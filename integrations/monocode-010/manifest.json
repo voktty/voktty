@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "name": "MonoCode 0.10 functional integration audit",
+  "upstreamBase": "6bd432cada0f492f076cc93f7ccb3027f4ff7102",
+  "upstreamTarget": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0",
+  "vokttyBaseline": "3386eb48c4c60f6b3ae17d578a19afa1907337a1",
+  "outputDirectory": "integrations/monocode-010",
+  "mergeProofFiles": ["codexQuestions.ts", "codex.ts", "child.ts"],
+  "scope": "Mechanical commit, path, text-comparison, and isolated merge inventory; it does not certify functional equivalence."
+}

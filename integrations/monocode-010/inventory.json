@@ -1,0 +1,3354 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "base": "6bd432cada0f492f076cc93f7ccb3027f4ff7102",
+    "target": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0"
+  },
+  "vokttyBaseline": "3386eb48c4c60f6b3ae17d578a19afa1907337a1",
+  "scope": "Mechanical commit, path, text-comparison, and isolated merge inventory; it does not certify functional equivalence.",
+  "commits": [
+    {
+      "sha": "929c45b3c90211e636fc2f1e32838286dff1101a",
+      "title": "Add particle effect for session title updates",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/app/shell/Sidebar.tsx",
+        "src/features/sessions/data/sessionHistory.test.ts",
+        "src/features/sessions/data/sessionHistory.ts",
+        "src/shared/ui/ParticleText.tsx"
+      ]
+    },
+    {
+      "sha": "f4868d4ea6338ea6b0f47a4e9dfc046ed15a94f8",
+      "title": "Add insertion animation for new sidebar sessions",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/shell/Sidebar.tsx",
+        "src/app/shell/SidebarRename.test.ts"
+      ]
+    },
+    {
+      "sha": "3ab724d8ebbcfc4ce4c3d6985d7d4210ca796171",
+      "title": "Support live remaining-usage display in provider chip",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/shell/UsageProviderChip.test.ts",
+        "src/app/shell/UsageProviderChip.tsx",
+        "src/features/providers/model/rateLimits.test.ts",
+        "src/features/providers/model/rateLimits.ts"
+      ]
+    },
+    {
+      "sha": "ce656bafe5ee0b8ebeee08ab810e6bff86dd828c",
+      "title": "Add slide and reveal animations to linked work item panel",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/inbox/ui/InboxView.tsx",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "dcaba3dc026a71d7e5aea7d179cc0e03cf8f48d0",
+      "title": "Extract permissions to dedicated picker modal",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/quick-composer/ui/QuickComposer.tsx",
+        "src/features/quick-composer/ui/QuickModelSelector.test.ts",
+        "src/features/quick-composer/ui/QuickModelSelector.tsx",
+        "src/features/quick-composer/ui/QuickPermissions.tsx",
+        "src/features/quick-composer/ui/QuickWorkspaceControls.tsx",
+        "src/features/quick-composer/ui/useQuickPickerMotion.ts"
+      ]
+    },
+    {
+      "sha": "45c9a2220724d5ae2ad65e9e29da9755fb143a86",
+      "title": "Animate pane entry from split edge",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/workspace/ui/PaneTree.tsx",
+        "src/features/workspace/ui/PaneTreeEnter.test.ts",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "00d68d342eff3adf23a320fa5e2be97d5e212683",
+      "title": "Add activity timeline to PR/issue panels with commit interleaving",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/app/shell/Sidebar.tsx",
+        "src/features/inbox/model/githubTasks.ts",
+        "src/features/inbox/model/githubWorkItemFreshness.test.ts",
+        "src/features/inbox/ui/InboxComments.test.ts",
+        "src/features/inbox/ui/InboxComments.tsx",
+        "src/features/inbox/ui/InboxPrDiff.tsx",
+        "src/features/inbox/ui/InboxPrOverview.test.ts",
+        "src/features/inbox/ui/InboxPrOverview.tsx",
+        "src/features/inbox/ui/InboxView.tsx",
+        "src/features/source-control/ui/UnifiedDiffView.tsx"
+      ]
+    },
+    {
+      "sha": "31fcb0903fd6ba969e11fab3a0dd288ee5df1571",
+      "title": "Prevent model picker labels from truncating",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/ModelPicker.tsx"
+      ]
+    },
+    {
+      "sha": "fb55b25543fa94f9990e2ebbb110961b64e075e9",
+      "title": "Add folder staging actions to Git changes panel",
+      "category": "functional change or adaptation",
+      "paths": [
+        "host/workspace.test.ts",
+        "src-tauri/src/fs.rs",
+        "src/features/source-control/ui/GitChangesPanel.test.ts",
+        "src/features/source-control/ui/GitChangesPanel.tsx"
+      ]
+    },
+    {
+      "sha": "14cb1ed5a03a3fd4aac76dbae80edb81843986e8",
+      "title": "Preserve descenders in explorer file names (#678)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/files/ui/FileTree.test.ts",
+        "src/features/files/ui/FileTree.tsx"
+      ]
+    },
+    {
+      "sha": "6a5f7fa13750cb115ce461be278fded591dc794f",
+      "title": "Add `Back` to revisit earlier answers in the question panel (#688)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/QuestionForm.test.ts",
+        "src/features/sessions/ui/QuestionForm.tsx"
+      ]
+    },
+    {
+      "sha": "e188ff1e271e6e3c8f991b74901b3d1e54894021",
+      "title": "Add colorblind-friendly diff palettes and +/- line markers (#707)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "src/app/shell/ProjectRail.tsx",
+        "src/app/shell/Sidebar.tsx",
+        "src/features/files/editor/editorGit.gutter.test.ts",
+        "src/features/files/editor/editorGit.ts",
+        "src/features/files/ui/FileEditor.tsx",
+        "src/features/files/ui/FilePreview.tsx",
+        "src/features/files/ui/FileTree.tsx",
+        "src/features/sessions/ui/SessionReview.tsx",
+        "src/features/settings/model/appearance.test.ts",
+        "src/features/settings/model/appearance.ts",
+        "src/features/settings/model/settings.ts",
+        "src/features/settings/ui/SettingsView.tsx",
+        "src/features/source-control/ui/GitChangesPanel.tsx",
+        "src/features/source-control/ui/UnifiedDiffView.markers.test.ts",
+        "src/features/source-control/ui/UnifiedDiffView.tsx",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "e65ed823027e4e05f4b36b86b3e02a44d4d52158",
+      "title": "fix(files): open markdown diffs as source instead of preview (#660)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/files/ui/FileEditor.tsx",
+        "src/features/sessions/ui/MarkdownModeToggle.tsx"
+      ]
+    },
+    {
+      "sha": "e9fd233ba4ce47cb6eb8afaeaa87874bbe5992cf",
+      "title": "Detect npm-installed Pi agent via package manifest (#687)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "host/process.test.ts",
+        "host/process.ts"
+      ]
+    },
+    {
+      "sha": "a5410169fdd74b9b69a77b6c843fa97a1ef0f851",
+      "title": "Focus the model search once the flyout is on screen (#670)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/ModelPicker.test.ts",
+        "src/features/sessions/ui/ModelPicker.tsx"
+      ]
+    },
+    {
+      "sha": "c7de48fd2f01fc961c6dd6a05ff5ad03be565133",
+      "title": "fix(pi): discover models registered by extensions (#645)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/integrations/harness/providers/pi/piCatalog.test.ts",
+        "src/integrations/harness/providers/pi/piCatalog.ts"
+      ]
+    },
+    {
+      "sha": "32fb2d1ad41d96bb9838e2fb893f34d7c76a136f",
+      "title": "Merge remote-tracking branch 'origin/main'",
+      "category": "merge; review parents",
+      "paths": [
+        "CHANGELOG.md",
+        "host/process.test.ts",
+        "host/process.ts",
+        "src/app/shell/ProjectRail.tsx",
+        "src/app/shell/Sidebar.tsx",
+        "src/features/files/editor/editorGit.gutter.test.ts",
+        "src/features/files/editor/editorGit.ts",
+        "src/features/files/ui/FileEditor.tsx",
+        "src/features/files/ui/FilePreview.tsx",
+        "src/features/files/ui/FileTree.test.ts",
+        "src/features/files/ui/FileTree.tsx",
+        "src/features/sessions/ui/MarkdownModeToggle.tsx",
+        "src/features/sessions/ui/ModelPicker.test.ts",
+        "src/features/sessions/ui/ModelPicker.tsx",
+        "src/features/sessions/ui/QuestionForm.test.ts",
+        "src/features/sessions/ui/QuestionForm.tsx",
+        "src/features/sessions/ui/SessionReview.tsx",
+        "src/features/settings/model/appearance.test.ts",
+        "src/features/settings/model/appearance.ts",
+        "src/features/settings/model/settings.ts",
+        "src/features/settings/ui/SettingsView.tsx",
+        "src/features/source-control/ui/GitChangesPanel.tsx",
+        "src/features/source-control/ui/UnifiedDiffView.markers.test.ts",
+        "src/features/source-control/ui/UnifiedDiffView.tsx",
+        "src/integrations/harness/providers/pi/piCatalog.test.ts",
+        "src/integrations/harness/providers/pi/piCatalog.ts",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "e994afb81c0dd2cc63f412cdd2585e8c72fa4a57",
+      "title": "fix(gitlab): support merge request diffs on older instances (#723)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/gitlab.rs"
+      ]
+    },
+    {
+      "sha": "60102ab3a608519598066b04cefbbde9d312b4c5",
+      "title": "Treat Git paths literally when staging folders",
+      "category": "functional change or adaptation",
+      "paths": [
+        "host/workspace.test.ts",
+        "host/workspace.ts",
+        "src-tauri/src/fs.rs"
+      ]
+    },
+    {
+      "sha": "271b66ded71e795e0569db77c9bbf599219c8cdc",
+      "title": "Merge branch 'main' of https://github.com/hardbeat920/monocode",
+      "category": "merge; review parents",
+      "paths": [
+        "src-tauri/src/gitlab.rs"
+      ]
+    },
+    {
+      "sha": "dc6d0ef4a7ae0f50afc9060f5594c63a36b8b9e5",
+      "title": "Make diff stats resize to fit sidebar",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/shell/Sidebar.tsx"
+      ]
+    },
+    {
+      "sha": "56bae4464534bede4fc73392b7837157b2cf4a9e",
+      "title": "Harden Composer file drop handling",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/Composer.tsx",
+        "src/features/sessions/ui/ComposerFileDrop.test.ts"
+      ]
+    },
+    {
+      "sha": "7933972a5b86bdffad4b3414f1faf4c36103eff7",
+      "title": "Improve scroll stability and output reveal pacing",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/model/composerResize.test.ts",
+        "src/features/sessions/model/composerResize.ts",
+        "src/features/sessions/ui/AgentMarkdown.tsx",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/AgentTranscriptPacing.test.ts",
+        "src/features/sessions/ui/AgentTranscriptScroll.test.ts",
+        "src/features/sessions/ui/Composer.tsx",
+        "src/features/sessions/ui/wordFade.test.ts",
+        "src/features/sessions/ui/wordFade.tsx",
+        "src/shared/hooks/useLockOverscroll.ts"
+      ]
+    },
+    {
+      "sha": "4361fdb6d0879a60d1b93513aa4ef17e0360122d",
+      "title": "Stabilize GitChangesPanel folder action tests",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/source-control/ui/GitChangesPanel.test.ts"
+      ]
+    },
+    {
+      "sha": "22b48740499ab37c854b3018e6c207d79f8290f0",
+      "title": "Add searchable worktree creation to sidebar switcher",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/source-control/ui/SidebarWorktreeSwitcher.test.ts",
+        "src/features/source-control/ui/SidebarWorktreeSwitcher.tsx"
+      ]
+    },
+    {
+      "sha": "610550e4ddde1ee22a66a28eb88fb08e3ac5cd09",
+      "title": "Move workspace actions into the sidebar header",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/app/shell/Sidebar.tsx",
+        "src/app/shell/TitleBar.tsx",
+        "src/app/shell/TitleBarMenu.test.ts",
+        "src/app/shell/TitleBarPaneDrop.test.ts",
+        "src/app/shell/TitleBarStatus.test.ts",
+        "src/features/workspace/ui/TabCloseMotion.test.ts",
+        "src/features/workspace/ui/TabMiddleClick.test.ts"
+      ]
+    },
+    {
+      "sha": "990f1411488ca37d18edc15aca859ef65dd833b0",
+      "title": "Add soft fades to clipped tabs and scroll areas",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/shell/Sidebar.tsx",
+        "src/app/shell/TitleBar.tsx",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/SessionPane.tsx",
+        "src/features/workspace/ui/SurfaceTabs.tsx",
+        "src/shared/ui/TabLabel.tsx",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "807c70e0d56fad77a83e98dad12cef0e4f3ef460",
+      "title": "Release v0.7.1",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "Cargo.lock",
+        "Cargo.toml",
+        "package-lock.json",
+        "package.json",
+        "src-tauri/tauri.conf.json"
+      ]
+    },
+    {
+      "sha": "889ac2062cad12fb6f279cae4e4075aa1c54a942",
+      "title": "Paint macOS glass tint natively during resize",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/macos.rs",
+        "src-tauri/src/window.rs",
+        "src/app/App.tsx",
+        "src/features/settings/model/appearance.ts",
+        "src/features/settings/model/nativeGlass.test.ts",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "98da85ae7c2b44c2f2427c17b381433ef4f23ea9",
+      "title": "Support async Codex agent questions",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/integrations/harness/providers/codex/codex.ts",
+        "src/integrations/harness/providers/codex/codexApprovalUi.test.ts",
+        "src/integrations/harness/providers/codex/codexLive.test.ts",
+        "src/integrations/harness/providers/codex/codexQuestions.test.ts",
+        "src/integrations/harness/providers/codex/codexQuestions.ts"
+      ]
+    },
+    {
+      "sha": "98845e58cfdc6c062ead43bcdbc9cf440e49d2cf",
+      "title": "Stop the remote folder dialog from darkening the window (#733)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/connections/ui/AddRemoteProjectDialog.tsx"
+      ]
+    },
+    {
+      "sha": "680e1ab96907f2171f9e7fb5d83e14261f3d8f70",
+      "title": "Keep IME composition intact in remote session composers (#741)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/Composer.ime.test.ts",
+        "src/features/sessions/ui/Composer.tsx"
+      ]
+    },
+    {
+      "sha": "a6b4b1d0b98ee0431edfa174c311a9dfba93c78f",
+      "title": "Open general new terminals in the active session's worktree (#732)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/terminal/model/terminalTab.test.ts",
+        "src/features/terminal/model/terminalTab.ts"
+      ]
+    },
+    {
+      "sha": "185b5005406aedec6f03bceaebf4b11cfe68bd62",
+      "title": "Fix editor diff gutter layout and Inbox PR overview diff colors (#759)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "src/features/files/editor/editorGit.gutter.test.ts",
+        "src/features/files/editor/editorGit.ts",
+        "src/features/files/ui/FileEditor.tsx",
+        "src/features/inbox/ui/InboxPrOverview.tsx"
+      ]
+    },
+    {
+      "sha": "0bfa5c6120e474312597e56266735ba6549b55ec",
+      "title": "Optimize streaming output, file indexes, and transcript rendering",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/app/model/harnessFlush.test.ts",
+        "src/app/model/harnessFlush.ts",
+        "src/app/shell/Sidebar.tsx",
+        "src/app/shell/SidebarRename.test.ts",
+        "src/features/files/model/fileIndex.resume.test.ts",
+        "src/features/files/model/fileIndex.test.ts",
+        "src/features/files/model/fileIndex.ts",
+        "src/features/sessions/model/transcriptTurnCache.test.ts",
+        "src/features/sessions/model/transcriptTurnCache.ts",
+        "src/features/sessions/ui/AgentTranscript.copy.test.ts",
+        "src/features/sessions/ui/AgentTranscript.performance.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/TranscriptPool.test.ts",
+        "src/features/sessions/ui/TranscriptPool.tsx"
+      ]
+    },
+    {
+      "sha": "010364720ec71b2c2574edcbdf75c1fa866621ae",
+      "title": "Improve modal layering and light-theme styling",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/connections/ui/AddRemoteProjectDialog.tsx",
+        "src/features/projects/ui/RemoveProjectDialog.tsx",
+        "src/features/source-control/ui/SwitchBranchDialog.tsx",
+        "src/shared/ui/Modal.tsx"
+      ]
+    },
+    {
+      "sha": "3e05e03258d58f13570d129720c44fcca4124a1d",
+      "title": "Preserve transcript scroll position during asynchronous updates",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/AgentTranscriptScroll.test.ts"
+      ]
+    },
+    {
+      "sha": "7eebfc179cb032714ab6164dc595d3f53f410f28",
+      "title": "fix: preserve focused note title drafts (#769)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/notes/ui/NotesView.test.ts",
+        "src/features/notes/ui/NotesView.tsx"
+      ]
+    },
+    {
+      "sha": "07f29c13f18e0d8c4258897a9ff658e2691032b0",
+      "title": "fix(skills): raise the skill catalog cap from 300 to 5,000 (#750)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/skills.rs"
+      ]
+    },
+    {
+      "sha": "57366970be0a22fbabbe05131adf48d4716d19b1",
+      "title": "Render Nerd Font prompt glyphs in the terminal (#767)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/terminal/ui/TerminalView.test.ts",
+        "src/features/terminal/ui/TerminalView.tsx",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "b74e803e69b01e3b24d880a7090f52c1ff854620",
+      "title": "Keep Pi extension status in one row per key (#760)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/model/session.ts",
+        "src/integrations/harness/core/apply.test.ts",
+        "src/integrations/harness/core/apply.ts",
+        "src/integrations/harness/core/types.ts",
+        "src/integrations/harness/providers/pi/piFamily.ts",
+        "src/integrations/harness/providers/pi/piLive.test.ts",
+        "src/integrations/harness/providers/pi/piProtocol.ts"
+      ]
+    },
+    {
+      "sha": "5aef862304b78133e078faacbf86406f2e9a9b8f",
+      "title": "Hide internal and legacy Copilot models from Pi/omp catalogs (#766)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/integrations/harness/providers/pi/piProtocol.test.ts",
+        "src/integrations/harness/providers/pi/piProtocol.ts"
+      ]
+    },
+    {
+      "sha": "850be653809ee3e0b243d1ad7a39aff27a64ea83",
+      "title": "Add persistent Mono agents with memory and scheduled habits (#773)",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src-tauri/src/control_cli.rs",
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/mono.rs",
+        "src-tauri/src/mono_transcript.rs",
+        "src-tauri/src/session_store.rs",
+        "src/app/App.tsx",
+        "src/app/hooks/useIdleSessionDetach.test.ts",
+        "src/app/hooks/useIdleSessionDetach.ts",
+        "src/app/hooks/useMonoHabits.test.ts",
+        "src/app/hooks/useMonoHabits.ts",
+        "src/app/shell/MonoRailSection.test.ts",
+        "src/app/shell/MonoRailSection.tsx",
+        "src/app/shell/ProjectRail.tsx",
+        "src/app/shell/SettingsRail.tsx",
+        "src/app/shell/Sidebar.tsx",
+        "src/app/shell/SidebarRename.test.ts",
+        "src/app/shell/TitleBar.tsx",
+        "src/features/agent-app/model/agentApp.test.ts",
+        "src/features/agent-app/model/agentApp.ts",
+        "src/features/agent-app/model/agentAppMemory.test.ts",
+        "src/features/agent-app/model/agentAppSoul.test.ts",
+        "src/features/agent-app/model/sessionConversation.test.ts",
+        "src/features/agent-app/model/sessionConversation.ts",
+        "src/features/monos/hooks/useMonoTranscript.test.ts",
+        "src/features/monos/hooks/useMonoTranscript.ts",
+        "src/features/monos/model/mono.test.ts",
+        "src/features/monos/model/mono.ts",
+        "src/features/monos/model/monoActivity.test.ts",
+        "src/features/monos/model/monoActivity.ts",
+        "src/features/monos/model/monoBackground.test.ts",
+        "src/features/monos/model/monoBackground.ts",
+        "src/features/monos/model/monoCards.ts",
+        "src/features/monos/model/monoCompletionBatches.test.ts",
+        "src/features/monos/model/monoConversation.test.ts",
+        "src/features/monos/model/monoConversation.ts",
+        "src/features/monos/model/monoFiles.test.ts",
+        "src/features/monos/model/monoFiles.ts",
+        "src/features/monos/model/monoHabits.test.ts",
+        "src/features/monos/model/monoHabits.ts",
+        "src/features/monos/model/monoMemory.test.ts",
+        "src/features/monos/model/monoMemory.ts",
+        "src/features/monos/model/monoMessaging.test.ts",
+        "src/features/monos/model/monoMessaging.ts",
+        "src/features/monos/model/monoMigration.test.ts",
+        "src/features/monos/model/monoRoster.test.ts",
+        "src/features/monos/model/monoRotation.test.ts",
+        "src/features/monos/model/monoRotation.ts",
+        "src/features/monos/model/monoSessionCompletion.test.ts",
+        "src/features/monos/model/monoSessionCompletion.ts",
+        "src/features/monos/model/monoUsageLimit.test.ts",
+        "src/features/monos/model/monoUsageLimit.ts",
+        "src/features/monos/model/monoWorkspace.test.ts",
+        "src/features/monos/model/monoWorkspace.ts",
+        "src/features/monos/ui/ConfirmReset.tsx",
+        "src/features/monos/ui/HabitPage.tsx",
+        "src/features/monos/ui/HabitRow.test.ts",
+        "src/features/monos/ui/MonoActivityPanel.test.ts",
+        "src/features/monos/ui/MonoActivityPanel.tsx",
+        "src/features/monos/ui/MonoComposer.test.ts",
+        "src/features/monos/ui/MonoComposer.tsx",
+        "src/features/monos/ui/MonoComposerFileDrop.test.ts",
+        "src/features/monos/ui/MonoDetails.tsx",
+        "src/features/monos/ui/MonoFilePages.test.ts",
+        "src/features/monos/ui/MonoFilePages.tsx",
+        "src/features/monos/ui/MonoHabits.tsx",
+        "src/features/monos/ui/MonoHeader.tsx",
+        "src/features/monos/ui/MonoIntro.test.ts",
+        "src/features/monos/ui/MonoIntro.tsx",
+        "src/features/monos/ui/MonoProjects.tsx",
+        "src/features/monos/ui/MonoRailMascot.tsx",
+        "src/features/monos/ui/MonoSettingsPage.test.ts",
+        "src/features/monos/ui/MonoSettingsPage.tsx",
+        "src/features/monos/ui/MonoSidebar.tsx",
+        "src/features/monos/ui/MonoStatus.tsx",
+        "src/features/monos/ui/MonoUsageLimitNotice.test.ts",
+        "src/features/monos/ui/MonoUsageLimitNotice.tsx",
+        "src/features/monos/ui/NewHabitPage.tsx",
+        "src/features/monos/ui/PanelStack.test.ts",
+        "src/features/monos/ui/PanelStack.tsx",
+        "src/features/monos/ui/monoPanelParts.tsx",
+        "src/features/notes/ui/NotesView.tsx",
+        "src/features/projects/model/pixelMascots.test.ts",
+        "src/features/projects/model/pixelMascots.ts",
+        "src/features/projects/ui/PixelMascot.tsx",
+        "src/features/projects/ui/ProjectBackgroundDialog.test.ts",
+        "src/features/projects/ui/ProjectBackgroundDialog.tsx",
+        "src/features/projects/ui/SearchableProjectPicker.tsx",
+        "src/features/projects/ui/SearchableProjectPickerMonos.test.ts",
+        "src/features/sessions/data/monoSessionStore.test.ts",
+        "src/features/sessions/data/sessionHistory.test.ts",
+        "src/features/sessions/data/sessionHistory.ts",
+        "src/features/sessions/data/sessionStore.test.ts",
+        "src/features/sessions/data/sessionStore.ts",
+        "src/features/sessions/hooks/useBottomChatMotion.test.ts",
+        "src/features/sessions/hooks/useBottomChatMotion.ts",
+        "src/features/sessions/hooks/useFileDrop.ts",
+        "src/features/sessions/model/emojiMessage.test.ts",
+        "src/features/sessions/model/emojiMessage.ts",
+        "src/features/sessions/model/handoff.ts",
+        "src/features/sessions/model/liveAgents.test.ts",
+        "src/features/sessions/model/liveAgents.ts",
+        "src/features/sessions/model/messageQueue.test.ts",
+        "src/features/sessions/model/messageQueue.ts",
+        "src/features/sessions/model/monoWorkStatus.test.ts",
+        "src/features/sessions/model/monoWorkStatus.ts",
+        "src/features/sessions/model/queuedFollowUp.test.ts",
+        "src/features/sessions/model/queuedFollowUp.ts",
+        "src/features/sessions/model/session.ts",
+        "src/features/sessions/model/transcriptActivity.test.ts",
+        "src/features/sessions/model/transcriptActivity.ts",
+        "src/features/sessions/model/transcriptTurnCache.test.ts",
+        "src/features/sessions/model/transcriptTurnCache.ts",
+        "src/features/sessions/model/usageLimit.test.ts",
+        "src/features/sessions/model/usageLimit.ts",
+        "src/features/sessions/ui/AgentTranscript.habits.test.ts",
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/AgentTranscriptPacing.test.ts",
+        "src/features/sessions/ui/AgentTranscriptScroll.test.ts",
+        "src/features/sessions/ui/AttachmentChip.tsx",
+        "src/features/sessions/ui/Composer.tsx",
+        "src/features/sessions/ui/MarkdownSourceEditor.tsx",
+        "src/features/sessions/ui/MessageQueue.test.ts",
+        "src/features/sessions/ui/MessageQueue.tsx",
+        "src/features/sessions/ui/ModelPicker.tsx",
+        "src/features/sessions/ui/MonoWorkTicker.test.ts",
+        "src/features/sessions/ui/MonoWorkTicker.tsx",
+        "src/features/sessions/ui/SessionPane.tsx",
+        "src/features/sessions/ui/SessionPaneMessaging.test.ts",
+        "src/features/sessions/ui/SessionPaneScroll.test.ts",
+        "src/features/sessions/ui/TranscriptFind.test.ts",
+        "src/features/sessions/ui/TranscriptFind.tsx",
+        "src/features/sessions/ui/TranscriptJumpToBottom.tsx",
+        "src/features/sessions/ui/UsageLimitNotice.tsx",
+        "src/features/settings/model/appShortcuts.test.ts",
+        "src/features/settings/model/appShortcuts.ts",
+        "src/features/settings/model/settings.flags.test.ts",
+        "src/features/settings/model/settings.test.ts",
+        "src/features/settings/model/settings.ts",
+        "src/features/settings/ui/SettingsView.tsx",
+        "src/integrations/harness/core/apply.test.ts",
+        "src/integrations/harness/core/apply.ts",
+        "src/integrations/harness/core/registry.test.ts",
+        "src/integrations/harness/core/registry.ts",
+        "src/integrations/harness/core/types.ts",
+        "src/integrations/harness/index.ts",
+        "src/integrations/harness/providers/claude/claude.ts",
+        "src/integrations/harness/providers/codex/codex.ts",
+        "src/integrations/harness/providers/cursor/cursor.ts",
+        "src/integrations/harness/providers/hermes/hermes.ts",
+        "src/integrations/harness/providers/opencode/opencode.ts",
+        "src/integrations/harness/providers/pi/piFamily.ts",
+        "src/shared/hooks/useDragResize.ts",
+        "src/shared/ui/ColorPickerPopover.tsx",
+        "src/shared/ui/Popover.tsx",
+        "src/shared/ui/icons.tsx",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "80ba2c091245af2fe5372e63f405c89e7fb074cc",
+      "title": "Throttle GitHub polling and handle rate-limit backoff",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/fs.rs",
+        "src/app/shell/Sidebar.tsx",
+        "src/features/inbox/hooks/useInboxUnseen.test.ts",
+        "src/features/inbox/hooks/useInboxUnseen.ts",
+        "src/features/inbox/model/githubTasks.repositories.test.ts",
+        "src/features/inbox/model/githubTasks.ts",
+        "src/features/inbox/ui/InboxDetail.polling.test.ts",
+        "src/features/inbox/ui/InboxView.tsx",
+        "src/features/notifications/hooks/projectNotificationFlow.test.ts"
+      ]
+    },
+    {
+      "sha": "9ccfc094615aa3170c01ae77a44298aefacdc9de",
+      "title": "Release v0.8.0",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "Cargo.lock",
+        "Cargo.toml",
+        "package-lock.json",
+        "package.json",
+        "src-tauri/tauri.conf.json",
+        "src/features/inbox/ui/InboxPrChecks.test.ts"
+      ]
+    },
+    {
+      "sha": "de033ffabc7088f1f0643d8133191a9ff77af8f2",
+      "title": "fix(monos): keep IME candidate selection from sending in Mono inputs (#790)",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/features/monos/ui/MonoComposer.ime.test.ts",
+        "src/features/monos/ui/MonoComposer.tsx",
+        "src/features/monos/ui/MonoFilePages.tsx",
+        "src/features/monos/ui/MonoSettingsPage.tsx",
+        "src/features/monos/ui/NewHabitPage.tsx"
+      ]
+    },
+    {
+      "sha": "93ee54c8b95be7d4dfcb9b584e7b71ef6797dd5b",
+      "title": "Add Mono permission controls to Details",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/monos/model/monoWorkspace.test.ts",
+        "src/features/monos/model/monoWorkspace.ts",
+        "src/features/monos/ui/MonoDetails.test.ts",
+        "src/features/monos/ui/MonoDetails.tsx",
+        "src/features/sessions/ui/AccessPicker.tsx"
+      ]
+    },
+    {
+      "sha": "de83c7963254048f9177528b6acd16cc4d49c63f",
+      "title": "Add MonoCode session lifecycle controls",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "README.md",
+        "src-tauri/src/control_cli.rs",
+        "src/app/App.tsx",
+        "src/features/agent-app/model/agentApp.test.ts",
+        "src/features/agent-app/model/agentApp.ts",
+        "src/features/monos/model/monoCompletionBatches.test.ts",
+        "src/features/monos/model/monoFiles.test.ts",
+        "src/features/monos/model/monoFiles.ts",
+        "src/features/monos/model/monoSessionCompletion.test.ts",
+        "src/features/monos/model/monoSessionCompletion.ts",
+        "src/features/sessions/model/monocodeToolCall.test.ts",
+        "src/features/sessions/model/monocodeToolCall.ts",
+        "src/features/sessions/model/sessionRemoval.test.ts",
+        "src/features/sessions/model/sessionRemoval.ts"
+      ]
+    },
+    {
+      "sha": "432ac6862789840dc2f32ecec88e9ccb40a7770a",
+      "title": "Refine Mono activity display and completion handling",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/monos/model/monoCompletionBatches.test.ts",
+        "src/features/monos/model/monoFiles.ts",
+        "src/features/monos/model/monoSessionCompletion.ts",
+        "src/features/sessions/model/transcriptActivity.test.ts",
+        "src/features/sessions/model/transcriptActivity.ts",
+        "src/features/sessions/model/transcriptTurnCache.test.ts",
+        "src/features/sessions/ui/AgentTranscript.habits.test.ts",
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/MonoWorkTicker.tsx",
+        "src/features/sessions/ui/SessionPaneScroll.test.ts"
+      ]
+    },
+    {
+      "sha": "0f8e5688c86950e7f09af1801582ab55141c590b",
+      "title": "Preserve delivered follow-up replies during inline work",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/features/monos/model/monoFiles.ts",
+        "src/features/sessions/model/transcriptActivity.test.ts",
+        "src/features/sessions/model/transcriptActivity.ts",
+        "src/features/sessions/model/transcriptTurnCache.test.ts",
+        "src/features/sessions/model/transcriptTurnCache.ts",
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "0b7a21fd2a2a820e4b1d3c797ed3610b663534ac",
+      "title": "Add Mono launched sessions panel and persistence",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/monos/model/monoSpawnedSessions.test.ts",
+        "src/features/monos/model/monoSpawnedSessions.ts",
+        "src/features/monos/ui/MonoSessionsPanel.test.ts",
+        "src/features/monos/ui/MonoSessionsPanel.tsx",
+        "src/features/monos/ui/MonoSidebar.tsx",
+        "src/features/sessions/data/sessionStore.test.ts",
+        "src/features/sessions/data/sessionStore.ts",
+        "src/features/sessions/data/sessionStoreRestore.test.ts",
+        "src/features/sessions/model/session.ts",
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/SessionPane.tsx",
+        "src/features/sessions/ui/SessionPaneScroll.test.ts"
+      ]
+    },
+    {
+      "sha": "e5794cc015db7e44ece05de69e55501ffbd629ed",
+      "title": "Use chatting icon for session toggle",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "d8902e738aa3ef266c01c8b60a759d9797dbce99",
+      "title": "Add per-Mono session sidebar visibility",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src-tauri/src/session_store.rs",
+        "src/app/App.tsx",
+        "src/app/model/quickLaunchSession.test.ts",
+        "src/app/model/quickLaunchSession.ts",
+        "src/app/shell/Sidebar.tsx",
+        "src/app/shell/SidebarRename.test.ts",
+        "src/features/agent-app/model/agentApp.test.ts",
+        "src/features/agent-app/model/agentApp.ts",
+        "src/features/monos/model/mono.ts",
+        "src/features/quick-composer/model/quickComposer.ts",
+        "src/features/sessions/data/sessionHistory.test.ts",
+        "src/features/sessions/data/sessionHistory.ts",
+        "src/features/sessions/data/sessionStore.test.ts",
+        "src/features/sessions/data/sessionStore.ts",
+        "src/features/sessions/data/sessionStoreRestore.test.ts",
+        "src/features/sessions/model/session.ts",
+        "src/features/settings/model/settings.ts",
+        "src/features/settings/ui/SettingsView.test.ts",
+        "src/features/settings/ui/SettingsView.tsx"
+      ]
+    },
+    {
+      "sha": "40aa9feb4ca05364af9197a6be6f0afb7e2ffca3",
+      "title": "Add effort selection animations for other harnesses (#672)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/ModelPicker.test.ts",
+        "src/features/sessions/ui/ModelPicker.tsx"
+      ]
+    },
+    {
+      "sha": "dddefe45391e5371e2fa824a511bcc8f469e25af",
+      "title": "Stabilize host Vitest integration runs under load. (#683)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "host/vitest.config.ts"
+      ]
+    },
+    {
+      "sha": "c2b479dde61be031c6406e83bde5b1e2ccf1c40c",
+      "title": "fix(codex): omit collaboration mode until a model is known (#771)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/integrations/harness/providers/codex/codexProtocol.test.ts",
+        "src/integrations/harness/providers/codex/codexProtocol.ts"
+      ]
+    },
+    {
+      "sha": "bdc2b64cc1ae009b0c75b81e171f3010acb62fc6",
+      "title": "Fix notes keeping an \"untitled\" slug after they get a real title (#788)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/notes.rs",
+        "src/features/agent-app/model/agentApp.test.ts",
+        "src/features/notes/notes.test.ts",
+        "src/features/notes/notes.ts",
+        "src/features/notes/ui/NotesView.test.ts",
+        "src/features/notes/ui/NotesView.tsx"
+      ]
+    },
+    {
+      "sha": "140c6e566c34f8db5130d45c0ce5bdca2feeba70",
+      "title": "Add floating Mono chat panel with menu bar integration",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "Cargo.lock",
+        "mono-chat.html",
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/macos.rs",
+        "src-tauri/src/mono_chat.rs",
+        "src-tauri/src/mono_chat/menu_bar.rs",
+        "src-tauri/src/quick_composer.rs",
+        "src-tauri/src/window.rs",
+        "src/app/App.tsx",
+        "src/app/hooks/useFloatingMono.test.ts",
+        "src/app/hooks/useFloatingMono.ts",
+        "src/features/monos/floatingMain.test.ts",
+        "src/features/monos/floatingMain.tsx",
+        "src/features/monos/model/floatingMono.test.ts",
+        "src/features/monos/model/floatingMono.ts",
+        "src/features/monos/ui/FloatingMonoChat.motion.test.ts",
+        "src/features/monos/ui/FloatingMonoChat.test.ts",
+        "src/features/monos/ui/FloatingMonoChat.tsx",
+        "src/features/monos/ui/MonoComposer.test.ts",
+        "src/features/monos/ui/MonoComposer.tsx",
+        "vite.config.ts"
+      ]
+    },
+    {
+      "sha": "03ae2775d1d8518e87653d0d5f7d865b3e2837c3",
+      "title": "Continue Mono replies after sessions complete",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/features/monos/model/monoActivity.ts",
+        "src/features/sessions/model/transcriptActivity.test.ts",
+        "src/features/sessions/model/transcriptActivity.ts",
+        "src/features/sessions/model/transcriptTurnCache.test.ts",
+        "src/features/sessions/model/transcriptTurnCache.ts",
+        "src/features/sessions/ui/AgentTranscript.habits.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "e79778cdb55f7e2ca24580055c3bca9df25a9cf9",
+      "title": "Resize menu bar portrait and fix macOS 27 image visibility",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/mono_chat/menu_bar.rs"
+      ]
+    },
+    {
+      "sha": "b1660e7635a84f689199adc2ae67cd0beab5fcc4",
+      "title": "Fix ModelPicker type error from stale harness prop",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/ModelPicker.tsx"
+      ]
+    },
+    {
+      "sha": "53d91c8262e6375e13d31cc8b51dab022b95a686",
+      "title": "Fix macOS Clippy chunking warnings",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/mono_chat.rs"
+      ]
+    },
+    {
+      "sha": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
+      "title": "Route ⌘W and ⌘T to the focused project terminal (#774)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/menu.rs",
+        "src/app/App.tsx",
+        "src/features/projects/model/projectTerminal.test.ts",
+        "src/features/projects/model/projectTerminal.ts",
+        "src/features/terminal/ui/ProjectTerminalDock.tsx"
+      ]
+    },
+    {
+      "sha": "eb14d1a9cdfaeba97da099d944199dd38c61cfaf",
+      "title": "Fix Settings catalog refresh behind fallback models (#783)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/settings/ui/SettingsView.tsx"
+      ]
+    },
+    {
+      "sha": "88994864d095ce4cca53763dcf1d5016298bdf0d",
+      "title": "Default to masking account emails",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/shell/UsageProviderChip.test.ts",
+        "src/features/settings/model/displayPrefs.test.ts",
+        "src/features/settings/model/displayPrefs.ts",
+        "src/features/settings/ui/SettingsView.test.ts",
+        "src/shared/ui/PrivateEmail.test.ts"
+      ]
+    },
+    {
+      "sha": "4d24fd7e322e73ad1ba43eee6449a8ddb2e3d38e",
+      "title": "Add persisted artifacts with chat attachments and panels",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src-tauri/src/artifacts.rs",
+        "src-tauri/src/control_cli.rs",
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/mono_transcript.rs",
+        "src-tauri/src/notes.rs",
+        "src-tauri/src/session_store.rs",
+        "src/app/App.tsx",
+        "src/app/hooks/useMonoHabits.ts",
+        "src/features/agent-app/model/agentApp.test.ts",
+        "src/features/agent-app/model/agentApp.ts",
+        "src/features/artifacts/artifacts.test.ts",
+        "src/features/artifacts/artifacts.ts",
+        "src/features/artifacts/ui/ArtifactCard.tsx",
+        "src/features/artifacts/ui/ArtifactPanel.test.ts",
+        "src/features/artifacts/ui/ArtifactPanel.tsx",
+        "src/features/monos/model/floatingMono.test.ts",
+        "src/features/monos/model/floatingMono.ts",
+        "src/features/monos/model/monoFiles.test.ts",
+        "src/features/monos/model/monoFiles.ts",
+        "src/features/monos/ui/FloatingMonoChat.tsx",
+        "src/features/monos/ui/MonoSidebar.tsx",
+        "src/features/sessions/data/monoSessionStore.test.ts",
+        "src/features/sessions/data/sessionStore.ts",
+        "src/features/sessions/model/monocodeToolCall.ts",
+        "src/features/sessions/model/session.ts",
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/features/sessions/ui/SessionPane.tsx",
+        "src/styles/index.css",
+        "work/mono-document-preview.html"
+      ]
+    },
+    {
+      "sha": "9a7b6a2581b6ac11bef8dffc8df461074346aa92",
+      "title": "Release v0.9.0",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "Cargo.lock",
+        "Cargo.toml",
+        "package-lock.json",
+        "package.json",
+        "src-tauri/tauri.conf.json"
+      ]
+    },
+    {
+      "sha": "0ee745e945e531adea226cff9ee3e8927447e61c",
+      "title": "Remove accidental document preview mockup",
+      "category": "distribution or documentation",
+      "paths": [
+        ".gitignore",
+        "work/mono-document-preview.html"
+      ]
+    },
+    {
+      "sha": "11b539742b461bb0c04df834717c90708bef46a6",
+      "title": "Add Mono rail to floating chats for switching and creating",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/mono_chat.rs",
+        "src/app/App.tsx",
+        "src/app/hooks/useFloatingMono.ts",
+        "src/features/monos/model/floatingMono.test.ts",
+        "src/features/monos/model/floatingMono.ts",
+        "src/features/monos/ui/FloatingMonoChat.test.ts",
+        "src/features/monos/ui/FloatingMonoChat.tsx"
+      ]
+    },
+    {
+      "sha": "c0d1fa0da78f023001897394e809d5263b77906a",
+      "title": "Add menu bar icon visibility toggle",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/mono_chat.rs",
+        "src-tauri/src/mono_chat/menu_bar.rs",
+        "src-tauri/src/quick_composer.rs",
+        "src/app/hooks/useFloatingMono.test.ts",
+        "src/app/hooks/useFloatingMono.ts",
+        "src/features/settings/model/settings.ts",
+        "src/features/settings/ui/SettingsView.tsx"
+      ]
+    },
+    {
+      "sha": "1c532697609924c1ee00bf11ee5b250881b4211f",
+      "title": "Add artifact sheet overlay in floating Mono chat",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src-tauri/src/mono_chat.rs",
+        "src-tauri/src/mono_chat/menu_bar.rs",
+        "src/features/artifacts/ui/ArtifactContent.tsx",
+        "src/features/artifacts/ui/ArtifactPanel.tsx",
+        "src/features/monos/ui/FloatingMonoChat.test.ts",
+        "src/features/monos/ui/FloatingMonoChat.tsx"
+      ]
+    },
+    {
+      "sha": "de9650ce9f4901f479455613fa38dbb167c769a7",
+      "title": "Use host WebKitGTK in the Linux AppImage (#824)",
+      "category": "distribution or documentation",
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "README.md",
+        "package.json",
+        "scripts/assert-appimage-host-libs.sh",
+        "scripts/repack-appimage.sh"
+      ]
+    },
+    {
+      "sha": "296d7fd01a56c83521d1614858fddc6a9dd2fc04",
+      "title": "Stabilize chat history scrolling and add browser regression coverage (#818)",
+      "category": "functional change or adaptation",
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".gitignore",
+        "CONTRIBUTING.md",
+        "package-lock.json",
+        "package.json",
+        "playwright.config.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "src/styles/index.css",
+        "tests/browser/transcript-scroll.spec.ts",
+        "tests/browser/transcript.html",
+        "tests/browser/transcript.tsx"
+      ]
+    },
+    {
+      "sha": "b9e2a13fa5f85985dec4a1009d0b11b19395a7a3",
+      "title": "Self-update the Linux AppImage (#825)",
+      "category": "functional change or adaptation",
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "README.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/install-linux-deps-debian.sh",
+        "scripts/release-channel.cjs",
+        "scripts/release-channel.test.cjs",
+        "src/app/model/updater.test.ts",
+        "src/app/model/updater.ts",
+        "src/app/model/updaterConfig.test.ts",
+        "src/app/shell/SidebarUpdate.test.ts",
+        "src/features/settings/ui/SettingsView.tsx"
+      ]
+    },
+    {
+      "sha": "0eb2773ec4f18c0533d5253ea6d4627cd5795299",
+      "title": "feat(opencode): support OpenCode 2.x servers (#434)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "host/child-backend.test.ts",
+        "host/child-backend.ts",
+        "host/opencode-v2-transport.test.ts",
+        "src-tauri/src/harness.rs",
+        "src/features/settings/ui/SettingsView.tsx",
+        "src/integrations/harness/core/registry.test.ts",
+        "src/integrations/harness/core/registry.ts",
+        "src/integrations/harness/providers/opencode/opencode.ts",
+        "src/integrations/harness/providers/opencode/opencodeCatalog.ts",
+        "src/integrations/harness/providers/opencode/opencodeClient.test.ts",
+        "src/integrations/harness/providers/opencode/opencodeClient.ts",
+        "src/integrations/harness/providers/opencode/opencodeLive.test.ts",
+        "src/integrations/harness/providers/opencode/opencodeProtocol.test.ts",
+        "src/integrations/harness/providers/opencode/opencodeProtocol.ts",
+        "src/integrations/harness/providers/opencode/opencodeService.test.ts",
+        "src/integrations/harness/providers/opencode/opencodeService.ts",
+        "src/integrations/harness/providers/opencode/opencodeText.ts",
+        "src/integrations/harness/providers/opencode/opencodeV2Events.test.ts",
+        "src/integrations/harness/providers/opencode/opencodeV2Events.ts"
+      ]
+    },
+    {
+      "sha": "6c677052bf798fa82e73cfabe83632cd0f545384",
+      "title": "Fix Changes list file selection click target and latency (#830)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/source-control/ui/GitChangesPanel.tsx"
+      ]
+    },
+    {
+      "sha": "b6e0db8def499677e080bc6a31a14f6a5e94ac03",
+      "title": "Stabilize transcript scroll pinning and settled Mono turn headers",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/features/monos/ui/FloatingMonoChat.tsx",
+        "src/features/sessions/ui/AgentTranscript.habits.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx",
+        "tests/browser/transcript-scroll.spec.ts",
+        "tests/browser/transcript.tsx"
+      ]
+    },
+    {
+      "sha": "bbb91627725747f3f7c9793a510fd962e542f4e3",
+      "title": "Wrap active agent names in signature pills",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "514400dc3cd0f09820f4472a608f3e11d1498a94",
+      "title": "Enable native macOS spell checking in chat composer (#829)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/macos.rs",
+        "src/features/sessions/ui/Composer.tsx"
+      ]
+    },
+    {
+      "sha": "09238465181eb2000211b0b656c69d102d5b4d6f",
+      "title": "Merge branch 'main' of https://github.com/hardbeat920/monocode",
+      "category": "merge; review parents",
+      "paths": [
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/macos.rs",
+        "src/app/App.tsx",
+        "src/features/sessions/ui/Composer.tsx",
+        "src/features/source-control/ui/GitChangesPanel.tsx"
+      ]
+    },
+    {
+      "sha": "e92d803854c28857026d45691cd98ed6ce5b2aa5",
+      "title": "Keep Mono Codex sessions ephemeral and rotate by context",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/monos/model/monoRotation.test.ts",
+        "src/features/monos/model/monoRotation.ts",
+        "src/features/monos/model/monoWorkspace.test.ts",
+        "src/integrations/harness/core/types.ts",
+        "src/integrations/harness/index.ts",
+        "src/integrations/harness/providers/codex/codex.ts",
+        "src/integrations/harness/providers/codex/codexLive.test.ts"
+      ]
+    },
+    {
+      "sha": "3e157b755d1e988b349294d187d04b6f71daa07f",
+      "title": "Clean up temporary provider sessions",
+      "category": "functional change or adaptation",
+      "paths": [
+        "host/child-backend.test.ts",
+        "host/child-backend.ts",
+        "src-tauri/src/harness.rs",
+        "src/app/App.tsx",
+        "src/integrations/harness/core/registry.ts",
+        "src/integrations/harness/providers/codex/codexText.test.ts",
+        "src/integrations/harness/providers/codex/codexText.ts",
+        "src/integrations/harness/providers/grok/grokText.test.ts",
+        "src/integrations/harness/providers/grok/grokText.ts",
+        "src/integrations/harness/providers/opencode/opencodeClient.test.ts",
+        "src/integrations/harness/providers/opencode/opencodeClient.ts",
+        "src/integrations/harness/providers/opencode/opencodeText.test.ts"
+      ]
+    },
+    {
+      "sha": "daaad71c2046c1a6d335008ae949ffc8b8d52f6e",
+      "title": "Hide scrollbars in Zen phase live content",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "004cab5b749c06260707c17a30f678e48c31daa2",
+      "title": "Add isolated Codex mono storage and rollout persistence",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "Cargo.lock",
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/codex_mono_store.rs",
+        "src-tauri/src/harness.rs",
+        "src-tauri/src/lib.rs",
+        "src/app/App.tsx",
+        "src/features/monos/model/monoRotation.test.ts",
+        "src/features/monos/model/monoRotation.ts",
+        "src/integrations/harness/core/child.ts",
+        "src/integrations/harness/core/registry.ts",
+        "src/integrations/harness/core/types.ts",
+        "src/integrations/harness/index.ts",
+        "src/integrations/harness/providers/codex/codex.ts",
+        "src/integrations/harness/providers/codex/codexLive.test.ts",
+        "src/integrations/harness/providers/codex/codexStore.test.ts",
+        "src/integrations/harness/providers/codex/codexStore.ts",
+        "src/integrations/harness/providers/codex/codexText.test.ts",
+        "src/integrations/harness/providers/codex/codexText.ts"
+      ]
+    },
+    {
+      "sha": "0b2c391f3994ba4cdb1b0ee6e6941faa5e1fbae3",
+      "title": "Fix Windows path links and file syncing",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/codex_mono_store.rs"
+      ]
+    },
+    {
+      "sha": "322fc2a090c6a38cfa2e497ce00377e8b64aff24",
+      "title": "Fix Windows Codex directory junction creation",
+      "category": "functional change or adaptation",
+      "paths": [
+        "Cargo.lock",
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/codex_mono_store.rs"
+      ]
+    },
+    {
+      "sha": "bf5a30dca6210210007da3109c31e327c8c45be1",
+      "title": "Add keyboard navigation to the file tree",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/files/ui/FileTree.test.ts",
+        "src/features/files/ui/FileTree.tsx"
+      ]
+    },
+    {
+      "sha": "eb5f69a541362735f15d5adc819742ea9ea8f1cf",
+      "title": "Allow mono habits to run for up to one hour",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/hooks/useMonoHabits.test.ts",
+        "src/features/monos/model/monoHabits.ts"
+      ]
+    },
+    {
+      "sha": "8a63eb693c9e2e6b5dd4d8001549f2befcd69809",
+      "title": "Tone down settled turn agent names",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "b93b95a45069b9999a5c8bbff61e0db131d981bf",
+      "title": "Preserve remote sessions when opening local projects",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/connections/model/remoteSessionTabs.test.ts",
+        "src/features/connections/model/remoteSessionTabs.ts",
+        "src/features/projects/model/projectOpenRun.test.ts",
+        "src/features/projects/model/projectReturn.ts"
+      ]
+    },
+    {
+      "sha": "43602cde68496fe2a75a5c5c86e91c63aa47eb59",
+      "title": "Make the live activity ticker expandable",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "a3f6f8a44b5f25bf712cbdaed1c831caa278d658",
+      "title": "Release v0.10.0",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "Cargo.lock",
+        "Cargo.toml",
+        "package-lock.json",
+        "package.json",
+        "src-tauri/tauri.conf.json",
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "d4e40a975fced29e0307678b512a992523478506",
+      "title": "Add session changes panel for Mono diffs",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/monos/ui/MonoChangesPanel.tsx",
+        "src/features/monos/ui/MonoSidebar.tsx"
+      ]
+    },
+    {
+      "sha": "d26871f246d34479795bc9a00513b43d4d18add2",
+      "title": "Add commit tab to Mono changes panel",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/monos/ui/MonoChangesPanel.tsx",
+        "src/features/monos/ui/MonoProjectCommit.tsx",
+        "src/features/monos/ui/MonoSidebar.tsx",
+        "src/features/sessions/ui/SessionPane.tsx",
+        "src/features/sessions/ui/SessionReview.tsx",
+        "src/features/source-control/ui/GitChangesPanel.tsx",
+        "src/features/source-control/ui/SessionChangesDiff.tsx",
+        "src/platform/tauri/fs.ts"
+      ]
+    },
+    {
+      "sha": "5a3aef0eae9a7879249f3a385096c38dc8105297",
+      "title": "Allow editing commit message without staged files",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/source-control/ui/GitChangesPanel.tsx"
+      ]
+    },
+    {
+      "sha": "6ec7c52e2606f7998f89228d0aa7900b3bba36a7",
+      "title": "Allow editing commit message without selected files",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/features/monos/ui/MonoProjectCommit.tsx"
+      ]
+    },
+    {
+      "sha": "7c4bb7e50ab990da6525a38b451eabd0ca4bd1b2",
+      "title": "Add Mono session sidebar folder preferences",
+      "category": "new product feature; review coexistence",
+      "paths": [
+        "src/app/App.tsx",
+        "src/features/agent-app/model/agentApp.test.ts",
+        "src/features/agent-app/model/agentApp.ts",
+        "src/features/monos/model/mono.ts",
+        "src/features/monos/ui/MonoDetails.tsx",
+        "src/features/monos/ui/MonoPreferencesPage.tsx",
+        "src/features/monos/ui/MonoSettingsPage.test.ts",
+        "src/features/monos/ui/MonoSettingsPage.tsx",
+        "src/features/monos/ui/monoPanelParts.tsx"
+      ]
+    },
+    {
+      "sha": "fd107302654e706aa020f5b808acab25f091e2f3",
+      "title": "Stop repeating a thought's first paragraph when its row is opened (#882)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+        "src/features/sessions/ui/AgentTranscript.tsx"
+      ]
+    },
+    {
+      "sha": "829fede692a90f323e5d2ea635bd5b35e956fc7f",
+      "title": "Drop a reorder drag whose pointerup never arrived (#879)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src/shared/hooks/useAnimatedReorder.test.ts",
+        "src/shared/hooks/useAnimatedReorder.ts"
+      ]
+    },
+    {
+      "sha": "51b561ba40a8293923203e83668295af50434094",
+      "title": "fix: keep markdown table columns readable (#876)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "CHANGELOG.md",
+        "src/styles/index.css"
+      ]
+    },
+    {
+      "sha": "db006a4a19c0f5ce23b3bd58a44f62b9b78a2d97",
+      "title": "Run the same codex the user's shell does (#878)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "src-tauri/src/harness.rs"
+      ]
+    },
+    {
+      "sha": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0",
+      "title": "Improve rendering performance for large streamed Markdown fences (#863)",
+      "category": "functional change or adaptation",
+      "paths": [
+        "package-lock.json",
+        "package.json",
+        "src/features/files/editor/codeHighlightPlugin.test.ts",
+        "src/features/files/editor/codeHighlightPlugin.ts",
+        "src/features/sessions/ui/AgentMarkdown.tsx",
+        "src/features/sessions/ui/HighlightedCodeBlock.tsx",
+        "src/features/sessions/ui/streamingMarkdown.test.ts",
+        "src/features/sessions/ui/streamingMarkdown.ts",
+        "src/styles/index.css",
+        "tests/browser/markdown-performance.html",
+        "tests/browser/markdown-performance.spec.ts",
+        "tests/browser/markdown-performance.tsx"
+      ]
+    }
+  ],
+  "files": {
+    ".github/workflows/ci.yml": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    ".github/workflows/release.yml": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    ".gitignore": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "CHANGELOG.md": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "CONTRIBUTING.md": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "Cargo.lock": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "Cargo.toml": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "README.md": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/child-backend.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/child-backend.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/opencode-v2-transport.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/process.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/process.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/vitest.config.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/workspace.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "host/workspace.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "mono-chat.html": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "package-lock.json": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "package.json": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "playwright.config.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "scripts/assert-appimage-host-libs.sh": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "scripts/install-linux-deps-debian.sh": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "scripts/release-channel.cjs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "scripts/release-channel.test.cjs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "scripts/repack-appimage.sh": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/Cargo.toml": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/artifacts.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/codex_mono_store.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/control_cli.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/fs.rs": {
+      "candidates": [
+        "src-tauri/src/modules/harness/fs.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/gitlab.rs": {
+      "candidates": [
+        "src-tauri/src/modules/harness/gitlab.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/harness.rs": {
+      "candidates": [
+        "src-tauri/src/modules/harness/host.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/lib.rs": {
+      "candidates": [
+        "src-tauri/src/lib.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/macos.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/menu.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/mono.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/mono_chat.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/mono_chat/menu_bar.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/mono_transcript.rs": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src-tauri/src/notes.rs": {
+      "candidates": [
+        "src-tauri/src/modules/harness/notes.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/quick_composer.rs": {
+      "candidates": [
+        "src-tauri/src/modules/quick_composer.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/session_store.rs": {
+      "candidates": [
+        "src-tauri/src/modules/harness/session_store.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/skills.rs": {
+      "candidates": [
+        "src-tauri/src/modules/harness/skills.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/src/window.rs": {
+      "candidates": [
+        "src-tauri/src/modules/window.rs"
+      ],
+      "comparison": "different"
+    },
+    "src-tauri/tauri.conf.json": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/App.tsx": {
+      "candidates": [
+        "src/modules/harness/components/HarnessApp.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/app/hooks/useFloatingMono.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/hooks/useFloatingMono.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/hooks/useIdleSessionDetach.test.ts": {
+      "candidates": [
+        "src/modules/harness/hooks/useIdleSessionDetach.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/hooks/useIdleSessionDetach.ts": {
+      "candidates": [
+        "src/modules/harness/hooks/useIdleSessionDetach.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/hooks/useMonoHabits.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/hooks/useMonoHabits.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/model/harnessFlush.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/model/harnessFlush.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/model/quickLaunchSession.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/model/quickLaunchSession.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/model/updater.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/updater.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/model/updater.ts": {
+      "candidates": [
+        "src/modules/harness/lib/updater.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/model/updaterConfig.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/updaterConfig.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/MonoRailSection.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/shell/MonoRailSection.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/shell/ProjectRail.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/ProjectRail.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/SettingsRail.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/SettingsRail.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/Sidebar.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/Sidebar.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/SidebarRename.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/shell/SidebarUpdate.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/shell/TitleBar.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/TitleBar.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/TitleBarMenu.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/shell/TitleBarPaneDrop.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/app/shell/TitleBarStatus.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/TitleBarStatus.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/UsageProviderChip.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/UsageProviderChip.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/app/shell/UsageProviderChip.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/UsageProviderChip.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/agent-app/model/agentApp.test.ts": {
+      "candidates": [
+        "src/modules/agent-app/model/agentApp.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/agent-app/model/agentApp.ts": {
+      "candidates": [
+        "src/modules/agent-app/model/agentApp.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/agent-app/model/agentAppMemory.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/agent-app/model/agentAppSoul.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/agent-app/model/sessionConversation.test.ts": {
+      "candidates": [
+        "src/modules/agent-app/model/sessionConversation.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/agent-app/model/sessionConversation.ts": {
+      "candidates": [
+        "src/modules/agent-app/model/sessionConversation.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/artifacts/artifacts.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/artifacts/artifacts.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/artifacts/ui/ArtifactCard.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/artifacts/ui/ArtifactContent.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/artifacts/ui/ArtifactPanel.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/artifacts/ui/ArtifactPanel.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/connections/model/remoteSessionTabs.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/connections/model/remoteSessionTabs.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/connections/ui/AddRemoteProjectDialog.tsx": {
+      "candidates": [
+        "src/modules/connections/ui/AddRemoteProjectDialog.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/editor/codeHighlightPlugin.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/codeHighlightPlugin.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/editor/codeHighlightPlugin.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/codeHighlightPlugin.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/editor/editorGit.gutter.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/files/editor/editorGit.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/editorGit.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/model/fileIndex.resume.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/files/model/fileIndex.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/fileIndex.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/model/fileIndex.ts": {
+      "candidates": [
+        "src/modules/harness/lib/fileIndex.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/ui/FileEditor.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/FileEditor.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/ui/FilePreview.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/FilePreview.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/ui/FileTree.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/FileTree.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/files/ui/FileTree.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/FileTree.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/hooks/useInboxUnseen.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/inbox/hooks/useInboxUnseen.ts": {
+      "candidates": [
+        "src/modules/harness/hooks/useInboxUnseen.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/model/githubTasks.repositories.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/inbox/model/githubTasks.ts": {
+      "candidates": [
+        "src/modules/harness/lib/githubTasks.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/model/githubWorkItemFreshness.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/githubWorkItemFreshness.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/ui/InboxComments.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/InboxComments.test.ts"
+      ],
+      "comparison": "identical"
+    },
+    "src/features/inbox/ui/InboxComments.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/InboxComments.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/ui/InboxDetail.polling.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/inbox/ui/InboxPrChecks.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/inbox/ui/InboxPrDiff.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/InboxPrDiff.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/ui/InboxPrOverview.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/InboxPrOverview.test.ts"
+      ],
+      "comparison": "identical"
+    },
+    "src/features/inbox/ui/InboxPrOverview.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/InboxPrOverview.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/inbox/ui/InboxView.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/InboxView.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/monos/floatingMain.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/floatingMain.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/hooks/useMonoTranscript.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/hooks/useMonoTranscript.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/floatingMono.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/floatingMono.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/mono.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/mono.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoActivity.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoActivity.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoBackground.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoBackground.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoCards.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoCompletionBatches.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoConversation.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoConversation.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoFiles.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoFiles.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoHabits.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoHabits.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoMemory.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoMemory.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoMessaging.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoMessaging.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoMigration.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoRoster.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoRotation.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoRotation.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoSessionCompletion.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoSessionCompletion.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoSpawnedSessions.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoSpawnedSessions.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoUsageLimit.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoUsageLimit.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoWorkspace.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/model/monoWorkspace.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/ConfirmReset.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/FloatingMonoChat.motion.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/FloatingMonoChat.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/FloatingMonoChat.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/HabitPage.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/HabitRow.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoActivityPanel.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoActivityPanel.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoChangesPanel.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoComposer.ime.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoComposer.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoComposer.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoComposerFileDrop.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoDetails.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoDetails.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoFilePages.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoFilePages.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoHabits.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoHeader.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoIntro.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoIntro.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoPreferencesPage.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoProjectCommit.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoProjects.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoRailMascot.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoSessionsPanel.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoSessionsPanel.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoSettingsPage.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoSettingsPage.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoSidebar.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoStatus.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoUsageLimitNotice.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/MonoUsageLimitNotice.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/NewHabitPage.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/PanelStack.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/PanelStack.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/monos/ui/monoPanelParts.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/notes/notes.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/notes.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/notes/notes.ts": {
+      "candidates": [
+        "src/modules/harness/lib/notes.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/notes/ui/NotesView.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/notes/ui/NotesView.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/NotesView.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/notifications/hooks/projectNotificationFlow.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/projects/model/pixelMascots.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/projects/model/pixelMascots.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/projects/model/projectOpenRun.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/projects/model/projectReturn.ts": {
+      "candidates": [
+        "src/modules/harness/lib/projectReturn.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/projects/model/projectTerminal.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/projectTerminal.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/projects/model/projectTerminal.ts": {
+      "candidates": [
+        "src/modules/harness/lib/projectTerminal.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/projects/ui/PixelMascot.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/projects/ui/ProjectBackgroundDialog.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/projects/ui/ProjectBackgroundDialog.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/ProjectBackgroundDialog.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/projects/ui/RemoveProjectDialog.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/RemoveProjectDialog.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/projects/ui/SearchableProjectPicker.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/SearchableProjectPicker.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/projects/ui/SearchableProjectPickerMonos.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/providers/model/rateLimits.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/rateLimits.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/providers/model/rateLimits.ts": {
+      "candidates": [
+        "src/modules/harness/lib/rateLimits.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/model/quickComposer.ts": {
+      "candidates": [
+        "src/modules/quick-composer/model/quickComposer.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/ui/QuickComposer.tsx": {
+      "candidates": [
+        "src/modules/quick-composer/ui/QuickComposer.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/ui/QuickModelSelector.test.ts": {
+      "candidates": [
+        "src/modules/quick-composer/ui/QuickModelSelector.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/ui/QuickModelSelector.tsx": {
+      "candidates": [
+        "src/modules/quick-composer/ui/QuickModelSelector.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/ui/QuickPermissions.tsx": {
+      "candidates": [
+        "src/modules/quick-composer/ui/QuickPermissions.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/ui/QuickWorkspaceControls.tsx": {
+      "candidates": [
+        "src/modules/quick-composer/ui/QuickWorkspaceControls.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/quick-composer/ui/useQuickPickerMotion.ts": {
+      "candidates": [
+        "src/modules/quick-composer/ui/useQuickPickerMotion.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/data/monoSessionStore.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/data/sessionHistory.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/sessionHistory.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/data/sessionHistory.ts": {
+      "candidates": [
+        "src/modules/harness/lib/sessionHistory.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/data/sessionStore.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/sessionStore.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/data/sessionStore.ts": {
+      "candidates": [
+        "src/modules/harness/lib/sessionStore.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/data/sessionStoreRestore.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/hooks/useBottomChatMotion.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/hooks/useBottomChatMotion.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/hooks/useFileDrop.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/composerResize.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/composerResize.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/composerResize.ts": {
+      "candidates": [
+        "src/modules/harness/lib/composerResize.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/emojiMessage.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/emojiMessage.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/handoff.ts": {
+      "candidates": [
+        "src/modules/harness/lib/handoff.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/liveAgents.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/liveAgents.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/liveAgents.ts": {
+      "candidates": [
+        "src/modules/harness/lib/liveAgents.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/messageQueue.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/messageQueue.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/messageQueue.ts": {
+      "candidates": [
+        "src/modules/harness/lib/messageQueue.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/monoWorkStatus.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/monoWorkStatus.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/monocodeToolCall.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/monocodeToolCall.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/queuedFollowUp.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/queuedFollowUp.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/session.ts": {
+      "candidates": [
+        "src/modules/harness/lib/session.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/sessionRemoval.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/sessionRemoval.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/sessionRemoval.ts": {
+      "candidates": [
+        "src/modules/harness/lib/sessionRemoval.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/transcriptActivity.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/transcriptActivity.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/transcriptActivity.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/transcriptActivity.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/model/transcriptTurnCache.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/transcriptTurnCache.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/usageLimit.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/model/usageLimit.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/AccessPicker.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/AccessPicker.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/AgentMarkdown.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/AgentMarkdown.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/AgentTranscript.copy.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/AgentTranscript.copy.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/AgentTranscript.habits.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/AgentTranscript.performance.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/AgentTranscript.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/AgentTranscript.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/AgentTranscript.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/AgentTranscript.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/AgentTranscriptPacing.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/AgentTranscriptScroll.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/AttachmentChip.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/AttachmentChip.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/Composer.ime.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/Composer.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/Composer.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/ComposerFileDrop.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/HighlightedCodeBlock.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/MarkdownModeToggle.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/MarkdownModeToggle.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/MarkdownSourceEditor.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/MessageQueue.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/MessageQueue.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/ModelPicker.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/ModelPicker.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/ModelPicker.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/ModelPicker.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/MonoWorkTicker.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/MonoWorkTicker.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/QuestionForm.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/QuestionForm.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/QuestionForm.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/QuestionForm.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/SessionPane.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/SessionPane.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/SessionPaneMessaging.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/SessionPaneScroll.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/SessionReview.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/SessionReview.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/sessions/ui/TranscriptFind.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/TranscriptFind.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/TranscriptJumpToBottom.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/TranscriptPool.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/TranscriptPool.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/UsageLimitNotice.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/streamingMarkdown.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/streamingMarkdown.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/wordFade.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/sessions/ui/wordFade.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/settings/model/appShortcuts.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/settings/model/appShortcuts.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/settings/model/appearance.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/appearance.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/model/appearance.ts": {
+      "candidates": [
+        "src/modules/harness/lib/appearance.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/model/displayPrefs.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/displayPrefs.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/model/displayPrefs.ts": {
+      "candidates": [
+        "src/modules/harness/lib/displayPrefs.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/model/nativeGlass.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/settings/model/settings.flags.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/settings/model/settings.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/settings.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/model/settings.ts": {
+      "candidates": [
+        "src/modules/harness/lib/settings.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/ui/SettingsView.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/SettingsView.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/settings/ui/SettingsView.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/SettingsView.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/source-control/ui/GitChangesPanel.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/source-control/ui/GitChangesPanel.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/source-control/ui/SessionChangesDiff.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/SessionChangesDiff.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/source-control/ui/SidebarWorktreeSwitcher.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/SidebarWorktreeSwitcher.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/source-control/ui/SidebarWorktreeSwitcher.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/SidebarWorktreeSwitcher.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/source-control/ui/SwitchBranchDialog.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/SwitchBranchDialog.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/source-control/ui/UnifiedDiffView.markers.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/source-control/ui/UnifiedDiffView.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/UnifiedDiffView.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/terminal/model/terminalTab.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/terminalTab.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/terminal/model/terminalTab.ts": {
+      "candidates": [
+        "src/modules/harness/lib/terminalTab.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/terminal/ui/ProjectTerminalDock.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/ProjectTerminalDock.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/terminal/ui/TerminalView.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/terminal/ui/TerminalView.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/TerminalView.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/workspace/ui/PaneTree.tsx": {
+      "candidates": [
+        "src/modules/harness/surfaces/PaneTree.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/workspace/ui/PaneTreeEnter.test.ts": {
+      "candidates": [
+        "src/modules/harness/surfaces/PaneTreeEnter.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/features/workspace/ui/SurfaceTabs.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/SurfaceTabs.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/features/workspace/ui/TabCloseMotion.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/features/workspace/ui/TabMiddleClick.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/core/apply.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/apply.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/core/apply.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/apply.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/core/child.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/child.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/core/registry.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/registry.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/core/registry.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/registry.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/core/types.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/types.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/index.ts": {
+      "candidates": [
+        "src/modules/agent-app/index.ts",
+        "src/modules/agents/index.ts",
+        "src/modules/ai/index.ts",
+        "src/modules/api-client/index.ts",
+        "src/modules/collab/index.ts",
+        "src/modules/command-palette/index.ts",
+        "src/modules/connections/index.ts",
+        "src/modules/control/index.ts",
+        "src/modules/docker/index.ts",
+        "src/modules/editor/index.ts",
+        "src/modules/explorer/index.ts",
+        "src/modules/extensions/index.ts",
+        "src/modules/git-history/index.ts",
+        "src/modules/git-review/index.ts",
+        "src/modules/harness/index.ts",
+        "src/modules/harness/lib/harness/index.ts",
+        "src/modules/harness/mcp/index.ts",
+        "src/modules/header/index.ts",
+        "src/modules/i18n/index.ts",
+        "src/modules/launcher/index.ts",
+        "src/modules/lsp/index.ts",
+        "src/modules/markdown/index.ts",
+        "src/modules/mcp/index.ts",
+        "src/modules/mobile/index.ts",
+        "src/modules/notes-board/index.ts",
+        "src/modules/notifications/index.ts",
+        "src/modules/onboarding/index.ts",
+        "src/modules/orchestration/index.ts",
+        "src/modules/preview/index.ts",
+        "src/modules/quick-composer/index.ts",
+        "src/modules/quick-open/index.ts",
+        "src/modules/quota/index.ts",
+        "src/modules/rdp/index.ts",
+        "src/modules/remote/index.ts",
+        "src/modules/serial/index.ts",
+        "src/modules/settings/index.ts",
+        "src/modules/shortcuts/index.ts",
+        "src/modules/sidebar/index.ts",
+        "src/modules/skills/index.ts",
+        "src/modules/sound/index.ts",
+        "src/modules/source-control/index.ts",
+        "src/modules/spaces/index.ts",
+        "src/modules/ssh/index.ts",
+        "src/modules/ssh/tunnels/index.ts",
+        "src/modules/statusbar/index.ts",
+        "src/modules/tabs/index.ts",
+        "src/modules/terminal/index.ts",
+        "src/modules/theme/index.ts",
+        "src/modules/theme/skins/index.ts",
+        "src/modules/theme/themes/index.ts",
+        "src/modules/updater/index.ts",
+        "src/modules/vault/index.ts",
+        "src/modules/workbench/index.ts",
+        "src/modules/workspace-edit/index.ts",
+        "src/modules/workspace-search/index.ts",
+        "src/modules/workspace/index.ts"
+      ],
+      "comparison": "ambiguous"
+    },
+    "src/integrations/harness/providers/claude/claude.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/claude.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codex.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codex.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codexApprovalUi.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/codex/codexLive.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codexLive.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codexProtocol.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codexProtocol.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codexProtocol.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codexProtocol.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codexQuestions.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codexQuestions.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codexQuestions.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codexQuestions.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/codex/codexStore.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/codex/codexStore.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/codex/codexText.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/codex/codexText.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/codexText.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/cursor/cursor.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/cursor.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/grok/grokText.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/grok/grokText.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/grokText.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/hermes/hermes.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/hermes.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencode.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencode.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeCatalog.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeCatalog.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeClient.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeClient.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeClient.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeClient.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeLive.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/opencode/opencodeProtocol.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeProtocol.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeProtocol.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeProtocol.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeService.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/opencode/opencodeService.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/opencode/opencodeText.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeText.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeText.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/opencodeText.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/opencode/opencodeV2Events.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/opencode/opencodeV2Events.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/pi/piCatalog.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/integrations/harness/providers/pi/piCatalog.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/piCatalog.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/pi/piFamily.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/piFamily.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/pi/piLive.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/piLive.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/pi/piProtocol.test.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/piProtocol.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/integrations/harness/providers/pi/piProtocol.ts": {
+      "candidates": [
+        "src/modules/harness/lib/harness/piProtocol.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/platform/tauri/fs.ts": {
+      "candidates": [
+        "src/modules/harness/lib/fs.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/hooks/useAnimatedReorder.test.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/shared/hooks/useAnimatedReorder.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/shared/hooks/useDragResize.ts": {
+      "candidates": [
+        "src/modules/harness/hooks/useDragResize.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/hooks/useLockOverscroll.ts": {
+      "candidates": [
+        "src/modules/harness/hooks/useLockOverscroll.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/ui/ColorPickerPopover.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/ColorPickerPopover.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/ui/Modal.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/Modal.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/ui/ParticleText.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/ParticleText.tsx"
+      ],
+      "comparison": "identical"
+    },
+    "src/shared/ui/Popover.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/Popover.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/ui/PrivateEmail.test.ts": {
+      "candidates": [
+        "src/modules/harness/chrome/PrivateEmail.test.ts"
+      ],
+      "comparison": "different"
+    },
+    "src/shared/ui/TabLabel.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "src/shared/ui/icons.tsx": {
+      "candidates": [
+        "src/modules/harness/chrome/icons.tsx"
+      ],
+      "comparison": "different"
+    },
+    "src/styles/index.css": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "tests/browser/markdown-performance.html": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "tests/browser/markdown-performance.spec.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "tests/browser/markdown-performance.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "tests/browser/transcript-scroll.spec.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "tests/browser/transcript.html": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "tests/browser/transcript.tsx": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    },
+    "vite.config.ts": {
+      "candidates": [],
+      "comparison": "no_candidate"
+    }
+  },
+  "merge_proof": [
+    {
+      "upstream": "src/integrations/harness/providers/codex/codexQuestions.ts",
+      "local": "src/modules/harness/lib/harness/codexQuestions.ts",
+      "raw": {
+        "conflicts": 0,
+        "exit": 0
+      },
+      "without_imports_branding": {
+        "conflicts": 0,
+        "exit": 0
+      }
+    },
+    {
+      "upstream": "src/integrations/harness/providers/codex/codex.ts",
+      "local": "src/modules/harness/lib/harness/codex.ts",
+      "raw": {
+        "conflicts": 12,
+        "exit": 12
+      },
+      "without_imports_branding": {
+        "conflicts": 10,
+        "exit": 10
+      }
+    },
+    {
+      "upstream": "src/integrations/harness/core/child.ts",
+      "local": "src/modules/harness/lib/harness/child.ts",
+      "raw": {
+        "conflicts": 3,
+        "exit": 3
+      },
+      "without_imports_branding": {
+        "conflicts": 3,
+        "exit": 3
+      }
+    }
+  ]
+}
