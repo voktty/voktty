@@ -4743,9 +4743,9 @@ export const es: TranslationSchema = {
       composerMascot: "Mascota del composer",
       composerMascotDesc:
         "Cuando un turno esta en marcha, la mascota del proyecto recorre el composer.",
-      emptySessionGames: "Juegos en sesion vacia",
+      emptySessionGames: "Señal de sesión",
       emptySessionGamesDesc:
-        "Pac-man y snake esperan en la cuadricula de sesion vacia. Pasa el cursor para controlarlos.",
+        "Una animación propia de Voktty acompaña el inicio de una sesión.",
       notes: "Notas",
       notesDesc: "Un cuaderno markdown global en el rail del proyecto.",
       workingAgents: "Agentes en marcha",
@@ -5714,7 +5714,7 @@ export const es: TranslationSchema = {
       effortControl: "Control de esfuerzo",
       composerMascot: "Mascota del compositor",
       diffView: "Vista de diferencias",
-      emptySessionGames: "Juegos de sesión vacía",
+      emptySessionGames: "Señal de sesión",
       providerAccounts: "Cuentas de proveedor",
       showRemainingUsage: "Mostrar uso restante",
       maskEmails: "Enmascarar correos de cuenta",

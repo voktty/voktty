@@ -1,0 +1,110 @@
+.root {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 0;
+  height: 12rem;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, #000 48%, transparent 100%);
+}
+
+.art {
+  width: 100%;
+  height: 100%;
+  opacity: 0.72;
+}
+
+.route,
+.routeSecondary {
+  fill: none;
+  stroke-width: 1;
+}
+
+.route {
+  stroke: var(--accent-indicator);
+  opacity: 0.15;
+}
+
+.routeSecondary {
+  stroke: var(--accent-action);
+  opacity: 0.11;
+}
+
+.trace {
+  fill: none;
+  stroke: var(--accent-indicator);
+  stroke-width: 1.4;
+  stroke-dasharray: 1 28;
+  opacity: 0.58;
+  animation: signal-flow 22s linear infinite;
+}
+
+.traceReverse {
+  stroke: var(--accent-action);
+  animation-direction: reverse;
+  animation-duration: 28s;
+}
+
+.mark,
+.markInner {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: signal-breathe 7s ease-in-out infinite;
+}
+
+.mark {
+  stroke: var(--accent-indicator);
+  stroke-width: 1.5;
+  opacity: 0.38;
+}
+
+.markInner {
+  stroke: var(--accent-action);
+  stroke-width: 1;
+  opacity: 0.24;
+  animation-delay: -3.5s;
+}
+
+.ticks {
+  fill: none;
+  stroke: var(--content);
+  stroke-width: 1;
+  opacity: 0.13;
+}
+
+.nodes {
+  fill: var(--accent-indicator);
+  opacity: 0.45;
+}
+
+.coreNode {
+  fill: var(--accent-action);
+  animation: signal-breathe 4s ease-in-out infinite;
+}
+
+@keyframes signal-flow {
+  to {
+    stroke-dashoffset: -116;
+  }
+}
+
+@keyframes signal-breathe {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trace,
+  .mark,
+  .markInner,
+  .coreNode {
+    animation: none;
+  }
+}

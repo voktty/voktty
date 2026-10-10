@@ -1,4 +1,5 @@
 import { type ReactNode, useSyncExternalStore } from "react";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { basename } from "../lib/fs";
 import { projectKey } from "../lib/paths";
 import { looksLikeProject } from "../lib/recents";
@@ -11,8 +12,7 @@ import {
   loadGridArcadeEnabled,
   subscribeGridArcadeEnabled,
 } from "../lib/settings";
-import { useLockOverscroll } from "../hooks/useLockOverscroll";
-import { TerminalGridBackground } from "./TerminalGridBackground";
+import { VokttySignal } from "./VokttySignal";
 
 type Props = {
   cwd: string;
@@ -22,7 +22,7 @@ type Props = {
 
 export function EmptySession({ cwd, composer, hasChatBackground }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const arcadeEnabled = useSyncExternalStore(
+  const signalEnabled = useSyncExternalStore(
     subscribeGridArcadeEnabled,
     loadGridArcadeEnabled,
     () => true,
@@ -45,7 +45,7 @@ export function EmptySession({ cwd, composer, hasChatBackground }: Props) {
       ref={lockOverscroll}
       className="relative flex h-full min-h-0 overflow-y-auto overscroll-none"
     >
-      {arcadeEnabled && !hasChatBackground ? <TerminalGridBackground /> : null}
+      {signalEnabled && !hasChatBackground ? <VokttySignal /> : null}
       {composer ? (
         <div className="pointer-events-none relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-12">
           <div className="pointer-events-auto mb-4 px-2.5">

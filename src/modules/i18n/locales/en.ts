@@ -4632,9 +4632,9 @@ export const en = {
       composerMascot: "Composer mascot",
       composerMascotDesc:
         "When a turn is running, the project mascot runs along the composer.",
-      emptySessionGames: "Empty session games",
+      emptySessionGames: "Session signal",
       emptySessionGamesDesc:
-        "Pac-man and snake idle on the empty-session grid. Hover to take control.",
+        "A quiet Voktty signal animates above a new session.",
       notes: "Notes",
       notesDesc: "A global markdown notebook on the project rail.",
       workingAgents: "Working agents",
@@ -5593,7 +5593,7 @@ export const en = {
       effortControl: "Effort control",
       composerMascot: "Composer mascot",
       diffView: "Diff view",
-      emptySessionGames: "Empty session games",
+      emptySessionGames: "Session signal",
       providerAccounts: "Provider accounts",
       showRemainingUsage: "Show remaining usage",
       maskEmails: "Mask account emails",
