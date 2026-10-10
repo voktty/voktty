@@ -6,6 +6,7 @@ pub mod cursor_store;
 pub mod external_editor;
 pub mod external_history;
 pub mod fs;
+mod github_rate_limit;
 pub mod gitlab;
 pub mod host;
 pub mod inbox_media;

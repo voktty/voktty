@@ -133,7 +133,7 @@ export type InboxListResult = {
   errors: InboxProviderErrors;
 };
 
-const INBOX_CACHE_FRESH_MS = 30_000;
+const INBOX_CACHE_FRESH_MS = 2 * 60_000;
 
 type InboxListCache = InboxListResult & {
   key: string;
@@ -142,6 +142,7 @@ type InboxListCache = InboxListResult & {
 
 let inboxListCache: InboxListCache | null = null;
 const inboxListInflight = new Map<string, Promise<InboxListResult>>();
+let inboxCacheGeneration = 0;
 const repoByPath = new Map<string, string>();
 const workItemByKey = new Map<string, GithubWorkItem>();
 const workItemInflight = new Map<string, Promise<GithubWorkItem>>();
@@ -154,8 +155,8 @@ const prDiffInflight = new Map<string, Promise<GithubPrDiff>>();
 /** When each details, thread and diff entry last arrived, by cache map key. */
 const fetchedAt = new Map<string, number>();
 
-/** Work item views can reuse anything fetched this recently instead of refetching. */
-export const GITHUB_WORK_ITEM_FRESH_MS = INBOX_CACHE_FRESH_MS;
+/** Detail views reuse recently fetched content without delaying Inbox refreshes. */
+export const GITHUB_WORK_ITEM_FRESH_MS = 30_000;
 
 function freshEnough(key: string, maxAgeMs: number | undefined): boolean {
   if (maxAgeMs == null) return false;
@@ -164,6 +165,7 @@ function freshEnough(key: string, maxAgeMs: number | undefined): boolean {
 }
 
 export function clearInboxCache() {
+  inboxCacheGeneration += 1;
   inboxListCache = null;
   inboxListInflight.clear();
   repoByPath.clear();
@@ -514,27 +516,6 @@ export async function githubPrDiff(
   return promise;
 }
 
-/**
- * Warms everything the linked side panel reads, so opening it from a session
- * card can render straight from cache instead of waiting on `gh`.
- */
-export function prefetchGithubWorkItem(
-  cwd: string,
-  target: { repo: string; kind: GithubTaskKind; number: number },
-) {
-  const { kind, number } = target;
-  const quiet = () => undefined;
-  if (!peekGithubWorkItemDetails(cwd, kind, number)) {
-    void githubWorkItemDetails(cwd, kind, number).catch(quiet);
-  }
-  if (!peekGithubWorkItemThread(cwd, kind, number)) {
-    void githubWorkItemThread(cwd, kind, number).catch(quiet);
-  }
-  if (kind === "pr" && !peekGithubPrDiff(cwd, number)) {
-    void githubPrDiff(cwd, number).catch(quiet);
-  }
-}
-
 export async function listInboxItems(
   projects: readonly { path: string }[],
   query: InboxQuery,
@@ -546,9 +527,25 @@ export async function listInboxItems(
   }
   const pending = inboxListInflight.get(key);
   if (pending) return pending;
+  const generation = inboxCacheGeneration;
   const promise = fetchInboxItems(projects, query)
     .then((result) => {
-      inboxListCache = { key, ...result, fetchedAt: Date.now() };
+      const cachedGithubItems =
+        result.errors.github && inboxListCache?.key === key
+          ? inboxListCache.items.filter((item) => item.provider === "github")
+          : [];
+      if (cachedGithubItems.length > 0) {
+        result = {
+          ...result,
+          items: dedupeInboxItems(
+            [...result.items, ...cachedGithubItems],
+            projects.map((project) => project.path),
+          ),
+        };
+      }
+      if (generation === inboxCacheGeneration) {
+        inboxListCache = { key, ...result, fetchedAt: Date.now() };
+      }
       return result;
     })
     .finally(() => {

@@ -2387,6 +2387,12 @@ fn gh_checked(root: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 fn gh_run(root: &Path, args: &[&str], allow_empty: bool) -> Result<String, String> {
+    super::github_rate_limit::run(args, allow_empty, |args, allow_empty| {
+        gh_run_raw(root, args, allow_empty)
+    })
+}
+
+fn gh_run_raw(root: &Path, args: &[&str], allow_empty: bool) -> Result<String, String> {
     let program = super::host::resolve_gui_binary("gh")
         .ok_or_else(|| "GitHub CLI (`gh`) is not installed.".to_string())?;
     let mut cmd = Command::new(&program);

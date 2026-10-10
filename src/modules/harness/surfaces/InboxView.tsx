@@ -56,7 +56,6 @@ import {
   peekGithubWorkItemDetails,
   peekGithubWorkItemThread,
   peekInboxList,
-  prefetchGithubWorkItem,
   formatRelativeTime,
   GITHUB_WORK_ITEM_FRESH_MS,
   inboxPersonAvatarUrl,
@@ -716,22 +715,7 @@ export function InboxView({
               const key = inboxItemKey(item);
               const projectId = projectKey(item.projectPath);
               return (
-                <li
-                  key={key}
-                  onPointerEnter={() => {
-                    if (
-                      item.provider !== "github" ||
-                      (item.kind !== "issue" && item.kind !== "pr")
-                    ) {
-                      return;
-                    }
-                    prefetchGithubWorkItem(item.projectPath, {
-                      repo: item.repo,
-                      kind: item.kind,
-                      number: item.number,
-                    });
-                  }}
-                >
+                <li key={key}>
                   <InboxCard
                     item={item}
                     active={selected != null && key === inboxItemKey(selected)}
@@ -1122,8 +1106,7 @@ function InboxDetail({
   const [loading, setLoading] = useState(cached == null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"summary" | "code">("summary");
-  // The side panel often opens right after a hover prefetch, so it reuses
-  // recent GitHub data. Inbox keeps refetching so its refresh stays live.
+  // Reopened panels reuse recent GitHub data; explicit Inbox refreshes stay live.
   const panelMaxAge = panel ? GITHUB_WORK_ITEM_FRESH_MS : undefined;
   const [diffFocusPath, setDiffFocusPath] = useState<string | undefined>();
   // The panel summary lists changed files, so it shares the Code tab's fetch.

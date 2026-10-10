@@ -5,7 +5,6 @@ import {
   githubPrDiff,
   githubWorkItemDetails,
   githubWorkItemThread,
-  prefetchGithubWorkItem,
 } from "./githubTasks";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -46,26 +45,5 @@ describe("github work item freshness", () => {
 
     await githubWorkItemDetails("/repo", "pr", 1);
     expect(mocked).toHaveBeenCalledTimes(4);
-  });
-
-  it("prefetches issue activity and PR diffs once for the Inbox hover", async () => {
-    const target = { repo: "owner/repo", number: 1 };
-    prefetchGithubWorkItem("/repo", { ...target, kind: "issue" });
-    await vi.waitFor(() => expect(mocked).toHaveBeenCalledTimes(2));
-    expect(mocked.mock.calls.map(([command]) => command)).toEqual([
-      "git_github_work_item_details",
-      "git_github_work_item_thread",
-    ]);
-
-    prefetchGithubWorkItem("/repo", { ...target, kind: "pr" });
-    await vi.waitFor(() => expect(mocked).toHaveBeenCalledTimes(5));
-    expect(mocked.mock.calls.slice(2).map(([command]) => command)).toEqual([
-      "git_github_work_item_details",
-      "git_github_work_item_thread",
-      "git_github_pr_diff",
-    ]);
-
-    prefetchGithubWorkItem("/repo", { ...target, kind: "pr" });
-    expect(mocked).toHaveBeenCalledTimes(5);
   });
 });

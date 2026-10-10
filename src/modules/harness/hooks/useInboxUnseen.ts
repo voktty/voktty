@@ -22,7 +22,9 @@ import { loadHiddenLinearTeamIds } from "../lib/linear";
 import type { RecentProject } from "../lib/recents";
 import { noteInboxUnseen } from "../lib/sounds";
 
-const POLL_MS = 30_000;
+const POLL_MS = 2 * 60_000;
+const HIDDEN_POLL_MS = 5 * 60_000;
+const POLL_TICK_MS = 30_000;
 
 function seenEntries(items: readonly InboxItem[]): InboxSeenEntry[] {
   return items.map((item) => ({
@@ -39,6 +41,7 @@ export function useInboxUnseen(
   const [unseen, setUnseen] = useState(false);
   const entriesRef = useRef<InboxSeenEntry[]>([]);
   const onAppearedRef = useRef(options?.onAppeared);
+  const lastPulledAt = useRef<number | null>(null);
   onAppearedRef.current = options?.onAppeared;
 
   const applyUnseen = useCallback((next: boolean) => {
@@ -61,8 +64,12 @@ export function useInboxUnseen(
     }
 
     let cancelled = false;
+    let pulling = false;
 
     const pull = (force: boolean) => {
+      if (pulling) return;
+      pulling = true;
+      lastPulledAt.current = Date.now();
       const projectPaths = projects.map((project) => project.path);
       const filters = pruneInboxFilters(loadInboxFilters(), projectPaths);
       const query: InboxQuery = {
@@ -83,15 +90,29 @@ export function useInboxUnseen(
         })
         .catch(() => {
           // Leave the last known badge; a later poll can try again.
+        })
+        .finally(() => {
+          pulling = false;
         });
     };
 
     pull(false);
-    // Keep polling while minimized or closed-to-tray: the webview is still
-    // alive, and GitHub/GitLab automation triggers ride this same refresh.
-    const timer = window.setInterval(() => pull(true), POLL_MS);
+    const poll = () => {
+      if (pulling) return;
+      const interval = document.hidden ? HIDDEN_POLL_MS : POLL_MS;
+      if (
+        lastPulledAt.current != null &&
+        Date.now() - lastPulledAt.current < interval
+      ) {
+        return;
+      }
+      pull(true);
+    };
+    // Keep the tray badge fresh without letting background activity drive a
+    // request every few seconds or on every visibility transition.
+    const timer = window.setInterval(poll, POLL_TICK_MS);
     const onVis = () => {
-      if (!document.hidden) pull(true);
+      if (!document.hidden) poll();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
