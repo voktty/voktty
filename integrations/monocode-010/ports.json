@@ -1610,6 +1610,97 @@
         }
       ],
       "rationale": "Voktty already positions the diff glyph lane after line numbers, shows original line numbers for removed rows, and tints changed gutter rows. The Inbox PR overview already uses the selected diff palette for counts and file bars. These adaptations are covered by local commits 3ee0e4d and 02af232; the gutter regression checks the lane order and row classes."
+    },
+    {
+      "upstreamCommit": "0bfa5c6120",
+      "upstreamTitle": "Optimize streaming output, file indexes, and transcript rendering",
+      "localCommits": ["9ad872e", "ac9eb2e", "c7ef180", "caace6d", "ca1f602"],
+      "localCommitBases": [
+        "integrated",
+        "integrated",
+        "integrated",
+        "integrated",
+        "integrated"
+      ],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/app/model/harnessFlush.ts",
+          "local": "src/modules/harness/lib/harnessFlush.ts"
+        },
+        {
+          "upstream": "src/app/model/harnessFlush.test.ts",
+          "local": "src/modules/harness/lib/harnessFlush.test.ts"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/app/shell/SidebarRename.test.ts",
+          "local": "src/modules/harness/chrome/Sidebar.performance.test.ts"
+        },
+        {
+          "upstream": "src/features/files/model/fileIndex.ts",
+          "local": "src/modules/harness/lib/fileIndex.ts"
+        },
+        {
+          "upstream": "src/features/files/model/fileIndex.test.ts",
+          "local": "src/modules/harness/lib/fileIndex.test.ts"
+        },
+        {
+          "upstream": "src/features/files/model/fileIndex.resume.test.ts",
+          "local": "src/modules/harness/lib/fileIndex.resume.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/model/transcriptTurnCache.ts",
+          "local": "src/modules/harness/surfaces/transcriptTurnCache.ts"
+        },
+        {
+          "upstream": "src/features/sessions/model/transcriptTurnCache.test.ts",
+          "local": "src/modules/harness/surfaces/transcriptTurnCache.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.performance.test.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscript.performance.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.copy.test.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscript.performance.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/TranscriptPool.tsx",
+          "local": "src/modules/harness/surfaces/TranscriptPool.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/TranscriptPool.test.ts",
+          "local": "src/modules/harness/surfaces/TranscriptPool.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/harnessFlush.test.ts",
+            "src/modules/harness/chrome/Sidebar.performance.test.ts",
+            "src/modules/harness/lib/fileIndex.test.ts",
+            "src/modules/harness/lib/fileIndex.resume.test.ts",
+            "src/modules/harness/surfaces/transcriptTurnCache.test.ts",
+            "src/modules/harness/surfaces/AgentTranscript.performance.test.ts",
+            "src/modules/harness/surfaces/TranscriptPool.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty had already integrated this performance work across five local commits: foreground/background event batching, hidden explorer retention, worktree file-index caching and resume validation, transcript turn memoization, and pooled transcript updates. Voktty's cache retains its Zen/classic grouping and its transcript pool keeps pane focus handling in the owning module. Its performance regression suite covers the changed behaviors, including hidden prompt measurement."
     }
   ]
 }
