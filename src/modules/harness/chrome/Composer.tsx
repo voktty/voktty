@@ -40,6 +40,7 @@ import {
   EXPLORER_FILE_POINTER_DRAG_EVENT,
   type ExplorerFilePointerDragDetail,
 } from "../lib/drag";
+import { dragPointToClient } from "../lib/dragPoint";
 import type { ContextUsage } from "../lib/contextUsage";
 import {
   loadProjectFiles,
@@ -490,6 +491,16 @@ export function Composer({
   const attachmentsRef = useRef<Attachment[]>([]);
   const borrowedAttachmentIdsRef = useRef(new Set<string>());
   const draftRevisionRef = useRef(0);
+  const dropReadGenerationRef = useRef(0);
+  const dropReadFlightsRef = useRef(new Set<Promise<void>>());
+  const dropReadWaitersRef = useRef(new Set<() => void>());
+  const submitWaitingForDropsRef = useRef(false);
+  const submitRef = useRef<((value: string) => void) | undefined>(undefined);
+  const invalidateDropReads = useCallback(() => {
+    dropReadGenerationRef.current += 1;
+    for (const wake of dropReadWaitersRef.current) wake();
+    dropReadWaitersRef.current.clear();
+  }, []);
   const consumedQuoteId = useRef<number | null>(null);
   const positionedInitialDraft = useRef(false);
   const slashRef = useRef<SlashToken | null>(null);
@@ -699,25 +710,48 @@ export function Composer({
   const addAttachments = useCallback(
     (incoming: Attachment[]) => {
       if (!harnessSupportsAttachments(harness) || incoming.length === 0) return;
-      setAttachments((prev) => {
-        const next = mergeAttachments(prev, incoming);
-        syncHasValue(ref.current?.value ?? "", next);
-        return next;
-      });
+      const next = mergeAttachments(attachmentsRef.current, incoming);
+      attachmentsRef.current = next;
+      setAttachments(next);
+      syncHasValue(ref.current?.value ?? "", next);
       ref.current?.focus();
     },
     [harness, syncHasValue],
   );
 
+  const fileDropStateRef = useRef({ attachmentsSupported, addAttachments });
+  fileDropStateRef.current = { attachmentsSupported, addAttachments };
+
+  const readDroppedAttachments = useCallback(
+    (read: () => Promise<Attachment[]>) => {
+      const generation = dropReadGenerationRef.current;
+      const flight = read()
+        .then((incoming) => {
+          if (
+            generation !== dropReadGenerationRef.current ||
+            !fileDropStateRef.current.attachmentsSupported
+          ) {
+            incoming.forEach(revokeAttachment);
+            return;
+          }
+          fileDropStateRef.current.addAttachments(incoming);
+        })
+        .catch(() => undefined);
+      dropReadFlightsRef.current.add(flight);
+      void flight.finally(() => dropReadFlightsRef.current.delete(flight));
+    },
+    [],
+  );
+
   const removeAttachment = useCallback(
     (id: string) => {
-      setAttachments((prev) => {
-        const removed = prev.find((file) => file.id === id);
-        if (removed) revokeAttachment(removed);
-        const next = prev.filter((file) => file.id !== id);
-        syncHasValue(ref.current?.value ?? "", next);
-        return next;
-      });
+      const previous = attachmentsRef.current;
+      const removed = previous.find((file) => file.id === id);
+      if (removed) revokeAttachment(removed);
+      const next = previous.filter((file) => file.id !== id);
+      attachmentsRef.current = next;
+      setAttachments(next);
+      syncHasValue(ref.current?.value ?? "", next);
       ref.current?.focus();
     },
     [syncHasValue],
@@ -761,6 +795,7 @@ export function Composer({
 
   const exitEditMode = useCallback(() => {
     draftRevisionRef.current += 1;
+    invalidateDropReads();
     if (ref.current) {
       ref.current.value = "";
       ref.current.style.height = "auto";
@@ -783,7 +818,12 @@ export function Composer({
     setCreateError(null);
     syncHasValue("", []);
     ref.current?.focus();
-  }, [onDraftChange, onEditingLastTurnChange, syncHasValue]);
+  }, [
+    invalidateDropReads,
+    onDraftChange,
+    onEditingLastTurnChange,
+    syncHasValue,
+  ]);
 
   const recallLastTurn = useCallback(() => {
     if (!editLastTurnSupported || !lastTurnRecall) return;
@@ -820,19 +860,21 @@ export function Composer({
 
   useEffect(() => {
     return () => {
+      invalidateDropReads();
       for (const file of attachmentsRef.current) revokeAttachment(file);
     };
-  }, []);
+  }, [invalidateDropReads]);
 
   useEffect(() => {
     if (harnessSupportsAttachments(harness)) return;
+    invalidateDropReads();
     setAttachments((prev) => {
       if (prev.length === 0) return prev;
       for (const file of prev) revokeAttachment(file);
       syncHasValue(ref.current?.value ?? "", []);
       return [];
     });
-  }, [harness, syncHasValue]);
+  }, [harness, invalidateDropReads, syncHasValue]);
 
   useEffect(() => {
     const refresh = () => setRunnerEnabled(loadComposerRunner());
@@ -1062,37 +1104,22 @@ export function Composer({
     const dropRoot = () =>
       boxRef.current?.closest("[data-session-drop]") as HTMLElement | null;
     let nativeDropAt = 0;
-
-    const toClientPoint = (x: number, y: number) => {
-      const scale = window.devicePixelRatio || 1;
-      // Tauri types this as PhysicalPosition, but macOS wry reports logical
-      // points. Only scale down when the point sits outside the CSS viewport.
-      if (scale !== 1 && (x > window.innerWidth || y > window.innerHeight)) {
-        return { x: x / scale, y: y / scale };
-      }
-      return { x, y };
-    };
+    let cancelled = false;
 
     const overTarget = (x: number, y: number) => {
       const root = dropRoot();
       if (!root) return false;
-      const point = toClientPoint(x, y);
       const rect = root.getBoundingClientRect();
-      return (
-        point.x >= rect.left &&
-        point.x <= rect.right &&
-        point.y >= rect.top &&
-        point.y <= rect.bottom
-      );
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
     };
 
     const onDragOver = (event: DragEvent) => {
       const data = event.dataTransfer;
       if (!hasFiles(data)) return;
       event.preventDefault();
-      if (!attachmentsSupported) return;
-      data.dropEffect = "copy";
-      setFileDrag(true);
+      const supported = fileDropStateRef.current.attachmentsSupported;
+      data.dropEffect = supported ? "copy" : "none";
+      setFileDrag(supported);
     };
     const onDragLeave = (event: DragEvent) => {
       const root = dropRoot();
@@ -1106,11 +1133,11 @@ export function Composer({
       if (!hasFiles(data)) return;
       event.preventDefault();
       setFileDrag(false);
-      if (!attachmentsSupported) return;
+      if (!fileDropStateRef.current.attachmentsSupported) return;
       if (Date.now() - nativeDropAt < 250) return;
-      const files = [...data.files];
+      const files = filesFromClipboard(data);
       if (files.length === 0) return;
-      void attachmentsFromFiles(files).then(addAttachments);
+      readDroppedAttachments(() => attachmentsFromFiles(files));
     };
 
     const onExplorerFilePointerDrag = (event: Event) => {
@@ -1121,13 +1148,14 @@ export function Composer({
         return;
       }
       const over = overTarget(detail.x, detail.y);
+      const supported = fileDropStateRef.current.attachmentsSupported;
       if (detail.type === "move") {
-        setFileDrag(over && attachmentsSupported);
+        setFileDrag(over && supported);
         return;
       }
       setFileDrag(false);
-      if (!over || !attachmentsSupported) return;
-      void attachmentsFromPaths([detail.path]).then(addAttachments);
+      if (!over || !supported) return;
+      readDroppedAttachments(() => attachmentsFromPaths([detail.path]));
     };
 
     const root = dropRoot();
@@ -1139,25 +1167,28 @@ export function Composer({
       onExplorerFilePointerDrag,
     );
 
-    let cancelled = false;
     let unlisten: (() => void) | undefined;
     void getCurrentWebview()
       .onDragDropEvent((event) => {
+        if (cancelled) return;
         if (event.payload.type === "leave") {
           setFileDrag(false);
           return;
         }
         const { x, y } = event.payload.position;
-        const over = overTarget(x, y);
+        const point = dragPointToClient(x, y);
+        const over = overTarget(point.x, point.y);
+        const supported = fileDropStateRef.current.attachmentsSupported;
         if (event.payload.type === "enter" || event.payload.type === "over") {
-          setFileDrag(over && attachmentsSupported);
+          setFileDrag(over && supported);
           return;
         }
         if (event.payload.type !== "drop") return;
         setFileDrag(false);
-        if (!over || !attachmentsSupported) return;
+        if (!over || !supported) return;
         nativeDropAt = Date.now();
-        void attachmentsFromPaths(event.payload.paths).then(addAttachments);
+        const paths = event.payload.paths;
+        readDroppedAttachments(() => attachmentsFromPaths(paths));
       })
       .then((fn) => {
         if (cancelled) fn();
@@ -1167,6 +1198,7 @@ export function Composer({
 
     return () => {
       cancelled = true;
+      invalidateDropReads();
       root?.removeEventListener("dragover", onDragOver);
       root?.removeEventListener("dragleave", onDragLeave);
       root?.removeEventListener("drop", onDrop);
@@ -1176,7 +1208,11 @@ export function Composer({
       );
       unlisten?.();
     };
-  }, [addAttachments, attachmentsSupported, enabled]);
+  }, [enabled, invalidateDropReads, readDroppedAttachments]);
+
+  useEffect(() => {
+    if (!attachmentsSupported) setFileDrag(false);
+  }, [attachmentsSupported]);
 
   useEffect(() => {
     if (!focused) return;
@@ -1204,6 +1240,38 @@ export function Composer({
   }, [focused, question, busy, focusToken]);
 
   const submit = (value: string) => {
+    if (submitWaitingForDropsRef.current) return;
+    const pendingDrops = [...dropReadFlightsRef.current];
+    if (pendingDrops.length > 0) {
+      const generation = dropReadGenerationRef.current;
+      submitWaitingForDropsRef.current = true;
+      void (async () => {
+        while (
+          generation === dropReadGenerationRef.current &&
+          dropReadFlightsRef.current.size > 0
+        ) {
+          const pending = [...dropReadFlightsRef.current];
+          await new Promise<void>((resolve) => {
+            let settled = false;
+            const wake = () => {
+              if (settled) return;
+              settled = true;
+              dropReadWaitersRef.current.delete(wake);
+              resolve();
+            };
+            dropReadWaitersRef.current.add(wake);
+            void Promise.all(pending).then(wake);
+          });
+        }
+      })().then(() => {
+        submitWaitingForDropsRef.current = false;
+        if (generation !== dropReadGenerationRef.current || !ref.current)
+          return;
+        submitRef.current?.(ref.current.value);
+      });
+      return;
+    }
+
     if (isCompactCommand(value)) {
       if (!onCompactContext?.()) return;
       if (!ref.current) return;
@@ -1250,6 +1318,7 @@ export function Composer({
       ref.current.style.height = "auto";
       setDraft("");
       onDraftChange?.("");
+      invalidateDropReads();
       borrowedAttachmentIdsRef.current.clear();
       attachmentsRef.current = [];
       setAttachments([]);
@@ -1269,7 +1338,7 @@ export function Composer({
       : { text: command.text, matched: false };
 
     let text = composeInboxMessage(inboxCard, orchestratorCommand.text);
-    const files = attachments;
+    const files = attachmentsRef.current;
     const selectedComp = useLiveComponentStore.getState().selectedComponent;
     if (selectedComp) {
       const compDirective = formatComponentPromptDirective(selectedComp);
@@ -1308,6 +1377,7 @@ export function Composer({
     ref.current.style.height = "auto";
     setDraft("");
     onDraftChange?.("");
+    invalidateDropReads();
     borrowedAttachmentIdsRef.current.clear();
     attachmentsRef.current = [];
     setAttachments([]);
@@ -1323,6 +1393,7 @@ export function Composer({
     setCreateError(null);
     syncHasValue("", []);
   };
+  submitRef.current = submit;
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isImeComposition(e.nativeEvent)) return;
@@ -2069,7 +2140,11 @@ export function ComposerAction({
 
 function hasFiles(data: DataTransfer | null): data is DataTransfer {
   if (!data) return false;
-  return [...data.types].some(
-    (type) => type === "Files" || type === "application/x-moz-file",
+  return (
+    data.files.length > 0 ||
+    [...data.types].some(
+      (type) => type === "Files" || type === "application/x-moz-file",
+    ) ||
+    Array.from(data.items ?? []).some((item) => item.kind === "file")
   );
 }
