@@ -1241,6 +1241,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   onKeyDown={handleCommitShortcut}
                   placeholder={t("git.commitPlaceholder")}
                   rows={3}
+                  disabled={!!scm.actionBusy}
                   className={cn(
                     "min-h-[72px] border-border resize-none rounded-lg bg-transparent px-3 pb-7 pt-2.5 text-[12.5px] leading-snug shadow-none placeholder:text-muted-foreground/65 focus-visible:ring-0 focus:border-0",
                   )}
