@@ -2203,6 +2203,34 @@
         }
       ],
       "rationale": "Voktty's existing transcript implementation already holds the bottom pin during directionless trackpad ticks, reconciles scroll position before async updates, and preserves manual movement. Regression tests cover the wheel hold, upward gesture, streaming growth and live activity phase. The upstream temporary scroll logging was not copied. The Mono-specific settled header styling remains deferred."
+    },
+    {
+      "upstreamCommit": "514400dc3cd0f09820f4472a608f3e11d1498a94",
+      "upstreamTitle": "Enable native macOS spell checking in chat composer (#829)",
+      "localCommit": "22fa526",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src-tauri/src/macos.rs",
+          "local": "src-tauri/src/main.rs"
+        },
+        {
+          "upstream": "src-tauri/src/lib.rs",
+          "local": "src-tauri/src/main.rs"
+        },
+        {
+          "upstream": "src/features/sessions/ui/Composer.tsx",
+          "local": "src/modules/harness/chrome/Composer.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/Composer.ime.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "This was already adapted in Voktty before the current port review. On macOS, main registers WebContinuousSpellCheckingEnabled before starting Tauri without replacing a saved user preference, and the Harness composer opts into HTML spell checking. Its IME regression test asserts the textarea spellcheck attribute."
     }
   ]
 }
