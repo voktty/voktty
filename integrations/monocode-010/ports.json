@@ -218,6 +218,20 @@
         }
       ],
       "rationale": "Opening a thought row replaces its summary with Voktty's localized Thinking label, so the first paragraph appears only in the body. The local regression checks open and close behavior in English and Spanish."
+    },
+    {
+      "upstreamCommit": "5a3aef0eae9a7879249f3a385096c38dc8105297",
+      "upstreamTitle": "Allow editing commit message without staged files",
+      "localCommit": "9a853fa",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/source-control/SourceControlPanel.tsx"
+        }
+      ],
+      "tests": [],
+      "rationale": "The commit-message editor remains writable when no files are staged, while the commit action still requires staged files and a non-empty message. The editor now disables during a Git action, matching the upstream busy-state guard."
     }
   ]
 }
