@@ -183,7 +183,7 @@
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Remote tab matching and stale connection bindings in the connections Host surface; revisit with the Voktty-native SSH agent and tmux integration."
+        "Voktty has no mounted remote Host-session history picker; `RemoteSession.tsx` has no application call site. If a remote-session catalog is added, match by project and providerSessionId and keep its connection in the native SSH/tmux path."
       ],
       "mappings": [
         {
@@ -198,7 +198,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "Do not reuse a restored remote:// session as a blank local conversation before its transcript arrives. This is a partial adaptation; the connections tab-binding behavior is deferred to the native SSH/tmux migration."
+      "rationale": "The shared project-return regression is covered: `isBlankSession` excludes every remote:// session, including one whose transcript has not loaded, so opening a local project creates or selects a local session. Active remote OpenCode sessions store providerSessionId on the Voktty session record and resume through the native SSH helper. MonoCode's extra remoteSessionTabs helper serves its Host-session history picker; Voktty does not mount that surface, so the helper has no live local call site. Keep only that catalog-specific behavior partial until Voktty adds such a picker."
     },
     {
       "upstreamCommit": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0",
