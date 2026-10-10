@@ -113,12 +113,20 @@ export function applyHarnessEvent(
     case "plan":
       return upsertPlan(session, event);
     case "session.error":
-      return appendBlock(stopStreaming(session), {
-        id: crypto.randomUUID(),
-        role: "system",
-        text: event.message,
-        notice: "error",
-      });
+      return appendBlock(
+        stopStreaming({
+          ...session,
+          queueStatus: session.queuedMessages?.length
+            ? "paused"
+            : session.queueStatus,
+        }),
+        {
+          id: crypto.randomUUID(),
+          role: "system",
+          text: event.message,
+          notice: "error",
+        },
+      );
     case "session.providerBound":
       return { ...session, providerSessionId: event.providerSessionId };
     case "turn.started": {

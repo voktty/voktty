@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { canDispatchQueuedHead } from "../messageQueue";
 import { newSession } from "../session";
 import {
   appendUser,
@@ -65,6 +66,34 @@ describe("turn duration", () => {
     });
     expect(session.busy).toBe(false);
     expect(session.blocks[0]?.durationMs).toBe(7_000);
+  });
+
+  it("pauses queued messages when the provider errors", () => {
+    let session = appendUser(newSession("cursor", "/tmp"), "first turn");
+    session = {
+      ...session,
+      queuedMessages: [{ id: "queued", text: "next turn", attachments: [] }],
+      queueStatus: "active",
+    };
+
+    session = applyHarnessEvent(session, {
+      type: "session.error",
+      message: "provider unavailable",
+    });
+
+    expect(session.queuedMessages).toHaveLength(1);
+    expect(session.queueStatus).toBe("paused");
+    expect(canDispatchQueuedHead(session)).toBe(false);
+  });
+
+  it("does not set a queue status when an error has no queued messages", () => {
+    let session = appendUser(newSession("cursor", "/tmp"), "first turn");
+    session = applyHarnessEvent(session, {
+      type: "session.error",
+      message: "provider unavailable",
+    });
+
+    expect(session.queueStatus).toBeUndefined();
   });
 });
 
