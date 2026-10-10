@@ -28,5 +28,7 @@ describe("SwitchBranchDialog", () => {
     expect(markup).toContain("harness.chrome.generateCommit");
     expect(markup).toContain("harness.chrome.commitAndSwitch");
     expect(markup).toContain("harness.chrome.stashAndSwitch");
+    expect(markup).toContain('class="absolute inset-0 z-0 bg-black/30"');
+    expect(markup).toContain("voktty-floating-surface absolute z-[1]");
   });
 });

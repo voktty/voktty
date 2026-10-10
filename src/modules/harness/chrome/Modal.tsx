@@ -59,7 +59,7 @@ export function ModalPanel({
 
   return (
     <div
-      className={`absolute left-1/2 ${TOP[size]} ${WIDTH[size]} -translate-x-1/2`}
+      className={`absolute z-[1] left-1/2 ${TOP[size]} ${WIDTH[size]} -translate-x-1/2`}
     >
       <div
         role="dialog"
@@ -111,7 +111,7 @@ export function Modal(props: Props) {
   const content = (
     <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
       <div
-        className="modal-backdrop absolute inset-0 bg-black/40"
+        className="modal-backdrop absolute inset-0 z-0 bg-black/40"
         onMouseDown={props.onClose}
       />
       <ModalPanel {...props} />

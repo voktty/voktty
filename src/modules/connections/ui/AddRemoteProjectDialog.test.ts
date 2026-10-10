@@ -64,7 +64,8 @@ describe("AddRemoteProjectDialog", () => {
 
     expect(markup).toContain("Open folder on a machine");
     expect(markup).toContain("Sessions in this project run on that machine");
-    expect(markup).toContain('class="absolute inset-0"');
+    expect(markup).toContain('class="absolute inset-0 z-0"');
+    expect(markup).toContain("bg-background-base dark:bg-content/5");
     expect(markup).not.toContain("bg-black/30");
   });
 
