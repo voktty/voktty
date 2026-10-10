@@ -175,12 +175,17 @@ pub async fn git_discard(
 pub async fn git_commit(
     repo_root: String,
     message: String,
+    paths: Option<Vec<String>>,
     workspace: Option<WorkspaceEnv>,
     app: AppHandle,
 ) -> Result<GitCommitResult, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
-        operations::commit(r, &repo_root, &message, &workspace).map_err(Into::into)
+        match paths {
+            Some(paths) => operations::commit_paths(r, &repo_root, &message, &paths, &workspace),
+            None => operations::commit(r, &repo_root, &message, &workspace),
+        }
+        .map_err(Into::into)
     })
     .await
 }

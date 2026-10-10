@@ -577,10 +577,16 @@ export const native = {
       contents,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
-  gitCommit: (repoRoot: string, message: string, workspace?: WorkspaceEnv) =>
+  gitCommit: (
+    repoRoot: string,
+    message: string,
+    workspace?: WorkspaceEnv,
+    paths?: string[],
+  ) =>
     invoke<GitCommitResult>("git_commit", {
       repoRoot,
       message,
+      ...(paths !== undefined ? { paths } : {}),
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
   gitFetch: (repoRoot: string, workspace?: WorkspaceEnv) =>

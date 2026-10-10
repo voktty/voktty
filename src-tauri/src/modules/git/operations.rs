@@ -550,6 +550,131 @@ pub fn commit(
     })
 }
 
+const MAX_COMMIT_PATHS: usize = 256;
+const MAX_COMMIT_PATH_BYTES: usize = 64 * 1024;
+const MAX_SCOPED_COMMIT_MESSAGE_BYTES: usize = 4096;
+
+pub fn commit_paths(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    message: &str,
+    paths: &[String],
+    workspace: &WorkspaceEnv,
+) -> Result<GitCommitResult> {
+    if paths.is_empty() || paths.len() > MAX_COMMIT_PATHS {
+        return Err(GitError::command(
+            "git commit",
+            format!("expected between 1 and {MAX_COMMIT_PATHS} selected paths"),
+        ));
+    }
+    let total_path_bytes = paths
+        .iter()
+        .fold(0usize, |total, path| total.saturating_add(path.len()));
+    if total_path_bytes > MAX_COMMIT_PATH_BYTES {
+        return Err(GitError::command(
+            "git commit",
+            "selected paths exceed the size limit",
+        ));
+    }
+
+    let trimmed = message.trim();
+    if trimmed.is_empty() {
+        return Err(GitError::EmptyCommitMessage);
+    }
+    if trimmed.len() > MAX_SCOPED_COMMIT_MESSAGE_BYTES {
+        return Err(GitError::command(
+            "git commit",
+            "commit message exceeds the size limit",
+        ));
+    }
+
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let status = status_inner(&repo_root)?;
+    if status.truncated {
+        return Err(GitError::command(
+            "git status",
+            "status output was truncated; refusing a scoped commit",
+        ));
+    }
+
+    let mut selected = Vec::with_capacity(paths.len());
+    let mut untracked = Vec::new();
+    for path in paths {
+        let relative = pathspec_from_input(&repo_root.local_path, path)?;
+        if selected.iter().any(|existing| existing == &relative) {
+            continue;
+        }
+        let change = status
+            .changed_files
+            .iter()
+            .find(|file| file.path == relative)
+            .ok_or_else(|| GitError::InvalidPath("path is not a changed file".into()))?;
+        if change.untracked {
+            untracked.push(relative.clone());
+        }
+        selected.push(relative);
+    }
+
+    if !untracked.is_empty() {
+        let mut args: Vec<OsString> = vec!["add".into(), "--".into()];
+        args.extend(
+            untracked
+                .iter()
+                .map(|path| format!(":(literal){path}").into()),
+        );
+        let output = run_git(
+            &repo_root.workspace,
+            Some(&repo_root.git_path),
+            args,
+            DEFAULT_TIMEOUT_SECS,
+        )?;
+        ensure_success(&output, "git add selected files failed")?;
+    }
+
+    let mut args: Vec<OsString> = vec![
+        "commit".into(),
+        "--only".into(),
+        "-m".into(),
+        trimmed.into(),
+        "--".into(),
+    ];
+    args.extend(
+        selected
+            .iter()
+            .map(|path| format!(":(literal){path}").into()),
+    );
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        args,
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    if output.exit_code != Some(0) && nothing_to_commit(&output) {
+        return Err(GitError::command(
+            "git commit",
+            "nothing selected to commit",
+        ));
+    }
+    ensure_success(&output, "git commit failed")?;
+
+    let combined = git_stdout_lines(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["show", "-s", "--format=%H%n%s", "HEAD"],
+    )?;
+    let sha = combined.first().cloned().ok_or(GitError::CommandFailed {
+        context: "failed to resolve commit sha",
+        detail: String::new(),
+    })?;
+    let summary = combined.get(1).cloned().unwrap_or_default();
+
+    Ok(GitCommitResult {
+        commit_sha: sha,
+        summary,
+    })
+}
+
 pub fn push(
     registry: &WorkspaceRegistry,
     repo_root: &str,
@@ -2353,6 +2478,52 @@ fn parse_blame_porcelain(text: &str) -> Vec<GitBlameLine> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::{Command, Output};
+
+    fn run_test_git(repo: &Path, args: &[&str]) -> Output {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git is available");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output
+    }
+
+    fn create_commit_test_repo() -> Option<(tempfile::TempDir, WorkspaceRegistry)> {
+        let version = Command::new("git").arg("--version").output().ok()?;
+        if !version.status.success() {
+            return None;
+        }
+        let repo = tempfile::tempdir().expect("temporary git repository");
+        run_test_git(repo.path(), &["init", "-q"]);
+        run_test_git(repo.path(), &["config", "user.name", "Voktty Test"]);
+        run_test_git(
+            repo.path(),
+            &["config", "user.email", "voktty-test@example.invalid"],
+        );
+        std::fs::write(repo.path().join("session.txt"), "base\n").unwrap();
+        std::fs::write(repo.path().join("other.txt"), "base\n").unwrap();
+        run_test_git(repo.path(), &["add", "--all"]);
+        run_test_git(repo.path(), &["commit", "-m", "initial"]);
+
+        let registry = WorkspaceRegistry::default();
+        registry.authorize(repo.path()).unwrap();
+        Some((repo, registry))
+    }
+
+    fn output_text(output: Output) -> String {
+        String::from_utf8(output.stdout).expect("git output is UTF-8")
+    }
+
+    fn selected_path(repo: &Path, relative: &str) -> String {
+        repo.join(relative).to_string_lossy().into_owned()
+    }
 
     #[test]
     fn sha_is_safe_accepts_hex() {
@@ -2478,5 +2649,128 @@ mod tests {
             "fatal: your current branch 'main' does not have any commits yet"
         )));
         assert!(!looks_like_no_head(&mk("fatal: pathspec did not match")));
+    }
+
+    #[test]
+    fn commit_paths_leaves_unselected_staged_files_in_the_index() {
+        let Some((repo, registry)) = create_commit_test_repo() else {
+            return;
+        };
+        std::fs::write(repo.path().join("session.txt"), "session change\n").unwrap();
+        std::fs::write(repo.path().join("other.txt"), "staged elsewhere\n").unwrap();
+        run_test_git(repo.path(), &["add", "--", "other.txt"]);
+
+        let selected = selected_path(repo.path(), "session.txt");
+        commit_paths(
+            &registry,
+            &repo.path().to_string_lossy(),
+            "session change",
+            &[selected],
+            &WorkspaceEnv::Local,
+        )
+        .unwrap();
+
+        let committed = output_text(run_test_git(
+            repo.path(),
+            &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        ));
+        assert_eq!(committed.trim(), "session.txt");
+        let staged = output_text(run_test_git(
+            repo.path(),
+            &["diff", "--cached", "--name-only"],
+        ));
+        assert_eq!(staged.trim(), "other.txt");
+    }
+
+    #[test]
+    fn commit_paths_stages_selected_untracked_files_only() {
+        let Some((repo, registry)) = create_commit_test_repo() else {
+            return;
+        };
+        std::fs::write(repo.path().join("new file.txt"), "new session file\n").unwrap();
+        std::fs::write(repo.path().join("other.txt"), "staged elsewhere\n").unwrap();
+        run_test_git(repo.path(), &["add", "--", "other.txt"]);
+
+        let selected = selected_path(repo.path(), "new file.txt");
+        commit_paths(
+            &registry,
+            &repo.path().to_string_lossy(),
+            "add session file",
+            &[selected],
+            &WorkspaceEnv::Local,
+        )
+        .unwrap();
+
+        let committed = output_text(run_test_git(
+            repo.path(),
+            &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        ));
+        assert_eq!(committed.trim(), "new file.txt");
+        let staged = output_text(run_test_git(
+            repo.path(),
+            &["diff", "--cached", "--name-only"],
+        ));
+        assert_eq!(staged.trim(), "other.txt");
+    }
+
+    #[test]
+    fn commit_paths_treats_git_pathspec_metacharacters_literally() {
+        let Some((repo, registry)) = create_commit_test_repo() else {
+            return;
+        };
+        std::fs::write(repo.path().join("literal[1].txt"), "base\n").unwrap();
+        std::fs::write(repo.path().join("literal1.txt"), "base\n").unwrap();
+        run_test_git(repo.path(), &["add", "--all"]);
+        run_test_git(repo.path(), &["commit", "-m", "add pathspec fixtures"]);
+        std::fs::write(repo.path().join("literal[1].txt"), "selected change\n").unwrap();
+        std::fs::write(repo.path().join("literal1.txt"), "other change\n").unwrap();
+
+        let selected = selected_path(repo.path(), "literal[1].txt");
+        commit_paths(
+            &registry,
+            &repo.path().to_string_lossy(),
+            "literal file",
+            &[selected],
+            &WorkspaceEnv::Local,
+        )
+        .unwrap();
+
+        let committed = output_text(run_test_git(
+            repo.path(),
+            &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        ));
+        assert_eq!(committed.trim(), "literal[1].txt");
+        let unstaged = output_text(run_test_git(repo.path(), &["diff", "--name-only"]));
+        assert_eq!(unstaged.trim(), "literal1.txt");
+    }
+
+    #[test]
+    fn commit_paths_rejects_a_directory_that_contains_changed_files() {
+        let Some((repo, registry)) = create_commit_test_repo() else {
+            return;
+        };
+        std::fs::create_dir(repo.path().join("nested")).unwrap();
+        std::fs::write(repo.path().join("nested/file.txt"), "base\n").unwrap();
+        run_test_git(repo.path(), &["add", "--all"]);
+        run_test_git(repo.path(), &["commit", "-m", "add nested file"]);
+        std::fs::write(repo.path().join("nested/file.txt"), "changed\n").unwrap();
+
+        let directory = selected_path(repo.path(), "nested");
+        let result = commit_paths(
+            &registry,
+            &repo.path().to_string_lossy(),
+            "must not commit a directory",
+            &[directory],
+            &WorkspaceEnv::Local,
+        );
+        assert!(matches!(result, Err(GitError::InvalidPath(_))));
+        assert_eq!(
+            output_text(run_test_git(
+                repo.path(),
+                &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]
+            ))
+            .trim(),
+            "nested/file.txt"
+        );
     }
 }
