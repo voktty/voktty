@@ -448,6 +448,10 @@ import type { InboxSessionPortal } from "../surfaces/InboxDiscussionPanel";
 import { markHarnessOpenPhase } from "../lib/openTiming";
 import { PaneTree } from "../surfaces/PaneTree";
 import { SessionSurface } from "../surfaces/SessionSurface";
+import {
+  TranscriptPool,
+  TranscriptPoolOutlet,
+} from "../surfaces/TranscriptPool";
 import type { SettingsAnchor } from "../surfaces/SettingsView";
 import type { ConnectableInboxSource } from "../lib/inboxFilters";
 
@@ -885,6 +889,7 @@ export function HarnessApp({
   filePickerOpenRef.current = filePickerOpen;
   const sessionNavigationIdsRef = useRef<readonly string[]>([]);
   const openingSessionIds = useRef(new Set<string>());
+  const [transcriptPool] = useState(() => new TranscriptPool());
   const loadedSessionCache = useRef(new Map<string, Session>());
   const orchestrationRuns = useMemo(() => [] as OrchestrationRun[], []);
 
@@ -6833,6 +6838,7 @@ export function HarnessApp({
                       >
                         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                           <PaneTree
+                            transcriptPool={transcriptPool}
                             workspaceSwitchingSessionId={
                               workspaceNavigation.pending
                                 ? active?.id
@@ -7099,6 +7105,7 @@ export function HarnessApp({
               }
             >
               <LazySessionPane
+                transcriptPool={transcriptPool}
                 session={session}
                 visible={inboxAskPortal?.sessionId === session.id}
                 focused={inboxAskPortal?.sessionId === session.id}
@@ -7127,6 +7134,7 @@ export function HarnessApp({
             </SessionSurface>
           ))}
       </div>
+      <TranscriptPoolOutlet pool={transcriptPool} />
     </div>
   );
 }

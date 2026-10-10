@@ -38,6 +38,7 @@ import type {
   RuntimeMode,
   Session,
 } from "../lib/session";
+import type { TranscriptPool } from "./TranscriptPool";
 
 const LazyFilePane = lazy(() =>
   import("./FilePane").then((module) => ({ default: module.FilePane })),
@@ -47,6 +48,7 @@ const LazySessionPane = lazy(() =>
 );
 
 type Shared = {
+  transcriptPool?: TranscriptPool;
   visible: boolean;
   sessions: Session[];
   editorPanes: EditorPane[];
@@ -149,6 +151,7 @@ type PaneDrag = {
 const DRAG_THRESHOLD = 5;
 
 function PaneTreeComponent({
+  transcriptPool,
   visible,
   layout,
   sessions,
@@ -406,6 +409,7 @@ function PaneTreeComponent({
                   fallback={<div aria-busy="true" className="h-full bg-background" />}
                 >
                   <LazySessionPane
+                    transcriptPool={transcriptPool}
                     session={session}
                     workspaceSwitchingSessionId={workspaceSwitchingSessionId}
                     visible={visible}

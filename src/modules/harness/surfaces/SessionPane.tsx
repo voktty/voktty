@@ -48,9 +48,11 @@ import {
   subscribeProjectChatBackground,
 } from "../lib/projectChatBackground";
 import { projectChatBackgroundSrc } from "../lib/chatBackground";
+import { PooledTranscript, type TranscriptPool } from "./TranscriptPool";
 
 export type SessionPaneProps = {
   session: Session;
+  transcriptPool?: TranscriptPool;
   visible: boolean;
   focused: boolean;
   addToChatTarget?: boolean;
@@ -137,6 +139,7 @@ export type SessionPaneProps = {
 
 export const SessionPane = memo(function SessionPane({
   session,
+  transcriptPool,
   visible,
   focused,
   addToChatTarget = focused,
@@ -199,6 +202,7 @@ export const SessionPane = memo(function SessionPane({
       onApproval(session.id, requestId, decision),
     [onApproval, session.id],
   );
+  const focusPane = useCallback(() => onFocus(session.id), [onFocus, session.id]);
   const openPlan = useCallback(
     (blockId: string) => onOpenPlan(session.id, blockId),
     [onOpenPlan, session.id],
@@ -395,7 +399,7 @@ export const SessionPane = memo(function SessionPane({
       data-project-background-scope={projectBackground?.scope}
       style={projectBackgroundStyle}
       className="chat-pane-background relative isolate flex h-full min-h-0 min-w-0 flex-1 flex-col"
-      onMouseDown={() => onFocus(session.id)}
+      onMouseDown={focusPane}
     >
       {showHeader ?? inSplit ? (
         <div
@@ -459,56 +463,63 @@ export const SessionPane = memo(function SessionPane({
           )
         ) : (
           <>
-            <AgentTranscript
-              blocks={session.blocks}
-              busy={!!session.busy}
-              visible={visible}
-              cwd={workCwd}
-              harness={session.harness}
-              model={session.model}
-              modelSettings={session.modelSettings}
-              onApproval={approve}
-              onAddToChat={addSelectionToChat}
-              onSaveNote={notesEnabled ? saveNote : undefined}
-              onSaveSelectionNote={notesEnabled ? saveSelectionNote : undefined}
-              onOpenFile={onOpenFile}
-              onOpenDiff={onOpenDiff}
-              onOpenPlan={openPlan}
-              onBuildPlan={buildPlan}
-              onSecondOpinion={
-                onSecondOpinion && !session.inboxAsk
-                  ? (target, turn) =>
-                      onSecondOpinion(session.id, target, turn)
-                  : undefined
-              }
-              onHandoff={
-                onHandoff && !session.inboxAsk
-                  ? (target, turn) =>
-                      onHandoff(session.id, target, turn)
-                  : undefined
-              }
-              onEditLastTurn={
-                editLastTurnSupported && !session.inboxAsk
-                  ? onEditLastTurn
-                  : undefined
-              }
-              editingLastTurn={editingLastTurn}
-              onJumpToBottomChange={setShowJumpToBottom}
-              onJumpToBottomReady={onJumpToBottomReady}
-              onRevealReady={onRevealReady}
-              latestTurnAccessory={
-                session.inboxAsk ? undefined : (
-                  <SessionReview
-                    sessionId={session.id}
-                    cwd={workCwd}
-                    enabled={visible}
-                    busy={!!session.busy}
-                    undoLocked={undoLocked}
-                    onOpenDiff={onOpenDiff}
-                  />
-                )
-              }
-            />
+            <PooledTranscript
+              pool={transcriptPool}
+              sessionId={session.id}
+              onMouseDown={focusPane}
+            >
+              <AgentTranscript
+                blocks={session.blocks}
+                busy={!!session.busy}
+                visible={visible}
+                cwd={workCwd}
+                harness={session.harness}
+                model={session.model}
+                modelSettings={session.modelSettings}
+                onApproval={approve}
+                onAddToChat={addSelectionToChat}
+                onSaveNote={notesEnabled ? saveNote : undefined}
+                onSaveSelectionNote={
+                  notesEnabled ? saveSelectionNote : undefined
+                }
+                onOpenFile={onOpenFile}
+                onOpenDiff={onOpenDiff}
+                onOpenPlan={openPlan}
+                onBuildPlan={buildPlan}
+                onSecondOpinion={
+                  onSecondOpinion && !session.inboxAsk
+                    ? (target, turn) =>
+                        onSecondOpinion(session.id, target, turn)
+                    : undefined
+                }
+                onHandoff={
+                  onHandoff && !session.inboxAsk
+                    ? (target, turn) => onHandoff(session.id, target, turn)
+                    : undefined
+                }
+                onEditLastTurn={
+                  editLastTurnSupported && !session.inboxAsk
+                    ? onEditLastTurn
+                    : undefined
+                }
+                editingLastTurn={editingLastTurn}
+                onJumpToBottomChange={setShowJumpToBottom}
+                onJumpToBottomReady={onJumpToBottomReady}
+                onRevealReady={onRevealReady}
+                latestTurnAccessory={
+                  session.inboxAsk ? undefined : (
+                    <SessionReview
+                      sessionId={session.id}
+                      cwd={workCwd}
+                      enabled={visible}
+                      busy={!!session.busy}
+                      undoLocked={undoLocked}
+                      onOpenDiff={onOpenDiff}
+                    />
+                  )
+                }
+              />
+            </PooledTranscript>
             <PromptOutline
               blocks={session.blocks}
               scope={transcriptScope}
