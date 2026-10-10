@@ -91,6 +91,13 @@ it("verifies mapped upstream and local changes with test paths", () => {
     "src/modules/harness/codex.ts",
   ]);
 
+  manifest.records.push(JSON.parse(JSON.stringify(manifest.records[0])));
+  assert.throws(
+    () => verifyPorts({ upstream, localRoot: local, manifest }),
+    /Duplicate upstream port record/,
+  );
+  manifest.records.pop();
+
   delete manifest.records[0].coverage;
   delete manifest.records[0].deferred;
   assert.equal(verifyPorts({ upstream, localRoot: local, manifest }).records[0].coverage, "complete");

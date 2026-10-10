@@ -138,6 +138,10 @@
         {
           "upstream": "src/integrations/harness/providers/codex/codexProtocol.ts",
           "local": "src/modules/harness/lib/harness/codexProtocol.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/codex/codexProtocol.test.ts",
+          "local": "src/modules/harness/lib/harness/codexModelSelection.test.ts"
         }
       ],
       "tests": [
@@ -149,7 +153,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "Omit model overrides until the provider model is selected while retaining Voktty's read-only plan sandbox and approval policy."
+      "rationale": "Voktty omits Codex model and collaboration-mode overrides until a nonblank model is known, then trims and uses the selected id consistently. This avoids sending a null or missing model in a collaboration-mode setting. The behavior and focused protocol test are already present in the local Harness."
     },
     {
       "upstreamCommit": "db006a4a19c0f5ce23b3bd58a44f62b9b78a2d97",
@@ -584,7 +588,7 @@
     {
       "upstreamCommit": "40aa9feb4ca05364af9197a6be6f0afb7e2ffca3",
       "upstreamTitle": "Add effort selection animations for other harnesses (#672)",
-      "localCommit": "8bf442b",
+      "localCommit": "8bf442b4e8bda41bbe2d0ea24267a61810bdd95e",
       "license": "MIT",
       "mappings": [
         {
@@ -603,7 +607,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "The max and ultra effort shimmer applies to Codex reasoning effort, OpenCode variants, Claude effort, and Cursor effort. Other settings and ordinary values remain unanimated; focused tests cover all four setting IDs and the non-effort case."
+      "rationale": "Voktty applies the max and ultra effort tiles to every Harness provider with a recognized effort setting, including Codex, OpenCode, Claude, and Cursor. This behavior is already in the local ModelPicker implementation and regression tests."
     },
     {
       "upstreamCommit": "0eb2773ec4f18c0533d5253ea6d4627cd5795299",
@@ -746,7 +750,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "Route ⌘/Ctrl+T and ⌘/Ctrl+W through the focused project dock only when the dock is open, its focus flag is set, and the active DOM element remains inside it. Keyboard focus is tracked by the dock, and a stale focus flag cannot redirect pane-close buttons. Voktty has no native app-menu command producer matching the upstream menu hunk; its existing new_tab/close_tab event bridge uses the same focus-aware routing."
+      "rationale": "Voktty already routes Cmd/Ctrl+T and Cmd/Ctrl+W to the active project terminal only when the dock layout is enabled, its focus flag is set, DOM focus remains inside the dock, and the active file is a terminal. Otherwise the shortcuts keep their workspace behavior. Voktty has no native application-menu dispatcher for the upstream menu broadcast adjustment; its local focused-target handlers and regression tests cover the available shortcut surface."
     },
     {
       "upstreamCommit": "6a5f7fa13750cb115ce461be278fded591dc794f",
@@ -1959,54 +1963,6 @@
       "rationale": "Voktty routes Harness GitHub CLI calls through one native gh_run path. A shared backoff pauses primary and secondary rate-limited requests, probes the GraphQL quota reset when appropriate, and falls back to a short pause if the probe fails. Inbox lists stay fresh for two minutes, detail data for thirty seconds, the badge refreshes every two minutes while visible and five minutes while hidden, and stale GitHub entries remain visible when refresh is rate limited. The Inbox card no longer prefetches linked GitHub details on hover. The Checks tab polling is deferred because Voktty has no corresponding tab."
     },
     {
-      "upstreamCommit": "40aa9feb4ca05364af9197a6be6f0afb7e2ffca3",
-      "upstreamTitle": "Add effort selection animations for other harnesses (#672)",
-      "localCommit": "8bf442b4e8bda41bbe2d0ea24267a61810bdd95e",
-      "license": "MIT",
-      "mappings": [
-        {
-          "upstream": "src/features/sessions/ui/ModelPicker.tsx",
-          "local": "src/modules/harness/chrome/ModelPicker.tsx"
-        },
-        {
-          "upstream": "src/features/sessions/ui/ModelPicker.test.ts",
-          "local": "src/modules/harness/chrome/ModelPicker.test.ts"
-        }
-      ],
-      "tests": [
-        {
-          "files": ["src/modules/harness/chrome/ModelPicker.test.ts"],
-          "cwd": ".",
-          "runner": "vitest"
-        }
-      ],
-      "rationale": "Voktty applies the max and ultra effort tiles to every Harness provider with a recognized effort setting, including Codex, OpenCode, Claude, and Cursor. This behavior is already in the local ModelPicker implementation and regression tests."
-    },
-    {
-      "upstreamCommit": "c2b479dde61be031c6406e83bde5b1e2ccf1c40c",
-      "upstreamTitle": "fix(codex): omit collaboration mode until a model is known (#771)",
-      "localCommit": "6d3ec038a09399df0ef5f609ccee82a399d0e56a",
-      "license": "MIT",
-      "mappings": [
-        {
-          "upstream": "src/integrations/harness/providers/codex/codexProtocol.ts",
-          "local": "src/modules/harness/lib/harness/codexProtocol.ts"
-        },
-        {
-          "upstream": "src/integrations/harness/providers/codex/codexProtocol.test.ts",
-          "local": "src/modules/harness/lib/harness/codexModelSelection.test.ts"
-        }
-      ],
-      "tests": [
-        {
-          "files": ["src/modules/harness/lib/harness/codexModelSelection.test.ts"],
-          "cwd": ".",
-          "runner": "vitest"
-        }
-      ],
-      "rationale": "Voktty omits Codex model and collaboration-mode overrides until a nonblank model is known, then trims and uses the selected id consistently. This avoids sending a null or missing model in a collaboration-mode setting. The behavior and focused protocol test are already present in the local Harness."
-    },
-    {
       "upstreamCommit": "bdc2b64cc1ae009b0c75b81e171f3010acb62fc6",
       "upstreamTitle": "Fix notes keeping an \"untitled\" slug after they get a real title (#788)",
       "localCommit": "8ddcf81ea8cc88a32bd9c84797c50a8e0911bb3a",
@@ -2059,38 +2015,6 @@
         }
       ],
       "rationale": "Voktty marks notes created with a blank title as carrying a provisional slug. It finalizes that slug once after a real title is committed, while preserving legacy slugs and explicit Untitled titles. The Harness editor and the notes board share this store, so both preserve and finalize the pending state correctly."
-    },
-    {
-      "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
-      "upstreamTitle": "Route ⌘W and ⌘T to the focused project terminal (#774)",
-      "localCommit": "b74c021a1ca48f0ae52c6b4538e196d9920256c6",
-      "license": "MIT",
-      "mappings": [
-        {
-          "upstream": "src/app/App.tsx",
-          "local": "src/modules/harness/components/HarnessApp.tsx"
-        },
-        {
-          "upstream": "src/features/projects/model/projectTerminal.test.ts",
-          "local": "src/modules/harness/lib/projectTerminal.test.ts"
-        },
-        {
-          "upstream": "src/features/projects/model/projectTerminal.ts",
-          "local": "src/modules/harness/lib/projectTerminal.ts"
-        },
-        {
-          "upstream": "src/features/terminal/ui/ProjectTerminalDock.tsx",
-          "local": "src/modules/harness/surfaces/ProjectTerminalDock.tsx"
-        }
-      ],
-      "tests": [
-        {
-          "files": ["src/modules/harness/lib/projectTerminal.test.ts"],
-          "cwd": ".",
-          "runner": "vitest"
-        }
-      ],
-      "rationale": "Voktty already routes Cmd/Ctrl+T and Cmd/Ctrl+W to the active project terminal only when the dock layout is enabled, its focus flag is set, DOM focus remains inside the dock, and the active file is a terminal. Otherwise the shortcuts keep their workspace behavior. Voktty has no native application-menu dispatcher for the upstream menu broadcast adjustment; its local focused-target handlers and regression tests cover the available shortcut surface."
     },
     {
       "upstreamCommit": "eb14d1a9cdfaeba97da099d944199dd38c61cfaf",

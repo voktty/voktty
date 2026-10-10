@@ -83,6 +83,7 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
   const localBaselinePaths = treePaths(localRoot, localBaseline);
   const localHeadPaths = treePaths(localRoot, localHead);
   const records = [];
+  const seenUpstreamCommits = new Set();
 
   for (const record of manifest.records) {
     const upstreamCommit = resolveCommit(upstream, record.upstreamCommit);
@@ -118,6 +119,10 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     if (!upstreamCommit.startsWith(record.upstreamCommit)) {
       throw new Error(`Upstream commit does not match the manifest: ${record.upstreamCommit}`);
     }
+    if (seenUpstreamCommits.has(upstreamCommit)) {
+      throw new Error(`Duplicate upstream port record: ${upstreamCommit}`);
+    }
+    seenUpstreamCommits.add(upstreamCommit);
     if (
       record.localCommit &&
       (localCommits.length !== 1 || !localCommit.startsWith(record.localCommit))
