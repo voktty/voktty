@@ -1545,6 +1545,38 @@
         }
       ],
       "rationale": "The remote folder dialog now leaves the full-window backdrop clear, preventing light content behind its glass panel from turning grey. The backdrop still handles outside-click cancellation."
+    },
+    {
+      "upstreamCommit": "a6b4b1d0b98ee0431edfa174c311a9dfba93c78f",
+      "upstreamTitle": "Open general new terminals in the active session's worktree (#732)",
+      "localCommit": "13ebdb3",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessSessionView.tsx"
+        },
+        {
+          "upstream": "src/features/terminal/model/terminalTab.ts",
+          "local": "src/modules/harness/lib/terminalTab.ts"
+        },
+        {
+          "upstream": "src/features/terminal/model/terminalTab.test.ts",
+          "local": "src/modules/harness/lib/terminalTab.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/terminalTab.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "General Harness terminal actions prefer the active session's non-removed worktree, then the focused pane, session, and project directories. Session-scoped and standalone Harness terminals use the same worktree validity rule. Voktty's existing terminal creation path remains responsible for opening the terminal."
     }
   ]
 }
