@@ -465,6 +465,21 @@
       "rationale": "Folder actions derive an exact list of changed paths under the selected subtree and pass those paths through Voktty's existing authorized Git stage/unstage operations with WorkspaceEnv. Folder state and path boundaries have focused regression coverage; no directory-specific filesystem IPC or Host route is needed."
     },
     {
+      "upstreamCommit": "14cb1ed5a03a3fd4aac76dbae80edb81843986e8",
+      "upstreamTitle": "Preserve descenders in explorer file names (#678)",
+      "localCommit": "a7888fc",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/files/ui/FileTree.tsx",
+          "local": "src/modules/explorer/TreeRow.tsx"
+        }
+      ],
+      "tests": [],
+      "rationale": "MonoCode adds a label line-height utility because its truncated tree label inherits leading-none. Voktty's equivalent TreeRow label does not inherit leading-none and fits within its 22px row using the normal inherited line-height, so the clipping condition is absent."
+    },
+    {
       "upstreamCommit": "45c9a2220724d5ae2ad65e9e29da9755fb143a86",
       "upstreamTitle": "Animate pane entry from split edge",
       "localCommit": "e7f7edd",
