@@ -615,7 +615,7 @@
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Route remote OpenCode 2.x service discovery and authenticated HTTP/SSE through Voktty's existing SSH agent and tunnel; validate reconnect, stale tab binding, and cleanup before claiming remote parity."
+        "Voktty's native SSH session now owns loopback tunnel processes and reuses its SSH prompt bridge. Add remote OpenCode service discovery, authenticated HTTP/SSE, tmux-backed service startup and recovery, stale tab binding, reconnect, and cleanup before claiming remote parity."
       ],
       "mappings": [
         {
