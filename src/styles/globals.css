@@ -937,6 +937,35 @@ html *::-webkit-scrollbar {
   animation: voktty-tab-finished-pulse 1.8s ease-in-out infinite;
 }
 
+/* Keep clipped tab labels readable until the final edge. */
+.tab-label[data-overflow="true"] {
+  --tab-label-mask: linear-gradient(
+    to right,
+    #000,
+    #000 calc(100% - 2.5rem),
+    transparent
+  );
+  -webkit-mask-image: var(--tab-label-mask);
+  mask-image: var(--tab-label-mask);
+}
+
+/* Fade the viewport edge on long lists and transcripts. */
+.sidebar-session-scroll,
+.transcript-composer-fade .agent-transcript {
+  --scroll-bottom-mask: linear-gradient(
+    to bottom,
+    #000,
+    #000 calc(100% - 2.5rem),
+    transparent
+  );
+  -webkit-mask-image: var(--scroll-bottom-mask);
+  mask-image: var(--scroll-bottom-mask);
+}
+
+.transcript-composer-fade [data-transcript-content] {
+  padding-bottom: 2.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0.01ms;

@@ -64,6 +64,7 @@ import { useSortable, type SortableDropTarget } from "../hooks/useSortable";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { TerminalSpinner } from "./TerminalSpinner";
+import { TabLabel } from "./TabLabel";
 import { IS_MAC, MOD } from "../lib/platform";
 import type { RecentProject } from "../lib/recents";
 
@@ -452,15 +453,15 @@ function TitleTabItem({
         )}
         <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
           <span className="flex min-w-0 items-center gap-1">
-            <span
-              className={`min-w-0 truncate leading-none ${
+            <TabLabel
+              className={`leading-none ${
                 meta
                   ? "text-[13px] @min-[11rem]:text-[10px] @min-[11rem]:font-medium"
                   : "text-[13px]"
               }`}
             >
               {headline}
-            </span>
+            </TabLabel>
             {tab.dirty ? (
               <span
                 className="size-1.5 shrink-0 rounded-full bg-content/70"
@@ -470,9 +471,9 @@ function TitleTabItem({
             ) : null}
           </span>
           {meta ? (
-            <span className="hidden min-w-0 truncate text-[10px] leading-none text-content/45 @min-[11rem]:block">
+            <TabLabel className="hidden text-[10px] leading-none text-content/45 @min-[11rem]:block">
               {meta}
-            </span>
+            </TabLabel>
           ) : null}
         </span>
       </button>

@@ -448,7 +448,12 @@ export const SessionPane = memo(function SessionPane({
           </button>
         </div>
       ) : null}
-      <div ref={transcriptScope} className="@container relative min-h-0 flex-1">
+      <div
+        ref={transcriptScope}
+        className={`@container relative min-h-0 flex-1${
+          dockComposer ? " transcript-composer-fade" : ""
+        }`}
+      >
         {isEmpty ? (
           session.inboxAsk ? (
             <div className="scrollbar-none h-full min-h-0 overflow-y-auto">

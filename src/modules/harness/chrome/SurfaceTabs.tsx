@@ -23,6 +23,7 @@ import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useSortable } from "../hooks/useSortable";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { TabLabel } from "./TabLabel";
 
 type Props = {
   files: FilePaneTab[];
@@ -342,8 +343,8 @@ export function SurfaceTabs({
               ) : (
                 <FileTypeIcon name={iconName} isDir={false} size={14} />
               )}
-              <span
-                className={`min-w-0 flex-1 truncate ${review ? "italic" : ""} ${
+              <TabLabel
+                className={`flex-1 ${review ? "italic" : ""} ${
                   errors
                     ? active
                     ? "text-red-400"
@@ -352,7 +353,7 @@ export function SurfaceTabs({
                 }`}
               >
                 {label}
-              </span>
+              </TabLabel>
               {dirty ? (
                 <span
                   className="size-1.5 shrink-0 rounded-full bg-content/70"
