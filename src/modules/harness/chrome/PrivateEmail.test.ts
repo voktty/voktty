@@ -28,8 +28,7 @@ function revealButton() {
   );
 }
 
-it("masks a revealed email again when masking is turned off and back on", async () => {
-  saveMaskEmails(true);
+it("masks by default and masks a revealed email again when re-enabled", async () => {
   await act(async () =>
     root.render(createElement(PrivateEmail, { email: "user@example.com" })),
   );
@@ -48,6 +47,7 @@ it("masks a revealed email again when masking is turned off and back on", async 
 });
 
 it("masks an email when another window turns masking on", async () => {
+  await act(async () => saveMaskEmails(false));
   await act(async () =>
     root.render(createElement(PrivateEmail, { email: "user@example.com" })),
   );

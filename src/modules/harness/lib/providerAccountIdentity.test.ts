@@ -57,12 +57,13 @@ describe("providerAccountIdentity", () => {
     ).toBe("claude:work-1");
   });
 
-  it("renders PrivateEmail with plain text by default", () => {
+  it("renders PrivateEmail masked by default", () => {
     const html = renderToStaticMarkup(
       React.createElement(PrivateEmail, { email: "secret@company.com" }),
     );
     expect(html).toContain("secret@company.com");
-    expect(html).not.toContain("blur-[5px]");
+    expect(html).toContain('aria-label="Reveal email"');
+    expect(html).toContain("blur-[5px]");
   });
 
   it("renders ProviderAccountSubtitle with plan and private email", () => {
