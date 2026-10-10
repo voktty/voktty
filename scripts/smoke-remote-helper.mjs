@@ -30,25 +30,33 @@ function ptyData(kind, ptyId, data) {
 }
 
 const repo = process.cwd();
-const translated = spawnSync("wsl.exe", [
-  "-d",
-  "Ubuntu",
-  "--",
-  "wslpath",
-  "-a",
-  repo.replaceAll("\\", "/"),
-], { encoding: "utf8" });
-if (translated.status !== 0) {
-  throw new Error(translated.stderr || "Could not translate repository path");
+let helperWorkspaceRoot = repo;
+let child;
+if (process.env.VOKTTY_REMOTE_HELPER_PATH) {
+  child = spawn(process.env.VOKTTY_REMOTE_HELPER_PATH, ["--stdio"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+} else {
+  const translated = spawnSync("wsl.exe", [
+    "-d",
+    "Ubuntu",
+    "--",
+    "wslpath",
+    "-a",
+    repo.replaceAll("\\", "/"),
+  ], { encoding: "utf8" });
+  if (translated.status !== 0) {
+    throw new Error(translated.stderr || "Could not translate repository path");
+  }
+  helperWorkspaceRoot = translated.stdout.trim();
+  const helper = path.posix.join(
+    helperWorkspaceRoot,
+    "src-tauri/resources/remote/linux-x86_64/voktty-remote",
+  );
+  child = spawn("wsl.exe", ["-d", "Ubuntu", "--", helper, "--stdio"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
 }
-const wslRoot = translated.stdout.trim();
-const helper = path.posix.join(
-  wslRoot,
-  "src-tauri/resources/remote/linux-x86_64/voktty-remote",
-);
-const child = spawn("wsl.exe", ["-d", "Ubuntu", "--", helper, "--stdio"], {
-  stdio: ["pipe", "pipe", "pipe"],
-});
 
 let buffered = Buffer.alloc(0);
 let terminalOutput = "";
@@ -58,25 +66,38 @@ let ptyReady = false;
 let ptyExited = false;
 let fileChanged = false;
 let watchRemoveSent = false;
+let lastResponseId = "starting";
 const smokeFile = `.voktty-remote-watch-smoke-${process.pid}`;
 const replaceSmokeFile = `.voktty-remote-replace-smoke-${process.pid}`;
 const replaceSmokePath = path.join(repo, replaceSmokeFile);
 const binarySmokeFile = `.voktty-remote-binary-smoke-${process.pid}`;
 const binarySmokePath = path.join(repo, binarySmokeFile);
+const gitSmokeDirectory = fs.mkdtempSync(
+  path.join(repo, ".voktty-remote-git-smoke-"),
+);
+const gitSmokeRelative = path.relative(repo, gitSmokeDirectory).replaceAll("\\", "/");
+const gitSmokePath = path.join(gitSmokeDirectory, "note.txt");
 fs.writeFileSync(replaceSmokePath, "foo foo", "utf8");
 fs.writeFileSync(binarySmokePath, Buffer.from([0, 255, 128]));
+fs.writeFileSync(gitSmokePath, "working tree contents\n", "utf8");
+
+function cleanupSmokeFiles() {
+  fs.rmSync(replaceSmokePath, { force: true });
+  fs.rmSync(binarySmokePath, { force: true });
+  fs.rmSync(gitSmokeDirectory, { recursive: true, force: true });
+}
+
+process.once("exit", cleanupSmokeFiles);
 
 const timeout = setTimeout(() => {
   child.kill();
-  fs.rmSync(replaceSmokePath, { force: true });
-  fs.rmSync(binarySmokePath, { force: true });
-  throw new Error("Remote helper smoke test timed out");
+  cleanupSmokeFiles();
+  throw new Error(`Remote helper smoke test timed out after ${lastResponseId}`);
 }, 10_000);
 
 function finish(code = 0) {
   clearTimeout(timeout);
-  fs.rmSync(replaceSmokePath, { force: true });
-  fs.rmSync(binarySmokePath, { force: true });
+  cleanupSmokeFiles();
   child.stdin.end();
   process.exitCode = code;
 }
@@ -85,13 +106,14 @@ function finishWhenReady() {
   if (!ptyExited || !fileChanged || watchRemoveSent) return;
   watchRemoveSent = true;
   child.stdin.write(
-    request("watch-remove", "fs.watchRemove", { paths: [wslRoot] }),
+    request("watch-remove", "fs.watchRemove", { paths: [helperWorkspaceRoot] }),
   );
 }
 
 function handleFrame(kind, payload) {
   if (kind === RESPONSE) {
     const response = JSON.parse(payload.toString("utf8"));
+    lastResponseId = response.id;
     if (!response.ok) throw new Error(JSON.stringify(response.error));
     if (response.id === "handshake") {
       const expected = [
@@ -100,6 +122,7 @@ function handleFrame(kind, payload) {
         "fs.replacePreview",
         "fs.replaceApply",
         "git.execWorkspace",
+        "git.execWorkspaceInput",
       ];
       if (!expected.every((method) => response.result.capabilities.includes(method))) {
         throw new Error("Remote helper did not advertise required filesystem capabilities");
@@ -123,6 +146,58 @@ function handleFrame(kind, payload) {
         throw new Error(
           `Unexpected bounded Git result: ${JSON.stringify(output)}`,
         );
+      }
+      child.stdin.write(
+        request("git-init", "git.execWorkspace", {
+          cwd: gitSmokeRelative,
+          args: ["init", "--quiet"],
+        }),
+      );
+    } else if (response.id === "git-init") {
+      if (response.result.exitCode !== 0) {
+        throw new Error(`Could not initialize Git smoke repository: ${JSON.stringify(response.result)}`);
+      }
+      child.stdin.write(
+        request("git-stage-buffer", "git.execWorkspaceInput", {
+          cwd: gitSmokeRelative,
+          args: ["hash-object", "-w", "--path", "note.txt", "--stdin"],
+          stdin: "staged editor buffer\n",
+        }),
+      );
+    } else if (response.id === "git-stage-buffer") {
+      const hash = Buffer.from(response.result.stdout, "base64").toString("utf8").trim();
+      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(hash)) {
+        throw new Error(`Unexpected staged content hash: ${JSON.stringify(response.result)}`);
+      }
+      child.stdin.write(
+        request("git-update-index", "git.execWorkspace", {
+          cwd: gitSmokeRelative,
+          args: ["update-index", "--add", "--cacheinfo", "100644", hash, "note.txt"],
+        }),
+      );
+    } else if (response.id === "git-update-index") {
+      if (
+        response.result.exitCode !== 0 ||
+        fs.readFileSync(gitSmokePath, "utf8") !== "working tree contents\n"
+      ) {
+        throw new Error(`Unexpected staged buffer update: ${JSON.stringify(response.result)}`);
+      }
+      child.stdin.write(
+        request("git-show-index", "git.execWorkspace", {
+          cwd: gitSmokeRelative,
+          args: ["show", ":note.txt"],
+        }),
+      );
+    } else if (response.id === "git-show-index") {
+      const staged = Buffer.from(response.result.stdout, "base64").toString("utf8");
+      if (staged !== "staged editor buffer\n") {
+        throw new Error(`Unexpected staged content: ${JSON.stringify(staged)}`);
+      }
+      fs.rmSync(gitSmokeDirectory, { recursive: true, force: true });
+      if (process.env.VOKTTY_REMOTE_HELPER_GIT_ONLY === "1") {
+        console.log("Remote helper bounded Git input smoke test passed");
+        finish();
+        return;
       }
       child.stdin.write(
         request("binary-read", "fs.readBinaryFile", {
@@ -202,7 +277,7 @@ function handleFrame(kind, payload) {
       }
       grepReady = true;
       child.stdin.write(
-        request("watch-add", "fs.watchAdd", { paths: [wslRoot] }),
+        request("watch-add", "fs.watchAdd", { paths: [helperWorkspaceRoot] }),
       );
     } else if (response.id === "watch-add") {
       child.stdin.write(
@@ -210,7 +285,7 @@ function handleFrame(kind, payload) {
           ptyId: 11,
           cols: 80,
           rows: 24,
-          cwd: wslRoot,
+          cwd: helperWorkspaceRoot,
           blocks: false,
         }),
       );
@@ -225,7 +300,7 @@ function handleFrame(kind, payload) {
       );
     } else if (response.id === "watch-remove") {
       console.log(
-        "Remote helper binary read, bounded Git output, workspace search, PTY and file watcher smoke test passed",
+        "Remote helper binary read, bounded Git output and input, workspace search, PTY and file watcher smoke test passed",
       );
       finish();
     }
@@ -288,5 +363,5 @@ child.on("exit", (code) => {
 });
 
 child.stdin.write(
-  request("handshake", "handshake", { workspaceRoot: wslRoot }),
+  request("handshake", "handshake", { workspaceRoot: helperWorkspaceRoot }),
 );

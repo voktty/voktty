@@ -22,11 +22,11 @@ use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse, METHOD_COPY,
     METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
-    METHOD_GIT_EXEC_WORKSPACE, METHOD_GREP, METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR,
-    METHOD_OPENCODE_SERVICE, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN,
-    METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
-    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
-    METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
+    METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL,
+    METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PTY_CLOSE,
+    METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE,
+    METHOD_READ_FILE, METHOD_RENAME, METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT,
+    METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
     METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
     PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
@@ -39,6 +39,7 @@ use voktty_workspace_edit::{
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_BINARY_FILE_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
+const MAX_GIT_INPUT_BYTES: usize = MAX_FILE_BYTES as usize;
 const MAX_COPY_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_COPY_ENTRIES: usize = 20_000;
 const MAX_DIRECTORY_ENTRIES: usize = 20_000;
@@ -181,6 +182,7 @@ impl RemoteServer {
             METHOD_WATCH_TREE_REMOVE => self.remove_watch_tree(request),
             METHOD_GIT_EXEC => self.git_exec(request),
             METHOD_GIT_EXEC_WORKSPACE => self.git_exec_workspace(request),
+            METHOD_GIT_EXEC_WORKSPACE_INPUT => self.git_exec_workspace_input(request),
             METHOD_OPENCODE_SERVICE => self.opencode_service(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
@@ -232,6 +234,7 @@ impl RemoteServer {
                     METHOD_PTY_GET_CWD,
                     METHOD_GIT_EXEC,
                     METHOD_GIT_EXEC_WORKSPACE,
+                    METHOD_GIT_EXEC_WORKSPACE_INPUT,
                     METHOD_OPENCODE_SERVICE
                 ]
             }),
@@ -1340,23 +1343,62 @@ impl RemoteServer {
     }
 
     fn git_exec(&self, request: RemoteRequest) -> RemoteResponse {
-        self.git_exec_with_workspace_cwd(request, false)
+        self.git_exec_with_workspace_cwd(request, false, false)
     }
 
     fn git_exec_workspace(&self, request: RemoteRequest) -> RemoteResponse {
-        self.git_exec_with_workspace_cwd(request, true)
+        self.git_exec_with_workspace_cwd(request, true, false)
+    }
+
+    fn git_exec_workspace_input(&self, request: RemoteRequest) -> RemoteResponse {
+        self.git_exec_with_workspace_cwd(request, true, true)
     }
 
     fn git_exec_with_workspace_cwd(
         &self,
         request: RemoteRequest,
         constrain_cwd: bool,
+        allow_input: bool,
     ) -> RemoteResponse {
         let params = match serde_json::from_value::<GitExecParams>(request.params) {
             Ok(params) => params,
             Err(error) => {
                 return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
             }
+        };
+        let stdin = match params.stdin {
+            Some(input) if allow_input => {
+                if input.len() > MAX_GIT_INPUT_BYTES {
+                    return RemoteResponse::failure(
+                        request.id,
+                        "input_too_large",
+                        "Git input exceeds the remote file limit",
+                    );
+                }
+                if !valid_git_hash_object_input_args(&params.args) {
+                    return RemoteResponse::failure(
+                        request.id,
+                        "invalid_params",
+                        "Git input is supported only for a root-relative hash-object request",
+                    );
+                }
+                Some(input.into_bytes())
+            }
+            Some(_) => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "invalid_params",
+                    "this Git method does not accept input",
+                )
+            }
+            None if allow_input => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "invalid_params",
+                    "Git input is required",
+                )
+            }
+            None => None,
         };
 
         let cwd = if constrain_cwd {
@@ -1411,7 +1453,11 @@ impl RemoteServer {
             .env("GCM_INTERACTIVE", "Never")
             .env("GCM_PROVIDER", "")
             .env("LC_ALL", "C")
-            .stdin(Stdio::null())
+            .stdin(if stdin.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -1420,6 +1466,34 @@ impl RemoteServer {
             Err(error) => {
                 return RemoteResponse::failure(request.id, "spawn_failed", error.to_string());
             }
+        };
+
+        let stdin_writer = match (stdin, child.stdin.take()) {
+            (Some(input), Some(mut pipe)) => match thread::Builder::new()
+                .name("voktty-remote-git-input".to_string())
+                .spawn(move || pipe.write_all(&input))
+            {
+                Ok(writer) => Some(writer),
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return RemoteResponse::failure(
+                        request.id,
+                        "stdin_write_failed",
+                        error.to_string(),
+                    );
+                }
+            },
+            (Some(_), None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return RemoteResponse::failure(
+                    request.id,
+                    "stdin_write_failed",
+                    "Git input pipe was unavailable",
+                );
+            }
+            (None, _) => None,
         };
 
         let stdout_pipe = child.stdout.take();
@@ -1460,6 +1534,28 @@ impl RemoteServer {
 
         let stdout_output = stdout_handle.join().unwrap_or_default();
         let stderr_output = stderr_handle.join().unwrap_or_default();
+
+        if let Some(writer) = stdin_writer {
+            match writer.join() {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) if timed_out => {}
+                Ok(Err(error)) => {
+                    return RemoteResponse::failure(
+                        request.id,
+                        "stdin_write_failed",
+                        error.to_string(),
+                    )
+                }
+                Err(_) if timed_out => {}
+                Err(_) => {
+                    return RemoteResponse::failure(
+                        request.id,
+                        "stdin_write_failed",
+                        "Git input writer stopped unexpectedly",
+                    )
+                }
+            }
+        }
 
         let stdout_base64 = base64::engine::general_purpose::STANDARD.encode(&stdout_output.bytes);
         let stderr_string = String::from_utf8_lossy(&stderr_output.bytes).into_owned();
@@ -2016,6 +2112,25 @@ struct GitExecParams {
     args: Vec<String>,
     timeout_secs: Option<u64>,
     max_output_bytes: Option<usize>,
+    stdin: Option<String>,
+}
+
+fn valid_git_hash_object_input_args(args: &[String]) -> bool {
+    if args.len() != 5
+        || args[0] != "hash-object"
+        || args[1] != "-w"
+        || args[2] != "--path"
+        || args[4] != "--stdin"
+    {
+        return false;
+    }
+    let path = &args[3];
+    !path.is_empty()
+        && !Path::new(path).is_absolute()
+        && !path
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        && safe_relative_path(path).is_ok()
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, String> {
@@ -3130,6 +3245,151 @@ mod tests {
         assert_eq!(result["timedOut"], false);
         assert_eq!(result["stdoutTruncated"], false);
         assert_eq!(result["stderrTruncated"], false);
+    }
+
+    #[test]
+    fn git_workspace_input_stages_editor_contents_without_writing_the_worktree() {
+        let workspace = tempdir().expect("workspace");
+        let git_init = std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git init");
+        assert!(git_init.success());
+        let worktree_path = workspace.path().join("note.txt");
+        fs::write(&worktree_path, "working tree contents\n").expect("worktree file");
+
+        let mut server = RemoteServer::new();
+        let handshake = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "handshake".to_string(),
+            method: METHOD_HANDSHAKE.to_string(),
+            params: json!({ "workspaceRoot": workspace.path() }),
+        });
+        assert!(handshake.ok);
+        let handshake_result = handshake.result.expect("handshake");
+        let capabilities = handshake_result["capabilities"]
+            .as_array()
+            .expect("capabilities");
+        assert!(capabilities
+            .iter()
+            .any(|capability| capability == METHOD_GIT_EXEC_WORKSPACE_INPUT));
+
+        let staged_contents = "editor buffer 😀\n";
+        let hashed = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "hash".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE_INPUT.to_string(),
+            params: json!({
+                "cwd": ".",
+                "args": ["hash-object", "-w", "--path", "note.txt", "--stdin"],
+                "stdin": staged_contents,
+            }),
+        });
+        assert!(hashed.ok, "{:?}", hashed.error);
+        let hash_output = hashed.result.expect("hash output");
+        let hash = String::from_utf8(
+            base64::engine::general_purpose::STANDARD
+                .decode(hash_output["stdout"].as_str().expect("base64 stdout"))
+                .expect("valid hash output"),
+        )
+        .expect("hash is UTF-8")
+        .trim()
+        .to_string();
+        assert!(hash.len() == 40 || hash.len() == 64);
+
+        let indexed = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "index".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({
+                "cwd": ".",
+                "args": ["update-index", "--add", "--cacheinfo", "100644", hash, "note.txt"],
+            }),
+        });
+        assert!(indexed.ok, "{:?}", indexed.error);
+
+        let staged = std::process::Command::new("git")
+            .args(["show", ":note.txt"])
+            .current_dir(workspace.path())
+            .output()
+            .expect("read staged content");
+        assert!(staged.status.success());
+        assert_eq!(staged.stdout, staged_contents.as_bytes());
+        assert_eq!(
+            fs::read_to_string(worktree_path).unwrap(),
+            "working tree contents\n"
+        );
+    }
+
+    #[test]
+    fn git_workspace_input_rejects_unbounded_or_unexpected_input() {
+        let workspace = tempdir().expect("workspace");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let oversized = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "oversized".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE_INPUT.to_string(),
+            params: json!({
+                "args": ["hash-object", "-w", "--path", "note.txt", "--stdin"],
+                "stdin": "x".repeat(MAX_GIT_INPUT_BYTES + 1),
+            }),
+        });
+        assert!(!oversized.ok);
+        assert_eq!(oversized.error.expect("size error").code, "input_too_large");
+
+        let unexpected_command = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "unexpected".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE_INPUT.to_string(),
+            params: json!({ "args": ["--version"], "stdin": "buffer" }),
+        });
+        assert!(!unexpected_command.ok);
+        assert_eq!(
+            unexpected_command.error.expect("argument error").code,
+            "invalid_params"
+        );
+
+        let path_traversal = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "path-traversal".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE_INPUT.to_string(),
+            params: json!({
+                "args": ["hash-object", "-w", "--path", "../outside.txt", "--stdin"],
+                "stdin": "buffer",
+            }),
+        });
+        assert!(!path_traversal.ok);
+        assert_eq!(
+            path_traversal.error.expect("path error").code,
+            "invalid_params"
+        );
+
+        let unsupported_input = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "unsupported".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({ "args": ["--version"], "stdin": "buffer" }),
+        });
+        assert!(!unsupported_input.ok);
+        assert_eq!(
+            unsupported_input
+                .error
+                .expect("unsupported input error")
+                .code,
+            "invalid_params"
+        );
     }
 
     #[test]

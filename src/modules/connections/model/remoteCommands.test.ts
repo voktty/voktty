@@ -46,6 +46,7 @@ import {
   gitDiscardFile,
   gitFileDiff,
   gitStageAll,
+  gitStageContents,
   gitStageFile,
   gitUnstageAll,
   gitUnstageFile,
@@ -86,7 +87,7 @@ beforeEach(() => {
     architecture: "x86_64",
     workspace_root: "/srv/app",
     helper_version: "1.0.16",
-    capabilities: [],
+    capabilities: ["git.execWorkspaceInput"],
   });
   closeRemoteWorkspace.mockReset().mockResolvedValue(undefined);
   requestRemoteResult.mockReset();
@@ -317,6 +318,122 @@ it("stages and unstages remote paths with literal Git pathspecs", async () => {
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
   expect(closeRemoteWorkspace).toHaveBeenCalledTimes(4);
+});
+
+it("stages unsaved SSH editor contents through bounded helper stdin", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "git.execWorkspaceInput") {
+        return gitExecResult(`${"a".repeat(40)}\n`);
+      }
+      if (method === "git.execWorkspace") {
+        const args = params.args as string[];
+        if (args[1] === "ls-files") {
+          return gitExecResult("100755 abc 0\tsrc/main.ts\n");
+        }
+        if (args[0] === "update-index") return gitExecResult("");
+      }
+      throw new Error(`Unexpected helper request: ${method}`);
+    },
+  );
+
+  await gitStageContents(
+    remotePath(environmentId, "/srv/app"),
+    "src/main.ts",
+    "editor buffer 😀\n",
+  );
+
+  expect(requestRemoteResult.mock.calls).toEqual([
+    [
+      9,
+      "git.execWorkspaceInput",
+      {
+        cwd: ".",
+        args: ["hash-object", "-w", "--path", "src/main.ts", "--stdin"],
+        timeoutSecs: 10,
+        maxOutputBytes: 64 * 1024,
+        stdin: "editor buffer 😀\n",
+      },
+    ],
+    [
+      9,
+      "git.execWorkspace",
+      {
+        cwd: ".",
+        args: [
+          "--literal-pathspecs",
+          "ls-files",
+          "--stage",
+          "--",
+          "src/main.ts",
+        ],
+        timeoutSecs: 10,
+        maxOutputBytes: 64 * 1024,
+      },
+    ],
+    [
+      9,
+      "git.execWorkspace",
+      {
+        cwd: ".",
+        args: [
+          "update-index",
+          "--add",
+          "--cacheinfo",
+          "100755",
+          "a".repeat(40),
+          "src/main.ts",
+        ],
+        timeoutSecs: 10,
+        maxOutputBytes: 4 * 1024 * 1024,
+      },
+    ],
+  ]);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("rejects unsaved staging when the SSH helper has no bounded-input capability", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.15",
+    capabilities: [],
+  });
+
+  await expect(
+    gitStageContents(
+      remotePath(environmentId, "/srv/app"),
+      "src/main.ts",
+      "editor buffer\n",
+    ),
+  ).rejects.toThrow("Update the Voktty remote helper");
+  expect(requestRemoteResult).not.toHaveBeenCalled();
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("caps SSH editor contents before sending them to the helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const tooLarge = "é".repeat(4 * 1024 * 1024 + 1);
+
+  await expect(
+    gitStageContents(
+      remotePath(environmentId, "/srv/app"),
+      "src/main.ts",
+      tooLarge,
+    ),
+  ).rejects.toThrow("File too large");
+  expect(requestRemoteResult).not.toHaveBeenCalled();
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
 it("discards only unstaged remote changes and preserves staged content", async () => {

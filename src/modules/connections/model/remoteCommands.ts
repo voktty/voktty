@@ -97,6 +97,7 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_diff_files",
   "git_diff_stats",
   "git_file_diff",
+  "git_stage_contents",
   "git_stage_file",
   "git_unstage_file",
   "git_discard_file",
@@ -193,8 +194,10 @@ const OUTDATED =
 const PROFILE_UNAVAILABLE =
   "This operation is not available for native SSH projects yet.";
 const HELPER_GIT_EXEC = "git.execWorkspace";
+const HELPER_GIT_EXEC_WORKSPACE_INPUT = "git.execWorkspaceInput";
 const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_GIT_DIFF_BYTES = 1024 * 1024;
+const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 
 type HelperGitOutput = {
   stdout: string;
@@ -364,13 +367,19 @@ async function runHelperGit(
   maxOutputBytes = MAX_GIT_OUTPUT_BYTES,
   allowFailure = false,
   allowTruncated = false,
+  stdin?: string,
 ): Promise<HelperGitOutput> {
-  const raw = await requestRemoteResult<unknown>(sessionId, HELPER_GIT_EXEC, {
-    cwd,
-    args,
-    timeoutSecs: 10,
-    maxOutputBytes,
-  });
+  const raw = await requestRemoteResult<unknown>(
+    sessionId,
+    stdin === undefined ? HELPER_GIT_EXEC : HELPER_GIT_EXEC_WORKSPACE_INPUT,
+    {
+      cwd,
+      args,
+      timeoutSecs: 10,
+      maxOutputBytes,
+      ...(stdin === undefined ? {} : { stdin }),
+    },
+  );
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("The remote helper returned an invalid Git result.");
   }
@@ -544,6 +553,47 @@ async function nativeProfileGitStatus(
     throw new Error("Could not read Git changes on the remote project.");
   }
   return parseGitPorcelainV2(decodeGitMetadata(statusOutput.stdoutBytes));
+}
+
+async function nativeProfileGitStageContents(
+  sessionId: number,
+  cwd: string,
+  requestedPath: unknown,
+  contents: string,
+): Promise<void> {
+  if (new TextEncoder().encode(contents).byteLength > MAX_GIT_INPUT_BYTES) {
+    throw new Error("File too large");
+  }
+  const relative = helperRelativePath(requestedPath);
+  const hashOutput = await runHelperGit(
+    sessionId,
+    cwd,
+    ["hash-object", "-w", "--path", relative, "--stdin"],
+    64 * 1024,
+    false,
+    false,
+    contents,
+  );
+  const hash = hashOutput.stdout.trim();
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(hash)) {
+    throw new Error("Remote Git returned an invalid content hash.");
+  }
+  const indexOutput = await runHelperGit(
+    sessionId,
+    cwd,
+    ["--literal-pathspecs", "ls-files", "--stage", "--", relative],
+    64 * 1024,
+    true,
+  );
+  const mode = indexOutput.stdout.match(/^([0-7]{6})\s/)?.[1] ?? "100644";
+  await runHelperGit(sessionId, cwd, [
+    "update-index",
+    "--add",
+    "--cacheinfo",
+    mode,
+    hash,
+    relative,
+  ]);
 }
 
 async function nativeProfileFileDiff(
@@ -794,6 +844,7 @@ async function runProfileFileCommand(
     return index;
   }
   if (
+    command === "git_stage_contents" ||
     command === "git_stage_file" ||
     command === "git_unstage_file" ||
     command === "git_discard_file" ||
@@ -804,6 +855,14 @@ async function runProfileFileCommand(
     const cwd = relativePath(args.cwd);
     const runGitMutation = (gitArgs: string[]) =>
       runHelperGit(sessionId, cwd, gitArgs).then(() => undefined);
+    if (command === "git_stage_contents") {
+      return nativeProfileGitStageContents(
+        sessionId,
+        cwd,
+        args.relative,
+        requireString(args, "contents"),
+      );
+    }
     if (command === "git_stage_file") {
       return runGitMutation([
         "--literal-pathspecs",
@@ -1130,6 +1189,14 @@ async function runNativeProfileCommand(
     if (sessionRoot !== normalizedProjectRoot) {
       throw new Error(
         "The native SSH helper did not open the saved project root.",
+      );
+    }
+    if (
+      command === "git_stage_contents" &&
+      !session.capabilities.includes(HELPER_GIT_EXEC_WORKSPACE_INPUT)
+    ) {
+      throw new Error(
+        "Update the Voktty remote helper to stage unsaved editor contents.",
       );
     }
     return await runProfileFileCommand(
