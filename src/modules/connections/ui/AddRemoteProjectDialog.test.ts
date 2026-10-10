@@ -68,7 +68,7 @@ describe("AddRemoteProjectDialog", () => {
     );
 
     expect(markup).toContain("Open folder on a machine");
-    expect(markup).toContain("Voktty’s authenticated SSH helper");
+    expect(markup).toContain("Voktty’s authenticated agent");
     expect(markup).toContain('class="absolute inset-0 z-0 cursor-default"');
     expect(markup).toContain("bg-background-base dark:bg-content/5");
     expect(markup).not.toContain("bg-black/30");

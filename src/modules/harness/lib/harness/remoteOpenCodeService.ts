@@ -1,5 +1,10 @@
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import type { RemoteMachine } from "@/modules/connections/model/protocol";
+import {
+  remoteSshConnectionFor,
+  remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment,
+} from "@/modules/connections/model/remoteSshProfiles";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
   assertSupportedOpenCodeVersion,
@@ -14,7 +19,7 @@ import {
   runRemoteOpenCodeServiceAction,
 } from "@/modules/remote/client";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { SshConnectionConfig } from "@/modules/workspace";
+import type { SshConnection } from "@/modules/ssh/types";
 
 export type RemoteOpenCodeService = {
   url: string;
@@ -25,7 +30,7 @@ export type RemoteOpenCodeService = {
 
 type OpenDependencies = {
   machineFor: (environmentId: string) => Promise<RemoteMachine | undefined>;
-  sshConnections: () => SshConnectionConfig[];
+  sshConnections: () => SshConnection[];
   openWorkspace: typeof openRemoteWorkspace;
   openTunnel: typeof openRemoteTunnel;
   serviceAction: typeof runRemoteOpenCodeServiceAction;
@@ -39,75 +44,6 @@ type Entry = {
   closed: Promise<void>;
   resolveClosed: () => void;
 };
-
-export function remoteSshConnectionFor(
-  machine: RemoteMachine,
-  savedConnections: SshConnectionConfig[],
-): RemoteSshConnection {
-  const config = machine.ssh;
-  if (!config) {
-    throw new Error(
-      "This remote project has no native SSH connection configured.",
-    );
-  }
-  const parsed = parseSshTarget(config.target);
-  if (!parsed) throw new Error("The remote machine has an invalid SSH target.");
-  const port = config.port ?? 22;
-  const matching = savedConnections.filter(
-    (connection) =>
-      connection.host.toLowerCase() === parsed.host.toLowerCase() &&
-      (!parsed.user ||
-        (connection.user ?? "").toLowerCase() === parsed.user.toLowerCase()) &&
-      (connection.port ?? 22) === port,
-  );
-  const saved = matching.length === 1 ? matching[0] : undefined;
-  return {
-    host: parsed.host,
-    ...((parsed.user ?? saved?.user)
-      ? { user: parsed.user ?? saved?.user }
-      : {}),
-    port,
-    ...(saved?.identityFile ? { identityFile: saved.identityFile } : {}),
-    ...(saved?.extraArgs ? { extraArgs: saved.extraArgs } : {}),
-    ...(saved?.initialDirectory
-      ? { initialDirectory: saved.initialDirectory }
-      : {}),
-  };
-}
-
-function parseSshTarget(value: string): { host: string; user?: string } | null {
-  const target = value.trim();
-  if (
-    !target ||
-    target.length > 255 ||
-    target.startsWith("-") ||
-    target.split("@").length > 2
-  ) {
-    return null;
-  }
-  const separator = target.lastIndexOf("@");
-  const user = separator >= 0 ? target.slice(0, separator) : undefined;
-  const host = separator >= 0 ? target.slice(separator + 1) : target;
-  const validUser = !user || /^[A-Za-z0-9._:+-]+$/.test(user);
-  const bracketedIpv6 =
-    host.startsWith("[") &&
-    host.endsWith("]") &&
-    /^[A-Fa-f0-9:.]+$/.test(host.slice(1, -1));
-  const validHost =
-    /^[A-Za-z0-9._-]+$/.test(host) ||
-    bracketedIpv6 ||
-    (/^[A-Fa-f0-9:.]+$/.test(host) && host.includes(":"));
-  if (
-    !host ||
-    host.startsWith("-") ||
-    (separator >= 0 && !user) ||
-    !validUser ||
-    !validHost
-  ) {
-    return null;
-  }
-  return { host, ...(user ? { user } : {}) };
-}
 
 function remoteServicePort(output: string): number | null {
   for (const line of output.split("\n")) {
@@ -125,12 +61,20 @@ async function openService(
   environmentId: string,
   dependencies: OpenDependencies,
 ): Promise<RemoteOpenCodeService> {
-  const machine = await dependencies.machineFor(environmentId);
-  if (!machine) throw new Error("The remote machine is no longer connected.");
-  const connection = remoteSshConnectionFor(
-    machine,
-    dependencies.sshConnections(),
-  );
+  const savedConnections = dependencies.sshConnections();
+  const connectionId = remoteSshConnectionIdForEnvironment(environmentId);
+  let connection: RemoteSshConnection;
+  if (connectionId) {
+    const profile = savedConnections.find((entry) => entry.id === connectionId);
+    if (!profile) {
+      throw new Error("The saved SSH connection for this project is missing.");
+    }
+    connection = remoteSshConnectionForProfile(profile);
+  } else {
+    const machine = await dependencies.machineFor(environmentId);
+    if (!machine) throw new Error("The remote machine is no longer connected.");
+    connection = remoteSshConnectionFor(machine, savedConnections);
+  }
   const session: RemoteSessionInfo = await dependencies.openWorkspace(
     connection,
     cwd,

@@ -1,12 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import {
+  remoteSshConnectionFor,
+  remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment,
+} from "@/modules/connections/model/remoteSshProfiles";
+import {
   parseRemotePath,
   remotePath,
 } from "@/modules/connections/model/remoteProjects";
 import {
   closeRemoteWorkspace,
   openRemoteWorkspace,
+  type RemoteSshConnection,
 } from "@/modules/remote/client";
 import {
   currentWorkspaceEnv,
@@ -16,7 +22,6 @@ import {
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { notifyGitChanged } from "./fs";
 import { isEqualOrInside } from "./paths";
-import { remoteSshConnectionFor } from "./harness/remoteOpenCodeService";
 export { namedWorktreeBranch } from "./worktreeNaming";
 
 export type Worktree = {
@@ -56,13 +61,32 @@ async function withGitWorkspace<T>(
 ): Promise<T> {
   const remoteProject = parseRemotePath(cwd);
   if (remoteProject) {
-    const machine = await remoteMachineFor(remoteProject.environmentId);
-    if (!machine) throw new Error("The remote machine is no longer connected.");
-    const connection = remoteSshConnectionFor(
-      machine,
-      usePreferencesStore.getState().sshConnections,
+    const savedConnections =
+      usePreferencesStore.getState().sshConnections ?? [];
+    const connectionId = remoteSshConnectionIdForEnvironment(
+      remoteProject.environmentId,
     );
-    const session = await openRemoteWorkspace(connection, remoteProject.hostPath);
+    let connection: RemoteSshConnection;
+    if (connectionId) {
+      const profile = savedConnections.find(
+        (entry) => entry.id === connectionId,
+      );
+      if (!profile) {
+        throw new Error(
+          "The saved SSH connection for this project is missing.",
+        );
+      }
+      connection = remoteSshConnectionForProfile(profile);
+    } else {
+      const machine = await remoteMachineFor(remoteProject.environmentId);
+      if (!machine)
+        throw new Error("The remote machine is no longer connected.");
+      connection = remoteSshConnectionFor(machine, savedConnections);
+    }
+    const session = await openRemoteWorkspace(
+      connection,
+      remoteProject.hostPath,
+    );
     const workspace: GitWorkspace = {
       kind: "ssh",
       root: session.workspace_root,

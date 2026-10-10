@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   closeRemoteWorkspace: vi.fn(),
   remoteMachineFor: vi.fn(),
   remoteSshConnectionFor: vi.fn(),
+  remoteSshConnectionForProfile: vi.fn(),
+  sshConnections: [] as Array<Record<string, unknown>>,
   notifyGitChanged: vi.fn(),
 }));
 
@@ -18,12 +20,19 @@ vi.mock("@/modules/remote/client", () => ({
 vi.mock("@/modules/connections/model/connections", () => ({
   remoteMachineFor: mocks.remoteMachineFor,
 }));
-vi.mock("@/modules/harness/lib/harness/remoteOpenCodeService", () => ({
+vi.mock("@/modules/connections/model/remoteSshProfiles", () => ({
   remoteSshConnectionFor: mocks.remoteSshConnectionFor,
+  remoteSshConnectionForProfile: mocks.remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment: (environmentId: string) =>
+    environmentId.startsWith("voktty-ssh-")
+      ? environmentId.slice("voktty-ssh-".length)
+      : undefined,
 }));
 vi.mock("./fs", () => ({ notifyGitChanged: mocks.notifyGitChanged }));
 vi.mock("@/modules/settings/preferences", () => ({
-  usePreferencesStore: { getState: () => ({ sshConnections: [] }) },
+  usePreferencesStore: {
+    getState: () => ({ sshConnections: mocks.sshConnections }),
+  },
 }));
 vi.mock("@/modules/workspace", () => ({
   currentWorkspaceEnv: () => ({ kind: "local" }),
@@ -63,6 +72,8 @@ beforeEach(() => {
     environmentId: "machine-1",
   });
   mocks.remoteSshConnectionFor.mockReturnValue(connection);
+  mocks.remoteSshConnectionForProfile.mockReturnValue(connection);
+  mocks.sshConnections = [];
   mocks.openRemoteWorkspace.mockResolvedValue(session);
   mocks.closeRemoteWorkspace.mockResolvedValue(undefined);
 });
@@ -123,5 +134,29 @@ describe("remote Harness worktrees", () => {
     );
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(session.session_id);
     expect(mocks.notifyGitChanged).toHaveBeenCalledOnce();
+  });
+
+  it("uses a saved SSH profile without looking up a Host machine", async () => {
+    const profile = {
+      id: "profile-1",
+      name: "Build host",
+      host: "build.example",
+      user: "deploy",
+      port: 2222,
+    };
+    mocks.sshConnections = [profile];
+    mocks.invoke.mockResolvedValueOnce({
+      worktrees: [{ ...tree, path: "/srv/app" }],
+      defaultRoot: "/srv/worktrees",
+    });
+
+    await listWorktrees("remote://voktty-ssh-profile-1/srv/app");
+
+    expect(mocks.remoteMachineFor).not.toHaveBeenCalled();
+    expect(mocks.remoteSshConnectionForProfile).toHaveBeenCalledWith(profile);
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
+      connection,
+      "/srv/app",
+    );
   });
 });

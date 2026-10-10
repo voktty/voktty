@@ -45,7 +45,7 @@ export function ConnectionsSettings() {
   const [updatingMachine, setUpdatingMachine] = useState<string>();
   const [removing, setRemoving] = useState<string>();
   const [revoking, setRevoking] = useState(false);
-  const [projectMachineId, setProjectMachineId] = useState<string>();
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [url, setUrl] = useState("http://127.0.0.1:3774");
   const [token, setToken] = useState("");
   const alive = useRef(true);
@@ -264,20 +264,29 @@ export function ConnectionsSettings() {
             The host keeps working when you close Terax here.
           </p>
         </div>
-        {!adding && (
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            className={`${button} flex shrink-0 items-center gap-2`}
-            disabled={busy}
-            onClick={() => {
-              setAdding(true);
-              setError("");
-              setNotice("");
-            }}
+            className={`${button} flex items-center gap-2`}
+            onClick={() => setProjectDialogOpen(true)}
           >
-            <Plus className="size-4" /> Add machine
+            <FolderOpen className="size-4" /> Open folder
           </button>
-        )}
+          {!adding && (
+            <button
+              type="button"
+              className={`${button} flex shrink-0 items-center gap-2`}
+              disabled={busy}
+              onClick={() => {
+                setAdding(true);
+                setError("");
+                setNotice("");
+              }}
+            >
+              <Plus className="size-4" /> Add machine
+            </button>
+          )}
+        </div>
       </div>
       {machines.length > 0 ? (
         <div className="divide-y divide-stroke overflow-hidden rounded-xl border border-stroke">
@@ -306,15 +315,6 @@ export function ConnectionsSettings() {
                 </div>
                 {machine.ssh && (
                   <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      className={button}
-                      onClick={() => setProjectMachineId(machine.id)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <FolderOpen className="size-4" /> Open folder
-                      </span>
-                    </button>
                     {needsUpdate[machine.id] ? (
                       <button
                         type="button"
@@ -589,12 +589,11 @@ export function ConnectionsSettings() {
           {notice}
         </p>
       )}
-      {projectMachineId ? (
+      {projectDialogOpen ? (
         <AddRemoteProjectDialog
-          initialMachineId={projectMachineId}
-          onCancel={() => setProjectMachineId(undefined)}
+          onCancel={() => setProjectDialogOpen(false)}
           onOpen={(path) => {
-            setProjectMachineId(undefined);
+            setProjectDialogOpen(false);
             window.dispatchEvent(
               new CustomEvent("voktty:harness-select-project", {
                 detail: { path },

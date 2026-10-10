@@ -1,10 +1,13 @@
 import type { RemoteMachine } from "@/modules/connections/model/protocol";
-import type { SshConnectionConfig } from "@/modules/workspace";
-import { describe, expect, it, vi } from "vitest";
 import {
-  createRemoteOpenCodeServiceManager,
   remoteSshConnectionFor,
-} from "./remoteOpenCodeService";
+  remoteSshConnectionForProfile,
+  remoteSshEnvironmentId,
+} from "@/modules/connections/model/remoteSshProfiles";
+import { remotePath } from "@/modules/connections/model/remoteProjects";
+import type { SshConnection } from "@/modules/ssh/types";
+import { describe, expect, it, vi } from "vitest";
+import { createRemoteOpenCodeServiceManager } from "./remoteOpenCodeService";
 
 function machine(): RemoteMachine {
   return {
@@ -47,8 +50,11 @@ function dependencies() {
   }));
   const closeWorkspace = vi.fn(async () => undefined);
   return {
-    machineFor: vi.fn(async (_environmentId: string) => machine()),
-    sshConnections: vi.fn(() => [] as SshConnectionConfig[]),
+    machineFor: vi.fn(
+      async (_environmentId: string): Promise<RemoteMachine | undefined> =>
+        machine(),
+    ),
+    sshConnections: vi.fn(() => [] as SshConnection[]),
     openWorkspace,
     openTunnel,
     serviceAction,
@@ -58,7 +64,9 @@ function dependencies() {
 
 describe("native remote OpenCode service", () => {
   it("parses SSH targets and reuses matching saved SSH credentials", () => {
-    const saved: SshConnectionConfig = {
+    const saved: SshConnection = {
+      id: "profile-1",
+      name: "Build host",
       host: "build-host",
       user: "dev",
       port: 2222,
@@ -66,7 +74,17 @@ describe("native remote OpenCode service", () => {
       extraArgs: "-o ProxyJump=bastion",
       initialDirectory: "/srv/projects",
     };
-    expect(remoteSshConnectionFor(machine(), [saved])).toEqual(saved);
+    expect(remoteSshConnectionFor(machine(), [saved])).toEqual(
+      remoteSshConnectionForProfile(saved),
+    );
+    expect(remoteSshConnectionForProfile(saved)).toEqual({
+      host: "build-host",
+      user: "dev",
+      port: 2222,
+      identityFile: "/keys/build",
+      extraArgs: "-o ProxyJump=bastion",
+      initialDirectory: "/srv/projects",
+    });
     expect(
       remoteSshConnectionFor(
         {
@@ -75,7 +93,7 @@ describe("native remote OpenCode service", () => {
         },
         [saved],
       ),
-    ).toEqual(saved);
+    ).toEqual(remoteSshConnectionForProfile(saved));
     expect(
       remoteSshConnectionFor(
         {
@@ -103,6 +121,47 @@ describe("native remote OpenCode service", () => {
         [],
       ),
     ).toThrow("invalid SSH target");
+  });
+
+  it("opens a project directly from its saved native SSH profile", async () => {
+    const deps = dependencies();
+    const saved: SshConnection = {
+      id: "profile-1",
+      name: "Build host",
+      host: "build-host",
+      user: "dev",
+      port: 2222,
+      identityFile: "/keys/build",
+      initialDirectory: "/srv/projects",
+    };
+    deps.sshConnections.mockReturnValue([saved]);
+    deps.machineFor.mockResolvedValue(undefined);
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    const cwd = remotePath(remoteSshEnvironmentId(saved.id), "/srv/app");
+
+    await manager.acquire("session-a", cwd);
+
+    expect(deps.machineFor).not.toHaveBeenCalled();
+    expect(deps.openWorkspace).toHaveBeenCalledWith(
+      remoteSshConnectionForProfile(saved),
+      "/srv/app",
+    );
+    await manager.release("session-a");
+  });
+
+  it("does not fall back to a Host machine when a saved profile was removed", async () => {
+    const deps = dependencies();
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    const cwd = remotePath(
+      remoteSshEnvironmentId("removed-profile"),
+      "/srv/app",
+    );
+
+    await expect(manager.acquire("session-a", cwd)).rejects.toThrow(
+      "saved SSH connection for this project is missing",
+    );
+
+    expect(deps.machineFor).not.toHaveBeenCalled();
   });
 
   it("opens an authenticated loopback tunnel and shares it between sessions", async () => {

@@ -1,6 +1,5 @@
 import { ChevronRight, Folder } from "@/modules/harness/chrome/icons";
 import { SearchableSelect } from "@/modules/harness/chrome/SearchableSelect";
-import { remoteSshConnectionFor } from "@/modules/harness/lib/harness/remoteOpenCodeService";
 import { LAYER } from "@/modules/harness/lib/layers";
 import {
   closeRemoteWorkspace,
@@ -8,13 +7,14 @@ import {
   type RemoteSessionInfo,
   requestRemoteResult,
 } from "@/modules/remote/client";
+import {
+  remoteSshConnectionForProfile,
+  remoteSshEnvironmentId,
+} from "@/modules/connections/model/remoteSshProfiles";
+import { useSshConnections } from "@/modules/ssh/sshStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  OPEN_CONNECTIONS_EVENT,
-  useRemoteMachines,
-} from "../model/connections";
 import {
   normalizeRemoteDirectoryRelative,
   type RemoteDirectoryListing,
@@ -24,26 +24,24 @@ import { rememberRemoteProject } from "../model/remoteProjects";
 
 /** Adds a remote project after browsing it through the native SSH helper. */
 export function AddRemoteProjectDialog({
-  initialMachineId,
   onCancel,
   onOpen,
 }: {
-  initialMachineId?: string;
   onCancel: () => void;
   /** Receives the new project's rail key. */
   onOpen: (key: string) => void;
 }) {
-  const { machines, loaded } = useRemoteMachines();
-  const nativeMachines = machines.filter((entry) => Boolean(entry.ssh));
-  const [machineId, setMachineId] = useState(initialMachineId);
-  const machine =
-    nativeMachines.find((entry) => entry.id === machineId) ?? nativeMachines[0];
-  const sshConnections = usePreferencesStore((state) => state.sshConnections);
+  const sshConnections = useSshConnections();
+  const preferencesLoaded = usePreferencesStore((state) => state.hydrated);
+  const [connectionId, setConnectionId] = useState("");
+  const profile =
+    sshConnections.find((entry) => entry.id === connectionId) ??
+    sshConnections[0];
   const connectionState = useMemo(() => {
-    if (!machine) return { connection: undefined, error: "" };
+    if (!profile) return { connection: undefined, error: "" };
     try {
       return {
-        connection: remoteSshConnectionFor(machine, sshConnections ?? []),
+        connection: remoteSshConnectionForProfile(profile),
         error: "",
       };
     } catch (reason) {
@@ -52,7 +50,7 @@ export function AddRemoteProjectDialog({
         error: String(reason).replace(/^Error: /, ""),
       };
     }
-  }, [machine, sshConnections]);
+  }, [profile]);
   const { connection } = connectionState;
   const [path, setPath] = useState("");
   const [directory, setDirectory] = useState<RemoteDirectoryListing>();
@@ -64,6 +62,11 @@ export function AddRemoteProjectDialog({
   const requestVersion = useRef(0);
   const sessionRef = useRef<RemoteSessionInfo | undefined>(undefined);
   const rootRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (sshConnections.some((entry) => entry.id === connectionId)) return;
+    setConnectionId(sshConnections[0]?.id ?? "");
+  }, [connectionId, sshConnections]);
+
   const cancel = useCallback(() => {
     alive.current = false;
     requestVersion.current++;
@@ -171,7 +174,7 @@ export function AddRemoteProjectDialog({
   }, [browse, connection, connectionState.error]);
 
   const open = async () => {
-    if (!machine || !sessionReady || !path.trim() || opening) return;
+    if (!profile || !sessionReady || !path.trim() || opening) return;
     const version = ++requestVersion.current;
     setOpening(true);
     setLoading(false);
@@ -179,8 +182,9 @@ export function AddRemoteProjectDialog({
     try {
       const parts = path.split("/").filter(Boolean);
       const name = parts[parts.length - 1] ?? path;
-      const project = rememberRemoteProject(machine.environmentId, {
-        id: `ssh-${machine.environmentId}-${path}`,
+      const environmentId = remoteSshEnvironmentId(profile.id);
+      const project = rememberRemoteProject(environmentId, {
+        id: `ssh-${profile.id}-${path}`,
         cwd: path,
         name,
       });
@@ -219,15 +223,15 @@ export function AddRemoteProjectDialog({
             Open folder on a machine
           </h2>
           <p className="text-[12px] leading-snug text-content/55">
-            Folder discovery uses Voktty’s authenticated SSH helper and the
-            machine’s saved SSH connection.
+            Folder discovery and OpenCode 2.x sessions use the saved SSH profile
+            through Voktty’s authenticated agent.
           </p>
         </div>
-        {!loaded ? null : !machine ? (
+        {!preferencesLoaded ? null : !profile ? (
           <>
             <p className="text-[12px] leading-snug text-content/55">
-              No SSH-connected machines are available. Add a machine through SSH
-              in Connections settings, then open its folder here.
+              No saved SSH connections are available. Add a profile in SSH
+              settings, then open its folder here.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -237,35 +241,25 @@ export function AddRemoteProjectDialog({
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  cancel();
-                  window.dispatchEvent(new Event(OPEN_CONNECTIONS_EVENT));
-                }}
-                className="rounded-md bg-selection px-3 py-1.5 text-[12px] font-medium hover:bg-selection-hover"
-              >
-                Add a machine
-              </button>
             </div>
           </>
         ) : (
           <>
-            {nativeMachines.length > 1 ? (
+            {sshConnections.length > 1 ? (
               <SearchableSelect
-                label="Machine"
-                value={machine.id}
-                options={nativeMachines.map((entry) => ({
+                label="SSH connection"
+                value={profile.id}
+                options={sshConnections.map((entry) => ({
                   value: entry.id,
                   label: entry.name,
-                  keywords: entry.ssh?.target ?? entry.endpoint,
+                  keywords: `${entry.user ? `${entry.user}@` : ""}${entry.host}:${entry.port ?? 22}`,
                 }))}
-                onChange={setMachineId}
-                searchable={false}
+                onChange={setConnectionId}
+                searchable
               />
             ) : (
               <p className="text-[12px] text-content/55">
-                On <span className="text-content/80">{machine.name}</span>
+                On <span className="text-content/80">{profile.name}</span>
               </p>
             )}
             <input
@@ -330,7 +324,13 @@ export function AddRemoteProjectDialog({
               </button>
               <button
                 type="submit"
-                disabled={opening || loading || !sessionReady || !path.trim()}
+                disabled={
+                  opening ||
+                  loading ||
+                  !profile ||
+                  !sessionReady ||
+                  !path.trim()
+                }
                 className="rounded-md bg-selection px-3 py-1.5 text-[12px] font-medium hover:bg-selection-hover disabled:opacity-40"
               >
                 {opening ? "Opening…" : "Open"}
