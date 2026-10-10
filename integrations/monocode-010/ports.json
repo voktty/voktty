@@ -1577,6 +1577,39 @@
         }
       ],
       "rationale": "General Harness terminal actions prefer the active session's non-removed worktree, then the focused pane, session, and project directories. Session-scoped and standalone Harness terminals use the same worktree validity rule. Voktty's existing terminal creation path remains responsible for opening the terminal."
+    },
+    {
+      "upstreamCommit": "185b500540",
+      "upstreamTitle": "Fix editor diff gutter layout and Inbox PR overview diff colors (#759)",
+      "localCommits": ["3ee0e4d", "02af232"],
+      "localCommitBases": ["integrated", "integrated"],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/files/editor/editorGit.ts",
+          "local": "src/modules/harness/surfaces/editorGit.ts"
+        },
+        {
+          "upstream": "src/features/files/editor/editorGit.gutter.test.ts",
+          "local": "src/modules/harness/surfaces/editorGit.gutter.test.ts"
+        },
+        {
+          "upstream": "src/features/files/ui/FileEditor.tsx",
+          "local": "src/modules/harness/surfaces/FileEditor.tsx"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxPrOverview.tsx",
+          "local": "src/modules/harness/surfaces/InboxPrOverview.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/editorGit.gutter.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already positions the diff glyph lane after line numbers, shows original line numbers for removed rows, and tints changed gutter rows. The Inbox PR overview already uses the selected diff palette for counts and file bars. These adaptations are covered by local commits 3ee0e4d and 02af232; the gutter regression checks the lane order and row classes."
     }
   ]
 }
