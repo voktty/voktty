@@ -38,6 +38,7 @@ import {
 } from "../chrome/icons";
 import {
   MarkdownViewShell,
+  markdownModeKey,
   useMarkdownMode,
 } from "../chrome/MarkdownModeToggle";
 import { useColorScheme } from "../hooks/useColorScheme";
@@ -132,7 +133,10 @@ export function FileEditor({
     original: string | null;
   }>({ path, original: null });
   const markdown = isMarkdownPath(path);
-  const [mode, setMode] = useMarkdownMode(path);
+  const [mode, setMode] = useMarkdownMode(
+    markdownModeKey(path, showDiff),
+    showDiff ? "source" : "preview",
+  );
   const sourceNavigationToken = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (

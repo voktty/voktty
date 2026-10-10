@@ -5,16 +5,21 @@ export type MarkdownViewMode = "preview" | "source";
 
 const remembered = new Map<string, MarkdownViewMode>();
 
+export function markdownModeKey(path: string, review: boolean): string {
+  return review ? `review:${path}` : path;
+}
+
 export function useMarkdownMode(
   key: string,
+  fallback: MarkdownViewMode = "preview",
 ): [MarkdownViewMode, (mode: MarkdownViewMode) => void] {
   const [mode, setMode] = useState<MarkdownViewMode>(
-    () => remembered.get(key) ?? "preview",
+    () => remembered.get(key) ?? fallback,
   );
 
   useEffect(() => {
-    setMode(remembered.get(key) ?? "preview");
-  }, [key]);
+    setMode(remembered.get(key) ?? fallback);
+  }, [fallback, key]);
 
   return [
     mode,
