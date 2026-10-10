@@ -170,6 +170,54 @@
       ],
       "tests": [],
       "rationale": "Voktty already applies the same 10rem minimum width and top alignment to Harness Markdown table cells. This presentation-only CSS rule needs no additional test."
+    },
+    {
+      "upstreamCommit": "829fede692a90f323e5d2ea635bd5b35e956fc7f",
+      "upstreamTitle": "Drop a reorder drag whose pointerup never arrived (#879)",
+      "localCommit": "6e0d9c88b07da58a2246184d00344dd156171a6d",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/shared/hooks/useAnimatedReorder.ts",
+          "local": "src/modules/harness/hooks/useSortable.ts"
+        },
+        {
+          "upstream": "src/shared/hooks/useAnimatedReorder.test.ts",
+          "local": "src/modules/harness/hooks/useSortable.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/hooks/useSortable.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already cancels a mouse reorder when pointerup is missed, and additionally ignores pointer movement from another pointer. The focused sortable tests cover cancellation without applying a reorder."
+    },
+    {
+      "upstreamCommit": "fd107302654e706aa020f5b808acab25f091e2f3",
+      "upstreamTitle": "Stop repeating a thought's first paragraph when its row is opened (#882)",
+      "localCommit": "a861e224c0a227d205cee201db5457f3d775eb7d",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscriptThinking.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/AgentTranscriptThinking.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Opening a thought row replaces its summary with Voktty's localized Thinking label, so the first paragraph appears only in the body. The local regression checks open and close behavior in English and Spanish."
     }
   ]
 }
