@@ -20,6 +20,36 @@ export const REMOTE_PROJECTS_CHANGED = "terax:remote-projects-changed";
 
 const slashed = (path: string) => path.replace(/\\/g, "/");
 
+function normalizedHostPath(path: string): string | undefined {
+  const value = slashed(path);
+  const unc = value.startsWith("//");
+  const drive = value.match(/^([A-Za-z]:)(?:\/|$)/)?.[1];
+  const absolute = unc || !!drive || value.startsWith("/");
+  if (!absolute) return undefined;
+  const prefix = unc ? "//" : drive ? `${drive.toLowerCase()}/` : "/";
+  const rest = unc ? value.slice(2) : drive ? value.slice(2) : value.slice(1);
+  const parts: string[] = [];
+  for (const part of rest.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  const normalized = `${prefix}${parts.join("/")}`.replace(/\/$/, "") || prefix;
+  return unc || drive ? normalized.toLocaleLowerCase("en-US") : normalized;
+}
+
+function hostPathIsWithin(root: string, candidate: string): boolean {
+  const normalizedRoot = normalizedHostPath(root);
+  const normalizedCandidate = normalizedHostPath(candidate);
+  if (!normalizedRoot || !normalizedCandidate) return false;
+  if (normalizedCandidate === normalizedRoot) return true;
+  const separator = normalizedRoot.endsWith("/") ? "" : "/";
+  return normalizedCandidate.startsWith(`${normalizedRoot}${separator}`);
+}
+
 export function remoteProjectKey(environmentId: string, cwd: string): string {
   return remotePath(environmentId, slashed(cwd).replace(/\/+$/, ""));
 }
@@ -50,7 +80,8 @@ export function parseRemotePath(
 
 function readAll(): Record<string, RemoteProject> {
   try {
-    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY) ?? "{}";
+    const raw =
+      localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY) ?? "{}";
     const value: unknown = JSON.parse(raw);
     return value && typeof value === "object"
       ? (value as Record<string, RemoteProject>)
@@ -64,9 +95,25 @@ export function remoteProjectFor(path: string): RemoteProject | undefined {
   if (!isRemoteProjectPath(path)) return undefined;
   const key = slashed(path).replace(/\/+$/, "");
   const projects = readAll();
-  return projects[key] ?? Object.values(projects).find(
-    (project) => remoteProjectKey(project.environmentId, project.cwd) === key,
+  return (
+    projects[key] ??
+    Object.values(projects).find(
+      (project) => remoteProjectKey(project.environmentId, project.cwd) === key,
+    )
   );
+}
+
+/** Finds the most specific saved project that owns a remote file path. */
+export function remoteProjectForPath(path: string): RemoteProject | undefined {
+  const parsed = parseRemotePath(path);
+  if (!parsed) return undefined;
+  return remoteProjectsOn(parsed.environmentId)
+    .filter((project) => hostPathIsWithin(project.cwd, parsed.hostPath))
+    .sort(
+      (left, right) =>
+        (normalizedHostPath(right.cwd)?.length ?? 0) -
+        (normalizedHostPath(left.cwd)?.length ?? 0),
+    )[0];
 }
 
 export function rememberRemoteProject(

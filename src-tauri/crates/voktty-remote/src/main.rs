@@ -18,7 +18,7 @@ use search::{run_search, PreparedSearch, RemoteSearchState};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
-    read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
+    read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse, METHOD_COPY,
     METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC, METHOD_GREP,
     METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE,
     METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
@@ -36,6 +36,9 @@ use voktty_workspace_edit::{
 
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_BINARY_FILE_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_COPY_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_COPY_ENTRIES: usize = 20_000;
+const MAX_DIRECTORY_ENTRIES: usize = 20_000;
 const HELPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(150);
 const WATCH_MAX_WINDOW: Duration = Duration::from_millis(1000);
@@ -160,6 +163,7 @@ impl RemoteServer {
             METHOD_CREATE_FILE => self.create_file(request),
             METHOD_CREATE_DIR => self.create_dir(request),
             METHOD_RENAME => self.rename(request),
+            METHOD_COPY => self.copy(request),
             METHOD_DELETE => self.delete(request),
             METHOD_GREP => self.grep(request),
             METHOD_GREP_CANCEL => self.cancel_grep(request),
@@ -206,6 +210,7 @@ impl RemoteServer {
                     METHOD_CREATE_FILE,
                     METHOD_CREATE_DIR,
                     METHOD_RENAME,
+                    METHOD_COPY,
                     METHOD_DELETE,
                     METHOD_GREP,
                     METHOD_GREP_CANCEL,
@@ -511,7 +516,33 @@ impl RemoteServer {
             Ok(path) => path,
             Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
         };
-        if let Err(error) = write_atomic(&path, params.content.as_bytes()) {
+        let root = match self.root.as_ref() {
+            Some(root) => root,
+            None => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "handshake_required",
+                    "handshake is required",
+                )
+            }
+        };
+        if params
+            .expected_content
+            .as_ref()
+            .is_some_and(|expected| expected.len() as u64 > MAX_FILE_BYTES)
+        {
+            return RemoteResponse::failure(
+                request.id,
+                "file_too_large",
+                "expected file content exceeds the remote write limit",
+            );
+        }
+        if let Err(error) = write_atomic_checked(
+            root,
+            &path,
+            params.content.as_bytes(),
+            params.expected_content.as_deref(),
+        ) {
             return RemoteResponse::failure(request.id, "write_failed", error.to_string());
         }
         RemoteResponse::success(request.id, json!({ "path": path.to_string_lossy() }))
@@ -613,6 +644,79 @@ impl RemoteServer {
         match fs::rename(&from, &to) {
             Ok(()) => RemoteResponse::success(request.id, json!({ "path": to })),
             Err(error) => RemoteResponse::failure(request.id, "rename_failed", error.to_string()),
+        }
+    }
+
+    fn copy(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<CopyParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        let root = match self.root.as_ref() {
+            Some(root) => root,
+            None => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "handshake_required",
+                    "handshake is required",
+                )
+            }
+        };
+        let from = match self.resolve_entry(Some(&params.from)) {
+            Ok(path) => path,
+            Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
+        };
+        let dest_parent = match self.resolve_existing_directory(&params.dest_parent) {
+            Ok(path) => path,
+            Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
+        };
+        let source_name = match from.file_name() {
+            Some(name) => name.to_string_lossy().into_owned(),
+            None => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "invalid_path",
+                    "source path has no file name",
+                )
+            }
+        };
+        let target_name = unique_copy_name(&dest_parent, &source_name);
+        let target =
+            match self.resolve_new_path(Some(&dest_parent.join(target_name).to_string_lossy())) {
+                Ok(path) => path,
+                Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
+            };
+        let source = match fs::canonicalize(&from) {
+            Ok(path) if path.starts_with(root) => path,
+            Ok(_) => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "invalid_path",
+                    "source is outside the workspace root",
+                )
+            }
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "copy_failed", error.to_string())
+            }
+        };
+        if fs::metadata(&source).is_ok_and(|metadata| metadata.is_dir())
+            && dest_parent.starts_with(&source)
+        {
+            return RemoteResponse::failure(
+                request.id,
+                "invalid_path",
+                "cannot copy a folder into itself",
+            );
+        }
+        let mut budget = CopyBudget::default();
+        match copy_entry(root, &source, &target, &mut budget) {
+            Ok(()) => RemoteResponse::success(request.id, json!({ "path": target })),
+            Err(error) => {
+                let _ = remove_copied_entry(&target);
+                RemoteResponse::failure(request.id, "copy_failed", error.to_string())
+            }
         }
     }
 
@@ -916,23 +1020,13 @@ impl RemoteServer {
 
     fn resolve_workspace_path(&self, path: &str, must_exist: bool) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let raw = Path::new(path);
-        let candidate = if raw.is_absolute() {
-            let canonical_raw = fs::canonicalize(raw).map_err(|e| e.to_string())?;
-            if !canonical_raw.starts_with(root) {
-                return Err("path is outside the workspace root".to_string());
-            }
-            canonical_raw
-        } else {
-            root.join(safe_relative_path(path)?)
-        };
-        if let Ok(canonical) = fs::canonicalize(&candidate) {
-            return Ok(canonical);
+        let candidate = workspace_candidate(root, path)?;
+        match fs::canonicalize(&candidate) {
+            Ok(canonical) if canonical.starts_with(root) => Ok(canonical),
+            Ok(_) => Err("path is outside the workspace root".to_string()),
+            Err(error) if must_exist => Err(format!("watch path does not exist: {error}")),
+            Err(_) => canonicalize_missing_path_inside_root(root, &candidate),
         }
-        if must_exist {
-            return Err("watch path does not exist".to_string());
-        }
-        Ok(candidate)
     }
 
     fn open_pty(&self, request: RemoteRequest, output: SharedOutput) -> RemoteResponse {
@@ -1417,14 +1511,7 @@ impl RemoteServer {
 
     fn resolve_existing(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let raw_str = path.unwrap_or(".");
-        let raw_path = Path::new(raw_str);
-        let candidate = if raw_path.is_absolute() {
-            fs::canonicalize(raw_path).map_err(|e| e.to_string())?
-        } else {
-            let relative = safe_relative_path(raw_str)?;
-            root.join(relative)
-        };
+        let candidate = workspace_candidate(root, path.unwrap_or("."))?;
         if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
             return Err("path does not exist".to_string());
         }
@@ -1433,61 +1520,196 @@ impl RemoteServer {
 
     fn resolve_for_write(&self, path: &str) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let raw_path = Path::new(path);
-        let candidate = if raw_path.is_absolute() {
-            raw_path.to_path_buf()
-        } else {
-            let relative = safe_relative_path(path)?;
-            root.join(relative)
-        };
-        let parent = candidate.parent().ok_or("path has no parent")?;
-        if !parent.exists() {
-            return Err("parent directory does not exist".to_string());
+        resolve_for_write_path(root, path)
+    }
+
+    fn resolve_existing_directory(&self, path: &str) -> Result<PathBuf, String> {
+        let root = self.root.as_ref().ok_or("handshake is required")?;
+        let candidate = workspace_candidate(root, path)?;
+        let canonical = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
+        if !canonical.starts_with(root) {
+            return Err("path is outside the workspace root".to_string());
         }
-        Ok(candidate)
+        if !canonical.is_dir() {
+            return Err("path is not a directory".to_string());
+        }
+        Ok(canonical)
     }
 
     fn resolve_entry(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let raw_str = path.unwrap_or(".");
-        let raw_path = Path::new(raw_str);
-        let candidate = if raw_path.is_absolute() {
-            raw_path.to_path_buf()
-        } else {
-            let relative = safe_relative_path(raw_str)?;
-            root.join(relative)
-        };
+        let candidate = workspace_candidate(root, path.unwrap_or("."))?;
+        if candidate == *root {
+            return Err("workspace root cannot be renamed or deleted".to_string());
+        }
         if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
             return Err("path does not exist".to_string());
+        }
+        let parent = candidate.parent().ok_or("path has no parent")?;
+        let canonical_parent = fs::canonicalize(parent).map_err(|e| e.to_string())?;
+        if !canonical_parent.starts_with(root) {
+            return Err("path is outside the workspace root".to_string());
         }
         Ok(candidate)
     }
 
     fn resolve_new_path(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let raw_str = path.unwrap_or(".");
-        let raw_path = Path::new(raw_str);
-        let candidate = if raw_path.is_absolute() {
-            raw_path.to_path_buf()
-        } else {
-            let relative = safe_relative_path(raw_str)?;
-            root.join(relative)
-        };
+        let candidate = workspace_candidate(root, path.unwrap_or("."))?;
         if candidate == *root {
             return Err("path must not be the workspace root".to_string());
         }
         let parent = candidate.parent().ok_or("path has no parent")?;
-        if !parent.exists() {
-            return Err("parent directory does not exist".to_string());
+        let canonical_parent = fs::canonicalize(parent).map_err(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                "parent directory does not exist".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
+        if !canonical_parent.starts_with(root) {
+            return Err("path is outside the workspace root".to_string());
         }
         if fs::symlink_metadata(&candidate).is_ok() {
             return Err("path already exists".to_string());
         }
-        Ok(candidate)
+        Ok(canonical_parent.join(candidate.file_name().ok_or("path has no name")?))
     }
 }
 
-fn write_atomic(path: &Path, content: &[u8]) -> io::Result<()> {
+fn workspace_candidate(root: &Path, path: &str) -> Result<PathBuf, String> {
+    let raw = Path::new(path);
+    let relative = if raw.is_absolute() {
+        raw.strip_prefix(root)
+            .map_err(|_| "path is outside the workspace root".to_string())?
+    } else {
+        raw
+    };
+    let relative = relative
+        .to_str()
+        .ok_or_else(|| "path is not valid UTF-8".to_string())?;
+    if relative.is_empty() {
+        return Ok(root.to_path_buf());
+    }
+    Ok(root.join(safe_relative_path(relative)?))
+}
+
+fn canonicalize_missing_path_inside_root(root: &Path, candidate: &Path) -> Result<PathBuf, String> {
+    let mut current = candidate.to_path_buf();
+    let mut missing = Vec::<std::ffi::OsString>::new();
+    loop {
+        match fs::canonicalize(&current) {
+            Ok(canonical) => {
+                if !canonical.starts_with(root) {
+                    return Err("path is outside the workspace root".to_string());
+                }
+                let mut resolved = canonical;
+                for component in missing.iter().rev() {
+                    resolved.push(component);
+                }
+                return Ok(resolved);
+            }
+            Err(error)
+                if error.kind() == io::ErrorKind::NotFound
+                    && fs::symlink_metadata(&current).is_err() =>
+            {
+                missing.push(
+                    current
+                        .file_name()
+                        .ok_or("path has no name")?
+                        .to_os_string(),
+                );
+                current = current
+                    .parent()
+                    .ok_or("path has no existing parent")?
+                    .to_path_buf();
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+}
+
+fn resolve_for_write_path(root: &Path, path: &str) -> Result<PathBuf, String> {
+    let candidate = workspace_candidate(root, path)?;
+    if candidate == root {
+        return Err("workspace root cannot be replaced".to_string());
+    }
+    let parent = candidate.parent().ok_or("path has no parent")?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            "parent directory does not exist".to_string()
+        } else {
+            error.to_string()
+        }
+    })?;
+    if !canonical_parent.starts_with(root) {
+        return Err("path is outside the workspace root".to_string());
+    }
+    let target = canonical_parent.join(candidate.file_name().ok_or("path has no name")?);
+    match fs::symlink_metadata(&target) {
+        Ok(metadata) if metadata.file_type().is_symlink() => match fs::canonicalize(&target) {
+            Ok(canonical) if canonical.starts_with(root) && canonical.is_file() => Ok(canonical),
+            Ok(canonical) if !canonical.starts_with(root) => {
+                Err("path is outside the workspace root".to_string())
+            }
+            Ok(_) => Err("path is not a file".to_string()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(target),
+            Err(error) => Err(error.to_string()),
+        },
+        Ok(metadata) => {
+            let canonical = fs::canonicalize(&target).map_err(|error| error.to_string())?;
+            if !canonical.starts_with(root) {
+                return Err("path is outside the workspace root".to_string());
+            }
+            if !metadata.is_file() {
+                return Err("path is not a file".to_string());
+            }
+            Ok(canonical)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(target),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn ensure_expected_content(path: &Path, expected: Option<&str>) -> Result<(), String> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let mut current = Vec::new();
+    fs::File::open(path)
+        .and_then(|file| file.take(MAX_FILE_BYTES + 1).read_to_end(&mut current))
+        .map_err(|_| "File changed on disk; save cancelled.".to_string())?;
+    if current.len() as u64 > MAX_FILE_BYTES || current != expected.as_bytes() {
+        return Err("File changed on disk; save cancelled.".to_string());
+    }
+    Ok(())
+}
+
+fn write_atomic_checked(
+    root: &Path,
+    path: &Path,
+    content: &[u8],
+    expected: Option<&str>,
+) -> Result<(), String> {
+    let requested = path.to_string_lossy();
+    let validated = resolve_for_write_path(root, &requested)?;
+    ensure_expected_content(&validated, expected)?;
+    let requested = requested.into_owned();
+    write_atomic_with_pre_replace(&validated, content, || {
+        let current = resolve_for_write_path(root, &requested).map_err(io::Error::other)?;
+        if current != validated {
+            return Err(io::Error::other("workspace path changed while saving"));
+        }
+        ensure_expected_content(&current, expected).map_err(io::Error::other)
+    })
+    .map_err(|error| error.to_string())
+}
+
+fn write_atomic_with_pre_replace(
+    path: &Path,
+    content: &[u8],
+    before_replace: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no parent"))?;
@@ -1508,6 +1730,7 @@ fn write_atomic(path: &Path, content: &[u8]) -> io::Result<()> {
             file.set_permissions(metadata.permissions())?;
         }
         drop(file);
+        before_replace()?;
         fs::rename(&temporary, path)
     })();
     if result.is_err() {
@@ -1516,21 +1739,114 @@ fn write_atomic(path: &Path, content: &[u8]) -> io::Result<()> {
     result
 }
 
+#[derive(Default)]
+struct CopyBudget {
+    entries: usize,
+    bytes: u64,
+}
+
+fn unique_copy_name(directory: &Path, name: &str) -> String {
+    let (stem, extension) = match name.rfind('.') {
+        Some(index) if index > 0 => (&name[..index], &name[index..]),
+        _ => (name, ""),
+    };
+    for index in 0..=1000 {
+        let candidate = match index {
+            0 => name.to_string(),
+            1 => format!("{stem} copy{extension}"),
+            number => format!("{stem} copy {number}{extension}"),
+        };
+        if fs::symlink_metadata(directory.join(&candidate)).is_err() {
+            return candidate;
+        }
+    }
+    format!("{stem} copy {}{extension}", unique_suffix())
+}
+
+fn copy_entry(
+    root: &Path,
+    source: &Path,
+    destination: &Path,
+    budget: &mut CopyBudget,
+) -> io::Result<()> {
+    let link_metadata = fs::symlink_metadata(source)?;
+    if link_metadata.file_type().is_symlink() {
+        let canonical = fs::canonicalize(source)?;
+        if !canonical.starts_with(root) {
+            return Err(io::Error::other(
+                "copy source is outside the workspace root",
+            ));
+        }
+        return copy_entry(root, &canonical, destination, budget);
+    }
+    budget.entries = budget
+        .entries
+        .checked_add(1)
+        .filter(|entries| *entries <= MAX_COPY_ENTRIES)
+        .ok_or_else(|| io::Error::other("copy exceeds the remote entry limit"))?;
+    let canonical = fs::canonicalize(source)?;
+    if !canonical.starts_with(root) {
+        return Err(io::Error::other(
+            "copy source is outside the workspace root",
+        ));
+    }
+    let metadata = fs::metadata(&canonical)?;
+    if metadata.is_dir() {
+        fs::create_dir(destination)?;
+        for entry in fs::read_dir(&canonical)? {
+            let entry = entry?;
+            copy_entry(
+                root,
+                &entry.path(),
+                &destination.join(entry.file_name()),
+                budget,
+            )?;
+        }
+        return Ok(());
+    }
+    if !metadata.is_file() {
+        return Err(io::Error::other("copy source is not a regular file"));
+    }
+    budget.bytes = budget
+        .bytes
+        .checked_add(metadata.len())
+        .filter(|bytes| *bytes <= MAX_COPY_BYTES)
+        .ok_or_else(|| io::Error::other("copy exceeds the remote byte limit"))?;
+    let copied = fs::copy(canonical, destination)?;
+    if copied != metadata.len() {
+        return Err(io::Error::other("copy source changed while being read"));
+    }
+    Ok(())
+}
+
+fn remove_copied_entry(path: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    }
+}
+
 struct RemoteWorkspaceEdit {
     root: PathBuf,
 }
 
 impl RemoteWorkspaceEdit {
     fn resolve_file(&self, relative: &str) -> Result<PathBuf, String> {
-        let candidate = self.root.join(safe_relative_path(relative)?);
+        let candidate = workspace_candidate(&self.root, relative)?;
         if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
             return Err("replacement target does not exist".to_string());
         }
-        let metadata = fs::metadata(&candidate).map_err(|error| error.to_string())?;
+        let canonical = fs::canonicalize(&candidate).map_err(|error| error.to_string())?;
+        if !canonical.starts_with(&self.root) {
+            return Err("replacement target is outside the workspace root".to_string());
+        }
+        let metadata = fs::metadata(&canonical).map_err(|error| error.to_string())?;
         if !metadata.is_file() {
             return Err("replacement target must be a regular file".to_string());
         }
-        Ok(candidate)
+        Ok(canonical)
     }
 }
 
@@ -1553,7 +1869,7 @@ impl WorkspaceEditFs for RemoteWorkspaceEdit {
 
     fn write_atomic(&mut self, path: &str, content: &str) -> Result<(), String> {
         let path = self.resolve_file(path)?;
-        write_atomic(&path, content.as_bytes()).map_err(|error| error.to_string())
+        write_atomic_checked(&self.root, &path, content.as_bytes(), None)
     }
 }
 
@@ -1585,6 +1901,15 @@ struct RenameParams {
 struct WriteFileParams {
     path: String,
     content: String,
+    #[serde(rename = "expectedContent")]
+    expected_content: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CopyParams {
+    from: String,
+    #[serde(rename = "destParent")]
+    dest_parent: String,
 }
 
 #[derive(Deserialize)]
@@ -1719,11 +2044,14 @@ fn safe_relative_path(path: &str) -> Result<PathBuf, String> {
 }
 
 fn read_directory(path: &Path) -> Result<Vec<Value>, String> {
-    let mut entries = fs::read_dir(path)
-        .map_err(|error| error.to_string())?
-        .filter_map(Result::ok)
-        .map(|entry| directory_entry(&entry))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
+        let Ok(entry) = entry else { continue };
+        if entries.len() >= MAX_DIRECTORY_ENTRIES {
+            return Err("directory exceeds the remote entry limit".to_string());
+        }
+        entries.push(directory_entry(&entry)?);
+    }
     entries.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
     Ok(entries)
 }
@@ -2080,6 +2408,191 @@ mod tests {
         assert!(!escape.ok);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn rejects_workspace_escape_for_absolute_paths_and_mutations_through_symlinks() {
+        let workspace = tempdir().expect("workspace");
+        let outside = tempdir().expect("outside");
+        let secret = outside.path().join("secret.txt");
+        fs::write(&secret, "outside data").expect("outside file");
+        std::os::unix::fs::symlink(outside.path(), workspace.path().join("linked"))
+            .expect("outside link");
+        std::os::unix::fs::symlink(&secret, workspace.path().join("linked-file"))
+            .expect("outside file link");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let absolute_read = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "absolute-read".to_string(),
+            method: METHOD_READ_FILE.to_string(),
+            params: json!({ "path": secret }),
+        });
+        let write_through_link = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "linked-write".to_string(),
+            method: METHOD_WRITE_FILE.to_string(),
+            params: json!({ "path": "linked/secret.txt", "content": "overwritten" }),
+        });
+        let write_through_file_link = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "linked-file-write".to_string(),
+            method: METHOD_WRITE_FILE.to_string(),
+            params: json!({ "path": "linked-file", "content": "overwritten" }),
+        });
+        let create_through_link = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "linked-create".to_string(),
+            method: METHOD_CREATE_FILE.to_string(),
+            params: json!({ "path": "linked/new.txt" }),
+        });
+        let delete_through_link = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "linked-delete".to_string(),
+            method: METHOD_DELETE.to_string(),
+            params: json!({ "path": "linked/secret.txt" }),
+        });
+        let copy_through_link = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "linked-copy".to_string(),
+            method: METHOD_COPY.to_string(),
+            params: json!({ "from": "linked/secret.txt", "destParent": "." }),
+        });
+
+        assert!(!absolute_read.ok);
+        assert!(!write_through_link.ok);
+        assert!(!write_through_file_link.ok);
+        assert!(!create_through_link.ok);
+        assert!(!delete_through_link.ok);
+        assert!(!copy_through_link.ok);
+        assert_eq!(fs::read_to_string(secret).unwrap(), "outside data");
+        assert!(!outside.path().join("new.txt").exists());
+    }
+
+    #[test]
+    fn remote_write_checks_expected_content_before_replacing_a_file() {
+        let workspace = tempdir().expect("workspace");
+        let path = workspace.path().join("note.txt");
+        fs::write(&path, "original").expect("test file");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let successful = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "write-match".to_string(),
+            method: METHOD_WRITE_FILE.to_string(),
+            params: json!({
+                "path": "note.txt",
+                "content": "edited",
+                "expectedContent": "original"
+            }),
+        });
+        assert!(successful.ok);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "edited");
+
+        fs::write(&path, "external change").expect("external update");
+        let conflict = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "write-conflict".to_string(),
+            method: METHOD_WRITE_FILE.to_string(),
+            params: json!({
+                "path": "note.txt",
+                "content": "lost update",
+                "expectedContent": "edited"
+            }),
+        });
+        assert!(!conflict.ok);
+        assert!(conflict
+            .error
+            .expect("write conflict error")
+            .message
+            .contains("File changed on disk"));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "external change");
+    }
+
+    #[test]
+    fn remote_copy_is_bounded_and_returns_the_created_path() {
+        let workspace = tempdir().expect("workspace");
+        fs::create_dir_all(workspace.path().join("src/nested")).expect("source dirs");
+        fs::write(workspace.path().join("src/nested/note.txt"), "copied").expect("source file");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let copied = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "copy".to_string(),
+            method: METHOD_COPY.to_string(),
+            params: json!({ "from": "src", "destParent": "." }),
+        });
+        assert!(copied.ok);
+        let copied_path = copied.result.expect("copy result")["path"]
+            .as_str()
+            .expect("copy path")
+            .to_string();
+        assert!(copied_path.ends_with("/src copy"));
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("src copy/nested/note.txt")).unwrap(),
+            "copied"
+        );
+
+        let copy_into_self = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "copy-self".to_string(),
+            method: METHOD_COPY.to_string(),
+            params: json!({ "from": "src", "destParent": "src/nested" }),
+        });
+        assert!(!copy_into_self.ok);
+    }
+
+    #[test]
+    fn remote_copy_stops_when_its_entry_or_byte_budget_is_exhausted() {
+        let workspace = tempdir().expect("workspace");
+        let source = workspace.path().join("source.txt");
+        fs::write(&source, "small").expect("source file");
+        let entry_target = workspace.path().join("entry-copy.txt");
+        let mut entry_budget = CopyBudget {
+            entries: MAX_COPY_ENTRIES,
+            bytes: 0,
+        };
+        assert!(copy_entry(workspace.path(), &source, &entry_target, &mut entry_budget).is_err());
+        assert!(!entry_target.exists());
+
+        let byte_target = workspace.path().join("byte-copy.txt");
+        let mut byte_budget = CopyBudget {
+            entries: 0,
+            bytes: MAX_COPY_BYTES,
+        };
+        assert!(copy_entry(workspace.path(), &source, &byte_target, &mut byte_budget).is_err());
+        assert!(!byte_target.exists());
+    }
+
     #[test]
     fn reads_binary_files_without_utf8_conversion() {
         let dir = tempdir().expect("temp dir");
@@ -2121,7 +2634,7 @@ mod tests {
         fs::write(&target, "old").expect("test file");
         fs::set_permissions(&target, fs::Permissions::from_mode(0o755)).expect("permissions");
 
-        write_atomic(&target, b"new").expect("atomic write");
+        write_atomic_with_pre_replace(&target, b"new", || Ok(())).expect("atomic write");
 
         assert_eq!(
             fs::metadata(&target).unwrap().permissions().mode() & 0o777,
@@ -2348,6 +2861,12 @@ mod tests {
 
         assert!(server.resolve_watch_add("src").is_ok());
         assert!(server.resolve_watch_add("node_modules").is_err());
+        assert_eq!(
+            server
+                .resolve_watch_remove("removed/nested")
+                .expect("remove path after nested deletion"),
+            workspace.path().join("removed/nested")
+        );
         assert!(server
             .resolve_watch_add(outside.path().to_str().expect("outside path"))
             .is_err());

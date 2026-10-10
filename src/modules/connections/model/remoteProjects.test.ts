@@ -1,5 +1,9 @@
 import { beforeEach, expect, it } from "vitest";
-import { remotePath, remoteProjectFor } from "./remoteProjects";
+import {
+  remotePath,
+  remoteProjectFor,
+  remoteProjectForPath,
+} from "./remoteProjects";
 
 const storage = new Map<string, string>();
 if (typeof globalThis.localStorage === "undefined") {
@@ -9,7 +13,9 @@ if (typeof globalThis.localStorage === "undefined") {
       setItem: (key: string, value: string) => storage.set(key, String(value)),
       removeItem: (key: string) => storage.delete(key),
       clear: () => storage.clear(),
-      get length() { return storage.size; },
+      get length() {
+        return storage.size;
+      },
       key: (i: number) => Array.from(storage.keys())[i] ?? null,
     },
     configurable: true,
@@ -36,7 +42,39 @@ it("finds a saved UNC project through its corrected remote path", () => {
     projectId: "project",
     cwd: "\\\\server\\share\\repo",
   };
-  localStorage.setItem("terax.remote-projects.v2", JSON.stringify({ [legacyKey]: project }));
+  localStorage.setItem(
+    "terax.remote-projects.v2",
+    JSON.stringify({ [legacyKey]: project }),
+  );
   expect(remoteProjectFor(remotePath("env", project.cwd))).toEqual(project);
   localStorage.removeItem("terax.remote-projects.v2");
+});
+
+it("finds the most specific saved project that contains a remote path", () => {
+  const parent = {
+    key: remotePath("env", "/srv/projects"),
+    environmentId: "env",
+    projectId: "parent",
+    cwd: "/srv/projects",
+  };
+  const nested = {
+    key: remotePath("env", "/srv/projects/app"),
+    environmentId: "env",
+    projectId: "nested",
+    cwd: "/srv/projects/app",
+  };
+  localStorage.setItem(
+    "terax.remote-projects.v2",
+    JSON.stringify({ [parent.key]: parent, [nested.key]: nested }),
+  );
+
+  expect(
+    remoteProjectForPath(remotePath("env", "/srv/projects/app/src/a.ts")),
+  ).toEqual(nested);
+  expect(
+    remoteProjectForPath(remotePath("env", "/srv/projects-other/a.ts")),
+  ).toBe(undefined);
+  expect(
+    remoteProjectForPath(remotePath("env", "/srv/projects/../secret")),
+  ).toBe(undefined);
 });

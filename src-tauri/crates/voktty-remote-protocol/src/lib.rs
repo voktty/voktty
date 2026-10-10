@@ -14,6 +14,7 @@ pub const METHOD_STAT: &str = "fs.stat";
 pub const METHOD_CREATE_FILE: &str = "fs.createFile";
 pub const METHOD_CREATE_DIR: &str = "fs.createDir";
 pub const METHOD_RENAME: &str = "fs.rename";
+pub const METHOD_COPY: &str = "fs.copy";
 pub const METHOD_DELETE: &str = "fs.delete";
 pub const METHOD_GREP: &str = "fs.grep";
 pub const METHOD_GREP_CANCEL: &str = "fs.grepCancel";

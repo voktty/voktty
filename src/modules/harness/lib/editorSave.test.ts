@@ -62,12 +62,12 @@ describe("saveEditorFile", () => {
     ).rejects.toThrow("disk full");
   });
 
-  it("preflights remote content without sending an unsupported native argument", async () => {
+  it("preflights remote content and sends the expected version for an atomic save", async () => {
     await saveEditorFile("remote://machine/repo/a.txt", "edited", "original");
     expect(writeTextFile).toHaveBeenCalledWith(
       "remote://machine/repo/a.txt",
       "edited",
-      undefined,
+      "original",
     );
   });
 });

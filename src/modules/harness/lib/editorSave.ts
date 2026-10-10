@@ -22,7 +22,7 @@ export async function saveEditorFile(
     }
   }
   try {
-    await writeTextFile(path, content, remote ? undefined : expectedContent);
+    await writeTextFile(path, content, expectedContent);
   } catch (error) {
     if (String(error).includes("File changed on disk")) {
       throw new EditorSaveConflictError("File changed on disk");
