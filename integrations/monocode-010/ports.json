@@ -2433,6 +2433,24 @@
       "upstreamTitle": "Keep Mono Codex sessions ephemeral and rotate by context",
       "category": "mono-only",
       "rationale": "Adds ephemeral Codex sessions and context rotation for persisted Mono chats. This depends on the Mono session model and isolated store, which Voktty does not have."
+    },
+    {
+      "upstreamCommit": "03ae2775d1d8518e87653d0d5f7d865b3e2837c3",
+      "upstreamTitle": "Continue Mono replies after sessions complete",
+      "category": "mono-only",
+      "rationale": "Groups hidden completion prompts and replies from Mono-launched sessions into Mono chat turns. Voktty's block model has no Mono completion marker or launched-session conversation flow."
+    },
+    {
+      "upstreamCommit": "0f8e5688c86950e7f09af1801582ab55141c590b",
+      "upstreamTitle": "Preserve delivered follow-up replies during inline work",
+      "category": "mono-only",
+      "rationale": "Keeps delivered messages visible within Mono's inline-work turn while later activity resumes. Voktty's queued messages dispatch after the provider is idle and its steered messages remain regular transcript turns."
+    },
+    {
+      "upstreamCommit": "432ac6862789840dc2f32ecec88e9ccb40a7770a",
+      "upstreamTitle": "Refine Mono activity display and completion handling",
+      "category": "mono-only",
+      "rationale": "Restructures Mono's mascot-signed inline-work header and activity trail. Voktty's Harness transcript uses a separate work-fold and has no Mono transcript mode."
     }
   ]
 }
