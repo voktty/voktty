@@ -433,6 +433,38 @@
       "rationale": "The selected Harness model label stays on one line and the trigger keeps its intrinsic width, so long model names are not clipped in the composer."
     },
     {
+      "upstreamCommit": "fb55b25543fa94f9990e2ebbb110961b64e075e9",
+      "upstreamTitle": "Add folder staging actions to Git changes panel",
+      "localCommit": "cb6fb34",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/source-control/SourceControlPanel.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/source-control/useSourceControlPanel.ts"
+        },
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/source-control/lib/tree.ts"
+        },
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.test.ts",
+          "local": "src/modules/source-control/lib/tree.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/source-control/lib/tree.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Folder actions derive an exact list of changed paths under the selected subtree and pass those paths through Voktty's existing authorized Git stage/unstage operations with WorkspaceEnv. Folder state and path boundaries have focused regression coverage; no directory-specific filesystem IPC or Host route is needed."
+    },
+    {
       "upstreamCommit": "45c9a2220724d5ae2ad65e9e29da9755fb143a86",
       "upstreamTitle": "Animate pane entry from split edge",
       "localCommit": "e7f7edd",
