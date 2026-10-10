@@ -1253,6 +1253,34 @@
         }
       ],
       "rationale": "The existing Host sidecar already treats folder arguments literally and has its regression test in 22c2707. Native Git stage/unstage and legacy Harness staging now pass --literal-pathspecs through local, SSH, Docker, and WSL Git execution. A stage/unstage-only path resolver permits colon-containing literal folder names while preserving traversal and repository-boundary checks; ordinary path validation remains strict."
+    },
+    {
+      "upstreamCommit": "dc6d0ef4a7ae0f50afc9060f5594c63a36b8b9e5",
+      "upstreamTitle": "Make diff stats resize to fit sidebar",
+      "localCommit": "99afbe4",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/DiffStat.tsx"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/DiffStat.test.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/DiffStat.test.tsx"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty shows project and session diff counts in both its Changes tab and session cards. The extracted DiffStat component scales its text to the measured space and watches the container so counts grow again after a sidebar resize. Existing localization and monospace styling remain in use; the session-card trailing row can shrink so long counts do not push out its label or Harness icon."
     }
   ]
 }
