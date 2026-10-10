@@ -2359,7 +2359,7 @@ function ActivityThinkingRow({
             bare ? pulse : ""
           }`}
         >
-          {text}
+          {open ? t("harness.chrome.thinking") : text}
         </span>
       </button>
       {open ? (
