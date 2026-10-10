@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use crate::modules::harness::ssh_askpass::Askpass;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -19,10 +21,11 @@ use voktty_remote_protocol::{
     METHOD_READ_FILE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD,
     METHOD_WATCH_TREE_REMOVE, PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
-use crate::modules::harness::ssh_askpass::Askpass;
 
 const REMOTE_OS: &str = "linux";
 const REMOTE_VERSION: &str = env!("CARGO_PKG_VERSION");
+const MAX_REMOTE_TUNNELS_PER_SESSION: usize = 8;
+const REMOTE_TUNNEL_START_TIMEOUT: Duration = Duration::from_secs(60);
 
 const REMOTE_BASHRC: &str = include_str!("pty/scripts/bashrc.bash");
 const REMOTE_ZSHENV: &str = include_str!("pty/scripts/zshenv.zsh");
@@ -65,6 +68,14 @@ pub struct RemoteSessionInfo {
     pub capabilities: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteTunnelInfo {
+    pub tunnel_id: u64,
+    pub local_port: u16,
+    pub remote_port: u16,
+}
+
 static GLOBAL_REMOTE: OnceLock<RemoteState> = OnceLock::new();
 
 #[derive(Clone)]
@@ -72,6 +83,7 @@ pub struct RemoteState {
     sessions: Arc<Mutex<HashMap<u64, Arc<RemoteSession>>>>,
     next_id: Arc<AtomicU64>,
     next_pty_id: Arc<AtomicU64>,
+    next_tunnel_id: Arc<AtomicU64>,
     next_request_id: Arc<AtomicU64>,
     ssh_prompts: Arc<Mutex<HashMap<String, mpsc::SyncSender<Option<String>>>>>,
 }
@@ -82,6 +94,7 @@ impl Default for RemoteState {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             next_id: Arc::new(AtomicU64::new(1)),
             next_pty_id: Arc::new(AtomicU64::new(1)),
+            next_tunnel_id: Arc::new(AtomicU64::new(1)),
             next_request_id: Arc::new(AtomicU64::new(1)),
             ssh_prompts: Arc::new(Mutex::new(HashMap::new())),
         };
@@ -271,9 +284,32 @@ pub fn remote_ssh_prompt_answer(
 struct RemoteSession {
     child: Mutex<Child>,
     stdin: Mutex<BufWriter<ChildStdin>>,
+    tunnels: Mutex<HashMap<u64, RemoteTunnel>>,
     routing: Arc<RemoteRouting>,
     connection: RemoteSshConnection,
     _askpass: Askpass,
+}
+
+struct RemoteTunnel {
+    child: Child,
+}
+
+impl RemoteTunnel {
+    fn stop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn tunnel_child_status(child: &mut Child) -> Result<Option<std::process::ExitStatus>, String> {
+    match child.try_wait() {
+        Ok(status) => Ok(status),
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(format!("could not inspect remote SSH tunnel: {error}"))
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -298,8 +334,15 @@ struct RemoteChangedPayload {
 
 impl Drop for RemoteSession {
     fn drop(&mut self) {
+        if let Ok(mut tunnels) = self.tunnels.lock() {
+            for tunnel in tunnels.values_mut() {
+                tunnel.stop();
+            }
+            tunnels.clear();
+        }
         if let Ok(mut child) = self.child.lock() {
             let _ = child.kill();
+            let _ = child.wait();
         }
         self.routing.fail_all("remote SSH session closed");
     }
@@ -335,6 +378,99 @@ impl RemoteSession {
             }
         }
         response.map_err(|_| "remote helper did not reply within 60 seconds".to_string())?
+    }
+
+    fn open_tunnel(&self, tunnel_id: u64, remote_port: u16) -> Result<RemoteTunnelInfo, String> {
+        if remote_port == 0 {
+            return Err("remote port must be greater than zero".to_string());
+        }
+
+        let mut tunnels = self
+            .tunnels
+            .lock()
+            .map_err(|_| "remote tunnel state is poisoned".to_string())?;
+        if tunnels.len() >= MAX_REMOTE_TUNNELS_PER_SESSION {
+            return Err(format!(
+                "remote session already has the maximum of {MAX_REMOTE_TUNNELS_PER_SESSION} tunnels"
+            ));
+        }
+
+        let local_port = allocate_loopback_port()?;
+        let args = build_tunnel_ssh_args(&self.connection, local_port, remote_port)?;
+        let mut command = Command::new("ssh");
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        self._askpass.configure(&mut command)?;
+        crate::modules::proc::hide_console(&mut command);
+        let mut child = command
+            .spawn()
+            .map_err(|error| format!("could not start remote SSH tunnel: {error}"))?;
+
+        let address = SocketAddr::from(([127, 0, 0, 1], local_port));
+        let started = Instant::now();
+        let mut occupied_since = None;
+        loop {
+            if let Some(status) = tunnel_child_status(&mut child)? {
+                return Err(format!(
+                    "remote SSH tunnel exited before becoming active (code {})",
+                    status.code().unwrap_or(-1)
+                ));
+            }
+
+            match TcpListener::bind(address) {
+                Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+                    let since = occupied_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() >= Duration::from_millis(150) {
+                        if let Some(status) = tunnel_child_status(&mut child)? {
+                            return Err(format!(
+                                "remote SSH tunnel exited before becoming active (code {})",
+                                status.code().unwrap_or(-1)
+                            ));
+                        }
+                        let info = RemoteTunnelInfo {
+                            tunnel_id,
+                            local_port,
+                            remote_port,
+                        };
+                        tunnels.insert(tunnel_id, RemoteTunnel { child });
+                        return Ok(info);
+                    }
+                }
+                Ok(listener) => {
+                    drop(listener);
+                    occupied_since = None;
+                }
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "could not verify remote SSH tunnel listener: {error}"
+                    ));
+                }
+            }
+
+            if started.elapsed() >= REMOTE_TUNNEL_START_TIMEOUT {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("timed out waiting for the remote SSH tunnel to listen".to_string());
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
+
+    fn close_tunnel(&self, tunnel_id: u64) -> Result<(), String> {
+        let tunnel = self
+            .tunnels
+            .lock()
+            .map_err(|_| "remote tunnel state is poisoned".to_string())?
+            .remove(&tunnel_id);
+        if let Some(mut tunnel) = tunnel {
+            tunnel.stop();
+        }
+        Ok(())
     }
 
     fn send(&self, frame: &Frame) -> Result<(), String> {
@@ -497,6 +633,31 @@ pub async fn remote_request(
     tauri::async_runtime::spawn_blocking(move || session.request(&request))
         .await
         .map_err(|error| format!("remote request task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn remote_tunnel_open(
+    state: State<'_, RemoteState>,
+    session_id: u64,
+    remote_port: u16,
+) -> Result<RemoteTunnelInfo, String> {
+    let session = remote_session(&state, session_id)?;
+    let tunnel_id = state.next_tunnel_id.fetch_add(1, Ordering::Relaxed);
+    tauri::async_runtime::spawn_blocking(move || session.open_tunnel(tunnel_id, remote_port))
+        .await
+        .map_err(|error| format!("remote tunnel startup task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn remote_tunnel_close(
+    state: State<'_, RemoteState>,
+    session_id: u64,
+    tunnel_id: u64,
+) -> Result<(), String> {
+    let session = remote_session(&state, session_id)?;
+    tauri::async_runtime::spawn_blocking(move || session.close_tunnel(tunnel_id))
+        .await
+        .map_err(|error| format!("remote tunnel close task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -1565,6 +1726,39 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     args
 }
 
+fn allocate_loopback_port() -> Result<u16, String> {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .map_err(|error| format!("could not allocate a local tunnel port: {error}"))?;
+    listener
+        .local_addr()
+        .map(|address| address.port())
+        .map_err(|error| format!("could not read allocated tunnel port: {error}"))
+}
+
+fn build_tunnel_ssh_args(
+    connection: &RemoteSshConnection,
+    local_port: u16,
+    remote_port: u16,
+) -> Result<Vec<String>, String> {
+    if local_port == 0 || remote_port == 0 {
+        return Err("tunnel ports must be greater than zero".to_string());
+    }
+
+    let mut args = ssh_args(connection);
+    let destination = args
+        .pop()
+        .ok_or_else(|| "SSH destination is missing".to_string())?;
+    args.extend([
+        "-N".to_string(),
+        "-o".to_string(),
+        "ExitOnForwardFailure=yes".to_string(),
+        "-L".to_string(),
+        format!("127.0.0.1:{local_port}:127.0.0.1:{remote_port}"),
+        destination,
+    ]);
+    Ok(args)
+}
+
 fn read_capped(mut stream: impl Read) -> Vec<u8> {
     let mut result = Vec::new();
     let mut buffer = [0u8; 4096];
@@ -1986,6 +2180,7 @@ fn start_helper(
     Ok(RemoteSession {
         child: Mutex::new(child),
         stdin: Mutex::new(BufWriter::new(stdin)),
+        tunnels: Mutex::new(HashMap::new()),
         routing,
         connection: connection.clone(),
         _askpass: askpass,
@@ -2133,6 +2328,54 @@ mod tests {
                 "ConnectTimeout=5",
                 "ubuntu@server.example"
             ]
+        );
+    }
+
+    #[test]
+    fn builds_loopback_only_remote_tunnel_arguments() {
+        let args = build_tunnel_ssh_args(&connection(), 43123, 4096)
+            .expect("valid tunnel ports must build SSH arguments");
+        let forward_index = args
+            .iter()
+            .position(|argument| argument == "-L")
+            .expect("local forwarding option must exist");
+        assert_eq!(
+            args.get(forward_index + 1).map(String::as_str),
+            Some("127.0.0.1:43123:127.0.0.1:4096")
+        );
+        assert!(args[..forward_index]
+            .iter()
+            .any(|argument| argument == "-N"));
+        assert!(args[..forward_index]
+            .windows(2)
+            .any(|pair| pair[0] == "-o" && pair[1] == "ExitOnForwardFailure=yes"));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("ubuntu@server.example")
+        );
+    }
+
+    #[test]
+    fn rejects_zero_ports_for_remote_tunnels() {
+        assert!(build_tunnel_ssh_args(&connection(), 0, 4096).is_err());
+        assert!(build_tunnel_ssh_args(&connection(), 43123, 0).is_err());
+    }
+
+    #[test]
+    fn serializes_remote_tunnel_info_with_the_ipc_field_names() {
+        let info = RemoteTunnelInfo {
+            tunnel_id: 12,
+            local_port: 43123,
+            remote_port: 4096,
+        };
+
+        assert_eq!(
+            serde_json::to_value(info).expect("tunnel info must serialize"),
+            serde_json::json!({
+                "tunnelId": 12,
+                "localPort": 43123,
+                "remotePort": 4096
+            })
         );
     }
 

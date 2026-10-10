@@ -356,6 +356,8 @@ pub fn run() {
             remote::remote_open,
             remote::remote_ssh_prompt_answer,
             remote::remote_request,
+            remote::remote_tunnel_open,
+            remote::remote_tunnel_close,
             remote::remote_close,
             remote::remote_pty_open,
             remote::remote_pty_write,

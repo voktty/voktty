@@ -13,6 +13,12 @@ export type RemoteSessionInfo = {
   capabilities: string[];
 };
 
+export type RemoteTunnelInfo = {
+  tunnelId: number;
+  localPort: number;
+  remotePort: number;
+};
+
 export type RemoteRequest = {
   protocol: typeof REMOTE_PROTOCOL_VERSION;
   id: string;
@@ -63,6 +69,23 @@ export function requestRemote(
     sessionId,
     request,
   });
+}
+
+export function openRemoteTunnel(
+  sessionId: number,
+  remotePort: number,
+): Promise<RemoteTunnelInfo> {
+  return invoke<RemoteTunnelInfo>("remote_tunnel_open", {
+    sessionId,
+    remotePort,
+  });
+}
+
+export function closeRemoteTunnel(
+  sessionId: number,
+  tunnelId: number,
+): Promise<void> {
+  return invoke("remote_tunnel_close", { sessionId, tunnelId });
 }
 
 export async function closeRemoteWorkspace(sessionId: number): Promise<void> {

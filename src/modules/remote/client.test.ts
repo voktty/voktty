@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   closeRemoteWorkspace,
+  closeRemoteTunnel,
+  openRemoteTunnel,
   openRemoteWorkspace,
   requestRemote,
   type RemoteRequestError,
@@ -60,6 +62,31 @@ describe("remote client", () => {
       },
     });
     expect(invoke).toHaveBeenNthCalledWith(2, "remote_close", { sessionId: 7 });
+  });
+
+  it("opens and closes a loopback tunnel through its remote session", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      tunnelId: 12,
+      localPort: 43123,
+      remotePort: 4096,
+    });
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+
+    await expect(openRemoteTunnel(7, 4096)).resolves.toEqual({
+      tunnelId: 12,
+      localPort: 43123,
+      remotePort: 4096,
+    });
+    await closeRemoteTunnel(7, 12);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "remote_tunnel_open", {
+      sessionId: 7,
+      remotePort: 4096,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "remote_tunnel_close", {
+      sessionId: 7,
+      tunnelId: 12,
+    });
   });
 
   it("preserves structured remote error codes", async () => {
