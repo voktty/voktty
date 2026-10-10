@@ -7,6 +7,7 @@ export type SettingsSearchEntry = {
   titleKey: string;
   descriptionKey?: string;
   targetTitleKey?: string;
+  keywords?: string;
 };
 
 const section = (
@@ -101,6 +102,16 @@ export const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
   section("agents-terminal", "models", "settings.agents.terminalAgentsTitle", "settings.agents.terminalAgentsDesc"),
   section("agents-hooks", "models", "settings.agents.enableHooks", "settings.agents.hooksDescription"),
   section("agents-snippets", "models", "settings.agents.snippets", "settings.agents.snippetsDesc"),
+  {
+    ...row(
+      "harness-diff-colors",
+      "harness",
+      "harness.settings.diffColors",
+      "harness.settings.diffColorsDesc",
+    ),
+    keywords:
+      "colorblind color blind accessibility added removed red green blue orange high contrast changes",
+  },
 
   section("extensions", "extensions", "extensions.title", "extensions.description"),
   section("ssh", "ssh", "settings.tabs.ssh"),
@@ -139,7 +150,9 @@ export function searchSettings(
       ? translate(entry.descriptionKey)
       : "";
     const normalizedTitle = normalize(title);
-    const searchableText = normalize(`${title} ${description}`);
+    const searchableText = normalize(
+      `${title} ${description} ${entry.keywords ?? ""}`,
+    );
     if (!queryTokens.every((token) => searchableText.includes(token))) return null;
 
     let score = 0;

@@ -10,6 +10,8 @@ const translations: Record<string, string> = {
   "settings.editor.display.fontSizeDesc": "Tamaño del texto del editor.",
   "settings.tabs.general": "General",
   "settings.general.description": "Terminal y arranque.",
+  "harness.settings.diffColors": "Diff colors",
+  "harness.settings.diffColorsDesc": "Choose colors for added and removed lines.",
 };
 
 const translate = (key: string) => translations[key] ?? "";
@@ -34,5 +36,17 @@ describe("searchSettings", () => {
 
   it("returns an empty list for unknown settings", () => {
     expect(searchSettings("not-a-setting", translate)).toEqual([]);
+  });
+
+  it("finds the diff palette from accessibility keywords", () => {
+    const result = searchSettings("color blind", translate).find(
+      (entry) => entry.id === "harness-diff-colors",
+    );
+
+    expect(result).toMatchObject({
+      tab: "harness",
+      titleKey: "harness.settings.diffColors",
+      targetTitleKey: "harness.settings.diffColors",
+    });
   });
 });

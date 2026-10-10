@@ -65,13 +65,18 @@ function Row({
   label,
   description,
   children,
+  settingTitle,
 }: {
   label: React.ReactNode;
   description?: string;
   children?: React.ReactNode;
+  settingTitle?: string;
 }) {
   return (
-    <div className="flex items-start gap-6 border-b border-border/40 py-4 last:border-b-0">
+    <div
+      data-setting-title={settingTitle}
+      className="flex items-start gap-6 border-b border-border/40 py-4 last:border-b-0 data-[settings-search-highlight=true]:rounded-md data-[settings-search-highlight=true]:ring-2 data-[settings-search-highlight=true]:ring-primary/30"
+    >
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-foreground">{label}</div>
         {description ? (
@@ -216,6 +221,7 @@ function GeneralBlock() {
       <Row
         label={t("harness.settings.diffColors")}
         description={t("harness.settings.diffColorsDesc")}
+        settingTitle={t("harness.settings.diffColors")}
       >
         <DiffPalettePicker />
       </Row>
