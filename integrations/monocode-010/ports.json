@@ -1762,6 +1762,30 @@
         }
       ],
       "rationale": "Voktty already reconciles the browser's scroll offset before asynchronous stream commits and ResizeObserver updates, and resumes following only when the reader reaches the bottom. The same intent rule covers live activity phases. Local scroll tests cover delayed scroll events, async content growth, small downward reversals, and wheel gestures."
+    },
+    {
+      "upstreamCommit": "7eebfc179c",
+      "upstreamTitle": "fix: preserve focused note title drafts (#769)",
+      "localCommit": "fb61fc6",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/notes/ui/NotesView.tsx",
+          "local": "src/modules/harness/surfaces/NotesView.tsx"
+        },
+        {
+          "upstream": "src/features/notes/ui/NotesView.test.ts",
+          "local": "src/modules/harness/surfaces/NotesView.test.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/NotesView.test.tsx"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Focused note title drafts, including blank drafts, remain visible while body saves complete. Blur and unmount normalize and commit the draft, with all writes serialized to prevent an earlier save from overwriting the final title. Regression tests cover blank and replacement drafts, delayed body saves, and unmount."
     }
   ]
 }
