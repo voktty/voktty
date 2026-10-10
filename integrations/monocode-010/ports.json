@@ -476,6 +476,116 @@
       "rationale": "The max and ultra effort shimmer applies to Codex reasoning effort, OpenCode variants, Claude effort, and Cursor effort. Other settings and ordinary values remain unanimated; focused tests cover all four setting IDs and the non-effort case."
     },
     {
+      "upstreamCommit": "0eb2773ec4f18c0533d5253ea6d4627cd5795299",
+      "upstreamTitle": "feat(opencode): support OpenCode 2.x servers (#434)",
+      "localCommits": ["6d3ec03", "db828c5", "26dadaa"],
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Route remote OpenCode 2.x service discovery and authenticated HTTP/SSE through Voktty's native SSH agent, with tmux recovery for Docker hosts; validate reconnect and cleanup before claiming remote parity."
+      ],
+      "mappings": [
+        {
+          "upstream": "host/child-backend.test.ts",
+          "local": "host/child-backend.test.ts"
+        },
+        {
+          "upstream": "host/child-backend.ts",
+          "local": "host/child-backend.ts"
+        },
+        {
+          "upstream": "host/opencode-v2-transport.test.ts",
+          "local": "host/opencode-v2-transport.test.ts"
+        },
+        {
+          "upstream": "src-tauri/src/harness.rs",
+          "local": "src-tauri/src/modules/harness/host.rs"
+        },
+        {
+          "upstream": "src/features/settings/ui/SettingsView.tsx",
+          "local": "src/settings/sections/HarnessSection.tsx"
+        },
+        {
+          "upstream": "src/integrations/harness/core/registry.ts",
+          "local": "src/settings/sections/HarnessSection.tsx"
+        },
+        {
+          "upstream": "src/integrations/harness/core/registry.test.ts",
+          "local": "src/modules/harness/lib/harness/registry.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencode.ts",
+          "local": "src/modules/harness/lib/harness/opencode.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeCatalog.ts",
+          "local": "src/modules/harness/lib/harness/opencodeCatalog.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeClient.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeV2Client.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeClient.ts",
+          "local": "src/modules/harness/lib/harness/opencodeClient.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeLive.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeV2Live.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeProtocol.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeV2Protocol.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeProtocol.ts",
+          "local": "src/modules/harness/lib/harness/opencodeProtocol.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeService.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeService.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeService.ts",
+          "local": "src/modules/harness/lib/harness/opencodeService.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeText.ts",
+          "local": "src/modules/harness/lib/harness/opencodeText.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeV2Events.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeV2Events.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeV2Events.ts",
+          "local": "src/modules/harness/lib/harness/opencodeV2Events.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/harness/opencodeV2Client.test.ts",
+            "src/modules/harness/lib/harness/opencodeV2Events.test.ts",
+            "src/modules/harness/lib/harness/opencodeV2Live.test.ts",
+            "src/modules/harness/lib/harness/opencodeV2Protocol.test.ts",
+            "src/modules/harness/lib/harness/opencodeService.test.ts",
+            "src/modules/harness/lib/harness/opencodeV2Text.test.ts",
+            "src/modules/harness/lib/harness/registry.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": ["src-tauri/src/modules/harness/host.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "service_commands_require_the_resolved_opencode_provider"
+        }
+      ],
+      "rationale": "Voktty already supports OpenCode 2.x on desktop: version gating, service authentication, the v2 catalog and agents, prompt and permission adaptation, event translation and correlation, compaction, resumed-session forks, and temporary text-session cleanup. Its service commands are scoped to OpenCode and authorized workspaces. The forced catalog refresh contract predated this port in Voktty's registry; the OpenCode settings action now calls it and a regression covers the bypass. Remote sessions still need the native SSH/tmux migration for Docker recovery."
+    },
+    {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
       "upstreamTitle": "Route ⌘W and ⌘T to the focused project terminal (#774)",
       "localCommit": "b74c021",
