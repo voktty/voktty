@@ -142,6 +142,61 @@ afterEach(async () => {
 });
 
 describe("Composer file drops", () => {
+  it("explains native image drops without paths and accepts the DOM fallback", async () => {
+    const session = await render();
+
+    await nativeDrop([]);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Save the image",
+    );
+
+    const file = Object.assign(
+      new File(["image"], "image.png", { type: "image/png" }),
+      { path: "/project/image.png" },
+    );
+    await act(async () => {
+      domDrop(session, [
+        { kind: "file", type: "image/png", getAsFile: () => file },
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(attachmentCount()).toBe(1);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("reports attachment read failures without exposing the path", async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "inspect_paths") {
+        throw new Error("Could not read /private/customer/image.png");
+      }
+      return "aW1hZ2U=";
+    });
+    await render();
+
+    await nativeDrop(["/private/customer/image.png"]);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    const alert = container.querySelector('[role="alert"]')?.textContent ?? "";
+    expect(alert).toContain("Could not attach the file");
+    expect(alert).not.toContain("/private/customer/image.png");
+  });
+
+  it("reports when the dropped path no longer exists", async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "inspect_paths") return [];
+      return "aW1hZ2U=";
+    });
+    await render();
+
+    await nativeDrop(["/project/moved-image.png"]);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Could not attach the file",
+    );
+  });
+
   it("accepts file items when FileList and transfer types are empty", async () => {
     const session = await render();
     const file = Object.assign(
@@ -183,6 +238,27 @@ describe("Composer file drops", () => {
     expect(attachmentCount()).toBe(1);
   });
 
+  it("keeps macOS logical coordinates on a Retina display", async () => {
+    vi.stubGlobal("devicePixelRatio", 2);
+    const session = await render();
+    session.getBoundingClientRect = () =>
+      ({
+        left: 100,
+        top: 200,
+        right: 600,
+        bottom: 450,
+        width: 500,
+        height: 250,
+        x: 100,
+        y: 200,
+        toJSON: () => undefined,
+      }) as DOMRect;
+
+    await nativeDrop(["/project/image.png"], 200, 300);
+
+    expect(attachmentCount()).toBe(1);
+  });
+
   it("uses current attachment support without replacing the native listener", async () => {
     await render();
     await render({ harness: "fx" });
@@ -196,6 +272,21 @@ describe("Composer file drops", () => {
 
     expect(listen).toHaveBeenCalledTimes(1);
     expect(attachmentCount()).toBe(1);
+  });
+
+  it("starts accepting file drops when a disabled composer becomes ready", async () => {
+    await render({ enabled: false });
+    await render({ enabled: true });
+    await nativeDrop(["/project/image.png"]);
+
+    expect(attachmentCount()).toBe(1);
+  });
+
+  it("does not attach native drops outside the session pane", async () => {
+    await render();
+    await nativeDrop(["/project/image.png"], 600, 600);
+
+    expect(attachmentCount()).toBe(0);
   });
 
   it("waits for a native drop read before submitting", async () => {
@@ -304,5 +395,42 @@ describe("Composer file drops", () => {
     await act(async () => finishRegistration?.());
 
     expect(handlers.size).toBe(0);
+  });
+
+  it("unlistens when native registration finishes after disabling", async () => {
+    let finishRegistration: (() => void) | undefined;
+    listen.mockImplementation((handler: NativeHandler) => {
+      handlers.add(handler);
+      return new Promise((resolve) => {
+        finishRegistration = () => resolve(() => handlers.delete(handler));
+      });
+    });
+    await render();
+    await render({ enabled: false });
+
+    await act(async () => finishRegistration?.());
+
+    expect(handlers.size).toBe(0);
+  });
+
+  it("processes a native drop once when the browser also reports it", async () => {
+    const session = await render();
+    const file = Object.assign(
+      new File(["image"], "image.png", { type: "image/png" }),
+      { path: "/project/image.png" },
+    );
+
+    await nativeDrop(["/project/image.png"]);
+    await act(async () => {
+      domDrop(session, [
+        { kind: "file", type: "image/png", getAsFile: () => file },
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(attachmentCount()).toBe(1);
+    expect(
+      invoke.mock.calls.filter(([command]) => command === "inspect_paths"),
+    ).toHaveLength(1);
   });
 });

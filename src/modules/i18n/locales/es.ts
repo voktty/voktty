@@ -5009,6 +5009,10 @@ export const es: TranslationSchema = {
       openContextActions: "{headline}, {detail}. Abrir acciones de contexto",
       contextUsageLabel: "{headline}, {detail}",
       dropFilesToAttach: "Suelta archivos para adjuntarlos",
+      dropAttachmentFailed:
+        "No se pudo adjuntar el archivo. Comprueba que siga disponible e inténtalo de nuevo.",
+      dropWithoutFilePath:
+        "El arrastre no incluyó la ruta de un archivo. Guarda la imagen y arrastra aquí el archivo guardado.",
       waitingForApproval: "Esperando aprobación",
       copied: "Copiado",
       copyFailed: "Error al copiar.",

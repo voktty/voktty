@@ -522,6 +522,7 @@ export function Composer({
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [skillActive, setSkillActive] = useState(0);
   const [creatingSkill, setCreatingSkill] = useState(false);
@@ -713,18 +714,34 @@ export function Composer({
       const next = mergeAttachments(attachmentsRef.current, incoming);
       attachmentsRef.current = next;
       setAttachments(next);
+      setDropError(null);
       syncHasValue(ref.current?.value ?? "", next);
       ref.current?.focus();
     },
     [harness, syncHasValue],
   );
 
-  const fileDropStateRef = useRef({ attachmentsSupported, addAttachments });
-  fileDropStateRef.current = { attachmentsSupported, addAttachments };
+  const fileDropStateRef = useRef({
+    attachmentsSupported,
+    addAttachments,
+    errors: {
+      failed: t("harness.chrome.dropAttachmentFailed"),
+      noPath: t("harness.chrome.dropWithoutFilePath"),
+    },
+  });
+  fileDropStateRef.current = {
+    attachmentsSupported,
+    addAttachments,
+    errors: {
+      failed: t("harness.chrome.dropAttachmentFailed"),
+      noPath: t("harness.chrome.dropWithoutFilePath"),
+    },
+  };
 
   const readDroppedAttachments = useCallback(
     (read: () => Promise<Attachment[]>) => {
       const generation = dropReadGenerationRef.current;
+      setDropError(null);
       const flight = read()
         .then((incoming) => {
           if (
@@ -734,9 +751,17 @@ export function Composer({
             incoming.forEach(revokeAttachment);
             return;
           }
+          if (incoming.length === 0) {
+            setDropError(fileDropStateRef.current.errors.failed);
+            return;
+          }
           fileDropStateRef.current.addAttachments(incoming);
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (generation === dropReadGenerationRef.current) {
+            setDropError(fileDropStateRef.current.errors.failed);
+          }
+        });
       dropReadFlightsRef.current.add(flight);
       void flight.finally(() => dropReadFlightsRef.current.delete(flight));
     },
@@ -1186,6 +1211,10 @@ export function Composer({
         if (event.payload.type !== "drop") return;
         setFileDrag(false);
         if (!over || !supported) return;
+        if (event.payload.paths.length === 0) {
+          setDropError(fileDropStateRef.current.errors.noPath);
+          return;
+        }
         nativeDropAt = Date.now();
         const paths = event.payload.paths;
         readDroppedAttachments(() => attachmentsFromPaths(paths));
@@ -1211,7 +1240,10 @@ export function Composer({
   }, [enabled, invalidateDropReads, readDroppedAttachments]);
 
   useEffect(() => {
-    if (!attachmentsSupported) setFileDrag(false);
+    if (!attachmentsSupported) {
+      setFileDrag(false);
+      setDropError(null);
+    }
   }, [attachmentsSupported]);
 
   useEffect(() => {
@@ -1753,6 +1785,15 @@ export function Composer({
                 />
               ))}
             </div>
+          ) : null}
+
+          {dropError ? (
+            <p
+              role="alert"
+              className="break-words px-3 pt-2 text-[11px] text-red-400"
+            >
+              {dropError}
+            </p>
           ) : null}
 
           {selectedComponent ? (

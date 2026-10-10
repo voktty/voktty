@@ -4891,6 +4891,10 @@ export const en = {
       openContextActions: "{headline}, {detail}. Open context actions",
       contextUsageLabel: "{headline}, {detail}",
       dropFilesToAttach: "Drop files to attach",
+      dropAttachmentFailed:
+        "Could not attach the file. Check that it is still available and try again.",
+      dropWithoutFilePath:
+        "This drag did not include a file path. Save the image, then drag the saved file here.",
       waitingForApproval: "Waiting for approval",
       copied: "Copied",
       copyFailed: "Copy failed.",
