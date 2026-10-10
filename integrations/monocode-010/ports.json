@@ -330,6 +330,100 @@
       ],
       "tests": [],
       "rationale": "The commit-message editor remains writable when no files are staged, while the commit action still requires staged files and a non-empty message. The editor now disables during a Git action, matching the upstream busy-state guard."
+    },
+    {
+      "upstreamCommit": "ce656bafe5ee0b8ebeee08ab810e6bff86dd828c",
+      "upstreamTitle": "Add slide and reveal animations to linked work item panel",
+      "localCommit": "d56d01f",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/inbox/ui/InboxView.tsx",
+          "local": "src/modules/harness/surfaces/InboxView.tsx"
+        },
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/modules/harness/surfaces/InboxDetailPane.module.css"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/inboxDetailMotion.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The Voktty detail pane slides in and reveals each selected issue or pull request. Its reducer ignores stale animation completions after rapid selection changes, and the scoped styles honor reduced-motion preferences."
+    },
+    {
+      "upstreamCommit": "45c9a2220724d5ae2ad65e9e29da9755fb143a86",
+      "upstreamTitle": "Animate pane entry from split edge",
+      "localCommit": "e7f7edd",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/workspace/ui/PaneTree.tsx",
+          "local": "src/modules/harness/surfaces/PaneTree.tsx"
+        },
+        {
+          "upstream": "src/features/workspace/ui/PaneTreeEnter.test.ts",
+          "local": "src/modules/harness/surfaces/PaneTreeEnter.test.ts"
+        },
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/styles/globals.css"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/PaneTreeEnter.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "New Voktty panes enter from their split edge, with a fade for restored panes and reduced-motion support. The local PaneTree regression suite protects direction, lifecycle, and scroll restoration behavior."
+    },
+    {
+      "upstreamCommit": "dcaba3dc026a71d7e5aea7d179cc0e03cf8f48d0",
+      "upstreamTitle": "Extract permissions to dedicated picker modal",
+      "localCommit": "ce17855",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/quick-composer/ui/QuickComposer.tsx",
+          "local": "src/modules/quick-composer/ui/QuickComposer.tsx"
+        },
+        {
+          "upstream": "src/features/quick-composer/ui/QuickModelSelector.test.ts",
+          "local": "src/modules/quick-composer/ui/QuickModelSelector.test.ts"
+        },
+        {
+          "upstream": "src/features/quick-composer/ui/QuickModelSelector.tsx",
+          "local": "src/modules/quick-composer/ui/QuickModelSelector.tsx"
+        },
+        {
+          "upstream": "src/features/quick-composer/ui/QuickPermissions.tsx",
+          "local": "src/modules/quick-composer/ui/QuickPermissions.tsx"
+        },
+        {
+          "upstream": "src/features/quick-composer/ui/QuickWorkspaceControls.tsx",
+          "local": "src/modules/quick-composer/ui/QuickWorkspaceControls.tsx"
+        },
+        {
+          "upstream": "src/features/quick-composer/ui/useQuickPickerMotion.ts",
+          "local": "src/modules/quick-composer/ui/useQuickPickerMotion.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/quick-composer/ui/QuickModelSelector.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The permissions selector is extracted into the dedicated picker modal in Voktty's quick composer. The existing model-selector test covers the picker behavior while Voktty keeps its own model catalog and permission policy."
     }
   ]
 }
