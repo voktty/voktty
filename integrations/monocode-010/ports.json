@@ -2276,5 +2276,36 @@
       ],
       "rationale": "Voktty's Host Vitest config already runs files serially and gives test and hook timeouts of 30 seconds on every platform. The matching behavior landed with the native Host process adapter and its integration suite."
     }
+  ],
+  "mergeCoverage": [
+    {
+      "upstreamCommit": "32fb2d1ad41d96bb9838e2fb893f34d7c76a136f",
+      "upstreamTitle": "Merge remote-tracking branch 'origin/main'",
+      "coveredBy": [
+        "14cb1ed5a03a3fd4aac76dbae80edb81843986e8",
+        "6a5f7fa13750cb115ce461be278fded591dc794f",
+        "e188ff1e271e6e3c8f991b74901b3d1e54894021",
+        "e65ed823027e4e05f4b36b86b3e02a44d4d52158",
+        "e9fd233ba4ce47cb6eb8afaeaa87874bbe5992cf",
+        "a5410169fdd74b9b69a77b6c843fa97a1ef0f851",
+        "c7de48fd2f01fc961c6dd6a05ff5ad03be565133"
+      ],
+      "rationale": "All seven commits from the merged side branch have individual port records. Their changed paths cover the merge's first-parent diff, and Git reports no merge-only conflict resolution."
+    },
+    {
+      "upstreamCommit": "271b66ded71e795e0569db77c9bbf599219c8cdc",
+      "upstreamTitle": "Merge branch 'main' of https://github.com/hardbeat920/monocode",
+      "coveredBy": ["e994afb81c0dd2cc63f412cdd2585e8c72fa4a57"],
+      "rationale": "The only side-branch commit is individually ported as 9fca835. Its GitLab older-instance fallback and regression tests account for the merge diff; Git reports no merge-only conflict resolution."
+    },
+    {
+      "upstreamCommit": "09238465181eb2000211b0b656c69d102d5b4d6f",
+      "upstreamTitle": "Merge branch 'main' of https://github.com/hardbeat920/monocode",
+      "coveredBy": [
+        "6c677052bf798fa82e73cfabe83632cd0f545384",
+        "514400dc3cd0f09820f4472a608f3e11d1498a94"
+      ],
+      "rationale": "Both side-branch commits have individual port records covering all five changed paths. Git reports no merge-only conflict resolution."
+    }
   ]
 }

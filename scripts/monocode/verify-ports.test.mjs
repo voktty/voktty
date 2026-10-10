@@ -236,3 +236,66 @@ it("verifies behavior adapted before the pinned local baseline", () => {
     /outside the pinned preexisting history/,
   );
 });
+
+it("verifies merge coverage against individually ported side commits", () => {
+  const upstream = join(temp, "upstream-merge");
+  const local = join(temp, "local-merge");
+  initRepo(upstream);
+  initRepo(local);
+
+  writeFileSync(join(upstream, "README.md"), "base\n");
+  writeFileSync(join(upstream, "LICENSE"), "MIT License\n");
+  const upstreamBase = commit(upstream, "Base");
+  git(upstream, "checkout", "--quiet", "-b", "feature");
+  mkdirSync(join(upstream, "src/features"), { recursive: true });
+  writeFileSync(join(upstream, "src/features/codex.ts"), "export const updated = true;\n");
+  const upstreamPort = commit(upstream, "Update Codex behavior");
+  git(upstream, "checkout", "--quiet", "-b", "mainline", upstreamBase);
+  writeFileSync(join(upstream, "docs.md"), "mainline change\n");
+  commit(upstream, "Update docs");
+  execFileSync("git", ["-C", upstream, "merge", "--no-ff", "--quiet", "feature", "-m", "Merge feature"]);
+  const upstreamMerge = git(upstream, "rev-parse", "HEAD");
+
+  writeFileSync(join(local, "README.md"), "base\n");
+  const localBaseline = commit(local, "Local baseline");
+  mkdirSync(join(local, "src/modules/harness"), { recursive: true });
+  writeFileSync(join(local, "src/modules/harness/codex.ts"), "export const updated = true;\n");
+  const localPort = commit(local, "Port Codex behavior");
+
+  const manifest = {
+    upstreamBase,
+    upstreamTarget: upstreamMerge,
+    localBaseline,
+    records: [
+      {
+        upstreamCommit: upstreamPort,
+        upstreamTitle: "Update Codex behavior",
+        localCommit: localPort,
+        license: "MIT",
+        mappings: [
+          { upstream: "src/features/codex.ts", local: "src/modules/harness/codex.ts" },
+        ],
+        tests: [],
+        rationale: "The provider behavior was adapted in the Harness.",
+      },
+    ],
+    mergeCoverage: [
+      {
+        upstreamCommit: upstreamMerge,
+        upstreamTitle: "Merge feature",
+        coveredBy: [upstreamPort],
+        rationale: "The merge contains only behavior from the separately ported feature commit.",
+      },
+    ],
+  };
+
+  const result = verifyPorts({ upstream, localRoot: local, manifest });
+  assert.equal(result.mergeCoverage.length, 1);
+  assert.deepEqual(result.mergeCoverage[0].coveredBy, [upstreamPort]);
+
+  manifest.mergeCoverage[0].coveredBy = [];
+  assert.throws(
+    () => verifyPorts({ upstream, localRoot: local, manifest }),
+    /Invalid merge coverage details/,
+  );
+});

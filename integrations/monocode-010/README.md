@@ -22,6 +22,8 @@ Records default to the `integrated` basis and cite local commits between `localB
 
 Integrated commit mappings, MIT provenance, focused test selections, and coverage state live in `ports.json`. A port can cite one local commit or several when the adaptation landed in separate focused changes. Partial records list the behavior deferred for a later milestone. The verifier checks both Git histories and the upstream license. Its test runners are restricted to Vitest and a named cargo-nextest filter. Verify mappings without running tests:
 
+Merge commits whose side-branch changes are already covered by individual port records live in the `mergeCoverage` list. The verifier checks that the list names every side-branch commit, that each has a port record, that their changed paths account for the merge diff, and that the merge has no conflict-resolution-only changes.
+
 ```bash
 node scripts/monocode/verify-ports.mjs /path/to/monocode
 ```

@@ -84,6 +84,7 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
   const localHeadPaths = treePaths(localRoot, localHead);
   const records = [];
   const seenUpstreamCommits = new Set();
+  const portCommits = new Set();
 
   for (const record of manifest.records) {
     const upstreamCommit = resolveCommit(upstream, record.upstreamCommit);
@@ -123,6 +124,7 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       throw new Error(`Duplicate upstream port record: ${upstreamCommit}`);
     }
     seenUpstreamCommits.add(upstreamCommit);
+    portCommits.add(upstreamCommit);
     if (
       record.localCommit &&
       (localCommits.length !== 1 || !localCommit.startsWith(record.localCommit))
@@ -242,7 +244,87 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     });
   }
 
-  return { upstream: { base, target }, localBaseline, records };
+  const mergeCoverage = [];
+  for (const record of manifest.mergeCoverage ?? []) {
+    const upstreamCommit = resolveCommit(upstream, record.upstreamCommit);
+    if (!upstreamRange.has(upstreamCommit)) {
+      throw new Error(`Upstream merge is outside the pinned range: ${upstreamCommit}`);
+    }
+    if (!upstreamCommit.startsWith(record.upstreamCommit)) {
+      throw new Error(`Upstream merge does not match the manifest: ${record.upstreamCommit}`);
+    }
+    if (seenUpstreamCommits.has(upstreamCommit)) {
+      throw new Error(`Duplicate upstream coverage record: ${upstreamCommit}`);
+    }
+    seenUpstreamCommits.add(upstreamCommit);
+    if (git(upstream, "show", "-s", "--format=%s", upstreamCommit) !== record.upstreamTitle) {
+      throw new Error(`Upstream merge title changed for ${record.upstreamCommit}`);
+    }
+    if (
+      typeof record.rationale !== "string" ||
+      record.rationale.trim() === "" ||
+      !Array.isArray(record.coveredBy) ||
+      record.coveredBy.length === 0 ||
+      record.coveredBy.some((commit) => typeof commit !== "string")
+    ) {
+      throw new Error(`Invalid merge coverage details for ${record.upstreamCommit}`);
+    }
+
+    const parents = git(upstream, "rev-list", "--parents", "-n", "1", upstreamCommit)
+      .split(" ")
+      .slice(1);
+    if (parents.length !== 2) {
+      throw new Error(`Upstream coverage record is not a two-parent merge: ${upstreamCommit}`);
+    }
+    const sideCommits = git(
+      upstream,
+      "rev-list",
+      "--reverse",
+      "--no-merges",
+      `${parents[0]}..${parents[1]}`,
+    )
+      .split("\n")
+      .filter(Boolean);
+    const coveredCommits = record.coveredBy.map((reference) => {
+      const commit = resolveCommit(upstream, reference);
+      if (!commit.startsWith(reference)) {
+        throw new Error(`Merge side commit does not match the manifest: ${reference}`);
+      }
+      return commit;
+    });
+    if (
+      new Set(coveredCommits).size !== coveredCommits.length ||
+      JSON.stringify([...coveredCommits].sort()) !== JSON.stringify([...sideCommits].sort())
+    ) {
+      throw new Error(`Merge coverage must list every side commit exactly once: ${record.upstreamCommit}`);
+    }
+    for (const commit of coveredCommits) {
+      if (!portCommits.has(commit)) {
+        throw new Error(`Merge side commit has no port record: ${commit}`);
+      }
+    }
+
+    const coveredPaths = new Set();
+    for (const commit of coveredCommits) {
+      for (const path of commitPaths(upstream, commit)) coveredPaths.add(path);
+    }
+    assertPathSet(
+      coveredPaths,
+      commitPaths(upstream, upstreamCommit),
+      `Upstream merge ${record.upstreamCommit}`,
+    );
+    if (git(upstream, "show", "--remerge-diff", "--format=", upstreamCommit) !== "") {
+      throw new Error(`Upstream merge has conflict-resolution changes: ${upstreamCommit}`);
+    }
+    mergeCoverage.push({
+      upstreamCommit,
+      upstreamTitle: record.upstreamTitle,
+      coveredBy: coveredCommits,
+      rationale: record.rationale,
+    });
+  }
+
+  return { upstream: { base, target }, localBaseline, records, mergeCoverage };
 }
 
 export function runPortTests(records, localRoot) {
@@ -294,6 +376,7 @@ function main(args) {
     `${JSON.stringify(
       {
         upstreamCommits: verification.records.length,
+        mergeCoverageRecords: verification.mergeCoverage.length,
         mappings: verification.records.reduce((total, record) => total + record.mappings.length, 0),
         testCommands: runTests ? testsRun : 0,
       },
