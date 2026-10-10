@@ -757,6 +757,7 @@ export function ModelPicker({
           {showSubmenu && submenu.kind === "models" ? (
             <ModelFlyout
               anchor={activeRow}
+              autoFocusSearch
               harnesses={pickerHarnesses}
               tab={visibleTab}
               models={visibleModels}
@@ -845,6 +846,7 @@ export function ModelPicker({
 
 function ModelFlyout({
   anchor,
+  autoFocusSearch,
   harnesses,
   tab,
   models,
@@ -860,6 +862,7 @@ function ModelFlyout({
   onToggleFavorite,
 }: {
   anchor: HTMLButtonElement;
+  autoFocusSearch: boolean;
   harnesses: HarnessId[];
   tab: ModelPickerTab;
   models: AgentModel[];
@@ -881,6 +884,15 @@ function ModelFlyout({
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest" });
   }, [active]);
+
+  useEffect(() => {
+    if (!autoFocusSearch) return;
+    // The popover starts hidden while it measures its anchor.
+    const frame = requestAnimationFrame(() => {
+      searchRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [autoFocusSearch, searchRef]);
 
   const onSearchKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
