@@ -33,6 +33,7 @@ import {
   generateSemanticStagingGroups,
   type SemanticCommitGroup,
 } from "./lib/semanticStaging";
+import { sourceControlFolderPaths } from "./lib/tree";
 import type { SourceControlSummary } from "./useSourceControl";
 
 export type { SemanticCommitGroup };
@@ -157,6 +158,10 @@ type SourceControlPanelState = {
   stageEntry: (entry: SourceControlEntry) => Promise<void>;
   unstageEntry: (entry: SourceControlEntry) => Promise<void>;
   toggleStageFile: (entry: SourceControlFileEntry) => Promise<void>;
+  toggleStageFolder: (
+    folderPath: string,
+    action: "stage" | "unstage",
+  ) => Promise<void>;
   toggleAll: () => Promise<void>;
   requestDiscardEntry: (entry: SourceControlEntry) => void;
   requestDiscardFile: (entry: SourceControlFileEntry) => void;
@@ -964,6 +969,28 @@ export function useSourceControlPanel(
     [repo, runMutation],
   );
 
+  const toggleStageFolder = useCallback(
+    async (folderPath: string, action: "stage" | "unstage") => {
+      if (!repo) return;
+      const paths = sourceControlFolderPaths(fileEntries, folderPath, action);
+      if (paths.length === 0) return;
+      const selectedPaths = new Set(paths);
+      await runMutation(
+        `${action}-folder:${folderPath}`,
+        (current) =>
+          action === "stage"
+            ? optimisticStage(current, selectedPaths)
+            : optimisticUnstage(current, selectedPaths),
+        () =>
+          action === "stage"
+            ? native.gitStage(repo.repoRoot, paths, workspaceEnv)
+            : native.gitUnstage(repo.repoRoot, paths, workspaceEnv),
+        paths,
+      );
+    },
+    [fileEntries, repo, runMutation, workspaceEnv],
+  );
+
   const toggleAll = useCallback(async () => {
     if (headerCheckState === "checked") await unstageAllEntries();
     else await stageAllEntries();
@@ -1297,6 +1324,7 @@ export function useSourceControlPanel(
     stageEntry,
     unstageEntry,
     toggleStageFile,
+    toggleStageFolder,
     toggleAll,
     requestDiscardEntry,
     requestDiscardFile,

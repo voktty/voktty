@@ -8,6 +8,7 @@ export type SourceControlTreeRow =
       name: string;
       depth: number;
       expanded: boolean;
+      checkState: SourceControlFileEntry["checkState"];
     }
   | {
       kind: "entry";
@@ -21,6 +22,9 @@ type FolderNode = {
   path: string;
   folders: Map<string, FolderNode>;
   entries: SourceControlFileEntry[];
+  entryCount: number;
+  checkedCount: number;
+  stagedCount: number;
 };
 
 function normalizePath(path: string): string {
@@ -28,7 +32,15 @@ function normalizePath(path: string): string {
 }
 
 function createFolder(name: string, path: string): FolderNode {
-  return { name, path, folders: new Map(), entries: [] };
+  return {
+    name,
+    path,
+    folders: new Map(),
+    entries: [],
+    entryCount: 0,
+    checkedCount: 0,
+    stagedCount: 0,
+  };
 }
 
 function buildTree(entries: readonly SourceControlFileEntry[]): FolderNode {
@@ -42,6 +54,7 @@ function buildTree(entries: readonly SourceControlFileEntry[]): FolderNode {
     }
 
     let folder = root;
+    const ancestors: FolderNode[] = [];
     for (const part of parts) {
       const path = folder.path ? `${folder.path}/${part}` : part;
       let child = folder.folders.get(part);
@@ -50,10 +63,50 @@ function buildTree(entries: readonly SourceControlFileEntry[]): FolderNode {
         folder.folders.set(part, child);
       }
       folder = child;
+      ancestors.push(folder);
     }
     folder.entries.push(entry);
+    for (const ancestor of ancestors) {
+      ancestor.entryCount += 1;
+      if (entry.checkState === "checked") ancestor.checkedCount += 1;
+      if (entry.staged) ancestor.stagedCount += 1;
+    }
   }
   return root;
+}
+
+function folderCheckState(
+  folder: FolderNode,
+): SourceControlFileEntry["checkState"] {
+  if (folder.checkedCount === folder.entryCount) return "checked";
+  if (folder.stagedCount > 0) return "indeterminate";
+  return "unchecked";
+}
+
+export function sourceControlFolderPaths(
+  entries: readonly SourceControlFileEntry[],
+  folderPath: string,
+  action: "stage" | "unstage",
+): string[] {
+  const folder = normalizePath(folderPath).replace(/\/+$/, "");
+  if (
+    !folder ||
+    folder.startsWith("/") ||
+    /^[A-Za-z]:/.test(folder) ||
+    folder.split("/").includes("..")
+  ) {
+    return [];
+  }
+  const prefix = `${folder}/`;
+  return entries
+    .filter((entry) => {
+      const path = normalizePath(entry.path);
+      return (
+        path.startsWith(prefix) &&
+        (action === "stage" ? entry.unstaged : entry.staged)
+      );
+    })
+    .map((entry) => entry.path);
 }
 
 function flattenFolder(
@@ -74,6 +127,7 @@ function flattenFolder(
       name: child.name,
       depth,
       expanded,
+      checkState: folderCheckState(child),
     });
     if (expanded) {
       flattenFolder(child, depth + 1, collapsedFolders, rows);

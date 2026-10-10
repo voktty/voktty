@@ -1582,6 +1582,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                             <FolderRow
                               row={row}
                               onToggle={() => toggleFolder(row.path)}
+                              onToggleStage={() =>
+                                void scm.toggleStageFolder(
+                                  row.path,
+                                  row.checkState === "checked"
+                                    ? "unstage"
+                                    : "stage",
+                                )
+                              }
+                              actionBusy={scm.actionBusy}
                               collapseLabel={t("git.collapseFolder", {
                                 name: row.name,
                               })}
@@ -1716,37 +1725,67 @@ function CleanTreeHint({ repoLabel }: { repoLabel: string }) {
 function FolderRow({
   row,
   onToggle,
+  onToggleStage,
+  actionBusy,
   collapseLabel,
   expandLabel,
 }: {
   row: Extract<RowDescriptor, { kind: "folder" }>;
   onToggle: () => void;
+  onToggleStage: () => void;
+  actionBusy: string | null;
   collapseLabel: string;
   expandLabel: string;
 }) {
+  const { t } = useTranslation();
+  const stageAction = row.checkState === "checked" ? "unstage" : "stage";
+  const actionLabel = t(
+    stageAction === "stage" ? "git.stageAll" : "git.unstageAll",
+  );
+  const folderBusy =
+    actionBusy === `stage-folder:${row.path}` ||
+    actionBusy === `unstage-folder:${row.path}`;
+
   return (
-    <button
-      type="button"
-      aria-expanded={row.expanded}
-      aria-label={row.expanded ? collapseLabel : expandLabel}
-      onClick={onToggle}
+    <div
       style={{ paddingLeft: 8 + row.depth * 14 }}
-      className="flex h-[30px] w-full cursor-pointer items-center gap-1.5 rounded-md pr-2 text-left text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+      className="group flex h-[30px] w-full items-center gap-1.5 rounded-md pr-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
     >
-      <HugeiconsIcon
-        icon={row.expanded ? ArrowDown01Icon : ArrowRight01Icon}
-        size={11}
-        strokeWidth={2}
-        className="shrink-0"
-      />
-      <HugeiconsIcon
-        icon={Folder01Icon}
-        size={14}
-        strokeWidth={1.7}
-        className="shrink-0 text-muted-foreground/80"
-      />
-      <span className="min-w-0 truncate">{row.name}</span>
-    </button>
+      <button
+        type="button"
+        aria-expanded={row.expanded}
+        aria-label={row.expanded ? collapseLabel : expandLabel}
+        onClick={onToggle}
+        className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+      >
+        <HugeiconsIcon
+          icon={row.expanded ? ArrowDown01Icon : ArrowRight01Icon}
+          size={11}
+          strokeWidth={2}
+          className="shrink-0"
+        />
+        <HugeiconsIcon
+          icon={Folder01Icon}
+          size={14}
+          strokeWidth={1.7}
+          className="shrink-0 text-muted-foreground/80"
+        />
+        <span className="min-w-0 truncate">{row.name}</span>
+      </button>
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        {folderBusy ? (
+          <Spinner className="size-3" />
+        ) : (
+          <Checkbox
+            aria-label={`${actionLabel} ${row.path}`}
+            checked={checkboxValue(row.checkState)}
+            disabled={actionBusy !== null}
+            onCheckedChange={onToggleStage}
+            className="size-3.5"
+          />
+        )}
+      </span>
+    </div>
   );
 }
 
