@@ -4687,6 +4687,7 @@ export const es: TranslationSchema = {
       appearance: "Apariencia",
       providers: "Proveedores",
       inbox: "Bandeja",
+      connections: "Conexiones",
       worktrees: "Árboles de trabajo",
       inboxDesc:
         "Gestiona conexiones de fuentes y tokens para los feeds de tu bandeja de entrada.",
@@ -4784,6 +4785,29 @@ export const es: TranslationSchema = {
       providersIntro:
         "Un proveedor aparece como instalado cuando su CLI esta en el PATH. El modelo junto a cada proveedor se usa en las sesiones nuevas.",
     },
+    connections: {
+      intro:
+        "Harness usa los perfiles SSH guardados en Voktty. Abre una carpeta remota para añadirla como proyecto. Las terminales remotas siguen la configuración tmux del perfil para recuperar sesiones cuando está disponible.",
+      profilesTitle: "Perfiles SSH guardados",
+      manageProfiles: "Gestionar perfiles SSH",
+      addProfile: "Añadir perfil SSH",
+      openFolder: "Abrir carpeta",
+      emptyTitle: "No hay perfiles SSH guardados",
+      emptyDescription:
+        "Añade un perfil en Ajustes de Voktty > SSH y vuelve aquí para explorar y abrir un proyecto remoto.",
+      dialogTitle: "Abrir carpeta en un equipo",
+      dialogDescription:
+        "Explora carpetas mediante el agente SSH autenticado de Voktty y abre una en Harness.",
+      noProfilesDescription:
+        "No hay perfiles SSH guardados. Añade uno en Ajustes de Voktty > SSH y vuelve para abrir su carpeta.",
+      profile: "Conexión SSH",
+      folderPath: "Ruta de la carpeta en el equipo",
+      connecting: "Conectando por SSH…",
+      folders: "Carpetas",
+      noSubfolders: "No hay subcarpetas",
+      loadingFolders: "Conectando y cargando carpetas…",
+      opening: "Abriendo…",
+    },
     modelSettings: {
       reasoning: "Razonamiento",
       serviceTier: "Nivel de servicio",
@@ -4819,6 +4843,8 @@ export const es: TranslationSchema = {
           "CLIs de agentes que Voktty puede controlar y el modelo con el que empiezan las sesiones nuevas.",
         inbox:
           "Conexiones de origen y autenticación para incidencias, PRs y feeds de revisión.",
+        connections:
+          "Administra perfiles SSH guardados y abre carpetas remotas mediante el agente nativo de Voktty.",
         skills:
           "Explorar y administrar habilidades basadas en archivos desde el proyecto, carpetas personales y el harness.",
         mcp: "Servidores configurados del Protocolo de Contexto de Modelo (MCP) para tus proyectos y cuentas de proveedores.",

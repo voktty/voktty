@@ -4577,6 +4577,7 @@ export const en = {
       appearance: "Appearance",
       providers: "Providers",
       inbox: "Inbox",
+      connections: "Connections",
       worktrees: "Worktrees",
       inboxDesc: "Manage source connections and tokens for your inbox feeds.",
       github: "GitHub",
@@ -4672,6 +4673,29 @@ export const en = {
       providersIntro:
         "A provider is listed as installed once its CLI is found on your PATH. The model beside each provider is used for new sessions.",
     },
+    connections: {
+      intro:
+        "Harness uses Voktty's saved SSH profiles. Open a remote folder to add it as a project. Remote terminals follow the profile's tmux settings to recover sessions when available.",
+      profilesTitle: "Saved SSH profiles",
+      manageProfiles: "Manage SSH profiles",
+      addProfile: "Add SSH profile",
+      openFolder: "Open folder",
+      emptyTitle: "No SSH profiles saved",
+      emptyDescription:
+        "Add a profile in Voktty Settings > SSH, then return here to browse and open a remote project.",
+      dialogTitle: "Open folder on a machine",
+      dialogDescription:
+        "Browse folders through Voktty's authenticated SSH agent, then open one in Harness.",
+      noProfilesDescription:
+        "No saved SSH profiles are available. Add a profile in Voktty Settings > SSH, then open its folder here.",
+      profile: "SSH connection",
+      folderPath: "Folder path on the machine",
+      connecting: "Connecting over SSH…",
+      folders: "Folders",
+      noSubfolders: "No subfolders",
+      loadingFolders: "Connecting and loading folders…",
+      opening: "Opening…",
+    },
     modelSettings: {
       reasoning: "Reasoning",
       serviceTier: "Service tier",
@@ -4706,6 +4730,8 @@ export const en = {
           "Agent CLIs Voktty can drive, and the model new sessions start with.",
         inbox:
           "Source connections and authentication for issues, PRs, and review feeds.",
+        connections:
+          "Manage saved SSH profiles and open remote project folders through Voktty's native agent.",
         skills:
           "Discover and manage file skills from project, personal, and harness folders.",
         mcp: "Configured Model Context Protocol servers for your projects and provider accounts.",

@@ -16,4 +16,5 @@ export * from "./model/remoteAttachmentPreviews";
 export * from "./model/remoteSessionActions";
 export * from "./model/modelSource";
 
+export { AddRemoteProjectDialog } from "./ui/AddRemoteProjectDialog";
 export type { RemoteSessionOverrides } from "./ui/RemoteSession";

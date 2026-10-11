@@ -41,6 +41,7 @@ import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { SkillsPage } from "./SkillsPage";
 import { McpSettings } from "./McpSettings";
 import { WorktreesPage } from "./WorktreesPage";
+import { HarnessConnectionsPage } from "./HarnessConnectionsPage";
 import { removeWorktree, type RemoveWorktree } from "../lib/worktrees";
 import { ProjectNotificationSettings } from "@/modules/notifications";
 import type { RecentProject } from "../lib/recents";
@@ -367,6 +368,7 @@ export function SettingsView({
                 notificationSettingsRequest={notificationSettingsRequest}
               />
             ) : null}
+            {section === "connections" ? <HarnessConnectionsPage /> : null}
             {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
             {section === "mcp" ? <McpSettings cwd={cwd} /> : null}
             {section === "worktrees" ? (

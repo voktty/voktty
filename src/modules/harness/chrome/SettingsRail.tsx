@@ -30,6 +30,7 @@ const SECTION_ICONS: Record<SettingsSectionId, IconComponent> = {
   keybindings: Keyboard,
   providers: Bot,
   inbox: Inbox,
+  connections: Globe,
   skills: Sparkles,
   mcp: Globe,
   worktrees: FolderTree,

@@ -11,6 +11,7 @@ export type SettingsSectionId =
   | "skills"
   | "mcp"
   | "inbox"
+  | "connections"
   | "worktrees"
   | "archive";
 
@@ -96,6 +97,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Inbox",
     description: "Connect and manage the services that appear in your Inbox.",
     keywords: "github gitlab linear connect token integration",
+  },
+  {
+    id: "connections",
+    group: "workspace",
+    label: "Connections",
+    description:
+      "Manage saved SSH profiles and open remote project folders through Voktty's native agent.",
+    keywords: "ssh server remote machine host profile folder tmux",
   },
   {
     id: "worktrees",

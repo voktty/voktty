@@ -53,6 +53,12 @@ describe("harness catalog labels", () => {
     expect(settingsSectionDescription(t, "archive")).toBe(
       "harness.modelSettings.sectionDescriptions.archive",
     );
+    expect(settingsSectionLabel(t, "connections")).toBe(
+      "harness.settings.connections",
+    );
+    expect(settingsSectionDescription(t, "connections")).toBe(
+      "harness.modelSettings.sectionDescriptions.connections",
+    );
   });
 
   it("covers every visible keybinding and settings search label", () => {

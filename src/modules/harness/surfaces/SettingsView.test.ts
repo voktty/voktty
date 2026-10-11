@@ -13,6 +13,12 @@ describe("settings structure", () => {
     expect([...groups]).toEqual(["app", "agents", "workspace"]);
   });
 
+  it("exposes native SSH connections in Harness workspace settings", () => {
+    const section = SETTINGS_SECTIONS.find((item) => item.id === "connections");
+    expect(section?.group).toBe("workspace");
+    expect(searchSettings("ssh").some((result) => result.section === "connections")).toBe(true);
+  });
+
   it("indexes each setting once", () => {
     const ids = SETTINGS_INDEX.map((entry) => entry.id);
     expect(ids).toEqual([...new Set(ids)]);
