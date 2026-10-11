@@ -4924,15 +4924,18 @@ export function HarnessApp({
             harnessText || attachments.map((file: any) => file.name).join(", "),
           providerAccountId,
         })
-          .then((title: any) => {
-            if (!title) return;
+          .then((generated) => {
+            if (!generated?.title) return;
             setSessions((prev: any) =>
               prev.map((s: any) => {
                 if (s.id !== sessionId) return s;
                 if (!canReplaceSessionTitle(s.title, s.harness, titleSeed)) {
                   return s;
                 }
-                return { ...s, title: formatSessionTitle(s.harness, title) };
+                return {
+                  ...s,
+                  title: formatSessionTitle(s.harness, generated.title),
+                };
               }),
             );
           })
