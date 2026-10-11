@@ -1,5 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { parseGitNumstat, parseGitPorcelainV2 } from "./remoteGit";
+import {
+  parseGitBranches,
+  parseGitNumstat,
+  parseGitPorcelainV2,
+} from "./remoteGit";
+
+describe("parseGitBranches", () => {
+  it("sorts local branches first and keeps remote-only names selectable", () => {
+    expect(
+      parseGitBranches(
+        "feature/demo",
+        "abc1234",
+        "feature/demo\t*\nmain\t \nrelease\t \n",
+        "origin/main\norigin/feat/remote-only\nbackup/feat/remote-only\norigin/HEAD\norigin/foo/HEAD\norigin/feat/demo\n",
+      ),
+    ).toEqual({
+      current: "feature/demo",
+      detached: false,
+      branches: [
+        { name: "feature/demo", current: true, remote: null },
+        { name: "main", current: false, remote: null },
+        { name: "release", current: false, remote: null },
+        { name: "feat/demo", current: false, remote: "origin" },
+        { name: "feat/remote-only", current: false, remote: "backup" },
+        { name: "feat/remote-only", current: false, remote: "origin" },
+      ],
+    });
+  });
+
+  it("represents detached HEAD and an unborn current branch", () => {
+    expect(parseGitBranches(null, "abc1234", "main\t \n", "")).toEqual({
+      current: "abc1234",
+      detached: true,
+      branches: [{ name: "main", current: false, remote: null }],
+    });
+    expect(parseGitBranches("feature/new", null, "", "")).toEqual({
+      current: "feature/new",
+      detached: false,
+      branches: [{ name: "feature/new", current: true, remote: null }],
+    });
+  });
+});
 
 describe("parseGitPorcelainV2", () => {
   it("maps branch metadata, staged state, untracked files, and renames", () => {

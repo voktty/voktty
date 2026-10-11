@@ -1,7 +1,9 @@
 import {
+  type GitBranches,
   type GitChangedFile,
   type GitDiffIndex,
   type GitFileDiff,
+  isCheckoutBlockedByChanges,
   setRemoteCommandRunner,
 } from "@/modules/harness/lib/fs";
 import {
@@ -12,7 +14,11 @@ import {
 } from "@/modules/remote/client";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { remoteMachineFor, remoteRequest } from "./connections";
-import { parseGitNumstat, parseGitPorcelainV2 } from "./remoteGit";
+import {
+  parseGitBranches,
+  parseGitNumstat,
+  parseGitPorcelainV2,
+} from "./remoteGit";
 import {
   parseRemotePath,
   remotePath,
@@ -112,6 +118,10 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "harness_git_push",
   "git_pull",
   "git_sync",
+  "git_branches",
+  "git_checkout",
+  "git_create_branch",
+  "git_stash",
   "git_staged_context",
 ]);
 
@@ -208,6 +218,7 @@ const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_GIT_DIFF_BYTES = 1024 * 1024;
 const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
+const MAX_GIT_REF_BYTES = 1024;
 const GIT_NETWORK_TIMEOUT_SECS = 180;
 
 type HelperGitOutput = {
@@ -705,17 +716,7 @@ async function nativeProfileGitRemoteName(
   sessionId: number,
   cwd: string,
 ): Promise<string> {
-  const result = await runHelperGit(
-    sessionId,
-    cwd,
-    ["remote"],
-    64 * 1024,
-    true,
-  );
-  const names = result.stdout
-    .split(/\r?\n/)
-    .map((name) => name.trim())
-    .filter(Boolean);
+  const names = await nativeProfileGitRemoteNames(sessionId, cwd);
   const remote = names.includes("origin") ? "origin" : names[0];
   if (!remote) throw new Error("No Git remote to push to");
   return remote;
@@ -771,6 +772,280 @@ async function nativeProfileGitNetworkCommand(
   }
   const remote = await nativeProfileGitRemoteName(sessionId, cwd);
   await runNetworkGit(["push", "-u", "--", remote, "HEAD"]);
+}
+
+async function nativeProfileGitIsWorkTree(
+  sessionId: number,
+  cwd: string,
+): Promise<boolean> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--is-inside-work-tree"],
+    64 * 1024,
+    true,
+  );
+  return result.exitCode === 0 && result.stdout.trim() === "true";
+}
+
+async function nativeProfileGitHeadBranch(
+  sessionId: number,
+  cwd: string,
+): Promise<string | null> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["symbolic-ref", "--short", "HEAD"],
+    64 * 1024,
+    true,
+  );
+  const branch = result.exitCode === 0 ? result.stdout.trim() : "";
+  return branch && branch !== "HEAD" ? branch : null;
+}
+
+async function nativeProfileGitBranchName(
+  sessionId: number,
+  cwd: string,
+  value: unknown,
+): Promise<string> {
+  if (typeof value !== "string") {
+    throw new Error("The remote command requires name.");
+  }
+  const name = value.trim();
+  if (!name) throw new Error("Branch name cannot be empty");
+  if (new TextEncoder().encode(name).byteLength > MAX_GIT_REF_BYTES) {
+    throw new Error("Branch name is too large");
+  }
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["check-ref-format", "--branch", name],
+    64 * 1024,
+    true,
+  );
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
+    throw new Error(`'${name}' is not a valid branch name`);
+  }
+  return result.stdout.trim();
+}
+
+async function nativeProfileGitRefExists(
+  sessionId: number,
+  cwd: string,
+  ref: string,
+): Promise<boolean> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["show-ref", "--verify", "--quiet", ref],
+    64 * 1024,
+    true,
+  );
+  return result.exitCode === 0;
+}
+
+async function nativeProfileGitRemoteNames(
+  sessionId: number,
+  cwd: string,
+): Promise<string[]> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["remote"],
+    64 * 1024,
+    true,
+  );
+  return decodeGitMetadata(result.stdoutBytes)
+    .split(/\r?\n/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+async function nativeProfileGitBranches(
+  sessionId: number,
+  root: string,
+  cwd: string,
+): Promise<GitBranches> {
+  if (!(await nativeProfileGitIsWorkTree(sessionId, cwd))) {
+    return { current: null, detached: false, branches: [] };
+  }
+  await assertProfileGitRoot(sessionId, root, cwd);
+
+  const currentBranch = await nativeProfileGitHeadBranch(sessionId, cwd);
+  const head = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--short", "HEAD"],
+    64 * 1024,
+    true,
+  );
+  const headSha = head.exitCode === 0 ? head.stdout.trim() || null : null;
+  const localRefs = await runHelperGit(sessionId, cwd, [
+    "for-each-ref",
+    "--format=%(refname:short)%09%(HEAD)",
+    "refs/heads",
+  ]);
+  const remoteRefs = await runHelperGit(sessionId, cwd, [
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/remotes",
+  ]);
+  return parseGitBranches(
+    currentBranch,
+    headSha,
+    decodeGitMetadata(localRefs.stdoutBytes),
+    decodeGitMetadata(remoteRefs.stdoutBytes),
+  );
+}
+
+async function nativeProfileGitMutation(
+  sessionId: number,
+  cwd: string,
+  gitArgs: string[],
+): Promise<void> {
+  const result = await runHelperGit(sessionId, cwd, gitArgs, 64 * 1024, true);
+  if (result.exitCode !== 0) {
+    throw new Error(
+      result.stderr.trim() ||
+        result.stdout.trim() ||
+        "Remote Git operation failed.",
+    );
+  }
+}
+
+async function nativeProfileGitCheckoutMutation(
+  sessionId: number,
+  cwd: string,
+  gitArgs: string[],
+): Promise<void> {
+  try {
+    await nativeProfileGitMutation(sessionId, cwd, gitArgs);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isCheckoutBlockedByChanges(message)) {
+      throw new Error(
+        "Your local changes would be overwritten. Commit or stash them first.",
+      );
+    }
+    throw error;
+  }
+}
+
+async function nativeProfileGitCheckout(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  value: unknown,
+  remoteValue: unknown,
+): Promise<string> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name = await nativeProfileGitBranchName(sessionId, cwd, value);
+  if (
+    remoteValue !== undefined &&
+    remoteValue !== null &&
+    typeof remoteValue !== "string"
+  ) {
+    throw new Error("The remote branch name is invalid.");
+  }
+  const requestedRemote =
+    typeof remoteValue === "string" ? remoteValue.trim() : "";
+  const current = await nativeProfileGitHeadBranch(sessionId, cwd);
+  if (current === name) return name;
+
+  if (requestedRemote) {
+    if (requestedRemote.startsWith("-")) {
+      throw new Error("The remote branch name is invalid.");
+    }
+    const remotes = await nativeProfileGitRemoteNames(sessionId, cwd);
+    if (!remotes.includes(requestedRemote)) {
+      throw new Error(`Remote ${requestedRemote} not found`);
+    }
+    const ref = `refs/remotes/${requestedRemote}/${name}`;
+    const validRef = await runHelperGit(
+      sessionId,
+      cwd,
+      ["check-ref-format", ref],
+      64 * 1024,
+      true,
+    );
+    if (validRef.exitCode !== 0)
+      throw new Error("The remote branch name is invalid.");
+    if (!(await nativeProfileGitRefExists(sessionId, cwd, ref))) {
+      throw new Error(`Branch ${name} not found`);
+    }
+    await nativeProfileGitCheckoutMutation(sessionId, cwd, [
+      "checkout",
+      "--track",
+      "-b",
+      name,
+      `${requestedRemote}/${name}`,
+    ]);
+    return name;
+  }
+
+  if (await nativeProfileGitRefExists(sessionId, cwd, `refs/heads/${name}`)) {
+    await nativeProfileGitCheckoutMutation(sessionId, cwd, ["checkout", name]);
+    return name;
+  }
+  const remotes = await nativeProfileGitRemoteNames(sessionId, cwd);
+  const remote = remotes.includes("origin") ? "origin" : remotes[0];
+  if (remote && !remote.startsWith("-")) {
+    const ref = `refs/remotes/${remote}/${name}`;
+    if (await nativeProfileGitRefExists(sessionId, cwd, ref)) {
+      await nativeProfileGitCheckoutMutation(sessionId, cwd, [
+        "checkout",
+        "--track",
+        "-b",
+        name,
+        `${remote}/${name}`,
+      ]);
+      return name;
+    }
+  }
+  throw new Error(`Branch ${name} not found`);
+}
+
+async function nativeProfileGitCreateBranch(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  value: unknown,
+): Promise<string> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name = await nativeProfileGitBranchName(sessionId, cwd, value);
+  if (
+    (await nativeProfileGitRefExists(sessionId, cwd, `refs/heads/${name}`)) ||
+    (await nativeProfileGitHeadBranch(sessionId, cwd)) === name
+  ) {
+    throw new Error(`Branch ${name} already exists`);
+  }
+  await nativeProfileGitMutation(sessionId, cwd, ["checkout", "-b", name]);
+  return name;
+}
+
+async function nativeProfileGitStash(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  value: unknown,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  if (value !== undefined && value !== null && typeof value !== "string") {
+    throw new Error("The stash message is invalid.");
+  }
+  const message = typeof value === "string" ? value.trim() : "";
+  if (
+    new TextEncoder().encode(message).byteLength > MAX_GIT_COMMIT_MESSAGE_BYTES
+  ) {
+    throw new Error("Stash message is too large");
+  }
+  await nativeProfileGitMutation(
+    sessionId,
+    cwd,
+    message
+      ? ["stash", "push", "--include-untracked", "-m", message]
+      : ["stash", "push", "--include-untracked"],
+  );
 }
 
 async function nativeProfileGitStageContents(
@@ -1029,6 +1304,35 @@ async function runProfileFileCommand(
   if (!PROFILE_HELPER_COMMANDS.has(command))
     throw new Error(PROFILE_UNAVAILABLE);
   const remoteResultPath = (value: string) => remotePath(environmentId, value);
+  if (command === "git_branches") {
+    const cwd = relativePath(args.cwd);
+    return nativeProfileGitBranches(sessionId, root, cwd);
+  }
+  if (command === "git_checkout") {
+    return nativeProfileGitCheckout(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.name,
+      args.remote,
+    );
+  }
+  if (command === "git_create_branch") {
+    return nativeProfileGitCreateBranch(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.name,
+    );
+  }
+  if (command === "git_stash") {
+    return nativeProfileGitStash(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.message,
+    );
+  }
   if (command === "git_staged_context") {
     return nativeProfileGitStagedContext(
       sessionId,

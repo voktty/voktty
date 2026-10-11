@@ -41,7 +41,10 @@ vi.mock("@/modules/settings/preferences", () => ({
 }));
 
 import {
+  gitBranches,
+  gitCheckout,
   gitCommit,
+  gitCreateBranch,
   gitDiffIndex,
   gitDiffStats,
   gitDiscardFile,
@@ -52,6 +55,7 @@ import {
   gitStageContents,
   gitStagedContext,
   gitStageFile,
+  gitStash,
   gitSync,
   gitUnstageAll,
   gitUnstageFile,
@@ -576,6 +580,235 @@ it("syncs a branch without upstream by setting its selected remote", async () =>
     ["push", "-u", "--", "upstream", "HEAD"],
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("lists local and remote-only branches through the native SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") {
+        return gitExecResult("true\n");
+      }
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "symbolic-ref") return gitExecResult("feature/demo\n");
+      if (args[0] === "rev-parse") return gitExecResult("abc1234\n");
+      if (args[0] === "for-each-ref" && args[2] === "refs/heads") {
+        return gitExecResult("feature/demo\t*\nmain\t \nrelease\t \n");
+      }
+      if (args[0] === "for-each-ref" && args[2] === "refs/remotes") {
+        return gitExecResult(
+          "origin/main\norigin/feat/remote-only\nbackup/feat/remote-only\norigin/HEAD\norigin/foo/HEAD\norigin/feat/demo\n",
+        );
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitBranches(remotePath(environmentId, "/srv/app")),
+  ).resolves.toEqual({
+    current: "feature/demo",
+    detached: false,
+    branches: [
+      { name: "feature/demo", current: true, remote: null },
+      { name: "main", current: false, remote: null },
+      { name: "release", current: false, remote: null },
+      { name: "feat/demo", current: false, remote: "origin" },
+      { name: "feat/remote-only", current: false, remote: "backup" },
+      { name: "feat/remote-only", current: false, remote: "origin" },
+    ],
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("returns an empty branch list for a saved SSH folder outside Git", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce(gitExecResult("", 128));
+
+  await expect(
+    gitBranches(remotePath(environmentId, "/srv/app")),
+  ).resolves.toEqual({
+    current: null,
+    detached: false,
+    branches: [],
+  });
+  expect(requestRemoteResult).toHaveBeenCalledTimes(1);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("checks out a selected remote branch with a local tracking branch", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format" && args[1] === "--branch") {
+        return gitExecResult(`${args[2]}\n`);
+      }
+      if (args[0] === "symbolic-ref") return gitExecResult("main\n");
+      if (args[0] === "remote") return gitExecResult("origin\n");
+      if (args[0] === "check-ref-format") return gitExecResult("");
+      if (args[0] === "show-ref") return gitExecResult("");
+      if (args[0] === "checkout") return gitExecResult("");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitCheckout(
+      remotePath(environmentId, "/srv/app"),
+      "feature/remote",
+      "origin",
+    ),
+  ).resolves.toBe("feature/remote");
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toContainEqual([
+    "checkout",
+    "--track",
+    "-b",
+    "feature/remote",
+    "origin/feature/remote",
+  ]);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("rejects invalid remote branch names before running a checkout", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format") return gitExecResult("", 1);
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitCheckout(remotePath(environmentId, "/srv/app"), "bad branch"),
+  ).rejects.toThrow("'bad branch' is not a valid branch name");
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toContainEqual(["check-ref-format", "--branch", "bad branch"]);
+  expect(requestRemoteResult).not.toHaveBeenCalledWith(
+    9,
+    "git.execWorkspace",
+    expect.objectContaining({ args: expect.arrayContaining(["checkout"]) }),
+  );
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("normalizes a remote checkout blocked by local changes", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format") return gitExecResult("main\n");
+      if (args[0] === "symbolic-ref") return gitExecResult("feature\n");
+      if (args[0] === "show-ref") return gitExecResult("");
+      if (args[0] === "checkout") {
+        return gitExecResult(
+          "",
+          1,
+          "error: Your local changes to the following files would be overwritten by checkout.\nPlease commit your changes or stash them before you switch branches.\n",
+        );
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitCheckout(remotePath(environmentId, "/srv/app"), "main"),
+  ).rejects.toThrow(
+    "Your local changes would be overwritten. Commit or stash them first.",
+  );
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("creates remote branches and stashes tracked plus untracked changes", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format") return gitExecResult("feature/new\n");
+      if (args[0] === "show-ref") return gitExecResult("", 1);
+      if (args[0] === "symbolic-ref") return gitExecResult("main\n");
+      if (args[0] === "checkout" || args[0] === "stash") {
+        return gitExecResult("");
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(gitCreateBranch(cwd, "feature/new")).resolves.toBe(
+    "feature/new",
+  );
+  await gitStash(cwd, "  WIP before checkout  ");
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual(
+    expect.arrayContaining([
+      ["checkout", "-b", "feature/new"],
+      ["stash", "push", "--include-untracked", "-m", "WIP before checkout"],
+    ]),
+  );
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
 });
 
 it("stages unsaved SSH editor contents through bounded helper stdin", async () => {

@@ -1,4 +1,8 @@
-import type { GitChangedFile, GitDiffIndex } from "@/modules/harness/lib/fs";
+import type {
+  GitBranches,
+  GitChangedFile,
+  GitDiffIndex,
+} from "@/modules/harness/lib/fs";
 
 const MAX_GIT_STATUS_FILES = 20_000;
 
@@ -144,4 +148,87 @@ export function parseGitNumstat(
     counts.set(relative, { additions, deletions });
   }
   return counts;
+}
+
+function compareGitText(left: string, right: string): number {
+  const leftPoints = Array.from(
+    left,
+    (character) => character.codePointAt(0) ?? 0,
+  );
+  const rightPoints = Array.from(
+    right,
+    (character) => character.codePointAt(0) ?? 0,
+  );
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = leftPoints[index] - rightPoints[index];
+    if (difference !== 0) return difference;
+  }
+  return leftPoints.length - rightPoints.length;
+}
+
+function asciiLowercase(value: string): string {
+  return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
+}
+
+function compareGitBranches(
+  left: GitBranches["branches"][number],
+  right: GitBranches["branches"][number],
+): number {
+  return (
+    Number(right.current) - Number(left.current) ||
+    Number(left.remote !== null) - Number(right.remote !== null) ||
+    compareGitText(asciiLowercase(left.name), asciiLowercase(right.name)) ||
+    compareGitText(left.remote ?? "", right.remote ?? "")
+  );
+}
+
+export function parseGitBranches(
+  currentBranch: string | null,
+  headSha: string | null,
+  localRefsOutput: string,
+  remoteRefsOutput: string,
+): GitBranches {
+  const current = currentBranch ?? headSha;
+  const branches: GitBranches["branches"] = [];
+  const localNames = new Set<string>();
+
+  for (const record of localRefsOutput.split(/\r?\n/)) {
+    const line = record.trim();
+    if (!line) continue;
+    const [name, headMarker = ""] = line.split("\t", 2);
+    if (!name) continue;
+    localNames.add(name);
+    branches.push({ name, current: headMarker.trim() === "*", remote: null });
+  }
+
+  if (currentBranch && !localNames.has(currentBranch)) {
+    localNames.add(currentBranch);
+    branches.push({ name: currentBranch, current: true, remote: null });
+  }
+
+  for (const record of remoteRefsOutput.split(/\r?\n/)) {
+    const full = record.trim();
+    if (!full) continue;
+    const separator = full.indexOf("/");
+    if (separator <= 0 || separator === full.length - 1) continue;
+    const remote = full.slice(0, separator);
+    const name = full.slice(separator + 1);
+    if (
+      !name ||
+      name === "HEAD" ||
+      name.endsWith("/HEAD") ||
+      localNames.has(name)
+    ) {
+      continue;
+    }
+    branches.push({ name, current: false, remote });
+  }
+
+  branches.sort(compareGitBranches);
+  return {
+    current,
+    detached: currentBranch === null && headSha !== null,
+    branches,
+  };
 }
