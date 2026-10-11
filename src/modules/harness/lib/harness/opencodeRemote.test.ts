@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
   abortSession: vi.fn(),
   clientOptions: undefined as unknown,
   event: undefined as ((value: Record<string, unknown>) => void) | undefined,
+  eventFailure: undefined as ((message: string) => void) | undefined,
+  eventError: undefined as string | undefined,
+  invalidateRemote: vi.fn(),
   sessionLookups: [] as string[],
   refreshCatalog: vi.fn(),
   releaseRemote: vi.fn(),
@@ -49,12 +52,18 @@ vi.mock("./opencodeClient", () => ({
     async subscribeEvents(
       _sessionId: string,
       onEvent: (value: Record<string, unknown>) => void,
+      onError: (message: string) => void,
     ) {
       mocks.event = onEvent;
+      mocks.eventFailure = onError;
     }
 
     async promptAsync() {
       queueMicrotask(() => {
+        if (mocks.eventError) {
+          mocks.eventFailure?.(mocks.eventError);
+          return;
+        }
         mocks.event?.({
           type: "session.idle",
           properties: { sessionID: "opencode-remote-session" },
@@ -80,6 +89,7 @@ vi.mock("./opencodeCatalog", () => ({
 
 vi.mock("./remoteOpenCodeService", () => ({
   acquireRemoteOpenCodeService: mocks.acquireRemote,
+  invalidateRemoteOpenCodeService: mocks.invalidateRemote,
   releaseRemoteOpenCodeService: mocks.releaseRemote,
 }));
 
@@ -102,7 +112,10 @@ describe("remote OpenCode Harness binding", () => {
     mocks.abortSession.mockReset().mockResolvedValue(undefined);
     mocks.clientOptions = undefined;
     mocks.event = undefined;
+    mocks.eventFailure = undefined;
+    mocks.eventError = undefined;
     mocks.sessionLookups = [];
+    mocks.invalidateRemote.mockReset().mockResolvedValue(undefined);
     mocks.refreshCatalog.mockReset().mockResolvedValue(undefined);
     mocks.releaseRemote.mockReset().mockResolvedValue(undefined);
     mocks.resolveBinary.mockReset();
@@ -173,6 +186,58 @@ describe("remote OpenCode Harness binding", () => {
 
     await sendOpenCodeTurn(input);
     await stopOpenCodeSession("remote-thread");
+    await sendOpenCodeTurn(input);
+
+    expect(mocks.acquireRemote).toHaveBeenCalledTimes(2);
+    expect(mocks.sessionLookups).toEqual(["opencode-remote-session"]);
+    expect(mocks.clientOptions).toMatchObject({
+      baseUrl: "http://127.0.0.1:43124",
+      directory: "/srv/app",
+    });
+    expect(
+      events.filter((event) => event.type === "session.providerBound"),
+    ).toEqual([
+      {
+        type: "session.providerBound",
+        providerSessionId: "opencode-remote-session",
+      },
+      {
+        type: "session.providerBound",
+        providerSessionId: "opencode-remote-session",
+      },
+    ]);
+  });
+
+  it("invalidates the native SSH session after a lost event stream and resumes on retry", async () => {
+    mocks.acquireRemote
+      .mockResolvedValueOnce({
+        url: "http://127.0.0.1:43123",
+        password: "remote-secret",
+        directory: "/srv/app",
+        sessionId: 7,
+      })
+      .mockResolvedValueOnce({
+        url: "http://127.0.0.1:43124",
+        password: "remote-secret",
+        directory: "/srv/app",
+        sessionId: 8,
+      });
+    const events: HarnessEvent[] = [];
+    const input = {
+      sessionId: "remote-thread",
+      cwd: "remote://env-1/srv/app",
+      model: "opencode:openai/gpt-5.2",
+      runtimeMode: "supervised" as const,
+      text: "Continue this remote project",
+      attachments: [],
+      onEvent: (event: HarnessEvent) => events.push(event),
+    };
+    mocks.eventError = "SSH tunnel closed";
+
+    await expect(sendOpenCodeTurn(input)).rejects.toThrow("SSH tunnel closed");
+    expect(mocks.invalidateRemote).toHaveBeenCalledWith("remote-thread");
+
+    mocks.eventError = undefined;
     await sendOpenCodeTurn(input);
 
     expect(mocks.acquireRemote).toHaveBeenCalledTimes(2);

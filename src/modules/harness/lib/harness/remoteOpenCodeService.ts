@@ -145,6 +145,10 @@ export function createRemoteOpenCodeServiceManager(
 ) {
   const entries = new Map<string, Entry>();
   const ownerKeys = new Map<string, string>();
+  const ownerLocations = new Map<string, string>();
+  const ownersNeedingFreshService = new Set<string>();
+  const freshServiceKeys = new Map<string, string>();
+  let freshServiceSequence = 0;
 
   const finishEntry = (key: string, entry: Entry) => {
     if (entries.get(key) === entry) entries.delete(key);
@@ -161,14 +165,28 @@ export function createRemoteOpenCodeServiceManager(
     return entry.closed;
   };
 
-  const release = async (ownerId: string): Promise<void> => {
+  const detach = async (ownerId: string): Promise<void> => {
     const key = ownerKeys.get(ownerId);
-    if (!key) return;
     ownerKeys.delete(ownerId);
+    ownerLocations.delete(ownerId);
+    if (!key) return;
     const entry = entries.get(key);
     if (!entry) return;
     entry.owners.delete(ownerId);
     if (entry.owners.size === 0) await closeEntry(key, entry);
+  };
+
+  const release = async (ownerId: string): Promise<void> => {
+    ownersNeedingFreshService.delete(ownerId);
+    freshServiceKeys.delete(ownerId);
+    await detach(ownerId);
+  };
+
+  const invalidate = async (ownerId: string): Promise<void> => {
+    if (!ownerKeys.has(ownerId)) return;
+    ownersNeedingFreshService.add(ownerId);
+    freshServiceKeys.delete(ownerId);
+    await detach(ownerId);
   };
 
   const acquire = async (
@@ -179,13 +197,30 @@ export function createRemoteOpenCodeServiceManager(
     if (!remote) return undefined;
     const owner = ownerId.trim();
     if (!owner) throw new Error("Remote OpenCode session id is required.");
-    const key = JSON.stringify([remote.environmentId, remote.hostPath]);
-    const previous = ownerKeys.get(owner);
-    if (previous && previous !== key) await release(owner);
-    let entry = entries.get(key);
+    const location = JSON.stringify([remote.environmentId, remote.hostPath]);
+    if (ownerKeys.has(owner) && ownerLocations.get(owner) !== location) {
+      await release(owner);
+    }
+
+    let entryKey = ownerKeys.get(owner);
+    let entry = entryKey ? entries.get(entryKey) : undefined;
     if (entry?.closing) {
       await entry.closed;
       return acquire(owner, cwd);
+    }
+    if (!entry) {
+      entryKey = ownersNeedingFreshService.has(owner)
+        ? (freshServiceKeys.get(owner) ??
+          JSON.stringify([location, owner, ++freshServiceSequence]))
+        : location;
+      if (ownersNeedingFreshService.has(owner)) {
+        freshServiceKeys.set(owner, entryKey);
+      }
+      entry = entries.get(entryKey);
+      if (entry?.closing) {
+        await entry.closed;
+        return acquire(owner, cwd);
+      }
     }
     if (!entry) {
       if (entries.size >= maxSessions) {
@@ -209,21 +244,29 @@ export function createRemoteOpenCodeServiceManager(
         closed,
         resolveClosed,
       };
-      entries.set(key, entry);
+      const createdKey = entryKey;
+      if (!createdKey)
+        throw new Error("Remote OpenCode service key is missing.");
+      entries.set(createdKey, entry);
       const createdEntry = entry;
-      void service.catch(() => finishEntry(key, createdEntry));
+      void service.catch(() => finishEntry(createdKey, createdEntry));
     }
     entry.owners.add(owner);
-    ownerKeys.set(owner, key);
+    ownerKeys.set(owner, entryKey ?? location);
+    ownerLocations.set(owner, location);
     try {
-      return await entry.service;
+      const service = await entry.service;
+      ownersNeedingFreshService.delete(owner);
+      freshServiceKeys.delete(owner);
+      return service;
     } catch (error) {
-      await release(owner);
+      await detach(owner);
+      freshServiceKeys.delete(owner);
       throw error;
     }
   };
 
-  return { acquire, release };
+  return { acquire, release, invalidate };
 }
 
 const remoteOpenCodeServices = createRemoteOpenCodeServiceManager({
@@ -237,3 +280,5 @@ const remoteOpenCodeServices = createRemoteOpenCodeServiceManager({
 
 export const acquireRemoteOpenCodeService = remoteOpenCodeServices.acquire;
 export const releaseRemoteOpenCodeService = remoteOpenCodeServices.release;
+export const invalidateRemoteOpenCodeService =
+  remoteOpenCodeServices.invalidate;

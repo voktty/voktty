@@ -48,7 +48,7 @@ function dependencies() {
     localPort: 43123,
     remotePort: 4096,
   }));
-  const closeWorkspace = vi.fn(async () => undefined);
+  const closeWorkspace = vi.fn(async (_sessionId: number) => undefined);
   return {
     machineFor: vi.fn(
       async (_environmentId: string): Promise<RemoteMachine | undefined> =>
@@ -194,6 +194,65 @@ describe("native remote OpenCode service", () => {
     expect(deps.closeWorkspace).not.toHaveBeenCalled();
     await manager.release("session-b");
     expect(deps.closeWorkspace).toHaveBeenCalledWith(7);
+  });
+
+  it("reopens an invalidated SSH helper without disrupting its other owners", async () => {
+    const deps = dependencies();
+    let sessionId = 7;
+    deps.openWorkspace.mockImplementation(async () => ({
+      session_id: sessionId++,
+      architecture: "x86_64",
+      workspace_root: "/srv/app",
+      helper_version: "1.0.0",
+      capabilities: ["opencode.service"],
+    }));
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    const cwd = "remote://env-1/srv/app";
+
+    await manager.acquire("session-a", cwd);
+    await manager.acquire("session-b", cwd);
+    await manager.invalidate("session-a");
+
+    expect(deps.closeWorkspace).not.toHaveBeenCalled();
+    await expect(manager.acquire("session-a", cwd)).resolves.toMatchObject({
+      sessionId: 8,
+    });
+    expect(deps.openWorkspace).toHaveBeenCalledTimes(2);
+    expect(deps.openTunnel).toHaveBeenCalledTimes(2);
+
+    await manager.release("session-a");
+    await manager.release("session-b");
+    expect(deps.closeWorkspace.mock.calls.map(([id]) => id)).toEqual([8, 7]);
+  });
+
+  it("keeps invalidation pending when opening the replacement SSH helper fails", async () => {
+    const deps = dependencies();
+    let sessionId = 7;
+    deps.openWorkspace.mockImplementation(async () => ({
+      session_id: sessionId++,
+      architecture: "x86_64",
+      workspace_root: "/srv/app",
+      helper_version: "1.0.0",
+      capabilities: ["opencode.service"],
+    }));
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    const cwd = "remote://env-1/srv/app";
+    await manager.acquire("session-a", cwd);
+    await manager.acquire("session-b", cwd);
+    await manager.invalidate("session-a");
+
+    deps.openWorkspace.mockRejectedValueOnce(new Error("SSH unavailable"));
+    await expect(manager.acquire("session-a", cwd)).rejects.toThrow(
+      "SSH unavailable",
+    );
+    await expect(manager.acquire("session-a", cwd)).resolves.toMatchObject({
+      sessionId: 8,
+    });
+    expect(deps.openWorkspace).toHaveBeenCalledTimes(3);
+    expect(deps.openTunnel).toHaveBeenCalledTimes(2);
+
+    await manager.release("session-a");
+    await manager.release("session-b");
   });
 
   it("checks service status again when start does not return its port", async () => {

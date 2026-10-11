@@ -63,6 +63,7 @@ import {
 } from "./preview";
 import {
   acquireRemoteOpenCodeService,
+  invalidateRemoteOpenCodeService,
   releaseRemoteOpenCodeService,
 } from "./remoteOpenCodeService";
 import { streamTextDelta } from "./streamText";
@@ -552,6 +553,9 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
           live.turnDone = null;
           live.turnFailed = null;
           void live.client.closeEvents(input.sessionId);
+          void invalidateRemoteOpenCodeService(input.sessionId).catch(
+            () => undefined,
+          );
           return;
         }
         if (error) {
