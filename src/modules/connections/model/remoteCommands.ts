@@ -69,10 +69,15 @@ const HOST_COMMANDS = new Set([
   "git_history",
   "git_commit_files",
   "git_commit_file_diff",
+  "git_show_commit",
   "git_staged_context",
   "git_range_context",
   "git_branches",
   "git_remote_url",
+  "git_tag_list",
+  "git_tag_create",
+  "git_tag_delete",
+  "git_tag_push",
   "git_checkout",
   "git_create_branch",
   "git_stash",
@@ -132,6 +137,11 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_history",
   "git_commit_files",
   "git_commit_file_diff",
+  "git_show_commit",
+  "git_tag_list",
+  "git_tag_create",
+  "git_tag_delete",
+  "git_tag_push",
 ]);
 
 const HELPER_FS = {
@@ -228,6 +238,7 @@ const MAX_GIT_DIFF_BYTES = 1024 * 1024;
 const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
 const MAX_GIT_REF_BYTES = 1024;
+const MAX_GIT_TAGS = 20_000;
 const GIT_NETWORK_TIMEOUT_SECS = 180;
 const REMOTE_GIT_COMMIT_SHA = /^[0-9a-f]{4,64}$/i;
 
@@ -924,24 +935,298 @@ async function nativeProfileGitCommit(
   root: string,
   cwd: string,
   value: unknown,
-): Promise<void> {
+  pathsValue: unknown,
+  returnResult: boolean,
+): Promise<{ commitSha: string; summary: string } | undefined> {
   const message = requireString({ message: value }, "message").trim();
   if (!message) throw new Error("Commit message cannot be empty");
+  let selectedPaths: string[] | null = null;
+  if (pathsValue !== undefined && pathsValue !== null) {
+    if (!Array.isArray(pathsValue)) {
+      throw new Error("The selected Git commit paths are invalid.");
+    }
+    if (pathsValue.length === 0 || pathsValue.length > 256) {
+      throw new Error("Select between 1 and 256 changed files to commit.");
+    }
+    const inputPathBytes = pathsValue.reduce((total, path) => {
+      if (typeof path !== "string" || path.length > 64 * 1024) {
+        throw new Error("The selected Git commit paths are invalid.");
+      }
+      return total + new TextEncoder().encode(path).byteLength;
+    }, 0);
+    if (inputPathBytes > 64 * 1024) {
+      throw new Error("Selected Git commit paths are too large.");
+    }
+    selectedPaths = pathsValue.map(helperRelativePath);
+  }
+  const messageLimit = selectedPaths ? 4096 : MAX_GIT_COMMIT_MESSAGE_BYTES;
   if (
-    new TextEncoder().encode(message).byteLength > MAX_GIT_COMMIT_MESSAGE_BYTES
+    message.length > messageLimit ||
+    new TextEncoder().encode(message).byteLength > messageLimit
   ) {
     throw new Error("Commit message is too large");
   }
+  const repositoryRoot = await assertProfileGitRoot(sessionId, root, cwd);
+
+  let commitArgs = ["commit", "--cleanup=strip", "-m", message];
+  if (selectedPaths) {
+    const repositoryPaths = selectedPaths.map((path) =>
+      relativeToRemoteRoot(repositoryRoot, joinRemotePath(root, path)),
+    );
+    if (repositoryPaths.length === 0 || repositoryPaths.length > 256) {
+      throw new Error("Select between 1 and 256 changed files to commit.");
+    }
+    const uniquePaths = [...new Set(repositoryPaths)];
+    const pathBytes = uniquePaths.reduce(
+      (total, path) => total + new TextEncoder().encode(path).byteLength,
+      0,
+    );
+    if (pathBytes > 64 * 1024) {
+      throw new Error("Selected Git commit paths are too large.");
+    }
+    const status = await nativeProfileGitStatus(sessionId, cwd);
+    if (!status) throw new Error("No Git repository is available.");
+    const selectedFiles = uniquePaths.map((path) => {
+      const file = status.files.find((entry) => entry.relative === path);
+      if (!file) throw new Error("A selected path is not a changed file.");
+      return file;
+    });
+    const untracked = selectedFiles
+      .filter((file) => file.status === "untracked")
+      .map((file) => file.relative);
+    if (untracked.length > 0) {
+      const add = await runHelperGit(
+        sessionId,
+        cwd,
+        ["add", "--", ...untracked.map((path) => `:(literal)${path}`)],
+        64 * 1024,
+        true,
+      );
+      if (add.exitCode !== 0) {
+        throw new Error(
+          add.stderr.trim() || add.stdout.trim() || "Remote Git add failed.",
+        );
+      }
+    }
+    commitArgs = [
+      "commit",
+      "--only",
+      "-m",
+      message,
+      "--",
+      ...uniquePaths.map((path) => `:(literal)${path}`),
+    ];
+  }
+
+  const commit = await runHelperGit(
+    sessionId,
+    cwd,
+    commitArgs,
+    64 * 1024,
+    true,
+    true,
+    undefined,
+    120,
+  );
+  if (commit.exitCode !== 0) {
+    throw new Error(
+      commit.stderr.trim() ||
+        commit.stdout.trim() ||
+        "Remote Git commit failed.",
+    );
+  }
+  if (!returnResult) return undefined;
+  const details = await runHelperGit(
+    sessionId,
+    cwd,
+    ["show", "-s", "--format=%H%x00%s", "HEAD"],
+    64 * 1024,
+  );
+  const [commitSha, ...subject] = decodeGitMetadata(details.stdoutBytes).split(
+    "\0",
+  );
+  if (!commitSha || !/^[0-9a-f]{40,64}$/i.test(commitSha)) {
+    throw new Error("Could not resolve the new remote Git commit.");
+  }
+  return { commitSha, summary: subject.join("\0").trim() };
+}
+
+async function nativeProfileGitShowCommit(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  shaValue: unknown,
+): Promise<{ diffText: string; truncated: boolean }> {
   await assertProfileGitRoot(sessionId, root, cwd);
+  const sha = await nativeProfileGitCommitSha(sessionId, cwd, shaValue);
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["show", "--no-color", "--no-ext-diff", "--patch-with-stat", sha, "--"],
+    MAX_GIT_OUTPUT_BYTES,
+    false,
+    true,
+  );
+  return {
+    diffText: result.stdout,
+    truncated: result.stdoutTruncated || result.stderrTruncated,
+  };
+}
+
+async function nativeProfileGitTagName(
+  sessionId: number,
+  cwd: string,
+  value: unknown,
+): Promise<string> {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value.length > MAX_GIT_REF_BYTES ||
+    value.startsWith("-") ||
+    value.includes("..") ||
+    /\s/.test(value) ||
+    new TextEncoder().encode(value).byteLength > MAX_GIT_REF_BYTES
+  ) {
+    throw new Error("The Git tag name is invalid.");
+  }
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["check-ref-format", `refs/tags/${value}`],
+    64 * 1024,
+    true,
+  );
+  if (result.exitCode !== 0) throw new Error("The Git tag name is invalid.");
+  return value;
+}
+
+async function nativeProfileGitTagList(
+  sessionId: number,
+  root: string,
+  cwd: string,
+): Promise<
+  Array<{
+    name: string;
+    sha: string;
+    annotated: boolean;
+    message: string | null;
+    timestampSecs: number;
+  }>
+> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const format =
+    "%(refname:short)%00%(objectname)%00%(*objectname)%00%(objecttype)%00%(creatordate:unix)%00%(contents:subject)";
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["tag", "--sort=-creatordate", `--format=${format}`],
+    MAX_GIT_OUTPUT_BYTES,
+  );
+  const lines = decodeGitMetadata(result.stdoutBytes)
+    .split(/\r?\n/)
+    .filter(Boolean);
+  if (lines.length > MAX_GIT_TAGS) {
+    throw new Error("The remote Git repository has too many tags to display.");
+  }
+  return lines.map((line) => {
+    const [name, directSha, peeledSha, objectType, rawTimestamp, rawMessage] =
+      line.split("\0");
+    const annotated = objectType === "tag";
+    const sha = annotated && peeledSha ? peeledSha : directSha;
+    if (
+      !name ||
+      !sha ||
+      !/^[0-9a-f]{40,64}$/i.test(sha) ||
+      rawTimestamp === undefined ||
+      rawMessage === undefined
+    ) {
+      throw new Error("The remote helper returned invalid Git tags.");
+    }
+    const timestamp = Number(rawTimestamp);
+    return {
+      name,
+      sha,
+      annotated,
+      message: annotated && rawMessage.trim() ? rawMessage.trim() : null,
+      timestampSecs: Number.isSafeInteger(timestamp) ? timestamp : 0,
+    };
+  });
+}
+
+async function nativeProfileGitTagCreate(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  nameValue: unknown,
+  targetShaValue: unknown,
+  messageValue: unknown,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name = await nativeProfileGitTagName(sessionId, cwd, nameValue);
+  let targetSha: string | null = null;
+  if (targetShaValue !== undefined && targetShaValue !== null) {
+    targetSha = await nativeProfileGitCommitSha(sessionId, cwd, targetShaValue);
+  }
+  if (
+    messageValue !== undefined &&
+    messageValue !== null &&
+    typeof messageValue !== "string"
+  ) {
+    throw new Error("The Git tag message is invalid.");
+  }
+  const message = typeof messageValue === "string" ? messageValue : "";
+  if (
+    message.length > MAX_GIT_COMMIT_MESSAGE_BYTES ||
+    new TextEncoder().encode(message).byteLength > MAX_GIT_COMMIT_MESSAGE_BYTES
+  ) {
+    throw new Error("The Git tag message is too large.");
+  }
+  const args = ["tag"];
+  if (message) args.push("-a");
+  args.push(name);
+  if (message) args.push("-m", message);
+  if (targetSha) args.push(targetSha);
+  await runHelperGit(sessionId, cwd, args, 64 * 1024, false);
+}
+
+async function nativeProfileGitTagDelete(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  nameValue: unknown,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name = await nativeProfileGitTagName(sessionId, cwd, nameValue);
+  await runHelperGit(sessionId, cwd, ["tag", "-d", name], 64 * 1024, false);
+}
+
+async function nativeProfileGitTagPush(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  nameValue: unknown,
+  remoteValue: unknown,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name = await nativeProfileGitTagName(sessionId, cwd, nameValue);
+  const remote =
+    remoteValue === undefined || remoteValue === null || remoteValue === ""
+      ? "origin"
+      : typeof remoteValue === "string"
+        ? remoteValue
+        : "";
+  if (!remote || remote.length > 64 || !/^[A-Za-z0-9_.-]+$/.test(remote)) {
+    throw new Error("The Git remote name is invalid.");
+  }
   await runHelperGit(
     sessionId,
     cwd,
-    ["commit", "--cleanup=strip", "-m", message],
+    ["push", remote, name],
     64 * 1024,
     false,
     true,
     undefined,
-    120,
+    GIT_NETWORK_TIMEOUT_SECS,
   );
 }
 
@@ -1681,6 +1966,44 @@ async function runProfileFileCommand(
       args.relative,
     );
   }
+  if (command === "git_show_commit") {
+    return nativeProfileGitShowCommit(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.sha,
+    );
+  }
+  if (command === "git_tag_list") {
+    return nativeProfileGitTagList(sessionId, root, relativePath(args.cwd));
+  }
+  if (command === "git_tag_create") {
+    return nativeProfileGitTagCreate(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.name,
+      args.targetSha,
+      args.message,
+    );
+  }
+  if (command === "git_tag_delete") {
+    return nativeProfileGitTagDelete(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.name,
+    );
+  }
+  if (command === "git_tag_push") {
+    return nativeProfileGitTagPush(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.name,
+      args.remote,
+    );
+  }
   if (command === "git_branches") {
     const cwd = relativePath(args.cwd);
     return nativeProfileGitBranches(sessionId, root, cwd);
@@ -1726,11 +2049,19 @@ async function runProfileFileCommand(
     );
   }
   if (command === "git_commit" || command === "harness_git_commit") {
+    const paths =
+      args.paths === undefined || args.paths === null
+        ? args.paths
+        : Array.isArray(args.paths)
+          ? args.paths.map(relativePath)
+          : args.paths;
     return nativeProfileGitCommit(
       sessionId,
       root,
       relativePath(args.cwd),
       args.message,
+      paths,
+      command === "git_commit",
     );
   }
   if (

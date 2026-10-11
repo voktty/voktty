@@ -21,6 +21,7 @@ import {
   isDirectSshProfilePath,
   loadRemoteGitBranches,
   loadRemoteGitCheckout,
+  loadRemoteGitCommit,
   loadRemoteGitCommitFileDiff,
   loadRemoteGitCommitFiles,
   loadRemoteGitFetch,
@@ -29,6 +30,11 @@ import {
   loadRemoteGitPull,
   loadRemoteGitPush,
   loadRemoteGitRemoteUrl,
+  loadRemoteGitShowCommit,
+  loadRemoteGitTagCreate,
+  loadRemoteGitTagDelete,
+  loadRemoteGitTagList,
+  loadRemoteGitTagPush,
   resolveRemoteGitRepo,
 } from "./remoteGitHistory";
 
@@ -601,12 +607,14 @@ export const native = {
     workspace?: WorkspaceEnv,
     paths?: string[],
   ) =>
-    invoke<GitCommitResult>("git_commit", {
-      repoRoot,
-      message,
-      ...(paths !== undefined ? { paths } : {}),
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitCommit(repoRoot, message, paths)
+      : invoke<GitCommitResult>("git_commit", {
+          repoRoot,
+          message,
+          ...(paths !== undefined ? { paths } : {}),
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitFetch: (repoRoot: string, workspace?: WorkspaceEnv) =>
     isDirectSshProfilePath(repoRoot)
       ? loadRemoteGitFetch(repoRoot)
@@ -649,11 +657,13 @@ export const native = {
           workspace: resolveGitWorkspace(repoRoot, options?.workspace),
         }),
   gitShowCommit: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
-    invoke<GitDiffResult>("git_show_commit", {
-      repoRoot,
-      sha,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitShowCommit(repoRoot, sha)
+      : invoke<GitDiffResult>("git_show_commit", {
+          repoRoot,
+          sha,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitCommitFiles: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
     isDirectSshProfilePath(repoRoot)
       ? loadRemoteGitCommitFiles(repoRoot, sha)
@@ -822,10 +832,12 @@ export const native = {
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
   gitTagList: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitTagEntry[]>("git_tag_list", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitTagList(repoRoot)
+      : invoke<GitTagEntry[]>("git_tag_list", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitTagCreate: (
     repoRoot: string,
     name: string,
@@ -833,31 +845,37 @@ export const native = {
     message: string | undefined,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_tag_create", {
-      repoRoot,
-      name,
-      targetSha: targetSha ?? null,
-      message: message ?? null,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitTagCreate(repoRoot, name, targetSha, message)
+      : invoke<void>("git_tag_create", {
+          repoRoot,
+          name,
+          targetSha: targetSha ?? null,
+          message: message ?? null,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitTagDelete: (repoRoot: string, name: string, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_tag_delete", {
-      repoRoot,
-      name,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitTagDelete(repoRoot, name)
+      : invoke<void>("git_tag_delete", {
+          repoRoot,
+          name,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitTagPush: (
     repoRoot: string,
     name: string,
     remote: string | undefined,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_tag_push", {
-      repoRoot,
-      name,
-      remote: remote ?? null,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitTagPush(repoRoot, name, remote)
+      : invoke<void>("git_tag_push", {
+          repoRoot,
+          name,
+          remote: remote ?? null,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitOperationStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
     invoke<GitOperationStatus>("git_operation_status", {
       repoRoot,

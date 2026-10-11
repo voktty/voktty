@@ -459,6 +459,245 @@ it("commits remote staged changes with bounded message and helper timeout", asyn
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
+it("creates a selected-file SSH commit and returns its commit metadata", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const commitSha = "a".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app/repo\n");
+      }
+      if (args[0] === "status") {
+        return gitExecResult(
+          "1 .M N... 100644 100644 100644 abc def src/my file.ts\0",
+        );
+      }
+      if (args[0] === "commit") return gitExecResult("");
+      if (args[0] === "show") {
+        return gitExecResult(`${commitSha}\0fix: selected file`);
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_commit", {
+      cwd: remotePath(environmentId, "/srv/app/repo"),
+      paths: [remotePath(environmentId, "/srv/app/repo/src/my file.ts")],
+      message: "fix: selected file",
+    }),
+  ).resolves.toEqual({ commitSha, summary: "fix: selected file" });
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual([
+    ["rev-parse", "--show-toplevel"],
+    [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--ahead-behind",
+      "--untracked-files=all",
+      "-z",
+    ],
+    [
+      "commit",
+      "--only",
+      "-m",
+      "fix: selected file",
+      "--",
+      ":(literal)src/my file.ts",
+    ],
+    ["show", "-s", "--format=%H%x00%s", "HEAD"],
+  ]);
+  expect(requestRemoteResult.mock.calls[2][2]).toMatchObject({
+    timeoutSecs: 120,
+    maxOutputBytes: 64 * 1024,
+  });
+});
+
+it("stages only a selected untracked file before a native SSH commit", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const commitSha = "b".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "status") {
+        return gitExecResult("? new file.ts\0? unrelated untracked.ts\0");
+      }
+      if (args[0] === "add" || args[0] === "commit") {
+        return gitExecResult("");
+      }
+      if (args[0] === "show") return gitExecResult(`${commitSha}\0Added file`);
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_commit", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      paths: [remotePath(environmentId, "/srv/app/new file.ts")],
+      message: "Add file",
+    }),
+  ).resolves.toEqual({ commitSha, summary: "Added file" });
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual([
+    ["rev-parse", "--show-toplevel"],
+    [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--ahead-behind",
+      "--untracked-files=all",
+      "-z",
+    ],
+    ["add", "--", ":(literal)new file.ts"],
+    ["commit", "--only", "-m", "Add file", "--", ":(literal)new file.ts"],
+    ["show", "-s", "--format=%H%x00%s", "HEAD"],
+  ]);
+  expect(requestRemoteResult.mock.calls[2][2]).toMatchObject({
+    maxOutputBytes: 64 * 1024,
+  });
+});
+
+it("reads commit patches and routes tag reads and writes through native SSH", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const commitSha = "a".repeat(40);
+  const tagObjectSha = "b".repeat(40);
+  const tagOutput =
+    ["v1.0", tagObjectSha, commitSha, "tag", "1700000000", "Release 1.0"].join(
+      "\0",
+    ) +
+    "\n" +
+    ["v0.9", commitSha, "", "commit", "1690000000", ""].join("\0") +
+    "\n";
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse" && args[1] === "--verify") {
+        return gitExecResult(`${commitSha}\n`);
+      }
+      if (args[0] === "show") {
+        return { ...gitExecResult("partial patch"), stdoutTruncated: true };
+      }
+      if (args[0] === "tag" && args[1] === "--sort=-creatordate") {
+        return gitExecResult(tagOutput);
+      }
+      if (args[0] === "check-ref-format") return gitExecResult("");
+      if (args[0] === "tag" && args[1] === "-a") return gitExecResult("");
+      if (args[0] === "tag" && args[1] === "-d") return gitExecResult("");
+      if (args[0] === "push") return gitExecResult("");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(
+    runRemoteCommand("git_show_commit", { cwd, sha: commitSha }),
+  ).resolves.toEqual({ diffText: "partial patch", truncated: true });
+  await expect(runRemoteCommand("git_tag_list", { cwd })).resolves.toEqual([
+    {
+      name: "v1.0",
+      sha: commitSha,
+      annotated: true,
+      message: "Release 1.0",
+      timestampSecs: 1700000000,
+    },
+    {
+      name: "v0.9",
+      sha: commitSha,
+      annotated: false,
+      message: null,
+      timestampSecs: 1690000000,
+    },
+  ]);
+  await expect(
+    runRemoteCommand("git_tag_create", {
+      cwd,
+      name: "v1.1",
+      targetSha: commitSha,
+      message: "Release 1.1",
+    }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_tag_delete", { cwd, name: "v1.1" }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_tag_push", { cwd, name: "v1.0" }),
+  ).resolves.toBeUndefined();
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toContainEqual(["push", "origin", "v1.0"]);
+  const pushCall = requestRemoteResult.mock.calls.find(
+    ([, method, params]) =>
+      method === "git.execWorkspace" &&
+      (params as { args: string[] }).args[0] === "push",
+  );
+  expect(pushCall?.[2]).toMatchObject({
+    timeoutSecs: 180,
+    maxOutputBytes: 64 * 1024,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("rejects unsafe Git tag names before running tag mutations", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_tag_delete", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      name: "--delete-all",
+    }),
+  ).rejects.toThrow("tag name is invalid");
+  expect(requestRemoteResult).toHaveBeenCalledTimes(1);
+});
+
 it("refuses to read or commit a Git repository above the saved project root", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockImplementation(

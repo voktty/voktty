@@ -4,12 +4,18 @@ import {
   isDirectSshProfilePath,
   loadRemoteGitBranches,
   loadRemoteGitCheckout,
+  loadRemoteGitCommit,
   loadRemoteGitFetch,
   loadRemoteGitHistoryMetadata,
   loadRemoteGitLog,
   loadRemoteGitPull,
   loadRemoteGitPush,
   loadRemoteGitRemoteUrl,
+  loadRemoteGitShowCommit,
+  loadRemoteGitTagCreate,
+  loadRemoteGitTagDelete,
+  loadRemoteGitTagList,
+  loadRemoteGitTagPush,
   mapRemoteCommitFiles,
   mapRemoteGitHistoryMetadata,
   mapRemoteGitLogPage,
@@ -211,6 +217,70 @@ describe("remote Git history adapters", () => {
     expect(runner).toHaveBeenCalledWith("git_checkout", {
       cwd: repoRoot,
       name: "feature/new",
+    });
+  });
+
+  it("routes commits, patches, and tag actions through the SSH helper", async () => {
+    const tag = {
+      name: "v1.0",
+      sha: head,
+      annotated: true,
+      message: "Release 1.0",
+      timestampSecs: 1700000000,
+    };
+    const runner = vi.fn(async (command: string) => {
+      if (command === "git_commit") {
+        return { commitSha: head, summary: "fix: remote" };
+      }
+      if (command === "git_show_commit") {
+        return { diffText: "commit patch", truncated: false };
+      }
+      if (command === "git_tag_list") return [tag];
+      return undefined;
+    });
+    setRemoteCommandRunner(runner);
+
+    await expect(
+      loadRemoteGitCommit(repoRoot, "fix: remote", [`${repoRoot}/src/a.ts`]),
+    ).resolves.toEqual({ commitSha: head, summary: "fix: remote" });
+    await expect(loadRemoteGitShowCommit(repoRoot, head)).resolves.toEqual({
+      diffText: "commit patch",
+      truncated: false,
+    });
+    await expect(loadRemoteGitTagList(repoRoot)).resolves.toEqual([tag]);
+    await expect(
+      loadRemoteGitTagCreate(repoRoot, "v1.0", head, "Release 1.0"),
+    ).resolves.toBeUndefined();
+    await expect(
+      loadRemoteGitTagDelete(repoRoot, "v1.0"),
+    ).resolves.toBeUndefined();
+    await expect(
+      loadRemoteGitTagPush(repoRoot, "v1.0", "origin"),
+    ).resolves.toBeUndefined();
+
+    expect(runner.mock.calls.map(([command]) => command)).toEqual([
+      "git_commit",
+      "git_show_commit",
+      "git_tag_list",
+      "git_tag_create",
+      "git_tag_delete",
+      "git_tag_push",
+    ]);
+    expect(runner).toHaveBeenCalledWith("git_commit", {
+      cwd: repoRoot,
+      message: "fix: remote",
+      paths: [`${repoRoot}/src/a.ts`],
+    });
+    expect(runner).toHaveBeenCalledWith("git_tag_create", {
+      cwd: repoRoot,
+      name: "v1.0",
+      targetSha: head,
+      message: "Release 1.0",
+    });
+    expect(runner).toHaveBeenCalledWith("git_tag_push", {
+      cwd: repoRoot,
+      name: "v1.0",
+      remote: "origin",
     });
   });
 

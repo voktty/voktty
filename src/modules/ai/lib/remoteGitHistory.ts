@@ -5,11 +5,14 @@ import type {
   GitBranchEntry,
   GitBranchListResult,
   GitCommitFileChange,
+  GitCommitResult,
   GitDiffContentResult,
+  GitDiffResult,
   GitHistoryMetadata,
   GitLogEntry,
   GitPushResult,
   GitRepoInfo,
+  GitTagEntry,
 } from "./native";
 
 type RemoteHistoryRef = { name: string; kind: "local" | "remote" | "tag" };
@@ -255,6 +258,106 @@ export async function loadRemoteGitPush(
     throw new Error("The remote helper returned an invalid Git push result.");
   }
   return result as GitPushResult;
+}
+
+export async function loadRemoteGitCommit(
+  repoRoot: string,
+  message: string,
+  paths?: string[],
+): Promise<GitCommitResult> {
+  const result = await remoteGitCommand<unknown>("git_commit", repoRoot, {
+    message,
+    ...(paths === undefined ? {} : { paths }),
+  });
+  if (
+    !result ||
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    typeof (result as GitCommitResult).commitSha !== "string" ||
+    !/^[0-9a-f]{40,64}$/i.test((result as GitCommitResult).commitSha) ||
+    typeof (result as GitCommitResult).summary !== "string"
+  ) {
+    throw new Error("The remote helper returned an invalid Git commit result.");
+  }
+  return result as GitCommitResult;
+}
+
+export async function loadRemoteGitShowCommit(
+  repoRoot: string,
+  sha: string,
+): Promise<GitDiffResult> {
+  const result = await remoteGitCommand<unknown>("git_show_commit", repoRoot, {
+    sha,
+  });
+  if (
+    !result ||
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    typeof (result as GitDiffResult).diffText !== "string" ||
+    typeof (result as GitDiffResult).truncated !== "boolean"
+  ) {
+    throw new Error("The remote helper returned an invalid Git commit diff.");
+  }
+  return result as GitDiffResult;
+}
+
+export async function loadRemoteGitTagList(
+  repoRoot: string,
+): Promise<GitTagEntry[]> {
+  const result = await remoteGitCommand<unknown>("git_tag_list", repoRoot);
+  if (!Array.isArray(result) || result.length > 20_000) {
+    throw new Error("The remote helper returned invalid Git tags.");
+  }
+  return result.map((tag) => {
+    if (
+      !tag ||
+      typeof tag !== "object" ||
+      Array.isArray(tag) ||
+      typeof (tag as GitTagEntry).name !== "string" ||
+      typeof (tag as GitTagEntry).sha !== "string" ||
+      !/^[0-9a-f]{40,64}$/i.test((tag as GitTagEntry).sha) ||
+      typeof (tag as GitTagEntry).annotated !== "boolean" ||
+      !(
+        (tag as GitTagEntry).message === null ||
+        typeof (tag as GitTagEntry).message === "string"
+      ) ||
+      !Number.isSafeInteger((tag as GitTagEntry).timestampSecs)
+    ) {
+      throw new Error("The remote helper returned invalid Git tags.");
+    }
+    return tag as GitTagEntry;
+  });
+}
+
+export function loadRemoteGitTagCreate(
+  repoRoot: string,
+  name: string,
+  targetSha?: string,
+  message?: string,
+): Promise<void> {
+  return remoteGitCommand<void>("git_tag_create", repoRoot, {
+    name,
+    targetSha: targetSha ?? null,
+    message: message ?? null,
+  });
+}
+
+export function loadRemoteGitTagDelete(
+  repoRoot: string,
+  name: string,
+): Promise<void> {
+  return remoteGitCommand<void>("git_tag_delete", repoRoot, { name });
+}
+
+export function loadRemoteGitTagPush(
+  repoRoot: string,
+  name: string,
+  remote?: string,
+): Promise<void> {
+  return remoteGitCommand<void>("git_tag_push", repoRoot, {
+    name,
+    remote: remote ?? null,
+  });
 }
 
 export async function loadRemoteGitCheckout(
