@@ -4792,16 +4792,29 @@ export const es: TranslationSchema = {
       manageProfiles: "Gestionar perfiles SSH",
       addProfile: "Añadir perfil SSH",
       openFolder: "Abrir carpeta",
+      openRemoteProject: "Abrir proyecto remoto",
       emptyTitle: "No hay perfiles SSH guardados",
       emptyDescription:
         "Añade un perfil en Ajustes de Voktty > SSH y vuelve aquí para explorar y abrir un proyecto remoto.",
-      dialogTitle: "Abrir carpeta en un equipo",
+      dialogTitle: "Abrir un proyecto remoto",
       dialogDescription:
-        "Explora carpetas mediante el agente SSH autenticado de Voktty y abre una en Harness.",
+        "Escribe la ruta remota de la carpeta para abrirla directamente. Explora por SSH solo si necesitas encontrar la ruta.",
       noProfilesDescription:
         "No hay perfiles SSH guardados. Añade uno en Ajustes de Voktty > SSH y vuelve para abrir su carpeta.",
       profile: "Conexión SSH",
-      folderPath: "Ruta de la carpeta en el equipo",
+      onProfile: "En",
+      folderPath: "Carpeta del proyecto remoto",
+      pathPlaceholder: "/srv/workspace/proyecto",
+      directPathHint:
+        "Usa una ruta absoluta que comience por / en el equipo remoto. Explorar inicia una conexión SSH.",
+      browseFolders: "Explorar carpetas",
+      hideFolderBrowser: "Ocultar explorador",
+      pathErrors: {
+        required: "Escribe la ruta de una carpeta.",
+        absolute: "Escribe una ruta absoluta que comience por /.",
+        control:
+          "La ruta no puede contener saltos de línea ni caracteres de control.",
+      },
       connecting: "Conectando por SSH…",
       folders: "Carpetas",
       noSubfolders: "No hay subcarpetas",

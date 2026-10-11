@@ -10,6 +10,26 @@ export type RemoteDirectoryListing = {
   entries: Array<{ name: string; path: string; relativePath: string }>;
 };
 
+export type RemoteProjectPathIssue = "required" | "absolute" | "control";
+
+export function remoteProjectPathIssue(
+  path: string,
+): RemoteProjectPathIssue | undefined {
+  const value = path.trim();
+  if (!value) return "required";
+  if (/[\u0000-\u001f\u007f]/.test(value)) return "control";
+  if (!value.startsWith("/")) return "absolute";
+  return undefined;
+}
+
+export function normalizeRemoteProjectPath(path: string): string {
+  const value = path.trim();
+  if (remoteProjectPathIssue(value)) {
+    throw new Error("Enter an absolute remote project path.");
+  }
+  return value.replace(/\/+$/, "") || "/";
+}
+
 export function normalizeRemoteDirectoryRelative(path: string): string {
   const normalized = path.replace(/\\/g, "/");
   if (normalized.startsWith("/")) {

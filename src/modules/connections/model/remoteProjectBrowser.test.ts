@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeRemoteDirectoryRelative,
+  normalizeRemoteProjectPath,
   remoteDirectoryListing,
   remoteDirectoryPath,
+  remoteProjectPathIssue,
 } from "./remoteProjectBrowser";
 
 describe("native remote project browser paths", () => {
+  it("accepts and normalizes absolute project paths", () => {
+    expect(normalizeRemoteProjectPath("  /srv/workspace/my app///  ")).toBe(
+      "/srv/workspace/my app",
+    );
+    expect(normalizeRemoteProjectPath("/")).toBe("/");
+    expect(remoteProjectPathIssue("/srv/workspace/app")).toBeUndefined();
+  });
+
+  it("rejects empty, relative, and control-character project paths", () => {
+    expect(remoteProjectPathIssue("  ")).toBe("required");
+    expect(remoteProjectPathIssue("workspace/app")).toBe("absolute");
+    expect(remoteProjectPathIssue("/workspace/app\nother")).toBe("control");
+  });
+
   it("keeps browsing relative to the authenticated workspace root", () => {
     expect(remoteDirectoryPath("/home/dev/", "repo/src")).toBe(
       "/home/dev/repo/src",

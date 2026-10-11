@@ -1,3 +1,4 @@
+import { AddRemoteProjectDialog } from "@/modules/connections/ui/AddRemoteProjectDialog";
 import {
   AppWindow,
   Archive,
@@ -11,6 +12,7 @@ import {
   FolderTree,
   ImagePlus,
   Inbox,
+  Internet,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -304,6 +306,7 @@ export function ProjectRail({
     project: string;
     name: string;
   } | null>(null);
+  const [remoteProjectDialogOpen, setRemoteProjectDialogOpen] = useState(false);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
@@ -778,6 +781,7 @@ export function ProjectRail({
                   : undefined
               }
               onAdd={onOpenProject}
+              onOpenRemoteProject={() => setRemoteProjectDialogOpen(true)}
               onAddGroup={projectGroups.length === 0 ? createGroup : undefined}
               cwd={cwd}
               busy={busy}
@@ -931,6 +935,19 @@ export function ProjectRail({
           project={backgroundProject.project}
           name={backgroundProject.name}
           onClose={() => setBackgroundProject(null)}
+        />
+      ) : null}
+      {remoteProjectDialogOpen ? (
+        <AddRemoteProjectDialog
+          onCancel={() => setRemoteProjectDialogOpen(false)}
+          onOpen={(path) => {
+            setRemoteProjectDialogOpen(false);
+            window.dispatchEvent(
+              new CustomEvent("voktty:harness-select-project", {
+                detail: { path },
+              }),
+            );
+          }}
         />
       ) : null}
       <div
@@ -1173,10 +1190,12 @@ function projectGroupColor(group: ProjectGroup): string {
 function ProjectSectionHeader({
   label,
   onAdd,
+  onOpenRemoteProject,
   onAddGroup,
 }: {
   label: string;
   onAdd?: () => void;
+  onOpenRemoteProject?: () => void;
   onAddGroup?: (x: number, y: number) => void;
 }) {
   const { t } = useTranslation();
@@ -1197,6 +1216,17 @@ function ProjectSectionHeader({
           className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
         >
           <FolderPlus className="size-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+      {onOpenRemoteProject ? (
+        <button
+          type="button"
+          title={t("harness.connections.openRemoteProject")}
+          aria-label={t("harness.connections.openRemoteProject")}
+          onClick={onOpenRemoteProject}
+          className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
+        >
+          <Internet className="size-3.5" strokeWidth={1.75} />
         </button>
       ) : null}
       {onAdd ? (
@@ -1440,6 +1470,7 @@ function ProjectSection({
   items,
   emptyLabel,
   onAdd,
+  onOpenRemoteProject,
   onAddGroup,
   cwd,
   busy,
@@ -1461,6 +1492,7 @@ function ProjectSection({
   items: RecentProject[];
   emptyLabel?: string;
   onAdd?: () => void;
+  onOpenRemoteProject?: () => void;
   onAddGroup?: (x: number, y: number) => void;
   cwd: string;
   busy: Set<string>;
@@ -1480,7 +1512,12 @@ function ProjectSection({
 }) {
   return (
     <div className="shrink-0 mb-2">
-      <ProjectSectionHeader label={label} onAdd={onAdd} onAddGroup={onAddGroup} />
+      <ProjectSectionHeader
+        label={label}
+        onAdd={onAdd}
+        onOpenRemoteProject={onOpenRemoteProject}
+        onAddGroup={onAddGroup}
+      />
       {items.length === 0 && emptyLabel ? (
         <p className="px-4 pb-1 text-[11px] leading-tight text-content/40">
           {emptyLabel}

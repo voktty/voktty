@@ -4680,16 +4680,28 @@ export const en = {
       manageProfiles: "Manage SSH profiles",
       addProfile: "Add SSH profile",
       openFolder: "Open folder",
+      openRemoteProject: "Open remote project",
       emptyTitle: "No SSH profiles saved",
       emptyDescription:
         "Add a profile in Voktty Settings > SSH, then return here to browse and open a remote project.",
-      dialogTitle: "Open folder on a machine",
+      dialogTitle: "Open a remote project",
       dialogDescription:
-        "Browse folders through Voktty's authenticated SSH agent, then open one in Harness.",
+        "Enter its remote folder path to open it directly. Browse over SSH only when you need to find the path.",
       noProfilesDescription:
         "No saved SSH profiles are available. Add a profile in Voktty Settings > SSH, then open its folder here.",
       profile: "SSH connection",
-      folderPath: "Folder path on the machine",
+      onProfile: "On",
+      folderPath: "Remote project folder",
+      pathPlaceholder: "/srv/workspace/project",
+      directPathHint:
+        "Use an absolute path beginning with / on the remote machine. Browsing starts an SSH connection.",
+      browseFolders: "Browse folders",
+      hideFolderBrowser: "Hide folder browser",
+      pathErrors: {
+        required: "Enter a folder path.",
+        absolute: "Enter an absolute path beginning with /.",
+        control: "The path cannot contain line breaks or control characters.",
+      },
       connecting: "Connecting over SSH…",
       folders: "Folders",
       noSubfolders: "No subfolders",

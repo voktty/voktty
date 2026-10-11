@@ -67,8 +67,8 @@ describe("AddRemoteProjectDialog", () => {
       }),
     );
 
-    expect(markup).toContain("Open folder on a machine");
-    expect(markup).toContain("authenticated SSH agent");
+    expect(markup).toContain("Open a remote project");
+    expect(markup).toContain("Enter its remote folder path");
     expect(markup).toContain(
       'class="absolute inset-0 z-0 cursor-default bg-black/40"',
     );
