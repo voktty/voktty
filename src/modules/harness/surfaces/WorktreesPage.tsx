@@ -269,7 +269,7 @@ export function WorktreesPage({
                 }
                 sessionsDeleted = true;
               }
-              await onRemove(cwd, path, force, !deleteSessions);
+              await onRemove(cwd, path, force);
             } catch (error) {
               const failure = sessionsDeleted
                 ? new Error(

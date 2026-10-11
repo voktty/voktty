@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createWorktree, listWorktrees } from "./worktrees";
+import {
+  checkWorktreeRemoval,
+  createWorktree,
+  listWorktrees,
+  removeWorktree,
+} from "./worktrees";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   openRemoteWorkspace: vi.fn(),
   closeRemoteWorkspace: vi.fn(),
   remoteMachineFor: vi.fn(),
+  remoteProjectForPath: vi.fn(),
   remoteSshConnectionFor: vi.fn(),
   remoteSshConnectionForProfile: vi.fn(),
   sshConnections: [] as Array<Record<string, unknown>>,
@@ -19,6 +25,17 @@ vi.mock("@/modules/remote/client", () => ({
 }));
 vi.mock("@/modules/connections/model/connections", () => ({
   remoteMachineFor: mocks.remoteMachineFor,
+}));
+vi.mock("@/modules/connections/model/remoteProjects", () => ({
+  parseRemotePath: (path: string) => {
+    const match = path.replace(/\\/g, "/").match(/^remote:\/\/([^/]+)\/(.*)$/);
+    return match
+      ? { environmentId: match[1], hostPath: `/${match[2]}` }
+      : undefined;
+  },
+  remotePath: (environmentId: string, hostPath: string) =>
+    `remote://${environmentId}/${hostPath.replace(/^\/+/, "")}`,
+  remoteProjectForPath: mocks.remoteProjectForPath,
 }));
 vi.mock("@/modules/connections/model/remoteSshProfiles", () => ({
   remoteSshConnectionFor: mocks.remoteSshConnectionFor,
@@ -53,7 +70,7 @@ const session = {
   capabilities: [],
 };
 const tree = {
-  path: "/srv/app-worktrees/voktty-feature-123",
+  path: "/srv/app/.git/voktty-worktrees/voktty-feature-123",
   branch: "feature/new",
   head: "abc123",
   isMain: false,
@@ -71,6 +88,10 @@ beforeEach(() => {
     id: "machine-1",
     environmentId: "machine-1",
   });
+  mocks.remoteProjectForPath.mockImplementation((path: string) => {
+    const match = path.match(/^remote:\/\/([^/]+)\//);
+    return match ? { environmentId: match[1], cwd: "/srv/app" } : undefined;
+  });
   mocks.remoteSshConnectionFor.mockReturnValue(connection);
   mocks.remoteSshConnectionForProfile.mockReturnValue(connection);
   mocks.sshConnections = [];
@@ -82,7 +103,7 @@ describe("remote Harness worktrees", () => {
   it("lists through Voktty's native SSH helper and remaps host paths", async () => {
     mocks.invoke.mockResolvedValueOnce({
       worktrees: [{ ...tree, path: "/srv/app" }, tree],
-      defaultRoot: "/srv/app-worktrees",
+      defaultRoot: "/srv/app/.git/voktty-worktrees",
     });
 
     const result = await listWorktrees("remote://machine-1/srv/app");
@@ -100,9 +121,11 @@ describe("remote Harness worktrees", () => {
         connection,
       },
     });
-    expect(result.defaultRoot).toBe("remote://machine-1/srv/app-worktrees");
+    expect(result.defaultRoot).toBe(
+      "remote://machine-1/srv/app/.git/voktty-worktrees",
+    );
     expect(result.worktrees[1].path).toBe(
-      "remote://machine-1/srv/app-worktrees/voktty-feature-123",
+      "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
     );
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(session.session_id);
   });
@@ -130,7 +153,7 @@ describe("remote Harness worktrees", () => {
       },
     });
     expect(result.path).toBe(
-      "remote://machine-1/srv/app-worktrees/voktty-feature-123",
+      "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
     );
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(session.session_id);
     expect(mocks.notifyGitChanged).toHaveBeenCalledOnce();
@@ -147,7 +170,7 @@ describe("remote Harness worktrees", () => {
     mocks.sshConnections = [profile];
     mocks.invoke.mockResolvedValueOnce({
       worktrees: [{ ...tree, path: "/srv/app" }],
-      defaultRoot: "/srv/worktrees",
+      defaultRoot: "/srv/app/.git/voktty-worktrees",
     });
 
     await listWorktrees("remote://voktty-ssh-profile-1/srv/app");
@@ -158,5 +181,128 @@ describe("remote Harness worktrees", () => {
       connection,
       "/srv/app",
     );
+  });
+
+  it("opens the saved project root when listing from one of its worktrees", async () => {
+    mocks.invoke.mockResolvedValueOnce({
+      worktrees: [{ ...tree, path: "/srv/app" }, tree],
+      defaultRoot: "/srv/app/.git/voktty-worktrees",
+    });
+
+    await listWorktrees(
+      "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
+    );
+
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
+      connection,
+      "/srv/app",
+    );
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "git_worktrees",
+      expect.objectContaining({ cwd: "/srv/app" }),
+    );
+  });
+
+  it("deletes a selected remote worktree through the authenticated helper", async () => {
+    mocks.sshConnections = [
+      {
+        id: "profile-1",
+        name: "Build host",
+        host: "build.example",
+        user: "deploy",
+        port: 2222,
+      },
+    ];
+    mocks.invoke.mockResolvedValueOnce({ removed: true, reason: null });
+
+    await removeWorktree(
+      "remote://voktty-ssh-profile-1/srv/app",
+      "remote://voktty-ssh-profile-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
+      true,
+    );
+
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
+      connection,
+      "/srv/app",
+    );
+    expect(mocks.invoke).toHaveBeenCalledWith("git_worktree_delete", {
+      cwd: "/srv/app",
+      path: "/srv/app/.git/voktty-worktrees/voktty-feature-123",
+      force: true,
+      workspace: {
+        kind: "ssh",
+        root: "/srv/app",
+        sessionId: session.session_id,
+        connection,
+      },
+    });
+    expect(mocks.notifyGitChanged).toHaveBeenCalledOnce();
+  });
+
+  it("preflights removal from the native remote worktree list", async () => {
+    mocks.invoke.mockResolvedValueOnce({
+      worktrees: [
+        { ...tree, path: "/srv/app", isMain: true },
+        { ...tree, dirty: false },
+      ],
+      defaultRoot: "/srv/app/.git/voktty-worktrees",
+    });
+
+    await checkWorktreeRemoval(
+      "remote://machine-1/srv/app",
+      "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
+      true,
+    );
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "git_worktrees",
+      expect.objectContaining({ cwd: "/srv/app" }),
+    );
+    expect(mocks.invoke).not.toHaveBeenCalledWith(
+      "git_worktree_check_remove",
+      expect.anything(),
+    );
+  });
+
+  it("requires remote worktree status even when forced removal is selected", async () => {
+    mocks.invoke.mockResolvedValueOnce({
+      worktrees: [
+        { ...tree, path: "/srv/app", isMain: true },
+        { ...tree, dirty: null },
+      ],
+      defaultRoot: "/srv/app/.git/voktty-worktrees",
+    });
+
+    await expect(
+      checkWorktreeRemoval(
+        "remote://machine-1/srv/app",
+        "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
+        true,
+      ),
+    ).rejects.toThrow("Worktree status is unavailable.");
+  });
+
+  it("rejects a worktree path from another remote profile before connecting", async () => {
+    await expect(
+      removeWorktree(
+        "remote://voktty-ssh-profile-1/srv/app",
+        "remote://voktty-ssh-profile-2/srv/other/.git/voktty-worktrees/tree",
+        true,
+      ),
+    ).rejects.toThrow("Worktrees must belong to the selected remote project.");
+
+    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects remote worktree access outside a saved project", async () => {
+    mocks.remoteProjectForPath.mockReturnValueOnce(undefined);
+
+    await expect(
+      listWorktrees("remote://voktty-ssh-profile-1/srv/other"),
+    ).rejects.toThrow("outside a saved remote project");
+
+    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });

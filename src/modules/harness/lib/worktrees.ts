@@ -7,6 +7,7 @@ import {
 } from "@/modules/connections/model/remoteSshProfiles";
 import {
   parseRemotePath,
+  remoteProjectForPath,
   remotePath,
 } from "@/modules/connections/model/remoteProjects";
 import {
@@ -21,7 +22,7 @@ import {
 } from "@/modules/workspace";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { notifyGitChanged } from "./fs";
-import { isEqualOrInside } from "./paths";
+import { isEqualOrInside, pathKey } from "./paths";
 export { namedWorktreeBranch } from "./worktreeNaming";
 
 export type Worktree = {
@@ -61,10 +62,14 @@ async function withGitWorkspace<T>(
 ): Promise<T> {
   const remoteProject = parseRemotePath(cwd);
   if (remoteProject) {
+    const project = remoteProjectForPath(cwd);
+    if (!project || project.environmentId !== remoteProject.environmentId) {
+      throw new Error("This path is outside a saved remote project.");
+    }
     const savedConnections =
       usePreferencesStore.getState().sshConnections ?? [];
     const connectionId = remoteSshConnectionIdForEnvironment(
-      remoteProject.environmentId,
+      project.environmentId,
     );
     let connection: RemoteSshConnection;
     if (connectionId) {
@@ -78,15 +83,12 @@ async function withGitWorkspace<T>(
       }
       connection = remoteSshConnectionForProfile(profile);
     } else {
-      const machine = await remoteMachineFor(remoteProject.environmentId);
+      const machine = await remoteMachineFor(project.environmentId);
       if (!machine)
         throw new Error("The remote machine is no longer connected.");
       connection = remoteSshConnectionFor(machine, savedConnections);
     }
-    const session = await openRemoteWorkspace(
-      connection,
-      remoteProject.hostPath,
-    );
+    const session = await openRemoteWorkspace(connection, project.cwd);
     const workspace: GitWorkspace = {
       kind: "ssh",
       root: session.workspace_root,
@@ -99,9 +101,9 @@ async function withGitWorkspace<T>(
     };
     try {
       return await operation({
-        cwd: remoteProject.hostPath,
+        cwd: session.workspace_root,
         workspace,
-        environmentId: remoteProject.environmentId,
+        environmentId: project.environmentId,
       });
     } finally {
       await closeRemoteWorkspace(session.session_id).catch(() => undefined);
@@ -259,14 +261,23 @@ export async function removeWorktree(
   cwd: string,
   path: string,
   force = false,
-  keepSessions = false,
-): Promise<{ sessionIds: string[]; projectCwd: string }> {
-  const result = await invoke<{ sessionIds: string[]; projectCwd: string }>(
-    "git_worktree_remove",
-    { cwd, path, force, keepSessions },
-  );
-  notifyGitChanged();
-  return result;
+): Promise<void> {
+  const targetPath = worktreePathForProject(cwd, path);
+  return withGitWorkspace(cwd, async ({ cwd: nativeCwd, workspace }) => {
+    const result = await invoke<{ removed: boolean; reason?: string | null }>(
+      "git_worktree_delete",
+      {
+        cwd: nativeCwd,
+        path: targetPath,
+        force,
+        ...workspaceArgs(workspace),
+      },
+    );
+    if (!result.removed) {
+      throw new Error(result.reason || "The worktree was not removed.");
+    }
+    notifyGitChanged();
+  });
 }
 
 export async function removeOrchestrationWorktree(
@@ -289,9 +300,47 @@ export async function removeOrchestrationBranch(
   notifyGitChanged();
 }
 
-/** Read-only preflight; final removal must still recheck for new blockers. */
-export const checkWorktreeRemoval: RemoveWorktree = (cwd, path, force) =>
-  invoke("git_worktree_check_remove", { cwd, path, force });
+/** Read-only preflight; final removal rechecks against Git's worktree list. */
+export async function checkWorktreeRemoval(
+  cwd: string,
+  path: string,
+  force: boolean,
+): Promise<void> {
+  worktreePathForProject(cwd, path);
+  const { worktrees } = await listWorktrees(cwd);
+  const tree = worktrees.find((entry) => pathKey(entry.path) === pathKey(path));
+  if (!tree || tree.path !== path || tree.isMain) {
+    throw new Error("The selected worktree is no longer available.");
+  }
+  if (tree.missing || tree.prunable) {
+    throw new Error("The worktree folder is missing.");
+  }
+  if (tree.locked) {
+    throw new Error("Unlock this worktree in Git first.");
+  }
+  if (!tree.branch) {
+    throw new Error("Create a branch before removing this detached worktree.");
+  }
+  if (tree.dirty === null) {
+    throw new Error("Worktree status is unavailable.");
+  }
+  if (!force && tree.dirty) {
+    throw new Error("The worktree has uncommitted changes.");
+  }
+}
+
+function worktreePathForProject(cwd: string, path: string): string {
+  const project = parseRemotePath(cwd);
+  const tree = parseRemotePath(path);
+  if (!project) {
+    if (tree) throw new Error("Worktrees must belong to the selected project.");
+    return path;
+  }
+  if (!tree || tree.environmentId !== project.environmentId) {
+    throw new Error("Worktrees must belong to the selected remote project.");
+  }
+  return tree.hostPath;
+}
 
 export function assertWorktreeFilesClosed(
   path: string,
@@ -358,5 +407,4 @@ export type RemoveWorktree = (
   cwd: string,
   path: string,
   force: boolean,
-  keepSessions?: boolean,
-) => Promise<void | { sessionIds: string[]; projectCwd: string }>;
+) => Promise<void>;

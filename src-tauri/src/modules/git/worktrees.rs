@@ -7,9 +7,12 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::modules::git::errors::{GitError, Result as GitResult};
-use crate::modules::git::process::{ensure_git_available, ensure_success, run_git};
+use crate::modules::git::process::{
+    ensure_git_available, ensure_success, git_stdout_line_opt, run_git,
+};
+use crate::modules::git::types::WorktreeRemoveOutcome;
 use crate::modules::git::utils::authorized_repo_root;
-use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry, resolve_path};
+use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
 
 const MAX_WORKTREES: usize = 128;
 const WORKTREE_STATUS_BUDGET: Duration = Duration::from_secs(15);
@@ -90,6 +93,21 @@ pub async fn git_worktree_create(
     .await
 }
 
+#[tauri::command]
+pub async fn git_worktree_delete(
+    cwd: String,
+    path: String,
+    force: bool,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> std::result::Result<WorktreeRemoveOutcome, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |registry| {
+        delete_worktree(registry, &cwd, &path, force, &workspace)
+    })
+    .await
+}
+
 fn list_worktrees(
     registry: &WorkspaceRegistry,
     cwd: &str,
@@ -128,7 +146,26 @@ fn list_worktrees(
         ));
     }
 
-    let default_root = path_parent(&raw[0].path, &repo.workspace)?;
+    let (default_root, remote_root) = if repo.workspace.is_remote() {
+        let git_common_dir = git_stdout_line_opt(
+            &repo.workspace,
+            &repo.git_path,
+            ["rev-parse", "--git-common-dir"],
+        )?
+        .ok_or_else(|| GitError::command("git worktree", "could not resolve Git metadata"))?;
+        let (default_root, root) =
+            remote_worktree_root(&repo.git_path, &raw[0].path, &git_common_dir)?;
+        (default_root, Some(root))
+    } else {
+        (path_parent(&raw[0].path, &repo.workspace)?, None)
+    };
+    let raw = if let Some(root) = remote_root.as_deref() {
+        raw.into_iter()
+            .filter(|entry| remote_path_is_within(root, &entry.path))
+            .collect::<Vec<_>>()
+    } else {
+        raw
+    };
     let mut worktrees = Vec::with_capacity(raw.len());
     let status_started = Instant::now();
     for (index, entry) in raw.into_iter().enumerate() {
@@ -356,6 +393,75 @@ fn create_worktree(
     Ok(created)
 }
 
+fn delete_worktree(
+    registry: &WorkspaceRegistry,
+    cwd: &str,
+    path: &str,
+    force: bool,
+    workspace: &WorkspaceEnv,
+) -> GitResult<WorktreeRemoveOutcome> {
+    ensure_supported_workspace(workspace)?;
+    let listed = list_worktrees(registry, cwd, workspace)?;
+    let tree = listed
+        .worktrees
+        .iter()
+        .find(|tree| tree.path == path)
+        .ok_or_else(|| GitError::command("git worktree remove", "worktree is not registered"))?;
+    if tree.is_main {
+        return Err(GitError::command(
+            "git worktree remove",
+            "the project worktree cannot be removed",
+        ));
+    }
+    if tree.missing || tree.prunable {
+        return Err(GitError::command(
+            "git worktree remove",
+            "the worktree folder is missing",
+        ));
+    }
+    if tree.locked {
+        return Err(GitError::command(
+            "git worktree remove",
+            "unlock this worktree in Git first",
+        ));
+    }
+    if tree.branch.is_none() {
+        return Err(GitError::command(
+            "git worktree remove",
+            "create a branch before removing this detached worktree",
+        ));
+    }
+    if let Some(reason) = worktree_removal_reason(tree.dirty, force) {
+        return Ok(WorktreeRemoveOutcome {
+            removed: false,
+            reason: Some(reason.into()),
+        });
+    }
+
+    let mut args = vec![OsString::from("worktree"), OsString::from("remove")];
+    if force {
+        args.push(OsString::from("--force"));
+    }
+    args.push(OsString::from("--"));
+    args.push(OsString::from(path));
+    let repo = authorized_repo_root(registry, cwd, workspace)?;
+    let output = run_git(&repo.workspace, Some(&repo.git_path), args, 60)?;
+    ensure_success(&output, "git worktree remove failed")?;
+
+    Ok(WorktreeRemoveOutcome {
+        removed: true,
+        reason: None,
+    })
+}
+
+fn worktree_removal_reason(dirty: Option<bool>, force: bool) -> Option<&'static str> {
+    match (dirty, force) {
+        (None, _) => Some("worktree status is unavailable"),
+        (Some(true), false) => Some("uncommitted changes"),
+        _ => None,
+    }
+}
+
 fn ensure_supported_workspace(workspace: &WorkspaceEnv) -> GitResult<()> {
     if workspace.is_docker() {
         return Err(GitError::command(
@@ -442,6 +548,69 @@ fn path_parent(path: &str, workspace: &WorkspaceEnv) -> GitResult<String> {
         .filter(|parent| !parent.as_os_str().is_empty())
         .map(|parent| parent.to_string_lossy().into_owned())
         .ok_or_else(|| GitError::InvalidPath(path.to_string()))
+}
+
+fn remote_worktree_root(
+    project_root: &str,
+    main_worktree: &str,
+    git_common_dir: &str,
+) -> GitResult<(String, String)> {
+    let project_root = normalize_remote_path(project_root, None)?;
+    let main_worktree = normalize_remote_path(main_worktree, None)?;
+    if main_worktree != project_root {
+        return Err(GitError::command(
+            "git worktree",
+            "SSH worktrees require the saved project to be the main repository folder",
+        ));
+    }
+    let git_common_dir = normalize_remote_path(git_common_dir, Some(&project_root))?;
+    let expected_common_dir = normalize_remote_path(".git", Some(&project_root))?;
+    if git_common_dir != expected_common_dir {
+        return Err(GitError::command(
+            "git worktree",
+            "SSH worktrees require Git metadata inside the saved project",
+        ));
+    }
+    let default_root = normalize_remote_path("voktty-worktrees", Some(&git_common_dir))?;
+    Ok((default_root, project_root))
+}
+
+fn normalize_remote_path(path: &str, base: Option<&str>) -> GitResult<String> {
+    let path = path.replace('\\', "/");
+    let absolute = if path.starts_with('/') {
+        path
+    } else if let Some(base) = base {
+        format!("{}/{path}", base.trim_end_matches('/'))
+    } else {
+        return Err(GitError::InvalidPath(path));
+    };
+    let mut parts = Vec::new();
+    for part in absolute.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                if parts.pop().is_none() {
+                    return Err(GitError::InvalidPath(absolute));
+                }
+            }
+            _ => parts.push(part),
+        }
+    }
+    Ok(format!("/{}", parts.join("/")))
+}
+
+fn remote_path_is_within(root: &str, path: &str) -> bool {
+    let Ok(root) = normalize_remote_path(root, None) else {
+        return false;
+    };
+    let Ok(path) = normalize_remote_path(path, None) else {
+        return false;
+    };
+    path == root
+        || (root == "/" && path.starts_with('/'))
+        || path
+            .strip_prefix(&root)
+            .is_some_and(|rest| rest.starts_with('/'))
 }
 
 fn new_worktree_path(
@@ -553,7 +722,10 @@ mod tests {
         assert_eq!(worktree_status_timeout_secs(Duration::from_secs(9)), 5);
         assert_eq!(worktree_status_timeout_secs(Duration::from_secs(10)), 5);
         assert_eq!(worktree_status_timeout_secs(Duration::from_secs(14)), 1);
-        assert_eq!(worktree_status_timeout_secs(Duration::from_millis(14_999)), 0);
+        assert_eq!(
+            worktree_status_timeout_secs(Duration::from_millis(14_999)),
+            0
+        );
         assert_eq!(worktree_status_timeout_secs(Duration::from_secs(15)), 0);
     }
 
@@ -663,6 +835,102 @@ mod tests {
         .expect("create worktree from existing branch");
         assert_eq!(existing.branch.as_deref(), Some("existing"));
         assert!(!existing.is_main);
+    }
+
+    #[test]
+    fn removes_registered_worktrees_after_rechecking_and_keeps_the_branch() {
+        let (_parent, repo, registry) = repository();
+        let tree = create_worktree(
+            &registry,
+            &repo.to_string_lossy(),
+            "feature/remove",
+            "HEAD",
+            false,
+            &WorkspaceEnv::Local,
+        )
+        .expect("create worktree");
+        std::fs::write(Path::new(&tree.path).join("dirty.txt"), "changes\n")
+            .expect("write uncommitted change");
+
+        let blocked = delete_worktree(
+            &registry,
+            &repo.to_string_lossy(),
+            &tree.path,
+            false,
+            &WorkspaceEnv::Local,
+        )
+        .expect("preflight dirty worktree");
+        assert!(!blocked.removed);
+        assert_eq!(blocked.reason.as_deref(), Some("uncommitted changes"));
+        assert!(Path::new(&tree.path).is_dir());
+
+        let removed = delete_worktree(
+            &registry,
+            &repo.to_string_lossy(),
+            &tree.path,
+            true,
+            &WorkspaceEnv::Local,
+        )
+        .expect("remove confirmed worktree");
+        assert!(removed.removed);
+        assert!(!Path::new(&tree.path).exists());
+        let branch = run_git(&repo, &["branch", "--list", "feature/remove"]);
+        assert!(String::from_utf8_lossy(&branch.stdout).contains("feature/remove"));
+    }
+
+    #[test]
+    fn refuses_forced_removal_when_worktree_status_is_unavailable() {
+        assert_eq!(
+            worktree_removal_reason(None, false),
+            Some("worktree status is unavailable")
+        );
+        assert_eq!(
+            worktree_removal_reason(None, true),
+            Some("worktree status is unavailable")
+        );
+        assert_eq!(
+            worktree_removal_reason(Some(true), false),
+            Some("uncommitted changes")
+        );
+        assert_eq!(worktree_removal_reason(Some(true), true), None);
+        assert_eq!(worktree_removal_reason(Some(false), false), None);
+    }
+
+    #[test]
+    fn refuses_to_remove_the_main_worktree() {
+        let (_parent, repo, registry) = repository();
+        let error = match delete_worktree(
+            &registry,
+            &repo.to_string_lossy(),
+            &repo.to_string_lossy(),
+            true,
+            &WorkspaceEnv::Local,
+        ) {
+            Ok(_) => panic!("the main worktree must not be removable"),
+            Err(error) => error,
+        };
+        assert!(error
+            .to_string()
+            .contains("project worktree cannot be removed"));
+    }
+
+    #[test]
+    fn keeps_direct_profile_worktrees_inside_the_saved_main_project() {
+        let (default_root, project_root) = remote_worktree_root("/srv/app", "/srv/app/", ".git")
+            .expect("remote main checkout worktree root");
+        assert_eq!(project_root, "/srv/app");
+        assert_eq!(default_root, "/srv/app/.git/voktty-worktrees");
+        assert!(remote_path_is_within(
+            &project_root,
+            "/srv/app/.git/voktty-worktrees/feature"
+        ));
+        assert!(!remote_path_is_within(
+            &project_root,
+            "/srv/app-worktrees/feature"
+        ));
+
+        assert!(remote_worktree_root("/srv/app", "/srv/other", "/srv/other/.git").is_err());
+        assert!(remote_worktree_root("/srv/app", "/srv/app", "../shared/.git").is_err());
     }
 
     #[test]

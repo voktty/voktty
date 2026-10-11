@@ -439,6 +439,7 @@ pub fn run() {
             git::commands::git_worktree_remove,
             git::worktrees::git_worktrees,
             git::worktrees::git_worktree_create,
+            git::worktrees::git_worktree_delete,
             git::commands::git_add_safe_directory,
             git::commands::git_init,
             git::commands::git_clone,
