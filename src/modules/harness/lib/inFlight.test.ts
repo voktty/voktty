@@ -24,7 +24,7 @@ function chat(
 }
 
 describe("isInFlightSession", () => {
-  it("is true for a busy turn or a live approval", () => {
+  it("is true for a busy turn, live approval, or parked question", () => {
     expect(isInFlightSession(chat("/tmp/a"))).toBe(false);
     expect(isInFlightSession(chat("/tmp/a", { busy: true }))).toBe(true);
     expect(
@@ -42,6 +42,27 @@ describe("isInFlightSession", () => {
         }),
       ),
     ).toBe(true);
+    expect(
+      isInFlightSession(
+        chat("/tmp/a", {
+          pendingQuestion: {
+            requestId: 4,
+            questions: [
+              {
+                id: "q1",
+                prompt: "Which file?",
+                multiSelect: false,
+                allowCustom: true,
+                options: [{ id: "a.ts", label: "a.ts" }],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isInFlightSession(chat("/tmp/a", { busy: true, worktreeRemoved: true })),
+    ).toBe(false);
   });
 });
 
@@ -67,6 +88,36 @@ describe("inFlightRefs", () => {
     blank.busy = true;
     expect(inFlightRefs([blank], [newTab(blank.id)])).toEqual([]);
     expect(hasInFlightSessions([blank])).toBe(true);
+  });
+
+  it("preserves a session waiting on a question for quit recovery", () => {
+    const question = chat("/tmp/question", {
+      pendingQuestion: {
+        requestId: 4,
+        questions: [
+          {
+            id: "q1",
+            prompt: "Which file?",
+            multiSelect: false,
+            allowCustom: true,
+            options: [{ id: "a.ts", label: "a.ts" }],
+          },
+        ],
+      },
+    });
+
+    expect(inFlightRefs([question], [newTab(question.id)])).toEqual([
+      { sessionId: question.id, cwd: "/tmp/question" },
+    ]);
+  });
+
+  it("skips sessions whose worktree was removed", () => {
+    const removed = chat("/tmp/a", {
+      busy: true,
+      worktreeCwd: "/tmp/a-worktrees/feature",
+      worktreeRemoved: true,
+    });
+    expect(inFlightRefs([removed], [newTab(removed.id)])).toEqual([]);
   });
 });
 
@@ -222,6 +273,9 @@ describe("canAutoContinue", () => {
       }),
     ).toBe(false);
     expect(canAutoContinue({ ...interrupted, busy: true })).toBe(false);
+    expect(canAutoContinue({ ...interrupted, worktreeRemoved: true })).toBe(
+      false,
+    );
   });
 });
 
