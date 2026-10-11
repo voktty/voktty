@@ -1775,6 +1775,124 @@ it("creates remote branches and stashes tracked plus untracked changes", async (
   expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
 });
 
+it("lists and mutates Git History stashes through bounded native SSH Git calls", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const firstSha = "a".repeat(40);
+  const secondSha = "b".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "stash" && args[1] === "list") {
+        const separator = "\x1f";
+        return gitExecResult(
+          [
+            [firstSha, "1700000000", "WIP first"].join(separator),
+            [secondSha, "1700000001", "WIP second"].join(separator),
+            "",
+          ].join("\n"),
+        );
+      }
+      if (args[0] === "stash") return gitExecResult("");
+      throw new Error("Unexpected Git command");
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(runRemoteCommand("git_stash_list", { cwd })).resolves.toEqual([
+    {
+      index: 0,
+      sha: firstSha,
+      timestampSecs: 1700000000,
+      message: "WIP first",
+    },
+    {
+      index: 1,
+      sha: secondSha,
+      timestampSecs: 1700000001,
+      message: "WIP second",
+    },
+  ]);
+  await expect(
+    runRemoteCommand("git_stash_save", {
+      cwd,
+      message: "  keep staged  ",
+      includeUntracked: false,
+    }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_stash_apply", { cwd, index: 1 }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_stash_pop", { cwd, index: 0 }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_stash_drop", { cwd, index: 1 }),
+  ).resolves.toBeUndefined();
+
+  const mutationCalls = requestRemoteResult.mock.calls
+    .filter(([, method, params]) => {
+      const args = (params as { args: string[] }).args;
+      return (
+        method === "git.execWorkspace" &&
+        args[0] === "stash" &&
+        args[1] !== "list"
+      );
+    })
+    .map(([, , params]) => (params as { args: string[] }).args);
+  expect(mutationCalls).toEqual([
+    ["stash", "push", "-m", "keep staged"],
+    ["stash", "apply", "stash@{1}"],
+    ["stash", "pop", "stash@{0}"],
+    ["stash", "drop", "stash@{1}"],
+  ]);
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method, params]) => {
+        const args = (params as { args: string[] }).args;
+        return (
+          method === "git.execWorkspace" &&
+          args[0] === "stash" &&
+          ["apply", "pop", "drop"].includes(args[1])
+        );
+      })
+      .every(
+        ([, , params]) =>
+          (params as { timeoutSecs: number }).timeoutSecs === 30,
+      ),
+  ).toBe(true);
+
+  requestRemoteResult.mockClear();
+  await expect(
+    runRemoteCommand("git_stash_apply", { cwd, index: -1 }),
+  ).rejects.toThrow("Git stash index is invalid");
+  await expect(
+    runRemoteCommand("git_stash_save", {
+      cwd,
+      message: "invalid option",
+      includeUntracked: "false",
+    }),
+  ).rejects.toThrow("include-untracked option is invalid");
+  expect(
+    requestRemoteResult.mock.calls.filter(([, method, params]) => {
+      const args = (params as { args: string[] }).args;
+      return method === "git.execWorkspace" && args[0] === "stash";
+    }),
+  ).toHaveLength(0);
+  await expect(
+    runRemoteCommand("git_stash_list", { cwd: "remote://env/srv/app" }),
+  ).rejects.toThrow("This isn’t available for projects on another machine");
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
 it("stages unsaved SSH editor contents through bounded helper stdin", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockImplementation(

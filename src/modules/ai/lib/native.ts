@@ -38,6 +38,11 @@ import {
   loadRemoteGitRemoteUrl,
   loadRemoteGitRevertCommit,
   loadRemoteGitShowCommit,
+  loadRemoteGitStashApply,
+  loadRemoteGitStashDrop,
+  loadRemoteGitStashList,
+  loadRemoteGitStashPop,
+  loadRemoteGitStashSave,
   loadRemoteGitTagCreate,
   loadRemoteGitTagDelete,
   loadRemoteGitTagList,
@@ -810,40 +815,50 @@ export const native = {
           workspace: resolveGitWorkspace(repoRoot, workspace),
         }),
   gitStashList: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitStashEntry[]>("git_stash_list", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitStashList(repoRoot)
+      : invoke<GitStashEntry[]>("git_stash_list", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStashSave: (
     repoRoot: string,
     message: string | undefined,
     includeUntracked: boolean,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_stash_save", {
-      repoRoot,
-      message: message ?? null,
-      includeUntracked,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitStashSave(repoRoot, message, includeUntracked)
+      : invoke<void>("git_stash_save", {
+          repoRoot,
+          message: message ?? null,
+          includeUntracked,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStashApply: (repoRoot: string, index: number, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_stash_apply", {
-      repoRoot,
-      index,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitStashApply(repoRoot, index)
+      : invoke<void>("git_stash_apply", {
+          repoRoot,
+          index,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStashPop: (repoRoot: string, index: number, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_stash_pop", {
-      repoRoot,
-      index,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitStashPop(repoRoot, index)
+      : invoke<void>("git_stash_pop", {
+          repoRoot,
+          index,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStashDrop: (repoRoot: string, index: number, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_stash_drop", {
-      repoRoot,
-      index,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitStashDrop(repoRoot, index)
+      : invoke<void>("git_stash_drop", {
+          repoRoot,
+          index,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitTagList: (repoRoot: string, workspace?: WorkspaceEnv) =>
     isDirectSshProfilePath(repoRoot)
       ? loadRemoteGitTagList(repoRoot)

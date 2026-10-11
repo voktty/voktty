@@ -15,6 +15,7 @@ import type {
   GitOperationStatus,
   GitPushResult,
   GitRepoInfo,
+  GitStashEntry,
   GitTagEntry,
 } from "./native";
 
@@ -361,6 +362,76 @@ export function loadRemoteGitTagPush(
     name,
     remote: remote ?? null,
   });
+}
+
+export async function loadRemoteGitStashList(
+  repoRoot: string,
+): Promise<GitStashEntry[]> {
+  const result = await remoteGitCommand<unknown>("git_stash_list", repoRoot);
+  if (!Array.isArray(result) || result.length > 20_000) {
+    throw new Error("The remote helper returned an invalid Git stash list.");
+  }
+  const entries = result as unknown[];
+  if (
+    !entries.every((value, index) => {
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        return false;
+      const entry = value as GitStashEntry;
+      return (
+        entry.index === index &&
+        typeof entry.sha === "string" &&
+        /^[0-9a-f]{40,64}$/i.test(entry.sha) &&
+        typeof entry.message === "string" &&
+        Number.isSafeInteger(entry.timestampSecs)
+      );
+    })
+  ) {
+    throw new Error("The remote helper returned an invalid Git stash list.");
+  }
+  return entries as GitStashEntry[];
+}
+
+export function loadRemoteGitStashSave(
+  repoRoot: string,
+  message: string | undefined,
+  includeUntracked: boolean,
+): Promise<void> {
+  return remoteGitCommand<void>("git_stash_save", repoRoot, {
+    message: message ?? null,
+    includeUntracked,
+  });
+}
+
+async function loadRemoteGitStashMutation(
+  command: "git_stash_apply" | "git_stash_pop" | "git_stash_drop",
+  repoRoot: string,
+  index: number,
+): Promise<void> {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= 20_000) {
+    throw new Error("The Git stash index is invalid.");
+  }
+  await remoteGitCommand<void>(command, repoRoot, { index });
+}
+
+export function loadRemoteGitStashApply(
+  repoRoot: string,
+  index: number,
+): Promise<void> {
+  return loadRemoteGitStashMutation("git_stash_apply", repoRoot, index);
+}
+
+export function loadRemoteGitStashPop(
+  repoRoot: string,
+  index: number,
+): Promise<void> {
+  return loadRemoteGitStashMutation("git_stash_pop", repoRoot, index);
+}
+
+export function loadRemoteGitStashDrop(
+  repoRoot: string,
+  index: number,
+): Promise<void> {
+  return loadRemoteGitStashMutation("git_stash_drop", repoRoot, index);
 }
 
 export function loadRemoteGitBranchFromCommit(

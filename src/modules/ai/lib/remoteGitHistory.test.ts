@@ -19,6 +19,11 @@ import {
   loadRemoteGitRemoteUrl,
   loadRemoteGitRevertCommit,
   loadRemoteGitShowCommit,
+  loadRemoteGitStashApply,
+  loadRemoteGitStashDrop,
+  loadRemoteGitStashList,
+  loadRemoteGitStashPop,
+  loadRemoteGitStashSave,
   loadRemoteGitTagCreate,
   loadRemoteGitTagDelete,
   loadRemoteGitTagList,
@@ -289,6 +294,54 @@ describe("remote Git history adapters", () => {
       name: "v1.0",
       remote: "origin",
     });
+  });
+
+  it("routes Git History stash actions through the SSH helper", async () => {
+    const stashes = [
+      {
+        index: 0,
+        sha: head,
+        message: "WIP remote",
+        timestampSecs: 1700000000,
+      },
+    ];
+    const runner = vi.fn(async (command: string) =>
+      command === "git_stash_list" ? stashes : undefined,
+    );
+    setRemoteCommandRunner(runner);
+
+    await expect(loadRemoteGitStashList(repoRoot)).resolves.toEqual(stashes);
+    await expect(
+      loadRemoteGitStashSave(repoRoot, "WIP remote", false),
+    ).resolves.toBeUndefined();
+    await expect(loadRemoteGitStashApply(repoRoot, 0)).resolves.toBeUndefined();
+    await expect(loadRemoteGitStashPop(repoRoot, 0)).resolves.toBeUndefined();
+    await expect(loadRemoteGitStashDrop(repoRoot, 0)).resolves.toBeUndefined();
+
+    expect(runner.mock.calls.map(([command]) => command)).toEqual([
+      "git_stash_list",
+      "git_stash_save",
+      "git_stash_apply",
+      "git_stash_pop",
+      "git_stash_drop",
+    ]);
+    expect(runner).toHaveBeenCalledWith("git_stash_save", {
+      cwd: repoRoot,
+      message: "WIP remote",
+      includeUntracked: false,
+    });
+
+    await expect(loadRemoteGitStashApply(repoRoot, -1)).rejects.toThrow(
+      "Git stash index is invalid",
+    );
+    expect(runner).toHaveBeenCalledTimes(5);
+
+    setRemoteCommandRunner(
+      vi.fn().mockResolvedValue([{ ...stashes[0], index: 1 }]),
+    );
+    await expect(loadRemoteGitStashList(repoRoot)).rejects.toThrow(
+      "invalid Git stash list",
+    );
   });
 
   it("routes Git History mutations, conflict handling, and comparison through SSH", async () => {

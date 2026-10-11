@@ -156,6 +156,11 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_operation_status",
   "git_operation_abort",
   "git_operation_continue",
+  "git_stash_list",
+  "git_stash_save",
+  "git_stash_apply",
+  "git_stash_pop",
+  "git_stash_drop",
 ]);
 
 const HELPER_FS = {
@@ -253,6 +258,7 @@ const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
 const MAX_GIT_REF_BYTES = 1024;
 const MAX_GIT_TAGS = 20_000;
+const MAX_GIT_STASHES = 20_000;
 const MAX_GIT_COMPARE_COMMITS = 20_000;
 const MAX_GIT_COMPARE_FILES = 20_000;
 const GIT_MUTATION_TIMEOUT_SECS = 30;
@@ -1996,10 +2002,14 @@ async function nativeProfileGitStash(
   root: string,
   cwd: string,
   value: unknown,
+  includeUntrackedValue: unknown = true,
 ): Promise<void> {
   await assertProfileGitRoot(sessionId, root, cwd);
   if (value !== undefined && value !== null && typeof value !== "string") {
     throw new Error("The stash message is invalid.");
+  }
+  if (typeof includeUntrackedValue !== "boolean") {
+    throw new Error("The stash include-untracked option is invalid.");
   }
   const message = typeof value === "string" ? value.trim() : "";
   if (
@@ -2007,12 +2017,76 @@ async function nativeProfileGitStash(
   ) {
     throw new Error("Stash message is too large");
   }
+  const args = ["stash", "push"];
+  if (includeUntrackedValue) args.push("--include-untracked");
+  if (message) args.push("-m", message);
+  await nativeProfileGitMutation(sessionId, cwd, args);
+}
+
+async function nativeProfileGitStashList(
+  sessionId: number,
+  root: string,
+  cwd: string,
+): Promise<
+  Array<{ index: number; sha: string; message: string; timestampSecs: number }>
+> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["stash", "list", "--format=%H%x1f%at%x1f%s"],
+    MAX_GIT_OUTPUT_BYTES,
+    false,
+  );
+  const entries = decodeGitMetadata(result.stdoutBytes)
+    .split(/\r?\n/)
+    .flatMap((line, index) => {
+      if (!line) return [];
+      const [sha, rawTimestamp, ...messageParts] = line.split("\x1f");
+      const timestamp = Number(rawTimestamp);
+      if (
+        !sha ||
+        !/^[0-9a-f]{40,64}$/i.test(sha) ||
+        !Number.isSafeInteger(timestamp)
+      ) {
+        throw new Error("The remote helper returned invalid Git stash data.");
+      }
+      return [
+        {
+          index,
+          sha,
+          timestampSecs: timestamp,
+          message: messageParts.join("\x1f"),
+        },
+      ];
+    });
+  if (entries.length > MAX_GIT_STASHES) {
+    throw new Error("The remote Git stash list has too many entries.");
+  }
+  return entries;
+}
+
+async function nativeProfileGitStashMutation(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  operation: "apply" | "pop" | "drop",
+  indexValue: unknown,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  if (
+    typeof indexValue !== "number" ||
+    !Number.isSafeInteger(indexValue) ||
+    indexValue < 0 ||
+    indexValue >= MAX_GIT_STASHES
+  ) {
+    throw new Error("The Git stash index is invalid.");
+  }
   await nativeProfileGitMutation(
     sessionId,
     cwd,
-    message
-      ? ["stash", "push", "--include-untracked", "-m", message]
-      : ["stash", "push", "--include-untracked"],
+    ["stash", operation, `stash@{${indexValue}}`],
+    GIT_MUTATION_TIMEOUT_SECS,
   );
 }
 
@@ -2420,6 +2494,39 @@ async function runProfileFileCommand(
       root,
       relativePath(args.cwd),
       args.message,
+    );
+  }
+  if (command === "git_stash_list") {
+    return nativeProfileGitStashList(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+    );
+  }
+  if (command === "git_stash_save") {
+    return nativeProfileGitStash(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+      args.message,
+      args.includeUntracked,
+    );
+  }
+  if (
+    command === "git_stash_apply" ||
+    command === "git_stash_pop" ||
+    command === "git_stash_drop"
+  ) {
+    return nativeProfileGitStashMutation(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+      command === "git_stash_apply"
+        ? "apply"
+        : command === "git_stash_pop"
+          ? "pop"
+          : "drop",
+      args.index,
     );
   }
   if (command === "git_staged_context") {
@@ -2877,7 +2984,9 @@ export async function runRemoteCommand(
   command: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  if (!HOST_COMMANDS.has(command)) throw new Error(UNAVAILABLE);
+  if (!HOST_COMMANDS.has(command) && !PROFILE_HELPER_COMMANDS.has(command)) {
+    throw new Error(UNAVAILABLE);
+  }
   const references = pathReferences(args);
   if (references.length === 0) throw new Error(UNAVAILABLE);
   const remoteEnvironmentId = references[0].environmentId;
@@ -2896,6 +3005,7 @@ export async function runRemoteCommand(
       remoteEnvironmentId,
     );
   }
+  if (!HOST_COMMANDS.has(command)) throw new Error(UNAVAILABLE);
 
   let environmentId: string | undefined;
   const toHost = (value: unknown): unknown => {
