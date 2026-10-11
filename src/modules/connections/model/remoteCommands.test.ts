@@ -2308,6 +2308,9 @@ it("sends expected text to the native helper for conflict-safe remote writes", a
 it("lists project files through bounded helper traversal and skips ignored entries", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult
+    .mockResolvedValueOnce(
+      gitExecResult("", 128, "fatal: not a git repository"),
+    )
     .mockResolvedValueOnce({ content: "*.log\nprivate\n" })
     .mockResolvedValueOnce({
       entries: [
@@ -2341,6 +2344,83 @@ it("lists project files through bounded helper traversal and skips ignored entri
     9,
     "git.exec",
     expect.anything(),
+  );
+});
+
+it("lists saved SSH project files with Git ignore rules through the native helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      expect(method).toBe("git.execWorkspace");
+      expect(params).toMatchObject({
+        cwd: ".",
+        args: ["ls-files", "-co", "--exclude-standard", "-z"],
+        maxOutputBytes: 4 * 1024 * 1024,
+      });
+      return gitExecResult(
+        "README.md\0src/main.ts\0docs/notes\nwith-newline.md\0.DS_Store\0node_modules/pkg/index.js\0",
+      );
+    },
+  );
+
+  await expect(
+    runRemoteCommand("list_project_files", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).resolves.toEqual([
+    {
+      name: "notes\nwith-newline.md",
+      relative: "docs/notes\nwith-newline.md",
+      path: remotePath(environmentId, "/srv/app/docs/notes\nwith-newline.md"),
+    },
+    {
+      name: "README.md",
+      relative: "README.md",
+      path: remotePath(environmentId, "/srv/app/README.md"),
+    },
+    {
+      name: "main.ts",
+      relative: "src/main.ts",
+      path: remotePath(environmentId, "/srv/app/src/main.ts"),
+    },
+  ]);
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("drops the incomplete trailing Git path when the helper listing is truncated", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce({
+    ...gitExecResult("complete.ts\0partial"),
+    stdoutTruncated: true,
+  });
+
+  await expect(
+    runRemoteCommand("list_project_files", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).resolves.toEqual([
+    {
+      name: "complete.ts",
+      relative: "complete.ts",
+      path: remotePath(environmentId, "/srv/app/complete.ts"),
+    },
+  ]);
+});
+
+it("rejects Git file listings that escape the saved SSH project", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce(gitExecResult("../outside.ts\0"));
+
+  await expect(
+    runRemoteCommand("list_project_files", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).rejects.toThrow(
+    "The remote Git file listing contains a path outside the project.",
   );
 });
 

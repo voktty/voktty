@@ -253,6 +253,7 @@ const PROFILE_UNAVAILABLE =
 const HELPER_GIT_EXEC = "git.execWorkspace";
 const HELPER_GIT_EXEC_WORKSPACE_INPUT = "git.execWorkspaceInput";
 const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_PROJECT_FILES = 20_000;
 const MAX_GIT_DIFF_BYTES = 1024 * 1024;
 const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
@@ -2269,11 +2270,73 @@ async function helperListDirectory(
   return result.entries;
 }
 
+function projectFilePathsFromGit(output: HelperGitOutput): string[] {
+  let bytes = output.stdoutBytes;
+  if (output.stdoutTruncated) {
+    const terminator = bytes.lastIndexOf(0);
+    if (terminator < 0) {
+      throw new Error("The remote Git file listing was truncated.");
+    }
+    bytes = bytes.subarray(0, terminator + 1);
+  } else if (bytes.length > 0 && bytes[bytes.length - 1] !== 0) {
+    throw new Error("The remote helper returned an incomplete Git file list.");
+  }
+  return decodeGitMetadata(bytes).split("\0").filter(Boolean);
+}
+
+function projectFilesFromGit(
+  output: HelperGitOutput,
+  environmentId: string,
+  root: string,
+): Array<{ name: string; path: string; relative: string }> {
+  const found = [];
+  for (const relative of projectFilePathsFromGit(output)) {
+    const parts = relative.split("/");
+    if (
+      !relative ||
+      relative.startsWith("/") ||
+      parts.some((part) => !part || part === "." || part === "..")
+    ) {
+      throw new Error(
+        "The remote Git file listing contains a path outside the project.",
+      );
+    }
+    if (
+      relative.includes("\\") ||
+      parts[parts.length - 1] === ".DS_Store" ||
+      parts.some((part) => PROJECT_WALK_SKIPS.has(part))
+    ) {
+      continue;
+    }
+    found.push({
+      name: parts[parts.length - 1],
+      relative,
+      path: remotePath(environmentId, joinRemotePath(root, relative)),
+    });
+    if (found.length >= MAX_PROJECT_FILES) break;
+  }
+  return found.sort((left, right) =>
+    left.relative.localeCompare(right.relative),
+  );
+}
+
 async function listProjectFilesWithHelper(
   sessionId: number,
   environmentId: string,
   root: string,
 ): Promise<Array<{ name: string; path: string; relative: string }>> {
+  const gitFiles = await runHelperGit(
+    sessionId,
+    ".",
+    ["ls-files", "-co", "--exclude-standard", "-z"],
+    MAX_GIT_OUTPUT_BYTES,
+    true,
+    true,
+  );
+  if (gitFiles.exitCode === 0) {
+    return projectFilesFromGit(gitFiles, environmentId, root);
+  }
+
   const exactIgnores = new Set([".git"]);
   const suffixIgnores: string[] = [];
   try {
@@ -2322,7 +2385,7 @@ async function listProjectFilesWithHelper(
           relative,
           path: remotePath(environmentId, joinRemotePath(root, relative)),
         });
-        if (found.length >= 20_000) {
+        if (found.length >= MAX_PROJECT_FILES) {
           return found.sort((left, right) =>
             left.relative.localeCompare(right.relative),
           );
