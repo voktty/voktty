@@ -2254,24 +2254,12 @@ fn valid_git_hash_object_input_args(args: &[String]) -> bool {
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, String> {
     let expanded = expand_home(path);
-    if let Ok(canonical) = fs::canonicalize(&expanded) {
-        if canonical.is_dir() {
-            return Ok(canonical);
-        }
+    let canonical = fs::canonicalize(&expanded)
+        .map_err(|_| "workspace root must be an existing accessible directory".to_string())?;
+    if !canonical.is_dir() {
+        return Err("workspace root must be an existing accessible directory".to_string());
     }
-    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-        if let Ok(canonical) = fs::canonicalize(&home) {
-            if canonical.is_dir() {
-                return Ok(canonical);
-            }
-        }
-    }
-    if let Ok(canonical) = fs::canonicalize("/") {
-        if canonical.is_dir() {
-            return Ok(canonical);
-        }
-    }
-    Ok(PathBuf::from("/"))
+    Ok(canonical)
 }
 
 fn expand_home(path: &Path) -> PathBuf {
@@ -3147,6 +3135,17 @@ mod tests {
         };
         assert_eq!(expand_home(Path::new("~")), home);
         assert_eq!(expand_home(Path::new("~/project")), home.join("project"));
+    }
+
+    #[test]
+    fn rejects_missing_or_non_directory_workspace_roots() {
+        let workspace = tempdir().expect("workspace");
+        let missing = workspace.path().join("missing");
+        let file = workspace.path().join("file.txt");
+        fs::write(&file, "content").expect("file");
+
+        assert!(canonical_directory(&missing).is_err());
+        assert!(canonical_directory(&file).is_err());
     }
 
     #[test]

@@ -173,8 +173,12 @@ export function AddRemoteProjectDialog({
       setLoading(false);
       return;
     }
+    const requestedPath = pathRef.current.trim();
     setLoading(true);
-    void openRemoteWorkspace(connection)
+    const requestedRoot = requestedPath
+      ? normalizeRemoteProjectPath(requestedPath)
+      : undefined;
+    void openRemoteWorkspace(connection, requestedRoot)
       .then(async (session) => {
         sessionId = session.session_id;
         if (disposed || !alive.current) {
@@ -335,7 +339,18 @@ export function AddRemoteProjectDialog({
             <button
               type="button"
               disabled={opening || !connection}
-              onClick={() => setBrowseRequested((requested) => !requested)}
+              onClick={() => {
+                if (browseRequested) {
+                  setBrowseRequested(false);
+                  return;
+                }
+                const requestedPath = pathRef.current.trim();
+                if (requestedPath && remoteProjectPathIssue(requestedPath)) {
+                  setError(t("harness.connections.pathErrors.absolute"));
+                  return;
+                }
+                setBrowseRequested(true);
+              }}
               className="self-start rounded-md border border-content/10 px-2.5 py-1.5 text-[11px] text-content/70 hover:bg-content/5 hover:text-content disabled:opacity-40"
             >
               {browseRequested

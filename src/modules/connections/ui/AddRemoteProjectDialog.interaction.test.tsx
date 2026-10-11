@@ -122,6 +122,20 @@ function dialogButton(label: string): HTMLButtonElement {
   return button;
 }
 
+async function setDialogInputValue(value: string) {
+  const input = dialogInput();
+  const setInputValue = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  if (!setInputValue) throw new Error("Missing input value setter");
+
+  await act(async () => {
+    setInputValue.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 describe("AddRemoteProjectDialog remote flow", () => {
   it("opens the saved profile path directly without starting a browse session", async () => {
     const onOpen = await render();
@@ -137,10 +151,10 @@ describe("AddRemoteProjectDialog remote flow", () => {
     expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
   });
 
-  it("starts SSH folder browsing only after the user requests it", async () => {
+  it("starts browsing at the absolute path entered by the user", async () => {
     mocks.openRemoteWorkspace.mockResolvedValue({
       session_id: 17,
-      workspace_root: "/srv/workspace",
+      workspace_root: "/workspaces",
       architecture: "x86_64",
       helper_version: "1",
       capabilities: [],
@@ -149,6 +163,7 @@ describe("AddRemoteProjectDialog remote flow", () => {
     await render();
 
     expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+    await setDialogInputValue("/workspaces/");
 
     await act(async () => {
       dialogButton("Browse folders").click();
@@ -157,6 +172,7 @@ describe("AddRemoteProjectDialog remote flow", () => {
     });
 
     expect(mocks.openRemoteWorkspace).toHaveBeenCalledOnce();
+    expect(mocks.openRemoteWorkspace.mock.calls[0]?.[1]).toBe("/workspaces");
     expect(mocks.requestRemoteResult).toHaveBeenCalledWith(17, "fs.readDir", {
       path: ".",
       directoriesOnly: true,
@@ -169,22 +185,32 @@ describe("AddRemoteProjectDialog remote flow", () => {
       initialDirectory: undefined,
     };
     const onOpen = await render();
-    const input = dialogInput();
-    const setInputValue = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )?.set;
-
-    await act(async () => {
-      setInputValue?.call(input, "workspace/app");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await setDialogInputValue("workspace/app");
     await act(async () => dialogButton("Open").click());
 
     expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
       "Enter an absolute path beginning with /.",
     );
     expect(onOpen).not.toHaveBeenCalled();
+    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("rejects a relative browsing path before starting SSH", async () => {
+    mocks.sshConnections[0] = {
+      ...mocks.sshConnections[0],
+      initialDirectory: undefined,
+    };
+    await render();
+    await setDialogInputValue("workspaces/app");
+
+    await act(async () => {
+      dialogButton("Browse folders").click();
+      await Promise.resolve();
+    });
+
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
+      "Enter an absolute path beginning with /.",
+    );
     expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
   });
 });
