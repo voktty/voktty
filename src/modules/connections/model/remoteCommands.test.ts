@@ -46,10 +46,13 @@ import {
   gitDiffStats,
   gitDiscardFile,
   gitFileDiff,
+  gitPull,
+  gitPush,
   gitStageAll,
   gitStageContents,
   gitStagedContext,
   gitStageFile,
+  gitSync,
   gitUnstageAll,
   gitUnstageFile,
   listDir,
@@ -460,6 +463,119 @@ it("rejects oversized remote commit messages before invoking Git", async () => {
   expect(requestRemoteResult).not.toHaveBeenCalled();
   expect(remoteRequest).not.toHaveBeenCalled();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("sets the upstream to origin on the first native SSH push", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse") return gitExecResult("", 1);
+      if (args[0] === "remote") return gitExecResult("backup\norigin\n");
+      if (args[0] === "push") return gitExecResult("Everything up-to-date\n");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await gitPush(remotePath(environmentId, "/srv/app"));
+
+  expect(requestRemoteResult).toHaveBeenLastCalledWith(9, "git.execWorkspace", {
+    cwd: ".",
+    args: ["push", "-u", "--", "origin", "HEAD"],
+    timeoutSecs: 180,
+    maxOutputBytes: 64 * 1024,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("pulls only by fast-forward and syncs by pull then push", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse") return gitExecResult("origin/main\n");
+      if (args[0] === "pull" || args[0] === "push") return gitExecResult("");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await gitPull(cwd);
+  await gitSync(cwd);
+
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual([
+    ["rev-parse", "--show-toplevel"],
+    ["pull", "--ff-only"],
+    ["rev-parse", "--show-toplevel"],
+    ["rev-parse", "--abbrev-ref", "@{upstream}"],
+    ["pull", "--no-edit", "--ff"],
+    ["push"],
+  ]);
+  expect(requestRemoteResult.mock.calls[1][2]).toMatchObject({
+    timeoutSecs: 180,
+    maxOutputBytes: 64 * 1024,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+});
+
+it("syncs a branch without upstream by setting its selected remote", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse") return gitExecResult("", 1);
+      if (args[0] === "remote") return gitExecResult("upstream\n");
+      if (args[0] === "push") return gitExecResult("");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await gitSync(remotePath(environmentId, "/srv/app"));
+
+  expect(
+    requestRemoteResult.mock.calls.map(
+      ([, , params]) => (params as { args: string[] }).args,
+    ),
+  ).toEqual([
+    ["rev-parse", "--show-toplevel"],
+    ["rev-parse", "--abbrev-ref", "@{upstream}"],
+    ["remote"],
+    ["push", "-u", "--", "upstream", "HEAD"],
+  ]);
+  expect(remoteRequest).not.toHaveBeenCalled();
 });
 
 it("stages unsaved SSH editor contents through bounded helper stdin", async () => {

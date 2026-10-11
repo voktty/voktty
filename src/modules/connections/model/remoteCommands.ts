@@ -50,6 +50,7 @@ const HOST_COMMANDS = new Set([
   "git_unstage_all",
   "git_commit",
   "harness_git_commit",
+  "harness_git_push",
   "git_head_message",
   "git_push",
   "git_pull",
@@ -107,6 +108,10 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_unstage_all",
   "git_commit",
   "harness_git_commit",
+  "git_push",
+  "harness_git_push",
+  "git_pull",
+  "git_sync",
   "git_staged_context",
 ]);
 
@@ -203,6 +208,7 @@ const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_GIT_DIFF_BYTES = 1024 * 1024;
 const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
+const GIT_NETWORK_TIMEOUT_SECS = 180;
 
 type HelperGitOutput = {
   stdout: string;
@@ -695,6 +701,78 @@ async function nativeProfileGitCommit(
   );
 }
 
+async function nativeProfileGitRemoteName(
+  sessionId: number,
+  cwd: string,
+): Promise<string> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["remote"],
+    64 * 1024,
+    true,
+  );
+  const names = result.stdout
+    .split(/\r?\n/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const remote = names.includes("origin") ? "origin" : names[0];
+  if (!remote) throw new Error("No Git remote to push to");
+  return remote;
+}
+
+async function nativeProfileGitHasUpstream(
+  sessionId: number,
+  cwd: string,
+): Promise<boolean> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--abbrev-ref", "@{upstream}"],
+    64 * 1024,
+    true,
+  );
+  return result.exitCode === 0 && Boolean(result.stdout.trim());
+}
+
+async function nativeProfileGitNetworkCommand(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  command: string,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const runNetworkGit = (args: string[]) =>
+    runHelperGit(
+      sessionId,
+      cwd,
+      args,
+      64 * 1024,
+      false,
+      true,
+      undefined,
+      GIT_NETWORK_TIMEOUT_SECS,
+    ).then(() => undefined);
+
+  if (command === "git_pull") {
+    await runNetworkGit(["pull", "--ff-only"]);
+    return;
+  }
+
+  const hasUpstream = await nativeProfileGitHasUpstream(sessionId, cwd);
+  if (command === "git_sync" && hasUpstream) {
+    await runNetworkGit(["pull", "--no-edit", "--ff"]);
+    await runNetworkGit(["push"]);
+    return;
+  }
+  if (hasUpstream) {
+    await runNetworkGit(["push"]);
+    return;
+  }
+  const remote = await nativeProfileGitRemoteName(sessionId, cwd);
+  await runNetworkGit(["push", "-u", "--", remote, "HEAD"]);
+}
+
 async function nativeProfileGitStageContents(
   sessionId: number,
   cwd: string,
@@ -964,6 +1042,19 @@ async function runProfileFileCommand(
       root,
       relativePath(args.cwd),
       args.message,
+    );
+  }
+  if (
+    command === "git_push" ||
+    command === "harness_git_push" ||
+    command === "git_pull" ||
+    command === "git_sync"
+  ) {
+    return nativeProfileGitNetworkCommand(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      command,
     );
   }
   if (

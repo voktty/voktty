@@ -3381,6 +3381,89 @@ mod tests {
     }
 
     #[test]
+    fn git_workspace_push_sets_the_upstream_on_the_first_push() {
+        let temp = tempdir().expect("temporary Git root");
+        let workspace = temp.path().join("project");
+        let origin = temp.path().join("origin.git");
+        fs::create_dir(&workspace).expect("workspace directory");
+        let origin_init = std::process::Command::new("git")
+            .args(["init", "--bare", "--quiet"])
+            .arg(&origin)
+            .status()
+            .expect("initialize bare remote");
+        assert!(origin_init.success());
+        let project_init = std::process::Command::new("git")
+            .args(["init", "--quiet", "-b", "main"])
+            .current_dir(&workspace)
+            .status()
+            .expect("initialize project");
+        assert!(project_init.success());
+        fs::write(workspace.join("note.txt"), "push this\n").expect("worktree file");
+
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace }),
+                })
+                .ok
+        );
+
+        let commands = [
+            vec!["config", "user.name", "Voktty Test"],
+            vec!["config", "user.email", "voktty@example.invalid"],
+            vec!["add", "--", "note.txt"],
+            vec!["commit", "-m", "first"],
+        ];
+        for (index, args) in commands.into_iter().enumerate() {
+            let response = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: format!("setup-{index}"),
+                method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+                params: json!({ "cwd": ".", "args": args }),
+            });
+            assert!(response.ok, "setup {index}: {:?}", response.error);
+            let result = response.result.expect("Git result");
+            assert_eq!(result["exitCode"], 0, "setup {index}: {result}");
+        }
+
+        let remote_added = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "setup-remote".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({ "cwd": ".", "args": ["remote", "add", "origin", origin] }),
+        });
+        assert!(remote_added.ok, "{:?}", remote_added.error);
+
+        let pushed = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "push".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({
+                "cwd": ".",
+                "args": ["push", "-u", "--", "origin", "HEAD"],
+            }),
+        });
+        assert!(pushed.ok, "{:?}", pushed.error);
+        let push_result = pushed.result.expect("push result");
+        assert_eq!(push_result["exitCode"], 0);
+
+        let upstream = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "@{upstream}"])
+            .current_dir(&workspace)
+            .output()
+            .expect("read upstream");
+        assert!(upstream.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&upstream.stdout).trim(),
+            "origin/main"
+        );
+    }
+
+    #[test]
     fn git_workspace_input_rejects_unbounded_or_unexpected_input() {
         let workspace = tempdir().expect("workspace");
         let mut server = RemoteServer::new();

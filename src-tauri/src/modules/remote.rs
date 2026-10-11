@@ -371,13 +371,19 @@ impl RemoteSession {
             }
             return Err(error);
         }
-        let response = receiver.recv_timeout(Duration::from_secs(60));
+        let timeout = request.response_timeout();
+        let response = receiver.recv_timeout(timeout);
         if response.is_err() {
             if let Ok(mut pending) = self.routing.pending.lock() {
                 pending.remove(&request.id);
             }
         }
-        response.map_err(|_| "remote helper did not reply within 60 seconds".to_string())?
+        response.map_err(|_| {
+            format!(
+                "remote helper did not reply within {} seconds",
+                timeout.as_secs()
+            )
+        })?
     }
 
     fn open_tunnel(&self, tunnel_id: u64, remote_port: u16) -> Result<RemoteTunnelInfo, String> {

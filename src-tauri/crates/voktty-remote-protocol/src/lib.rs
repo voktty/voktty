@@ -1,4 +1,5 @@
 use std::io::{self, Read, Write};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -50,6 +51,25 @@ pub struct RemoteRequest {
     pub method: String,
     #[serde(default = "empty_object")]
     pub params: Value,
+}
+
+impl RemoteRequest {
+    pub fn response_timeout(&self) -> Duration {
+        let is_git_exec = matches!(
+            self.method.as_str(),
+            METHOD_GIT_EXEC | METHOD_GIT_EXEC_WORKSPACE | METHOD_GIT_EXEC_WORKSPACE_INPUT
+        );
+        if !is_git_exec {
+            return Duration::from_secs(60);
+        }
+        let command_timeout_secs = self
+            .params
+            .get("timeoutSecs")
+            .and_then(Value::as_u64)
+            .unwrap_or(30)
+            .clamp(1, 300);
+        Duration::from_secs(command_timeout_secs.saturating_add(10))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -220,6 +240,40 @@ mod tests {
                 .expect("request should deserialize");
 
         assert_eq!(request.params, json!({}));
+    }
+
+    #[test]
+    fn git_request_response_timeout_tracks_the_bounded_command_timeout() {
+        let request = RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "git-request".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({ "timeoutSecs": 120 }),
+        };
+        assert_eq!(request.response_timeout(), Duration::from_secs(130));
+
+        let maximum = RemoteRequest {
+            params: json!({ "timeoutSecs": 999 }),
+            ..request.clone()
+        };
+        assert_eq!(maximum.response_timeout(), Duration::from_secs(310));
+
+        let default = RemoteRequest {
+            params: json!({}),
+            ..request
+        };
+        assert_eq!(default.response_timeout(), Duration::from_secs(40));
+    }
+
+    #[test]
+    fn non_git_request_response_timeout_keeps_the_standard_limit() {
+        let request = RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "pty-request".to_string(),
+            method: METHOD_PTY_OPEN.to_string(),
+            params: json!({ "timeoutSecs": 300 }),
+        };
+        assert_eq!(request.response_timeout(), Duration::from_secs(60));
     }
 
     #[test]
