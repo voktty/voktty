@@ -3,6 +3,7 @@ import {
   remotePath,
   remoteProjectFor,
   remoteProjectForPath,
+  terminalProjectPath,
 } from "./remoteProjects";
 
 const storage = new Map<string, string>();
@@ -77,4 +78,13 @@ it("finds the most specific saved project that contains a remote path", () => {
   expect(
     remoteProjectForPath(remotePath("env", "/srv/projects/../secret")),
   ).toBe(undefined);
+});
+
+it("keeps OSC terminal working directories in the remote path namespace", () => {
+  expect(
+    terminalProjectPath("remote://machine-1/srv/app", "/srv/app/src"),
+  ).toBe("remote://machine-1/srv/app/src");
+  expect(terminalProjectPath("/local/app", "/local/app/src")).toBe(
+    "/local/app/src",
+  );
 });

@@ -1,10 +1,25 @@
 import { openPty, type PtySession } from "@/modules/terminal/lib/pty-bridge";
+import {
+  closeRemoteWorkspace,
+  openRemoteWorkspace,
+  type RemoteSshConnection,
+} from "@/modules/remote/client";
+import {
+  parseRemotePath,
+  remoteProjectForPath,
+} from "@/modules/connections/model/remoteProjects";
+import {
+  remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment,
+} from "@/modules/connections/model/remoteSshProfiles";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 
 type DataHandler = (data: Uint8Array) => void;
 type ExitHandler = (code: number | null) => void;
 
 const activeSessions = new Map<string, PtySession>();
+const remoteWorkspaceClosers = new Map<string, () => Promise<void>>();
 const dataHandlers = new Map<string, DataHandler>();
 const exitHandlers = new Map<string, ExitHandler>();
 const dataBuffer = new Map<string, Uint8Array[]>();
@@ -56,6 +71,88 @@ function clearBuffered(id: string) {
   dataBufferBytes.delete(id);
 }
 
+function closeRemoteWorkspaceOnce(id: string, sessionId: number) {
+  let closing: Promise<void> | undefined;
+  const close = () => {
+    if (!closing) {
+      closing = closeRemoteWorkspace(sessionId)
+        .catch(() => undefined)
+        .then(() => {
+          if (remoteWorkspaceClosers.get(id) === close) {
+            remoteWorkspaceClosers.delete(id);
+          }
+        });
+    }
+    return closing;
+  };
+  return close;
+}
+
+async function openRemoteTerminalTarget(id: string, cwd: string) {
+  const remotePath = parseRemotePath(cwd);
+  if (!remotePath) {
+    if (cwd.startsWith("remote://")) {
+      throw new Error("Remote terminal path is invalid.");
+    }
+    return undefined;
+  }
+
+  const project = remoteProjectForPath(cwd);
+  if (!project || project.environmentId !== remotePath.environmentId) {
+    throw new Error("Remote terminal path is outside a saved project.");
+  }
+
+  const connectionId = remoteSshConnectionIdForEnvironment(
+    remotePath.environmentId,
+  );
+  if (!connectionId) {
+    throw new Error("Remote terminal requires a saved Voktty SSH profile.");
+  }
+
+  const profile = usePreferencesStore
+    .getState()
+    .sshConnections.find((connection) => connection.id === connectionId);
+  if (!profile) {
+    throw new Error("The saved SSH connection for this project is missing.");
+  }
+
+  const nativeConnection: RemoteSshConnection = {
+    ...remoteSshConnectionForProfile(profile),
+    ...(profile.multiplexerMode
+      ? { multiplexerMode: profile.multiplexerMode }
+      : {}),
+    ...(profile.tmuxSessionName
+      ? { tmuxSessionName: profile.tmuxSessionName }
+      : {}),
+    ...(profile.activeMultiplexerSession
+      ? { activeMultiplexerSession: profile.activeMultiplexerSession }
+      : {}),
+    ...(profile.multiplexerAction
+      ? { multiplexerAction: profile.multiplexerAction }
+      : {}),
+  };
+  const remoteSession = await openRemoteWorkspace(
+    nativeConnection,
+    remotePath.hostPath,
+  );
+
+  return {
+    cwd: remotePath.hostPath,
+    workspace: {
+      kind: "ssh" as const,
+      connection: profile,
+      root: remoteSession.workspace_root,
+      sessionId: remoteSession.session_id,
+    },
+    close: closeRemoteWorkspaceOnce(id, remoteSession.session_id),
+  };
+}
+
+async function closeRemoteTerminalTarget(id: string) {
+  const close = remoteWorkspaceClosers.get(id);
+  if (close) await close();
+}
+
 export async function spawnPty(
   id: string,
   cwd: string,
@@ -67,33 +164,63 @@ export async function spawnPty(
     await existing.close().catch(() => undefined);
     activeSessions.delete(id);
   }
+  await closeRemoteTerminalTarget(id);
 
   // Normalize "~" or empty string to undefined so openPty uses default home/workspace root
   const effectiveCwd =
     !cwd || cwd === "~" || cwd.trim() === "" ? undefined : cwd;
 
-  const session = await openPty(
-    cols,
-    rows,
-    {
-      onData: (bytes: Uint8Array) => {
-        const handler = dataHandlers.get(id);
-        if (handler) {
-          handler(bytes);
-        } else {
-          pushBuffered(id, bytes);
-        }
-      },
-      onExit: (code?: number) => {
-        activeSessions.delete(id);
-        const handler = exitHandlers.get(id);
-        handler?.(code ?? null);
-      },
-    },
-    effectiveCwd,
-  );
+  const remoteTarget = effectiveCwd
+    ? await openRemoteTerminalTarget(id, effectiveCwd)
+    : undefined;
+  let session: PtySession | undefined;
+  let exitedBeforeOpen = false;
+  const closeRemote = remoteTarget?.close;
 
-  activeSessions.set(id, session);
+  try {
+    session = await openPty(
+      cols,
+      rows,
+      {
+        onData: (bytes: Uint8Array) => {
+          const handler = dataHandlers.get(id);
+          if (handler) {
+            handler(bytes);
+          } else {
+            pushBuffered(id, bytes);
+          }
+        },
+        onExit: (code?: number) => {
+          if (session) {
+            if (activeSessions.get(id) === session) activeSessions.delete(id);
+            void closeRemote?.();
+          } else {
+            exitedBeforeOpen = true;
+          }
+          const handler = exitHandlers.get(id);
+          handler?.(code ?? null);
+        },
+      },
+      remoteTarget?.cwd ?? effectiveCwd,
+      false,
+      undefined,
+      undefined,
+      remoteTarget?.workspace,
+    );
+
+    activeSessions.set(id, session);
+    if (closeRemote && !exitedBeforeOpen) {
+      remoteWorkspaceClosers.set(id, closeRemote);
+    }
+    if (exitedBeforeOpen) {
+      if (activeSessions.get(id) === session) activeSessions.delete(id);
+      await session.close().catch(() => undefined);
+      await closeRemote?.();
+    }
+  } catch (error) {
+    await closeRemote?.();
+    throw error;
+  }
 }
 
 export async function writePty(id: string, data: string): Promise<void> {
@@ -138,6 +265,7 @@ export async function killPty(id: string): Promise<void> {
   if (session) {
     await session.close().catch(() => undefined);
   }
+  await closeRemoteTerminalTarget(id);
 }
 
 export async function killAllPtys(): Promise<void> {
@@ -147,7 +275,12 @@ export async function killAllPtys(): Promise<void> {
   exitHandlers.clear();
   dataBuffer.clear();
   dataBufferBytes.clear();
-  await Promise.allSettled(sessions.map((s) => s.close().catch(() => undefined)));
+  await Promise.allSettled(
+    sessions.map((s) => s.close().catch(() => undefined)),
+  );
+  await Promise.allSettled(
+    Array.from(remoteWorkspaceClosers.values(), (close) => close()),
+  );
 }
 
 export function subscribePty(

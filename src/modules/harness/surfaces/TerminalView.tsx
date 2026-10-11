@@ -14,6 +14,7 @@ import {
   scanOscCwd,
   type TerminalMetaPatch,
 } from "../lib/terminalTab";
+import { terminalProjectPath } from "@/modules/connections/model/remoteProjects";
 import { THEME_CHANGED_EVENT } from "@/modules/theme";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { readTerminalTokens } from "@/styles/tokens";
@@ -158,7 +159,9 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
             const scanned = scanOscCwd(text, oscBuffer);
             oscBuffer = scanned.rest;
             if (scanned.cwd) {
-              const patch: TerminalMetaPatch = { cwd: scanned.cwd };
+              const patch: TerminalMetaPatch = {
+                cwd: terminalProjectPath(cwd, scanned.cwd),
+              };
               if (!runningProcessRef.current) {
                 patch.title = defaultTerminalTitle(scanned.cwd);
               }

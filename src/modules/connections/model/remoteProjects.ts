@@ -78,6 +78,15 @@ export function parseRemotePath(
   };
 }
 
+/** Keeps a terminal cwd in the remote path namespace after OSC 7 reports it. */
+export function terminalProjectPath(
+  projectPath: string,
+  hostPath: string,
+): string {
+  const remote = parseRemotePath(projectPath);
+  return remote ? remotePath(remote.environmentId, hostPath) : hostPath;
+}
+
 function readAll(): Record<string, RemoteProject> {
   try {
     const raw =
