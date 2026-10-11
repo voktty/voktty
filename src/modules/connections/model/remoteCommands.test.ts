@@ -369,6 +369,22 @@ it("reads bounded staged Git context through the native SSH helper", async () =>
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
+it("returns an empty commit history for a saved SSH folder outside Git", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce(
+    gitExecResult("", 128, "fatal: not a git repository"),
+  );
+
+  await expect(
+    runRemoteCommand("git_history", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).resolves.toEqual({ head: null, commits: [] });
+  expect(requestRemoteResult).toHaveBeenCalledTimes(1);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
 it("includes unstaged changes and untracked names in remote commit context", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockImplementation(
@@ -445,17 +461,46 @@ it("commits remote staged changes with bounded message and helper timeout", asyn
 
 it("refuses to read or commit a Git repository above the saved project root", async () => {
   const { environmentId } = registerNativeProfileProject();
-  requestRemoteResult.mockResolvedValue(gitExecResult("/srv\n"));
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      _method: string,
+      params: Record<string, unknown>,
+    ) => {
+      const args = params.args as string[];
+      return args[1] === "--is-inside-work-tree"
+        ? gitExecResult("true\n")
+        : gitExecResult("/srv\n");
+    },
+  );
 
   await expect(
     gitStagedContext(remotePath(environmentId, "/srv/app")),
   ).rejects.toThrow("Git repository root is outside the saved project");
   await expect(
+    runRemoteCommand("git_history", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).rejects.toThrow("Git repository root is outside the saved project");
+  await expect(
+    runRemoteCommand("git_commit_files", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha: "a".repeat(40),
+    }),
+  ).rejects.toThrow("Git repository root is outside the saved project");
+  await expect(
+    runRemoteCommand("git_commit_file_diff", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha: "a".repeat(40),
+      relative: "file.ts",
+    }),
+  ).rejects.toThrow("Git repository root is outside the saved project");
+  await expect(
     gitCommit(remotePath(environmentId, "/srv/app"), "fix: keep root"),
   ).rejects.toThrow("Git repository root is outside the saved project");
-  expect(requestRemoteResult).toHaveBeenCalledTimes(2);
+  expect(requestRemoteResult).toHaveBeenCalledTimes(6);
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(5);
 });
 
 it("rejects oversized remote commit messages before invoking Git", async () => {
@@ -643,6 +688,226 @@ it("returns an empty branch list for a saved SSH folder outside Git", async () =
     branches: [],
   });
   expect(requestRemoteResult).toHaveBeenCalledTimes(1);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("loads bounded commit history through the native SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const head = "a".repeat(40);
+  const parent = "b".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") {
+        return gitExecResult("true\n");
+      }
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (
+        args[0] === "rev-parse" &&
+        args[1] === "--verify" &&
+        args[2] === "HEAD"
+      ) {
+        return gitExecResult(`${head}\n`);
+      }
+      if (args[0] === "rev-parse" && args[2] === "@{upstream}") {
+        return gitExecResult(`${parent}\n`);
+      }
+      if (args[0] === "remote") return gitExecResult("origin\n");
+      if (args[0] === "symbolic-ref") return gitExecResult("origin/main\n");
+      if (args[0] === "show-ref") return gitExecResult("");
+      if (args[0] === "log") {
+        expect(args).toContain("--max-count=3");
+        expect(args.slice(-3)).toEqual(["HEAD", "@{upstream}", "origin/main"]);
+        return gitExecResult(
+          `${head}\0${head.slice(0, 7)}\0${parent}\0Ada\0${1700000000}\0` +
+            "HEAD -> main, origin/main, tag: v1.0\0Add feature\x1e\n",
+        );
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_history", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      limit: 3,
+    }),
+  ).resolves.toEqual({
+    head,
+    commits: [
+      {
+        sha: head,
+        shortSha: head.slice(0, 7),
+        parents: [parent],
+        author: "Ada",
+        timestamp: 1700000000,
+        subject: "Add feature",
+        refs: [
+          { name: "main", kind: "local" },
+          { name: "origin/main", kind: "remote" },
+          { name: "v1.0", kind: "tag" },
+        ],
+        head: true,
+      },
+    ],
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("lists files and reads commit diffs through root-confined Git calls", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const sha = "a".repeat(40);
+  const parent = "b".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse" && args[1] === "--verify") {
+        return gitExecResult(
+          `${args[2] === `${sha}^{commit}` ? sha : parent}\n`,
+        );
+      }
+      if (args[0] === "diff-tree" && args.includes("--name-status")) {
+        return gitExecResult("A\0new file.ts\0M\0changed.ts\0");
+      }
+      if (args[0] === "diff-tree" && args.includes("--numstat")) {
+        return gitExecResult("2\t0\tnew file.ts\0" + "1\t1\tchanged.ts\0");
+      }
+      if (args[0] === "show" && args[3] === `${parent}:changed.ts`) {
+        return gitExecResult("before\n");
+      }
+      if (args[0] === "show" && args[3] === `${sha}:changed.ts`) {
+        return gitExecResult("after\n");
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_commit_files", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha,
+    }),
+  ).resolves.toEqual([
+    {
+      path: remotePath(environmentId, "/srv/app/new file.ts"),
+      relative: "new file.ts",
+      status: "added",
+      additions: 2,
+      deletions: 0,
+      staged: false,
+      unstaged: false,
+    },
+    {
+      path: remotePath(environmentId, "/srv/app/changed.ts"),
+      relative: "changed.ts",
+      status: "modified",
+      additions: 1,
+      deletions: 1,
+      staged: false,
+      unstaged: false,
+    },
+  ]);
+  await expect(
+    runRemoteCommand("git_commit_file_diff", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha,
+      relative: "changed.ts",
+    }),
+  ).resolves.toEqual({
+    path: remotePath(environmentId, "/srv/app/changed.ts"),
+    relative: "changed.ts",
+    status: "modified",
+    original: "before\n",
+    current: "after\n",
+    binary: false,
+    tooLarge: false,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+});
+
+it("marks truncated commit blobs as too large without returning partial text", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const sha = "a".repeat(40);
+  const parent = "b".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse" && args[1] === "--verify") {
+        return gitExecResult(
+          `${args[2] === `${sha}^{commit}` ? sha : parent}\n`,
+        );
+      }
+      if (args[0] === "show") {
+        return { ...gitExecResult("partial"), stdoutTruncated: true };
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_commit_file_diff", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha,
+      relative: "large.txt",
+    }),
+  ).resolves.toMatchObject({
+    original: "",
+    current: "",
+    binary: false,
+    tooLarge: true,
+  });
+});
+
+it("rejects invalid history paths and commit ids before invoking unsafe Git args", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValue(gitExecResult("/srv/app\n"));
+  await expect(
+    runRemoteCommand("git_commit_file_diff", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha: "--help",
+      relative: "../secret.txt",
+    }),
+  ).rejects.toThrow("outside the project");
+  await expect(
+    runRemoteCommand("git_commit_files", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      sha: "--help",
+    }),
+  ).rejects.toThrow("Invalid commit");
+  expect(
+    requestRemoteResult.mock.calls.map(([, , params]) =>
+      (params as { args: string[] }).args,
+    ),
+  ).toEqual([["rev-parse", "--show-toplevel"]]);
   expect(remoteRequest).not.toHaveBeenCalled();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });

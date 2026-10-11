@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   parseGitBranches,
+  parseGitCommitFiles,
+  parseGitHistory,
   parseGitNumstat,
   parseGitPorcelainV2,
 } from "./remoteGit";
@@ -39,6 +41,95 @@ describe("parseGitBranches", () => {
       detached: false,
       branches: [{ name: "feature/new", current: true, remote: null }],
     });
+  });
+});
+
+describe("parseGitHistory", () => {
+  it("parses commit fields and classifies local, remote, and tag refs", () => {
+    const head = "a".repeat(40);
+    const parent = "b".repeat(40);
+    expect(
+      parseGitHistory(
+        `${head}\0${head.slice(0, 7)}\0${parent}\0Ada\0${1700000000}\0` +
+          "HEAD -> main, origin/main, tag: v1.0\0Add feature\x1e\n" +
+          `${parent}\0${parent.slice(0, 7)}\0\0Lin\0${1699990000}\0\0First commit\x1e\n`,
+        head,
+        ["origin"],
+      ),
+    ).toEqual([
+      {
+        sha: head,
+        shortSha: head.slice(0, 7),
+        parents: [parent],
+        author: "Ada",
+        timestamp: 1700000000,
+        subject: "Add feature",
+        refs: [
+          { name: "main", kind: "local" },
+          { name: "origin/main", kind: "remote" },
+          { name: "v1.0", kind: "tag" },
+        ],
+        head: true,
+      },
+      {
+        sha: parent,
+        shortSha: parent.slice(0, 7),
+        parents: [],
+        author: "Lin",
+        timestamp: 1699990000,
+        subject: "First commit",
+        refs: [],
+        head: false,
+      },
+    ]);
+  });
+
+  it("ignores malformed and abbreviated commit records", () => {
+    expect(
+      parseGitHistory("abcd\0abcd\0\0Ada\0" + "1700000000\0\0bad\x1e", "", []),
+    ).toEqual([]);
+  });
+});
+
+describe("parseGitCommitFiles", () => {
+  it("keeps unusual path characters and attaches numstat counts", () => {
+    expect(
+      parseGitCommitFiles(
+        "A\0new file.ts\0M\0source\nname.ts\0D\0gone.txt\0",
+        "2\t0\tnew file.ts\0-\t-\tsource\nname.ts\0",
+      ),
+    ).toEqual([
+      {
+        relative: "new file.ts",
+        status: "added",
+        additions: 2,
+        deletions: 0,
+      },
+      {
+        relative: "source\nname.ts",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+      },
+      {
+        relative: "gone.txt",
+        status: "deleted",
+        additions: 0,
+        deletions: 0,
+      },
+    ]);
+  });
+
+  it("rejects malformed statuses, incomplete records, and paths outside the project", () => {
+    expect(() => parseGitCommitFiles("Q\0file.ts\0", "")).toThrow(
+      "invalid commit file status",
+    );
+    expect(() => parseGitCommitFiles("A\0", "")).toThrow(
+      "incomplete commit file list",
+    );
+    expect(() => parseGitCommitFiles("M\0../outside.txt\0", "")).toThrow(
+      "outside the saved project",
+    );
   });
 });
 

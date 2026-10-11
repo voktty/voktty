@@ -16,6 +16,8 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { remoteMachineFor, remoteRequest } from "./connections";
 import {
   parseGitBranches,
+  parseGitCommitFiles,
+  parseGitHistory,
   parseGitNumstat,
   parseGitPorcelainV2,
 } from "./remoteGit";
@@ -123,6 +125,9 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_create_branch",
   "git_stash",
   "git_staged_context",
+  "git_history",
+  "git_commit_files",
+  "git_commit_file_diff",
 ]);
 
 const HELPER_FS = {
@@ -220,6 +225,7 @@ const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
 const MAX_GIT_REF_BYTES = 1024;
 const GIT_NETWORK_TIMEOUT_SECS = 180;
+const REMOTE_GIT_COMMIT_SHA = /^[0-9a-f]{4,64}$/i;
 
 type HelperGitOutput = {
   stdout: string;
@@ -665,7 +671,7 @@ async function assertProfileGitRoot(
   sessionId: number,
   root: string,
   cwd: string,
-): Promise<void> {
+): Promise<string> {
   const result = await runHelperGit(
     sessionId,
     cwd,
@@ -684,6 +690,267 @@ async function assertProfileGitRoot(
   ) {
     throw new Error("The Git repository root is outside the saved project.");
   }
+  return repositoryRoot;
+}
+
+async function nativeProfileGitCommitSha(
+  sessionId: number,
+  cwd: string,
+  value: unknown,
+): Promise<string> {
+  if (typeof value !== "string" || !REMOTE_GIT_COMMIT_SHA.test(value)) {
+    throw new Error("Invalid commit");
+  }
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--verify", `${value}^{commit}`],
+    64 * 1024,
+    true,
+  );
+  const sha = result.stdout.trim();
+  if (result.exitCode !== 0 || !/^[0-9a-f]{40,64}$/i.test(sha)) {
+    throw new Error("Unknown commit");
+  }
+  return sha;
+}
+
+async function nativeProfileGitHistory(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  limitValue: unknown,
+): Promise<{
+  head: string | null;
+  commits: ReturnType<typeof parseGitHistory>;
+}> {
+  if (!(await nativeProfileGitIsWorkTree(sessionId, cwd))) {
+    return { head: null, commits: [] };
+  }
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const limit = Number.isSafeInteger(limitValue)
+    ? Math.min(500, Math.max(1, Number(limitValue)))
+    : 200;
+  const [headOutput, upstreamOutput, remoteNames] = await Promise.all([
+    runHelperGit(
+      sessionId,
+      cwd,
+      ["rev-parse", "--verify", "HEAD"],
+      64 * 1024,
+      true,
+    ),
+    runHelperGit(
+      sessionId,
+      cwd,
+      ["rev-parse", "--verify", "@{upstream}"],
+      64 * 1024,
+      true,
+    ),
+    nativeProfileGitRemoteNames(sessionId, cwd),
+  ]);
+  const head = headOutput.stdout.trim();
+  if (headOutput.exitCode !== 0 || !/^[0-9a-f]{40,64}$/i.test(head)) {
+    return { head: null, commits: [] };
+  }
+
+  const tips = ["HEAD"];
+  if (upstreamOutput.exitCode === 0 && upstreamOutput.stdout.trim()) {
+    tips.push("@{upstream}");
+  }
+  if (remoteNames.includes("origin")) {
+    const symbolicDefault = await runHelperGit(
+      sessionId,
+      cwd,
+      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+      64 * 1024,
+      true,
+    );
+    let defaultBranch = symbolicDefault.stdout.trim();
+    if (!defaultBranch.startsWith("origin/")) {
+      defaultBranch = "";
+      for (const branch of ["main", "master"]) {
+        const exists = await nativeProfileGitRefExists(
+          sessionId,
+          cwd,
+          `refs/remotes/origin/${branch}`,
+        );
+        if (exists) {
+          defaultBranch = `origin/${branch}`;
+          break;
+        }
+      }
+    } else if (
+      !(await nativeProfileGitRefExists(
+        sessionId,
+        cwd,
+        `refs/remotes/${defaultBranch}`,
+      ))
+    ) {
+      defaultBranch = "";
+    }
+    if (defaultBranch) tips.push(defaultBranch);
+  }
+
+  const output = await runHelperGit(
+    sessionId,
+    cwd,
+    [
+      "log",
+      "--topo-order",
+      "--decorate=short",
+      `--max-count=${limit}`,
+      "--format=%H%x00%h%x00%P%x00%an%x00%at%x00%D%x00%s%x1e",
+      ...tips,
+    ],
+    MAX_GIT_OUTPUT_BYTES,
+    false,
+    false,
+    undefined,
+    30,
+  );
+  return {
+    head,
+    commits: parseGitHistory(
+      decodeGitMetadata(output.stdoutBytes),
+      head,
+      remoteNames,
+    ).slice(0, limit),
+  };
+}
+
+async function nativeProfileGitCommitFiles(
+  sessionId: number,
+  environmentId: string,
+  root: string,
+  cwd: string,
+  shaValue: unknown,
+) {
+  const repositoryRoot = await assertProfileGitRoot(sessionId, root, cwd);
+  const sha = await nativeProfileGitCommitSha(sessionId, cwd, shaValue);
+  const [names, stats] = await Promise.all([
+    runHelperGit(
+      sessionId,
+      cwd,
+      [
+        "diff-tree",
+        "--root",
+        "--no-commit-id",
+        "--no-renames",
+        "--name-status",
+        "-r",
+        "-z",
+        sha,
+      ],
+      MAX_GIT_OUTPUT_BYTES,
+      false,
+      false,
+      undefined,
+      30,
+    ),
+    runHelperGit(
+      sessionId,
+      cwd,
+      [
+        "diff-tree",
+        "--root",
+        "--no-commit-id",
+        "--no-renames",
+        "--numstat",
+        "-r",
+        "-z",
+        sha,
+      ],
+      MAX_GIT_OUTPUT_BYTES,
+      false,
+      false,
+      undefined,
+      30,
+    ),
+  ]);
+  const repositoryRelative = relativeToRemoteRoot(root, repositoryRoot);
+  return parseGitCommitFiles(
+    decodeGitMetadata(names.stdoutBytes),
+    decodeGitMetadata(stats.stdoutBytes),
+  ).map((file) => ({
+    path: remotePath(
+      environmentId,
+      joinRemotePath(root, joinRelativePath(repositoryRelative, file.relative)),
+    ),
+    ...file,
+    staged: false,
+    unstaged: false,
+  }));
+}
+
+async function nativeProfileGitCommitFileDiff(
+  sessionId: number,
+  environmentId: string,
+  root: string,
+  cwd: string,
+  shaValue: unknown,
+  pathValue: unknown,
+) {
+  const relative = helperRelativePath(pathValue);
+  const repositoryRoot = await assertProfileGitRoot(sessionId, root, cwd);
+  const sha = await nativeProfileGitCommitSha(sessionId, cwd, shaValue);
+  const parentOutput = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--verify", `${sha}^`],
+    64 * 1024,
+    true,
+  );
+  const parent = parentOutput.stdout.trim();
+  const readBlob = async (ref: string) => {
+    const output = await runHelperGit(
+      sessionId,
+      cwd,
+      ["show", "--no-ext-diff", "--no-textconv", `${ref}:${relative}`],
+      MAX_GIT_DIFF_BYTES,
+      true,
+      true,
+    );
+    return {
+      exists: output.exitCode === 0,
+      bytes: output.stdoutBytes,
+      tooLarge:
+        output.stdoutTruncated ||
+        output.stdoutBytes.byteLength > MAX_GIT_DIFF_BYTES,
+    };
+  };
+  const [original, current] = await Promise.all([
+    parent && /^[0-9a-f]{40,64}$/i.test(parent)
+      ? readBlob(parent)
+      : Promise.resolve({
+          exists: false,
+          bytes: new Uint8Array(),
+          tooLarge: false,
+        }),
+    readBlob(sha),
+  ]);
+  if (!original.exists && !current.exists) {
+    throw new Error("The commit does not contain this file.");
+  }
+  const binary = original.bytes.includes(0) || current.bytes.includes(0);
+  const tooLarge = original.tooLarge || current.tooLarge;
+  const repositoryRelative = relativeToRemoteRoot(root, repositoryRoot);
+  return {
+    path: remotePath(
+      environmentId,
+      joinRemotePath(root, joinRelativePath(repositoryRelative, relative)),
+    ),
+    relative,
+    status: !original.exists
+      ? "added"
+      : !current.exists
+        ? "deleted"
+        : "modified",
+    original:
+      binary || tooLarge ? "" : new TextDecoder().decode(original.bytes),
+    current: binary || tooLarge ? "" : new TextDecoder().decode(current.bytes),
+    binary,
+    tooLarge,
+  };
 }
 
 async function nativeProfileGitCommit(
@@ -1304,6 +1571,33 @@ async function runProfileFileCommand(
   if (!PROFILE_HELPER_COMMANDS.has(command))
     throw new Error(PROFILE_UNAVAILABLE);
   const remoteResultPath = (value: string) => remotePath(environmentId, value);
+  if (command === "git_history") {
+    return nativeProfileGitHistory(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.limit,
+    );
+  }
+  if (command === "git_commit_files") {
+    return nativeProfileGitCommitFiles(
+      sessionId,
+      environmentId,
+      root,
+      relativePath(args.cwd),
+      args.sha,
+    );
+  }
+  if (command === "git_commit_file_diff") {
+    return nativeProfileGitCommitFileDiff(
+      sessionId,
+      environmentId,
+      root,
+      relativePath(args.cwd),
+      args.sha,
+      args.relative,
+    );
+  }
   if (command === "git_branches") {
     const cwd = relativePath(args.cwd);
     return nativeProfileGitBranches(sessionId, root, cwd);

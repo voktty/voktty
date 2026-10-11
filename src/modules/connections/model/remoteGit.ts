@@ -232,3 +232,114 @@ export function parseGitBranches(
     branches,
   };
 }
+
+type GitHistoryRef = { name: string; kind: "local" | "remote" | "tag" };
+
+export type RemoteGitHistoryCommit = {
+  sha: string;
+  shortSha: string;
+  parents: string[];
+  author: string;
+  timestamp: number;
+  subject: string;
+  refs: GitHistoryRef[];
+  head: boolean;
+};
+
+const FULL_GIT_SHA = /^[0-9a-f]{40,64}$/i;
+
+export function parseGitHistory(
+  output: string,
+  head: string,
+  remoteNames: readonly string[],
+): RemoteGitHistoryCommit[] {
+  const remotes = new Set(remoteNames);
+  return output.split("\x1e").flatMap((record) => {
+    const normalized = record.replace(/^\r?\n/, "").replace(/\r?\n$/, "");
+    if (!normalized) return [];
+    const [sha, shortSha, parents, author, timestamp, decorations, subject] =
+      normalized.split("\0");
+    const seconds = Number(timestamp);
+    if (
+      !sha ||
+      !FULL_GIT_SHA.test(sha) ||
+      !/^\d+$/.test(timestamp ?? "") ||
+      !Number.isSafeInteger(seconds) ||
+      subject === undefined
+    ) {
+      return [];
+    }
+    const refs = (decorations ?? "")
+      .split(",")
+      .map((raw) => raw.trim())
+      .filter(Boolean)
+      .flatMap((raw): GitHistoryRef[] => {
+        if (raw === "HEAD" || raw.endsWith("/HEAD")) return [];
+        if (raw.startsWith("HEAD -> ")) {
+          return [{ name: raw.slice("HEAD -> ".length), kind: "local" }];
+        }
+        if (raw.startsWith("tag: ")) {
+          return [{ name: raw.slice("tag: ".length), kind: "tag" }];
+        }
+        return [
+          {
+            name: raw,
+            kind: Array.from(remotes).some(
+              (remote) => raw === remote || raw.startsWith(`${remote}/`),
+            )
+              ? "remote"
+              : "local",
+          },
+        ];
+      });
+    return [
+      {
+        sha,
+        shortSha: shortSha || sha.slice(0, 7),
+        parents: parents ? parents.split(" ").filter(Boolean) : [],
+        author: author ?? "",
+        timestamp: seconds,
+        subject,
+        refs,
+        head: sha === head,
+      },
+    ];
+  });
+}
+
+export type RemoteGitCommitFile = {
+  relative: string;
+  status: "added" | "deleted" | "modified";
+  additions: number;
+  deletions: number;
+};
+
+export function parseGitCommitFiles(
+  nameStatusOutput: string,
+  numstatOutput: string,
+): RemoteGitCommitFile[] {
+  const counts = parseGitNumstat(numstatOutput);
+  const fields = nameStatusOutput.split("\0");
+  const files: RemoteGitCommitFile[] = [];
+  for (let index = 0; index < fields.length; index += 2) {
+    const code = fields[index];
+    if (!code) continue;
+    const path = fields[index + 1];
+    if (!path) throw new Error("Git returned an incomplete commit file list.");
+    if (!/^[ADMT]$/.test(code)) {
+      throw new Error("Git returned an invalid commit file status.");
+    }
+    const relative = relativeGitPath(path);
+    const count = counts.get(relative);
+    files.push({
+      relative,
+      status: code === "A" ? "added" : code === "D" ? "deleted" : "modified",
+      additions: count?.additions ?? 0,
+      deletions: count?.deletions ?? 0,
+    });
+    if (files.length > MAX_GIT_STATUS_FILES) {
+      throw new Error("The remote commit has too many files to display.");
+    }
+  }
+  return files;
+}
