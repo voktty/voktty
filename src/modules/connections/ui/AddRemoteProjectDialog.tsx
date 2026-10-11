@@ -1,19 +1,19 @@
+import {
+  remoteSshConnectionForProfile,
+  remoteSshEnvironmentId,
+} from "@/modules/connections/model/remoteSshProfiles";
 import { ChevronRight, Folder } from "@/modules/harness/chrome/icons";
 import { SearchableSelect } from "@/modules/harness/chrome/SearchableSelect";
 import { LAYER } from "@/modules/harness/lib/layers";
+import { useTranslation } from "@/modules/i18n";
 import {
   closeRemoteWorkspace,
   openRemoteWorkspace,
   type RemoteSessionInfo,
   requestRemoteResult,
 } from "@/modules/remote/client";
-import {
-  remoteSshConnectionForProfile,
-  remoteSshEnvironmentId,
-} from "@/modules/connections/model/remoteSshProfiles";
-import { useTranslation } from "@/modules/i18n";
-import { useSshConnections } from "@/modules/ssh/sshStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useSshConnections } from "@/modules/ssh/sshStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -208,7 +208,7 @@ export function AddRemoteProjectDialog({
       <button
         type="button"
         aria-label="Close dialog"
-        className="absolute inset-0 z-0 cursor-default"
+        className="absolute inset-0 z-0 cursor-default bg-black/40"
         onClick={cancel}
       />
       <form
@@ -220,7 +220,7 @@ export function AddRemoteProjectDialog({
           event.preventDefault();
           void open();
         }}
-        className="absolute z-[1] left-1/2 top-[16%] flex max-h-[70vh] w-[min(480px,calc(100vw-24px))] -translate-x-1/2 flex-col gap-3 rounded-lg border border-content/10 bg-background-base dark:bg-content/5 p-4 shadow-xl backdrop-blur-xl"
+        className="voktty-floating-surface absolute z-[1] left-1/2 top-[16%] flex max-h-[70vh] w-[min(480px,calc(100vw-24px))] -translate-x-1/2 flex-col gap-3 rounded-xl border border-content/10 p-4 text-popover-foreground shadow-2xl"
       >
         <div className="flex flex-col gap-1">
           <h2 className="text-[13px] font-medium leading-tight text-content">
