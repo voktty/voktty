@@ -604,11 +604,18 @@ pub async fn remote_open(
     state: State<'_, RemoteState>,
     connection: RemoteSshConnection,
     workspace_root: Option<String>,
+    install_shell_integration: bool,
 ) -> Result<RemoteSessionInfo, String> {
     validate_connection(&connection)?;
     let state_for_task = state.inner().clone();
     let (session, mut info) = tauri::async_runtime::spawn_blocking(move || {
-        open_remote_session(app, state_for_task, connection, workspace_root)
+        open_remote_session(
+            app,
+            state_for_task,
+            connection,
+            workspace_root,
+            install_shell_integration,
+        )
     })
     .await
     .map_err(|error| format!("remote bootstrap task failed: {error}"))??;
@@ -1776,34 +1783,88 @@ fn read_capped(mut stream: impl Read) -> Vec<u8> {
     result
 }
 
-fn command_output_with_timeout(command: &mut Command, timeout: Duration) -> Result<std::process::Output, String> {
+fn command_output_with_timeout(
+    command: &mut Command,
+    timeout: Duration,
+) -> Result<std::process::Output, String> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = command.spawn().map_err(|e| format!("could not start SSH command: {e}"))?;
+    capture_command_output(command, None, timeout)
+}
+
+fn command_output_with_stdin_timeout(
+    command: &mut Command,
+    input: &[u8],
+    timeout: Duration,
+) -> Result<std::process::Output, String> {
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    capture_command_output(command, Some(input), timeout)
+}
+
+fn capture_command_output(
+    command: &mut Command,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<std::process::Output, String> {
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("could not start SSH command: {e}"))?;
     let stdout = child.stdout.take().ok_or("SSH stdout unavailable")?;
     let stderr = child.stderr.take().ok_or("SSH stderr unavailable")?;
     let stdout_reader = std::thread::spawn(move || read_capped(stdout));
     let stderr_reader = std::thread::spawn(move || read_capped(stderr));
+    let input_writer = if let Some(input) = input {
+        let Some(mut stdin) = child.stdin.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("SSH stdin unavailable".to_string());
+        };
+        let input = input.to_vec();
+        Some(std::thread::spawn(move || {
+            stdin
+                .write_all(&input)
+                .map_err(|error| format!("could not write SSH input: {error}"))
+        }))
+    } else {
+        None
+    };
     let start = std::time::Instant::now();
     let status = loop {
         match child.try_wait() {
-            Ok(Some(status)) => break status,
+            Ok(Some(status)) => break Ok(status),
             Ok(None) if start.elapsed() < timeout => std::thread::sleep(Duration::from_millis(50)),
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("SSH command timed out".to_string());
+                break Err(format!(
+                    "SSH command timed out after {} seconds",
+                    timeout.as_secs()
+                ));
             }
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(format!("could not wait for SSH command: {error}"));
+                break Err(format!("could not wait for SSH command: {error}"));
             }
         }
     };
+    let stdout = stdout_reader.join().unwrap_or_default();
+    let stderr = stderr_reader.join().unwrap_or_default();
+    let input_result = input_writer.map(|writer| {
+        writer
+            .join()
+            .map_err(|_| "SSH input writer failed".to_string())?
+    });
+    let status = status?;
+    if let Some(input_result) = input_result {
+        input_result?;
+    }
     Ok(std::process::Output {
         status,
-        stdout: stdout_reader.join().unwrap_or_default(),
-        stderr: stderr_reader.join().unwrap_or_default(),
+        stdout,
+        stderr,
     })
 }
 
@@ -1826,11 +1887,25 @@ fn run_ssh_capture_with_askpass(
     remote_command: &str,
     askpass: &Askpass,
 ) -> Result<String, String> {
+    run_ssh_capture_with_askpass_timeout(
+        connection,
+        remote_command,
+        askpass,
+        Duration::from_secs(180),
+    )
+}
+
+fn run_ssh_capture_with_askpass_timeout(
+    connection: &RemoteSshConnection,
+    remote_command: &str,
+    askpass: &Askpass,
+    timeout: Duration,
+) -> Result<String, String> {
     let mut command = Command::new("ssh");
     command.args(ssh_args(connection)).arg(remote_command);
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let output = command_output_with_timeout(&mut command, Duration::from_secs(180))?;
+    let output = command_output_with_timeout(&mut command, timeout)?;
     if !output.status.success() {
         return Err(command_error(&output.stderr));
     }
@@ -1848,8 +1923,16 @@ struct BundledHelper {
     digest: String,
 }
 
-fn probe_remote_helper(connection: &RemoteSshConnection, askpass: &Askpass) -> Result<HelperProbe, String> {
-    parse_helper_probe(&run_ssh_capture_with_askpass(connection, &probe_command(), askpass)?)
+fn probe_remote_helper(
+    connection: &RemoteSshConnection,
+    askpass: &Askpass,
+) -> Result<HelperProbe, String> {
+    parse_helper_probe(&run_ssh_capture_with_askpass_timeout(
+        connection,
+        &probe_command(),
+        askpass,
+        Duration::from_secs(30),
+    )?)
 }
 
 fn parse_helper_probe(output: &str) -> Result<HelperProbe, String> {
@@ -1979,29 +2062,15 @@ fn install_helper(
     let command_line = install_command(architecture, &helper.digest);
 
     let mut command = Command::new("ssh");
-    command
-        .args(ssh_args(connection))
-        .arg(command_line)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.args(ssh_args(connection)).arg(command_line);
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("could not start ssh helper upload: {e}"))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "ssh upload stdin is unavailable".to_string())?;
-    if let Err(error) = stdin.write_all(encoded.as_bytes()) {
-        let _ = child.kill();
-        return Err(format!("could not upload remote helper: {error}"));
-    }
-    drop(stdin);
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("could not finish remote helper upload: {e}"))?;
+    let output = command_output_with_stdin_timeout(
+        &mut command,
+        encoded.as_bytes(),
+        Duration::from_secs(45),
+    )
+    .map_err(|error| format!("could not upload remote helper: {error}"))?;
     if output.status.success() {
         Ok(())
     } else {
@@ -2062,31 +2131,15 @@ fn install_remote_shell_integration(
     );
     let command_line = shell_integration_install_command(digest);
     let mut command = Command::new("ssh");
-    command
-        .args(ssh_args(connection))
-        .arg(command_line)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.args(ssh_args(connection)).arg(command_line);
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("could not start SSH shell integration upload: {e}"))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "SSH shell integration upload stdin is unavailable".to_string())?;
-    if let Err(error) = stdin.write_all(payload.as_bytes()) {
-        let _ = child.kill();
-        return Err(format!(
-            "could not upload remote shell integration: {error}"
-        ));
-    }
-    drop(stdin);
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("could not finish remote shell integration upload: {e}"))?;
+    let output = command_output_with_stdin_timeout(
+        &mut command,
+        payload.as_bytes(),
+        Duration::from_secs(20),
+    )
+    .map_err(|error| format!("could not upload remote shell integration: {error}"))?;
     if output.status.success() {
         Ok(())
     } else {
@@ -2099,6 +2152,7 @@ fn open_remote_session(
     state: RemoteState,
     connection: RemoteSshConnection,
     workspace_root: Option<String>,
+    install_shell_integration: bool,
 ) -> Result<(RemoteSession, RemoteSessionInfo), String> {
     let askpass = start_ssh_askpass(&app, &state)?;
     let probe = probe_remote_helper(&connection, &askpass)?;
@@ -2106,10 +2160,16 @@ fn open_remote_session(
     if probe.digest.as_deref() != Some(helper.digest.as_str()) {
         install_helper(&connection, &helper, &probe.architecture, &askpass)?;
     }
-    let shell_digest = remote_shell_bundle_digest();
-    if probe.shell_digest.as_deref() != Some(shell_digest.as_str()) {
-        if let Err(error) = install_remote_shell_integration(&connection, &shell_digest, &askpass) {
-            log::warn!("Remote shell integration unavailable; using login shell fallback: {error}");
+    if install_shell_integration {
+        let shell_digest = remote_shell_bundle_digest();
+        if probe.shell_digest.as_deref() != Some(shell_digest.as_str()) {
+            if let Err(error) =
+                install_remote_shell_integration(&connection, &shell_digest, &askpass)
+            {
+                log::warn!(
+                    "Remote shell integration unavailable; using login shell fallback: {error}"
+                );
+            }
         }
     }
 
@@ -2294,6 +2354,36 @@ fn parse_session_info(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn captures_stdin_and_stdout_for_bounded_remote_uploads() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "cat"]);
+
+        let output = command_output_with_stdin_timeout(
+            &mut command,
+            b"remote helper payload",
+            Duration::from_secs(2),
+        )
+        .expect("upload command must finish");
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"remote helper payload");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn terminates_remote_upload_commands_at_the_deadline() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "exec sleep 10"]);
+
+        let error =
+            command_output_with_stdin_timeout(&mut command, b"payload", Duration::from_millis(50))
+                .expect_err("a stalled upload must be stopped");
+
+        assert!(error.contains("timed out"));
+    }
 
     fn connection() -> RemoteSshConnection {
         RemoteSshConnection {

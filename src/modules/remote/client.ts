@@ -60,10 +60,12 @@ export function nextRemoteRequestId(): string {
 export function openRemoteWorkspace(
   connection: RemoteSshConnection,
   workspaceRoot?: string,
+  options: { installShellIntegration?: boolean } = {},
 ): Promise<RemoteSessionInfo> {
   return invoke<RemoteSessionInfo>("remote_open", {
     connection,
     workspaceRoot,
+    installShellIntegration: options.installShellIntegration ?? true,
   });
 }
 

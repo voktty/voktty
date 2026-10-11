@@ -62,6 +62,8 @@ export function AddRemoteProjectDialog({
   const pathRef = useRef("");
   const [directory, setDirectory] = useState<RemoteDirectoryListing>();
   const [browseRequested, setBrowseRequested] = useState(false);
+  const [browseRequest, setBrowseRequest] = useState<{ root?: string }>({});
+  const [connecting, setConnecting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -85,6 +87,8 @@ export function AddRemoteProjectDialog({
     setRemotePath(remoteProjectPathIssue(initialPath) ? "" : initialPath);
     setDirectory(undefined);
     setBrowseRequested(false);
+    setBrowseRequest({ root: undefined });
+    setConnecting(false);
     setError("");
   }, [connectionId, profile?.id, profile?.initialDirectory, setRemotePath]);
 
@@ -162,6 +166,7 @@ export function AddRemoteProjectDialog({
     let sessionId: number | undefined;
     if (!browseRequested) {
       setDirectory(undefined);
+      setConnecting(false);
       setLoading(false);
       return;
     }
@@ -173,12 +178,11 @@ export function AddRemoteProjectDialog({
       setLoading(false);
       return;
     }
-    const requestedPath = pathRef.current.trim();
     setLoading(true);
-    const requestedRoot = requestedPath
-      ? normalizeRemoteProjectPath(requestedPath)
-      : undefined;
-    void openRemoteWorkspace(connection, requestedRoot)
+    setConnecting(true);
+    void openRemoteWorkspace(connection, browseRequest.root, {
+      installShellIntegration: false,
+    })
       .then(async (session) => {
         sessionId = session.session_id;
         if (disposed || !alive.current) {
@@ -187,11 +191,13 @@ export function AddRemoteProjectDialog({
         }
         sessionRef.current = session;
         rootRef.current = session.workspace_root;
+        setConnecting(false);
         await browse("", false);
       })
       .catch((reason: unknown) => {
         if (!disposed && alive.current) {
           setError(String(reason).replace(/^Error: /, ""));
+          setConnecting(false);
           setLoading(false);
         }
       });
@@ -205,8 +211,15 @@ export function AddRemoteProjectDialog({
       if (sessionId !== undefined) {
         void closeRemoteWorkspace(sessionId).catch(() => undefined);
       }
+      if (alive.current) setConnecting(false);
     };
-  }, [browse, browseRequested, connection, connectionState.error]);
+  }, [
+    browse,
+    browseRequested,
+    browseRequest,
+    connection,
+    connectionState.error,
+  ]);
 
   const open = async () => {
     if (!profile || opening || loading) return;
@@ -242,6 +255,17 @@ export function AddRemoteProjectDialog({
         setOpening(false);
     }
   };
+  const requestedBrowsePath = pathRef.current.trim();
+  const currentBrowsePath = directory?.relativePath
+    ? directory.path
+    : (browseRequest.root ?? directory?.path);
+  const browsePathChanged =
+    browseRequested &&
+    requestedBrowsePath.length > 0 &&
+    (remoteProjectPathIssue(requestedBrowsePath)
+      ? requestedBrowsePath !== currentBrowsePath
+      : normalizeRemoteProjectPath(requestedBrowsePath) !== currentBrowsePath);
+
   return createPortal(
     <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
       <button
@@ -340,20 +364,27 @@ export function AddRemoteProjectDialog({
               type="button"
               disabled={opening || !connection}
               onClick={() => {
-                if (browseRequested) {
+                const requestedPath = pathRef.current.trim();
+                const pathIssue = requestedPath
+                  ? remoteProjectPathIssue(requestedPath)
+                  : undefined;
+                if (pathIssue) {
+                  setError(t(`harness.connections.pathErrors.${pathIssue}`));
+                  return;
+                }
+                const requestedRoot = requestedPath
+                  ? normalizeRemoteProjectPath(requestedPath)
+                  : undefined;
+                if (browseRequested && !browsePathChanged) {
                   setBrowseRequested(false);
                   return;
                 }
-                const requestedPath = pathRef.current.trim();
-                if (requestedPath && remoteProjectPathIssue(requestedPath)) {
-                  setError(t("harness.connections.pathErrors.absolute"));
-                  return;
-                }
+                setBrowseRequest({ root: requestedRoot });
                 setBrowseRequested(true);
               }}
               className="self-start rounded-md border border-content/10 px-2.5 py-1.5 text-[11px] text-content/70 hover:bg-content/5 hover:text-content disabled:opacity-40"
             >
-              {browseRequested
+              {browseRequested && !browsePathChanged
                 ? t("harness.connections.hideFolderBrowser")
                 : t("harness.connections.browseFolders")}
             </button>
@@ -383,9 +414,13 @@ export function AddRemoteProjectDialog({
                       {t("harness.connections.noSubfolders")}
                     </p>
                   ) : null}
-                  {!directory && loading ? (
+                  {!directory && (connecting || loading) ? (
                     <p className="px-2 py-1.5 text-[12px] text-content/45">
-                      {t("harness.connections.loadingFolders")}
+                      {t(
+                        connecting
+                          ? "harness.connections.connecting"
+                          : "harness.connections.loadingFolders",
+                      )}
                     </p>
                   ) : null}
                 </div>

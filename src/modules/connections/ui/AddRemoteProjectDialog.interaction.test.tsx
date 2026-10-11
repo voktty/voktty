@@ -17,6 +17,7 @@ vi.mock("@/modules/i18n", () => ({
         "common.cancel": "Cancel",
         "common.open": "Open",
         "harness.connections.browseFolders": "Browse folders",
+        "harness.connections.connecting": "Connecting over SSH…",
         "harness.connections.dialogDescription":
           "Enter its remote folder path to open it directly.",
         "harness.connections.dialogTitle": "Open a remote project",
@@ -173,10 +174,56 @@ describe("AddRemoteProjectDialog remote flow", () => {
 
     expect(mocks.openRemoteWorkspace).toHaveBeenCalledOnce();
     expect(mocks.openRemoteWorkspace.mock.calls[0]?.[1]).toBe("/workspaces");
+    expect(mocks.openRemoteWorkspace.mock.calls[0]?.[2]).toEqual({
+      installShellIntegration: false,
+    });
     expect(mocks.requestRemoteResult).toHaveBeenCalledWith(17, "fs.readDir", {
       path: ".",
       directoriesOnly: true,
     });
+  });
+
+  it("restarts browsing when the path changes while the explorer is open", async () => {
+    mocks.openRemoteWorkspace
+      .mockResolvedValueOnce({
+        session_id: 17,
+        workspace_root: "/workspaces",
+        architecture: "x86_64",
+        helper_version: "1",
+        capabilities: [],
+      })
+      .mockResolvedValueOnce({
+        session_id: 18,
+        workspace_root: "/srv/project",
+        architecture: "x86_64",
+        helper_version: "1",
+        capabilities: [],
+      });
+    mocks.requestRemoteResult.mockResolvedValue({ entries: [] });
+    await render();
+    await setDialogInputValue("/workspaces");
+
+    await act(async () => {
+      dialogButton("Browse folders").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await setDialogInputValue("/srv/project");
+
+    await act(async () => {
+      dialogButton("Browse folders").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(2);
+    expect(mocks.openRemoteWorkspace.mock.calls[1]?.[1]).toBe("/srv/project");
+    expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(17);
+    expect(mocks.requestRemoteResult).toHaveBeenLastCalledWith(
+      18,
+      "fs.readDir",
+      { path: ".", directoriesOnly: true },
+    );
   });
 
   it("shows a validation message for a relative path", async () => {

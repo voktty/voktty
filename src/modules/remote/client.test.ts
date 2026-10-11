@@ -40,6 +40,29 @@ describe("remote client", () => {
     expect(invoke).toHaveBeenCalledWith("remote_open", {
       connection: { host: "server.example", user: "ubuntu" },
       workspaceRoot: "/srv/app",
+      installShellIntegration: true,
+    });
+  });
+
+  it("can skip terminal setup when opening a remote folder browser", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      session_id: 8,
+      architecture: "x86_64",
+      workspace_root: "/srv/app",
+      helper_version: "1.0.0",
+      capabilities: ["fs.readDir"],
+    });
+
+    await openRemoteWorkspace(
+      { host: "server.example", user: "ubuntu" },
+      "/srv/app",
+      { installShellIntegration: false },
+    );
+
+    expect(invoke).toHaveBeenCalledWith("remote_open", {
+      connection: { host: "server.example", user: "ubuntu" },
+      workspaceRoot: "/srv/app",
+      installShellIntegration: false,
     });
   });
 
