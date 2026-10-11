@@ -166,6 +166,7 @@ const PROFILE_HELPER_COMMANDS = new Set([
 const HELPER_FS = {
   listDir: "fs.readDir",
   readFile: "fs.readFile",
+  readFilePreview: "fs.readFilePreview",
   countTextLines: "fs.countTextLines",
   readBinaryFile: "fs.readBinaryFile",
   writeFile: "fs.writeFile",
@@ -2463,6 +2464,7 @@ async function runProfileFileCommand(
   sessionId: number,
   root: string,
   supportsUntrackedLineCounts: boolean,
+  supportsFilePreview: boolean,
   relativePath: (value: unknown) => string,
 ): Promise<unknown> {
   if (!PROFILE_HELPER_COMMANDS.has(command))
@@ -2893,6 +2895,48 @@ async function runProfileFileCommand(
     return result.contentBase64;
   }
   if (command === "read_file_preview") {
+    const requestedMaxLines = Number(args.maxLines);
+    const maxLines = Math.min(
+      12,
+      Math.max(
+        1,
+        Number.isFinite(requestedMaxLines) && requestedMaxLines !== 0
+          ? Math.floor(requestedMaxLines)
+          : 6,
+      ),
+    );
+    const requestedStartLine = Number(args.startLine);
+    const startLine =
+      Number.isSafeInteger(requestedStartLine) && requestedStartLine > 0
+        ? requestedStartLine
+        : 1;
+    if (supportsFilePreview) {
+      const result = await requestRemoteResult<unknown>(
+        sessionId,
+        HELPER_FS.readFilePreview,
+        {
+          path: relativePath(args.path),
+          maxLines,
+          startLine,
+        },
+      );
+      const lines =
+        result && typeof result === "object" && !Array.isArray(result)
+          ? (result as { lines?: unknown }).lines
+          : undefined;
+      const encoder = new TextEncoder();
+      if (
+        !Array.isArray(lines) ||
+        lines.length > maxLines ||
+        lines.some(
+          (line) =>
+            typeof line !== "string" || encoder.encode(line).byteLength > 1024,
+        )
+      ) {
+        throw new Error("The remote helper returned an invalid file preview.");
+      }
+      return lines;
+    }
     const result = await requestRemoteResult<{ content: string }>(
       sessionId,
       HELPER_FS.readFile,
@@ -2902,8 +2946,6 @@ async function runProfileFileCommand(
     const lines = result.content.split(/\r?\n/);
     if (result.content === "") lines.length = 0;
     else if (result.content.endsWith("\n")) lines.pop();
-    const startLine = Math.max(1, Number(args.startLine) || 1);
-    const maxLines = Math.min(12, Math.max(1, Number(args.maxLines) || 6));
     return lines
       .slice(startLine - 1, startLine - 1 + maxLines)
       .map((line) =>
@@ -3085,6 +3127,7 @@ async function runNativeProfileCommand(
       session.session_id,
       sessionRoot,
       session.capabilities.includes(HELPER_FS.countTextLines),
+      session.capabilities.includes(HELPER_FS.readFilePreview),
       (value) => {
         if (typeof value !== "string") {
           throw new Error("The remote command is missing a project path.");

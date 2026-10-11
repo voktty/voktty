@@ -61,6 +61,7 @@ import {
   gitUnstageFile,
   listDir,
   readBinaryFile,
+  readFilePreview,
   readTextFile,
   statFiles,
   writeTextFile,
@@ -2419,6 +2420,71 @@ it("runs saved SSH profile file operations through the Voktty helper", async () 
     path: ".",
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("previews direct-profile SSH files through the bounded helper capability", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.17",
+    capabilities: ["fs.readFilePreview"],
+  });
+  requestRemoteResult.mockResolvedValueOnce({ lines: ["third", "fourth"] });
+
+  await expect(
+    readFilePreview(remotePath(environmentId, "/srv/app/src/note.txt"), 2, 3),
+  ).resolves.toEqual(["third", "fourth"]);
+  expect(requestRemoteResult).toHaveBeenCalledWith(9, "fs.readFilePreview", {
+    path: "src/note.txt",
+    maxLines: 2,
+    startLine: 3,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("falls back to bounded full-file reads for older SSH helpers", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.16",
+    capabilities: [],
+  });
+  requestRemoteResult.mockResolvedValueOnce({
+    content: "first\nsecond\nthird\n",
+  });
+
+  await expect(
+    readFilePreview(remotePath(environmentId, "/srv/app/note.txt"), 1, 2),
+  ).resolves.toEqual(["second"]);
+  expect(requestRemoteResult).toHaveBeenCalledWith(9, "fs.readFile", {
+    path: "note.txt",
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("rejects oversized line previews from an SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.17",
+    capabilities: ["fs.readFilePreview"],
+  });
+  requestRemoteResult.mockResolvedValueOnce({
+    lines: ["x".repeat(1025)],
+  });
+
+  await expect(
+    readFilePreview(remotePath(environmentId, "/srv/app/note.txt")),
+  ).rejects.toThrow("The remote helper returned an invalid file preview.");
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 

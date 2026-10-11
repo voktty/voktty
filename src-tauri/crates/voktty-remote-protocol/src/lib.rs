@@ -9,6 +9,7 @@ pub const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 pub const METHOD_HANDSHAKE: &str = "handshake";
 pub const METHOD_LIST_DIR: &str = "fs.readDir";
 pub const METHOD_READ_FILE: &str = "fs.readFile";
+pub const METHOD_READ_FILE_PREVIEW: &str = "fs.readFilePreview";
 pub const METHOD_COUNT_TEXT_LINES: &str = "fs.countTextLines";
 pub const METHOD_READ_BINARY_FILE: &str = "fs.readBinaryFile";
 pub const METHOD_WRITE_FILE: &str = "fs.writeFile";

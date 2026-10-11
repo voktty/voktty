@@ -1,3 +1,4 @@
+mod file_preview;
 mod git_output;
 mod line_metrics;
 mod opencode_service;
@@ -26,10 +27,11 @@ use voktty_remote_protocol::{
     METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL,
     METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PTY_CLOSE,
     METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE,
-    METHOD_READ_FILE, METHOD_RENAME, METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT,
-    METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
-    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
-    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
+    METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME, METHOD_REPLACE_APPLY,
+    METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
+    METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY,
+    METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE, PROTOCOL_VERSION,
+    REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -162,6 +164,7 @@ impl RemoteServer {
             METHOD_HANDSHAKE => self.handshake(request),
             METHOD_LIST_DIR => self.list_dir(request),
             METHOD_READ_FILE => self.read_file(request),
+            METHOD_READ_FILE_PREVIEW => self.read_file_preview(request),
             METHOD_COUNT_TEXT_LINES => self.count_text_lines(request),
             METHOD_READ_BINARY_FILE => self.read_binary_file(request),
             METHOD_WRITE_FILE => self.write_file(request),
@@ -212,6 +215,7 @@ impl RemoteServer {
                 "capabilities": [
                     METHOD_LIST_DIR,
                     METHOD_READ_FILE,
+                    METHOD_READ_FILE_PREVIEW,
                     METHOD_COUNT_TEXT_LINES,
                     METHOD_READ_BINARY_FILE,
                     METHOD_WRITE_FILE,
@@ -313,6 +317,53 @@ impl RemoteServer {
                 "mtime": modified_millis(&metadata)
             }),
         )
+    }
+
+    fn read_file_preview(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<ReadFilePreviewParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        if params.path.is_empty() || params.path.len() > file_preview::MAX_PREVIEW_PATH_BYTES {
+            return RemoteResponse::failure(
+                request.id,
+                "invalid_path",
+                "preview path is empty or exceeds the path limit",
+            );
+        }
+        if safe_relative_path(&params.path).is_err() {
+            return RemoteResponse::failure(
+                request.id,
+                "invalid_path",
+                "preview path must be project-relative",
+            );
+        }
+        let path = match self.resolve_workspace_path(&params.path, false) {
+            Ok(path) => path,
+            Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
+        };
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "stat_failed", error.to_string())
+            }
+        };
+        if !metadata.is_file() {
+            return RemoteResponse::failure(request.id, "not_a_file", "path is not a file");
+        }
+        match file_preview::read_file_preview(
+            &path,
+            params.max_lines.unwrap_or(6),
+            params.start_line.unwrap_or(1),
+        ) {
+            Ok(lines) => RemoteResponse::success(request.id, json!({ "lines": lines })),
+            Err(error) if error == "Binary file" => {
+                RemoteResponse::failure(request.id, "binary_file", error)
+            }
+            Err(error) => RemoteResponse::failure(request.id, "read_failed", error),
+        }
     }
 
     fn count_text_lines(&self, request: RemoteRequest) -> RemoteResponse {
@@ -2077,6 +2128,14 @@ struct CountTextLinesParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadFilePreviewParams {
+    path: String,
+    max_lines: Option<usize>,
+    start_line: Option<usize>,
+}
+
+#[derive(Deserialize)]
 struct RenameParams {
     from: Option<String>,
     to: Option<String>,
@@ -3745,6 +3804,86 @@ mod tests {
         let result = response.result.expect("line-count result");
         assert_eq!(result["lineCounts"], json!([2, 2, 0, 0, 0]));
         assert!(result.get("content").is_none());
+    }
+
+    #[test]
+    fn previews_requested_lines_from_large_files_through_the_authenticated_root() {
+        use std::io::Write;
+
+        let workspace = tempdir().expect("workspace");
+        let mut file = fs::File::create(workspace.path().join("large.txt")).expect("file");
+        file.write_all(b"skip\r\nfirst\nsecond\n")
+            .expect("preview lines");
+        file.set_len(MAX_FILE_BYTES + 1).expect("large file");
+        let mut server = RemoteServer::new();
+        let handshake = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "handshake".to_string(),
+            method: METHOD_HANDSHAKE.to_string(),
+            params: json!({ "workspaceRoot": workspace.path() }),
+        });
+        assert!(handshake.ok);
+        assert!(handshake.result.expect("handshake")["capabilities"]
+            .as_array()
+            .expect("capabilities")
+            .iter()
+            .any(|capability| capability == METHOD_READ_FILE_PREVIEW));
+
+        let preview = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "preview".to_string(),
+            method: METHOD_READ_FILE_PREVIEW.to_string(),
+            params: json!({ "path": "large.txt", "maxLines": 2, "startLine": 2 }),
+        });
+        assert!(preview.ok, "{:?}", preview.error);
+        assert_eq!(
+            preview.result.expect("preview")["lines"],
+            json!(["first", "second"])
+        );
+
+        let outside = tempdir().expect("outside workspace");
+        fs::write(outside.path().join("secret.txt"), "outside").expect("outside file");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.txt"),
+            workspace.path().join("linked.txt"),
+        )
+        .expect("outside symlink");
+
+        #[cfg(unix)]
+        {
+            let symlink = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: "symlink".to_string(),
+                method: METHOD_READ_FILE_PREVIEW.to_string(),
+                params: json!({ "path": "linked.txt" }),
+            });
+            assert!(!symlink.ok);
+            assert_eq!(symlink.error.expect("path error").code, "invalid_path");
+        }
+
+        let traversal = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "traversal".to_string(),
+            method: METHOD_READ_FILE_PREVIEW.to_string(),
+            params: json!({ "path": "../outside.txt" }),
+        });
+        assert!(!traversal.ok);
+        assert_eq!(traversal.error.expect("path error").code, "invalid_path");
+
+        let oversized_path = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "oversized-path".to_string(),
+            method: METHOD_READ_FILE_PREVIEW.to_string(),
+            params: json!({
+                "path": "x".repeat(file_preview::MAX_PREVIEW_PATH_BYTES + 1)
+            }),
+        });
+        assert!(!oversized_path.ok);
+        assert_eq!(
+            oversized_path.error.expect("path error").code,
+            "invalid_path"
+        );
     }
 
     #[test]
