@@ -4687,6 +4687,7 @@ export const es: TranslationSchema = {
       appearance: "Apariencia",
       providers: "Proveedores",
       inbox: "Bandeja",
+      worktrees: "Árboles de trabajo",
       inboxDesc:
         "Gestiona conexiones de fuentes y tokens para los feeds de tu bandeja de entrada.",
       github: "GitHub",
@@ -4821,6 +4822,7 @@ export const es: TranslationSchema = {
         skills:
           "Explorar y administrar habilidades basadas en archivos desde el proyecto, carpetas personales y el harness.",
         mcp: "Servidores configurados del Protocolo de Contexto de Modelo (MCP) para tus proyectos y cuentas de proveedores.",
+        worktrees: "Administra los árboles de trabajo Git de tus proyectos locales y remotos.",
         archive: "Proyectos y conversaciones que has archivado.",
       },
     },

@@ -4577,6 +4577,7 @@ export const en = {
       appearance: "Appearance",
       providers: "Providers",
       inbox: "Inbox",
+      worktrees: "Worktrees",
       inboxDesc: "Manage source connections and tokens for your inbox feeds.",
       github: "GitHub",
       githubConnection: "GitHub connection",
@@ -4708,6 +4709,7 @@ export const en = {
         skills:
           "Discover and manage file skills from project, personal, and harness folders.",
         mcp: "Configured Model Context Protocol servers for your projects and provider accounts.",
+        worktrees: "Manage Git worktrees for local and remote projects.",
         archive: "Projects and conversations you have archived.",
       },
     },
