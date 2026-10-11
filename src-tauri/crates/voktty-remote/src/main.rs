@@ -1,4 +1,5 @@
 mod git_output;
+mod line_metrics;
 mod opencode_service;
 mod search;
 
@@ -21,7 +22,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse, METHOD_COPY,
-    METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
+    METHOD_COUNT_TEXT_LINES, METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
     METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL,
     METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PTY_CLOSE,
     METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE,
@@ -161,6 +162,7 @@ impl RemoteServer {
             METHOD_HANDSHAKE => self.handshake(request),
             METHOD_LIST_DIR => self.list_dir(request),
             METHOD_READ_FILE => self.read_file(request),
+            METHOD_COUNT_TEXT_LINES => self.count_text_lines(request),
             METHOD_READ_BINARY_FILE => self.read_binary_file(request),
             METHOD_WRITE_FILE => self.write_file(request),
             METHOD_STAT => self.stat(request),
@@ -210,6 +212,7 @@ impl RemoteServer {
                 "capabilities": [
                     METHOD_LIST_DIR,
                     METHOD_READ_FILE,
+                    METHOD_COUNT_TEXT_LINES,
                     METHOD_READ_BINARY_FILE,
                     METHOD_WRITE_FILE,
                     METHOD_STAT,
@@ -310,6 +313,56 @@ impl RemoteServer {
                 "mtime": modified_millis(&metadata)
             }),
         )
+    }
+
+    fn count_text_lines(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<CountTextLinesParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        if self.root.is_none() {
+            return RemoteResponse::failure(
+                request.id,
+                "handshake_required",
+                "handshake is required",
+            );
+        }
+        if params.paths.len() > line_metrics::MAX_LINE_COUNT_FILES {
+            return RemoteResponse::failure(
+                request.id,
+                "count_limit",
+                "too many paths in one line-count request",
+            );
+        }
+        let path_bytes = params
+            .paths
+            .iter()
+            .try_fold(0usize, |total, path| total.checked_add(path.len()));
+        if path_bytes.is_none_or(|bytes| bytes > line_metrics::MAX_LINE_COUNT_PATH_BYTES) {
+            return RemoteResponse::failure(
+                request.id,
+                "count_limit",
+                "line-count paths exceed the request limit",
+            );
+        }
+        let paths = match params
+            .paths
+            .iter()
+            .map(|path| {
+                if path.is_empty() || safe_relative_path(path).is_err() {
+                    return Err("line-count paths must be project-relative files".to_string());
+                }
+                self.resolve_workspace_path(path, false)
+            })
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(paths) => paths,
+            Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
+        };
+        let line_counts = line_metrics::count_text_lines(&paths);
+        RemoteResponse::success(request.id, json!({ "lineCounts": line_counts }))
     }
 
     fn read_binary_file(&self, request: RemoteRequest) -> RemoteResponse {
@@ -2019,6 +2072,11 @@ struct PathParams {
 }
 
 #[derive(Deserialize)]
+struct CountTextLinesParams {
+    paths: Vec<String>,
+}
+
+#[derive(Deserialize)]
 struct RenameParams {
     from: Option<String>,
     to: Option<String>,
@@ -3645,5 +3703,130 @@ mod tests {
         });
         assert!(!response.ok);
         assert_eq!(response.error.expect("error").code, "invalid_cwd");
+    }
+
+    #[test]
+    fn counts_bounded_text_lines_without_returning_file_contents() {
+        let workspace = tempdir().expect("workspace");
+        fs::write(workspace.path().join("plain.txt"), "one\ntwo").expect("text file");
+        fs::write(workspace.path().join("trailing.txt"), "one\ntwo\n").expect("text file");
+        fs::write(workspace.path().join("empty.txt"), "").expect("empty file");
+        fs::write(workspace.path().join("binary.txt"), b"one\0two\n").expect("binary file");
+        let mut server = RemoteServer::new();
+        let handshake = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "handshake".to_string(),
+            method: METHOD_HANDSHAKE.to_string(),
+            params: json!({ "workspaceRoot": workspace.path() }),
+        });
+        assert!(handshake.ok);
+        assert!(handshake.result.expect("handshake")["capabilities"]
+            .as_array()
+            .expect("capabilities")
+            .iter()
+            .any(|capability| capability == METHOD_COUNT_TEXT_LINES));
+
+        let response = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "counts".to_string(),
+            method: METHOD_COUNT_TEXT_LINES.to_string(),
+            params: json!({
+                "paths": [
+                    "plain.txt",
+                    "trailing.txt",
+                    "empty.txt",
+                    "binary.txt",
+                    "missing.txt"
+                ]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("line-count result");
+        assert_eq!(result["lineCounts"], json!([2, 2, 0, 0, 0]));
+        assert!(result.get("content").is_none());
+    }
+
+    #[test]
+    fn line_count_requests_reject_paths_outside_the_project_and_oversized_batches() {
+        let workspace = tempdir().expect("workspace");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let traversal = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "traversal".to_string(),
+            method: METHOD_COUNT_TEXT_LINES.to_string(),
+            params: json!({ "paths": ["../outside.txt"] }),
+        });
+        assert!(!traversal.ok);
+        assert_eq!(traversal.error.expect("path error").code, "invalid_path");
+
+        let too_many = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "too-many".to_string(),
+            method: METHOD_COUNT_TEXT_LINES.to_string(),
+            params: json!({
+                "paths": vec!["missing.txt"; line_metrics::MAX_LINE_COUNT_FILES + 1]
+            }),
+        });
+        assert!(!too_many.ok);
+        assert_eq!(too_many.error.expect("count error").code, "count_limit");
+
+        let oversized = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "oversized-paths".to_string(),
+            method: METHOD_COUNT_TEXT_LINES.to_string(),
+            params: json!({
+                "paths": ["x".repeat(line_metrics::MAX_LINE_COUNT_PATH_BYTES + 1)]
+            }),
+        });
+        assert!(!oversized.ok);
+        assert_eq!(oversized.error.expect("request error").code, "count_limit");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn line_count_rejects_symlinks_outside_the_workspace() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = tempdir().expect("workspace");
+        let outside = tempdir().expect("outside workspace");
+        fs::write(outside.path().join("secret.txt"), "private lines\n").expect("text file");
+        symlink(
+            outside.path().join("secret.txt"),
+            workspace.path().join("linked.txt"),
+        )
+        .expect("symlink");
+
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+        let response = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "outside-symlink".to_string(),
+            method: METHOD_COUNT_TEXT_LINES.to_string(),
+            params: json!({ "paths": ["linked.txt"] }),
+        });
+
+        assert!(!response.ok);
+        assert_eq!(response.error.expect("path error").code, "invalid_path");
     }
 }

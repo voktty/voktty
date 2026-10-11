@@ -166,6 +166,7 @@ const PROFILE_HELPER_COMMANDS = new Set([
 const HELPER_FS = {
   listDir: "fs.readDir",
   readFile: "fs.readFile",
+  countTextLines: "fs.countTextLines",
   readBinaryFile: "fs.readBinaryFile",
   writeFile: "fs.writeFile",
   stat: "fs.stat",
@@ -253,6 +254,8 @@ const PROFILE_UNAVAILABLE =
 const HELPER_GIT_EXEC = "git.execWorkspace";
 const HELPER_GIT_EXEC_WORKSPACE_INPUT = "git.execWorkspaceInput";
 const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_REMOTE_LINE_COUNT_FILES = 20_000;
+const MAX_REMOTE_LINE_COUNT_PATH_BYTES = 4 * 1024 * 1024;
 const MAX_PROJECT_FILES = 20_000;
 const MAX_GIT_DIFF_BYTES = 1024 * 1024;
 const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
@@ -507,6 +510,7 @@ async function nativeProfileGitIndex(
   environmentId: string,
   root: string,
   cwd: string,
+  supportsUntrackedLineCounts: boolean,
 ): Promise<GitDiffIndex> {
   const status = await nativeProfileGitStatus(sessionId, cwd);
   if (!status) return emptyGitIndex();
@@ -521,6 +525,58 @@ async function nativeProfileGitIndex(
     numstatOutput.exitCode === 0
       ? parseGitNumstat(decodeGitMetadata(numstatOutput.stdoutBytes))
       : new Map();
+  const filesNeedingLineCounts = status.files.filter(
+    (file) =>
+      file.status === "untracked" ||
+      (file.status === "added" &&
+        counts.get(file.relative)?.additions === undefined),
+  );
+  const lineCounts = new Map<string, number>();
+  const lineCountRequests: {
+    file: (typeof filesNeedingLineCounts)[number];
+    path: string;
+  }[] = [];
+  if (supportsUntrackedLineCounts) {
+    const encoder = new TextEncoder();
+    let pathBytes = 0;
+    for (const file of filesNeedingLineCounts) {
+      if (lineCountRequests.length >= MAX_REMOTE_LINE_COUNT_FILES) break;
+      const path = joinRelativePath(cwd, file.relative);
+      const nextPathBytes = encoder.encode(path).byteLength;
+      if (nextPathBytes > MAX_REMOTE_LINE_COUNT_PATH_BYTES - pathBytes) break;
+      pathBytes += nextPathBytes;
+      lineCountRequests.push({ file, path });
+    }
+  }
+  if (lineCountRequests.length > 0) {
+    const result = await requestRemoteResult<unknown>(
+      sessionId,
+      HELPER_FS.countTextLines,
+      {
+        paths: lineCountRequests.map(({ path }) => path),
+      },
+    );
+    const values =
+      result && typeof result === "object" && !Array.isArray(result)
+        ? (result as { lineCounts?: unknown }).lineCounts
+        : undefined;
+    if (
+      !Array.isArray(values) ||
+      values.length !== lineCountRequests.length ||
+      values.some(
+        (value) =>
+          typeof value !== "number" ||
+          !Number.isSafeInteger(value) ||
+          value < 0 ||
+          value > 1024 * 1024,
+      )
+    ) {
+      throw new Error("The remote helper returned invalid line counts.");
+    }
+    lineCountRequests.forEach(({ file }, index) => {
+      lineCounts.set(file.relative, values[index] as number);
+    });
+  }
   const files: GitChangedFile[] = status.files.map((file) => {
     const count = counts.get(file.relative);
     return {
@@ -529,7 +585,7 @@ async function nativeProfileGitIndex(
         environmentId,
         joinRemotePath(root, joinRelativePath(cwd, file.relative)),
       ),
-      additions: count?.additions ?? 0,
+      additions: count?.additions ?? lineCounts.get(file.relative) ?? 0,
       deletions: count?.deletions ?? 0,
     };
   });
@@ -2137,6 +2193,7 @@ async function nativeProfileFileDiff(
   environmentId: string,
   root: string,
   cwd: string,
+  supportsUntrackedLineCounts: boolean,
   requestedPath: unknown,
   staged: boolean,
 ): Promise<GitFileDiff> {
@@ -2147,6 +2204,7 @@ async function nativeProfileFileDiff(
     environmentId,
     root,
     cwd,
+    supportsUntrackedLineCounts,
   );
   const file = index.files.find((entry) => entry.relative === relative);
   if (!file) throw new Error("File has no uncommitted changes.");
@@ -2404,6 +2462,7 @@ async function runProfileFileCommand(
   environmentId: string,
   sessionId: number,
   root: string,
+  supportsUntrackedLineCounts: boolean,
   relativePath: (value: unknown) => string,
 ): Promise<unknown> {
   if (!PROFILE_HELPER_COMMANDS.has(command))
@@ -2642,6 +2701,7 @@ async function runProfileFileCommand(
         environmentId,
         root,
         cwd,
+        supportsUntrackedLineCounts,
         args.relative,
         args.staged === true,
       );
@@ -2651,6 +2711,7 @@ async function runProfileFileCommand(
       environmentId,
       root,
       cwd,
+      supportsUntrackedLineCounts,
     );
     if (command === "git_diff_stats") {
       return {
@@ -3023,6 +3084,7 @@ async function runNativeProfileCommand(
       environmentId,
       session.session_id,
       sessionRoot,
+      session.capabilities.includes(HELPER_FS.countTextLines),
       (value) => {
         if (typeof value !== "string") {
           throw new Error("The remote command is missing a project path.");

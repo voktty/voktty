@@ -306,6 +306,141 @@ it("loads remote Git status and statistics through the native helper", async () 
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
+it("counts untracked direct-profile Git files through the bounded SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.17",
+    capabilities: ["git.execWorkspaceInput", "fs.countTextLines"],
+  });
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "fs.countTextLines") {
+        expect(params.paths).toEqual(["src/binary.bin", "src/new file.ts"]);
+        return { lineCounts: [0, 3] };
+      }
+      if (method !== "git.execWorkspace")
+        throw new Error(`Unexpected helper method: ${method}`);
+      const args = params.args as string[];
+      switch (args[0]) {
+        case "status":
+          return gitExecResult("? binary.bin\0? new file.ts\0");
+        case "diff":
+          return gitExecResult("");
+        case "remote":
+        case "symbolic-ref":
+          return gitExecResult("", 1);
+        default:
+          throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+      }
+    },
+  );
+
+  await expect(
+    gitDiffIndex(remotePath(environmentId, "/srv/app/src")),
+  ).resolves.toMatchObject({
+    files: [
+      { relative: "binary.bin", status: "untracked", additions: 0 },
+      { relative: "new file.ts", status: "untracked", additions: 3 },
+    ],
+    additions: 3,
+  });
+  expect(requestRemoteResult).toHaveBeenCalledWith(9, "fs.countTextLines", {
+    paths: ["src/binary.bin", "src/new file.ts"],
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("counts files at the maximum Git index size within the SSH RPC cap", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.17",
+    capabilities: ["fs.countTextLines"],
+  });
+  const fileCount = 20_000;
+  const status = Array.from(
+    { length: fileCount },
+    (_, index) => `? file-${index}.txt\0`,
+  ).join("");
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "fs.countTextLines") {
+        return { lineCounts: (params.paths as string[]).map(() => 0) };
+      }
+      if (method !== "git.execWorkspace")
+        throw new Error(`Unexpected helper method: ${method}`);
+      const args = params.args as string[];
+      if (args[0] === "status") return gitExecResult(status);
+      if (args[0] === "diff") return gitExecResult("");
+      if (args[0] === "remote" || args[0] === "symbolic-ref")
+        return gitExecResult("", 1);
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  const index = await gitDiffIndex(remotePath(environmentId, "/srv/app"));
+  expect(index.files).toHaveLength(fileCount);
+  expect(
+    index.files.find((file) => file.relative === `file-${fileCount - 1}.txt`),
+  ).toMatchObject({
+    relative: `file-${fileCount - 1}.txt`,
+    additions: 0,
+  });
+  const countCall = requestRemoteResult.mock.calls.find(
+    ([, method]) => method === "fs.countTextLines",
+  );
+  if (!countCall) throw new Error("Expected a bounded line-count request.");
+  expect((countCall[2] as { paths: string[] }).paths).toHaveLength(20_000);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("rejects malformed line-count responses from the SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  openRemoteWorkspace.mockResolvedValueOnce({
+    session_id: 9,
+    architecture: "x86_64",
+    workspace_root: "/srv/app",
+    helper_version: "1.0.17",
+    capabilities: ["fs.countTextLines"],
+  });
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "fs.countTextLines") return { lineCounts: ["3"] };
+      if (method !== "git.execWorkspace")
+        throw new Error(`Unexpected helper method: ${method}`);
+      const args = params.args as string[];
+      if (args[0] === "status") return gitExecResult("? new file.ts\0");
+      if (args[0] === "diff") return gitExecResult("");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitDiffIndex(remotePath(environmentId, "/srv/app")),
+  ).rejects.toThrow("The remote helper returned invalid line counts.");
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
 it("stages and unstages remote paths with literal Git pathspecs", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockResolvedValue(gitExecResult(""));
