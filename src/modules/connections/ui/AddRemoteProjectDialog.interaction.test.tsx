@@ -159,6 +159,7 @@ describe("AddRemoteProjectDialog remote flow", () => {
     expect(mocks.openRemoteWorkspace).toHaveBeenCalledOnce();
     expect(mocks.requestRemoteResult).toHaveBeenCalledWith(17, "fs.readDir", {
       path: ".",
+      directoriesOnly: true,
     });
   });
 

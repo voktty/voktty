@@ -131,6 +131,7 @@ export function AddRemoteProjectDialog({
           }>;
         }>(session.session_id, "fs.readDir", {
           path: relativePath || ".",
+          directoriesOnly: true,
         });
         if (
           !alive.current ||

@@ -259,7 +259,7 @@ impl RemoteServer {
             Ok(path) => path,
             Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
         };
-        let entries = match read_directory(&path) {
+        let entries = match read_directory(&path, params.directories_only.unwrap_or(false)) {
             Ok(entries) => entries,
             Err(error) => return RemoteResponse::failure(request.id, "read_failed", error),
         };
@@ -2120,6 +2120,8 @@ struct HandshakeParams {
 #[derive(Deserialize)]
 struct PathParams {
     path: Option<String>,
+    #[serde(rename = "directoriesOnly")]
+    directories_only: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -2307,17 +2309,40 @@ fn safe_relative_path(path: &str) -> Result<PathBuf, String> {
     Ok(path.to_path_buf())
 }
 
-fn read_directory(path: &Path) -> Result<Vec<Value>, String> {
+fn read_directory(path: &Path, directories_only: bool) -> Result<Vec<Value>, String> {
     let mut entries = Vec::new();
+    let mut scanned = 0;
     for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
         let Ok(entry) = entry else { continue };
-        if entries.len() >= MAX_DIRECTORY_ENTRIES {
+        scanned += 1;
+        if scanned > MAX_DIRECTORY_ENTRIES {
             return Err("directory exceeds the remote entry limit".to_string());
+        }
+        if directories_only {
+            if let Some(name) = directory_name(&entry)? {
+                entries.push(json!({
+                    "name": name,
+                    "kind": "directory"
+                }));
+            }
+            continue;
         }
         entries.push(directory_entry(&entry)?);
     }
     entries.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
     Ok(entries)
+}
+
+fn directory_name(entry: &fs::DirEntry) -> Result<Option<String>, String> {
+    let file_type = entry.file_type().map_err(|error| error.to_string())?;
+    let is_directory = if file_type.is_symlink() {
+        fs::metadata(entry.path())
+            .map(|metadata| metadata.is_dir())
+            .unwrap_or(false)
+    } else {
+        file_type.is_dir()
+    };
+    Ok(is_directory.then(|| entry.file_name().to_string_lossy().into_owned()))
 }
 
 fn directory_entry(entry: &fs::DirEntry) -> Result<Value, String> {
@@ -2670,6 +2695,50 @@ mod tests {
             params: json!({ "path": "../outside" }),
         });
         assert!(!escape.ok);
+    }
+
+    #[test]
+    fn directory_listing_can_skip_file_metadata_and_keep_symlink_directories() {
+        let workspace = tempdir().expect("workspace");
+        let nested = workspace.path().join("nested");
+        fs::create_dir(&nested).expect("nested directory");
+        fs::write(workspace.path().join("large-file.txt"), "content").expect("file");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&nested, workspace.path().join("linked-folder"))
+            .expect("directory symlink");
+
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let listing = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "directories".to_string(),
+            method: METHOD_LIST_DIR.to_string(),
+            params: json!({ "directoriesOnly": true }),
+        });
+
+        assert!(listing.ok);
+        let result = listing.result.expect("listing");
+        let entries = result["entries"].as_array().expect("entries");
+        let names: Vec<_> = entries
+            .iter()
+            .map(|entry| entry["name"].as_str().expect("entry name"))
+            .collect();
+        #[cfg(unix)]
+        assert_eq!(names, ["linked-folder", "nested"]);
+        #[cfg(not(unix))]
+        assert_eq!(names, ["nested"]);
+        assert!(entries.iter().all(|entry| entry["kind"] == "directory"));
+        assert!(entries.iter().all(|entry| entry.get("size").is_none()));
     }
 
     #[cfg(unix)]
