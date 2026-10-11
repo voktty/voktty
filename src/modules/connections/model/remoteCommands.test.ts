@@ -698,6 +698,350 @@ it("rejects unsafe Git tag names before running tag mutations", async () => {
   expect(requestRemoteResult).toHaveBeenCalledTimes(1);
 });
 
+it("routes Git History branch, cherry-pick, revert, and conflict actions through SSH", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const sourceSha = "a".repeat(40);
+  const resultSha = "b".repeat(40);
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format") {
+        return gitExecResult(`${args[2]}\n`);
+      }
+      if (args[0] === "rev-parse" && args[1] === "--verify") {
+        return gitExecResult(`${sourceSha}\n`);
+      }
+      if (
+        args[0] === "rev-parse" &&
+        args[1] === "-q" &&
+        args[3] === "MERGE_HEAD"
+      ) {
+        return gitExecResult("", 1);
+      }
+      if (
+        args[0] === "rev-parse" &&
+        args[1] === "-q" &&
+        args[3] === "CHERRY_PICK_HEAD"
+      ) {
+        return gitExecResult(`${sourceSha}\n`);
+      }
+      if (args[0] === "rev-parse" && args[1] === "-q") {
+        return gitExecResult("", 1);
+      }
+      if (args[0] === "rev-parse" && args[1] === "HEAD") {
+        return gitExecResult(`${resultSha}\n`);
+      }
+      if (
+        args[0] === "checkout" ||
+        args[0] === "cherry-pick" ||
+        args[0] === "revert" ||
+        args[0] === "-c"
+      ) {
+        return gitExecResult("");
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(
+    runRemoteCommand("git_branch_from_commit", {
+      cwd,
+      name: "feature/from-commit",
+      sha: sourceSha,
+    }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_cherry_pick_commit", { cwd, sha: sourceSha }),
+  ).resolves.toBe(resultSha);
+  await expect(
+    runRemoteCommand("git_revert_commit", { cwd, sha: sourceSha }),
+  ).resolves.toBe(resultSha);
+  await expect(
+    runRemoteCommand("git_operation_status", { cwd }),
+  ).resolves.toEqual({ kind: "cherryPick" });
+  await expect(
+    runRemoteCommand("git_operation_abort", { cwd, kind: "revert" }),
+  ).resolves.toBeUndefined();
+  await expect(
+    runRemoteCommand("git_operation_continue", { cwd, kind: "cherryPick" }),
+  ).resolves.toBeUndefined();
+
+  const gitCalls = requestRemoteResult.mock.calls
+    .filter(([, method]) => method === "git.execWorkspace")
+    .map(([, , params]) => (params as { args: string[] }).args);
+  expect(gitCalls).toContainEqual([
+    "checkout",
+    "-b",
+    "feature/from-commit",
+    sourceSha,
+  ]);
+  expect(gitCalls).toContainEqual(["cherry-pick", sourceSha]);
+  expect(gitCalls).toContainEqual(["revert", "--no-edit", sourceSha]);
+  expect(gitCalls).toContainEqual(["revert", "--abort"]);
+  expect(gitCalls).toContainEqual([
+    "-c",
+    "core.editor=true",
+    "cherry-pick",
+    "--continue",
+  ]);
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method, params]) => {
+        const args = (params as { args: string[] }).args;
+        return (
+          method === "git.execWorkspace" &&
+          (args[0] === "checkout" ||
+            args[0] === "cherry-pick" ||
+            args[0] === "revert" ||
+            args[0] === "-c")
+        );
+      })
+      .every(
+        ([, , params]) =>
+          (params as { timeoutSecs: number }).timeoutSecs === 30,
+      ),
+  ).toBe(true);
+
+  await expect(
+    runRemoteCommand("git_operation_abort", { cwd, kind: "toString" }),
+  ).rejects.toThrow("Git operation kind is invalid");
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("rejects invalid SSH branch names and commit refs before Git mutations", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format") return gitExecResult("", 1);
+      if (args[0] === "rev-parse" && args[1] === "--verify") {
+        return gitExecResult("", 1);
+      }
+      throw new Error("Unexpected Git command");
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(
+    runRemoteCommand("git_branch_from_commit", {
+      cwd,
+      name: "--delete",
+      sha: "a".repeat(40),
+    }),
+  ).rejects.toThrow("not a valid branch name");
+  await expect(
+    runRemoteCommand("git_cherry_pick_commit", { cwd, sha: "--delete" }),
+  ).rejects.toThrow("Invalid commit");
+  await expect(
+    runRemoteCommand("git_revert_commit", { cwd, sha: "a".repeat(40) }),
+  ).rejects.toThrow("Unknown commit");
+
+  const gitCalls = requestRemoteResult.mock.calls
+    .filter(([, method]) => method === "git.execWorkspace")
+    .map(([, , params]) => (params as { args: string[] }).args);
+  expect(
+    gitCalls.some((args) =>
+      ["checkout", "cherry-pick", "revert"].includes(args[0]),
+    ),
+  ).toBe(false);
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("compares native SSH branches with bounded logs and safe file metadata", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const sha = "a".repeat(40);
+  const parentSha = "b".repeat(40);
+  const logLine = [
+    sha,
+    "Ada Lovelace",
+    "ada@example.test",
+    "1700000000",
+    parentSha,
+    "Add remote feature",
+  ].join("\x1f");
+  const nameStatusOutput = [
+    "M",
+    "src/a\tfile.ts",
+    "R100",
+    "src/old.ts",
+    "src/new file.ts",
+    "",
+  ].join("\0");
+  const numstatOutput = [
+    "3\t1\tsrc/a\tfile.ts",
+    "0\t0\t",
+    "src/old.ts",
+    "src/new file.ts",
+    "",
+  ].join("\0");
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "check-ref-format") {
+        return gitExecResult(`${args[2]}\n`);
+      }
+      if (args[0] === "log") {
+        return args[3] === "main..feature/remote"
+          ? gitExecResult(`${logLine}\n`)
+          : gitExecResult("");
+      }
+      if (args[0] === "diff" && args.includes("--name-status")) {
+        return gitExecResult(nameStatusOutput);
+      }
+      if (args[0] === "diff" && args.includes("--numstat")) {
+        return gitExecResult(numstatOutput);
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_compare_branches", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      base: "main",
+      compare: "feature/remote",
+    }),
+  ).resolves.toEqual({
+    ahead: [
+      {
+        sha,
+        shortSha: sha.slice(0, 7),
+        author: "Ada Lovelace",
+        authorEmail: "ada@example.test",
+        timestampSecs: 1700000000,
+        parents: [parentSha],
+        subject: "Add remote feature",
+        filesChanged: 0,
+        insertions: 0,
+        deletions: 0,
+      },
+    ],
+    behind: [],
+    files: [
+      {
+        path: "src/a\tfile.ts",
+        originalPath: null,
+        status: "M",
+        statusLabel: "Modified",
+        added: 3,
+        removed: 1,
+        isBinary: false,
+      },
+      {
+        path: "src/new file.ts",
+        originalPath: "src/old.ts",
+        status: "R",
+        statusLabel: "Renamed",
+        added: 0,
+        removed: 0,
+        isBinary: false,
+      },
+    ],
+  });
+  const gitCalls = requestRemoteResult.mock.calls
+    .filter(([, method]) => method === "git.execWorkspace")
+    .map(([, , params]) => (params as { args: string[] }).args);
+  expect(gitCalls).toContainEqual([
+    "log",
+    "--no-color",
+    "--format=%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s",
+    "main..feature/remote",
+  ]);
+  expect(gitCalls).toContainEqual([
+    "diff",
+    "--no-commit-id",
+    "-r",
+    "-z",
+    "--name-status",
+    "main...feature/remote",
+  ]);
+  expect(gitCalls).toContainEqual([
+    "diff",
+    "--no-commit-id",
+    "-r",
+    "-z",
+    "--numstat",
+    "main...feature/remote",
+  ]);
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method, params]) => {
+        const args = (params as { args: string[] }).args;
+        return (
+          method === "git.execWorkspace" &&
+          (args[0] === "log" || args[0] === "diff")
+        );
+      })
+      .every(([, , params]) => {
+        const options = params as {
+          timeoutSecs: number;
+          maxOutputBytes: number;
+        };
+        return (
+          options.timeoutSecs === 30 &&
+          options.maxOutputBytes === 4 * 1024 * 1024
+        );
+      }),
+  ).toBe(true);
+
+  requestRemoteResult.mockClear();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      _method: string,
+      params: Record<string, unknown>,
+    ) => {
+      const args = params.args as string[];
+      if (args[1] === "--show-toplevel") return gitExecResult("/srv/app\n");
+      if (args[0] === "check-ref-format") {
+        return gitExecResult(`${args[2]}\n`);
+      }
+      if (args.includes("--name-status")) {
+        return gitExecResult(["M", "../outside.ts", ""].join("\0"));
+      }
+      if (args.includes("--numstat")) {
+        return gitExecResult("1\t0\t../outside.ts\0");
+      }
+      return gitExecResult("");
+    },
+  );
+  await expect(
+    runRemoteCommand("git_compare_branches", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      base: "main",
+      compare: "feature/remote",
+    }),
+  ).rejects.toThrow("outside the project");
+});
+
 it("refuses to read or commit a Git repository above the saved project root", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockImplementation(

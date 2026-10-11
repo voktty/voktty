@@ -78,6 +78,13 @@ const HOST_COMMANDS = new Set([
   "git_tag_create",
   "git_tag_delete",
   "git_tag_push",
+  "git_branch_from_commit",
+  "git_cherry_pick_commit",
+  "git_revert_commit",
+  "git_compare_branches",
+  "git_operation_status",
+  "git_operation_abort",
+  "git_operation_continue",
   "git_checkout",
   "git_create_branch",
   "git_stash",
@@ -142,6 +149,13 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_tag_create",
   "git_tag_delete",
   "git_tag_push",
+  "git_branch_from_commit",
+  "git_cherry_pick_commit",
+  "git_revert_commit",
+  "git_compare_branches",
+  "git_operation_status",
+  "git_operation_abort",
+  "git_operation_continue",
 ]);
 
 const HELPER_FS = {
@@ -239,8 +253,12 @@ const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
 const MAX_GIT_REF_BYTES = 1024;
 const MAX_GIT_TAGS = 20_000;
+const MAX_GIT_COMPARE_COMMITS = 20_000;
+const MAX_GIT_COMPARE_FILES = 20_000;
+const GIT_MUTATION_TIMEOUT_SECS = 30;
 const GIT_NETWORK_TIMEOUT_SECS = 180;
 const REMOTE_GIT_COMMIT_SHA = /^[0-9a-f]{4,64}$/i;
+const GIT_COMPARE_LOG_FORMAT = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 
 type HelperGitOutput = {
   stdout: string;
@@ -1230,6 +1248,199 @@ async function nativeProfileGitTagPush(
   );
 }
 
+function parseNativeProfileGitLog(output: string) {
+  const entries = output.split(/\r?\n/).flatMap((line) => {
+    if (!line) return [];
+    const fields = line.split("\x1f");
+    const [sha, author, authorEmail, rawTimestamp, rawParents] = fields;
+    if (!sha || !/^[0-9a-f]{40,64}$/i.test(sha) || fields.length < 6) {
+      return [];
+    }
+    const parsedTimestamp = Number(rawTimestamp);
+    const subject = fields.slice(5).join("\x1f");
+    return [
+      {
+        sha,
+        shortSha: sha.slice(0, 7),
+        author: author ?? "",
+        authorEmail: authorEmail ?? "",
+        timestampSecs: Number.isSafeInteger(parsedTimestamp)
+          ? parsedTimestamp
+          : 0,
+        parents: (rawParents ?? "").split(/\s+/).filter(Boolean),
+        subject,
+        filesChanged: 0,
+        insertions: 0,
+        deletions: 0,
+      },
+    ];
+  });
+  if (entries.length > MAX_GIT_COMPARE_COMMITS) {
+    throw new Error("The remote Git comparison has too many commits.");
+  }
+  return entries;
+}
+
+function parseNativeProfileGitCompareFiles(
+  nameStatusOutput: string,
+  numstatOutput: string,
+) {
+  const nameStatus = nameStatusOutput.split("\0").filter(Boolean);
+  const numstat = numstatOutput.split("\0").filter(Boolean);
+  const stats = new Map<
+    string,
+    { added: number; removed: number; isBinary: boolean }
+  >();
+
+  for (let index = 0; index < numstat.length;) {
+    const record = numstat[index++];
+    if (!record) continue;
+    const firstTab = record.indexOf("\t");
+    const secondTab = record.indexOf("\t", firstTab + 1);
+    if (firstTab < 0 || secondTab < 0) {
+      throw new Error("The remote helper returned invalid Git change counts.");
+    }
+    const rawAdded = record.slice(0, firstTab);
+    const rawRemoved = record.slice(firstTab + 1, secondTab);
+    let path = record.slice(secondTab + 1);
+    if (!path) {
+      index += 1;
+      path = numstat[index++] ?? "";
+    }
+    const relative = helperRelativePath(path);
+    const isBinary = rawAdded === "-" && rawRemoved === "-";
+    const added = rawAdded === "-" ? 0 : Number(rawAdded);
+    const removed = rawRemoved === "-" ? 0 : Number(rawRemoved);
+    if (
+      !Number.isSafeInteger(added) ||
+      added < 0 ||
+      !Number.isSafeInteger(removed) ||
+      removed < 0
+    ) {
+      throw new Error("The remote helper returned invalid Git change counts.");
+    }
+    stats.set(relative, { added, removed, isBinary });
+  }
+
+  const files = [];
+  for (let index = 0; index < nameStatus.length;) {
+    const statusToken = nameStatus[index++];
+    if (!statusToken) continue;
+    const status = statusToken[0];
+    const originalPath =
+      status === "R" || status === "C" ? nameStatus[index++] : undefined;
+    const path = nameStatus[index++];
+    if (!path || (originalPath !== undefined && !originalPath)) {
+      throw new Error(
+        "The remote helper returned an incomplete Git file list.",
+      );
+    }
+    const relative = helperRelativePath(path);
+    const originalRelative =
+      originalPath === undefined ? null : helperRelativePath(originalPath);
+    const count = stats.get(relative);
+    const statusLabel =
+      status === "A"
+        ? "Added"
+        : status === "D"
+          ? "Deleted"
+          : status === "M"
+            ? "Modified"
+            : status === "R"
+              ? "Renamed"
+              : status === "C"
+                ? "Copied"
+                : status === "T"
+                  ? "Type changed"
+                  : status === "U"
+                    ? "Unmerged"
+                    : `Status ${status}`;
+    files.push({
+      path: relative,
+      originalPath: originalRelative,
+      status,
+      statusLabel,
+      added: count?.added ?? 0,
+      removed: count?.removed ?? 0,
+      isBinary: count?.isBinary ?? false,
+    });
+    if (files.length > MAX_GIT_COMPARE_FILES) {
+      throw new Error("The remote Git comparison has too many files.");
+    }
+  }
+  return files;
+}
+
+async function nativeProfileGitLogRange(
+  sessionId: number,
+  cwd: string,
+  range: string,
+) {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["log", "--no-color", `--format=${GIT_COMPARE_LOG_FORMAT}`, range],
+    MAX_GIT_OUTPUT_BYTES,
+    false,
+    false,
+    undefined,
+    GIT_MUTATION_TIMEOUT_SECS,
+  );
+  return parseNativeProfileGitLog(decodeGitMetadata(result.stdoutBytes));
+}
+
+async function nativeProfileGitCompareBranches(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  baseValue: unknown,
+  compareValue: unknown,
+) {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const base = await nativeProfileGitBranchName(sessionId, cwd, baseValue);
+  const compare = await nativeProfileGitBranchName(
+    sessionId,
+    cwd,
+    compareValue,
+  );
+  const ahead = await nativeProfileGitLogRange(
+    sessionId,
+    cwd,
+    `${base}..${compare}`,
+  );
+  const behind = await nativeProfileGitLogRange(
+    sessionId,
+    cwd,
+    `${compare}..${base}`,
+  );
+  const diffArgs = ["diff", "--no-commit-id", "-r", "-z"];
+  const nameStatusResult = await runHelperGit(
+    sessionId,
+    cwd,
+    [...diffArgs, "--name-status", `${base}...${compare}`],
+    MAX_GIT_OUTPUT_BYTES,
+    false,
+    false,
+    undefined,
+    GIT_MUTATION_TIMEOUT_SECS,
+  );
+  const numstatResult = await runHelperGit(
+    sessionId,
+    cwd,
+    [...diffArgs, "--numstat", `${base}...${compare}`],
+    MAX_GIT_OUTPUT_BYTES,
+    false,
+    false,
+    undefined,
+    GIT_MUTATION_TIMEOUT_SECS,
+  );
+  const files = parseNativeProfileGitCompareFiles(
+    decodeGitMetadata(nameStatusResult.stdoutBytes),
+    decodeGitMetadata(numstatResult.stdoutBytes),
+  );
+  return { ahead, behind, files };
+}
+
 async function nativeProfileGitRemoteName(
   sessionId: number,
   cwd: string,
@@ -1535,8 +1746,18 @@ async function nativeProfileGitMutation(
   sessionId: number,
   cwd: string,
   gitArgs: string[],
+  timeoutSecs = 10,
 ): Promise<void> {
-  const result = await runHelperGit(sessionId, cwd, gitArgs, 64 * 1024, true);
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    gitArgs,
+    64 * 1024,
+    true,
+    false,
+    undefined,
+    timeoutSecs,
+  );
   if (result.exitCode !== 0) {
     throw new Error(
       result.stderr.trim() ||
@@ -1654,6 +1875,120 @@ async function nativeProfileGitCreateBranch(
   }
   await nativeProfileGitMutation(sessionId, cwd, ["checkout", "-b", name]);
   return name;
+}
+
+async function nativeProfileGitBranchFromCommit(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  nameValue: unknown,
+  shaValue: unknown,
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name = await nativeProfileGitBranchName(sessionId, cwd, nameValue);
+  const sha = await nativeProfileGitCommitSha(sessionId, cwd, shaValue);
+  await nativeProfileGitMutation(
+    sessionId,
+    cwd,
+    ["checkout", "-b", name, sha],
+    GIT_MUTATION_TIMEOUT_SECS,
+  );
+}
+
+async function nativeProfileGitHeadSha(
+  sessionId: number,
+  cwd: string,
+): Promise<string> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "HEAD"],
+    64 * 1024,
+  );
+  const sha = result.stdout.trim();
+  if (!/^[0-9a-f]{40,64}$/i.test(sha)) {
+    throw new Error("Could not resolve the new remote Git commit.");
+  }
+  return sha;
+}
+
+async function nativeProfileGitApplyCommit(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  operation: "cherry-pick" | "revert",
+  shaValue: unknown,
+): Promise<string> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const sha = await nativeProfileGitCommitSha(sessionId, cwd, shaValue);
+  await nativeProfileGitMutation(
+    sessionId,
+    cwd,
+    operation === "revert"
+      ? ["revert", "--no-edit", sha]
+      : ["cherry-pick", sha],
+    GIT_MUTATION_TIMEOUT_SECS,
+  );
+  return nativeProfileGitHeadSha(sessionId, cwd);
+}
+
+const GIT_OPERATION_SUBCOMMANDS = {
+  merge: "merge",
+  revert: "revert",
+  cherryPick: "cherry-pick",
+  rebase: "rebase",
+} as const;
+
+async function nativeProfileGitOperationStatus(
+  sessionId: number,
+  root: string,
+  cwd: string,
+): Promise<{ kind: "none" | keyof typeof GIT_OPERATION_SUBCOMMANDS }> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const refs = [
+    ["MERGE_HEAD", "merge"],
+    ["CHERRY_PICK_HEAD", "cherryPick"],
+    ["REVERT_HEAD", "revert"],
+    ["REBASE_HEAD", "rebase"],
+  ] as const;
+  for (const [ref, kind] of refs) {
+    const result = await runHelperGit(
+      sessionId,
+      cwd,
+      ["rev-parse", "-q", "--verify", ref],
+      64 * 1024,
+      true,
+    );
+    if (result.exitCode === 0) return { kind };
+  }
+  return { kind: "none" };
+}
+
+async function nativeProfileGitOperationMutation(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  kindValue: unknown,
+  action: "--abort" | "--continue",
+): Promise<void> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  if (
+    typeof kindValue !== "string" ||
+    !Object.keys(GIT_OPERATION_SUBCOMMANDS).includes(kindValue)
+  ) {
+    throw new Error("The Git operation kind is invalid.");
+  }
+  const kind = kindValue as keyof typeof GIT_OPERATION_SUBCOMMANDS;
+  const gitArgs =
+    action === "--continue"
+      ? ["-c", "core.editor=true", GIT_OPERATION_SUBCOMMANDS[kind], action]
+      : [GIT_OPERATION_SUBCOMMANDS[kind], action];
+  await nativeProfileGitMutation(
+    sessionId,
+    cwd,
+    gitArgs,
+    GIT_MUTATION_TIMEOUT_SECS,
+  );
 }
 
 async function nativeProfileGitStash(
@@ -2002,6 +2337,52 @@ async function runProfileFileCommand(
       relativePath(args.cwd),
       args.name,
       args.remote,
+    );
+  }
+  if (command === "git_branch_from_commit") {
+    return nativeProfileGitBranchFromCommit(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+      args.name,
+      args.sha,
+    );
+  }
+  if (command === "git_cherry_pick_commit" || command === "git_revert_commit") {
+    return nativeProfileGitApplyCommit(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+      command === "git_revert_commit" ? "revert" : "cherry-pick",
+      args.sha,
+    );
+  }
+  if (command === "git_compare_branches") {
+    return nativeProfileGitCompareBranches(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+      args.base,
+      args.compare,
+    );
+  }
+  if (command === "git_operation_status") {
+    return nativeProfileGitOperationStatus(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+    );
+  }
+  if (
+    command === "git_operation_abort" ||
+    command === "git_operation_continue"
+  ) {
+    return nativeProfileGitOperationMutation(
+      sessionId,
+      root,
+      relativePath(args.repoRoot ?? args.cwd),
+      args.kind,
+      command === "git_operation_abort" ? "--abort" : "--continue",
     );
   }
   if (command === "git_branches") {

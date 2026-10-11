@@ -2,6 +2,7 @@ import type { GitBranches, GitDiffIndex } from "@/modules/harness/lib/fs";
 import { invokeWorkspace } from "@/modules/harness/lib/fs";
 import { t } from "@/modules/i18n";
 import type {
+  GitBranchComparison,
   GitBranchEntry,
   GitBranchListResult,
   GitCommitFileChange,
@@ -10,6 +11,8 @@ import type {
   GitDiffResult,
   GitHistoryMetadata,
   GitLogEntry,
+  GitOperationKind,
+  GitOperationStatus,
   GitPushResult,
   GitRepoInfo,
   GitTagEntry,
@@ -358,6 +361,150 @@ export function loadRemoteGitTagPush(
     name,
     remote: remote ?? null,
   });
+}
+
+export function loadRemoteGitBranchFromCommit(
+  repoRoot: string,
+  name: string,
+  sha: string,
+): Promise<void> {
+  return remoteGitCommand<void>("git_branch_from_commit", repoRoot, {
+    name,
+    sha,
+  });
+}
+
+async function loadRemoteGitCommitOperation(
+  command: "git_cherry_pick_commit" | "git_revert_commit",
+  repoRoot: string,
+  sha: string,
+): Promise<string> {
+  const result = await remoteGitCommand<unknown>(command, repoRoot, { sha });
+  if (typeof result !== "string" || !/^[0-9a-f]{40,64}$/i.test(result)) {
+    throw new Error("The remote helper returned an invalid Git commit id.");
+  }
+  return result;
+}
+
+export function loadRemoteGitCherryPickCommit(
+  repoRoot: string,
+  sha: string,
+): Promise<string> {
+  return loadRemoteGitCommitOperation("git_cherry_pick_commit", repoRoot, sha);
+}
+
+export function loadRemoteGitRevertCommit(
+  repoRoot: string,
+  sha: string,
+): Promise<string> {
+  return loadRemoteGitCommitOperation("git_revert_commit", repoRoot, sha);
+}
+
+export async function loadRemoteGitOperationStatus(
+  repoRoot: string,
+): Promise<GitOperationStatus> {
+  const result = await remoteGitCommand<unknown>(
+    "git_operation_status",
+    repoRoot,
+  );
+  const kind = (result as GitOperationStatus | null)?.kind;
+  if (
+    !["none", "merge", "revert", "cherryPick", "rebase"].includes(
+      kind as GitOperationKind,
+    )
+  ) {
+    throw new Error("The remote helper returned an invalid Git operation.");
+  }
+  return { kind: kind as GitOperationKind };
+}
+
+export function loadRemoteGitOperationAbort(
+  repoRoot: string,
+  kind: Exclude<GitOperationKind, "none">,
+): Promise<void> {
+  return remoteGitCommand<void>("git_operation_abort", repoRoot, { kind });
+}
+
+export function loadRemoteGitOperationContinue(
+  repoRoot: string,
+  kind: Exclude<GitOperationKind, "none">,
+): Promise<void> {
+  return remoteGitCommand<void>("git_operation_continue", repoRoot, { kind });
+}
+
+function isRemoteComparisonLogEntry(value: unknown): value is GitLogEntry {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const entry = value as GitLogEntry;
+  return (
+    typeof entry.sha === "string" &&
+    /^[0-9a-f]{40,64}$/i.test(entry.sha) &&
+    entry.shortSha === entry.sha.slice(0, 7) &&
+    typeof entry.author === "string" &&
+    typeof entry.authorEmail === "string" &&
+    Number.isSafeInteger(entry.timestampSecs) &&
+    Array.isArray(entry.parents) &&
+    entry.parents.every(
+      (parent) =>
+        typeof parent === "string" && /^[0-9a-f]{40,64}$/i.test(parent),
+    ) &&
+    typeof entry.subject === "string" &&
+    Number.isSafeInteger(entry.filesChanged) &&
+    Number.isSafeInteger(entry.insertions) &&
+    Number.isSafeInteger(entry.deletions)
+  );
+}
+
+function isRemoteComparisonFile(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const file = value as GitBranchComparison["files"][number];
+  const safePath = (path: string) =>
+    Boolean(path) &&
+    !path.includes("\\") &&
+    !path.startsWith("/") &&
+    !/^[A-Za-z]:/.test(path) &&
+    !path.split("/").some((part) => !part || part === "." || part === "..");
+  return (
+    typeof file.path === "string" &&
+    safePath(file.path) &&
+    (file.originalPath === null || typeof file.originalPath === "string") &&
+    (file.originalPath === null || safePath(file.originalPath)) &&
+    typeof file.status === "string" &&
+    typeof file.statusLabel === "string" &&
+    Number.isSafeInteger(file.added) &&
+    file.added >= 0 &&
+    Number.isSafeInteger(file.removed) &&
+    file.removed >= 0 &&
+    typeof file.isBinary === "boolean"
+  );
+}
+
+export async function loadRemoteGitCompareBranches(
+  repoRoot: string,
+  base: string,
+  compare: string,
+): Promise<GitBranchComparison> {
+  const result = await remoteGitCommand<unknown>(
+    "git_compare_branches",
+    repoRoot,
+    { base, compare },
+  );
+  if (
+    !result ||
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    !Array.isArray((result as GitBranchComparison).ahead) ||
+    !Array.isArray((result as GitBranchComparison).behind) ||
+    !Array.isArray((result as GitBranchComparison).files) ||
+    (result as GitBranchComparison).ahead.length > 20_000 ||
+    (result as GitBranchComparison).behind.length > 20_000 ||
+    (result as GitBranchComparison).files.length > 20_000 ||
+    !(result as GitBranchComparison).ahead.every(isRemoteComparisonLogEntry) ||
+    !(result as GitBranchComparison).behind.every(isRemoteComparisonLogEntry) ||
+    !(result as GitBranchComparison).files.every(isRemoteComparisonFile)
+  ) {
+    throw new Error("The remote helper returned an invalid Git comparison.");
+  }
+  return result as GitBranchComparison;
 }
 
 export async function loadRemoteGitCheckout(

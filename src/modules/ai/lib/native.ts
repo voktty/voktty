@@ -20,16 +20,23 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   isDirectSshProfilePath,
   loadRemoteGitBranches,
+  loadRemoteGitBranchFromCommit,
   loadRemoteGitCheckout,
+  loadRemoteGitCherryPickCommit,
   loadRemoteGitCommit,
   loadRemoteGitCommitFileDiff,
   loadRemoteGitCommitFiles,
+  loadRemoteGitCompareBranches,
   loadRemoteGitFetch,
   loadRemoteGitHistoryMetadata,
   loadRemoteGitLog,
+  loadRemoteGitOperationAbort,
+  loadRemoteGitOperationContinue,
+  loadRemoteGitOperationStatus,
   loadRemoteGitPull,
   loadRemoteGitPush,
   loadRemoteGitRemoteUrl,
+  loadRemoteGitRevertCommit,
   loadRemoteGitShowCommit,
   loadRemoteGitTagCreate,
   loadRemoteGitTagDelete,
@@ -774,28 +781,34 @@ export const native = {
     sha: string,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_branch_from_commit", {
-      repoRoot,
-      name,
-      sha,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitBranchFromCommit(repoRoot, name, sha)
+      : invoke<void>("git_branch_from_commit", {
+          repoRoot,
+          name,
+          sha,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitCherryPickCommit: (
     repoRoot: string,
     sha: string,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<string>("git_cherry_pick_commit", {
-      repoRoot,
-      sha,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitCherryPickCommit(repoRoot, sha)
+      : invoke<string>("git_cherry_pick_commit", {
+          repoRoot,
+          sha,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitRevertCommit: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
-    invoke<string>("git_revert_commit", {
-      repoRoot,
-      sha,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitRevertCommit(repoRoot, sha)
+      : invoke<string>("git_revert_commit", {
+          repoRoot,
+          sha,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStashList: (repoRoot: string, workspace?: WorkspaceEnv) =>
     invoke<GitStashEntry[]>("git_stash_list", {
       repoRoot,
@@ -877,30 +890,36 @@ export const native = {
           workspace: resolveGitWorkspace(repoRoot, workspace),
         }),
   gitOperationStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitOperationStatus>("git_operation_status", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitOperationStatus(repoRoot)
+      : invoke<GitOperationStatus>("git_operation_status", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitOperationAbort: (
     repoRoot: string,
-    kind: GitOperationKind,
+    kind: Exclude<GitOperationKind, "none">,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_operation_abort", {
-      repoRoot,
-      kind,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitOperationAbort(repoRoot, kind)
+      : invoke<void>("git_operation_abort", {
+          repoRoot,
+          kind,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitOperationContinue: (
     repoRoot: string,
-    kind: GitOperationKind,
+    kind: Exclude<GitOperationKind, "none">,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_operation_continue", {
-      repoRoot,
-      kind,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitOperationContinue(repoRoot, kind)
+      : invoke<void>("git_operation_continue", {
+          repoRoot,
+          kind,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitBlame: (repoRoot: string, path: string, workspace?: WorkspaceEnv) =>
     invoke<GitBlameLine[]>("git_blame", {
       repoRoot,
@@ -913,10 +932,12 @@ export const native = {
     compare: string,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<GitBranchComparison>("git_compare_branches", {
-      repoRoot,
-      base,
-      compare,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitCompareBranches(repoRoot, base, compare)
+      : invoke<GitBranchComparison>("git_compare_branches", {
+          repoRoot,
+          base,
+          compare,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
 };

@@ -3,14 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isDirectSshProfilePath,
   loadRemoteGitBranches,
+  loadRemoteGitBranchFromCommit,
   loadRemoteGitCheckout,
+  loadRemoteGitCherryPickCommit,
   loadRemoteGitCommit,
+  loadRemoteGitCompareBranches,
   loadRemoteGitFetch,
   loadRemoteGitHistoryMetadata,
   loadRemoteGitLog,
+  loadRemoteGitOperationAbort,
+  loadRemoteGitOperationContinue,
+  loadRemoteGitOperationStatus,
   loadRemoteGitPull,
   loadRemoteGitPush,
   loadRemoteGitRemoteUrl,
+  loadRemoteGitRevertCommit,
   loadRemoteGitShowCommit,
   loadRemoteGitTagCreate,
   loadRemoteGitTagDelete,
@@ -282,6 +289,121 @@ describe("remote Git history adapters", () => {
       name: "v1.0",
       remote: "origin",
     });
+  });
+
+  it("routes Git History mutations, conflict handling, and comparison through SSH", async () => {
+    const comparison = {
+      ahead: [
+        {
+          sha: head,
+          shortSha: head.slice(0, 7),
+          author: "Ada",
+          authorEmail: "ada@example.test",
+          timestampSecs: 1700000000,
+          parents: [parent],
+          subject: "Add remote feature",
+          filesChanged: 0,
+          insertions: 0,
+          deletions: 0,
+        },
+      ],
+      behind: [],
+      files: [
+        {
+          path: "src/a.ts",
+          originalPath: null,
+          status: "M",
+          statusLabel: "Modified",
+          added: 2,
+          removed: 1,
+          isBinary: false,
+        },
+      ],
+    };
+    const runner = vi.fn(async (command: string) => {
+      if (
+        command === "git_cherry_pick_commit" ||
+        command === "git_revert_commit"
+      )
+        return side;
+      if (command === "git_operation_status") return { kind: "cherryPick" };
+      if (command === "git_compare_branches") return comparison;
+      return undefined;
+    });
+    setRemoteCommandRunner(runner);
+
+    await expect(
+      loadRemoteGitBranchFromCommit(repoRoot, "feature/new", head),
+    ).resolves.toBeUndefined();
+    await expect(loadRemoteGitCherryPickCommit(repoRoot, head)).resolves.toBe(
+      side,
+    );
+    await expect(loadRemoteGitRevertCommit(repoRoot, head)).resolves.toBe(side);
+    await expect(loadRemoteGitOperationStatus(repoRoot)).resolves.toEqual({
+      kind: "cherryPick",
+    });
+    await expect(
+      loadRemoteGitOperationAbort(repoRoot, "revert"),
+    ).resolves.toBeUndefined();
+    await expect(
+      loadRemoteGitOperationContinue(repoRoot, "cherryPick"),
+    ).resolves.toBeUndefined();
+    await expect(
+      loadRemoteGitCompareBranches(repoRoot, "main", "feature/new"),
+    ).resolves.toEqual(comparison);
+
+    expect(runner.mock.calls.map(([command]) => command)).toEqual([
+      "git_branch_from_commit",
+      "git_cherry_pick_commit",
+      "git_revert_commit",
+      "git_operation_status",
+      "git_operation_abort",
+      "git_operation_continue",
+      "git_compare_branches",
+    ]);
+    expect(runner).toHaveBeenCalledWith("git_branch_from_commit", {
+      cwd: repoRoot,
+      name: "feature/new",
+      sha: head,
+    });
+    expect(runner).toHaveBeenCalledWith("git_operation_abort", {
+      cwd: repoRoot,
+      kind: "revert",
+    });
+    expect(runner).toHaveBeenCalledWith("git_compare_branches", {
+      cwd: repoRoot,
+      base: "main",
+      compare: "feature/new",
+    });
+  });
+
+  it("rejects malformed remote Git operation and comparison responses", async () => {
+    const runner = vi.fn(async (command: string) => {
+      if (command === "git_operation_status") return { kind: "reset" };
+      return {
+        ahead: [],
+        behind: [],
+        files: [
+          {
+            path: "../private",
+            originalPath: null,
+            status: "M",
+            statusLabel: "Modified",
+            added: 1,
+            removed: 0,
+            isBinary: false,
+          },
+        ],
+      };
+    });
+    setRemoteCommandRunner(runner);
+
+    await expect(loadRemoteGitOperationStatus(repoRoot)).rejects.toThrow(
+      "invalid Git operation",
+    );
+    await expect(
+      loadRemoteGitCompareBranches(repoRoot, "main", "feature/new"),
+    ).rejects.toThrow("invalid Git comparison");
   });
 
   it("resolves a canonical repository root for a file inside a saved profile", async () => {
