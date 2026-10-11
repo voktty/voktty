@@ -13,10 +13,25 @@ import {
   remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import {
+  shouldPickSshMultiplexer,
+  sshMultiplexerSettingsForSelection,
+  type SshMultiplexerSelection,
+} from "@/modules/ssh/multiplexerSelection";
+import {
+  probeSshMultiplexer,
+  type RemoteMultiplexerProbe,
+  type SshConnection,
+} from "@/modules/ssh/types";
 import { invoke } from "@tauri-apps/api/core";
 
 type DataHandler = (data: Uint8Array) => void;
 type ExitHandler = (code: number | null) => void;
+export type SshMultiplexerPicker = (
+  connection: SshConnection,
+  probe: RemoteMultiplexerProbe,
+) => Promise<SshMultiplexerSelection | null>;
+export type PtyLaunchOptions = { multiplexerPicker?: SshMultiplexerPicker };
 
 const activeSessions = new Map<string, PtySession>();
 const remoteWorkspaceClosers = new Map<string, () => Promise<void>>();
@@ -88,7 +103,11 @@ function closeRemoteWorkspaceOnce(id: string, sessionId: number) {
   return close;
 }
 
-async function openRemoteTerminalTarget(id: string, cwd: string) {
+async function openRemoteTerminalTarget(
+  id: string,
+  cwd: string,
+  multiplexerPicker?: SshMultiplexerPicker,
+) {
   const remotePath = parseRemotePath(cwd);
   if (!remotePath) {
     if (cwd.startsWith("remote://")) {
@@ -116,19 +135,32 @@ async function openRemoteTerminalTarget(id: string, cwd: string) {
     throw new Error("The saved SSH connection for this project is missing.");
   }
 
+  let selectedProfile = profile;
+  if (multiplexerPicker && profile.multiplexerMode !== "none") {
+    const probe = await probeSshMultiplexer(profile).catch(() => undefined);
+    if (probe && shouldPickSshMultiplexer(profile, probe)) {
+      const selection = await multiplexerPicker(profile, probe);
+      if (!selection) throw new Error("SSH terminal connection was canceled.");
+      selectedProfile = {
+        ...profile,
+        ...sshMultiplexerSettingsForSelection(profile, selection),
+      };
+    }
+  }
+
   const nativeConnection: RemoteSshConnection = {
-    ...remoteSshConnectionForProfile(profile),
-    ...(profile.multiplexerMode
-      ? { multiplexerMode: profile.multiplexerMode }
+    ...remoteSshConnectionForProfile(selectedProfile),
+    ...(selectedProfile.multiplexerMode
+      ? { multiplexerMode: selectedProfile.multiplexerMode }
       : {}),
-    ...(profile.tmuxSessionName
-      ? { tmuxSessionName: profile.tmuxSessionName }
+    ...(selectedProfile.tmuxSessionName
+      ? { tmuxSessionName: selectedProfile.tmuxSessionName }
       : {}),
-    ...(profile.activeMultiplexerSession
-      ? { activeMultiplexerSession: profile.activeMultiplexerSession }
+    ...(selectedProfile.activeMultiplexerSession
+      ? { activeMultiplexerSession: selectedProfile.activeMultiplexerSession }
       : {}),
-    ...(profile.multiplexerAction
-      ? { multiplexerAction: profile.multiplexerAction }
+    ...(selectedProfile.multiplexerAction
+      ? { multiplexerAction: selectedProfile.multiplexerAction }
       : {}),
   };
   const remoteSession = await openRemoteWorkspace(
@@ -140,7 +172,7 @@ async function openRemoteTerminalTarget(id: string, cwd: string) {
     cwd: remotePath.hostPath,
     workspace: {
       kind: "ssh" as const,
-      connection: profile,
+      connection: selectedProfile,
       root: remoteSession.workspace_root,
       sessionId: remoteSession.session_id,
     },
@@ -158,6 +190,7 @@ export async function spawnPty(
   cwd: string,
   cols: number,
   rows: number,
+  options?: PtyLaunchOptions,
 ): Promise<void> {
   const existing = activeSessions.get(id);
   if (existing) {
@@ -171,7 +204,11 @@ export async function spawnPty(
     !cwd || cwd === "~" || cwd.trim() === "" ? undefined : cwd;
 
   const remoteTarget = effectiveCwd
-    ? await openRemoteTerminalTarget(id, effectiveCwd)
+    ? await openRemoteTerminalTarget(
+        id,
+        effectiveCwd,
+        options?.multiplexerPicker,
+      )
     : undefined;
   let session: PtySession | undefined;
   let exitedBeforeOpen = false;

@@ -1,5 +1,5 @@
 import { Terminal } from "@xterm/xterm";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getPtyStatus,
   killPty,
@@ -7,6 +7,8 @@ import {
   spawnPty,
   subscribePty,
   writePty,
+  type PtyLaunchOptions,
+  type SshMultiplexerPicker,
 } from "../lib/pty";
 import { isOscColorQuery, oscColorReply } from "../lib/terminalChrome";
 import {
@@ -15,6 +17,12 @@ import {
   type TerminalMetaPatch,
 } from "../lib/terminalTab";
 import { terminalProjectPath } from "@/modules/connections/model/remoteProjects";
+import { SshSessionPickerModal } from "@/modules/ssh/components/SshSessionPickerModal";
+import type {
+  SshConnection,
+  RemoteMultiplexerProbe,
+} from "@/modules/ssh/types";
+import type { SshMultiplexerSelection } from "@/modules/ssh/multiplexerSelection";
 import { THEME_CHANGED_EVENT } from "@/modules/theme";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { readTerminalTokens } from "@/styles/tokens";
@@ -46,7 +54,10 @@ function oscColor(value: string, fallback: string): string {
   if (/^#[0-9a-f]{6}$/i.test(hex)) return hex;
   const rgb = hex.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
   if (!rgb) return fallback;
-  return `#${rgb.slice(1).map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
+  return `#${rgb
+    .slice(1)
+    .map((part) => Number(part).toString(16).padStart(2, "0"))
+    .join("")}`;
 }
 
 function oscColors() {
@@ -74,6 +85,27 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
   const onMetaChangeRef = useRef(onMetaChange);
   onMetaChangeRef.current = onMetaChange;
   const runningProcessRef = useRef<string | null>(null);
+  const cwdRef = useRef(cwd);
+  cwdRef.current = cwd;
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const pickerResolveRef = useRef<
+    ((selection: SshMultiplexerSelection | null) => void) | null
+  >(null);
+  const [pickerRequest, setPickerRequest] = useState<{
+    connection: SshConnection;
+    probe: RemoteMultiplexerProbe;
+  } | null>(null);
+
+  const resolveMultiplexerPicker = useCallback(
+    (selection: SshMultiplexerSelection | null) => {
+      const resolve = pickerResolveRef.current;
+      pickerResolveRef.current = null;
+      setPickerRequest(null);
+      resolve?.(selection);
+    },
+    [],
+  );
 
   useEffect(() => {
     const outer = outerRef.current;
@@ -96,6 +128,18 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     term.open(host);
     termRef.current = term;
     let closed = false;
+    let resolvePendingPicker:
+      ((selection: SshMultiplexerSelection | null) => void) | null = null;
+    const chooseMultiplexer: SshMultiplexerPicker = (connection, probe) =>
+      new Promise((resolve) => {
+        if (closed) {
+          resolve(null);
+          return;
+        }
+        resolvePendingPicker = resolve;
+        pickerResolveRef.current = resolve;
+        setPickerRequest({ connection, probe });
+      });
 
     const onCopy = (event: ClipboardEvent) => {
       const text = term.getSelection();
@@ -160,7 +204,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
             oscBuffer = scanned.rest;
             if (scanned.cwd) {
               const patch: TerminalMetaPatch = {
-                cwd: terminalProjectPath(cwd, scanned.cwd),
+                cwd: terminalProjectPath(cwdRef.current, scanned.cwd),
               };
               if (!runningProcessRef.current) {
                 patch.title = defaultTerminalTitle(scanned.cwd);
@@ -177,7 +221,10 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
         },
       );
       didStart = true;
-      return spawnPty(id, cwd, term.cols, term.rows);
+      const launchOptions: PtyLaunchOptions | undefined = activeRef.current
+        ? { multiplexerPicker: chooseMultiplexer }
+        : undefined;
+      return spawnPty(id, cwdRef.current, term.cols, term.rows, launchOptions);
     };
 
     const starting = (stoppingPtys.get(id) ?? Promise.resolve())
@@ -286,6 +333,12 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
 
     return () => {
       closed = true;
+      if (resolvePendingPicker) {
+        if (pickerResolveRef.current === resolvePendingPicker) {
+          pickerResolveRef.current = null;
+        }
+        resolvePendingPicker(null);
+      }
       cancelAnimationFrame(frame);
       if (raf) cancelAnimationFrame(raf);
       observer.disconnect();
@@ -365,15 +418,29 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
   }, [active]);
 
   return (
-    <div
-      ref={outerRef}
-      className="monocode-terminal flex h-full w-full min-h-0 min-w-0 flex-col"
-      onMouseDown={() => termRef.current?.focus()}
-    >
+    <>
       <div
-        ref={hostRef}
-        className="monocode-terminal-host min-h-0 min-w-0 flex-1 overflow-hidden"
+        ref={outerRef}
+        className="monocode-terminal flex h-full w-full min-h-0 min-w-0 flex-col"
+        onMouseDown={() => termRef.current?.focus()}
+      >
+        <div
+          ref={hostRef}
+          className="monocode-terminal-host min-h-0 min-w-0 flex-1 overflow-hidden"
+        />
+      </div>
+      <SshSessionPickerModal
+        open={pickerRequest !== null}
+        onOpenChange={(open) => {
+          if (!open) setPickerRequest(null);
+        }}
+        onCancel={() => resolveMultiplexerPicker(null)}
+        connection={pickerRequest?.connection ?? null}
+        probe={pickerRequest?.probe ?? null}
+        onSelect={(action, sessionName) =>
+          resolveMultiplexerPicker({ action, sessionName })
+        }
       />
-    </div>
+    </>
   );
 }

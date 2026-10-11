@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   closeRemoteWorkspace: vi.fn(),
   openPty: vi.fn(),
   openRemoteWorkspace: vi.fn(),
+  probeSshMultiplexer: vi.fn(),
   remoteProjectForPath: vi.fn(),
   sshConnections: [] as Array<Record<string, unknown>>,
 }));
@@ -34,6 +35,9 @@ vi.mock(
   },
 );
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@/modules/ssh/types", () => ({
+  probeSshMultiplexer: mocks.probeSshMultiplexer,
+}));
 
 import { killPty, spawnPty } from "./pty";
 
@@ -72,6 +76,10 @@ describe("Harness remote terminals", () => {
       workspace_root: "/srv/app",
     });
     mocks.closeRemoteWorkspace.mockResolvedValue(undefined);
+    mocks.probeSshMultiplexer.mockResolvedValue({
+      supported: true,
+      sessions: [],
+    });
     mocks.openPty.mockResolvedValue(fakePty(91));
   });
 
@@ -153,6 +161,95 @@ describe("Harness remote terminals", () => {
       spawnPty("startup-failure", projectPath, 80, 24),
     ).rejects.toThrow("PTY unavailable");
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(71);
+  });
+
+  it("passes a chosen tmux session through the native helper to the remote PTY", async () => {
+    const probe = {
+      supported: true,
+      sessions: [
+        {
+          name: "build",
+          windowsCount: 1,
+          attachedCount: 0,
+          isAttached: false,
+          multiplexer: "tmux",
+        },
+        {
+          name: "deploy",
+          windowsCount: 2,
+          attachedCount: 1,
+          isAttached: true,
+          multiplexer: "tmux",
+        },
+      ],
+    };
+    mocks.probeSshMultiplexer.mockResolvedValueOnce(probe);
+    const multiplexerPicker = vi
+      .fn()
+      .mockResolvedValue({ action: "attach_force", sessionName: "deploy" });
+
+    await spawnPty("picked-terminal", projectPath, 80, 24, {
+      multiplexerPicker,
+    });
+
+    expect(multiplexerPicker).toHaveBeenCalledWith(profile, probe);
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        multiplexerMode: "auto",
+        activeMultiplexerSession: "deploy",
+        multiplexerAction: "attach_force",
+      }),
+      "/srv/app",
+    );
+    expect(mocks.openPty).toHaveBeenCalledWith(
+      80,
+      24,
+      expect.anything(),
+      "/srv/app",
+      false,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        kind: "ssh",
+        connection: expect.objectContaining({
+          activeMultiplexerSession: "deploy",
+          multiplexerAction: "attach_force",
+        }),
+        sessionId: 71,
+      }),
+    );
+
+    await killPty("picked-terminal");
+  });
+
+  it("does not open a remote session when the tmux picker is canceled", async () => {
+    mocks.probeSshMultiplexer.mockResolvedValueOnce({
+      supported: true,
+      sessions: [
+        {
+          name: "build",
+          windowsCount: 1,
+          attachedCount: 0,
+          isAttached: false,
+          multiplexer: "tmux",
+        },
+        {
+          name: "deploy",
+          windowsCount: 1,
+          attachedCount: 1,
+          isAttached: true,
+          multiplexer: "tmux",
+        },
+      ],
+    });
+
+    await expect(
+      spawnPty("canceled-terminal", projectPath, 80, 24, {
+        multiplexerPicker: vi.fn().mockResolvedValue(null),
+      }),
+    ).rejects.toThrow("SSH terminal connection was canceled");
+    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+    expect(mocks.openPty).not.toHaveBeenCalled();
   });
 
   it("closes the helper session when the remote process exits", async () => {

@@ -33,6 +33,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   connection: (SshConnectionConfig & { name?: string }) | null;
   probe: RemoteMultiplexerProbe | null;
+  onCancel?: () => void;
   onSelect: (
     action: "attach" | "attach_force" | "grouped" | "new" | "none",
     sessionName?: string,
@@ -54,10 +55,12 @@ export function SshSessionPickerModal({
   onOpenChange,
   connection,
   probe: initialProbe,
+  onCancel,
   onSelect,
 }: Props) {
   const { t } = useTranslation();
-  const [currentProbe, setCurrentProbe] = useState<RemoteMultiplexerProbe | null>(initialProbe);
+  const [currentProbe, setCurrentProbe] =
+    useState<RemoteMultiplexerProbe | null>(initialProbe);
   const [refreshing, setRefreshing] = useState(false);
   const [showNewInput, setShowNewInput] = useState(false);
   const [customSessionName, setCustomSessionName] = useState("");
@@ -110,12 +113,20 @@ export function SshSessionPickerModal({
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = customSessionName.trim() || connection.tmuxSessionName?.trim() || "voktty";
+    const finalName =
+      customSessionName.trim() ||
+      connection.tmuxSessionName?.trim() ||
+      "voktty";
     handleSelect("new", finalName);
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && open) onCancel?.();
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl border-border bg-popover text-popover-foreground">
         <DialogHeader className="p-5 pb-3 border-b border-border/40 shrink-0">
           <div className="flex items-center justify-between gap-2 pr-6">
@@ -319,7 +330,10 @@ export function SshSessionPickerModal({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              onOpenChange(false);
+              onCancel?.();
+            }}
           >
             {t("common.cancel")}
           </Button>

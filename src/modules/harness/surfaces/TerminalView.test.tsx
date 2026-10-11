@@ -5,14 +5,21 @@ import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const pty = vi.hoisted(() => ({
-  spawnPty: vi.fn(async () => {}),
+  spawnPty: vi.fn(async (..._args: unknown[]) => {}),
   killPty: vi.fn(async () => {}),
   resizePty: vi.fn(async () => {}),
   writePty: vi.fn(async () => {}),
   subscribePty: vi.fn(() => () => {}),
   getPtyStatus: vi.fn(async () => ({ foreground: null })),
 }));
+const pickerUi = vi.hoisted(() => ({ props: null as unknown }));
 vi.mock("../lib/pty", () => pty);
+vi.mock("@/modules/ssh/components/SshSessionPickerModal", () => ({
+  SshSessionPickerModal: (props: unknown) => {
+    pickerUi.props = props;
+    return null;
+  },
+}));
 vi.mock("../lib/terminalLayout", () => ({
   fitTerminal: () => null,
   applyTerminalChrome: () => {},
@@ -89,6 +96,119 @@ it("does not let StrictMode cleanup kill the replacement shell", async () => {
     host.remove();
   }
   expect(pty.killPty).toHaveBeenCalledTimes(1);
+});
+
+it("uses the existing SSH picker for an active terminal and passes its choice", async () => {
+  const { host, root } = setup();
+  try {
+    await act(async () => {
+      root.render(
+        createElement(TerminalView, {
+          id: "active-remote",
+          cwd: "remote://voktty-ssh-profile-1/srv/app",
+          active: true,
+        }),
+      );
+    });
+
+    const launch = pty.spawnPty.mock.calls[0]?.[4] as {
+      multiplexerPicker: (
+        connection: { id: string; name: string; host: string },
+        probe: {
+          supported: boolean;
+          sessions: [];
+        },
+      ) => Promise<{ action: "attach"; sessionName: string } | null>;
+    };
+    expect(launch.multiplexerPicker).toBeTypeOf("function");
+
+    const connection = { id: "profile-1", name: "Build host", host: "build" };
+    const probe = { supported: true, sessions: [] as [] };
+    let selection!: Promise<{ action: "attach"; sessionName: string } | null>;
+    await act(async () => {
+      selection = launch.multiplexerPicker(connection, probe);
+    });
+    expect(pickerUi.props).toMatchObject({ open: true, connection, probe });
+
+    const picker = pickerUi.props as {
+      onSelect: (action: "attach", sessionName: string) => void;
+    };
+    await act(async () => {
+      picker.onSelect("attach", "build-session");
+    });
+    await expect(selection).resolves.toEqual({
+      action: "attach",
+      sessionName: "build-session",
+    });
+  } finally {
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  }
+});
+
+it("does not prompt for tmux when a Harness terminal is not active", async () => {
+  const { host, root } = setup();
+  try {
+    await act(async () => {
+      root.render(
+        createElement(TerminalView, {
+          id: "inactive-remote",
+          cwd: "remote://voktty-ssh-profile-1/srv/app",
+          active: false,
+        }),
+      );
+    });
+    expect(pty.spawnPty.mock.calls[0]?.[4]).toBeUndefined();
+  } finally {
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  }
+});
+
+it("resolves a pending tmux picker when the terminal unmounts", async () => {
+  const { host, root } = setup();
+  let unmounted = false;
+  try {
+    await act(async () => {
+      root.render(
+        createElement(TerminalView, {
+          id: "unmount-picker",
+          cwd: "remote://voktty-ssh-profile-1/srv/app",
+          active: true,
+        }),
+      );
+    });
+    const launch = pty.spawnPty.mock.calls[0]?.[4] as {
+      multiplexerPicker: (
+        connection: { id: string; name: string; host: string },
+        probe: { supported: boolean; sessions: [] },
+      ) => Promise<unknown>;
+    };
+    let selection!: Promise<unknown>;
+    await act(async () => {
+      selection = launch.multiplexerPicker(
+        { id: "profile-1", name: "Build host", host: "build" },
+        { supported: true, sessions: [] },
+      );
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+    unmounted = true;
+    await expect(selection).resolves.toBeNull();
+  } finally {
+    if (!unmounted) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+    host.remove();
+  }
 });
 
 it("waits for a pending same-id startup and cleanup before starting again", async () => {
@@ -169,7 +289,9 @@ it("does not hold a different terminal behind another one's teardown", async () 
       );
     });
     expect(pty.spawnPty).toHaveBeenCalledTimes(2);
-    expect(pty.spawnPty).toHaveBeenLastCalledWith("second", "/tmp", 80, 24);
+    expect(pty.spawnPty).toHaveBeenLastCalledWith("second", "/tmp", 80, 24, {
+      multiplexerPicker: expect.any(Function),
+    });
   } finally {
     await act(async () => {
       root.unmount();
