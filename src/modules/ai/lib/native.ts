@@ -17,6 +17,13 @@ import {
   workspaceForNativeFs,
 } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  isDirectSshProfilePath,
+  loadRemoteGitCommitFileDiff,
+  loadRemoteGitCommitFiles,
+  loadRemoteGitLog,
+  resolveRemoteGitRepo,
+} from "./remoteGitHistory";
 
 export type ReadResult =
   | { kind: "text"; content: string; size: number }
@@ -497,10 +504,12 @@ export const native = {
     }>("dap_poll", { sessionId }),
   dapStop: (sessionId: number) => invoke<void>("dap_stop", { sessionId }),
   gitResolveRepo: (cwd: string, workspace?: WorkspaceEnv) =>
-    invoke<GitRepoInfo | null>("git_resolve_repo", {
-      cwd,
-      workspace: resolveGitWorkspace(cwd, workspace),
-    }),
+    isDirectSshProfilePath(cwd)
+      ? resolveRemoteGitRepo(cwd)
+      : invoke<GitRepoInfo | null>("git_resolve_repo", {
+          cwd,
+          workspace: resolveGitWorkspace(cwd, workspace),
+        }),
   gitPanelSnapshot: (cwd: string, workspace?: WorkspaceEnv) =>
     invoke<GitPanelSnapshot>("git_panel_snapshot", {
       cwd,
@@ -614,14 +623,16 @@ export const native = {
       workspace?: WorkspaceEnv;
     },
   ) =>
-    invoke<GitLogEntry[]>("git_log", {
-      repoRoot,
-      limit: options?.limit ?? null,
-      beforeSha: options?.beforeSha ?? null,
-      allRefs: options?.allRefs ?? null,
-      skip: options?.skip ?? null,
-      workspace: resolveGitWorkspace(repoRoot, options?.workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitLog(repoRoot, options)
+      : invoke<GitLogEntry[]>("git_log", {
+          repoRoot,
+          limit: options?.limit ?? null,
+          beforeSha: options?.beforeSha ?? null,
+          allRefs: options?.allRefs ?? null,
+          skip: options?.skip ?? null,
+          workspace: resolveGitWorkspace(repoRoot, options?.workspace),
+        }),
   gitShowCommit: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
     invoke<GitDiffResult>("git_show_commit", {
       repoRoot,
@@ -629,11 +640,13 @@ export const native = {
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
   gitCommitFiles: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
-    invoke<GitCommitFileChange[]>("git_commit_files", {
-      repoRoot,
-      sha,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitCommitFiles(repoRoot, sha)
+      : invoke<GitCommitFileChange[]>("git_commit_files", {
+          repoRoot,
+          sha,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitCommitFileDiff: (
     repoRoot: string,
     sha: string,
@@ -641,13 +654,15 @@ export const native = {
     originalPath?: string | null,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<GitDiffContentResult>("git_commit_file_diff", {
-      repoRoot,
-      sha,
-      path,
-      originalPath: originalPath ?? null,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitCommitFileDiff(repoRoot, sha, path)
+      : invoke<GitDiffContentResult>("git_commit_file_diff", {
+          repoRoot,
+          sha,
+          path,
+          originalPath: originalPath ?? null,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitRemoteUrl: (repoRoot: string, name?: string, workspace?: WorkspaceEnv) =>
     invoke<string | null>("git_remote_url", {
       repoRoot,

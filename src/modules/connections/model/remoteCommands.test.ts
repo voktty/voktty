@@ -718,15 +718,10 @@ it("loads bounded commit history through the native SSH helper", async () => {
       ) {
         return gitExecResult(`${head}\n`);
       }
-      if (args[0] === "rev-parse" && args[2] === "@{upstream}") {
-        return gitExecResult(`${parent}\n`);
-      }
       if (args[0] === "remote") return gitExecResult("origin\n");
-      if (args[0] === "symbolic-ref") return gitExecResult("origin/main\n");
-      if (args[0] === "show-ref") return gitExecResult("");
       if (args[0] === "log") {
         expect(args).toContain("--max-count=3");
-        expect(args.slice(-3)).toEqual(["HEAD", "@{upstream}", "origin/main"]);
+        expect(args[args.length - 1]).toBe("--all");
         return gitExecResult(
           `${head}\0${head.slice(0, 7)}\0${parent}\0Ada\0${1700000000}\0` +
             "HEAD -> main, origin/main, tag: v1.0\0Add feature\x1e\n",
@@ -740,8 +735,10 @@ it("loads bounded commit history through the native SSH helper", async () => {
     runRemoteCommand("git_history", {
       cwd: remotePath(environmentId, "/srv/app"),
       limit: 3,
+      allRefs: true,
     }),
   ).resolves.toEqual({
+    repoRoot: remotePath(environmentId, "/srv/app"),
     head,
     commits: [
       {
@@ -813,6 +810,7 @@ it("lists files and reads commit diffs through root-confined Git calls", async (
       status: "added",
       additions: 2,
       deletions: 0,
+      binary: false,
       staged: false,
       unstaged: false,
     },
@@ -822,6 +820,7 @@ it("lists files and reads commit diffs through root-confined Git calls", async (
       status: "modified",
       additions: 1,
       deletions: 1,
+      binary: false,
       staged: false,
       unstaged: false,
     },
@@ -904,8 +903,8 @@ it("rejects invalid history paths and commit ids before invoking unsafe Git args
     }),
   ).rejects.toThrow("Invalid commit");
   expect(
-    requestRemoteResult.mock.calls.map(([, , params]) =>
-      (params as { args: string[] }).args,
+    requestRemoteResult.mock.calls.map(
+      ([, , params]) => (params as { args: string[] }).args,
     ),
   ).toEqual([["rev-parse", "--show-toplevel"]]);
   expect(remoteRequest).not.toHaveBeenCalled();

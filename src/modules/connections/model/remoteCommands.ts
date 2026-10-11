@@ -717,21 +717,25 @@ async function nativeProfileGitCommitSha(
 
 async function nativeProfileGitHistory(
   sessionId: number,
+  environmentId: string,
   root: string,
   cwd: string,
   limitValue: unknown,
+  allRefsValue: unknown,
 ): Promise<{
+  repoRoot?: string;
   head: string | null;
   commits: ReturnType<typeof parseGitHistory>;
 }> {
   if (!(await nativeProfileGitIsWorkTree(sessionId, cwd))) {
     return { head: null, commits: [] };
   }
-  await assertProfileGitRoot(sessionId, root, cwd);
+  const repositoryRoot = await assertProfileGitRoot(sessionId, root, cwd);
+  const remoteRepositoryRoot = remotePath(environmentId, repositoryRoot);
   const limit = Number.isSafeInteger(limitValue)
     ? Math.min(500, Math.max(1, Number(limitValue)))
     : 200;
-  const [headOutput, upstreamOutput, remoteNames] = await Promise.all([
+  const [headOutput, remoteNames] = await Promise.all([
     runHelperGit(
       sessionId,
       cwd,
@@ -739,57 +743,14 @@ async function nativeProfileGitHistory(
       64 * 1024,
       true,
     ),
-    runHelperGit(
-      sessionId,
-      cwd,
-      ["rev-parse", "--verify", "@{upstream}"],
-      64 * 1024,
-      true,
-    ),
     nativeProfileGitRemoteNames(sessionId, cwd),
   ]);
   const head = headOutput.stdout.trim();
   if (headOutput.exitCode !== 0 || !/^[0-9a-f]{40,64}$/i.test(head)) {
-    return { head: null, commits: [] };
+    return { repoRoot: remoteRepositoryRoot, head: null, commits: [] };
   }
 
-  const tips = ["HEAD"];
-  if (upstreamOutput.exitCode === 0 && upstreamOutput.stdout.trim()) {
-    tips.push("@{upstream}");
-  }
-  if (remoteNames.includes("origin")) {
-    const symbolicDefault = await runHelperGit(
-      sessionId,
-      cwd,
-      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-      64 * 1024,
-      true,
-    );
-    let defaultBranch = symbolicDefault.stdout.trim();
-    if (!defaultBranch.startsWith("origin/")) {
-      defaultBranch = "";
-      for (const branch of ["main", "master"]) {
-        const exists = await nativeProfileGitRefExists(
-          sessionId,
-          cwd,
-          `refs/remotes/origin/${branch}`,
-        );
-        if (exists) {
-          defaultBranch = `origin/${branch}`;
-          break;
-        }
-      }
-    } else if (
-      !(await nativeProfileGitRefExists(
-        sessionId,
-        cwd,
-        `refs/remotes/${defaultBranch}`,
-      ))
-    ) {
-      defaultBranch = "";
-    }
-    if (defaultBranch) tips.push(defaultBranch);
-  }
+  const refs = allRefsValue === true ? ["--all"] : ["HEAD"];
 
   const output = await runHelperGit(
     sessionId,
@@ -800,7 +761,7 @@ async function nativeProfileGitHistory(
       "--decorate=short",
       `--max-count=${limit}`,
       "--format=%H%x00%h%x00%P%x00%an%x00%at%x00%D%x00%s%x1e",
-      ...tips,
+      ...refs,
     ],
     MAX_GIT_OUTPUT_BYTES,
     false,
@@ -809,6 +770,7 @@ async function nativeProfileGitHistory(
     30,
   );
   return {
+    repoRoot: remoteRepositoryRoot,
     head,
     commits: parseGitHistory(
       decodeGitMetadata(output.stdoutBytes),
@@ -1574,9 +1536,11 @@ async function runProfileFileCommand(
   if (command === "git_history") {
     return nativeProfileGitHistory(
       sessionId,
+      environmentId,
       root,
       relativePath(args.cwd),
       args.limit,
+      args.allRefs,
     );
   }
   if (command === "git_commit_files") {

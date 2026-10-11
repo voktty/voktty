@@ -104,18 +104,21 @@ describe("parseGitCommitFiles", () => {
         status: "added",
         additions: 2,
         deletions: 0,
+        binary: false,
       },
       {
         relative: "source\nname.ts",
         status: "modified",
         additions: 0,
         deletions: 0,
+        binary: true,
       },
       {
         relative: "gone.txt",
         status: "deleted",
         additions: 0,
         deletions: 0,
+        binary: false,
       },
     ]);
   });
@@ -202,9 +205,9 @@ describe("parseGitNumstat", () => {
       ),
     ).toEqual(
       new Map([
-        ["file with spaces.ts", { additions: 4, deletions: 2 }],
-        ["binary.dat", { additions: 0, deletions: 0 }],
-        ["new.ts", { additions: 3, deletions: 1 }],
+        ["file with spaces.ts", { additions: 4, deletions: 2, binary: false }],
+        ["binary.dat", { additions: 0, deletions: 0, binary: true }],
+        ["new.ts", { additions: 3, deletions: 1, binary: false }],
       ]),
     );
   });

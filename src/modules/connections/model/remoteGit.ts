@@ -112,8 +112,11 @@ export function parseGitPorcelainV2(output: string): GitStatus {
 
 export function parseGitNumstat(
   output: string,
-): Map<string, { additions: number; deletions: number }> {
-  const counts = new Map<string, { additions: number; deletions: number }>();
+): Map<string, { additions: number; deletions: number; binary: boolean }> {
+  const counts = new Map<
+    string,
+    { additions: number; deletions: number; binary: boolean }
+  >();
   const records = output.split("\0");
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
@@ -134,6 +137,9 @@ export function parseGitNumstat(
       index += 2;
     }
     const relative = relativeGitPath(path);
+    const binary =
+      record.slice(0, firstTab) === "-" &&
+      record.slice(firstTab + 1, secondTab) === "-";
     const parseCount = (value: string) => (value === "-" ? 0 : Number(value));
     const additions = parseCount(record.slice(0, firstTab));
     const deletions = parseCount(record.slice(firstTab + 1, secondTab));
@@ -145,7 +151,7 @@ export function parseGitNumstat(
     ) {
       throw new Error("Git returned invalid change counts.");
     }
-    counts.set(relative, { additions, deletions });
+    counts.set(relative, { additions, deletions, binary });
   }
   return counts;
 }
@@ -312,6 +318,7 @@ export type RemoteGitCommitFile = {
   status: "added" | "deleted" | "modified";
   additions: number;
   deletions: number;
+  binary: boolean;
 };
 
 export function parseGitCommitFiles(
@@ -336,6 +343,7 @@ export function parseGitCommitFiles(
       status: code === "A" ? "added" : code === "D" ? "deleted" : "modified",
       additions: count?.additions ?? 0,
       deletions: count?.deletions ?? 0,
+      binary: count?.binary ?? false,
     });
     if (files.length > MAX_GIT_STATUS_FILES) {
       throw new Error("The remote commit has too many files to display.");
