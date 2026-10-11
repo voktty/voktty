@@ -61,6 +61,7 @@ const HOST_COMMANDS = new Set([
   "harness_git_push",
   "git_head_message",
   "git_push",
+  "git_fetch",
   "git_pull",
   "git_sync",
   "git_pr_status",
@@ -71,6 +72,7 @@ const HOST_COMMANDS = new Set([
   "git_staged_context",
   "git_range_context",
   "git_branches",
+  "git_remote_url",
   "git_checkout",
   "git_create_branch",
   "git_stash",
@@ -117,10 +119,12 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_commit",
   "harness_git_commit",
   "git_push",
+  "git_fetch",
   "harness_git_push",
   "git_pull",
   "git_sync",
   "git_branches",
+  "git_remote_url",
   "git_checkout",
   "git_create_branch",
   "git_stash",
@@ -951,6 +955,36 @@ async function nativeProfileGitRemoteName(
   return remote;
 }
 
+async function nativeProfileGitRemoteUrl(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  value: unknown,
+): Promise<string | null> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const name =
+    value === undefined || value === null
+      ? "origin"
+      : typeof value === "string"
+        ? value
+        : "";
+  if (!name || name.length > 64 || !/^[A-Za-z0-9_.-]+$/.test(name)) {
+    return null;
+  }
+  const remotes = await nativeProfileGitRemoteNames(sessionId, cwd);
+  if (!remotes.includes(name)) return null;
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["config", "--get", `remote.${name}.url`],
+    64 * 1024,
+    true,
+  );
+  if (result.exitCode !== 0) return null;
+  const url = result.stdout.split(/\r?\n/, 1)[0]?.trim();
+  return url || null;
+}
+
 async function nativeProfileGitHasUpstream(
   sessionId: number,
   cwd: string,
@@ -965,12 +999,88 @@ async function nativeProfileGitHasUpstream(
   return result.exitCode === 0 && Boolean(result.stdout.trim());
 }
 
+async function nativeProfileGitUpstream(
+  sessionId: number,
+  cwd: string,
+): Promise<string | null> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--abbrev-ref", "@{upstream}"],
+    64 * 1024,
+    true,
+  );
+  const upstream = result.exitCode === 0 ? result.stdout.trim() : "";
+  return upstream || null;
+}
+
+function splitNativeProfileGitUpstream(
+  upstream: string,
+  remotes: string[],
+): { remote: string | null; branch: string | null } {
+  const remote = [...remotes]
+    .sort((left, right) => right.length - left.length)
+    .find((name) => upstream.startsWith(`${name}/`));
+  if (remote) {
+    return { remote, branch: upstream.slice(remote.length + 1) || null };
+  }
+  const separator = upstream.indexOf("/");
+  return separator > 0
+    ? {
+        remote: upstream.slice(0, separator),
+        branch: upstream.slice(separator + 1) || null,
+      }
+    : { remote: null, branch: null };
+}
+
+type NativeProfileGitPushResult = {
+  remote: string | null;
+  branch: string | null;
+  pushed: boolean;
+};
+
+async function nativeProfileGitPush(
+  sessionId: number,
+  cwd: string,
+): Promise<NativeProfileGitPushResult> {
+  const upstream = await nativeProfileGitUpstream(sessionId, cwd);
+  let selectedRemote: string | null = null;
+  const args = ["push"];
+  if (!upstream) {
+    selectedRemote = await nativeProfileGitRemoteName(sessionId, cwd);
+    args.push("-u", "--", selectedRemote, "HEAD");
+  }
+  await runHelperGit(
+    sessionId,
+    cwd,
+    args,
+    64 * 1024,
+    false,
+    true,
+    undefined,
+    GIT_NETWORK_TIMEOUT_SECS,
+  );
+  const finalUpstream = await nativeProfileGitUpstream(sessionId, cwd);
+  if (finalUpstream) {
+    const remotes = await nativeProfileGitRemoteNames(sessionId, cwd);
+    return {
+      ...splitNativeProfileGitUpstream(finalUpstream, remotes),
+      pushed: true,
+    };
+  }
+  return {
+    remote: selectedRemote,
+    branch: await nativeProfileGitHeadBranch(sessionId, cwd),
+    pushed: true,
+  };
+}
+
 async function nativeProfileGitNetworkCommand(
   sessionId: number,
   root: string,
   cwd: string,
   command: string,
-): Promise<void> {
+): Promise<NativeProfileGitPushResult | undefined> {
   await assertProfileGitRoot(sessionId, root, cwd);
   const runNetworkGit = (args: string[]) =>
     runHelperGit(
@@ -987,6 +1097,15 @@ async function nativeProfileGitNetworkCommand(
   if (command === "git_pull") {
     await runNetworkGit(["pull", "--ff-only"]);
     return;
+  }
+
+  if (command === "git_fetch") {
+    await runNetworkGit(["fetch", "--prune"]);
+    return;
+  }
+
+  if (command === "git_push") {
+    return nativeProfileGitPush(sessionId, cwd);
   }
 
   const hasUpstream = await nativeProfileGitHasUpstream(sessionId, cwd);
@@ -1566,6 +1685,14 @@ async function runProfileFileCommand(
     const cwd = relativePath(args.cwd);
     return nativeProfileGitBranches(sessionId, root, cwd);
   }
+  if (command === "git_remote_url") {
+    return nativeProfileGitRemoteUrl(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.name,
+    );
+  }
   if (command === "git_checkout") {
     return nativeProfileGitCheckout(
       sessionId,
@@ -1609,6 +1736,7 @@ async function runProfileFileCommand(
   if (
     command === "git_push" ||
     command === "harness_git_push" ||
+    command === "git_fetch" ||
     command === "git_pull" ||
     command === "git_sync"
   ) {

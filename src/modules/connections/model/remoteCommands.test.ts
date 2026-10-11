@@ -547,6 +547,123 @@ it("sets the upstream to origin on the first native SSH push", async () => {
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
+it("returns native SSH push metadata and uses a bounded network timeout", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "rev-parse" && args[1] === "--abbrev-ref") {
+        return args[2] === "@{upstream}"
+          ? gitExecResult("origin/feature/demo\n")
+          : gitExecResult("feature/demo\n");
+      }
+      if (args[0] === "push") return gitExecResult("Everything up-to-date\n");
+      if (args[0] === "remote") return gitExecResult("origin\n");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_push", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).resolves.toEqual({
+    remote: "origin",
+    branch: "feature/demo",
+    pushed: true,
+  });
+  expect(requestRemoteResult).toHaveBeenCalledWith(9, "git.execWorkspace", {
+    cwd: ".",
+    args: ["push"],
+    timeoutSecs: 180,
+    maxOutputBytes: 64 * 1024,
+  });
+});
+
+it("fetches and reads a configured remote URL through the native SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "remote") return gitExecResult("origin\n");
+      if (args[0] === "config") {
+        expect(args).toEqual(["config", "--get", "remote.origin.url"]);
+        return gitExecResult("ssh://git.example/group/project.git\n");
+      }
+      if (args[0] === "fetch") return gitExecResult("");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(
+    runRemoteCommand("git_remote_url", { cwd, name: "origin" }),
+  ).resolves.toBe("ssh://git.example/group/project.git");
+  await expect(runRemoteCommand("git_fetch", { cwd })).resolves.toBeUndefined();
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual([
+    ["rev-parse", "--show-toplevel"],
+    ["remote"],
+    ["config", "--get", "remote.origin.url"],
+    ["rev-parse", "--show-toplevel"],
+    ["fetch", "--prune"],
+  ]);
+  expect(requestRemoteResult.mock.calls[4][2]).toMatchObject({
+    timeoutSecs: 180,
+    maxOutputBytes: 64 * 1024,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+});
+
+it("returns no URL for an invalid remote name without invoking Git config", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    runRemoteCommand("git_remote_url", {
+      cwd: remotePath(environmentId, "/srv/app"),
+      name: "origin;touch",
+    }),
+  ).resolves.toBeNull();
+  expect(requestRemoteResult).toHaveBeenCalledTimes(1);
+});
+
 it("pulls only by fast-forward and syncs by pull then push", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockImplementation(

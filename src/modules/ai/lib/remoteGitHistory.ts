@@ -1,9 +1,14 @@
+import type { GitBranches, GitDiffIndex } from "@/modules/harness/lib/fs";
 import { invokeWorkspace } from "@/modules/harness/lib/fs";
 import { t } from "@/modules/i18n";
 import type {
+  GitBranchEntry,
+  GitBranchListResult,
   GitCommitFileChange,
   GitDiffContentResult,
+  GitHistoryMetadata,
   GitLogEntry,
+  GitPushResult,
   GitRepoInfo,
 } from "./native";
 
@@ -51,6 +56,213 @@ export type RemoteGitLogOptions = {
 
 const REMOTE_PROFILE_PREFIX = "remote://voktty-ssh-";
 const REMOTE_HISTORY_LIMIT = 500;
+
+function remoteGitCommand<T>(
+  command: string,
+  cwd: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  return invokeWorkspace<T>(command, { cwd, ...args });
+}
+
+function mapRemoteBranchEntries(branches: GitBranches): GitBranchEntry[] {
+  if (
+    !branches ||
+    !Array.isArray(branches.branches) ||
+    typeof branches.detached !== "boolean" ||
+    !(branches.current === null || typeof branches.current === "string")
+  ) {
+    throw new Error("The remote helper returned invalid Git branches.");
+  }
+  return branches.branches.flatMap((branch) => {
+    if (
+      !branch ||
+      typeof branch.name !== "string" ||
+      !branch.name ||
+      typeof branch.current !== "boolean" ||
+      !(branch.remote === null || typeof branch.remote === "string")
+    ) {
+      throw new Error("The remote helper returned invalid Git branches.");
+    }
+    if (branch.remote !== null) return [];
+    return [
+      {
+        name: branch.name,
+        kind: "local",
+        worktreePath: null,
+        isHead: branch.current,
+        isDetached: branch.current && branches.detached,
+      },
+    ];
+  });
+}
+
+export function mapRemoteGitHistoryMetadata(
+  repoRoot: string,
+  index: GitDiffIndex,
+  branches: GitBranches,
+): GitHistoryMetadata {
+  if (
+    !index ||
+    !Array.isArray(index.files) ||
+    !(index.branch === null || typeof index.branch === "string") ||
+    !(index.upstream === null || typeof index.upstream === "string") ||
+    !Number.isSafeInteger(index.ahead) ||
+    index.ahead < 0 ||
+    !Number.isSafeInteger(index.behind) ||
+    index.behind < 0
+  ) {
+    throw new Error("The remote helper returned invalid Git status metadata.");
+  }
+  if (
+    !branches ||
+    !Array.isArray(branches.branches) ||
+    typeof branches.detached !== "boolean" ||
+    !(branches.current === null || typeof branches.current === "string")
+  ) {
+    throw new Error("The remote helper returned invalid Git branches.");
+  }
+  const branch = branches.detached
+    ? "HEAD"
+    : (index.branch ?? branches.current ?? "");
+  const changedFiles = index.files.map((file) => {
+    if (
+      !file ||
+      typeof file.path !== "string" ||
+      typeof file.relative !== "string" ||
+      typeof file.status !== "string" ||
+      typeof file.staged !== "boolean" ||
+      typeof file.unstaged !== "boolean"
+    ) {
+      throw new Error("The remote helper returned invalid Git status files.");
+    }
+    const relative = relativeCommitPath(repoRoot, file.path);
+    if (relative !== file.relative) {
+      throw new Error("The remote helper returned a path outside the project.");
+    }
+    const code =
+      file.status === "added"
+        ? "A"
+        : file.status === "deleted"
+          ? "D"
+          : file.status === "untracked"
+            ? "?"
+            : file.status === "modified"
+              ? "M"
+              : null;
+    if (!code) {
+      throw new Error("The remote helper returned an invalid Git status.");
+    }
+    return {
+      path: file.path,
+      originalPath: null,
+      indexStatus:
+        file.unstaged && file.status === "untracked"
+          ? "?"
+          : file.staged
+            ? code
+            : ".",
+      worktreeStatus: file.unstaged ? code : ".",
+      staged: file.staged,
+      unstaged: file.unstaged,
+      untracked: file.status === "untracked",
+      conflicted: false,
+      statusLabel:
+        file.status === "untracked"
+          ? "Untracked"
+          : file.status.charAt(0).toUpperCase() + file.status.slice(1),
+    };
+  });
+  const repo: GitRepoInfo = {
+    repoRoot,
+    branch,
+    upstream: index.upstream,
+    isDetached: branches.detached,
+  };
+  return {
+    branches: mapRemoteBranchEntries(branches),
+    repo,
+    status: {
+      repoRoot,
+      branch,
+      upstream: index.upstream,
+      ahead: index.ahead,
+      behind: index.behind,
+      isDetached: branches.detached,
+      truncated: false,
+      changedFiles,
+    },
+  };
+}
+
+export async function loadRemoteGitHistoryMetadata(
+  repoRoot: string,
+): Promise<GitHistoryMetadata> {
+  const [index, branches] = await Promise.all([
+    remoteGitCommand<GitDiffIndex>("git_diff_index", repoRoot),
+    remoteGitCommand<GitBranches>("git_branches", repoRoot),
+  ]);
+  return mapRemoteGitHistoryMetadata(repoRoot, index, branches);
+}
+
+export async function loadRemoteGitBranches(
+  repoRoot: string,
+): Promise<GitBranchListResult> {
+  const branches = await remoteGitCommand<GitBranches>(
+    "git_branches",
+    repoRoot,
+  );
+  return { branches: mapRemoteBranchEntries(branches) };
+}
+
+export async function loadRemoteGitRemoteUrl(
+  repoRoot: string,
+  name?: string,
+): Promise<string | null> {
+  const url = await remoteGitCommand<unknown>("git_remote_url", repoRoot, {
+    name: name ?? null,
+  });
+  if (url !== null && typeof url !== "string") {
+    throw new Error("The remote helper returned an invalid Git remote URL.");
+  }
+  return url;
+}
+
+export function loadRemoteGitFetch(repoRoot: string): Promise<void> {
+  return remoteGitCommand<void>("git_fetch", repoRoot);
+}
+
+export function loadRemoteGitPull(repoRoot: string): Promise<void> {
+  return remoteGitCommand<void>("git_pull", repoRoot);
+}
+
+export async function loadRemoteGitPush(
+  repoRoot: string,
+): Promise<GitPushResult> {
+  const result = await remoteGitCommand<unknown>("git_push", repoRoot);
+  if (
+    !result ||
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    !(
+      (typeof (result as GitPushResult).remote === "string" ||
+        (result as GitPushResult).remote === null) &&
+      (typeof (result as GitPushResult).branch === "string" ||
+        (result as GitPushResult).branch === null) &&
+      typeof (result as GitPushResult).pushed === "boolean"
+    )
+  ) {
+    throw new Error("The remote helper returned an invalid Git push result.");
+  }
+  return result as GitPushResult;
+}
+
+export async function loadRemoteGitCheckout(
+  repoRoot: string,
+  branch: string,
+): Promise<void> {
+  await remoteGitCommand<string>("git_checkout", repoRoot, { name: branch });
+}
 
 async function fetchRemoteGitHistory(
   cwd: string,

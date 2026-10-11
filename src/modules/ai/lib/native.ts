@@ -19,9 +19,16 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import {
   isDirectSshProfilePath,
+  loadRemoteGitBranches,
+  loadRemoteGitCheckout,
   loadRemoteGitCommitFileDiff,
   loadRemoteGitCommitFiles,
+  loadRemoteGitFetch,
+  loadRemoteGitHistoryMetadata,
   loadRemoteGitLog,
+  loadRemoteGitPull,
+  loadRemoteGitPush,
+  loadRemoteGitRemoteUrl,
   resolveRemoteGitRepo,
 } from "./remoteGitHistory";
 
@@ -516,10 +523,12 @@ export const native = {
       workspace: resolveGitWorkspace(cwd, workspace),
     }),
   gitHistoryMetadata: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitHistoryMetadata>("git_history_metadata", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitHistoryMetadata(repoRoot)
+      : invoke<GitHistoryMetadata>("git_history_metadata", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
     invoke<GitStatusSnapshot>("git_status", {
       repoRoot,
@@ -599,20 +608,26 @@ export const native = {
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
   gitFetch: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_fetch", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitFetch(repoRoot)
+      : invoke<void>("git_fetch", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitPullFfOnly: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_pull_ff_only", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitPull(repoRoot)
+      : invoke<void>("git_pull_ff_only", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitPush: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitPushResult>("git_push", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitPush(repoRoot)
+      : invoke<GitPushResult>("git_push", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitLog: (
     repoRoot: string,
     options?: {
@@ -664,26 +679,32 @@ export const native = {
           workspace: resolveGitWorkspace(repoRoot, workspace),
         }),
   gitRemoteUrl: (repoRoot: string, name?: string, workspace?: WorkspaceEnv) =>
-    invoke<string | null>("git_remote_url", {
-      repoRoot,
-      name: name ?? null,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitRemoteUrl(repoRoot, name)
+      : invoke<string | null>("git_remote_url", {
+          repoRoot,
+          name: name ?? null,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitListBranches: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitBranchListResult>("git_list_branches", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitBranches(repoRoot)
+      : invoke<GitBranchListResult>("git_list_branches", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitCheckoutBranch: (
     repoRoot: string,
     branch: string,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_checkout_branch", {
-      repoRoot,
-      branch,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? loadRemoteGitCheckout(repoRoot, branch)
+      : invoke<void>("git_checkout_branch", {
+          repoRoot,
+          branch,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitWorktreeAdd: (
     repoRoot: string,
     sessionId: string,
