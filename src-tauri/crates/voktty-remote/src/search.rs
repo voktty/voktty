@@ -391,7 +391,6 @@ mod tests {
     #[test]
     fn rejects_search_roots_outside_the_authenticated_workspace() {
         let workspace = tempdir().unwrap();
-        let outside = tempdir().unwrap();
         let state = RemoteSearchState::default();
 
         assert!(matches!(
@@ -404,6 +403,7 @@ mod tests {
 
         #[cfg(unix)]
         {
+            let outside = tempdir().unwrap();
             std::os::unix::fs::symlink(outside.path(), workspace.path().join("linked")).unwrap();
             assert!(matches!(
                 state.prepare(
