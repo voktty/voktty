@@ -197,7 +197,10 @@ impl TunnelManager {
                         };
 
                         if let Ok(mut map) = tunnels_ref.write() {
-                            if let Some(t) = map.get_mut(&mon_id).filter(|t| Arc::ptr_eq(&t.child, &mon_child)) {
+                            if let Some(t) = map
+                                .get_mut(&mon_id)
+                                .filter(|t| Arc::ptr_eq(&t.child, &mon_child))
+                            {
                                 t.status = TunnelStatus::Error;
                                 t.error = Some(err_str.clone());
                             }
@@ -220,7 +223,10 @@ impl TunnelManager {
                 if !early_exit {
                     // Tunnel survived grace period, mark as Active!
                     if let Ok(mut map) = tunnels_ref.write() {
-                        if let Some(t) = map.get_mut(&mon_id).filter(|t| Arc::ptr_eq(&t.child, &mon_child)) {
+                        if let Some(t) = map
+                            .get_mut(&mon_id)
+                            .filter(|t| Arc::ptr_eq(&t.child, &mon_child))
+                        {
                             t.status = TunnelStatus::Active;
                         }
                     }
@@ -250,7 +256,10 @@ impl TunnelManager {
                         };
 
                         if let Ok(mut map) = tunnels_ref.write() {
-                            if let Some(t) = map.get_mut(&mon_id).filter(|t| Arc::ptr_eq(&t.child, &mon_child)) {
+                            if let Some(t) = map
+                                .get_mut(&mon_id)
+                                .filter(|t| Arc::ptr_eq(&t.child, &mon_child))
+                            {
                                 t.status = final_status.clone();
                                 t.error = final_error.clone();
                             }

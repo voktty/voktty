@@ -1173,12 +1173,8 @@ pub async fn harness_exec(
         } else {
             None
         };
-        let provider_matches = exec_provider_matches(
-            &command,
-            binary_provider.as_deref(),
-            opencode,
-            grok,
-        );
+        let provider_matches =
+            exec_provider_matches(&command, binary_provider.as_deref(), opencode, grok);
         if !provider_matches || (binary_provider.is_none() && !is_resolved_harness_binary(&command))
         {
             return Err("harness_exec: not a resolved harness CLI".to_string());
@@ -3279,7 +3275,12 @@ mod exec_allowlist_tests {
             Some(resolved),
             None,
         ));
-        assert!(!exec_provider_matches("opencode", Some("opencode"), None, None));
+        assert!(!exec_provider_matches(
+            "opencode",
+            Some("opencode"),
+            None,
+            None
+        ));
         assert!(!exec_provider_matches("codex", Some("codex"), None, None));
     }
 

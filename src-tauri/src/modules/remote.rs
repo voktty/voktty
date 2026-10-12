@@ -254,9 +254,19 @@ fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<Askpass, St
         let id = uuid::Uuid::new_v4().to_string();
         let (sender, receiver) = mpsc::sync_channel(1);
         prompts.lock().ok()?.insert(id.clone(), sender);
-        let emitted = app.emit("voktty:ssh-prompt", SshPromptEvent { id: id.clone(), message, confirm });
+        let emitted = app.emit(
+            "voktty:ssh-prompt",
+            SshPromptEvent {
+                id: id.clone(),
+                message,
+                confirm,
+            },
+        );
         let answer = if emitted.is_ok() {
-            receiver.recv_timeout(Duration::from_secs(120)).ok().flatten()
+            receiver
+                .recv_timeout(Duration::from_secs(120))
+                .ok()
+                .flatten()
         } else {
             None
         };
@@ -273,12 +283,20 @@ pub fn remote_ssh_prompt_answer(
     id: String,
     answer: Option<String>,
 ) -> Result<(), String> {
-    if answer.as_ref().is_some_and(|value| value.len() > 8192 || value.chars().any(|c| c == '\r' || c == '\n' || c == '\0')) {
+    if answer.as_ref().is_some_and(|value| {
+        value.len() > 8192 || value.chars().any(|c| c == '\r' || c == '\n' || c == '\0')
+    }) {
         return Err("SSH answer is invalid".to_string());
     }
-    let sender = state.ssh_prompts.lock().map_err(|_| "SSH prompt state is poisoned")?.remove(&id)
+    let sender = state
+        .ssh_prompts
+        .lock()
+        .map_err(|_| "SSH prompt state is poisoned")?
+        .remove(&id)
         .ok_or_else(|| "SSH prompt expired".to_string())?;
-    sender.send(answer).map_err(|_| "SSH prompt expired".to_string())
+    sender
+        .send(answer)
+        .map_err(|_| "SSH prompt expired".to_string())
 }
 
 struct RemoteSession {
@@ -1718,10 +1736,7 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
         args.extend(["-o".to_string(), "ConnectTimeout=10".to_string()]);
     }
     if !has_ssh_option(&user_extra, "StrictHostKeyChecking") {
-        args.extend([
-            "-o".to_string(),
-            "StrictHostKeyChecking=ask".to_string(),
-        ]);
+        args.extend(["-o".to_string(), "StrictHostKeyChecking=ask".to_string()]);
     }
 
     if let Some(port) = connection.port.filter(|port| *port != 22) {
@@ -1776,7 +1791,9 @@ fn read_capped(mut stream: impl Read) -> Vec<u8> {
     let mut result = Vec::new();
     let mut buffer = [0u8; 4096];
     while let Ok(count) = stream.read(&mut buffer) {
-        if count == 0 { break; }
+        if count == 0 {
+            break;
+        }
         let remaining = 65_536usize.saturating_sub(result.len());
         result.extend_from_slice(&buffer[..count.min(remaining)]);
     }
@@ -1873,7 +1890,11 @@ pub fn run_ssh_capture(
     remote_command: &str,
 ) -> Result<String, String> {
     let mut command = Command::new("ssh");
-    command.arg("-o").arg("BatchMode=yes").args(ssh_args(connection)).arg(remote_command);
+    command
+        .arg("-o")
+        .arg("BatchMode=yes")
+        .args(ssh_args(connection))
+        .arg(remote_command);
     crate::modules::proc::hide_console(&mut command);
     let output = command_output_with_timeout(&mut command, Duration::from_secs(60))?;
     if !output.status.success() {
