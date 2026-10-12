@@ -1,55 +1,134 @@
 fn main() {
     configure_sidecar();
-    configure_test_manifest();
-    tauri_build::build()
+    tauri_build::build();
+    ensure_test_manifest();
 }
 
-/// Give test binaries the Common-Controls 6 dependency the app binary already
-/// gets from `tauri_build`.
-///
-/// `rfd`, reached through `tauri-plugin-dialog`, imports `TaskDialogIndirect`,
-/// which only comctl32 version 6 exports. Without the manifest the Windows
-/// loader binds to the version 5 copy in System32 and every test binary that
-/// links that symbol dies with STATUS_ENTRYPOINT_NOT_FOUND before `main`.
-///
-/// Scoped to tests so the app binary keeps exactly one manifest, and written
-/// into `OUT_DIR` so no absolute path is ever committed.
-fn configure_test_manifest() {
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+use std::{env, fs, path::PathBuf};
+
+const COMCTL_V6_NAME: &str = "Microsoft.Windows.Common-Controls";
+const COMCTL_V6_VERSION: &str = "6.0.0.0";
+const COMCTL_V6_STANZA: &str = concat!(
+    "  <dependency>\n",
+    "    <dependentAssembly>\n",
+    "      <assemblyIdentity\n",
+    "        type=\"win32\"\n",
+    "        name=\"Microsoft.Windows.Common-Controls\"\n",
+    "        version=\"6.0.0.0\"\n",
+    "        processorArchitecture=\"*\"\n",
+    "        publicKeyToken=\"6595b64144ccf1df\"\n",
+    "        language=\"*\"\n",
+    "      />\n",
+    "    </dependentAssembly>\n",
+    "  </dependency>\n",
+);
+const MINIMAL_V6_MANIFEST: &str = "\
+<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
+<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">\n\
+  <dependency>\n\
+    <dependentAssembly>\n\
+      <assemblyIdentity\n\
+        type=\"win32\"\n\
+        name=\"Microsoft.Windows.Common-Controls\"\n\
+        version=\"6.0.0.0\"\n\
+        processorArchitecture=\"*\"\n\
+        publicKeyToken=\"6595b64144ccf1df\"\n\
+        language=\"*\"\n\
+      />\n\
+    </dependentAssembly>\n\
+  </dependency>\n\
+</assembly>\n";
+
+/// Reuse Tauri's manifest and attach it to test targets as well as the app.
+/// Tauri's Windows resource helper links the manifest to binary targets, but
+/// library unit-test binaries need their own Common Controls v6 dependency.
+fn ensure_test_manifest() {
+    if env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() != "windows"
+        || env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default() != "msvc"
+    {
         return;
     }
-    let Ok(out_dir) = std::env::var("OUT_DIR") else {
-        return;
-    };
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is required"));
+    let manifest = fs::read_to_string(out_dir.join("resource.rc"))
+        .ok()
+        .and_then(|resource| extract_manifest_from_rc(&resource))
+        .map(|manifest| ensure_comctl_v6(&manifest))
+        .unwrap_or_else(|| {
+            println!("cargo:warning=using a minimal Common Controls v6 manifest for test binaries");
+            MINIMAL_V6_MANIFEST.to_string()
+        });
+    let manifest_path = out_dir.join("test_manifest.xml");
+    fs::write(&manifest_path, manifest).expect("failed to write test manifest");
 
-    let manifest = std::path::Path::new(&out_dir).join("common-controls.manifest");
-    if std::fs::write(&manifest, COMMON_CONTROLS_MANIFEST).is_err() {
-        return;
-    }
-
-    println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED");
+    // Unscoped arguments also reach the library's #[test] executable.
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
     println!(
-        "cargo:rustc-link-arg-tests=/MANIFESTINPUT:{}",
-        manifest.display()
+        "cargo:rustc-link-arg=/MANIFESTINPUT:{}",
+        manifest_path.display()
     );
+    println!("cargo:rustc-link-arg=/WX");
 }
 
-const COMMON_CONTROLS_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <dependency>
-    <dependentAssembly>
-      <assemblyIdentity
-        type="win32"
-        name="Microsoft.Windows.Common-Controls"
-        version="6.0.0.0"
-        processorArchitecture="*"
-        publicKeyToken="6595b64144ccf1df"
-        language="*"
-      />
-    </dependentAssembly>
-  </dependency>
-</assembly>
-"#;
+fn extract_manifest_from_rc(resource: &str) -> Option<String> {
+    let mut lines = resource
+        .lines()
+        .map(str::trim)
+        .skip_while(|line| *line != "1 24");
+    lines.next()?;
+    if lines.next()? != "{" {
+        return None;
+    }
+    let mut manifest = String::new();
+    for line in lines {
+        if line == "}" {
+            break;
+        }
+        let inner = line.strip_prefix('\"')?.strip_suffix('\"')?;
+        let inner = inner.strip_prefix(' ').unwrap_or(inner);
+        let inner = inner.strip_suffix(' ').unwrap_or(inner);
+        manifest.push_str(&unescape_rc_string(inner));
+        manifest.push('\n');
+    }
+    Some(manifest)
+}
+
+fn ensure_comctl_v6(manifest: &str) -> String {
+    if manifest.contains(COMCTL_V6_NAME) && manifest.contains(COMCTL_V6_VERSION) {
+        return manifest.to_string();
+    }
+    match manifest.rfind("</assembly>") {
+        Some(index) => {
+            let (head, tail) = manifest.split_at(index);
+            format!("{head}{COMCTL_V6_STANZA}{tail}")
+        }
+        None => MINIMAL_V6_MANIFEST.to_string(),
+    }
+}
+
+fn unescape_rc_string(escaped: &str) -> String {
+    let mut unescaped = String::with_capacity(escaped.len());
+    let mut chars = escaped.chars();
+    while let Some(character) = chars.next() {
+        if character != '\\' && character != '\"' {
+            unescaped.push(character);
+            continue;
+        }
+        match chars.next() {
+            Some('\"') if character == '\"' => unescaped.push('\"'),
+            Some('\\') if character == '\\' => unescaped.push('\\'),
+            Some('\'') if character == '\\' => unescaped.push('\''),
+            Some('n') if character == '\\' => unescaped.push('\n'),
+            Some('t') if character == '\\' => unescaped.push('\t'),
+            Some('r') if character == '\\' => unescaped.push('\r'),
+            Some(other) => {
+                unescaped.push(character);
+                unescaped.push(other);
+            }
+            None => unescaped.push(character),
+        }
+    }
+    unescaped
+}
 
 fn configure_sidecar() {
     let Ok(target) = std::env::var("TARGET") else {

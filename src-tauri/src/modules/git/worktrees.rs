@@ -383,7 +383,7 @@ fn create_worktree(
     let created = list_worktrees(registry, &main.path, workspace)?
         .worktrees
         .into_iter()
-        .find(|tree| tree.path == path)
+        .find(|tree| worktree_paths_match(&tree.path, &path, &repo.workspace))
         .ok_or_else(|| {
             GitError::command(
                 "git worktree add",
@@ -405,7 +405,7 @@ fn delete_worktree(
     let tree = listed
         .worktrees
         .iter()
-        .find(|tree| tree.path == path)
+        .find(|tree| worktree_paths_match(&tree.path, path, workspace))
         .ok_or_else(|| GitError::command("git worktree remove", "worktree is not registered"))?;
     if tree.is_main {
         return Err(GitError::command(
@@ -443,7 +443,7 @@ fn delete_worktree(
         args.push(OsString::from("--force"));
     }
     args.push(OsString::from("--"));
-    args.push(OsString::from(path));
+    args.push(OsString::from(&tree.path));
     let repo = authorized_repo_root(registry, cwd, workspace)?;
     let output = run_git(&repo.workspace, Some(&repo.git_path), args, 60)?;
     ensure_success(&output, "git worktree remove failed")?;
@@ -452,6 +452,22 @@ fn delete_worktree(
         removed: true,
         reason: None,
     })
+}
+
+fn worktree_paths_match(registered: &str, requested: &str, workspace: &WorkspaceEnv) -> bool {
+    if registered == requested {
+        return true;
+    }
+    if workspace.is_remote() || workspace.is_wsl() {
+        return false;
+    }
+    match (
+        std::fs::canonicalize(resolve_path(registered, workspace)),
+        std::fs::canonicalize(resolve_path(requested, workspace)),
+    ) {
+        (Ok(registered), Ok(requested)) => registered == requested,
+        _ => false,
+    }
 }
 
 fn worktree_removal_reason(dirty: Option<bool>, force: bool) -> Option<&'static str> {
@@ -909,6 +925,23 @@ mod tests {
             Ok(_) => panic!("the main worktree must not be removable"),
             Err(error) => error,
         };
+        assert!(error
+            .to_string()
+            .contains("project worktree cannot be removed"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_to_remove_the_main_worktree_through_a_path_alias() {
+        use std::os::unix::fs::symlink;
+
+        let (parent, repo, registry) = repository();
+        let alias = parent.path().join("project-alias");
+        symlink(&repo, &alias).expect("create project path alias");
+        let alias = alias.to_string_lossy();
+        let error = delete_worktree(&registry, &alias, &alias, true, &WorkspaceEnv::Local)
+            .expect_err("the main worktree must not be removable through an alias");
+
         assert!(error
             .to_string()
             .contains("project worktree cannot be removed"));
