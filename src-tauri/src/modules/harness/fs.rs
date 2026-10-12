@@ -4146,6 +4146,31 @@ mod tests {
             && git(dir, &["config", "user.email", "monocode@test"])
             && git(dir, &["config", "commit.gpgsign", "false"])
             && git(dir, &["config", "core.autocrlf", "false"])
+            && disable_git_hooks(dir)
+    }
+
+    fn init_bare_git(dir: &Path) -> bool {
+        let init = Command::new("git")
+            .args(["init", "--bare"])
+            .current_dir(dir)
+            .output();
+        let Ok(init) = init else { return false };
+        init.status.success() && disable_git_hooks(dir)
+    }
+
+    fn disable_git_hooks(dir: &Path) -> bool {
+        // Local fixtures must not run user hooks that can block on prompts.
+        let Some(git_dir) =
+            git_stdout(dir, &["rev-parse", "--absolute-git-dir"]).map(PathBuf::from)
+        else {
+            return false;
+        };
+        let hooks_dir = git_dir.join("voktty-test-hooks");
+        if std::fs::create_dir_all(&hooks_dir).is_err() {
+            return false;
+        }
+        let hooks_path = hooks_dir.to_string_lossy().replace('\\', "/");
+        git(dir, &["config", "core.hooksPath", &hooks_path])
     }
 
     fn read_file(path: impl AsRef<Path>) -> String {
@@ -4546,13 +4571,7 @@ mod tests {
         if !init_git_commit(&repo.0, &[("a.txt", "alpha\n")]) {
             return;
         }
-        if Command::new("git")
-            .args(["init", "--bare"])
-            .current_dir(&origin.0)
-            .status()
-            .map(|status| !status.success())
-            .unwrap_or(true)
-        {
+        if !init_bare_git(&origin.0) {
             return;
         }
         let origin_url = origin.0.to_string_lossy().into_owned();
@@ -4580,13 +4599,7 @@ mod tests {
         if !init_git_commit(&repo.0, &[("a.txt", "alpha\n")]) {
             return;
         }
-        if Command::new("git")
-            .args(["init", "--bare"])
-            .current_dir(&origin.0)
-            .status()
-            .map(|status| !status.success())
-            .unwrap_or(true)
-        {
+        if !init_bare_git(&origin.0) {
             return;
         }
         let origin_url = origin.0.to_string_lossy().into_owned();
@@ -4618,13 +4631,7 @@ mod tests {
         if !init_git_commit(&a.0, &[("a.txt", "alpha\n")]) {
             return;
         }
-        if Command::new("git")
-            .args(["init", "--bare"])
-            .current_dir(&origin.0)
-            .status()
-            .map(|status| !status.success())
-            .unwrap_or(true)
-        {
+        if !init_bare_git(&origin.0) {
             return;
         }
         let origin_url = origin.0.to_string_lossy().into_owned();
@@ -4645,6 +4652,7 @@ mod tests {
                 .status()
                 .map(|status| !status.success())
                 .unwrap_or(true)
+            || !disable_git_hooks(&b.0)
             || !git(&b.0, &["config", "user.name", "MonoCode"])
             || !git(&b.0, &["config", "user.email", "monocode@test"])
             || !git(&b.0, &["config", "commit.gpgsign", "false"])
@@ -5210,13 +5218,7 @@ mod tests {
         if !init_git_commit(&repo.0, &[("a.txt", "alpha\n")]) {
             return;
         }
-        if Command::new("git")
-            .args(["init", "--bare"])
-            .current_dir(&origin.0)
-            .status()
-            .map(|status| !status.success())
-            .unwrap_or(true)
-        {
+        if !init_bare_git(&origin.0) {
             return;
         }
         let origin_url = origin.0.to_string_lossy().into_owned();

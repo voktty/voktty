@@ -146,12 +146,63 @@ mod tests {
     #[test]
     fn test_quota_coordinator_overview() {
         let coordinator = QuotaCoordinator::new();
+        // Seed snapshots so this test never reads local credentials or contacts providers.
+        let fixtures = [
+            ("claude", LimitState::Healthy, Some(0.25)),
+            (
+                "gemini",
+                LimitState::Approaching {
+                    used_percent: 85.0,
+                    label: "daily".into(),
+                    resets_at: None,
+                },
+                Some(0.5),
+            ),
+            (
+                "codex",
+                LimitState::Unavailable {
+                    message: "offline".into(),
+                },
+                None,
+            ),
+            ("voktty", LimitState::Healthy, Some(0.75)),
+        ];
+        let fetched_at = Instant::now();
+        let mut cache = coordinator.cache.lock().unwrap();
+        for (provider_id, state, cost_today_usd) in fixtures {
+            cache.insert(
+                provider_id.into(),
+                CacheEntry {
+                    quota: ProviderQuota {
+                        provider_id: provider_id.into(),
+                        provider_name: provider_id.into(),
+                        state,
+                        windows: vec![],
+                        plan_name: None,
+                        account_email: None,
+                        cost_today_usd,
+                        total_input_tokens: None,
+                        total_output_tokens: None,
+                        updated_at: String::new(),
+                    },
+                    fetched_at,
+                },
+            );
+        }
+        drop(cache);
+
         let overview = coordinator.get_overview();
         assert_eq!(overview.providers.len(), 4);
         assert!(overview.providers.iter().any(|p| p.provider_id == "voktty"));
         assert!(overview.providers.iter().any(|p| p.provider_id == "claude"));
         assert!(overview.providers.iter().any(|p| p.provider_id == "gemini"));
         assert!(overview.providers.iter().any(|p| p.provider_id == "codex"));
+        assert!(matches!(
+            overview.overall_state,
+            LimitState::Approaching { .. }
+        ));
+        assert_eq!(overview.total_cost_today_usd, 1.5);
+        assert_eq!(overview.total_active_providers, 3);
     }
 
     #[test]
