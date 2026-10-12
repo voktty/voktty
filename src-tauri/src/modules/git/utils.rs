@@ -104,14 +104,14 @@ fn resolve_within_repo_impl(repo_root: &Path, rel: &str, allow_colon: bool) -> R
         .trim_start_matches(r"\\?\");
 
     let repo_prefix = format!("{repo_clean}/");
-    let stripped_rel = if rel_clean.len() >= repo_prefix.len()
+    let (stripped_rel, input_matches_repo_root) = if rel_clean.len() >= repo_prefix.len()
         && rel_clean[..repo_prefix.len()].eq_ignore_ascii_case(&repo_prefix)
     {
-        &rel_clean[repo_prefix.len()..]
+        (&rel_clean[repo_prefix.len()..], true)
     } else if rel_clean.eq_ignore_ascii_case(repo_clean) {
-        ""
+        ("", true)
     } else {
-        rel.trim_start_matches(['/', '\\'])
+        (rel.trim_start_matches(['/', '\\']), false)
     };
 
     let clean_rel = stripped_rel.replace('\\', "/");
@@ -120,29 +120,45 @@ fn resolve_within_repo_impl(repo_root: &Path, rel: &str, allow_colon: bool) -> R
     if !is_safe_path(clean_rel, allow_colon) {
         return Err(GitError::InvalidPath(clean_rel.into()));
     }
-    let joined = repo_root.join(clean_rel);
     if !repo_root.exists() {
-        return Ok(joined);
+        return Ok(repo_root.join(clean_rel));
     }
+    let canonical_repo_root = std::fs::canonicalize(repo_root).map_err(GitError::Io)?;
+    let input_path = Path::new(&rel_clean);
+    let joined = if !input_matches_repo_root && input_path.is_absolute() {
+        input_path.to_path_buf()
+    } else {
+        canonical_repo_root.join(clean_rel)
+    };
     match std::fs::canonicalize(&joined) {
-        Ok(canonical) => {
-            let canon_str = canonical.to_string_lossy().replace('\\', "/");
-            let canon_clean = canon_str
-                .trim_start_matches("//?/")
-                .trim_start_matches(r"\\?\");
-            if !canon_clean
-                .to_lowercase()
-                .starts_with(&repo_clean.to_lowercase())
-            {
-                return Err(GitError::PathOutsideWorkspace(canonical));
-            }
-            Ok(canonical)
-        }
+        Ok(canonical) if path_is_within(&canonical_repo_root, &canonical) => Ok(canonical),
+        Ok(canonical) => Err(GitError::PathOutsideWorkspace(canonical)),
         // Deleted path (staging a removal): validate via nearest existing ancestor.
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            resolve_deleted_within_repo(repo_root, &joined, clean_rel)
+            resolve_deleted_within_repo(&canonical_repo_root, &joined, clean_rel)
         }
         Err(e) => Err(GitError::Io(e)),
+    }
+}
+
+fn path_is_within(root: &Path, candidate: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        let mut candidate_components = candidate.components();
+        root.components().all(|root_component| {
+            candidate_components
+                .next()
+                .is_some_and(|candidate_component| {
+                    root_component
+                        .as_os_str()
+                        .to_string_lossy()
+                        .eq_ignore_ascii_case(&candidate_component.as_os_str().to_string_lossy())
+                })
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        candidate.starts_with(root)
     }
 }
 
@@ -174,7 +190,7 @@ fn resolve_deleted_within_repo(repo_root: &Path, joined: &Path, rel: &str) -> Re
         tail.push(name);
         match std::fs::canonicalize(parent) {
             Ok(canonical_parent) => {
-                if !canonical_parent.starts_with(repo_root) {
+                if !path_is_within(repo_root, &canonical_parent) {
                     return Err(GitError::PathOutsideWorkspace(canonical_parent));
                 }
                 let mut resolved = canonical_parent;
@@ -271,6 +287,46 @@ mod tests {
             resolve_literal_within_repo(root.path(), "../outside"),
             Err(GitError::InvalidPath(_))
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_within_repo_accepts_absolute_paths_through_a_repo_alias() {
+        use std::os::unix::fs::symlink;
+
+        let parent = tempfile::tempdir().unwrap();
+        let repo = parent.path().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        let file = repo.join("file.txt");
+        std::fs::write(&file, "contents").unwrap();
+        let alias = parent.path().join("repo-alias");
+        symlink(&repo, &alias).unwrap();
+
+        let resolved = resolve_within_repo(
+            &repo.canonicalize().unwrap(),
+            alias.join("file.txt").to_str().unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(resolved, file.canonicalize().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_within_repo_rejects_symlinks_to_sibling_prefixes() {
+        use std::os::unix::fs::symlink;
+
+        let parent = tempfile::tempdir().unwrap();
+        let repo = parent.path().join("repo");
+        let sibling = parent.path().join("repo-outside");
+        std::fs::create_dir(&repo).unwrap();
+        std::fs::create_dir(&sibling).unwrap();
+        std::fs::write(sibling.join("secret.txt"), "outside").unwrap();
+        symlink(&sibling, repo.join("linked")).unwrap();
+
+        let result = resolve_within_repo(&repo.canonicalize().unwrap(), "linked/secret.txt");
+
+        assert!(matches!(result, Err(GitError::PathOutsideWorkspace(_))));
     }
 
     #[test]

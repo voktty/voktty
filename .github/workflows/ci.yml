@@ -116,6 +116,16 @@ jobs:
         with:
           workspaces: ./src-tauri -> target
 
+      - name: Remove conflicting Service Fabric binaries from PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $serviceFabricBin = "$env:ProgramFiles\Microsoft Service Fabric\bin\Fabric\Fabric.Code".TrimEnd([char]92)
+          $env:Path = ($env:Path -split ';' | Where-Object {
+            $_ -and $_.Trim().TrimEnd([char]92) -ine $serviceFabricBin
+          }) -join ';'
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "PATH=$env:Path"
+
       - uses: taiki-e/install-action@v2.87.7
         with:
           tool: cargo-nextest
