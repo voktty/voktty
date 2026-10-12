@@ -12,7 +12,17 @@ concurrency:
 
 jobs:
   build-remote-helper:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x86_64
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-22.04
+          - architecture: aarch64
+            target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -20,34 +30,44 @@ jobs:
       - name: Install musl toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools file
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
-          key: package-validation-remote-helper-linux-x86_64
+          key: package-validation-remote-helper-linux-${{ matrix.architecture }}
 
       - name: Build remote helper
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         working-directory: src-tauri
-        run: cargo build --locked -p voktty-remote --release --target x86_64-unknown-linux-musl
+        run: cargo build --locked -p voktty-remote --release --target ${{ matrix.target }}
 
       - name: Stage remote helper
         run: |
-          mkdir -p src-tauri/resources/remote/linux-x86_64
-          cp src-tauri/target/x86_64-unknown-linux-musl/release/voktty-remote \
-            src-tauri/resources/remote/linux-x86_64/voktty-remote
-          test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
+          mkdir -p src-tauri/resources/remote/linux-${{ matrix.architecture }}
+          cp src-tauri/target/${{ matrix.target }}/release/voktty-remote \
+            src-tauri/resources/remote/linux-${{ matrix.architecture }}/voktty-remote
+          test -s src-tauri/resources/remote/linux-${{ matrix.architecture }}/voktty-remote
+          binary_info="$(file src-tauri/resources/remote/linux-${{ matrix.architecture }}/voktty-remote)"
+          echo "$binary_info"
+          echo "$binary_info" | grep -E "statically linked|static-pie linked"
+          case "${{ matrix.architecture }}" in
+            x86_64) echo "$binary_info" | grep -F "x86-64" ;;
+            aarch64) echo "$binary_info" | grep -F "ARM aarch64" ;;
+          esac
 
       - name: Upload remote helper
         uses: actions/upload-artifact@v4
         with:
-          name: package-validation-remote-linux-x86_64
-          path: src-tauri/resources/remote/linux-x86_64/
+          name: package-validation-remote-linux-${{ matrix.architecture }}
+          path: src-tauri/resources/remote/linux-${{ matrix.architecture }}/
           if-no-files-found: error
           retention-days: 1
 
@@ -138,9 +158,17 @@ jobs:
           name: package-validation-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64
 
-      - name: Verify remote helper resource
+      - name: Download ARM64 remote helper
+        uses: actions/download-artifact@v4
+        with:
+          name: package-validation-remote-linux-aarch64
+          path: src-tauri/resources/remote/linux-aarch64
+
+      - name: Verify remote helper resources
         shell: bash
-        run: test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
+        run: |
+          test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
+          test -s src-tauri/resources/remote/linux-aarch64/voktty-remote
 
       - name: Build unsigned Tauri packages
         env:

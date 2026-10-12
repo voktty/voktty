@@ -66,7 +66,7 @@ Every hit carries an exact one-based UTF-16 line/column range for CodeMirror nav
 
 Global replacement is a separate preview-first transaction. A shared Rust crate computes literal and regular-expression replacements for local, WSL and SSH workspaces. Preview records the expected `mtime`, SHA-256 content hash and replacement count for each file. Commit validates every target before writing, repeats validation immediately before each atomic write and rolls earlier files back if a later write fails. Rollback refuses to overwrite a third-party change made after Voktty wrote the file. Open files with unsaved changes and truncated search result sets block replacement.
 
-The release pipeline builds the Linux x86_64 musl remote helper once and injects that artifact into every desktop bundle. Linux ARM64 remote hosts remain unsupported until an ARM64 helper artifact is added and qualified.
+The release pipeline builds static musl remote helpers for Linux x86_64 and ARM64 on matching Linux runners, verifies each ELF machine type, and injects both resources into every Windows, macOS and Linux desktop bundle. The remote client selects the helper for the host architecture. Linux ARM32 and other architectures remain unsupported.
 
 ## Navigation history and symbols
 
