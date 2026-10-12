@@ -11,6 +11,11 @@ vi.mock("@/modules/settings/preferences", () => ({
   },
 }));
 
+vi.mock("@/lib/platform", () => ({
+  IS_MAC: false,
+  MOD_PROP: "ctrl",
+}));
+
 import { shortcutLabel } from "./shortcutLabel";
 
 beforeEach(() => {

@@ -10,6 +10,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 vi.mock("@/modules/harness/lib/fs", () => ({ listProjectFiles: vi.fn() }));
 const list = vi.mocked(listProjectFiles);
+const firstCwd = "C:/repo/first";
+const secondCwd = "C:/repo/second";
 const files: ProjectFile[] = [
   { name: "a.ts", relative: "a.ts", path: "/repo/a.ts" },
 ];
@@ -30,28 +32,28 @@ afterEach(() => {
 it.each(["focus", "visibilitychange"])(
   "revalidates indexes after %s",
   async (event) => {
-    await loadProjectFiles("/repo/first");
-    await loadProjectFiles("/repo/second");
+    await loadProjectFiles(firstCwd);
+    await loadProjectFiles(secondCwd);
     const changed = [
       ...files,
       { name: "new.ts", relative: "new.ts", path: "/repo/new.ts" },
     ];
     list.mockResolvedValue(changed);
     (event === "focus" ? window : document).dispatchEvent(new Event(event));
-    expect(peekProjectFiles("/repo/first")).toBeNull();
+    expect(peekProjectFiles(firstCwd)).toBeNull();
     await vi.runAllTimersAsync();
-    expect(peekProjectFiles("/repo/second")).toBe(changed);
+    expect(peekProjectFiles(secondCwd)).toBe(changed);
     expect(list).toHaveBeenCalledTimes(3);
   },
 );
 
 it("does not refresh or evict indexes while the window is hidden", async () => {
-  await loadProjectFiles("/repo/first");
-  await loadProjectFiles("/repo/second");
+  await loadProjectFiles(firstCwd);
+  await loadProjectFiles(secondCwd);
   vi.spyOn(document, "hidden", "get").mockReturnValue(true);
   document.dispatchEvent(new Event("visibilitychange"));
   await vi.runAllTimersAsync();
-  expect(peekProjectFiles("/repo/first")).toBe(files);
-  expect(peekProjectFiles("/repo/second")).toBe(files);
+  expect(peekProjectFiles(firstCwd)).toBe(files);
+  expect(peekProjectFiles(secondCwd)).toBe(files);
   expect(list).toHaveBeenCalledTimes(2);
 });
