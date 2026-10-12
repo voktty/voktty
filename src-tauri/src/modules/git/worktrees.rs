@@ -759,7 +759,9 @@ mod tests {
         assert_eq!(listed.worktrees.len(), 2);
         assert!(listed.worktrees[0].is_main);
         assert_eq!(listed.worktrees[1].branch.as_deref(), Some("feature"));
-        assert!(registry.is_authorized(Path::new(&listed.worktrees[1].path)));
+        let feature_path =
+            std::fs::canonicalize(&listed.worktrees[1].path).expect("canonical worktree path");
+        assert!(registry.is_authorized(&feature_path));
     }
 
     #[test]
@@ -837,7 +839,8 @@ mod tests {
         assert_eq!(created.branch.as_deref(), Some("feature/new-worktree"));
         assert!(!created.is_main);
         assert!(Path::new(&created.path).is_dir());
-        assert!(registry.is_authorized(Path::new(&created.path)));
+        let canonical_path = std::fs::canonicalize(&created.path).expect("canonical worktree path");
+        assert!(registry.is_authorized(&canonical_path));
 
         run_git(&repo, &["branch", "existing"]);
         let existing = create_worktree(

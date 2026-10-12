@@ -3177,6 +3177,7 @@ mod tests {
     fn watch_paths_must_be_directories_inside_workspace_root() {
         let workspace = tempdir().expect("workspace");
         let outside = tempdir().expect("outside");
+        let root = fs::canonicalize(workspace.path()).expect("canonical workspace root");
         fs::create_dir(workspace.path().join("src")).expect("source directory");
         fs::create_dir(workspace.path().join("node_modules")).expect("excluded directory");
         let mut server = RemoteServer::new();
@@ -3186,7 +3187,7 @@ mod tests {
                     protocol: PROTOCOL_VERSION,
                     id: "1".to_string(),
                     method: METHOD_HANDSHAKE.to_string(),
-                    params: json!({ "workspaceRoot": workspace.path() }),
+                    params: json!({ "workspaceRoot": root }),
                 })
                 .ok
         );
@@ -3197,7 +3198,7 @@ mod tests {
             server
                 .resolve_watch_remove("removed/nested")
                 .expect("remove path after nested deletion"),
-            workspace.path().join("removed/nested")
+            root.join("removed/nested")
         );
         assert!(server
             .resolve_watch_add(outside.path().to_str().expect("outside path"))
@@ -3207,9 +3208,10 @@ mod tests {
     #[test]
     fn watch_refcounts_release_only_after_the_last_consumer() {
         let workspace = tempdir().expect("workspace");
-        let watched = workspace.path().join("src");
+        let root = fs::canonicalize(workspace.path()).expect("canonical workspace root");
+        let watched = root.join("src");
         fs::create_dir(&watched).expect("source directory");
-        let watched_key = fs::canonicalize(&watched).expect("canonical watch path");
+        let watched_key = watched.clone();
         let mut server = RemoteServer::new();
         assert!(
             server
@@ -3217,7 +3219,7 @@ mod tests {
                     protocol: PROTOCOL_VERSION,
                     id: "handshake".to_string(),
                     method: METHOD_HANDSHAKE.to_string(),
-                    params: json!({ "workspaceRoot": workspace.path() }),
+                    params: json!({ "workspaceRoot": root }),
                 })
                 .ok
         );

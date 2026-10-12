@@ -116,15 +116,35 @@ fn resolve_within_repo_impl(repo_root: &Path, rel: &str, allow_colon: bool) -> R
 
     let clean_rel = stripped_rel.replace('\\', "/");
     let clean_rel = clean_rel.trim_start_matches('/');
+    let unmatched_absolute = !input_matches_repo_root && Path::new(&rel_clean).is_absolute();
 
-    if !is_safe_path(clean_rel, allow_colon) {
+    if !unmatched_absolute && !is_safe_path(clean_rel, allow_colon) {
         return Err(GitError::InvalidPath(clean_rel.into()));
     }
+    if unmatched_absolute
+        && (rel_clean.contains('\0') || rel_clean.chars().any(|c| (c as u32) < 0x20))
+    {
+        return Err(GitError::InvalidPath(rel_clean.into()));
+    }
     if !repo_root.exists() {
+        if unmatched_absolute {
+            return Err(GitError::InvalidPath(rel_clean.into()));
+        }
         return Ok(repo_root.join(clean_rel));
     }
     let canonical_repo_root = std::fs::canonicalize(repo_root).map_err(GitError::Io)?;
     let input_path = Path::new(&rel_clean);
+    if unmatched_absolute {
+        return match std::fs::canonicalize(input_path) {
+            Ok(canonical) if path_is_within(&canonical_repo_root, &canonical) => Ok(canonical),
+            Ok(canonical) => Err(GitError::PathOutsideWorkspace(canonical)),
+            // Deleted paths are validated through their nearest existing ancestor.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                resolve_deleted_within_repo(&canonical_repo_root, input_path, rel_clean)
+            }
+            Err(e) => Err(GitError::Io(e)),
+        };
+    }
     let joined = if !input_matches_repo_root && input_path.is_absolute() {
         input_path.to_path_buf()
     } else {
