@@ -37,7 +37,8 @@ fn spawn_captures_stdout_and_exits_zero() {
         background::spawn("printf 'hello\\n'".into(), None, WorkspaceEnv::Local).expect("spawn");
 
     assert!(wait_until(Duration::from_secs(5), || {
-        proc.read_logs(0).exited
+        let logs = proc.read_logs(0);
+        logs.exited && logs.bytes.contains("hello")
     }));
 
     let logs = proc.read_logs(0);
@@ -101,11 +102,13 @@ fn read_logs_advances_offset() {
     .expect("spawn");
 
     assert!(wait_until(Duration::from_secs(5), || {
-        proc.read_logs(0).exited
+        let logs = proc.read_logs(0);
+        logs.exited && logs.next_offset >= b"one\ntwo\n".len() as u64
     }));
 
     let first = proc.read_logs(0);
-    assert!(first.next_offset > 0);
+    assert_eq!(first.bytes, "one\ntwo\n");
+    assert_eq!(first.next_offset, b"one\ntwo\n".len() as u64);
 
     let next = proc.read_logs(first.next_offset);
     assert!(
