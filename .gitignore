@@ -13,6 +13,9 @@ dist-ssr
 /build/
 *.local
 stats.html
+.env
+.keys
+release.ps1
 
 # Local environment files and credentials
 .env
