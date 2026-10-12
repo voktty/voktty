@@ -50,11 +50,10 @@ export const AGY_MODEL_CATALOG: AgentModel[] = [
     settings: [REASONING_EFFORT_HIGH],
   },
   {
-    id: "gemini:gemini-3.7-flash",
+    id: "gemini:gemini-3.5-flash-lite",
     harness: "gemini",
-    name: "Gemini 3.7 Flash",
-    nativeId: "gemini-3.7-flash-high",
-    settings: [REASONING_EFFORT_HIGH],
+    name: "Gemini 3.5 Flash-Lite",
+    nativeId: "gemini-3.5-flash-lite",
   },
   {
     id: "gemini:gemini-3.6-flash",
@@ -64,10 +63,10 @@ export const AGY_MODEL_CATALOG: AgentModel[] = [
     settings: [REASONING_EFFORT_MEDIUM],
   },
   {
-    id: "gemini:gemini-3.1-pro",
+    id: "gemini:gemini-3.1-pro-preview",
     harness: "gemini",
-    name: "Gemini 3.1 Pro",
-    nativeId: "gemini-3.1-pro-low",
+    name: "Gemini 3.1 Pro Preview",
+    nativeId: "gemini-3.1-pro-preview-low",
     settings: [REASONING_EFFORT_LOW],
   },
   {
@@ -127,13 +126,22 @@ export async function discoverAgyModels(
       if (parts.length >= 2) {
         const nativeId = parts[0].trim();
         const label = parts[1].trim();
-        const id = `gemini:${nativeId}`;
-        parsed.push({
+        const currentNativeId = nativeId.replace(
+          /^gemini-3\.7-flash(?=$|-)/,
+          "gemini-3.8-flash",
+        );
+        const currentLabel =
+          currentNativeId === nativeId ? label : label.replace("3.7", "3.8");
+        const id = `gemini:${currentNativeId}`;
+        const model: AgentModel = {
           id,
           harness: "gemini",
-          name: label,
-          nativeId,
-        });
+          name: currentLabel,
+          nativeId: currentNativeId,
+        };
+        const existingIndex = parsed.findIndex((entry) => entry.id === id);
+        if (existingIndex === -1) parsed.push(model);
+        else parsed[existingIndex] = model;
       }
     }
     return parsed.length > 0 ? parsed : AGY_MODEL_CATALOG;

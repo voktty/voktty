@@ -19,7 +19,7 @@ const TEXT_CHILD_ID = "monocode-codex-text";
 const INIT_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 45_000;
 const TEXT_RUNTIME_MODE = "supervised" as const;
-const TEXT_MODEL = "gpt-5.6-luna";
+const TEXT_MODEL = "gpt-6-luna";
 const TEXT_EFFORT = "low";
 
 type LiveText = {
@@ -42,7 +42,7 @@ let turns: Promise<void> = Promise.resolve();
 function pickTextModel(): string {
   const models = modelsFor("codex");
   const luna = models.find((model) =>
-    /5\.6-luna/i.test(`${model.nativeId ?? ""} ${model.name} ${model.id}`),
+    /6-luna/i.test(`${model.nativeId ?? ""} ${model.name} ${model.id}`),
   );
   return luna?.nativeId ?? TEXT_MODEL;
 }

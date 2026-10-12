@@ -165,6 +165,23 @@ export type CustomEndpoint = {
  */
 const HARNESS_MODEL_PREFIX = "harness@";
 
+const LEGACY_MODEL_ID_ALIASES: Readonly<Record<string, string>> = {
+  "gpt-5.6": "gpt-6.1-sol",
+  "gpt-5.6-terra": "gpt-6.1-sol",
+  "gpt-5.6-luna": "gpt-6-luna",
+  "gemini-3.7-flash": "gemini-3.8-flash",
+  "gemini-3.1-pro": "gemini-3.1-pro-preview",
+  "deepseek-v4-flash": "deepseek-flash",
+  "deepseek-reasoner": "deepseek-v4-pro",
+  "mistral-medium-latest": "mistral-medium-3-5",
+  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+  "deepseek-r1-distill-llama-70b": "openai/gpt-oss-120b",
+};
+
+function canonicalModelId(modelId: string): string {
+  return LEGACY_MODEL_ID_ALIASES[modelId] ?? modelId;
+}
+
 export function harnessModelId(agentModelId: string): string {
   return `${HARNESS_MODEL_PREFIX}${agentModelId}`;
 }
@@ -256,32 +273,32 @@ export type ModelInfo = {
 export const MODELS = [
   // ── OpenAI ────────────────────────────────────────────────────────────────
   {
-    id: "gpt-5.6",
+    id: "gpt-6.1-sol",
     provider: "openai",
-    label: "GPT-5.6 Sol",
-    hint: "Flagship",
-    description: "Frontier model for complex professional and agentic work.",
-    capabilities: { intelligence: 5, speed: 4, cost: 1 },
-    tags: ["vision", "reasoning", "tools", "coding"],
-    supportsTemperature: false,
-  },
-  {
-    id: "gpt-5.6-terra",
-    provider: "openai",
-    label: "GPT-5.6 Terra",
+    label: "GPT-6.1 Sol",
     hint: "Balanced",
-    description: "Strong intelligence with lower cost and latency.",
-    capabilities: { intelligence: 5, speed: 4, cost: 2 },
+    description: "Current general-purpose model for coding and agentic work.",
+    capabilities: { intelligence: 5, speed: 4, cost: 3 },
     tags: ["vision", "reasoning", "tools", "coding"],
     supportsTemperature: false,
   },
   {
-    id: "gpt-5.6-luna",
+    id: "gpt-6-astra",
     provider: "openai",
-    label: "GPT-5.6 Luna",
+    label: "GPT-6 Astra",
+    hint: "Flagship",
+    description: "OpenAI's highest-capability model for demanding agentic work.",
+    capabilities: { intelligence: 5, speed: 2, cost: 1 },
+    tags: ["vision", "reasoning", "tools", "coding"],
+    supportsTemperature: false,
+  },
+  {
+    id: "gpt-6-luna",
+    provider: "openai",
+    label: "GPT-6 Luna",
     hint: "Fast",
-    description: "Fast, affordable reasoning for high-volume work.",
-    capabilities: { intelligence: 4, speed: 5, cost: 3 },
+    description: "Fast, lower-cost model for frequent requests and completions.",
+    capabilities: { intelligence: 4, speed: 5, cost: 5 },
     tags: ["vision", "reasoning", "tools", "coding"],
     supportsTemperature: false,
   },
@@ -348,12 +365,42 @@ export const MODELS = [
 
   // ── Anthropic ─────────────────────────────────────────────────────────────
   {
+    id: "claude-opus-5-5",
+    provider: "anthropic",
+    label: "Claude Opus 5.5",
+    hint: "Flagship",
+    description: "Anthropic's most capable model for complex agentic work.",
+    capabilities: { intelligence: 5, speed: 2, cost: 1 },
+    tags: ["vision", "reasoning", "tools", "coding"],
+    supportsTemperature: false,
+  },
+  {
+    id: "claude-sonnet-5-5",
+    provider: "anthropic",
+    label: "Claude Sonnet 5.5",
+    hint: "Balanced",
+    description: "Strong coding and reasoning with balanced speed and cost.",
+    capabilities: { intelligence: 5, speed: 4, cost: 3 },
+    tags: ["vision", "reasoning", "tools", "coding"],
+    supportsTemperature: false,
+  },
+  {
+    id: "claude-haiku-5-5",
+    provider: "anthropic",
+    label: "Claude Haiku 5.5",
+    hint: "Fast",
+    description: "Fast multimodal model for frequent, lower-cost requests.",
+    capabilities: { intelligence: 4, speed: 5, cost: 5 },
+    tags: ["vision", "tools"],
+    supportsTemperature: false,
+  },
+  {
     id: "claude-fable-5-1",
     provider: "anthropic",
     label: "Claude Fable 5.1",
-    hint: "Frontier",
+    hint: "Previous",
     description:
-      "Anthropic's latest Mythos-class model for autonomous agentic coding and deep reasoning.",
+      "Earlier Mythos-class model for agentic coding and deep reasoning.",
     capabilities: { intelligence: 5, speed: 3, cost: 2 },
     tags: ["vision", "reasoning", "tools", "coding"],
     supportsTemperature: false,
@@ -362,9 +409,8 @@ export const MODELS = [
     id: "claude-fable-5",
     provider: "anthropic",
     label: "Claude Fable 5",
-    hint: "Frontier",
-    description:
-      "Most capable Claude for demanding reasoning and long-horizon agentic work.",
+    hint: "Previous",
+    description: "Earlier high-capability Claude for long reasoning tasks.",
     capabilities: { intelligence: 5, speed: 2, cost: 1 },
     tags: ["vision", "reasoning", "tools", "coding"],
     supportsTemperature: false,
@@ -438,16 +484,17 @@ export const MODELS = [
       "Google's newest flagship fast multimodal model with dynamic thinking.",
     capabilities: { intelligence: 5, speed: 5, cost: 4 },
     tags: ["vision", "reasoning", "tools", "coding"],
+    supportsTemperature: false,
   },
   {
-    id: "gemini-3.7-flash",
+    id: "gemini-3.5-flash-lite",
     provider: "google",
-    label: "Gemini 3.7 Flash",
-    hint: "Frontier",
-    description:
-      "Google's flagship fast multimodal model with dynamic thinking/reasoning.",
-    capabilities: { intelligence: 5, speed: 5, cost: 4 },
-    tags: ["vision", "reasoning", "tools", "coding"],
+    label: "Gemini 3.5 Flash-Lite",
+    hint: "Fast",
+    description: "Low-cost model for fast responses and inline completions.",
+    capabilities: { intelligence: 3, speed: 5, cost: 5 },
+    tags: ["vision", "tools"],
+    supportsTemperature: false,
   },
   {
     id: "gemini-3.6-flash",
@@ -458,11 +505,12 @@ export const MODELS = [
       "High-intelligence, extremely fast multimodal reasoning model.",
     capabilities: { intelligence: 4, speed: 5, cost: 4 },
     tags: ["vision", "reasoning", "tools", "coding"],
+    supportsTemperature: false,
   },
   {
-    id: "gemini-3.1-pro",
+    id: "gemini-3.1-pro-preview",
     provider: "google",
-    label: "Gemini 3.1 Pro",
+    label: "Gemini 3.1 Pro Preview",
     hint: "Flagship",
     description: "Deep reasoning, 1M context, strong coding capabilities.",
     capabilities: { intelligence: 5, speed: 3, cost: 2 },
@@ -479,6 +527,15 @@ export const MODELS = [
   },
 
   // ── xAI ───────────────────────────────────────────────────────────────────
+  {
+    id: "grok-4.7",
+    provider: "xai",
+    label: "Grok 4.7",
+    hint: "Flagship",
+    description: "Current xAI model for coding and general-purpose work.",
+    capabilities: { intelligence: 5, speed: 4, cost: 3 },
+    tags: ["vision", "reasoning", "tools", "coding"],
+  },
   {
     id: "grok-4.5",
     provider: "xai",
@@ -547,36 +604,26 @@ export const MODELS = [
     tags: ["reasoning", "tools", "coding"],
   },
   {
-    id: "deepseek-v4-flash",
+    id: "deepseek-flash",
     provider: "deepseek",
-    label: "DeepSeek V4 Flash",
+    label: "DeepSeek Flash",
     hint: "Fast",
     description: "Cheap and fast everyday tier.",
     capabilities: { intelligence: 4, speed: 5, cost: 5 },
     tags: ["reasoning", "tools"],
   },
-  {
-    id: "deepseek-reasoner",
-    provider: "deepseek",
-    label: "DeepSeek Reasoner",
-    hint: "Thinking",
-    description: "Chain-of-thought at open-weight prices.",
-    capabilities: { intelligence: 5, speed: 2, cost: 4 },
-    tags: ["reasoning", "coding"],
-  },
-
   // ── Mistral ────────────────────────────────────────────────────────────────
   {
     id: "mistral-large-latest",
     provider: "mistral",
     label: "Mistral Large 3",
     hint: "Best",
-    description: "Flagship Mistral model with 128K context.",
+    description: "Flagship Mistral model with 256K context.",
     capabilities: { intelligence: 5, speed: 3, cost: 3 },
     tags: ["vision", "tools", "coding"],
   },
   {
-    id: "mistral-medium-latest",
+    id: "mistral-medium-3-5",
     provider: "mistral",
     label: "Mistral Medium 3.5",
     hint: "Balanced",
@@ -622,6 +669,15 @@ export const MODELS = [
     capabilities: { intelligence: 3, speed: 5, cost: 5 },
     tags: ["tools", "coding"],
   },
+  {
+    id: "zai-glm-4.7",
+    provider: "cerebras",
+    label: "GLM 4.7",
+    hint: "Fast",
+    description: "GLM coding model available through Cerebras inference.",
+    capabilities: { intelligence: 4, speed: 5, cost: 4 },
+    tags: ["reasoning", "tools", "coding"],
+  },
 
   // ── Groq (autocomplete-tier) ──────────────────────────────────────────────
   {
@@ -634,21 +690,21 @@ export const MODELS = [
     tags: ["tools", "coding"],
   },
   {
-    id: "llama-3.3-70b-versatile",
+    id: "openai/gpt-oss-120b",
     provider: "groq",
-    label: "Llama 3.3 70B",
-    hint: "Versatile",
-    description: "Fast and broadly capable.",
-    capabilities: { intelligence: 4, speed: 5, cost: 5 },
-    tags: ["tools"],
+    label: "GPT-OSS 120B",
+    hint: "Balanced",
+    description: "Production model with stronger reasoning and tool use.",
+    capabilities: { intelligence: 4, speed: 4, cost: 4 },
+    tags: ["reasoning", "tools", "coding"],
   },
   {
-    id: "deepseek-r1-distill-llama-70b",
+    id: "qwen/qwen3.8-27b",
     provider: "groq",
-    label: "DeepSeek R1 Distill 70B",
-    hint: "Thinking",
-    description: "Reasoning-distilled Llama on Groq.",
-    capabilities: { intelligence: 4, speed: 5, cost: 5 },
+    label: "Qwen 3.8 27B",
+    hint: "Preview",
+    description: "Preview model for reasoning and coding on Groq.",
+    capabilities: { intelligence: 4, speed: 4, cost: 3 },
     tags: ["reasoning", "tools"],
   },
 
@@ -777,7 +833,7 @@ export function resolveModel(
 ): ModelInfo {
   if (isCompatModelId(modelId)) return getCompatModelInfo(modelId, endpoints);
   if (isHarnessModelId(modelId)) return getHarnessModelInfo(modelId);
-  const m = MODELS.find((x) => x.id === modelId);
+  const m = MODELS.find((x) => x.id === canonicalModelId(modelId));
   if (!m) throw new Error(`Unknown model: ${modelId}`);
   return m;
 }
@@ -802,8 +858,8 @@ function getHarnessModelInfo(modelId: string): ModelInfo {
   };
 }
 
-export function getModel(id: ModelId): ModelInfo {
-  const m = MODELS.find((x) => x.id === id);
+export function getModel(id: string): ModelInfo {
+  const m = MODELS.find((x) => x.id === canonicalModelId(id));
   if (!m) throw new Error(`Unknown model: ${id}`);
   return m;
 }
@@ -833,7 +889,7 @@ export function modelSupportsTemperature(
   modelId: string,
 ): boolean {
   const model: ModelInfo | undefined = MODELS.find(
-    (m) => m.provider === provider && m.id === modelId,
+    (m) => m.provider === provider && m.id === canonicalModelId(modelId),
   );
   return model?.supportsTemperature !== false;
 }
@@ -843,24 +899,24 @@ export function modelUsesReasoningTokens(
   modelId: string,
 ): boolean {
   const model: ModelInfo | undefined = MODELS.find(
-    (m) => m.provider === provider && m.id === modelId,
+    (m) => m.provider === provider && m.id === canonicalModelId(modelId),
   );
   return (
     (model?.tags?.includes("reasoning") ?? false) ||
-    (provider === "openai" && /^gpt-5(?:[.-]|$)/.test(modelId)) ||
-    /\bgpt-oss\b/i.test(modelId)
+    (provider === "openai" && /^gpt-[56](?:[.-]|$)/.test(canonicalModelId(modelId))) ||
+    /\bgpt-oss\b/i.test(canonicalModelId(modelId))
   );
 }
 
-export const DEFAULT_MODEL_ID: ModelId = "gpt-5.4-mini";
+export const DEFAULT_MODEL_ID: ModelId = "gpt-6.1-sol";
 
 /** Approximate context window (in tokens) per model. Used for the
  *  context-usage indicator in the AI mini-window header. Conservative
  *  estimates — actual provider limits may shift. */
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  "gpt-5.6": 1_050_000,
-  "gpt-5.6-terra": 1_050_000,
-  "gpt-5.6-luna": 1_050_000,
+  "gpt-6-astra": 1_050_000,
+  "gpt-6.1-sol": 1_050_000,
+  "gpt-6-luna": 1_050_000,
   "gpt-5.5": 1_050_000,
   "gpt-5.5-pro": 1_050_000,
   "gpt-5.4-mini": 400_000,
@@ -868,6 +924,9 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-5.3-codex": 400_000,
   "gpt-4.1-mini": 128_000,
   "claude-fable-5-1": 1_000_000,
+  "claude-opus-5-5": 1_000_000,
+  "claude-sonnet-5-5": 1_000_000,
+  "claude-haiku-5-5": 1_000_000,
   "claude-fable-5": 1_000_000,
   "claude-sonnet-5": 1_000_000,
   "claude-opus-4-7": 1_000_000,
@@ -875,10 +934,12 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "claude-sonnet-4-6": 1_000_000,
   "claude-haiku-4-5": 200_000,
   "claude-opus-4-6": 1_000_000,
-  "gemini-3.7-flash": 1_000_000,
+  "gemini-3.8-flash": 1_000_000,
+  "gemini-3.5-flash-lite": 1_000_000,
   "gemini-3.6-flash": 1_000_000,
-  "gemini-3.1-pro": 1_000_000,
+  "gemini-3.1-pro-preview": 1_000_000,
   "gemini-3.1-flash-lite": 1_000_000,
+  "grok-4.7": 500_000,
   "grok-4.5": 500_000,
   "grok-4.20-reasoning": 2_000_000,
   "grok-4.20-non-reasoning": 2_000_000,
@@ -886,22 +947,21 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "grok-4.3": 1_000_000,
   "grok-build-0.1": 256_000,
   "deepseek-v4-pro": 1_000_000,
-  "deepseek-v4-flash": 1_000_000,
-  "deepseek-reasoner": 128_000,
+  "deepseek-flash": 1_000_000,
+  "openai/gpt-oss-120b": 128_000,
   "gpt-oss-120b": 128_000,
   "llama3.3-70b": 128_000,
   "qwen-3-32b": 32_000,
   "openai/gpt-oss-20b": 128_000,
-  "llama-3.3-70b-versatile": 128_000,
-  "deepseek-r1-distill-llama-70b": 128_000,
+  "qwen/qwen3.8-27b": 131_072,
   "openrouter-custom": 256_000,
   "openai-compatible-custom": 128_000,
   "lmstudio-local": 32_000,
   "mlx-local": 32_000,
   "ollama-local": 32_000,
-  "mistral-large-latest": 131_072,
-  "mistral-medium-latest": 32_768,
-  "codestral-latest": 256_000,
+  "mistral-large-latest": 256_000,
+  "mistral-medium-3-5": 256_000,
+  "codestral-latest": 128_000,
 };
 
 export function getModelContextLimit(
@@ -912,7 +972,7 @@ export function getModelContextLimit(
   if (isCompatModelId(modelId)) return compatOverride ?? 128_000;
   if (modelId === "openai-compatible-custom" && compatOverride)
     return compatOverride;
-  return MODEL_CONTEXT_LIMITS[modelId] ?? 128_000;
+  return MODEL_CONTEXT_LIMITS[canonicalModelId(modelId)] ?? 128_000;
 }
 
 export type ModelPricing = {
@@ -922,36 +982,45 @@ export type ModelPricing = {
 };
 
 export const MODEL_PRICING: Record<string, ModelPricing> = {
-  "gpt-5.6": { input: 5, output: 30, cacheRead: 0.5 },
-  "gpt-5.6-terra": { input: 2.5, output: 15, cacheRead: 0.25 },
-  "gpt-5.6-luna": { input: 1, output: 6, cacheRead: 0.1 },
+  "gpt-6-astra": { input: 10, output: 50, cacheRead: 1 },
+  "gpt-6.1-sol": { input: 2, output: 10, cacheRead: 0.1 },
+  "gpt-6-luna": { input: 0.1, output: 0.5, cacheRead: 0.01 },
   "gpt-5.5": { input: 5, output: 30, cacheRead: 0.5 },
   "gpt-5.5-pro": { input: 30, output: 180 },
   "gpt-5.4-mini": { input: 0.75, output: 4.5, cacheRead: 0.075 },
   "gpt-5.4-nano": { input: 0.2, output: 1.25, cacheRead: 0.02 },
   "gpt-5.3-codex": { input: 1.5, output: 6, cacheRead: 0.15 },
   "gpt-4.1-mini": { input: 0.4, output: 1.6, cacheRead: 0.1 },
-  "claude-fable-5-1": { input: 8, output: 40, cacheRead: 0.25 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01 },
+  "claude-fable-5-1": { input: 10, output: 50, cacheRead: 0.25 },
   "claude-fable-5": { input: 10, output: 50, cacheRead: 1 },
-  "claude-sonnet-5": { input: 3, output: 15, cacheRead: 0.3 },
-  "claude-opus-4-7": { input: 15, output: 75, cacheRead: 1.5 },
+  "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5 },
-  "claude-opus-4-6": { input: 15, output: 75, cacheRead: 1.5 },
+  "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5 },
   "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3 },
   "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1 },
-  "gemini-3.7-flash": { input: 0.3, output: 2.5, cacheRead: 0.075 },
-  "gemini-3.6-flash": { input: 0.2, output: 1.5, cacheRead: 0.05 },
-  "gemini-3.1-pro": { input: 1.25, output: 10, cacheRead: 0.31 },
+  "gemini-3.8-flash": { input: 0.75, output: 3.75, cacheRead: 0.075 },
+  "gemini-3.5-flash-lite": { input: 0.3, output: 2.5, cacheRead: 0.03 },
+  "gemini-3.6-flash": { input: 0.75, output: 3.75, cacheRead: 0.075 },
+  "gemini-3.1-pro-preview": { input: 1.25, output: 10, cacheRead: 0.31 },
   "gemini-3.1-flash-lite": { input: 0.075, output: 0.3, cacheRead: 0.015 },
   "grok-4.5": { input: 2, output: 6, cacheRead: 0.5 },
+  "grok-4.7": { input: 2, output: 6, cacheRead: 0.5 },
   "grok-4.20-reasoning": { input: 3, output: 15 },
   "grok-4.20-non-reasoning": { input: 1, output: 5 },
   "grok-4-fast-reasoning": { input: 0.2, output: 0.5 },
   "grok-4.3": { input: 1.25, output: 2.5 },
   "grok-build-0.1": { input: 1, output: 2 },
-  "deepseek-v4-pro": { input: 0.28, output: 1.1, cacheRead: 0.028 },
-  "deepseek-v4-flash": { input: 0.07, output: 0.27, cacheRead: 0.007 },
-  "deepseek-reasoner": { input: 0.55, output: 2.19, cacheRead: 0.14 },
+  "deepseek-v4-pro": { input: 1.32, output: 3.96, cacheRead: 0.044 },
+  "deepseek-flash": { input: 0.3, output: 1.2, cacheRead: 0.006 },
+  "openai/gpt-oss-120b": { input: 0.15, output: 0.6 },
+  "openai/gpt-oss-20b": { input: 0.075, output: 0.3 },
+  "qwen/qwen3.8-27b": { input: 0.8, output: 4 },
+  "mistral-large-latest": { input: 0.5, output: 1.5, cacheRead: 0.05 },
+  "mistral-medium-3-5": { input: 1.5, output: 7.5, cacheRead: 0.15 },
 };
 
 export function estimateCost(
@@ -963,7 +1032,7 @@ export function estimateCost(
   },
 ): number | null {
   if (!modelId) return null;
-  const p = MODEL_PRICING[modelId];
+  const p = MODEL_PRICING[canonicalModelId(modelId)];
   if (!p) return null;
   const fresh = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
   const cached = usage.cachedInputTokens;
@@ -1004,13 +1073,13 @@ export type AutocompleteProviderId = ProviderId;
 export const DEFAULT_AUTOCOMPLETE_MODEL: Partial<Record<ProviderId, string>> = {
   cerebras: "gpt-oss-120b",
   groq: "openai/gpt-oss-20b",
-  lmstudio: "qwen2.5-coder-7b-instruct",
-  openai: "gpt-5.4-nano",
-  anthropic: "claude-haiku-4-5",
-  google: "gemini-3.7-flash",
-  xai: "grok-4.3",
-  deepseek: "deepseek-v4-flash",
-  openrouter: "openai/gpt-5.4-mini",
+  lmstudio: "",
+  openai: "gpt-6-luna",
+  anthropic: "claude-haiku-5-5",
+  google: "gemini-3.5-flash-lite",
+  xai: "grok-4.7",
+  deepseek: "deepseek-flash",
+  openrouter: "openai/gpt-6-luna",
   "openai-compatible": "",
 };
 
@@ -1105,6 +1174,12 @@ Rules:
 - Concise. No filler, no recap of the diff.`;
 
 const LITE_SYSTEM_PROMPT_MODEL_IDS = new Set<string>([
+  "gpt-6-luna",
+  "claude-haiku-5-5",
+  "gemini-3.5-flash-lite",
+  "deepseek-flash",
+  "openai/gpt-oss-120b",
+  "qwen/qwen3.8-27b",
   "gpt-5.4-nano",
   "gpt-4.1-mini",
   "claude-haiku-4-5",
@@ -1119,7 +1194,10 @@ const LITE_SYSTEM_PROMPT_MODEL_IDS = new Set<string>([
 ]);
 
 export function selectSystemPrompt(modelId: string | undefined): string {
-  if (modelId && LITE_SYSTEM_PROMPT_MODEL_IDS.has(modelId)) {
+  if (
+    modelId &&
+    LITE_SYSTEM_PROMPT_MODEL_IDS.has(canonicalModelId(modelId))
+  ) {
     return SYSTEM_PROMPT_LITE;
   }
   return SYSTEM_PROMPT;

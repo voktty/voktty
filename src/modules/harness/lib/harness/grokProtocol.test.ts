@@ -299,8 +299,8 @@ describe("grok protocol", () => {
     ]);
   });
 
-  it("ships a grok-4.6 fallback catalog", () => {
-    expect(fallbackGrokModels()[0]?.nativeId).toBe("grok-4.6");
+  it("ships a grok-4.7 fallback catalog", () => {
+    expect(fallbackGrokModels()[0]?.nativeId).toBe("grok-4.7");
   });
 
   it("reads a session id from ACP setup results", () => {

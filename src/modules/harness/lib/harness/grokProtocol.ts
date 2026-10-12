@@ -17,7 +17,7 @@ import {
 export const AUTH_HELP =
   "Grok Build is not signed in. Run `grok login` in a terminal, or set XAI_API_KEY.";
 
-export const TEXT_MODEL = "grok-4.6";
+export const TEXT_MODEL = "grok-4.7";
 
 const VARIANT_KIND: Record<string, string> = {
   readfile: "read",
@@ -485,6 +485,15 @@ export function modelsFromGrokModelsOutput(stdout: string): AgentModel[] {
 
 export function fallbackGrokModels(): AgentModel[] {
   return [
+    modelFromNative("grok-4.7", "Grok 4.7", {
+      contextWindow: 500_000,
+      efforts: [
+        { value: "xhigh", label: "Extra High" },
+        { value: "high", label: "High", default: true },
+        { value: "medium", label: "Medium" },
+        { value: "low", label: "Low" },
+      ],
+    }),
     modelFromNative("grok-4.6", "Grok 4.6", {
       contextWindow: 500_000,
       efforts: [

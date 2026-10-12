@@ -20,7 +20,7 @@ import { mergeStream } from "./streamText";
 const TEXT_CHILD_ID = "monocode-claude-text";
 const INIT_TIMEOUT_MS = 8_000;
 const REQUEST_TIMEOUT_MS = 45_000;
-const TEXT_MODEL = "claude-haiku-4-5";
+const TEXT_MODEL = "claude-haiku-5-5";
 
 type LiveText = {
   cwd: string;

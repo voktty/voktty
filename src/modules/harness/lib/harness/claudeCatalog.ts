@@ -18,6 +18,8 @@ import {
   buildClaudeSpawnArgs,
   buildControlRequest,
   compareSemver,
+  MINIMUM_CLAUDE_HAIKU_5_5_VERSION,
+  MINIMUM_CLAUDE_OPUS_5_5_VERSION,
   isClaudeInitMessage,
   listModelsFromControlResponse,
   MINIMUM_CLAUDE_FABLE_5_VERSION,
@@ -25,6 +27,7 @@ import {
   MINIMUM_CLAUDE_OPUS_4_8_VERSION,
   MINIMUM_CLAUDE_OPUS_5_VERSION,
   MINIMUM_CLAUDE_SONNET_5_VERSION,
+  MINIMUM_CLAUDE_SONNET_5_5_VERSION,
   parseClaudeVersion,
   parseControlResponse,
   parseJsonLine,
@@ -143,6 +146,20 @@ export const CLAUDE_MODEL_CATALOG: AgentModel[] = [
     name: "Claude Opus 5.5",
     nativeId: "claude-opus-5-5",
     settings: [EFFORT_WITH_XHIGH, FAST_MODE, contextWindow("1m")],
+  },
+  {
+    id: "claude:sonnet-5-5",
+    harness: "claude",
+    name: "Claude Sonnet 5.5",
+    nativeId: "claude-sonnet-5-5",
+    settings: [EFFORT_WITH_XHIGH, contextWindow("1m")],
+  },
+  {
+    id: "claude:haiku-5-5",
+    harness: "claude",
+    name: "Claude Haiku 5.5",
+    nativeId: "claude-haiku-5-5",
+    settings: [EFFORT_WITH_XHIGH, contextWindow("1m")],
   },
   {
     id: "claude:sonnet-5",
@@ -474,6 +491,21 @@ export function modelsForClaudeVersion(
 ): AgentModel[] {
   return CLAUDE_MODEL_CATALOG.filter((model) => {
     const slug = model.nativeId ?? "";
+    if (slug === "claude-opus-5-5") {
+      return version
+        ? compareSemver(version, MINIMUM_CLAUDE_OPUS_5_5_VERSION) >= 0
+        : false;
+    }
+    if (slug === "claude-sonnet-5-5") {
+      return version
+        ? compareSemver(version, MINIMUM_CLAUDE_SONNET_5_5_VERSION) >= 0
+        : false;
+    }
+    if (slug === "claude-haiku-5-5") {
+      return version
+        ? compareSemver(version, MINIMUM_CLAUDE_HAIKU_5_5_VERSION) >= 0
+        : false;
+    }
     if (slug === "claude-opus-5") {
       return version
         ? compareSemver(version, MINIMUM_CLAUDE_OPUS_5_VERSION) >= 0

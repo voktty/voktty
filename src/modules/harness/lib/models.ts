@@ -32,6 +32,27 @@ export type AgentModel = {
 
 export const MODELS: AgentModel[] = [
   {
+    id: "claude:opus-5-5",
+    harness: "claude",
+    name: "Claude Opus 5.5",
+    nativeId: "claude-opus-5-5",
+    contextWindow: 1_000_000,
+  },
+  {
+    id: "claude:sonnet-5-5",
+    harness: "claude",
+    name: "Claude Sonnet 5.5",
+    nativeId: "claude-sonnet-5-5",
+    contextWindow: 1_000_000,
+  },
+  {
+    id: "claude:haiku-5-5",
+    harness: "claude",
+    name: "Claude Haiku 5.5",
+    nativeId: "claude-haiku-5-5",
+    contextWindow: 1_000_000,
+  },
+  {
     id: "claude:fable-5.1",
     harness: "claude",
     name: "Claude Fable 5.1",
@@ -88,10 +109,10 @@ export const MODELS: AgentModel[] = [
     nativeId: "composer-2.5",
   },
   {
-    id: "cursor:gpt-5.4",
+    id: "cursor:gpt-6.1-sol",
     harness: "cursor",
-    name: "GPT-5.4",
-    nativeId: "gpt-5.4",
+    name: "GPT-6.1 Sol",
+    nativeId: "gpt-6.1-sol",
   },
   {
     id: "cursor:claude-fable-5-1",
@@ -100,18 +121,25 @@ export const MODELS: AgentModel[] = [
     nativeId: "claude-fable-5-1",
   },
   {
-    id: "cursor:claude-sonnet-4-6",
+    id: "cursor:claude-sonnet-5-5",
     harness: "cursor",
-    name: "Sonnet 4.6",
-    nativeId: "claude-sonnet-4-6",
+    name: "Claude Sonnet 5.5",
+    nativeId: "claude-sonnet-5-5",
   },
   {
-    id: "cursor:grok-4.6",
+    id: "cursor:grok-4.7",
     harness: "cursor",
-    name: "Cursor Grok 4.6",
-    nativeId: "grok-4.6",
+    name: "Cursor Grok 4.7",
+    nativeId: "grok-4.7",
   },
 
+  {
+    id: "grok:grok-4.7",
+    harness: "grok",
+    name: "Grok 4.7",
+    nativeId: "grok-4.7",
+    contextWindow: 500_000,
+  },
   {
     id: "grok:grok-4.6",
     harness: "grok",
@@ -158,18 +186,18 @@ export const MODELS: AgentModel[] = [
   { id: "opencode:minimax-m2.5", harness: "opencode", name: "MiniMax M2.5" },
   { id: "opencode:kimi-k2.5", harness: "opencode", name: "Kimi K2.5" },
   {
-    id: "opencode:deepseek-v4-flash",
+    id: "opencode:deepseek-flash",
     harness: "opencode",
-    name: "DeepSeek V4 Flash",
+    name: "DeepSeek Flash",
   },
   { id: "opencode:qwen-3.5", harness: "opencode", name: "Qwen 3.5" },
-  { id: "opencode:grok-4.5", harness: "opencode", name: "Grok 4.5" },
+  { id: "opencode:grok-4.7", harness: "opencode", name: "Grok 4.7" },
   {
-    id: "opencode:claude-sonnet-4.6",
+    id: "opencode:claude-sonnet-5.5",
     harness: "opencode",
-    name: "Claude Sonnet 4.6",
+    name: "Claude Sonnet 5.5",
   },
-  { id: "opencode:gpt-5.4", harness: "opencode", name: "GPT-5.4" },
+  { id: "opencode:gpt-6.1-sol", harness: "opencode", name: "GPT-6.1 Sol" },
   {
     id: "pi:default",
     harness: "pi",
@@ -190,10 +218,10 @@ export const MODELS: AgentModel[] = [
   },
 
   {
-    id: "codex:gpt-5.6-sol",
+    id: "codex:gpt-6.1-sol",
     harness: "codex",
-    name: "GPT-5.6 Sol (Default)",
-    nativeId: "gpt-5.6-sol",
+    name: "GPT-6.1 Sol (Default)",
+    nativeId: "gpt-6.1-sol",
     settings: [
       {
         id: "reasoningEffort",
@@ -222,10 +250,10 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
-    id: "codex:gpt-5.6-terra",
+    id: "codex:gpt-6-astra",
     harness: "codex",
-    name: "GPT-5.6 Terra",
-    nativeId: "gpt-5.6-terra",
+    name: "GPT-6 Astra",
+    nativeId: "gpt-6-astra",
     settings: [
       {
         id: "reasoningEffort",
@@ -241,10 +269,10 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
-    id: "codex:gpt-5.6-luna",
+    id: "codex:gpt-6-luna",
     harness: "codex",
-    name: "GPT-5.6 Luna",
-    nativeId: "gpt-5.6-luna",
+    name: "GPT-6 Luna",
+    nativeId: "gpt-6-luna",
     settings: [
       {
         id: "reasoningEffort",
@@ -310,23 +338,10 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
-    id: "gemini:gemini-3.7-flash",
+    id: "gemini:gemini-3.5-flash-lite",
     harness: "gemini",
-    name: "Gemini 3.7 Flash",
-    nativeId: "gemini-3.7-flash-high",
-    settings: [
-      {
-        id: "effort",
-        label: "Reasoning",
-        kind: "select",
-        value: "high",
-        options: [
-          { value: "high", label: "High" },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-      },
-    ],
+    name: "Gemini 3.5 Flash-Lite",
+    nativeId: "gemini-3.5-flash-lite",
   },
   {
     id: "gemini:gemini-3.6-flash",
@@ -348,10 +363,10 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
-    id: "gemini:gemini-3.1-pro",
+    id: "gemini:gemini-3.1-pro-preview",
     harness: "gemini",
-    name: "Gemini 3.1 Pro",
-    nativeId: "gemini-3.1-pro-low",
+    name: "Gemini 3.1 Pro Preview",
+    nativeId: "gemini-3.1-pro-preview-low",
     settings: [
       {
         id: "effort",
@@ -407,11 +422,11 @@ export const MODELS: AgentModel[] = [
 ];
 
 export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
-  claude: "claude:fable-5.1",
-  codex: "codex:gpt-5.6-sol",
+  claude: "claude:sonnet-5-5",
+  codex: "codex:gpt-6.1-sol",
   cursor: "cursor:composer-2.5",
   gemini: "gemini:gemini-3.8-flash",
-  grok: "grok:grok-4.6",
+  grok: "grok:grok-4.7",
   hermes: "hermes:hermes-3-llama-3.1-70b",
   opencode: "opencode:glm-5",
   pi: "pi:default",
@@ -541,9 +556,10 @@ export function findModel(id: string): AgentModel | undefined {
 export function resolveModel(harness: HarnessId, id?: string): AgentModel {
   const available = modelsFor(harness);
   if (id) {
-    const exact = findModel(id);
+    const currentId = canonicalHarnessModelId(id);
+    const exact = findModel(currentId);
     if (exact && exact.harness === harness) return exact;
-    const slug = nativeIdFrom(id);
+    const slug = nativeIdFrom(currentId);
     const byNative = available.find(
       (model) => (model.nativeId ?? nativeIdFrom(model.id)) === slug,
     );
@@ -578,7 +594,14 @@ export function nativeModelId(model: AgentModel | string): string {
   if (typeof model !== "string") {
     return model.nativeId ?? nativeIdFrom(model.id);
   }
-  return findModel(model)?.nativeId ?? nativeIdFrom(model);
+  const currentId = canonicalHarnessModelId(model);
+  const exact = findModel(currentId);
+  if (exact) return exact.nativeId ?? nativeIdFrom(exact.id);
+  if (currentId !== model) {
+    const resolved = resolveModel("gemini", currentId);
+    return resolved.nativeId ?? nativeIdFrom(resolved.id);
+  }
+  return nativeIdFrom(model);
 }
 
 export function defaultModelSettings(
@@ -988,6 +1011,15 @@ function nativeIdFrom(id: string): string {
   return bracket >= 0 ? slug.slice(0, bracket) : slug;
 }
 
+function canonicalHarnessModelId(id: string): string {
+  const legacyPrefix = id.startsWith("gemini:")
+    ? "gemini:gemini-3.7-flash"
+    : "gemini-3.7-flash";
+  return id === legacyPrefix || id.startsWith(`${legacyPrefix}-`)
+    ? id.replace("gemini-3.7-flash", "gemini-3.8-flash")
+    : id;
+}
+
 /** Claude's live catalog uses `opus`; its startup fallback uses `claude-opus-5`. */
 function comparableNativeId(harness: HarnessId, id: string): string {
   return harness === "claude" ? id.replace(/^claude-/, "") : id;
@@ -996,6 +1028,7 @@ function comparableNativeId(harness: HarnessId, id: string): string {
 function pickDefaultId(harness: HarnessId, models: AgentModel[]): string {
   if (harness === "claude") {
     return (
+      models.find((model) => model.nativeId === "claude-sonnet-5-5")?.id ??
       models.find((model) => model.nativeId === "claude-sonnet-5")?.id ??
       models.find((model) => model.id === DEFAULT_MODEL_ID.claude)?.id ??
       models[0]?.id ??
@@ -1017,6 +1050,7 @@ function pickDefaultId(harness: HarnessId, models: AgentModel[]): string {
   }
   if (harness === "grok") {
     return (
+      models.find((model) => model.nativeId === "grok-4.7")?.id ??
       models.find((model) => model.nativeId === "grok-4.6")?.id ??
       models.find((model) => model.id === DEFAULT_MODEL_ID.grok)?.id ??
       models[0]?.id ??

@@ -712,6 +712,12 @@ export const es: TranslationSchema = {
         thinking: "Pensamiento",
       },
       modelDescriptions: {
+        gpt_6_1_sol:
+          "Modelo general actual para programación y trabajo agéntico.",
+        gpt_6_astra:
+          "Modelo de mayor capacidad de OpenAI para tareas agénticas exigentes.",
+        gpt_6_luna:
+          "Modelo rápido y económico para solicitudes frecuentes y autocompletado.",
         gpt_5_6:
           "Modelo de frontera para trabajo profesional y agéntico complejo.",
         gpt_5_6_terra: "Gran capacidad con menor coste y latencia.",
@@ -725,7 +731,7 @@ export const es: TranslationSchema = {
         gpt_5_3_codex: "Optimizado para código y uso de tools.",
         gpt_4_1_mini: "Modelo de coste muy bajo para tareas masivas.",
         claude_fable_5:
-          "El Claude más capaz para razonamiento exigente y trabajo agéntico de larga duración.",
+          "Modelo Claude anterior de gran capacidad para razonamiento prolongado.",
         claude_sonnet_5:
           "La mejor combinación de inteligencia y velocidad de Claude.",
         claude_opus_4_8:
@@ -737,6 +743,10 @@ export const es: TranslationSchema = {
         claude_opus_4_6: "Opus de la generación anterior.",
         gemini_3_5_flash:
           "Modelo multimodal muy inteligente y extremadamente rápido.",
+        gemini_3_5_flash_lite:
+          "Modelo económico para respuestas rápidas y autocompletado.",
+        gemini_3_7_flash:
+          "Modelo multimodal rápido de generación anterior de Google, con razonamiento dinámico.",
         gemini_3_1_flash_lite:
           "Modelo multimodal extremadamente rápido, asequible y ligero.",
         gemini_3_1_pro_preview:
@@ -747,6 +757,8 @@ export const es: TranslationSchema = {
         gemini_2_5_flash: "Alto rendimiento a bajo coste.",
         grok_4_5:
           "Modelo de frontera para código, agentes y trabajo de conocimiento.",
+        grok_4_7:
+          "Modelo actual de xAI para programación y tareas generales.",
         grok_4_20_reasoning:
           "Razonamiento de frontera con pensamiento extendido.",
         grok_4_20_non_reasoning: "Nivel rápido para chat y tools.",
@@ -757,18 +769,27 @@ export const es: TranslationSchema = {
         grok_build_0_1:
           "Modelo rápido de código para workflows agénticos y Grok Build CLI.",
         deepseek_v4_pro: "Modelo open-weight potente para código.",
+        deepseek_flash: "Modelo rápido y económico para tareas cotidianas.",
         deepseek_v4_flash: "Nivel rápido y asequible para el trabajo diario.",
         deepseek_reasoner:
           "Razonamiento chain-of-thought a precios de modelos open-weight.",
         mistral_large_latest:
-          "Modelo principal de Mistral con contexto de 128K.",
+          "Modelo principal de Mistral con contexto de 256K.",
         mistral_medium_latest:
           "Buen equilibrio entre velocidad e inteligencia.",
+        mistral_medium_3_5:
+          "Modelo equilibrado de Mistral con contexto de 256K.",
         codestral_latest: "Modelo de Mistral especializado en código.",
         gpt_oss_120b: "Inferencia rápida sobre chips de Cerebras.",
+        zai_glm_4_7:
+          "Modelo de programación GLM disponible mediante la inferencia de Cerebras.",
         llama3_3_70b: "Modelo abierto de Meta sobre chips a escala de oblea.",
         qwen_3_32b: "Modelo multilingüe a muy alta velocidad.",
         openai_gpt_oss_20b: "Respuestas en menos de un segundo sobre Groq LPU.",
+        openai_gpt_oss_120b:
+          "Modelo de producción con razonamiento y uso de herramientas más potentes en Groq.",
+        qwen_qwen3_8_27b:
+          "Modelo preliminar para razonamiento y programación en Groq.",
         llama_3_3_70b_versatile:
           "Rápido y capaz para una amplia variedad de tareas.",
         deepseek_r1_distill_llama_70b:
@@ -779,11 +800,15 @@ export const es: TranslationSchema = {
         lmstudio_local: "Modelos GGUF locales mediante LM Studio.",
         mlx_local: "Modelos para Apple Silicon mediante mlx_lm.server.",
         claude_fable_5_1:
-          "El modelo clase Mythos más reciente de Anthropic, para programación agéntica autónoma y razonamiento profundo.",
+          "Modelo de la clase Mythos anterior, para programación agéntica y razonamiento profundo.",
+        claude_opus_5_5:
+          "El modelo más capaz de Anthropic para trabajo agéntico complejo.",
+        claude_sonnet_5_5:
+          "Programación y razonamiento potentes con equilibrio entre velocidad y coste.",
+        claude_haiku_5_5:
+          "Modelo multimodal rápido para solicitudes frecuentes y económicas.",
         gemini_3_8_flash:
           "El modelo multimodal rápido más reciente de Google, con razonamiento dinámico.",
-        gemini_3_7_flash:
-          "Modelo multimodal rápido insignia de Google, con razonamiento dinámico.",
         gemini_3_6_flash:
           "Modelo multimodal de razonamiento, muy rápido y de alta inteligencia.",
         gemini_3_1_pro:

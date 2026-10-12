@@ -140,31 +140,31 @@ type LocalMeta = {
 const LOCAL_META: Partial<Record<ProviderId, LocalMeta>> = {
   lmstudio: {
     urlPlaceholder: "http://localhost:1234/v1",
-    modelPlaceholder: "qwen2.5-coder-7b-instruct",
+    modelPlaceholder: "Model ID from LM Studio",
     descriptionKey: "settings.models.localMeta.lmstudioDescription",
     modelHintKey: "settings.models.localMeta.lmstudioHint",
   },
   mlx: {
     urlPlaceholder: "http://127.0.0.1:8080/v1",
-    modelPlaceholder: "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
+    modelPlaceholder: "Model ID from MLX server",
     descriptionKey: "settings.models.localMeta.mlxDescription",
     modelHintKey: "settings.models.localMeta.mlxHint",
   },
   ollama: {
     urlPlaceholder: "http://localhost:11434/v1",
-    modelPlaceholder: "qwen2.5-coder:7b",
+    modelPlaceholder: "Model ID from Ollama",
     descriptionKey: "settings.models.localMeta.ollamaDescription",
     modelHintKey: "settings.models.localMeta.ollamaHint",
   },
   "openai-compatible": {
     urlPlaceholder: "https://api.example.com/v1",
-    modelPlaceholder: "gpt-4o, qwen3-max, glm-4.6, …",
+    modelPlaceholder: "Model ID from endpoint",
     descriptionKey: "settings.models.localMeta.compatibleDescription",
     modelHintKey: null,
   },
   openrouter: {
     urlPlaceholder: "",
-    modelPlaceholder: "anthropic/claude-sonnet-5, openai/gpt-5.6, …",
+    modelPlaceholder: "anthropic/claude-opus-5-5, openai/gpt-6.1-sol, …",
     descriptionKey: "settings.models.localMeta.openrouterDescription",
     modelHintKey: "settings.models.localMeta.openrouterHint",
   },
@@ -717,12 +717,12 @@ function resolveDisplayModel(
   if (!modelId) {
     return (
       MODELS[0] ?? {
-        id: "gpt-5.4-mini" as ModelId,
+        id: DEFAULT_MODEL_ID,
         provider: "openai",
-        label: "GPT-5.4 Mini",
-        hint: "Fast",
-        description: globalT("settings.models.defaultFastModel"),
-        capabilities: { intelligence: 4, speed: 5, cost: 5 },
+        label: "GPT-6.1 Sol",
+        hint: "Balanced",
+        description: globalT("settings.models.defaultModel"),
+        capabilities: { intelligence: 5, speed: 4, cost: 3 },
       }
     );
   }
@@ -1210,12 +1210,12 @@ function AutocompleteRow({
 
   const fallbackModel: ModelInfo = eligible[0] ??
     MODELS[0] ?? {
-      id: "gpt-5.4-mini" as ModelId,
+      id: DEFAULT_MODEL_ID,
       provider: "openai",
-      label: "GPT-5.4 Mini",
-      hint: "Fast",
-      description: t("settings.models.defaultFastModel"),
-      capabilities: { intelligence: 4, speed: 5, cost: 5 },
+      label: "GPT-6.1 Sol",
+      hint: "Balanced",
+      description: t("settings.models.defaultModel"),
+      capabilities: { intelligence: 5, speed: 4, cost: 3 },
     };
 
   const local = useMemo(() => {

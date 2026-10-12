@@ -82,7 +82,7 @@ describe("Antigravity live stream", () => {
       "--output-format",
       "stream-json",
       "--model",
-      "gemini-3.7-flash-high",
+      "gemini-3.8-flash-high",
       "--effort",
       "high",
       "--mode",

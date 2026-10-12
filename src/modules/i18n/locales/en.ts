@@ -697,6 +697,12 @@ export const en = {
         thinking: "Thinking",
       },
       modelDescriptions: {
+        gpt_6_1_sol:
+          "Current general-purpose model for coding and agentic work.",
+        gpt_6_astra:
+          "OpenAI's highest-capability model for demanding agentic work.",
+        gpt_6_luna:
+          "Fast, lower-cost model for frequent requests and completions.",
         gpt_5_6: "Frontier model for complex professional and agentic work.",
         gpt_5_6_terra: "Strong intelligence with lower cost and latency.",
         gpt_5_6_luna: "Fast, affordable reasoning for high-volume work.",
@@ -708,7 +714,7 @@ export const en = {
         gpt_5_3_codex: "Tuned for code and tool use.",
         gpt_4_1_mini: "Very low-cost workhorse for bulk tasks.",
         claude_fable_5:
-          "Most capable Claude for demanding reasoning and long-horizon agentic work.",
+          "Earlier high-capability Claude for long reasoning tasks.",
         claude_sonnet_5: "Best combination of Claude intelligence and speed.",
         claude_opus_4_8:
           "Anthropic's most capable model for complex reasoning and long-horizon agentic coding.",
@@ -735,13 +741,17 @@ export const en = {
         deepseek_v4_pro: "Strong open-weight code model.",
         deepseek_v4_flash: "Fast, affordable tier for everyday work.",
         deepseek_reasoner: "Chain-of-thought reasoning at open-weight prices.",
-        mistral_large_latest: "Flagship Mistral model with 128K context.",
+        mistral_large_latest: "Flagship Mistral model with 256K context.",
         mistral_medium_latest: "Good balance of speed and intelligence.",
+        mistral_medium_3_5: "Balanced Mistral model with a 256K context window.",
         codestral_latest: "Purpose-built coding model from Mistral.",
         gpt_oss_120b: "Fast inference on Cerebras silicon.",
         llama3_3_70b: "Meta's open model on wafer-scale silicon.",
         qwen_3_32b: "Multilingual model at very high speed.",
         openai_gpt_oss_20b: "Sub-second responses on Groq LPU.",
+        openai_gpt_oss_120b:
+          "Production model with stronger reasoning and tool use on Groq.",
+        qwen_qwen3_8_27b: "Preview model for reasoning and coding on Groq.",
         llama_3_3_70b_versatile: "Fast and broadly capable.",
         deepseek_r1_distill_llama_70b: "Reasoning-distilled Llama on Groq.",
         openrouter_custom: "Any OpenRouter model selected by ID.",
@@ -749,14 +759,25 @@ export const en = {
         lmstudio_local: "Local GGUF models through LM Studio.",
         mlx_local: "Apple Silicon models through mlx_lm.server.",
         claude_fable_5_1:
-          "Anthropic's latest Mythos-class model for autonomous agentic coding and deep reasoning.",
+          "Earlier Mythos-class model for agentic coding and deep reasoning.",
+        claude_opus_5_5:
+          "Anthropic's most capable model for complex agentic work.",
+        claude_sonnet_5_5:
+          "Strong coding and reasoning with balanced speed and cost.",
+        claude_haiku_5_5:
+          "Fast multimodal model for frequent, lower-cost requests.",
         gemini_3_8_flash:
           "Google's newest flagship fast multimodal model with dynamic thinking.",
+        gemini_3_5_flash_lite:
+          "Low-cost model for fast responses and inline completions.",
         gemini_3_7_flash:
-          "Google's flagship fast multimodal model with dynamic thinking.",
+          "Google's previous-generation fast multimodal model with dynamic thinking.",
         gemini_3_6_flash:
           "High-intelligence, extremely fast multimodal reasoning model.",
         gemini_3_1_pro: "Deep reasoning, 1M context, strong coding.",
+        grok_4_7: "Current xAI model for coding and general-purpose work.",
+        deepseek_flash: "Fast, low-cost model for everyday requests.",
+        zai_glm_4_7: "GLM coding model available through Cerebras inference.",
         harness_claude:
           "Runs through the local Claude CLI and its OAuth session.",
         harness_codex:

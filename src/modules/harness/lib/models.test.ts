@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HarnessId } from "./session";
 import {
   coerceModelPickerTab,
+  DEFAULT_MODEL_ID,
   defaultModelId,
   defaultSessionChoice,
   hasLiveCatalog,
@@ -15,6 +16,8 @@ import {
   modelEffortLabel,
   modelEffortSetting,
   modelPickerTabs,
+  modelsFor,
+  nativeModelId,
   preferredModelId,
   preferredModelSettings,
   resetHarnessModelOverlays,
@@ -184,6 +187,52 @@ describe("provider defaults", () => {
 
   afterEach(() => {
     mockLocalStorage();
+    resetHarnessModelOverlays();
+  });
+
+  it("offers current built-in models and uses them as new-session defaults", () => {
+    expect(DEFAULT_MODEL_ID).toMatchObject({
+      claude: "claude:sonnet-5-5",
+      codex: "codex:gpt-6.1-sol",
+      gemini: "gemini:gemini-3.8-flash",
+      grok: "grok:grok-4.7",
+    });
+    expect(modelsFor("claude").map((model) => model.nativeId)).toContain(
+      "claude-opus-5-5",
+    );
+    expect(modelsFor("codex").map((model) => model.nativeId)).toContain(
+      "gpt-6.1-sol",
+    );
+    expect(modelsFor("grok").map((model) => model.nativeId)).toContain(
+      "grok-4.7",
+    );
+  });
+
+  it("migrates saved Gemini 3.7 selections to Gemini 3.8", () => {
+    expect(resolveModel("gemini", "gemini:gemini-3.7-flash").id).toBe(
+      "gemini:gemini-3.8-flash",
+    );
+    expect(nativeModelId("gemini:gemini-3.7-flash")).toBe(
+      "gemini-3.8-flash-high",
+    );
+    expect(modelsFor("gemini").map((model) => model.id)).not.toContain(
+      "gemini:gemini-3.7-flash",
+    );
+  });
+
+  it("resolves legacy Gemini selections against the live CLI catalog", () => {
+    setHarnessModels("gemini", [
+      {
+        id: "gemini:gemini-3.8-flash-high",
+        harness: "gemini",
+        name: "Gemini 3.8 Flash (High)",
+        nativeId: "gemini-3.8-flash-high",
+      },
+    ]);
+
+    expect(nativeModelId("gemini:gemini-3.7-flash")).toBe(
+      "gemini-3.8-flash-high",
+    );
   });
 
   it("remembers a model per provider without changing the default provider", () => {
@@ -350,7 +399,41 @@ describe("live catalog overlays", () => {
 
     // A relaunch starts with the built-in catalog until discovery completes.
     resetHarnessModelOverlays();
-    expect(resolveModel("claude", "claude:opus").id).toBe("claude:opus-5");
+    expect(resolveModel("claude", "claude:opus").id).toBe("claude:opus-5-5");
+  });
+
+  it("prefers current Claude and Grok models from refreshed CLI catalogs", () => {
+    setHarnessModels("claude", [
+      {
+        id: "claude:sonnet-5",
+        harness: "claude",
+        name: "Claude Sonnet 5",
+        nativeId: "claude-sonnet-5",
+      },
+      {
+        id: "claude:sonnet-5-5",
+        harness: "claude",
+        name: "Claude Sonnet 5.5",
+        nativeId: "claude-sonnet-5-5",
+      },
+    ]);
+    setHarnessModels("grok", [
+      {
+        id: "grok:grok-4.6",
+        harness: "grok",
+        name: "Grok 4.6",
+        nativeId: "grok-4.6",
+      },
+      {
+        id: "grok:grok-4.7",
+        harness: "grok",
+        name: "Grok 4.7",
+        nativeId: "grok-4.7",
+      },
+    ]);
+
+    expect(defaultModelId("claude")).toBe("claude:sonnet-5-5");
+    expect(defaultModelId("grok")).toBe("grok:grok-4.7");
   });
 });
 

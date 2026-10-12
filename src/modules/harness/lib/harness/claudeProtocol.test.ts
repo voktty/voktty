@@ -275,6 +275,37 @@ describe("modelsForClaudeVersion", () => {
     const missing = modelsForClaudeVersion(null).map((model) => model.nativeId);
     expect(missing).not.toContain("claude-sonnet-5");
   });
+
+  it("shows Claude 5.5 models only in CLI versions that support them", () => {
+    const beforeOpus = modelsForClaudeVersion("2.1.279").map(
+      (model) => model.nativeId,
+    );
+    expect(beforeOpus).not.toContain("claude-opus-5-5");
+
+    const withOpus = modelsForClaudeVersion("2.1.280").map(
+      (model) => model.nativeId,
+    );
+    expect(withOpus).toContain("claude-opus-5-5");
+    expect(withOpus).not.toContain("claude-sonnet-5-5");
+
+    const withSonnet = modelsForClaudeVersion("2.1.284").map(
+      (model) => model.nativeId,
+    );
+    expect(withSonnet).toContain("claude-sonnet-5-5");
+    expect(withSonnet).not.toContain("claude-haiku-5-5");
+
+    const withHaiku = modelsForClaudeVersion("2.1.293").map(
+      (model) => model.nativeId,
+    );
+    expect(withHaiku).toContain("claude-haiku-5-5");
+
+    const unknownVersion = modelsForClaudeVersion(null).map(
+      (model) => model.nativeId,
+    );
+    expect(unknownVersion).not.toContain("claude-opus-5-5");
+    expect(unknownVersion).not.toContain("claude-sonnet-5-5");
+    expect(unknownVersion).not.toContain("claude-haiku-5-5");
+  });
 });
 
 describe("list_models catalog", () => {

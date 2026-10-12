@@ -550,8 +550,8 @@ describe("parseCodexModelList", () => {
   it("builds models with reasoning and service tier settings", () => {
     const models = parseCodexModelList([
       {
-        model: "gpt-5.6-luna",
-        displayName: "gpt-5.6-luna",
+        model: "gpt-6-luna",
+        displayName: "gpt-6-luna",
         defaultReasoningEffort: "medium",
         supportedReasoningEfforts: [
           { reasoningEffort: "low" },
@@ -562,17 +562,17 @@ describe("parseCodexModelList", () => {
         defaultServiceTier: "default",
       },
       {
-        model: "gpt-5.6-terra",
-        displayName: "gpt-5.6-terra",
+        model: "gpt-6.1-sol",
+        displayName: "gpt-6.1-sol",
         isDefault: true,
         supportedReasoningEfforts: [],
       },
     ]);
     expect(models.map((m) => m.nativeId)).toEqual([
-      "gpt-5.6-terra",
-      "gpt-5.6-luna",
+      "gpt-6.1-sol",
+      "gpt-6-luna",
     ]);
-    const luna = models.find((m) => m.nativeId === "gpt-5.6-luna");
+    const luna = models.find((m) => m.nativeId === "gpt-6-luna");
     expect(luna?.settings?.some((s) => s.id === "reasoningEffort")).toBe(true);
     expect(luna?.settings?.some((s) => s.id === "serviceTier")).toBe(true);
     expect(luna?.settings?.find((s) => s.id === "reasoningEffort")?.value).toBe(

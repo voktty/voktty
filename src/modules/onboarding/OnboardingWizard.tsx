@@ -227,7 +227,7 @@ export function OnboardingWizard({
       await setKey(id, trimmed);
       await emitKeysChanged();
       if (id === "deepseek") {
-        await setDefaultModel("deepseek-v4-flash");
+        await setDefaultModel("deepseek-flash");
       }
       setProviderKeys((prev) => ({
         ...prev,

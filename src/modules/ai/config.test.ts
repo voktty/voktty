@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   compatModelIdForEndpoint,
   endpointIdFromCompatModel,
+  estimateCost,
+  DEFAULT_AUTOCOMPLETE_MODEL,
+  DEFAULT_MODEL_ID,
   getModelContextLimit,
+  isKnownModelId,
   isCompatModelId,
   migrateLegacyCompatEndpoint,
   modelKeepsReasoning,
@@ -53,14 +57,50 @@ describe("resolveModel", () => {
   });
 
   it.each([
-    ["gpt-5.6", "openai"],
-    ["gpt-5.6-terra", "openai"],
-    ["gpt-5.6-luna", "openai"],
-    ["claude-fable-5", "anthropic"],
-    ["claude-sonnet-5", "anthropic"],
-    ["grok-4.5", "xai"],
-  ] as const)("resolves current model %s through %s", (modelId, provider) => {
+    ["gpt-6.1-sol", "openai"],
+    ["gpt-6-astra", "openai"],
+    ["gpt-6-luna", "openai"],
+    ["claude-opus-5-5", "anthropic"],
+    ["claude-sonnet-5-5", "anthropic"],
+    ["claude-haiku-5-5", "anthropic"],
+    ["gemini-3.8-flash", "google"],
+    ["gemini-3.1-pro-preview", "google"],
+    ["grok-4.7", "xai"],
+    ["deepseek-flash", "deepseek"],
+    ["mistral-medium-3-5", "mistral"],
+  ] as const)("resolves catalog model %s through %s", (modelId, provider) => {
     expect(resolveModel(modelId).provider).toBe(provider);
+  });
+
+  it.each([
+    ["gpt-5.6", "gpt-6.1-sol"],
+    ["gpt-5.6-luna", "gpt-6-luna"],
+    ["gemini-3.7-flash", "gemini-3.8-flash"],
+    ["gemini-3.1-pro", "gemini-3.1-pro-preview"],
+    ["deepseek-v4-flash", "deepseek-flash"],
+    ["mistral-medium-latest", "mistral-medium-3-5"],
+    ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"],
+  ])("resolves saved model id %s to current model %s", (legacy, current) => {
+    expect(resolveModel(legacy).id).toBe(current);
+    expect(isKnownModelId(legacy)).toBe(false);
+  });
+
+  it("preserves older models that are still explicitly selectable", () => {
+    expect(resolveModel("claude-opus-4-6").id).toBe("claude-opus-4-6");
+    expect(resolveModel("claude-haiku-4-5").id).toBe("claude-haiku-4-5");
+  });
+
+  it("uses the current general-purpose model as the default", () => {
+    expect(DEFAULT_MODEL_ID).toBe("gpt-6.1-sol");
+  });
+
+  it.each([
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.7-flash",
+  ])("omits deprecated temperature settings for %s", (modelId) => {
+    expect(modelSupportsTemperature("google", modelId)).toBe(false);
   });
 
   it("throws on an unknown static model id", () => {
@@ -79,27 +119,60 @@ describe("getModelContextLimit", () => {
   });
 
   it.each([
-    ["gpt-5.6", 1_050_000],
-    ["gpt-5.6-terra", 1_050_000],
-    ["gpt-5.6-luna", 1_050_000],
-    ["claude-fable-5", 1_000_000],
-    ["claude-sonnet-5", 1_000_000],
-    ["grok-4.5", 500_000],
+    ["gpt-6.1-sol", 1_050_000],
+    ["claude-opus-5-5", 1_000_000],
+    ["claude-haiku-5-5", 1_000_000],
+    ["gemini-3.8-flash", 1_000_000],
+    ["gemini-3.5-flash-lite", 1_000_000],
+    ["grok-4.7", 500_000],
+    ["deepseek-flash", 1_000_000],
+    ["mistral-medium-3-5", 256_000],
   ] as const)("uses the published context limit for %s", (modelId, limit) => {
     expect(getModelContextLimit(modelId)).toBe(limit);
+  });
+
+  it("keeps the previous context when resolving a saved model id", () => {
+    expect(getModelContextLimit("gpt-5.6")).toBe(
+      getModelContextLimit("gpt-6.1-sol"),
+    );
   });
 });
 
 describe("current model pricing", () => {
   it.each([
-    ["gpt-5.6", 5, 30, 0.5],
-    ["gpt-5.6-terra", 2.5, 15, 0.25],
-    ["gpt-5.6-luna", 1, 6, 0.1],
+    ["gpt-6-astra", 10, 50, 1],
+    ["gpt-6.1-sol", 2, 10, 0.1],
+    ["gpt-6-luna", 0.1, 0.5, 0.01],
+    ["claude-opus-5-5", 4, 20, 0.2],
+    ["claude-sonnet-5-5", 2, 10, 0.1],
+    ["claude-haiku-5-5", 0.1, 0.5, 0.01],
+    ["gemini-3.8-flash", 0.75, 3.75, 0.075],
+    ["gemini-3.5-flash-lite", 0.3, 2.5, 0.03],
+    ["gemini-3.6-flash", 0.75, 3.75, 0.075],
+    ["grok-4.7", 2, 6, 0.5],
+    ["deepseek-flash", 0.3, 1.2, 0.006],
+    ["deepseek-v4-pro", 1.32, 3.96, 0.044],
     ["claude-fable-5", 10, 50, 1],
-    ["claude-sonnet-5", 3, 15, 0.3],
     ["grok-4.5", 2, 6, 0.5],
   ] as const)("uses the published token pricing for %s", (modelId, input, output, cacheRead) => {
     expect(MODEL_PRICING[modelId]).toEqual({ input, output, cacheRead });
+  });
+
+  it("estimates saved model ids with current pricing", () => {
+    const usage = { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 0 };
+    expect(estimateCost("gpt-5.6", usage)).toBe(
+      estimateCost("gpt-6.1-sol", usage),
+    );
+  });
+
+  it("uses current fast models for inline completions", () => {
+    expect(DEFAULT_AUTOCOMPLETE_MODEL).toMatchObject({
+      openai: "gpt-6-luna",
+      anthropic: "claude-haiku-5-5",
+      google: "gemini-3.5-flash-lite",
+      xai: "grok-4.7",
+      deepseek: "deepseek-flash",
+    });
   });
 });
 
