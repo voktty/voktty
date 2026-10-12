@@ -1,6 +1,11 @@
-import { type CustomEndpoint, resolveModel } from "../config";
+import {
+  isHarnessModelId,
+  type CustomEndpoint,
+  resolveModel,
+} from "../config";
 import { buildConfiguredLanguageModel } from "./agent";
 import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
+import { redactSensitive } from "./redact";
 
 export type AiHealthCheckConfig = {
   modelId: string;
@@ -18,8 +23,12 @@ export type AiHealthCheckConfig = {
   customEndpoints: readonly CustomEndpoint[];
 };
 
+function isLocalAgentModel(modelId: string): boolean {
+  return isHarnessModelId(modelId) || modelId.startsWith("harness-");
+}
+
 export function aiHealthCheckTimeoutMs(modelId: string): number {
-  return modelId.startsWith("harness-") ? 75_000 : 20_000;
+  return isLocalAgentModel(modelId) ? 75_000 : 20_000;
 }
 
 // Enough output budget for a reasoning model to finish thinking and still
@@ -31,9 +40,14 @@ export function aiHealthCheckErrorDetail(
   modelId: string,
   error: unknown,
 ): string | undefined {
-  if (!modelId.startsWith("harness-")) return undefined;
+  if (!isLocalAgentModel(modelId)) return undefined;
   const detail = error instanceof Error ? error.message : String(error);
-  return detail.trim().replace(/\s+/g, " ").slice(0, 240) || undefined;
+  const safeDetail = redactSensitive(detail)
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/(?<![\w:])(?:[A-Za-z]:[\\/]|\/(?!\/))[^\s"'<>]+/g, "<path>")
+    .trim()
+    .replace(/\s+/g, " ");
+  return safeDetail.slice(0, 240) || undefined;
 }
 
 export async function runAiHealthCheck(

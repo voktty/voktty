@@ -200,6 +200,7 @@ describe("runAiHealthCheck reasoning truncation", () => {
 describe("aiHealthCheckTimeoutMs", () => {
   it("allows local OAuth agents enough time to initialize", () => {
     expect(aiHealthCheckTimeoutMs("harness-codex")).toBe(75_000);
+    expect(aiHealthCheckTimeoutMs("harness@codex:gpt-6.1-sol")).toBe(75_000);
     expect(aiHealthCheckTimeoutMs("gpt-5.4-mini")).toBe(20_000);
   });
 });
@@ -208,10 +209,18 @@ describe("aiHealthCheckErrorDetail", () => {
   it("exposes bounded local agent errors without exposing cloud failures", () => {
     expect(
       aiHealthCheckErrorDetail(
-        "harness-codex",
+        "harness@codex:gpt-6.1-sol",
         new Error("OAuth session\nexpired"),
       ),
     ).toBe("OAuth session expired");
+    expect(
+      aiHealthCheckErrorDetail(
+        "harness@codex:gpt-6.1-sol",
+        new Error(
+          `failed at /home/private/workspace with sk-proj-${"a".repeat(24)}`,
+        ),
+      ),
+    ).toBe("failed at <path> with <REDACTED:openai-key>");
     expect(
       aiHealthCheckErrorDetail(
         "gpt-5.4-mini",
