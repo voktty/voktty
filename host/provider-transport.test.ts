@@ -309,9 +309,16 @@ describe("existing providers over headless process I/O", () => {
         if (harness === "codex")
           efforts.push(calls.find((call) => "codexEffort" in call).codexEffort);
         else {
-          const args: string[] = calls.find(
-            (call) => call.claudeArgs,
-          ).claudeArgs;
+          const args = calls
+            .map((call) => call.claudeArgs)
+            .find(
+              (args: unknown): args is string[] =>
+                Array.isArray(args) && args.includes("--effort"),
+            );
+          if (!args)
+            throw new Error(
+              "Claude session launch did not include an effort option",
+            );
           efforts.push(args[args.indexOf("--effort") + 1] ?? null);
         }
       }
