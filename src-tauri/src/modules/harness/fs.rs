@@ -108,8 +108,19 @@ pub(crate) fn list_project_files_sync(cwd: &str) -> Result<Vec<ProjectFile>, Str
 
 pub(crate) fn git_cmd() -> Command {
     let mut cmd = Command::new("git");
+    #[cfg(test)]
+    cmd.arg("-c")
+        .arg(format!("core.hooksPath={}", test_git_hooks_path()));
     crate::modules::proc::hide_console(&mut cmd);
     cmd
+}
+
+#[cfg(test)]
+fn test_git_hooks_path() -> String {
+    std::env::temp_dir()
+        .join(format!("voktty-empty-git-hooks-{}", std::process::id()))
+        .to_string_lossy()
+        .replace('\\', "/")
 }
 
 fn git_ls_files(root: &Path) -> Option<Vec<ProjectFile>> {
@@ -4096,15 +4107,12 @@ mod tests {
         std::fs::create_dir_all(dir.0.join("node_modules")).unwrap();
         std::fs::write(dir.0.join("node_modules").join("pkg.js"), "x\n").unwrap();
 
-        let init = Command::new("git")
-            .args(["init"])
-            .current_dir(&dir.0)
-            .output();
+        let init = git_cmd().args(["init"]).current_dir(&dir.0).output();
         let Ok(init) = init else { return };
         if !init.status.success() {
             return;
         }
-        let add = Command::new("git")
+        let add = git_cmd()
             .args(["add", "tracked.ts", ".gitignore"])
             .current_dir(&dir.0)
             .status();
@@ -4121,12 +4129,12 @@ mod tests {
     }
 
     fn init_git(dir: &Path, branch: &str, origin: Option<&str>) -> bool {
-        let init = Command::new("git").args(["init"]).current_dir(dir).output();
+        let init = git_cmd().args(["init"]).current_dir(dir).output();
         let Ok(init) = init else { return false };
         if !init.status.success() {
             return false;
         }
-        let head = Command::new("git")
+        let head = git_cmd()
             .args(["symbolic-ref", "HEAD", &format!("refs/heads/{branch}")])
             .current_dir(dir)
             .status();
@@ -4134,7 +4142,7 @@ mod tests {
             return false;
         }
         if let Some(url) = origin {
-            let remote = Command::new("git")
+            let remote = git_cmd()
                 .args(["remote", "add", "origin", url])
                 .current_dir(dir)
                 .status();
@@ -4150,10 +4158,7 @@ mod tests {
     }
 
     fn init_bare_git(dir: &Path) -> bool {
-        let init = Command::new("git")
-            .args(["init", "--bare"])
-            .current_dir(dir)
-            .output();
+        let init = git_cmd().args(["init", "--bare"]).current_dir(dir).output();
         let Ok(init) = init else { return false };
         init.status.success() && disable_git_hooks(dir)
     }
@@ -4207,7 +4212,7 @@ mod tests {
     }
 
     fn git(dir: &Path, args: &[&str]) -> bool {
-        Command::new("git")
+        git_cmd()
             .args([
                 "-c",
                 "user.name=MonoCode",
@@ -4624,6 +4629,30 @@ mod tests {
     }
 
     #[test]
+    fn git_test_commands_override_injected_hook_configuration() {
+        let repo = tmp("git-hook-isolation");
+        if !init_git(&repo.0, "main", None) {
+            return;
+        }
+
+        let injected_hooks = repo.0.join("injected-hooks");
+        let output = git_cmd()
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "core.hooksPath")
+            .env("GIT_CONFIG_VALUE_0", &injected_hooks)
+            .arg("-C")
+            .arg(&repo.0)
+            .args(["config", "--get", "core.hooksPath"])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let configured = String::from_utf8_lossy(&output.stdout);
+        let isolated_hooks = test_git_hooks_path();
+        assert_eq!(configured.trim(), isolated_hooks);
+        assert!(!Path::new(&isolated_hooks).exists());
+    }
+
+    #[test]
     fn git_sync_pulls_then_pushes() {
         let origin = tmp("git-sync-origin");
         let a = tmp("git-sync-a");
@@ -4638,7 +4667,7 @@ mod tests {
         if !git(&a.0, &["remote", "add", "origin", &origin_url])
             || !git(&a.0, &["push", "-u", "origin", "main"])
             || !git(&origin.0, &["symbolic-ref", "HEAD", "refs/heads/main"])
-            || Command::new("git")
+            || git_cmd()
                 .args([
                     "-c",
                     "core.autocrlf=false",
