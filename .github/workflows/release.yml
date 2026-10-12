@@ -67,7 +67,6 @@ jobs:
 
       - name: Build remote helper
         env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         working-directory: src-tauri
         run: cargo build --locked -p voktty-remote --release --target ${{ matrix.target }}
