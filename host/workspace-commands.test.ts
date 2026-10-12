@@ -1,13 +1,13 @@
 import { afterEach, expect, it } from "vitest";
 import {
   mkdtempSync,
-  realpathSync,
   readFileSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HostStore } from "./store";
@@ -18,14 +18,14 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 });
 
-function setup() {
+async function setup() {
   const directory = mkdtempSync(join(tmpdir(), "voktty-workspace-commands-"));
   const store = new HostStore(join(directory, "host.db"));
   cleanups.push(() => {
     store.close();
     rmSync(directory, { recursive: true, force: true });
   });
-  const project = store.addProject(realpathSync(directory), "Project");
+  const project = store.addProject(await realpath(directory), "Project");
   const commands = new WorkspaceCommands(store, async (_id, action) =>
     action(),
   );
@@ -33,7 +33,7 @@ function setup() {
 }
 
 it("checks expected content before replacing a file", async () => {
-  const { directory, commands } = setup();
+  const { directory, commands } = await setup();
   const path = join(directory, "document.txt");
   writeFileSync(path, "original");
   await expect(
@@ -60,7 +60,7 @@ it("checks expected content before replacing a file", async () => {
 it.skipIf(process.platform === "win32")(
   "preserves file permissions during an editor save",
   async () => {
-    const { directory, commands } = setup();
+    const { directory, commands } = await setup();
     const path = join(directory, "script.sh");
     writeFileSync(path, "before", { mode: 0o755 });
     await commands.run("write_text_file", {
@@ -75,7 +75,7 @@ it.skipIf(process.platform === "win32")(
 it.skipIf(process.platform === "win32")(
   "rejects a write through a symlink outside a registered project",
   async () => {
-    const { directory, commands } = setup();
+    const { directory, commands } = await setup();
     const outsideDir = mkdtempSync(join(tmpdir(), "voktty-workspace-outside-"));
     const outside = join(outsideDir, "private.txt");
     writeFileSync(outside, "private");

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SendTurnInput } from "@/modules/harness/lib/harness/types";
@@ -67,7 +68,7 @@ describe("headless session ownership", () => {
     const nested = join(directory, "nested");
     mkdirSync(nested);
     const alias = join(nested, "..", "nested");
-    const canonical = realpathSync(nested);
+    const canonical = await realpath(nested);
     const authorize = vi.fn(async (_cwd: string) => {});
     const engine = new HostEngine(store, { codex: provider }, authorize);
     const project = await engine.openProject(alias);
