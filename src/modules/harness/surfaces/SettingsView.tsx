@@ -1,32 +1,25 @@
-import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowDownCircle,
   Check,
-  ChevronDown,
   ImagePlus,
   Loader,
-  Pencil,
-  Plus,
   RefreshCw,
   Search,
-  Trash2,
 } from "../chrome/icons";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
-  type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "@/modules/i18n";
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
   keybindingCommandLabel,
   keybindingWhenLabel,
@@ -77,28 +70,6 @@ import {
   pickAndSaveChatBackground,
   removeChatBackground,
 } from "../lib/chatBackground";
-import {
-  getHarnessAvailabilitySnapshot,
-  harnessUnavailableHint,
-  isHarnessAvailable,
-  probeHarnessAvailability,
-  subscribeHarnessAvailability,
-} from "../lib/harness/availability";
-import { refreshHarnessCatalogs } from "../lib/harness/registry";
-import {
-  defaultModelId,
-  getModelSnapshot,
-  hasLiveCatalog,
-  isPickerProviderVisible,
-  loadDefaultModels,
-  loadLastModelChoice,
-  modelsFor,
-  resolveModel,
-  saveDefaultModel,
-  saveLastModelChoice,
-  savePickerProviderVisible,
-  subscribeModels,
-} from "../lib/models";
 import { prettyCwd, projectKey, projectName } from "../lib/paths";
 import { ALT, IS_MAC, IS_WIN, MOD } from "../lib/platform";
 import {
@@ -108,38 +79,9 @@ import {
   type ArchivedProject,
 } from "../lib/recents";
 import {
-  HARNESSES,
-  HARNESS_TITLE,
   sessionDisplayTitle,
-  type HarnessId,
   type Session,
 } from "../lib/session";
-import {
-  PROVIDER_ACCOUNT_PROVIDERS,
-  displayProviderAccountLabel,
-  newProviderAccount,
-  providerAccounts,
-  removeProviderAccount,
-  renameProviderAccount,
-  saveProviderAccount,
-  subscribeProviderAccounts,
-  type ProviderAccount,
-  type ProviderAccountProvider,
-} from "../lib/providerAccounts";
-import {
-  identityKey,
-  identityOrganizationTag,
-  useProviderAccountIdentities,
-} from "../lib/providerAccountIdentity";
-import {
-  saveMaskEmails,
-  saveShowRemainingUsage,
-  useMaskEmails,
-  useShowRemainingUsage,
-} from "../lib/displayPrefs";
-import { ProviderAccountSubtitle } from "../chrome/ProviderAccountSubtitle";
-import { removeProviderAccountCredentials } from "../lib/providerAccountCredentials";
-import { loginHarness } from "../lib/harness/auth";
 import {
   loadSessionSidebarFilters,
   saveSessionSidebarFilters,
@@ -202,7 +144,6 @@ export type SettingsAnchor =
   | "github"
   | "gitlab"
   | "linear"
-  | "provider-accounts"
   | "project-notifications"
   | "project-worktrees";
 
@@ -210,7 +151,6 @@ const ANCHOR_IDS: Record<SettingsAnchor, string> = {
   github: "settings-github",
   gitlab: "settings-gitlab",
   linear: "settings-linear",
-  "provider-accounts": "provider-accounts",
   "project-notifications": "settings-project-notifications",
   "project-worktrees": "setting-project-worktrees",
 };
@@ -1599,513 +1539,21 @@ function KeybindingsPage() {
   );
 }
 
-type AccountEditor = {
-  provider: ProviderAccountProvider;
-  accountId?: string;
-  label: string;
-};
-
-function ProviderAccountsSettings() {
-  const { t } = useTranslation();
-  const [version, setVersion] = useState(0);
-  const [editor, setEditor] = useState<AccountEditor | null>(null);
-  const [working, setWorking] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(
-    () => subscribeProviderAccounts(() => setVersion((value) => value + 1)),
-    [],
-  );
-
-  const startAdd = (provider: ProviderAccountProvider) => {
-    setError(null);
-    setEditor({ provider, label: "" });
-  };
-
-  const startRename = (account: ProviderAccount) => {
-    setError(null);
-    setEditor({
-      provider: account.provider,
-      accountId: account.id,
-      label: account.label,
-    });
-  };
-
-  const submitEditor = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!editor || !editor.label.trim() || working) return;
-    const key = editor.accountId
-      ? `rename:${editor.provider}:${editor.accountId}`
-      : `add:${editor.provider}`;
-    setWorking(key);
-    setError(null);
-    try {
-      if (editor.accountId) {
-        renameProviderAccount(editor.provider, editor.accountId, editor.label);
-      } else {
-        const account = newProviderAccount(editor.provider, editor.label);
-        await loginHarness(editor.provider, account.id);
-        saveProviderAccount(account);
-      }
-      setEditor(null);
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : t("harness.accounts.couldNotSaveAccount"),
-      );
-    } finally {
-      setWorking(null);
-    }
-  };
-
-  const removeAccount = async (account: ProviderAccount) => {
-    if (account.isDefault || working) return;
-    const confirmed = await ask(
-      t("harness.accounts.removeConfirm", { name: account.label }),
-      {
-        title: t("harness.accounts.removeAccountTitle", {
-          name: HARNESS_TITLE[account.provider],
-        }),
-        kind: "warning",
-        okLabel: t("harness.accounts.removeAccount"),
-        cancelLabel: t("common.cancel"),
-      },
-    );
-    if (!confirmed) return;
-    const key = `remove:${account.provider}:${account.id}`;
-    setWorking(key);
-    setError(null);
-    try {
-      await removeProviderAccountCredentials(account.provider, account.id);
-      removeProviderAccount(account.provider, account.id);
-      if (
-        editor?.provider === account.provider &&
-        editor.accountId === account.id
-      ) {
-        setEditor(null);
-      }
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : t("harness.accounts.couldNotRemoveAccount"),
-      );
-    } finally {
-      setWorking(null);
-    }
-  };
-
-  const identities = useProviderAccountIdentities(
-    PROVIDER_ACCOUNT_PROVIDERS.flatMap(providerAccounts),
-    version,
-  );
-
-  return (
-    <Group
-      id="provider-accounts"
-      title={t("harness.accounts.settingsTitle")}
-      description={t("harness.accounts.settingsDescription")}
-    >
-      {PROVIDER_ACCOUNT_PROVIDERS.map((provider) => {
-        const accounts = providerAccounts(provider);
-        const adding = editor?.provider === provider && !editor.accountId;
-        return (
-          <div
-            key={provider}
-            className="border-b border-content/5 last:border-b-0"
-          >
-            <div className="flex items-center gap-4 px-4 py-3.5">
-              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-content/[0.05] ring-1 ring-inset ring-content/[0.06]">
-                  <HarnessIcon harness={provider} className="size-4" />
-                </span>
-                <div className="min-w-0">
-                  <div className="text-[13px] font-medium text-content">
-                    {HARNESS_TITLE[provider]}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-content/40">
-                    {t("harness.accounts.accountCount", {
-                      count: accounts.length,
-                    })}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={Boolean(working)}
-                onClick={() => startAdd(provider)}
-                className="flex shrink-0 items-center gap-1.5 rounded-md border border-content/10 px-2.5 py-1 text-[12px] text-content/70 transition-transform duration-150 hover:bg-content/10 hover:text-content active:scale-[0.97] disabled:cursor-default disabled:opacity-40"
-              >
-                <Plus className="size-3.5" strokeWidth={1.75} aria-hidden />
-                {t("harness.accounts.addAccount")}
-              </button>
-            </div>
-            <div className="border-t border-content/5 bg-content/[0.015] pl-10">
-              {accounts.map((account) => {
-                const editing =
-                  editor?.provider === provider &&
-                  editor.accountId === account.id;
-                const removing = working === `remove:${provider}:${account.id}`;
-                const identity = identities[identityKey(account)];
-                const orgTag = identityOrganizationTag(identity);
-                return editing ? (
-                  <ProviderAccountEditor
-                    key={account.id}
-                    editor={editor}
-                    working={Boolean(working)}
-                    onLabel={(label) =>
-                      setEditor((current) =>
-                        current ? { ...current, label } : current,
-                      )
-                    }
-                    onCancel={() => setEditor(null)}
-                    onSubmit={submitEditor}
-                  />
-                ) : (
-                  <div
-                    key={account.id}
-                    className="flex h-12 items-center gap-3 border-b border-content/5 px-4 py-2 last:border-b-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span className="truncate text-[12px] text-content/85">
-                          {displayProviderAccountLabel(
-                            account.label,
-                            t("harness.accounts.defaultAccount"),
-                          )}
-                        </span>
-                        {orgTag ? (
-                          <span className="max-w-[8rem] shrink-0 truncate rounded bg-content/[0.07] px-1 text-[9px] leading-4 text-content/50">
-                            {orgTag}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-0.5 flex min-w-0 items-center gap-2.5 text-[10px]">
-                        <ProviderAccountSubtitle
-                          identity={identity}
-                          fallback={
-                            account.isDefault
-                              ? t("harness.accounts.providerCliProfile")
-                              : t("harness.accounts.isolatedProfile")
-                          }
-                          className="truncate text-content/30"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {account.isDefault ? (
-                        <span className="mr-1 text-[10px] font-medium uppercase tracking-wide text-content/30">
-                          {t("common.default")}
-                        </span>
-                      ) : null}
-                      <button
-                        type="button"
-                        disabled={Boolean(working)}
-                        aria-label={t("harness.accounts.renameNamed", {
-                          name: account.label,
-                        })}
-                        title={t("harness.accounts.renameAccount")}
-                        onClick={() => startRename(account)}
-                        className="grid size-7 place-items-center rounded-md text-content/40 transition-transform duration-150 hover:bg-content/10 hover:text-content active:scale-[0.96] disabled:opacity-35"
-                      >
-                        <Pencil className="size-3.5" strokeWidth={1.75} />
-                      </button>
-                      {!account.isDefault ? (
-                        <button
-                          type="button"
-                          disabled={Boolean(working)}
-                          aria-label={t("harness.accounts.removeNamed", {
-                            name: account.label,
-                          })}
-                          title={t("harness.accounts.removeAccount")}
-                          onClick={() => void removeAccount(account)}
-                          className="grid size-7 place-items-center rounded-md text-content/35 transition-transform duration-150 hover:bg-red-400/10 hover:text-red-400 active:scale-[0.96] disabled:opacity-35"
-                        >
-                          {removing ? (
-                            <Loader className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" strokeWidth={1.75} />
-                          )}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-              {adding && editor ? (
-                <ProviderAccountEditor
-                  editor={editor}
-                  working={Boolean(working)}
-                  onLabel={(label) =>
-                    setEditor((current) =>
-                      current ? { ...current, label } : current,
-                    )
-                  }
-                  onCancel={() => setEditor(null)}
-                  onSubmit={submitEditor}
-                />
-              ) : null}
-            </div>
-          </div>
-        );
-      })}
-      {error ? (
-        <p
-          className="border-t border-content/5 px-4 py-2.5 text-[11px] leading-4 text-red-400"
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
-    </Group>
-  );
-}
-
-function ProviderAccountEditor({
-  editor,
-  working,
-  onLabel,
-  onCancel,
-  onSubmit,
-}: {
-  editor: AccountEditor;
-  working: boolean;
-  onLabel: (label: string) => void;
-  onCancel: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const { t } = useTranslation();
-  const adding = !editor.accountId;
-  return (
-    <form
-      className="flex h-12 items-center border-b border-content/5 px-4 py-2 last:border-b-0"
-      onSubmit={onSubmit}
-    >
-      <div
-        data-provider-account-editor-field
-        className="flex items-center pr-1 h-8 min-w-0 flex-1 overflow-hidden rounded-md border border-content/10 bg-content/[0.04] focus-within:border-accent/45"
-      >
-        <label className="h-full min-w-0 flex-1">
-          <span className="sr-only">{t("harness.accounts.accountName")}</span>
-          <input
-            autoFocus
-            type="text"
-            maxLength={48}
-            value={editor.label}
-            disabled={working}
-            placeholder={t("harness.accounts.workOrPersonal")}
-            aria-label={t(
-              adding
-                ? "harness.accounts.newNamedAccount"
-                : "harness.accounts.renameNamedAccount",
-              { name: HARNESS_TITLE[editor.provider] },
-            )}
-            onChange={(event) => onLabel(event.target.value)}
-            className="h-full w-full bg-transparent px-2.5 text-[12px] text-content outline-none placeholder:text-content/25 disabled:opacity-50"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={working}
-          onClick={onCancel}
-          className="flex h-7 shrink-0 items-center rounded-md bg-content/[0.05] px-2.5 text-[11px] text-content/45 transition-transform duration-150 hover:bg-content/10 hover:text-content active:scale-[0.97] disabled:opacity-40"
-        >
-          {t("common.cancel")}
-        </button>
-        <button
-          type="submit"
-          disabled={working || !editor.label.trim()}
-          className="ml-1 flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-content px-2.5 text-[11px] font-medium text-background-base transition-transform duration-150 hover:bg-content/85 active:scale-[0.97] disabled:cursor-default disabled:opacity-40"
-        >
-          {working ? <Loader className="size-3 animate-spin" /> : null}
-          {adding
-            ? working
-              ? t("harness.accounts.waitingForBrowser")
-              : t("harness.accounts.signInAndAdd")
-            : t("common.save")}
-        </button>
-      </div>
-    </form>
-  );
-}
-
 function ProvidersPage() {
   const { t } = useTranslation();
-  useSyncExternalStore(subscribeModels, getModelSnapshot, getModelSnapshot);
-  useSyncExternalStore(
-    subscribeHarnessAvailability,
-    getHarnessAvailabilitySnapshot,
-    getHarnessAvailabilitySnapshot,
-  );
-  const [choice, setChoice] = useState(loadLastModelChoice);
-  const [defaultModels, setDefaultModels] = useState(loadDefaultModels);
-
-  useEffect(() => {
-    void probeHarnessAvailability();
-  }, []);
-
-  const onModelChange = (harness: HarnessId, model: string) => {
-    saveDefaultModel(harness, model);
-    setDefaultModels((prev) => ({ ...prev, [harness]: model }));
-    if (choice?.harness === harness) {
-      saveLastModelChoice(harness, model);
-      setChoice({ harness, model });
-    }
-  };
-
-  const onDefault = (harness: HarnessId, model: string) => {
-    saveLastModelChoice(harness, model);
-    setDefaultModels((prev) => ({ ...prev, [harness]: model }));
-    setChoice({ harness, model });
-  };
-
   return (
-    <>
-      <ProviderAccountsSettings />
-
-      <UsageDisplaySettings />
-
-      <p className="pb-2 pt-6 text-[12px] leading-relaxed text-content/45">
-        {t("harness.chrome.providersIntroLong")}
+    <div className="flex flex-col items-start gap-3">
+      <p className="max-w-2xl text-[12px] leading-relaxed text-content/50">
+        {t("harness.settings.providersIntro")}
       </p>
-      {HARNESSES.map((harness) => (
-        <ProviderRow
-          key={harness}
-          harness={harness}
-          selectedModel={
-            defaultModels[harness] ??
-            (choice?.harness === harness
-              ? choice.model
-              : defaultModelId(harness))
-          }
-          isDefault={choice?.harness === harness}
-          onDefault={onDefault}
-          onModelChange={onModelChange}
-        />
-      ))}
-    </>
-  );
-}
-
-function UsageDisplaySettings() {
-  const showRemainingUsage = useShowRemainingUsage();
-  const maskEmails = useMaskEmails();
-  return (
-    <Group title="Usage and privacy">
-      <Row
-        id="show-remaining-usage"
-        label="Show remaining usage"
-        description="Fill usage meters with what is left in each limit instead of what has been used."
+      <button
+        type="button"
+        onClick={() => void openSettingsWindow("harness")}
+        className="flex h-8 items-center rounded-md border border-content/10 px-3 text-[11px] font-medium text-content/75 transition-colors hover:bg-content/5 hover:text-content"
       >
-        <Toggle
-          label="Show remaining usage"
-          on={showRemainingUsage}
-          onChange={saveShowRemainingUsage}
-        />
-      </Row>
-      <Row
-        id="mask-emails"
-        label="Mask account emails"
-        description="Blur account emails in Settings and the usage popover until you click one, so they stay out of screenshots."
-      >
-        <Toggle
-          label="Mask account emails"
-          on={maskEmails}
-          onChange={saveMaskEmails}
-        />
-      </Row>
-    </Group>
-  );
-}
-
-function ProviderRow({
-  harness,
-  selectedModel,
-  isDefault,
-  onDefault,
-  onModelChange,
-}: {
-  harness: HarnessId;
-  selectedModel: string;
-  isDefault: boolean;
-  onDefault: (harness: HarnessId, model: string) => void;
-  onModelChange: (harness: HarnessId, model: string) => void;
-}) {
-  const { t } = useTranslation();
-  const models = modelsFor(harness);
-  const available = isHarnessAvailable(harness);
-  const current =
-    models.length > 0 ? resolveModel(harness, selectedModel) : null;
-  const [inPicker, setInPicker] = useState(() =>
-    isPickerProviderVisible(harness),
-  );
-
-  useEffect(() => {
-    if (!available || hasLiveCatalog(harness)) return;
-    void refreshHarnessCatalogs([harness]);
-  }, [available, harness]);
-
-  const onPickerVisible = (visible: boolean) => {
-    savePickerProviderVisible(harness, visible);
-    setInPicker(visible);
-  };
-
-  return (
-    <Row
-      label={
-        <span className="flex items-center gap-2">
-          <HarnessIcon harness={harness} className="size-4 shrink-0" />
-          {HARNESS_TITLE[harness]}
-          {isDefault ? (
-            <span className="rounded-full bg-content/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-content/60">
-              {t("harness.settings.defaultBadge")}
-            </span>
-          ) : null}
-        </span>
-      }
-      description={
-        available
-          ? t("harness.settings.modelsAvailable", { count: models.length })
-          : harnessUnavailableHint(harness)
-      }
-    >
-      {current ? (
-        <Select
-          label={t("harness.settings.modelAria", {
-            name: HARNESS_TITLE[harness],
-          })}
-          value={current.id}
-          onChange={(next) => onModelChange(harness, next)}
-          options={models.map((item) => ({
-            value: item.id,
-            label: item.name,
-          }))}
-        />
-      ) : null}
-      <SecondaryButton
-        onClick={() => current && onDefault(harness, current.id)}
-        disabled={isDefault || !current}
-      >
-        {isDefault
-          ? t("harness.settings.defaultBadge")
-          : t("harness.settings.useByDefault")}
-      </SecondaryButton>
-      {available ? (
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] text-content/50">
-            {t("harness.settings.showInPicker")}
-          </span>
-          <Toggle
-            label={t("harness.settings.showInPickerAria", {
-              name: HARNESS_TITLE[harness],
-            })}
-            on={inPicker}
-            onChange={onPickerVisible}
-          />
-        </div>
-      ) : null}
-    </Row>
+        {t("common.open")} {t("harness.settings.title")}
+      </button>
+    </div>
   );
 }
 
@@ -2331,47 +1779,6 @@ function Heading({
   );
 }
 
-function Group({
-  id,
-  title,
-  description,
-  action,
-  children,
-}: {
-  /** Matches a `SETTINGS_INDEX` id when the whole card is the search target. */
-  id?: string;
-  title: ReactNode;
-  description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  const revealed = useContext(RevealedSettingContext);
-  const flash = id != null && revealed === id;
-
-  return (
-    <section
-      id={id ? settingDomId(id) : undefined}
-      data-setting-id={id}
-      className={`rounded-xl border border-content/10 bg-content/[0.02] transition-colors duration-500 ${
-        flash ? "border-accent/60 bg-accent/[0.04]" : ""
-      }`}
-    >
-      <div className="flex items-start justify-between gap-4 border-b border-content/5 px-4 py-3">
-        <div className="min-w-0">
-          <div className="text-[13px] font-medium text-content">{title}</div>
-          {description ? (
-            <p className="mt-0.5 text-[11px] leading-relaxed text-content/45">
-              {description}
-            </p>
-          ) : null}
-        </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function Row({
   id,
   settingId,
@@ -2517,166 +1924,6 @@ function Toggle({
         }`}
       />
     </button>
-  );
-}
-
-/** Theme-aware dropdown for a Settings row: a trigger button opening a Popover listbox. Used instead of a native select, whose option popup is OS-rendered and unreadable in dark mode on Windows/Linux. */
-function Select({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(() =>
-    Math.max(
-      0,
-      options.findIndex((option) => option.value === value),
-    ),
-  );
-  const root = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const activeOption = useRef<HTMLButtonElement>(null);
-  const listId = useId();
-  const selected = options.find((option) => option.value === value);
-  const activeId =
-    options[active] != null ? `${listId}-opt-${active}` : undefined;
-
-  useEffect(() => {
-    if (!open) return;
-    setActive(
-      Math.max(
-        0,
-        options.findIndex((option) => option.value === value),
-      ),
-    );
-  }, [open, value, options]);
-
-  useEffect(() => {
-    if (!open) return;
-    activeOption.current?.scrollIntoView({ block: "nearest" });
-  }, [active, open]);
-
-  const pick = (next: string) => {
-    onChange(next);
-    setOpen(false);
-    trigger.current?.focus();
-  };
-
-  const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((i) => Math.min(options.length - 1, i + 1));
-      return;
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((i) => Math.max(0, i - 1));
-      return;
-    }
-    if (e.key === "Home") {
-      e.preventDefault();
-      setActive(0);
-      return;
-    }
-    if (e.key === "End") {
-      e.preventDefault();
-      setActive(options.length - 1);
-      return;
-    }
-    if (e.key === "Tab") {
-      const option = options[active];
-      if (option && option.value !== value) onChange(option.value);
-      setOpen(false);
-      trigger.current?.focus();
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const option = options[active];
-      if (option) pick(option.value);
-    }
-  };
-
-  return (
-    <div ref={root} className="relative max-w-52">
-      <button
-        type="button"
-        ref={trigger}
-        aria-label={`${label}: ${selected?.label ?? value}`}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-content/10 bg-content/5 px-2 py-1 text-left text-[12px] text-content outline-none hover:border-content/20"
-      >
-        <span className="min-w-0 flex-1 truncate">
-          {selected ? selected.label : value}
-        </span>
-        <ChevronDown
-          className={`size-3.5 shrink-0 text-content/50 transition-transform ${open ? "rotate-180" : ""}`}
-          strokeWidth={1.75}
-        />
-      </button>
-      {open ? (
-        <Popover
-          anchor={root}
-          side="bottom"
-          align="end"
-          width={280}
-          maxHeight={320}
-          autoFocus
-          onDismiss={(reason) => {
-            setOpen(false);
-            if (reason === "escape") trigger.current?.focus();
-          }}
-          role="listbox"
-          aria-label={label}
-          aria-activedescendant={activeId}
-          tabIndex={-1}
-          onKeyDown={onMenuKey}
-          className="overflow-y-auto overscroll-contain p-1"
-        >
-          {options.map((option, index) => {
-            const isSelected = option.value === value;
-            const highlighted = index === active;
-            return (
-              <button
-                key={option.value}
-                ref={highlighted ? activeOption : undefined}
-                type="button"
-                id={`${listId}-opt-${index}`}
-                role="option"
-                tabIndex={-1}
-                aria-selected={isSelected}
-                onMouseDown={(e) => e.preventDefault()}
-                onMouseEnter={() => setActive(index)}
-                onClick={() => pick(option.value)}
-                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] ${
-                  highlighted || isSelected
-                    ? "bg-content/10 text-content"
-                    : "text-content hover:bg-content/5"
-                }`}
-              >
-                <span className="min-w-0 flex-1 truncate">
-                  {option.label}
-                </span>
-                {isSelected ? (
-                  <Check
-                    className="size-3.5 shrink-0"
-                    strokeWidth={2.25}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </Popover>
-      ) : null}
-    </div>
   );
 }
 

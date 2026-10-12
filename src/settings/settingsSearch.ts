@@ -112,6 +112,30 @@ export const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
     keywords:
       "colorblind color blind accessibility added removed red green blue orange high contrast changes",
   },
+  row(
+    "harness-provider-accounts",
+    "harness",
+    "harness.accounts.settingsTitle",
+    "harness.accounts.settingsDescription",
+  ),
+  {
+    ...row(
+      "harness-usage-display",
+      "harness",
+      "harness.settings.usageDisplay",
+      "harness.settingsEntries.showRemainingUsage",
+    ),
+    keywords: "quota limits meter remaining usage privacy email mask",
+  },
+  {
+    ...row(
+      "harness-cli-defaults",
+      "harness",
+      "harness.settings.providers",
+      "harness.chrome.providersIntroLong",
+    ),
+    keywords: "default model new session claude codex gemini cli",
+  },
 
   section("extensions", "extensions", "extensions.title", "extensions.description"),
   section("ssh", "ssh", "settings.tabs.ssh"),

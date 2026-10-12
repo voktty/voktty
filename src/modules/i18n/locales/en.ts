@@ -559,7 +559,7 @@ export const en = {
         agents: "Agents",
       },
       aiInactiveBanner:
-        "AI is currently deactivated. Connect and verify a model below, then enable the AI switch to configure models and agents.",
+        "Connect a provider below and test its model. Voktty turns AI on after the check succeeds.",
       providers: "Providers",
       apiKey: "API Key",
       configurationRequired: "Configure the selected model first.",
@@ -4671,7 +4671,8 @@ export const en = {
       modelsAvailable:
         "{count, plural, one {# model available.} other {# models available.}}",
       providersIntro:
-        "A provider is listed as installed once its CLI is found on your PATH. The model beside each provider is used for new sessions.",
+        "Manage provider accounts and default CLI models in Voktty Settings > Agent Harness.",
+      usageDisplay: "Usage display",
     },
     connections: {
       intro:

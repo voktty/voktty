@@ -384,6 +384,7 @@ import {
 } from "../lib/settings";
 import { warmPiSkills } from "../lib/skills";
 import { playCue } from "../lib/sounds";
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
   addTabsToNewGroup,
   addTabToGroup,
@@ -7078,9 +7079,7 @@ export function HarnessApp({
               session={usageSession}
               project={active?.cwd ?? projectCwd}
               onSelectAccount={onSelectProviderAccount}
-              onManageAccounts={() =>
-                openSettings("providers", "provider-accounts")
-              }
+              onManageAccounts={() => void openSettingsWindow("harness")}
               terminals={runningTerminals}
               terminalOpen={runningTerminalOpen}
               onToggleTerminal={onToggleRunningTerminal}

@@ -389,7 +389,7 @@ const deBase = mergeLocale(en, {
         agents: "Agenten",
       },
       aiInactiveBanner:
-        "KI ist derzeit deaktiviert. Verbinden und prüfen Sie unten ein Modell und aktivieren Sie anschließend den KI-Schalter, um Modelle und Agenten zu konfigurieren.",
+        "Verbinde unten einen Anbieter und teste sein Modell. Voktty aktiviert die KI nach erfolgreicher Prüfung.",
       providers: "Anbieter",
       apiKey: "API-Schlüssel",
       keySaved:
@@ -4899,7 +4899,8 @@ const deGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "{name} im Auswahlfenster anzeigen",
       modelAria: "{name}-Modell",
       modelsAvailable: "{count, plural, one {# Modell verfügbar.} other {# Modelle verfügbar.}}",
-      providersIntro: "Ein Anbieter gilt als installiert, sobald seine CLI im PATH gefunden wird. Das Modell neben jedem Anbieter wird für neue Sitzungen verwendet.",
+      providersIntro: "Verwalte Anbieterkonten und Standard-CLI-Modelle unter Voktty-Einstellungen > Agent Harness.",
+      usageDisplay: "Nutzungsanzeige",
     },
     modelSettings: {
       reasoning: "Reasoning",

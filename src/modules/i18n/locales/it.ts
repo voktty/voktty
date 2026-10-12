@@ -397,7 +397,7 @@ const itBase = mergeLocale(en, {
         agents: "Agenti",
       },
       aiInactiveBanner:
-        "L'IA è attualmente disattivata. Connetti e verifica un modello qui sotto, quindi attiva l'interruttore IA per configurare modelli e agenti.",
+        "Collega un provider qui sotto e prova il suo modello. Voktty attiverà l'IA se il controllo riesce.",
       providers: "Provider",
       apiKey: "Chiave API",
       keySaved:
@@ -5001,7 +5001,8 @@ const itGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "Mostra {name} nel selettore",
       modelAria: "Modello {name}",
       modelsAvailable: "{count, plural, one {# modello disponibile.} other {# modelli disponibili.}}",
-      providersIntro: "Un provider risulta installato quando il relativo CLI è nel PATH. Il modello accanto a ogni provider viene usato per le nuove sessioni.",
+      providersIntro: "Gestisci gli account dei provider e i modelli CLI predefiniti in Impostazioni Voktty > Agent Harness.",
+      usageDisplay: "Visualizzazione dell'utilizzo",
     },
     modelSettings: {
       reasoning: "Ragionamento",

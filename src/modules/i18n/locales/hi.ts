@@ -441,7 +441,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
         agents: "एजेंट्स",
       },
       aiInactiveBanner:
-        "AI वर्तमान में निष्क्रिय है। नीचे एक मॉडल कनेक्ट करें और सत्यापित करें, फिर मॉडल्स और एजेंट्स कॉन्फ़िगर करने के लिए AI स्विच चालू करें।",
+        "नीचे कोई प्रदाता जोड़ें और उसके मॉडल की जाँच करें। जाँच सफल होने पर Voktty AI चालू कर देगा।",
       providers: "प्रदाता",
       apiKey: "API कुंजी",
       configurationRequired: "पहले चयनित मॉडल को कॉन्फ़िगर करें।",
@@ -4690,7 +4690,8 @@ const hiGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "पिकर में {name} दिखाएं",
       modelAria: "{name} मॉडल",
       modelsAvailable: "{count, plural, one {# मॉडल उपलब्ध।} other {# मॉडल उपलब्ध।}}",
-      providersIntro: "प्रदाता तब इंस्टॉल के रूप में सूचीबद्ध होता है जब उसका CLI आपके PATH पर मिल जाता है। प्रत्येक प्रदाता के पास वाला मॉडल नए सत्रों के लिए उपयोग होता है।",
+      providersIntro: "प्रदाता खाते और डिफ़ॉल्ट CLI मॉडल Voktty सेटिंग्स > Agent Harness में प्रबंधित करें।",
+      usageDisplay: "उपयोग प्रदर्शन",
     },
     modelSettings: {
       reasoning: "रीज़निंग",

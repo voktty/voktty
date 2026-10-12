@@ -12,6 +12,12 @@ const translations: Record<string, string> = {
   "settings.general.description": "Terminal y arranque.",
   "harness.settings.diffColors": "Diff colors",
   "harness.settings.diffColorsDesc": "Choose colors for added and removed lines.",
+  "harness.accounts.settingsTitle": "Provider accounts",
+  "harness.accounts.settingsDescription": "Manage provider sign-in accounts.",
+  "harness.settings.usageDisplay": "Usage display",
+  "harness.settingsEntries.showRemainingUsage": "Show remaining usage",
+  "harness.settings.providers": "Providers",
+  "harness.chrome.providersIntroLong": "Choose the default CLI model for new sessions.",
 };
 
 const translate = (key: string) => translations[key] ?? "";
@@ -48,5 +54,17 @@ describe("searchSettings", () => {
       titleKey: "harness.settings.diffColors",
       targetTitleKey: "harness.settings.diffColors",
     });
+  });
+
+  it("finds centralized Harness account and model settings", () => {
+    expect(searchSettings("provider accounts", translate).map((entry) => entry.id)).toContain(
+      "harness-provider-accounts",
+    );
+    expect(searchSettings("remaining usage", translate).map((entry) => entry.id)).toContain(
+      "harness-usage-display",
+    );
+    expect(searchSettings("default cli model", translate).map((entry) => entry.id)).toContain(
+      "harness-cli-defaults",
+    );
   });
 });

@@ -61,6 +61,8 @@ import { HarnessIcon } from "@/modules/harness/chrome/HarnessIcon";
 import { DiffPalettePicker } from "@/modules/harness/chrome/DiffPalettePicker";
 import { SectionHeader } from "../components/SectionHeader";
 import { Button } from "@/components/ui/button";
+import { HarnessProviderAccounts } from "@/modules/harness/components/HarnessProviderAccounts";
+import { HarnessUsageDisplaySettings } from "@/modules/harness/components/HarnessUsageDisplaySettings";
 
 function Row({
   label,
@@ -346,9 +348,12 @@ function ProvidersBlock() {
 
   const { t } = useTranslation();
   return (
-    <>
+    <section
+      className="flex flex-col gap-2"
+      data-setting-title={t("harness.settings.providers")}
+    >
       <p className="pb-3 text-[12px] leading-relaxed text-muted-foreground">
-        {t("harness.settings.providersIntro")}
+        {t("harness.chrome.providersIntroLong")}
       </p>
       {HARNESSES.map((harness) => (
         <ProviderRow
@@ -360,7 +365,7 @@ function ProvidersBlock() {
           onModelChange={onModelChange}
         />
       ))}
-    </>
+    </section>
   );
 }
 
@@ -376,6 +381,8 @@ export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
       )}
       <SubHeading title={t("harness.settings.general")} />
       <GeneralBlock />
+      <HarnessProviderAccounts />
+      <HarnessUsageDisplaySettings />
       <SubHeading title={t("harness.settings.providers")} />
       <ProvidersBlock />
     </div>

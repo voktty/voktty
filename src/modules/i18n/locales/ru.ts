@@ -384,7 +384,7 @@ const ruBase = mergeLocale(en, {
         agents: "Агенты",
       },
       aiInactiveBanner:
-        "ИИ в данный момент отключен. Подключите и проверьте модель ниже, затем включите переключатель ИИ для настройки моделей и агентов.",
+        "Подключите провайдера ниже и проверьте его модель. После успешной проверки Voktty включит ИИ.",
       providers: "Провайдеры",
       apiKey: "Ключ API",
       keySaved: "Ключ надежно сохранен в связке ключей ОС",
@@ -4807,7 +4807,8 @@ const ruGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "Показывать {name} в выборе",
       modelAria: "Модель {name}",
       modelsAvailable: "{count, plural, one {# модель доступна.} other {# моделей доступно.}}",
-      providersIntro: "Провайдер считается установленным, когда его CLI найден в PATH. Модель рядом с каждым провайдером используется для новых сессий.",
+      providersIntro: "Управляйте учетными записями провайдеров и моделями CLI по умолчанию в настройках Voktty > Agent Harness.",
+      usageDisplay: "Отображение использования",
     },
     modelSettings: {
       reasoning: "Рассуждение",

@@ -432,16 +432,6 @@ export function ModelsSection() {
           <AgentsSection hideHeader />
         ) : (
           <div className="flex flex-col gap-7">
-            <DefaultsBlock
-              defaultModel={defaultModel}
-              configuredIds={configuredIds}
-              keys={currentKeys}
-              customEndpoints={customEndpoints}
-              endpointKeys={epKeys}
-            />
-
-            <VoiceBlock />
-
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Label>{t("settings.models.providers")}</Label>
@@ -533,6 +523,18 @@ export function ModelsSection() {
                 </div>
               )}
             </div>
+
+            {configuredIds.size > 0 || customEndpoints.length > 0 ? (
+              <DefaultsBlock
+                defaultModel={defaultModel}
+                configuredIds={configuredIds}
+                keys={currentKeys}
+                customEndpoints={customEndpoints}
+                endpointKeys={epKeys}
+              />
+            ) : null}
+
+            <VoiceBlock />
           </div>
         )}
       </div>

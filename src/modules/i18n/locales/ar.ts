@@ -440,7 +440,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
         agents: "الوكلاء",
       },
       aiInactiveBanner:
-        "الذكاء الاصطناعي معطل حاليًا. قم بتوصيل نموذج والتحقق منه أدناه، ثم شغّل مفتاح الذكاء الاصطناعي لتكوين النماذج والوكلاء.",
+        "اربط موفرًا أدناه واختبر نموذجه. سيُفعّل Voktty الذكاء الاصطناعي بعد نجاح الاختبار.",
       providers: "المزودون",
       apiKey: "مفتاح API",
       configurationRequired: "قم بتكوين النموذج المحدد أولاً.",
@@ -4766,7 +4766,8 @@ const arGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "إظهار {name} في المنتقي",
       modelAria: "نموذج {name}",
       modelsAvailable: "{count, plural, one {# نموذج متاح.} other {# نماذج متاحة.}}",
-      providersIntro: "يُدرج المزود كمثبّت عند العثور على واجهة CLI الخاصة به في PATH. يُستخدم النموذج بجانب كل مزود للجلسات الجديدة.",
+      providersIntro: "أدِر حسابات الموفر والنماذج الافتراضية لواجهة CLI من إعدادات Voktty > Agent Harness.",
+      usageDisplay: "عرض الاستخدام",
     },
     modelSettings: {
       reasoning: "الاستدلال",

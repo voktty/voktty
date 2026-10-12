@@ -378,7 +378,7 @@ const koBase = mergeLocale(en, {
         agents: "에이전트",
       },
       aiInactiveBanner:
-        "현재 AI가 비활성화되어 있습니다. 아래에서 모델을 연결하고 확인한 후, AI 스위치를 켜서 모델과 에이전트를 구성하세요.",
+        "아래에서 공급자를 연결하고 모델을 테스트하세요. 확인이 성공하면 Voktty가 AI를 켭니다.",
       providers: "공급자",
       apiKey: "API 키",
       keySaved: "키가 OS 키체인에 안전하게 저장되었습니다",
@@ -4839,7 +4839,8 @@ const koGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "선택기에 {name} 표시",
       modelAria: "{name} 모델",
       modelsAvailable: "{count, plural, one {#개 모델을 사용할 수 있습니다.} other {#개 모델을 사용할 수 있습니다.}}",
-      providersIntro: "PATH에서 CLI가 발견되면 해당 공급자가 설치된 것으로 표시됩니다. 각 공급자 옆의 모델은 새 세션에 사용됩니다.",
+      providersIntro: "공급자 계정과 기본 CLI 모델은 Voktty 설정 > Agent Harness에서 관리하세요.",
+      usageDisplay: "사용량 표시",
     },
     modelSettings: {
       reasoning: "추론",

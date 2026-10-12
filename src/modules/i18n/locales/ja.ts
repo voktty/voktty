@@ -383,7 +383,7 @@ const jaBase = mergeLocale(en, {
         agents: "エージェント",
       },
       aiInactiveBanner:
-        "AI は現在無効になっています。以下でモデルを接続して確認し、AI スイッチをオンにしてモデルとエージェントを設定してください。",
+        "下でプロバイダーを接続してモデルをテストしてください。テストが成功すると Voktty が AI を有効にします。",
       providers: "プロバイダー",
       apiKey: "API キー",
       keySaved: "キーは OS のキーチェーンに安全に保存されています",
@@ -4915,7 +4915,8 @@ const jaGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "{name} をピッカーに表示",
       modelAria: "{name} モデル",
       modelsAvailable: "{count, plural, one {# 個のモデルが利用可能です。} other {# 個のモデルが利用可能です。}}",
-      providersIntro: "CLI が PATH で見つかると、プロバイダーはインストール済みとして表示されます。各プロバイダー横のモデルは新しいセッションで使われます。",
+      providersIntro: "プロバイダーアカウントと CLI の既定モデルは、Voktty の設定 > Agent Harness で管理できます。",
+      usageDisplay: "使用量の表示",
     },
     modelSettings: {
       reasoning: "推論",

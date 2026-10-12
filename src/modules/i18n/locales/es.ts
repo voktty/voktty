@@ -572,7 +572,7 @@ export const es: TranslationSchema = {
         agents: "Agentes",
       },
       aiInactiveBanner:
-        "La IA está desactivada actualmente. Conecta y verifica un modelo abajo, luego activa el interruptor de IA para configurar modelos y agentes.",
+        "Conecta un proveedor abajo y prueba su modelo. Voktty activará la IA cuando la comprobación termine correctamente.",
       providers: "Proveedores",
       apiKey: "Clave de API",
       configurationRequired: "Configura primero el modelo seleccionado.",
@@ -4783,7 +4783,8 @@ export const es: TranslationSchema = {
       modelsAvailable:
         "{count, plural, one {# modelo disponible.} other {# modelos disponibles.}}",
       providersIntro:
-        "Un proveedor aparece como instalado cuando su CLI esta en el PATH. El modelo junto a cada proveedor se usa en las sesiones nuevas.",
+        "Gestiona las cuentas de proveedor y los modelos CLI predeterminados en Ajustes de Voktty > Agent Harness.",
+      usageDisplay: "Visualización del uso",
     },
     connections: {
       intro:

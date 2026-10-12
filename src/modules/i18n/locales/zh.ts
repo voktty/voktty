@@ -359,7 +359,7 @@ const zhBase = mergeLocale(en, {
         agents: "智能体",
       },
       aiInactiveBanner:
-        "AI 当前已停用。请在下方连接并验证模型，然后开启 AI 开关以配置模型与智能体。",
+        "请在下方连接提供商并测试其模型。验证成功后，Voktty 会自动启用 AI。",
       providers: "提供商",
       apiKey: "API 密钥",
       keySaved: "密钥已安全存储在系统钥匙串中",
@@ -4571,7 +4571,8 @@ const zhGapFill: DeepPartial<TranslationSchema> = {
       showInPickerAria: "在选择器中显示 {name}",
       modelAria: "{name} 模型",
       modelsAvailable: "{count, plural, one {# 个可用模型。} other {# 个可用模型。}}",
-      providersIntro: "在 PATH 中找到其 CLI 后，提供商会显示为已安装。每个提供商旁的模型用于新会话。",
+      providersIntro: "在 Voktty 设置 > Agent Harness 中管理提供商账户和默认 CLI 模型。",
+      usageDisplay: "用量显示",
     },
     modelSettings: {
       reasoning: "推理",
