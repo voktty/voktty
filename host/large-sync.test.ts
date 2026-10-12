@@ -1,14 +1,15 @@
-import { afterEach, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AddressInfo } from "node:net";
-import { HostEngine } from "./engine";
-import { HostStore } from "./store";
-import { createHostServer } from "./server";
-import type { SendTurnInput } from "@/modules/harness/lib/harness/types";
-import type { HostSession } from "@/modules/connections/model/protocol";
 import { loadRemoteSession } from "@/modules/connections/model/connections";
+import type { HostSession } from "@/modules/connections/model/protocol";
+import type { SendTurnInput } from "@/modules/harness/lib/harness/types";
+import { afterEach, expect, it, vi } from "vitest";
+import { HostEngine } from "./engine";
+import { createHostServer } from "./server";
+import { HostStore } from "./store";
+import { postHttp } from "./test-http";
 
 // The desktop's native client (src-tauri/src/remote.rs) rejects responses over
 // 16 MiB. This routes the real renderer sync code through the real host server
@@ -29,17 +30,17 @@ vi.mock("@tauri-apps/api/core", () => ({
     input: { method: string; params: unknown },
   ) => {
     desktop.methods.push(input.method);
-    const response = await fetch(desktop.url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${desktop.token}` },
-      body: JSON.stringify({
+    const response = await postHttp(
+      desktop.url,
+      { Authorization: `Bearer ${desktop.token}` },
+      JSON.stringify({
         version: 1,
         environmentId: desktop.environmentId,
         method: input.method,
         params: input.params,
       }),
-    });
-    const bytes = Buffer.from(await response.arrayBuffer());
+    );
+    const bytes = response.body;
     desktop.largest = Math.max(desktop.largest, bytes.length);
     if (bytes.length > DESKTOP_LIMIT) throw "Host response is too large";
     const text = bytes.toString("utf8");

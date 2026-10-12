@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -6,18 +6,19 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { request } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AddressInfo } from "node:net";
-import { request } from "node:http";
-import { HostEngine } from "./engine";
-import { HostStore } from "./store";
-import { createHostServer } from "./server";
-import { HostChildBackend } from "./child-backend";
+import type { RemoteProvider } from "@/modules/connections/model/protocol";
 import { configureChildBackend } from "@/modules/harness/lib/harness/child";
 import type { SendTurnInput } from "@/modules/harness/lib/harness/types";
-import type { RemoteProvider } from "@/modules/connections/model/protocol";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { HostChildBackend } from "./child-backend";
+import { HostEngine } from "./engine";
+import { createHostServer } from "./server";
+import { HostStore } from "./store";
+import { postHttp } from "./test-http";
 
 const modelProbe = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/harness/lib/harness/codexCatalog", () => ({
@@ -82,20 +83,23 @@ async function setup(providers: RemoteProvider[] = ["codex"]) {
     overrides: Record<string, unknown> = {},
     headers: Record<string, string> = {},
   ) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, ...headers },
-      body: JSON.stringify({
+    const response = await postHttp(
+      url,
+      { Authorization: `Bearer ${token}`, ...headers },
+      JSON.stringify({
         version: 1,
         environmentId: store.environmentId,
         method,
         params,
         ...overrides,
       }),
-    });
+    );
     return {
       status: response.status,
-      value: (await response.json()) as { result?: any; error?: string },
+      value: JSON.parse(response.body.toString("utf8")) as {
+        result?: any;
+        error?: string;
+      },
     };
   };
   cleanups.push(async () => {

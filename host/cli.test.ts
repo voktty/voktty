@@ -1,18 +1,19 @@
-import { expect, it, vi } from "vitest";
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createServer, type AddressInfo } from "node:net";
 import {
-  mkdtempSync,
   existsSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { type AddressInfo, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { promisify } from "node:util";
+import { expect, it, vi } from "vitest";
+import { postHttp } from "./test-http";
 
 const exec = promisify(execFile);
 
@@ -71,20 +72,23 @@ it(
         (await run("pair", "--name", "Test laptop")).stdout,
       ) as { id: string; token: string; environmentId: string };
       const describe = () =>
-        fetch(`http://127.0.0.1:${port}/rpc`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${device.token}` },
-          body: JSON.stringify({
+        postHttp(
+          `http://127.0.0.1:${port}/rpc`,
+          { Authorization: `Bearer ${device.token}` },
+          JSON.stringify({
             version: 1,
             method: "environment.describe",
             params: {},
           }),
-        });
+        );
       const response = await describe();
       expect(response.status).toBe(200);
       expect(
-        ((await response.json()) as { result: { environmentId: string } })
-          .result.environmentId,
+        (
+          JSON.parse(response.body.toString("utf8")) as {
+            result: { environmentId: string };
+          }
+        ).result.environmentId,
       ).toBe(device.environmentId);
       if (process.platform !== "win32") {
         expect(statSync(directory).mode & 0o777).toBe(0o700);
