@@ -1,6 +1,7 @@
 name: Package validation
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
