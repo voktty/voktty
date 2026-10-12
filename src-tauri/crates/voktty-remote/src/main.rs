@@ -2877,7 +2877,12 @@ mod tests {
             .as_str()
             .expect("copy path")
             .to_string();
-        assert!(copied_path.ends_with("/src copy"));
+        assert_eq!(
+            Path::new(&copied_path)
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("src copy")
+        );
         assert_eq!(
             fs::read_to_string(workspace.path().join("src copy/nested/note.txt")).unwrap(),
             "copied"
