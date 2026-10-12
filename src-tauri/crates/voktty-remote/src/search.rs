@@ -67,10 +67,10 @@ impl RemoteSearchState {
         if params.pattern.trim().is_empty() {
             return Err("empty pattern".to_string());
         }
-        let search_root = resolve_search_root(root, params.cwd.as_deref())?;
+        let (workspace_root, search_root) = resolve_search_root(root, params.cwd.as_deref())?;
         let ticket = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(PreparedSearch {
-            workspace_root: root.to_path_buf(),
+            workspace_root,
             root: search_root,
             params,
             generation: self.generation.clone(),
@@ -83,9 +83,11 @@ impl RemoteSearchState {
     }
 }
 
-fn resolve_search_root(root: &Path, cwd: Option<&str>) -> Result<PathBuf, String> {
+fn resolve_search_root(root: &Path, cwd: Option<&str>) -> Result<(PathBuf, PathBuf), String> {
+    let workspace_root = std::fs::canonicalize(root)
+        .map_err(|error| format!("workspace root is not available: {error}"))?;
     let Some(cwd) = cwd.filter(|cwd| !cwd.trim().is_empty()) else {
-        return Ok(root.to_path_buf());
+        return Ok((workspace_root.clone(), workspace_root));
     };
     let normalized = cwd.replace('\\', "/");
     let relative = Path::new(&normalized);
@@ -101,15 +103,15 @@ fn resolve_search_root(root: &Path, cwd: Option<&str>) -> Result<PathBuf, String
     {
         return Err("search path must stay inside the workspace root".to_string());
     }
-    let search_root = std::fs::canonicalize(root.join(relative))
+    let search_root = std::fs::canonicalize(workspace_root.join(relative))
         .map_err(|error| format!("search directory is not available: {error}"))?;
-    if !search_root.starts_with(root) {
+    if !search_root.starts_with(&workspace_root) {
         return Err("search path is outside the workspace root".to_string());
     }
     if !search_root.is_dir() {
         return Err("search path is not a directory".to_string());
     }
-    Ok(search_root)
+    Ok((workspace_root, search_root))
 }
 
 pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
@@ -357,6 +359,28 @@ mod tests {
                 workspace.path(),
                 json!({ "pattern": "needle", "cwd": "src" }),
             )
+            .unwrap();
+        let response = run_search(search).unwrap();
+
+        assert_eq!(response["hits"].as_array().unwrap().len(), 1);
+        assert_eq!(response["hits"][0]["rel"], "src/main.ts");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn searches_a_nested_directory_through_a_workspace_path_alias() {
+        use std::os::unix::fs::symlink;
+
+        let parent = tempdir().unwrap();
+        let workspace = parent.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+        std::fs::create_dir(workspace.join("src")).unwrap();
+        std::fs::write(workspace.join("src/main.ts"), "needle\n").unwrap();
+        let alias = parent.path().join("workspace-alias");
+        symlink(&workspace, &alias).unwrap();
+
+        let search = RemoteSearchState::default()
+            .prepare(&alias, json!({ "pattern": "needle", "cwd": "src" }))
             .unwrap();
         let response = run_search(search).unwrap();
 
