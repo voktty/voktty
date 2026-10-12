@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { promisify } from "node:util";
 import {
   runPowerShell,
@@ -141,7 +141,7 @@ export function tmuxAgentCommand(
     "--port",
     String(options.port),
   ];
-  return `export PATH=${shellQuote(path)}; umask 077; exec ${args.map(shellQuote).join(" ")} >> ${shellQuote(join(options.directory, "host.log"))} 2>&1`;
+  return `export PATH=${shellQuote(path)}; umask 077; exec ${args.map(shellQuote).join(" ")} >> ${shellQuote(posix.join(options.directory, "host.log"))} 2>&1`;
 }
 
 async function startLinuxAgent(

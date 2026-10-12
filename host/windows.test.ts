@@ -163,7 +163,10 @@ try {
 it.skipIf(process.platform !== "win32")(
   "parses the Windows bootstrap with Windows PowerShell",
   () => {
-    const script = readFileSync("src-tauri/src/remote_bootstrap.ps1", "utf8")
+    const script = readFileSync(
+      "src-tauri/src/modules/harness/remote_bootstrap.ps1",
+      "utf8",
+    )
       .replace("@@VERSION@@", "'test'")
       .replace("@@RELEASE@@", "'https://example.invalid'")
       .replace("@@ACL@@", readFileSync("host/windows-acl.ps1", "utf8"));

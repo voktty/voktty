@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SendTurnInput } from "@/modules/harness/lib/harness/types";
@@ -67,11 +67,12 @@ describe("headless session ownership", () => {
     const nested = join(directory, "nested");
     mkdirSync(nested);
     const alias = join(nested, "..", "nested");
+    const canonical = realpathSync(nested);
     const authorize = vi.fn(async (_cwd: string) => {});
     const engine = new HostEngine(store, { codex: provider }, authorize);
     const project = await engine.openProject(alias);
-    expect(project.cwd).toBe(nested);
-    expect(authorize).toHaveBeenCalledWith(nested);
+    expect(project.cwd).toBe(canonical);
+    expect(authorize).toHaveBeenCalledWith(canonical);
     authorize.mockRejectedValueOnce(new Error("Denied"));
     const denied = join(directory, "denied");
     mkdirSync(denied);

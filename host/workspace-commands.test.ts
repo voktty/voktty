@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from "vitest";
 import {
   mkdtempSync,
+  realpathSync,
   readFileSync,
   rmSync,
   statSync,
@@ -24,7 +25,7 @@ function setup() {
     store.close();
     rmSync(directory, { recursive: true, force: true });
   });
-  const project = store.addProject(directory, "Project");
+  const project = store.addProject(realpathSync(directory), "Project");
   const commands = new WorkspaceCommands(store, async (_id, action) =>
     action(),
   );
