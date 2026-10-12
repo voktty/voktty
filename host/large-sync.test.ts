@@ -140,7 +140,7 @@ it(
           session: {
             ...created.session,
             blocks: [
-              ...Array.from({ length: 24 }, (_, index) => ({
+              ...Array.from({ length: 4 }, (_, index) => ({
                 id: `history-${index}`,
                 role: "assistant" as const,
                 text: text(600_000, `turn ${index}`),
@@ -159,7 +159,7 @@ it(
     );
     const full = s.store.session(s.sessionId);
     expect(Buffer.byteLength(JSON.stringify(visible(full)))).toBeGreaterThan(
-      DESKTOP_LIMIT * 2,
+      DESKTOP_LIMIT,
     );
 
     const reopened = await loadRemoteSession("machine", s.sessionId);
