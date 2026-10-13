@@ -57,6 +57,7 @@ import {
 } from "@/modules/ai/lib/keyring";
 import { useChatStore } from "@/modules/ai/store/chatStore";
 import { hasCurrentAiHealth } from "@/modules/ai/lib/availability";
+import { useEndpointProbe } from "@/modules/ai/hooks/useEndpointProbe";
 import {
   aiHealthCheckErrorDetail,
   aiHealthCheckTimeoutMs,
@@ -117,7 +118,6 @@ import {
   UserMultiple02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
@@ -1560,9 +1560,8 @@ function LocalProviderCard({
   const [modelDraft, setModelDraft] = useState(modelId);
   const [contextDraft, setContextDraft] = useState(String(contextLimit ?? ""));
   const [keyDraft, setKeyDraft] = useState("");
-  const [testStatus, setTestStatus] = useState<
-    "idle" | "testing" | "ok" | "fail"
-  >("idle");
+  const { status: testStatus, detail: testDetail, test } =
+    useEndpointProbe(urlDraft);
 
   useEffect(() => setUrlDraft(baseURL), [baseURL]);
   useEffect(() => setModelDraft(modelId), [modelId]);
@@ -1571,22 +1570,12 @@ function LocalProviderCard({
   const supportsKey =
     provider.id === "openai-compatible" || provider.id === "openrouter";
 
-  const test = async () => {
-    setTestStatus("testing");
-    try {
-      const status = await invoke<number>("lm_ping", { baseUrl: urlDraft });
-      setTestStatus(status > 0 ? "ok" : "fail");
-    } catch {
-      setTestStatus("fail");
-    }
-  };
-
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
       <div className="flex items-center gap-2">
         <ProviderIcon provider={provider.id} size={15} />
         <span className="text-[12.5px] font-medium">{provider.label}</span>
-        {configured ? (
+        {configured && testStatus === "ok" ? (
           <Badge
             variant="outline"
             className="ml-1 h-4 gap-1 border-border/60 bg-muted/40 px-1.5 text-[10px] font-normal text-muted-foreground"
@@ -1645,7 +1634,7 @@ function LocalProviderCard({
                 size="sm"
                 variant="outline"
                 onClick={() => void test()}
-                disabled={!urlDraft.trim()}
+                disabled={!urlDraft.trim() || testStatus === "testing"}
                 className="h-8 px-3 text-[11px]"
               >
                 {t("settings.models.test")}
@@ -1739,7 +1728,7 @@ function LocalProviderCard({
           </FieldRow>
         ) : null}
 
-        <StatusLine status={testStatus} />
+        <StatusLine status={testStatus} detail={testDetail} />
 
         {!modelId.trim() && meta.modelHintKey ? (
           <p className="text-[10.5px] leading-relaxed text-muted-foreground">
@@ -1775,9 +1764,8 @@ function CustomEndpointCard({
     String(endpoint.contextLimit ?? ""),
   );
   const [keyDraft, setKeyDraft] = useState("");
-  const [testStatus, setTestStatus] = useState<
-    "idle" | "testing" | "ok" | "fail"
-  >("idle");
+  const { status: testStatus, detail: testDetail, test } =
+    useEndpointProbe(urlDraft);
 
   useEffect(() => setNameDraft(endpoint.name), [endpoint.name]);
   useEffect(() => setUrlDraft(endpoint.baseURL), [endpoint.baseURL]);
@@ -1788,16 +1776,6 @@ function CustomEndpointCard({
   );
 
   const configured = !!endpoint.baseURL.trim() && !!endpoint.modelId.trim();
-
-  const test = async () => {
-    setTestStatus("testing");
-    try {
-      const status = await invoke<number>("lm_ping", { baseUrl: urlDraft });
-      setTestStatus(status > 0 ? "ok" : "fail");
-    } catch {
-      setTestStatus("fail");
-    }
-  };
 
   return (
     <div className="flex flex-col rounded-lg border border-border/60 bg-card/60">
@@ -1824,7 +1802,7 @@ function CustomEndpointCard({
             {endpoint.modelId}
           </span>
         )}
-        {configured ? (
+        {configured && testStatus === "ok" ? (
           <Badge
             variant="outline"
             className="ml-1 h-4 gap-1 border-border/60 bg-muted/40 px-1.5 text-[10px] font-normal text-muted-foreground"
@@ -1884,7 +1862,7 @@ function CustomEndpointCard({
                 size="sm"
                 variant="outline"
                 onClick={() => void test()}
-                disabled={!urlDraft.trim()}
+                disabled={!urlDraft.trim() || testStatus === "testing"}
                 className="h-8 px-3 text-[11px]"
               >
                 {t("settings.models.test")}
@@ -2009,7 +1987,7 @@ function CustomEndpointCard({
             )}
           </FieldRow>
 
-          <StatusLine status={testStatus} />
+          <StatusLine status={testStatus} detail={testDetail} />
         </div>
       )}
     </div>
@@ -2035,8 +2013,10 @@ function FieldRow({
 
 function StatusLine({
   status,
+  detail,
 }: {
   status: "idle" | "testing" | "ok" | "fail";
+  detail?: string;
 }) {
   const { t } = useTranslation();
   if (status === "idle") return null;
@@ -2056,8 +2036,9 @@ function StatusLine({
     );
   }
   return (
-    <span className="text-[10.5px] text-destructive/80">
+    <span className="flex flex-col gap-1 text-[10.5px] text-destructive/80" role="status">
       {t("settings.models.unreachable")}
+      {detail && <code className="break-words">{detail}</code>}
     </span>
   );
 }

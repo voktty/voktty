@@ -66,9 +66,9 @@ stdio starts executables without a shell, inside an authorized root and with a m
 1. Resolve the hostname once (`resolve_and_classify`).
 2. Classify every resolved IP as public, private, loopback, or blocked metadata.
 3. Block cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`, AWS IPv6 metadata, etc.).
-4. Pin reqwest to the resolved IPs so a second DNS lookup cannot return a different address (DNS rebinding).
+4. Pin reqwest to the allowed resolved IPs so a second DNS lookup cannot return a different address (DNS rebinding).
 
-Local LLM endpoints are explicitly allowed because the user opted in by pointing Voktty at them, but they are still classified and logged.
+Local LLM endpoints are explicitly allowed because the user opted in by pointing Voktty at them. If their DNS results mix a usable LAN address and a blocked link-local address, only the allowed addresses enter the pinned connection set. An address literal or hostname with no allowed result remains rejected; public-only requests continue to reject mixed private or blocked results. Private-network connections bypass system HTTP proxies so a configured LAN model is reached directly.
 
 ## Secret storage
 

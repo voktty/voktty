@@ -206,6 +206,12 @@ describe("aiHealthCheckTimeoutMs", () => {
 });
 
 describe("aiHealthCheckErrorDetail", () => {
+  it("surfaces local endpoint network failures without disclosing request URLs", () => {
+    expect(aiHealthCheckErrorDetail("compat-test", new Error(
+      "error sending request for url (http://server.local/v1?token=private): connection refused",
+    ))).toBe("error sending request for url (<endpoint>): connection refused");
+    expect(aiHealthCheckErrorDetail("compat-test", "dns: no addresses")).toBe("dns: no addresses");
+  });
   it("exposes bounded local agent errors without exposing cloud failures", () => {
     expect(
       aiHealthCheckErrorDetail(
