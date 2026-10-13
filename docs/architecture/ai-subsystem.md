@@ -8,6 +8,8 @@ The AI subsystem is BYOK (bring your own key). It supports cloud providers via `
 
 Main entry point: `runAgentStream` in `src/modules/ai/lib/agent.ts`.
 
+Agent Development exposes two views: the existing external CLI Harness and Voktty AI. The Voktty AI view reuses the native chat sessions, configured BYOK and local model picker, composer, tool approvals and edit review. Only the focused development view mounts its composer. While it owns chat presentation, sending a message or focusing the input does not open a second floating chat, and returning to the Harness keeps its live sessions mounted. Its tool cwd follows the active development project rather than an unrelated terminal.
+
 ## Providers
 
 Cloud providers are defined in `src/modules/ai/config.ts`:

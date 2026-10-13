@@ -12,6 +12,7 @@ import {
 } from "../config";
 import type { AgentUsage } from "../lib/agent";
 import { isAiRuntimeAvailable } from "../lib/runtimeAvailability";
+import { hasEmbeddedChat } from "../lib/embeddedChat";
 import {
   type CustomEndpointKeys,
   EMPTY_PROVIDER_KEYS,
@@ -339,6 +340,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
   presentChat: () => {
     const s = get();
     if (!isAiRuntimeAvailable()) return;
+    if (hasEmbeddedChat()) return;
     if (s.panelOpen) return;
     if (s.mini.open && !s.mini.collapsed) return;
     s.openMini();
@@ -348,7 +350,9 @@ export const useChatStore = create<StoreState>((set, get) => ({
   markChatRead: () => set({ unreadCount: 0 }),
   noteUnreadMessage: () =>
     set((s) => {
-      if (s.panelOpen || (s.mini.open && !s.mini.collapsed)) return s;
+      if (
+        hasEmbeddedChat() || s.panelOpen || (s.mini.open && !s.mini.collapsed)
+      ) return s;
       return { unreadCount: s.unreadCount + 1 };
     }),
 
