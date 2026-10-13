@@ -11,6 +11,11 @@ on:
 
 jobs:
   update:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(join(github.event.release.assets.*.name, ','), '_amd64.deb') &&
+       contains(github.event.release.assets.*.name, 'Voktty_x64.app.tar.gz') &&
+       contains(github.event.release.assets.*.name, 'Voktty_aarch64.app.tar.gz'))
     runs-on: ubuntu-latest
     permissions:
       contents: write

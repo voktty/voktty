@@ -30,6 +30,23 @@ The workflow has read-only repository permissions, disables updater artifacts an
 
 Only create and push a release tag after the complete package matrix is green. A successful validation proves compilation and unsigned packaging on every runner. It does not prove Apple notarization or Windows Authenticode signing, which remain separate checks when those credentials are enabled.
 
+## Desktop release publication
+
+The `Release` workflow supports version tags and manual publication. A pushed `vX.Y.Z` tag builds Windows x64, Linux x64, macOS Intel and macOS Apple Silicon. Android builds run independently on `main` or by manual dispatch, upload APKs as workflow artifacts, and never create or modify a release.
+
+For an urgent release from a tested `main` commit:
+
+1. Open Actions > Release > Run workflow and select the `main` branch.
+2. Enter a stable version, such as `1.0.18`, that has not already been published. Select Windows, Linux, macOS Apple Silicon and/or macOS Intel; Windows is selected by default.
+3. Leave `make_latest` disabled for a selective release. Enable it only when selecting every desktop platform.
+4. Run the workflow. Its captured `main` commit must already have a successful completed `CI` run. An incomplete or failing CI run blocks publication.
+
+Every build checks out the same captured commit. Version metadata in `package.json`, Tauri, Cargo and internal lockfile entries is updated only inside the build runners; the workflow does not commit a version bump to `main`. The release records its source commit, successful CI run and selected platforms, and creates the version tag automatically. A published version cannot be replaced. An unfinished draft can be retried with the same source commit and publication inputs.
+
+Selected desktop packages use the existing updater signing, optional Apple signing and SignPath Windows signing. Both Linux SSH helper architectures and all remote Host runtime packages remain included because a Windows desktop can work with Linux, macOS or Windows remote machines. Publication keeps the release in draft until the selected packages, Host packages and signed updater manifest are complete.
+
+A selective release is available from its own Releases page and download links. It does not replace the global `latest` release used by every desktop auto-updater: that manifest has a single version for all platforms. Selecting every platform and enabling `make_latest` publishes a complete auto-update release. Automatic Nix source updates run only when the required Linux and macOS assets exist.
+
 ## What must have a test
 
 `CONTRIBUTING.md` requires a test for any change that touches behavior in these load-bearing paths:
