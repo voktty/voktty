@@ -85,6 +85,7 @@ Service constant: `voktty-ai`. Keys never go in `localStorage` or logs. On Linux
 The terminal parses OSC sequences from the PTY byte stream:
 
 - **OSC 7** updates the tab cwd.
+- The authenticated SSH session root remains unchanged by OSC 7. Explorer paths are translated relative to that actual root, and navigation outside it requires a separate authenticated session.
 - **OSC 133 A/B/C/D** marks prompt/command boundaries.
 - **OSC 777** is used by the agent detector to signal coding-agent state transitions.
 
