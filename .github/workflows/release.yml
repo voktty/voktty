@@ -53,12 +53,12 @@ jobs:
       release-id: ${{ steps.plan.outputs.release-id }}
       latest: ${{ steps.plan.outputs.latest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - name: Validate source and create release draft
         id: plan
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_INPUTS: ${{ toJSON(inputs) }}
         with:
@@ -103,7 +103,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.source }}
       - name: Apply release version in build workspace
@@ -148,7 +148,7 @@ jobs:
           esac
 
       - name: Upload remote helper
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: voktty-remote-linux-${{ matrix.architecture }}
           path: src-tauri/resources/remote/linux-${{ matrix.architecture }}/
@@ -160,11 +160,11 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.source }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -184,7 +184,7 @@ jobs:
           sha256sum build/host-packages/*.tar.gz build/host-packages/*.zip > "$RUNNER_TEMP/host-second.sha256"
           diff -u "$RUNNER_TEMP/host-first.sha256" "$RUNNER_TEMP/host-second.sha256"
       - name: Upload host packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: voktty-host-packages
           path: |
@@ -210,7 +210,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.source }}
 
@@ -227,9 +227,9 @@ jobs:
             libudev-dev \
             patchelf
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -253,13 +253,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download remote helper
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: voktty-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64
 
       - name: Download ARM64 remote helper
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: voktty-remote-linux-aarch64
           path: src-tauri/resources/remote/linux-aarch64
@@ -410,7 +410,7 @@ jobs:
       - name: Upload unsigned Windows artifact
         id: upload-windows
         if: matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-unsigned
           path: signpath-staging/
@@ -421,7 +421,7 @@ jobs:
       # it takes to review and approve the request during a release.
       - name: Submit Windows installers to SignPath
         if: matrix.platform == 'windows-latest' && env.SIGNPATH_ENABLED == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@v3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: 'df665bf4-9b76-41ae-9596-1ba3a23010aa'
@@ -468,7 +468,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: voktty-host-packages
           path: host-packages
@@ -493,7 +493,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.source }}
       - name: Patch latest.json with re-signed AppImage and Windows signatures
@@ -574,7 +574,7 @@ jobs:
           gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Publish verified release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_LATEST: ${{ needs.prepare-release.outputs.latest }}
           RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
