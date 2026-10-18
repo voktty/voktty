@@ -759,11 +759,7 @@ fn parse_remote_cwd(cwd: &str) -> Option<String> {
     }
 }
 
-fn build_remote_agent_command(
-    target_dir: &str,
-    command: &str,
-    args: &[String],
-) -> String {
+fn build_remote_agent_command(target_dir: &str, command: &str, args: &[String]) -> String {
     let quoted_dir = super::remote_ssh::shell_quote(target_dir);
     let mut cmd_parts = vec![super::remote_ssh::shell_quote(command)];
     for arg in args {
@@ -781,7 +777,10 @@ fn build_remote_agent_command(
          {exec_cmd}"
     );
 
-    format!("${{SHELL:-/bin/sh}} -l -c {}", super::remote_ssh::shell_quote(&script))
+    format!(
+        "${{SHELL:-/bin/sh}} -l -c {}",
+        super::remote_ssh::shell_quote(&script)
+    )
 }
 
 /// Off the main thread: fork/exec, and `apply_gui_env` can wait on the first
@@ -3765,11 +3764,8 @@ mod binary_resolution_tests {
 
     #[test]
     fn build_remote_agent_command_constructs_login_shell_exec() {
-        let cmd = build_remote_agent_command(
-            "/workspace/project",
-            "codex",
-            &["app-server".to_string()],
-        );
+        let cmd =
+            build_remote_agent_command("/workspace/project", "codex", &["app-server".to_string()]);
         assert!(cmd.starts_with("${SHELL:-/bin/sh} -l -c "));
         assert!(cmd.contains("/workspace/project"));
         assert!(cmd.contains("exec"));
