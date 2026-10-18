@@ -20,6 +20,13 @@ vi.mock("@/modules/i18n", () => ({
         "harness.connections.manageProfiles": "Manage SSH profiles",
         "harness.connections.openFolder": "Open folder",
         "harness.connections.profilesTitle": "Saved SSH profiles",
+        "harness.connections.connect": "Connect",
+        "harness.connections.disconnect": "Disconnect",
+        "harness.connections.reconnect": "Reconnect",
+        "harness.connections.connected": "Connected",
+        "harness.connections.connecting": "Connecting...",
+        "harness.connections.disconnected": "Disconnected",
+        "harness.connections.refreshPings": "Refresh status",
       })[key] ?? key,
   }),
 }));
@@ -28,6 +35,7 @@ vi.mock("@/modules/ssh", () => ({
   formatSshSubtitle: (connection: { user?: string; host: string }) =>
     `${connection.user ? `${connection.user}@` : ""}${connection.host}`,
   useSshConnections: mocks.useSshConnections,
+  useSshPing: () => ({ pingMap: {}, refreshPings: vi.fn() }),
 }));
 
 vi.mock("@/modules/settings/openSettingsWindow", () => ({
@@ -142,6 +150,62 @@ describe("Harness connections settings", () => {
       expect(container.querySelector('[role="dialog"]')).toBeNull();
     } finally {
       window.removeEventListener("voktty:harness-select-project", selected);
+    }
+  });
+
+  it("dispatches voktty:connect-ssh when Connect is clicked", async () => {
+    const onConnect = vi.fn();
+    window.addEventListener("voktty:connect-ssh", onConnect);
+    try {
+      await render();
+      const connectBtn = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent?.includes("Connect"),
+      );
+      if (!connectBtn) throw new Error("Missing connect button");
+
+      await act(async () => connectBtn.click());
+
+      expect(onConnect).toHaveBeenCalledOnce();
+      const event = onConnect.mock.calls[0]?.[0] as CustomEvent<{
+        connection: { id: string };
+        openTab: boolean;
+      }>;
+      expect(event.detail.connection.id).toBe("profile-1");
+      expect(event.detail.openTab).toBe(false);
+    } finally {
+      window.removeEventListener("voktty:connect-ssh", onConnect);
+    }
+  });
+
+  it("shows Disconnect and Reconnect when profile is connected", async () => {
+    const { useWorkspaceEnvStore } = await import("@/modules/workspace");
+    const originalEnv = useWorkspaceEnvStore.getState().env;
+    act(() => {
+      useWorkspaceEnvStore.setState({
+        env: {
+          kind: "ssh",
+          connection: { id: "profile-1", name: "Build host", user: "dev", host: "build-host" },
+          root: "/home/dev",
+        },
+      });
+    });
+
+    const onDisconnect = vi.fn();
+    window.addEventListener("voktty:disconnect-ssh", onDisconnect);
+    try {
+      await render();
+      const disconnectBtn = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent?.includes("Disconnect"),
+      );
+      if (!disconnectBtn) throw new Error("Missing disconnect button");
+
+      await act(async () => disconnectBtn.click());
+      expect(onDisconnect).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener("voktty:disconnect-ssh", onDisconnect);
+      act(() => {
+        useWorkspaceEnvStore.setState({ env: originalEnv });
+      });
     }
   });
 });

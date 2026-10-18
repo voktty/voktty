@@ -1703,7 +1703,7 @@ function DesktopApp() {
   }, []);
 
   const startSshConnection = useCallback(
-    async (conn: SshConnection) => {
+    async (conn: SshConnection, openTab: boolean = true) => {
       const toastId = `ssh-${conn.id}`;
       const targetLabel =
         conn.name || `${conn.user ? `${conn.user}@` : ""}${conn.host}`;
@@ -1722,8 +1722,10 @@ function DesktopApp() {
         }
         if (activeSpaceId)
           useSpaces.getState().setEnv(activeSpaceId, connected);
-        const opened = newSshTab(connected.root, targetLabel, connected);
-        await waitForLeafConnection(opened.leafId);
+        if (openTab) {
+          const opened = newSshTab(connected.root, targetLabel, connected);
+          await waitForLeafConnection(opened.leafId);
+        }
         useWorkspaceEnvStore.getState().clearConnection(envCandidate);
         toast.success(t("ssh.connected", { name: targetLabel }), {
           id: toastId,
@@ -1744,9 +1746,13 @@ function DesktopApp() {
   );
 
   const handleConnectSsh = useCallback(
-    async (conn: SshConnection, forcePickSession: boolean = false) => {
+    async (
+      conn: SshConnection,
+      forcePickSession: boolean = false,
+      openTab: boolean = true,
+    ) => {
       const mode = conn.multiplexerMode ?? "auto";
-      if (mode !== "none") {
+      if (openTab && mode !== "none") {
         try {
           const probe = await probeSshMultiplexer(conn);
           if (probe.supported) {
@@ -1770,7 +1776,7 @@ function DesktopApp() {
           // If probe fails (e.g. host down or auth required in PTY), proceed to startSshConnection
         }
       }
-      await startSshConnection(conn);
+      await startSshConnection(conn, openTab);
     },
     [startSshConnection],
   );
@@ -1780,11 +1786,13 @@ function DesktopApp() {
       const customEvent = e as CustomEvent<{
         connection: SshConnection;
         forcePickSession?: boolean;
+        openTab?: boolean;
       }>;
       if (customEvent.detail?.connection) {
         void handleConnectSsh(
           customEvent.detail.connection,
           customEvent.detail.forcePickSession,
+          customEvent.detail.openTab ?? true,
         );
       }
     };
@@ -1793,6 +1801,7 @@ function DesktopApp() {
       window.removeEventListener("voktty:connect-ssh", handler);
     };
   }, [handleConnectSsh]);
+
 
   const handleConnectDocker = useCallback(
     async (conn: DockerWorkspaceConnection) => {
@@ -1927,6 +1936,16 @@ function DesktopApp() {
       t,
     ],
   );
+
+  useEffect(() => {
+    const disconnectHandler = () => {
+      void handleWorkspaceChange(LOCAL_WORKSPACE);
+    };
+    window.addEventListener("voktty:disconnect-ssh", disconnectHandler);
+    return () => {
+      window.removeEventListener("voktty:disconnect-ssh", disconnectHandler);
+    };
+  }, [handleWorkspaceChange]);
 
   const handleShareTerminal = useCallback(
     (tabId: number) => {

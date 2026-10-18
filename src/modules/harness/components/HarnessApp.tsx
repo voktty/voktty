@@ -38,6 +38,10 @@ import {
 import { listWorktrees, type Worktree } from "../lib/worktrees";
 import { sessionInWorktree } from "../lib/sessionWorktrees";
 import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
 import {
   claimDueAutomations,
   listAutomations,
@@ -4226,6 +4230,48 @@ export function HarnessApp({
       );
     }
   }, [projectCwd]);
+
+  const lastAttemptedRemoteProjectRef = useRef<string | null>(null);
+  const sshConnections = usePreferencesStore((s) => s.sshConnections);
+  const activeWorkspaceEnv = useWorkspaceEnvStore((s) => s.env);
+
+  useEffect(() => {
+    if (
+      !projectCwd ||
+      projectCwd === "~" ||
+      !projectCwd.startsWith("remote://voktty-ssh-")
+    ) {
+      lastAttemptedRemoteProjectRef.current = null;
+      return;
+    }
+    if (lastAttemptedRemoteProjectRef.current === projectCwd) {
+      return;
+    }
+    const parsed = parseRemotePath(projectCwd);
+    if (!parsed) return;
+    const connId = remoteSshConnectionIdForEnvironment(parsed.environmentId);
+    if (!connId) return;
+    const profile = sshConnections?.find((c) => c.id === connId);
+    if (!profile) return;
+    if (
+      activeWorkspaceEnv.kind === "ssh" &&
+      activeWorkspaceEnv.connection.id === profile.id
+    ) {
+      lastAttemptedRemoteProjectRef.current = projectCwd;
+      return;
+    }
+    lastAttemptedRemoteProjectRef.current = projectCwd;
+    window.dispatchEvent(
+      new CustomEvent("voktty:connect-ssh", {
+        detail: {
+          connection: profile,
+          forcePickSession: false,
+          openTab: false,
+        },
+      }),
+    );
+  }, [projectCwd, sshConnections, activeWorkspaceEnv]);
+
 
   const initialSessionHandled = useRef(false);
   useEffect(() => {

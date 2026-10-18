@@ -4820,9 +4820,22 @@ export const es: TranslationSchema = {
     connections: {
       intro:
         "Harness usa los perfiles SSH guardados en Voktty. Abre una carpeta remota para añadirla como proyecto. Las terminales remotas siguen la configuración tmux del perfil para recuperar sesiones cuando está disponible.",
+      title: "Conexiones y accesos remotos",
       profilesTitle: "Perfiles SSH guardados",
       manageProfiles: "Gestionar perfiles SSH",
       addProfile: "Añadir perfil SSH",
+      connect: "Conectar",
+      disconnect: "Desconectar",
+      reconnect: "Reconectar",
+      connected: "Conectado",
+      connecting: "Conectando…",
+      disconnected: "Desconectado",
+      currentProject: "Proyecto activo",
+      refreshPings: "Actualizar estado",
+      pinging: "Comprobando…",
+      offline: "Sin respuesta",
+      remoteHarnessDesc:
+        "Permite ejecutar agentes de IA (Codex, Claude, etc.) y comandos en servidores SSH remotos con estado y feedback en tiempo real.",
       openFolder: "Abrir carpeta",
       openRemoteProject: "Abrir proyecto remoto",
       emptyTitle: "No hay perfiles SSH guardados",
@@ -4847,7 +4860,6 @@ export const es: TranslationSchema = {
         control:
           "La ruta no puede contener saltos de línea ni caracteres de control.",
       },
-      connecting: "Conectando por SSH…",
       folders: "Carpetas",
       noSubfolders: "No hay subcarpetas",
       loadingFolders: "Conectando y cargando carpetas…",

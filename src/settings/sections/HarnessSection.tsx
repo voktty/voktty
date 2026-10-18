@@ -63,6 +63,22 @@ import { SectionHeader } from "../components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { HarnessProviderAccounts } from "@/modules/harness/components/HarnessProviderAccounts";
 import { HarnessUsageDisplaySettings } from "@/modules/harness/components/HarnessUsageDisplaySettings";
+import {
+  formatSshSubtitle,
+  type SshConnection,
+  useSshConnections,
+  useSshPing,
+} from "@/modules/ssh";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import {
+  PlayIcon,
+  Refresh01Icon,
+  ServerStack01Icon,
+  StopIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 function Row({
   label,
@@ -369,6 +385,166 @@ function ProvidersBlock() {
   );
 }
 
+function RemoteConnectionsBlock() {
+  const { t } = useTranslation();
+  const connections = useSshConnections();
+  const { pingMap, refreshPings } = useSshPing(connections, true);
+  const env = useWorkspaceEnvStore((s) => s.env);
+  const activeSshConn = env.kind === "ssh" ? env.connection : null;
+
+  const handleConnect = (conn: SshConnection) => {
+    window.dispatchEvent(
+      new CustomEvent("voktty:connect-ssh", {
+        detail: { connection: conn, forcePickSession: false, openTab: false },
+      }),
+    );
+  };
+
+  const handleDisconnect = () => {
+    window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
+  };
+
+  return (
+    <section
+      className="flex flex-col gap-2"
+      data-setting-title={t("harness.connections.title")}
+    >
+      <SubHeading title={t("harness.connections.title")} />
+      <p className="pb-2 text-[12px] leading-relaxed text-muted-foreground">
+        {t("harness.connections.remoteHarnessDesc")}
+      </p>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-border/40 bg-card/40 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <HugeiconsIcon
+              icon={ServerStack01Icon}
+              size={16}
+              className="text-primary"
+            />
+            <span className="text-[13px] font-medium text-foreground">
+              {connections.length === 0
+                ? t("harness.connections.emptyTitle")
+                : `${connections.length} ${
+                    connections.length === 1
+                      ? "perfil SSH guardado"
+                      : "perfiles SSH guardados"
+                  }`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-[11px] gap-1 cursor-pointer"
+              onClick={() => void refreshPings()}
+              title={t("harness.connections.refreshPings")}
+            >
+              <HugeiconsIcon icon={Refresh01Icon} size={12} />
+              <span>{t("harness.connections.refreshPings")}</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-[11px] gap-1 cursor-pointer"
+              onClick={() => void openSettingsWindow("ssh")}
+            >
+              <HugeiconsIcon icon={ServerStack01Icon} size={12} />
+              <span>{t("harness.connections.manageProfiles")}</span>
+            </Button>
+          </div>
+        </div>
+
+        {connections.length > 0 ? (
+          <div className="mt-2 divide-y divide-border/30 rounded-lg border border-border/30 overflow-hidden bg-background/50">
+            {connections.map((conn) => {
+              const pingStatus = pingMap[conn.id];
+              const isConnected =
+                activeSshConn &&
+                (activeSshConn.id === conn.id ||
+                  (activeSshConn.host === conn.host &&
+                    (activeSshConn.port ?? 22) === (conn.port ?? 22)));
+
+              return (
+                <div
+                  key={conn.id}
+                  className={`flex items-center justify-between gap-3 px-3 py-2 text-[12px] ${
+                    isConnected ? "bg-emerald-500/5" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className={`size-2 rounded-full shrink-0 ${
+                        isConnected
+                          ? "bg-emerald-500 animate-pulse"
+                          : pingStatus?.online
+                            ? "bg-emerald-500/70"
+                            : pingStatus && !pingStatus.online
+                              ? "bg-rose-500"
+                              : "bg-muted-foreground/40"
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <div className="font-medium text-foreground truncate">
+                        {conn.name}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate font-mono">
+                        {formatSshSubtitle(conn)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {pingStatus?.online ? (
+                      <span className="font-mono text-[11px] text-emerald-500">
+                        {pingStatus.latencyMs ?? 0} ms
+                      </span>
+                    ) : null}
+
+                    {isConnected ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
+                        <HugeiconsIcon
+                          icon={Tick02Icon}
+                          size={12}
+                          strokeWidth={2.5}
+                        />
+                        {t("harness.connections.connected")}
+                      </span>
+                    ) : null}
+
+                    {isConnected ? (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-6 px-2 text-[11px] gap-1 cursor-pointer"
+                        onClick={handleDisconnect}
+                      >
+                        <HugeiconsIcon icon={StopIcon} size={11} />
+                        {t("harness.connections.disconnect")}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-6 px-2 text-[11px] gap-1 cursor-pointer"
+                        onClick={() => handleConnect(conn)}
+                      >
+                        <HugeiconsIcon icon={PlayIcon} size={11} />
+                        {t("harness.connections.connect")}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { t } = useTranslation();
   return (
@@ -383,6 +559,7 @@ export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
       <GeneralBlock />
       <HarnessProviderAccounts />
       <HarnessUsageDisplaySettings />
+      <RemoteConnectionsBlock />
       <SubHeading title={t("harness.settings.providers")} />
       <ProvidersBlock />
     </div>
