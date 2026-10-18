@@ -196,13 +196,17 @@ export function verifyUpdaterManifest(manifest, plan, repository) {
     )
       throw new Error(`Updater manifest is missing ${target.selection}.`);
   }
-  const expectedUrl = `https://github.com/${repository}/releases/download/${plan.tag}/`;
+  const expectedDownloadUrl = `https://github.com/${repository}/releases/download/${plan.tag}/`;
+  const expectedApiUrl = `https://api.github.com/repos/${repository}/releases/assets/`;
   for (const [, entry] of entries) {
+    const validUrl =
+      typeof entry.url === "string" &&
+      (entry.url.startsWith(expectedDownloadUrl) ||
+        entry.url.startsWith(expectedApiUrl));
     if (
       typeof entry.signature !== "string" ||
       !entry.signature.trim() ||
-      typeof entry.url !== "string" ||
-      !entry.url.startsWith(expectedUrl)
+      !validUrl
     )
       throw new Error(
         "Updater entry has no signature or points outside this release.",

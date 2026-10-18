@@ -171,6 +171,15 @@ test("publication requires signed updater entries for the selected platforms and
     platforms: { "windows-x86_64-nsis": entry },
   };
   verifyUpdaterManifest(manifest, plan, "voktty/voktty");
+  const apiEntry = {
+    signature: "signed",
+    url: "https://api.github.com/repos/voktty/voktty/releases/assets/12345",
+  };
+  verifyUpdaterManifest(
+    { ...manifest, platforms: { "windows-x86_64-nsis": apiEntry } },
+    plan,
+    "voktty/voktty",
+  );
   assert.throws(() =>
     verifyUpdaterManifest(
       { ...manifest, version: "1.2.3" },
@@ -190,6 +199,10 @@ test("publication requires signed updater entries for the selected platforms and
     {
       ...entry,
       url: "https://github.com/voktty/voktty/releases/download/v1.2.3/installer.exe",
+    },
+    {
+      ...entry,
+      url: "https://api.github.com/repos/other/voktty/releases/assets/12345",
     },
   ])
     assert.throws(() =>
