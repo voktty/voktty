@@ -43,11 +43,15 @@ export const useHarnessEnvStore = create<HarnessEnvState>((set, get) => ({
     set({ connecting: true, error: null });
     try {
       const nativeConn = remoteSshConnectionForProfile(profile);
-      const root = targetRoot?.trim() || profile.initialDirectory?.trim() || "/";
+      const candidateRoot = targetRoot?.trim();
+      const root =
+        candidateRoot && candidateRoot !== "~"
+          ? candidateRoot
+          : (profile.initialDirectory?.trim() || ".");
       const session: RemoteSessionInfo = await openRemoteWorkspace(
         nativeConn,
         root,
-      ).catch(() => openRemoteWorkspace(nativeConn, "/"));
+      ).catch(() => openRemoteWorkspace(nativeConn, "."));
       const nextEnv: HarnessRemoteEnv = {
         kind: "ssh",
         connection: profile,

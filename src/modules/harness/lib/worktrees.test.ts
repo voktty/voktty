@@ -44,6 +44,16 @@ vi.mock("@/modules/connections/model/remoteSshProfiles", () => ({
     environmentId.startsWith("voktty-ssh-")
       ? environmentId.slice("voktty-ssh-".length)
       : undefined,
+  findSshProfile: (
+    environmentId: string,
+    savedConnections?: Array<Record<string, unknown>>,
+  ) => {
+    const list = savedConnections ?? mocks.sshConnections;
+    const targetId = environmentId.startsWith("voktty-ssh-")
+      ? environmentId.slice("voktty-ssh-".length)
+      : environmentId;
+    return list.find((c) => c.id === targetId || c.id === environmentId);
+  },
 }));
 vi.mock("./fs", () => ({ notifyGitChanged: mocks.notifyGitChanged }));
 vi.mock("@/modules/settings/preferences", () => ({

@@ -4,6 +4,7 @@ import {
   findSshProfile,
   remoteSshConnectionFor,
   remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
@@ -66,6 +67,8 @@ async function openService(
   let connection: RemoteSshConnection;
   if (profile) {
     connection = remoteSshConnectionForProfile(profile);
+  } else if (remoteSshConnectionIdForEnvironment(environmentId)) {
+    throw new Error("The saved SSH connection for this project is missing.");
   } else {
     const machine = await dependencies.machineFor(environmentId);
     if (!machine) throw new Error("The remote machine is no longer connected.");

@@ -42,6 +42,17 @@ vi.mock("@/modules/settings/openSettingsWindow", () => ({
   openSettingsWindow: mocks.openSettingsWindow,
 }));
 
+vi.mock("@/modules/remote/client", () => ({
+  openRemoteWorkspace: vi.fn().mockResolvedValue({
+    session_id: 1,
+    architecture: "x86_64",
+    workspace_root: "/home/dev",
+    helper_version: "1.0",
+    capabilities: [],
+  }),
+  closeRemoteWorkspace: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/modules/connections", () => ({
   AddRemoteProjectDialog: ({
     initialConnectionId,
@@ -153,9 +164,9 @@ describe("Harness connections settings", () => {
     }
   });
 
-  it("dispatches voktty:connect-ssh when Connect is clicked", async () => {
-    const onConnect = vi.fn();
-    window.addEventListener("voktty:connect-ssh", onConnect);
+  it("selects remote project in Harness when Connect is clicked", async () => {
+    const onSelectProject = vi.fn();
+    window.addEventListener("voktty:harness-select-project", onSelectProject);
     try {
       await render();
       const connectBtn = Array.from(container.querySelectorAll("button")).find(
@@ -165,33 +176,32 @@ describe("Harness connections settings", () => {
 
       await act(async () => connectBtn.click());
 
-      expect(onConnect).toHaveBeenCalledOnce();
-      const event = onConnect.mock.calls[0]?.[0] as CustomEvent<{
-        connection: { id: string };
-        openTab: boolean;
+      expect(onSelectProject).toHaveBeenCalledOnce();
+      const event = onSelectProject.mock.calls[0]?.[0] as CustomEvent<{
+        path: string;
       }>;
-      expect(event.detail.connection.id).toBe("profile-1");
-      expect(event.detail.openTab).toBe(false);
+      expect(event.detail.path).toBe("remote://voktty-ssh-profile-1/home/dev");
     } finally {
-      window.removeEventListener("voktty:connect-ssh", onConnect);
+      window.removeEventListener("voktty:harness-select-project", onSelectProject);
     }
   });
 
   it("shows Disconnect and Reconnect when profile is connected", async () => {
-    const { useWorkspaceEnvStore } = await import("@/modules/workspace");
-    const originalEnv = useWorkspaceEnvStore.getState().env;
+    const { useHarnessEnvStore } = await import("../lib/harnessEnvStore");
+    const originalEnv = useHarnessEnvStore.getState().env;
     act(() => {
-      useWorkspaceEnvStore.setState({
+      useHarnessEnvStore.setState({
         env: {
           kind: "ssh",
           connection: { id: "profile-1", name: "Build host", user: "dev", host: "build-host" },
           root: "/home/dev",
+          sessionId: 1,
         },
       });
     });
 
-    const onDisconnect = vi.fn();
-    window.addEventListener("voktty:disconnect-ssh", onDisconnect);
+    const onSelectProject = vi.fn();
+    window.addEventListener("voktty:harness-select-project", onSelectProject);
     try {
       await render();
       const disconnectBtn = Array.from(container.querySelectorAll("button")).find(
@@ -200,11 +210,15 @@ describe("Harness connections settings", () => {
       if (!disconnectBtn) throw new Error("Missing disconnect button");
 
       await act(async () => disconnectBtn.click());
-      expect(onDisconnect).toHaveBeenCalledOnce();
+      expect(onSelectProject).toHaveBeenCalledOnce();
+      const event = onSelectProject.mock.calls[0]?.[0] as CustomEvent<{
+        path: string;
+      }>;
+      expect(event.detail.path).toBe("~");
     } finally {
-      window.removeEventListener("voktty:disconnect-ssh", onDisconnect);
+      window.removeEventListener("voktty:harness-select-project", onSelectProject);
       act(() => {
-        useWorkspaceEnvStore.setState({ env: originalEnv });
+        useHarnessEnvStore.setState({ env: originalEnv });
       });
     }
   });

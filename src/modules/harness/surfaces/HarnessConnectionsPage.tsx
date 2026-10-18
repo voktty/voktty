@@ -1,8 +1,9 @@
 import { AddRemoteProjectDialog } from "@/modules/connections";
-import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { parseRemotePath, remotePath } from "@/modules/connections/model/remoteProjects";
 import {
   findSshProfile,
   remoteSshConnectionIdForEnvironment,
+  remoteSshEnvironmentId,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { useTranslation } from "@/modules/i18n";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
@@ -43,7 +44,6 @@ export function HarnessConnectionsPage() {
   const harnessEnv = useHarnessEnvStore((s) => s.env);
   const isHarnessConnecting = useHarnessEnvStore((s) => s.connecting);
   const harnessError = useHarnessEnvStore((s) => s.error);
-  const env = useWorkspaceEnvStore((s) => s.env);
   const connectionAttempts = useWorkspaceEnvStore((s) => s.connectionAttempts);
 
   const currentProjectPath = lastProjectPath() ?? "";
@@ -60,31 +60,50 @@ export function HarnessConnectionsPage() {
 
   const handleConnect = async (conn: SshConnection) => {
     try {
-      await useHarnessEnvStore.getState().connect(conn);
-    } catch {}
-    window.dispatchEvent(
-      new CustomEvent("voktty:connect-ssh", {
-        detail: { connection: conn, forcePickSession: false, openTab: false },
-      }),
-    );
+      const nextEnv = await useHarnessEnvStore.getState().connect(conn);
+      if (nextEnv.kind === "ssh") {
+        const remoteUri = remotePath(
+          remoteSshEnvironmentId(conn.id),
+          nextEnv.root,
+        );
+        window.dispatchEvent(
+          new CustomEvent("voktty:harness-select-project", {
+            detail: { path: remoteUri },
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("[harness] Failed to connect:", err);
+    }
   };
 
   const handleDisconnect = async () => {
     await useHarnessEnvStore.getState().disconnect();
-    window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
+    window.dispatchEvent(
+      new CustomEvent("voktty:harness-select-project", {
+        detail: { path: "~" },
+      }),
+    );
   };
 
   const handleReconnect = async (conn: SshConnection) => {
     await useHarnessEnvStore.getState().disconnect();
-    window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
-    setTimeout(() => {
-      void useHarnessEnvStore.getState().connect(conn).catch(() => {});
-      window.dispatchEvent(
-        new CustomEvent("voktty:connect-ssh", {
-          detail: { connection: conn, forcePickSession: false, openTab: false },
-        }),
-      );
-    }, 150);
+    try {
+      const nextEnv = await useHarnessEnvStore.getState().connect(conn);
+      if (nextEnv.kind === "ssh") {
+        const remoteUri = remotePath(
+          remoteSshEnvironmentId(conn.id),
+          nextEnv.root,
+        );
+        window.dispatchEvent(
+          new CustomEvent("voktty:harness-select-project", {
+            detail: { path: remoteUri },
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("[harness] Failed to reconnect:", err);
+    }
   };
 
   const onRefreshPingsClick = async () => {
@@ -159,17 +178,12 @@ export function HarnessConnectionsPage() {
               const isConnFailed =
                 Boolean(harnessError) || connectionAttempt?.state.phase === "failed";
               const isSshActive =
-                (harnessEnv.kind === "ssh" &&
-                  (harnessEnv.connection.id === connection.id ||
-                    (harnessEnv.connection.host.toLowerCase() ===
-                      connection.host.toLowerCase() &&
-                      (harnessEnv.connection.port ?? 22) ===
-                        (connection.port ?? 22)))) ||
-                (env.kind === "ssh" &&
-                  (env.connection.id === connection.id ||
-                    (env.connection.host.toLowerCase() ===
-                      connection.host.toLowerCase() &&
-                      (env.connection.port ?? 22) === (connection.port ?? 22))));
+                harnessEnv.kind === "ssh" &&
+                (harnessEnv.connection.id === connection.id ||
+                  (harnessEnv.connection.host.toLowerCase() ===
+                    connection.host.toLowerCase() &&
+                    (harnessEnv.connection.port ?? 22) ===
+                      (connection.port ?? 22)));
               const isCurrentProject = currentConnectionId === connection.id;
 
               return (

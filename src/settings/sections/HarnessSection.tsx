@@ -69,13 +69,13 @@ import {
   useSshConnections,
   useSshPing,
 } from "@/modules/ssh";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
-import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { parseRemotePath, remotePath } from "@/modules/connections/model/remoteProjects";
 import {
   findSshProfile,
   remoteSshConnectionIdForEnvironment,
+  remoteSshEnvironmentId,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
@@ -398,13 +398,8 @@ function RemoteConnectionsBlock() {
   const { pingMap, refreshPings } = useSshPing(connections, true);
   const harnessEnv = useHarnessEnvStore((s) => s.env);
   const isHarnessConnecting = useHarnessEnvStore((s) => s.connecting);
-  const env = useWorkspaceEnvStore((s) => s.env);
   const activeSshConn =
-    harnessEnv.kind === "ssh"
-      ? harnessEnv.connection
-      : env.kind === "ssh"
-        ? env.connection
-        : null;
+    harnessEnv.kind === "ssh" ? harnessEnv.connection : null;
   const currentProjectPath = lastProjectPath() ?? "";
   const parsedCurrentProject = parseRemotePath(currentProjectPath);
   const currentConnectionId = parsedCurrentProject
@@ -414,18 +409,30 @@ function RemoteConnectionsBlock() {
 
   const handleConnect = async (conn: SshConnection) => {
     try {
-      await useHarnessEnvStore.getState().connect(conn);
-    } catch {}
-    window.dispatchEvent(
-      new CustomEvent("voktty:connect-ssh", {
-        detail: { connection: conn, forcePickSession: false, openTab: false },
-      }),
-    );
+      const nextEnv = await useHarnessEnvStore.getState().connect(conn);
+      if (nextEnv.kind === "ssh") {
+        const remoteUri = remotePath(
+          remoteSshEnvironmentId(conn.id),
+          nextEnv.root,
+        );
+        window.dispatchEvent(
+          new CustomEvent("voktty:harness-select-project", {
+            detail: { path: remoteUri },
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("[harness] Failed to connect:", err);
+    }
   };
 
   const handleDisconnect = async () => {
     await useHarnessEnvStore.getState().disconnect();
-    window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
+    window.dispatchEvent(
+      new CustomEvent("voktty:harness-select-project", {
+        detail: { path: "~" },
+      }),
+    );
   };
 
   return (
