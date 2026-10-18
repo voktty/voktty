@@ -172,11 +172,7 @@ export function HarnessConnectionsPage() {
                         {isConnConnecting ? (
                           <Loader className="size-4 animate-spin" />
                         ) : isConnFailed ? (
-                          <HugeiconsIcon
-                            icon={AlertCircleIcon}
-                            size={16}
-                            strokeWidth={2}
-                          />
+                          <CircleAlert className="size-4" strokeWidth={2} />
                         ) : (
                           <Internet className="size-4" />
                         )}

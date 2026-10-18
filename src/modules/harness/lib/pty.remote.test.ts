@@ -39,6 +39,7 @@ vi.mock("@/modules/ssh/types", () => ({
   probeSshMultiplexer: mocks.probeSshMultiplexer,
 }));
 
+import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { killPty, spawnPty } from "./pty";
 
 const projectPath = "remote://voktty-ssh-profile-1/srv/app";
@@ -81,6 +82,7 @@ describe("Harness remote terminals", () => {
       sessions: [],
     });
     mocks.openPty.mockResolvedValue(fakePty(91));
+    useWorkspaceEnvStore.setState({ env: { kind: "local" } });
   });
 
   it("opens the Harness PTY through the saved profile's native SSH helper", async () => {
@@ -118,12 +120,77 @@ describe("Harness remote terminals", () => {
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(71);
   });
 
-  it("rejects remote paths outside a saved project instead of opening locally", async () => {
+  it("reuses active SSH session without spawning a new workspace helper", async () => {
+    useWorkspaceEnvStore.setState({
+      env: {
+        kind: "ssh",
+        connection: profile,
+        root: "/srv/app",
+        sessionId: 42,
+      },
+    });
+
+    await spawnPty("active-ssh-terminal", projectPath, 100, 32);
+
+    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+    expect(mocks.openPty).toHaveBeenCalledWith(
+      100,
+      32,
+      expect.objectContaining({ onData: expect.any(Function) }),
+      "/srv/app",
+      false,
+      undefined,
+      undefined,
+      {
+        kind: "ssh",
+        connection: profile,
+        root: "/srv/app",
+        sessionId: 42,
+      },
+    );
+
+    await killPty("active-ssh-terminal");
+    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("allows ad-hoc remote paths not registered in saved projects", async () => {
     mocks.remoteProjectForPath.mockReturnValue(undefined);
+
+    await spawnPty(
+      "adhoc-remote",
+      "remote://voktty-ssh-profile-1/workspace/pepe",
+      80,
+      24,
+    );
+
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "build-host" }),
+      "/workspace/pepe",
+    );
+    expect(mocks.openPty).toHaveBeenCalledWith(
+      80,
+      24,
+      expect.anything(),
+      "/workspace/pepe",
+      false,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        kind: "ssh",
+        sessionId: 71,
+      }),
+    );
+  });
+
+  it("rejects remote paths with conflicting project environment", async () => {
+    mocks.remoteProjectForPath.mockReturnValue({
+      environmentId: "different-env-id",
+      cwd: "/srv/other",
+    });
 
     await expect(
       spawnPty(
-        "outside-project",
+        "conflicting-project",
         "remote://voktty-ssh-profile-1/srv/other",
         80,
         24,

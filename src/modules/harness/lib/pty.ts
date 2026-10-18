@@ -11,8 +11,10 @@ import {
 import {
   remoteSshConnectionForProfile,
   remoteSshConnectionIdForEnvironment,
+  remoteSshEnvironmentId,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
 import {
   shouldPickSshMultiplexer,
   sshMultiplexerSettingsForSelection,
@@ -103,6 +105,65 @@ function closeRemoteWorkspaceOnce(id: string, sessionId: number) {
   return close;
 }
 
+function findSshProfile(environmentId: string): SshConnection | undefined {
+  const activeEnv = useWorkspaceEnvStore.getState().env;
+  const decodedId = remoteSshConnectionIdForEnvironment(environmentId);
+  const candidateId = decodedId ?? environmentId;
+
+  // 1. Check if the active workspace SSH connection matches
+  if (activeEnv.kind === "ssh") {
+    const activeConn = activeEnv.connection;
+    if (
+      activeConn.id === candidateId ||
+      activeConn.id === environmentId ||
+      (decodedId && activeConn.id === decodedId) ||
+      remoteSshEnvironmentId(activeConn.id) === environmentId ||
+      activeConn.name.toLowerCase() === candidateId.toLowerCase() ||
+      activeConn.host.toLowerCase() === candidateId.toLowerCase()
+    ) {
+      return activeConn;
+    }
+  }
+
+  // 2. Check saved connections in preferences
+  const saved = usePreferencesStore.getState().sshConnections;
+  const directMatch = saved.find(
+    (c) =>
+      c.id === candidateId ||
+      c.id === environmentId ||
+      (decodedId && c.id === decodedId) ||
+      remoteSshEnvironmentId(c.id) === environmentId,
+  );
+  if (directMatch) return directMatch;
+
+  const nameOrHostMatch = saved.find(
+    (c) =>
+      c.name?.toLowerCase() === candidateId.toLowerCase() ||
+      c.host?.toLowerCase() === candidateId.toLowerCase() ||
+      c.name?.toLowerCase() === environmentId.toLowerCase() ||
+      c.host?.toLowerCase() === environmentId.toLowerCase(),
+  );
+  if (nameOrHostMatch) return nameOrHostMatch;
+
+  const sshConfigAlias = environmentId.match(/^ssh-config-(.+)-\d+-[a-z0-9]+$/)?.[1];
+  if (sshConfigAlias) {
+    const aliasMatch = saved.find(
+      (c) =>
+        c.name?.toLowerCase() === sshConfigAlias.toLowerCase() ||
+        c.host?.toLowerCase() === sshConfigAlias.toLowerCase() ||
+        c.id.includes(sshConfigAlias),
+    );
+    if (aliasMatch) return aliasMatch;
+  }
+
+  // 3. Fallback to active SSH workspace connection if present
+  if (activeEnv.kind === "ssh" && activeEnv.connection) {
+    return activeEnv.connection;
+  }
+
+  return undefined;
+}
+
 async function openRemoteTerminalTarget(
   id: string,
   cwd: string,
@@ -117,20 +178,11 @@ async function openRemoteTerminalTarget(
   }
 
   const project = remoteProjectForPath(cwd);
-  if (!project || project.environmentId !== remotePath.environmentId) {
+  if (project && project.environmentId !== remotePath.environmentId) {
     throw new Error("Remote terminal path is outside a saved project.");
   }
 
-  const connectionId = remoteSshConnectionIdForEnvironment(
-    remotePath.environmentId,
-  );
-  if (!connectionId) {
-    throw new Error("Remote terminal requires a saved Voktty SSH profile.");
-  }
-
-  const profile = usePreferencesStore
-    .getState()
-    .sshConnections.find((connection) => connection.id === connectionId);
+  const profile = findSshProfile(remotePath.environmentId);
   if (!profile) {
     throw new Error("The saved SSH connection for this project is missing.");
   }
@@ -146,6 +198,27 @@ async function openRemoteTerminalTarget(
         ...sshMultiplexerSettingsForSelection(profile, selection),
       };
     }
+  }
+
+  const activeEnv = useWorkspaceEnvStore.getState().env;
+  const canReuseActiveSession =
+    activeEnv.kind === "ssh" &&
+    activeEnv.sessionId !== undefined &&
+    (activeEnv.connection.id === profile.id ||
+      activeEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+      activeEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
+
+  if (canReuseActiveSession && activeEnv.kind === "ssh" && activeEnv.sessionId !== undefined) {
+    return {
+      cwd: remotePath.hostPath,
+      workspace: {
+        kind: "ssh" as const,
+        connection: selectedProfile,
+        root: activeEnv.root || remotePath.hostPath,
+        sessionId: activeEnv.sessionId,
+      },
+      close: undefined,
+    };
   }
 
   const nativeConnection: RemoteSshConnection = {
