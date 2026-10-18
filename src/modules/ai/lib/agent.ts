@@ -176,13 +176,15 @@ export async function buildLanguageModel(
           "OpenAI-compatible provider has no base URL. Set it in Settings → Models.",
         );
       }
+      const activeKey = epKey || key || undefined;
       const { createOpenAICompatible } = await import(
         "@ai-sdk/openai-compatible"
       );
       built = createOpenAICompatible({
         name: "openai-compatible",
         baseURL: compatURL,
-        apiKey: epKey || key || undefined,
+        apiKey: activeKey,
+        headers: activeKey ? { "api-key": activeKey } : undefined,
         fetch: localProxyFetch,
       })(resolvedModelId);
       break;
