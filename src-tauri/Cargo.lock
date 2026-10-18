@@ -9122,7 +9122,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "tempfile",
  "tokio",
- "toml 0.8.2",
+ "toml 1.1.2+spec-1.1.0",
  "tungstenite",
  "unicode-normalization",
  "ureq",
