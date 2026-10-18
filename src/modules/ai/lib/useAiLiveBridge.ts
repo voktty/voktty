@@ -90,6 +90,43 @@ export function useAiLiveBridge(params: Params) {
       );
     };
 
+    const getTabCwd = (tab: Tab): string | null => {
+      if (tab.kind === "terminal") {
+        return findLeafCwd(tab.paneTree, tab.activeLeafId) ?? tab.cwd ?? null;
+      }
+      if ("cwd" in tab && typeof tab.cwd === "string") {
+        return tab.cwd;
+      }
+      return null;
+    };
+
+    const isLocalExplorerRoot = (root: string | null | undefined): boolean => {
+      if (!isLocalPath(root)) return false;
+      const { activeId, tabs } = ref.current;
+      const active = tabs.find((x) => x.id === activeId);
+      if (active && !isLocalTab(active)) {
+        const activeCwd = getTabCwd(active);
+        if (root === activeCwd) return false;
+        if (
+          "workspaceEnv" in active &&
+          active.workspaceEnv &&
+          "root" in active.workspaceEnv &&
+          active.workspaceEnv.root === root
+        ) {
+          return false;
+        }
+      }
+      return !tabs.some(
+        (t) =>
+          !isLocalTab(t) &&
+          (getTabCwd(t) === root ||
+            ("workspaceEnv" in t &&
+              t.workspaceEnv &&
+              "root" in t.workspaceEnv &&
+              t.workspaceEnv.root === root)),
+      );
+    };
+
     const findLocalCwd = (): string | null => {
       const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
       const active = tabs.find((x) => x.id === activeId);
@@ -111,7 +148,7 @@ export function useAiLiveBridge(params: Params) {
         const cwd = findLeafCwd(t.paneTree, t.activeLeafId) ?? t.cwd;
         if (cwd && isLocalPath(cwd)) return cwd;
       }
-      if (isLocalPath(explorerRoot)) return explorerRoot;
+      if (isLocalExplorerRoot(explorerRoot)) return explorerRoot;
       if (isLocalPath(launchCwd)) return launchCwd;
       if (isLocalPath(home)) return home;
       return null;
@@ -119,7 +156,7 @@ export function useAiLiveBridge(params: Params) {
 
     const findLocalWorkspaceRoot = (): string | null => {
       const { explorerRoot, launchCwd, home } = ref.current;
-      if (isLocalPath(explorerRoot)) return explorerRoot;
+      if (isLocalExplorerRoot(explorerRoot)) return explorerRoot;
       if (isLocalPath(launchCwd)) return launchCwd;
       if (isLocalPath(home)) return home;
       return null;
