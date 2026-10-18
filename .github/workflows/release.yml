@@ -75,7 +75,7 @@ jobs:
               ciUrl = requireGreenMain(data.workflow_runs, source);
             }
             applyVersion(process.cwd(), plan.version);
-            const notFound = (error) => { if (error.status !== 404) throw error; return null; };
+            const notFound = (error) => { if (error.status !== 404 && error.status !== 422) throw error; return null; };
             const existingTag = await github.rest.repos.getCommit({ ...context.repo, ref: `tags/${plan.tag}` }).catch(notFound);
             if (existingTag && existingTag.data.sha !== source) throw new Error('Release tag points to a different commit. Choose a new version.');
             const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
