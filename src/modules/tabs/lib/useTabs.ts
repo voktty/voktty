@@ -14,7 +14,6 @@ import {
   type PaneNode,
   removeLeaf,
   type SplitDir,
-  setLeafCwd as setLeafCwdInTree,
   siblingLeafOf,
   splitLeaf,
   swapLeafInDirection,
@@ -51,6 +50,7 @@ import {
   type WorkspaceScopeId,
 } from "./tabIdentity";
 import type { TabIconId } from "./tabIcon";
+import { updateTerminalCwd } from "./updateTerminalCwd";
 
 export { MAX_PANES_PER_TAB } from "@/modules/terminal/lib/paneLimits";
 
@@ -1910,22 +1910,10 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     setTabs((curr) => {
       let changed = false;
       const next = curr.map((t) => {
-        if (t.kind !== "terminal" || !hasLeaf(t.paneTree, leafId)) return t;
-        const paneTree = setLeafCwdInTree(t.paneTree, leafId, cwd);
-        const isActive = t.activeLeafId === leafId;
-        const cwdChanged = isActive && t.cwd !== cwd;
-        if (paneTree === t.paneTree && !cwdChanged) return t;
+        const updated = updateTerminalCwd(t, leafId, cwd);
+        if (updated === t) return t;
         changed = true;
-        const workspaceEnv =
-          cwdChanged && t.workspaceEnv?.kind === "ssh"
-            ? { ...t.workspaceEnv, root: cwd }
-            : t.workspaceEnv;
-        return {
-          ...t,
-          paneTree,
-          ...(cwdChanged && { cwd }),
-          ...(workspaceEnv !== t.workspaceEnv && { workspaceEnv }),
-        };
+        return updated;
       });
       return changed ? next : curr;
     });

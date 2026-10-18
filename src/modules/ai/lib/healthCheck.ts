@@ -5,7 +5,7 @@ import {
 } from "../config";
 import { buildConfiguredLanguageModel } from "./agent";
 import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
-import { redactSensitive } from "./redact";
+import { probeErrorDetail } from "./probeErrorDetail";
 
 export type AiHealthCheckConfig = {
   modelId: string;
@@ -40,14 +40,13 @@ export function aiHealthCheckErrorDetail(
   modelId: string,
   error: unknown,
 ): string | undefined {
-  if (!isLocalAgentModel(modelId)) return undefined;
   const detail = error instanceof Error ? error.message : String(error);
-  const safeDetail = redactSensitive(detail)
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
-    .replace(/(?<![\w:])(?:[A-Za-z]:[\\/]|\/(?!\/))[^\s"'<>]+/g, "<path>")
-    .trim()
-    .replace(/\s+/g, " ");
-  return safeDetail.slice(0, 240) || undefined;
+  if (
+    !isLocalAgentModel(modelId) &&
+    !/dns:|no safe IPs|host not allowed:|error sending request|connection refused|timed? ?out|fetch failed|ENOTFOUND|ECONN/i.test(detail)
+  )
+    return undefined;
+  return probeErrorDetail(error);
 }
 
 export async function runAiHealthCheck(

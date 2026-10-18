@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
 import type { WorkspacePlacement } from "@/modules/spaces";
@@ -25,6 +25,62 @@ const LazyHarnessApp = lazy(() =>
     default: m.HarnessApp,
   })),
 );
+const LazyNativeAiView = lazy(() =>
+  import("./HarnessNativeAiView").then((module) => ({
+    default: module.HarnessNativeAiView,
+  })),
+);
+
+function HarnessWorkbench({
+  tab,
+  focused,
+}: {
+  tab: HarnessTab;
+  focused: boolean;
+}) {
+  const { t } = useTranslation();
+  const [view, setView] = useState<"harness" | "native">("harness");
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div
+        role="group"
+        aria-label={t("harness.agentDevelopment")}
+        className="flex shrink-0 gap-1 border-b border-border bg-background px-3 py-1.5"
+      >
+        {(["harness", "native"] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            aria-pressed={view === item}
+            onClick={() => setView(item)}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs",
+              view === item
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            {item === "harness"
+              ? t("harness.agentDevelopment")
+              : `Voktty ${t("shortcuts.groups.ai")}`}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1" hidden={view !== "harness"}>
+        <LazyHarnessApp initialCwd={tab.cwd} initialSessionId={tab.sessionId} />
+      </div>
+      {view === "native" && (
+        <div className="min-h-0 flex-1">
+          {focused ? (
+            <Suspense fallback={null}>
+              <LazyNativeAiView onClose={() => setView("harness")} />
+            </Suspense>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Props = {
   tabs: Tab[];
@@ -77,9 +133,9 @@ export function HarnessStack({ tabs, activeId, placements }: Props) {
                 </div>
               }
             >
-              <LazyHarnessApp
-                initialCwd={tab.cwd}
-                initialSessionId={tab.sessionId}
+              <HarnessWorkbench
+                tab={tab}
+                focused={visible && tab.id === activeId}
               />
             </Suspense>
           </div>

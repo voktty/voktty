@@ -4,37 +4,92 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Stable release version (for example 1.0.18)"
+        required: true
+        type: string
+      windows:
+        description: "Windows x64 (NSIS and MSI)"
+        type: boolean
+        default: true
+      linux:
+        description: "Linux x64 (AppImage, DEB and RPM)"
+        type: boolean
+        default: false
+      macos_arm64:
+        description: "macOS Apple Silicon"
+        type: boolean
+        default: false
+      macos_intel:
+        description: "macOS Intel"
+        type: boolean
+        default: false
+      make_latest:
+        description: "Set as auto-updater latest (requires every desktop platform)"
+        type: boolean
+        default: false
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', inputs.version) || github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  validate-release-tag:
+  prepare-release:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+    outputs:
+      source: ${{ steps.plan.outputs.source }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      release-id: ${{ steps.plan.outputs.release-id }}
+      latest: ${{ steps.plan.outputs.latest }}
     steps:
       - uses: actions/checkout@v4
-      - name: Require a semantic version tag
-        shell: bash
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Release workflows require a semantic version tag such as v1.2.3."
-            exit 1
-          fi
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          CARGO_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' src-tauri/Cargo.toml | head -n1)
-          if [[ "$TAG" != "v$PACKAGE_VERSION" || "$PACKAGE_VERSION" != "$CARGO_VERSION" ]]; then
-            echo "Release tag, package.json and Cargo.toml versions must match."
-            exit 1
-          fi
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate source and create release draft
+        id: plan
+        uses: actions/github-script@v7
+        env:
+          RELEASE_INPUTS: ${{ toJSON(inputs) }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const { resolve } = require('node:path');
+            const { releasePlan, requireGreenMain, applyVersion } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
+            const source = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+            const sourceVersion = require('./package.json').version;
+            const plan = releasePlan({ eventName: context.eventName, ref: context.ref, sourceVersion, inputs: JSON.parse(process.env.RELEASE_INPUTS) });
+            let ciUrl = '';
+            if (context.eventName === 'workflow_dispatch') {
+              const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', branch: 'main', event: 'push', head_sha: source, per_page: 100 });
+              ciUrl = requireGreenMain(data.workflow_runs, source);
+            }
+            applyVersion(process.cwd(), plan.version);
+            const notFound = (error) => { if (error.status !== 404) throw error; return null; };
+            const existingTag = await github.rest.repos.getCommit({ ...context.repo, ref: `tags/${plan.tag}` }).catch(notFound);
+            if (existingTag && existingTag.data.sha !== source) throw new Error('Release tag points to a different commit. Choose a new version.');
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+            const existing = releases.find((release) => release.tag_name === plan.tag);
+            if (existing && !existing.draft) throw new Error('This release is already published. Choose a new version.');
+            if (existing && existing.target_commitish !== source) throw new Error('Release draft belongs to another source commit. Choose a new version.');
+            const body = `Source commit: ${source}\n${ciUrl ? `Validated CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
+            if (existing && existing.body !== body) throw new Error('Release draft uses a different publication plan. Rerun the original plan or choose a new version.');
+            const release = existing ?? (await github.rest.repos.createRelease({ ...context.repo, tag_name: plan.tag, target_commitish: source, name: `Voktty ${plan.tag}`, body, draft: true, prerelease: plan.prerelease })).data;
+            for (const [key, value] of Object.entries({ source, version: plan.version, tag: plan.tag, matrix: JSON.stringify(plan.matrix), 'release-id': release.id, latest: String(plan.latest) })) core.setOutput(key, value);
+            await core.summary.addHeading(`Release ${plan.tag}`).addRaw(body).write();
 
   build-remote-helper:
-    needs: validate-release-tag
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
@@ -49,6 +104,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source }}
+      - name: Apply release version in build workspace
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: node scripts/release/desktop-release.mjs "$RELEASE_VERSION"
+        shell: bash
 
       - name: Install musl toolchain
         run: |
@@ -94,16 +156,22 @@ jobs:
           retention-days: 1
 
   build-host-packages:
-    needs: validate-release-tag
+    needs: prepare-release
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
+      - name: Apply release version in build workspace
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: node scripts/release/desktop-release.mjs "$RELEASE_VERSION"
       - run: pnpm install --frozen-lockfile
       - name: Build pinned host runtimes
         run: |
@@ -127,7 +195,7 @@ jobs:
           retention-days: 1
 
   publish-tauri:
-    needs: build-remote-helper
+    needs: [prepare-release, build-remote-helper]
     permissions:
       contents: write
       id-token: write
@@ -135,30 +203,16 @@ jobs:
       SIGNPATH_ENABLED: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
       APPLE_SIGNING_ENABLED: ${{ secrets.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_CERTIFICATE != '' }}
       APPLE_API_ENABLED: ${{ secrets.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_API_KEY_PATH != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_ISSUER != '' }}
+      RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-            rust-target: aarch64-apple-darwin
-            apple-signing-identity: "-"
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-            rust-target: x86_64-apple-darwin
-            apple-signing-identity: "-"
-          - platform: ubuntu-22.04
-            args: ""
-            rust-target: ""
-            apple-signing-identity: ""
-          - platform: windows-latest
-            args: ""
-            rust-target: ""
-            apple-signing-identity: ""
+      matrix: ${{ fromJSON(needs.prepare-release.outputs.matrix) }}
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source }}
 
       - name: Install Linux build dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -179,6 +233,11 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Apply release version in build workspace
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: node scripts/release/desktop-release.mjs "$RELEASE_VERSION"
+        shell: bash
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -248,11 +307,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Voktty ${{ github.ref_name }}"
-          releaseBody: "See the assets to download and install. Auto-update is built in."
+          releaseId: ${{ needs.prepare-release.outputs.release-id }}
+          tagName: ${{ needs.prepare-release.outputs.tag }}
+          releaseCommitish: ${{ needs.prepare-release.outputs.source }}
+          releaseName: "Voktty ${{ needs.prepare-release.outputs.tag }}"
           releaseDraft: true
-          prerelease: false
+          prerelease: ${{ contains(needs.prepare-release.outputs.version, '-') }}
           args: ${{ matrix.args }}
 
       # Strip the bundled libwayland-* libs from the AppImage so it loads the
@@ -267,7 +327,7 @@ jobs:
       # patch-appimage-updater job after all matrix legs finish, so a parallel
       # macOS/Windows upload cannot clobber the combined latest.json.
       - name: Fix AppImage wayland libs and re-sign
-        if: matrix.platform == 'ubuntu-22.04' && startsWith(github.ref, 'refs/tags/')
+        if: matrix.platform == 'ubuntu-22.04'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -319,7 +379,7 @@ jobs:
           rm -f "$APPIMAGE.sig"
           pnpm tauri signer sign "$APPIMAGE"
 
-          TAG="${GITHUB_REF_NAME}"
+          TAG="$RELEASE_TAG"
           gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
             --clobber --repo "$GITHUB_REPOSITORY"
 
@@ -332,7 +392,7 @@ jobs:
       # patch-updater-manifest job, after every matrix leg has merged, so a
       # parallel macOS/Linux upload cannot clobber the Windows signatures.
       - name: Stage Windows installers for SignPath
-        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -349,7 +409,7 @@ jobs:
 
       - name: Upload unsigned Windows artifact
         id: upload-windows
-        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: windows-unsigned
@@ -360,7 +420,7 @@ jobs:
       # The default wait timeout is 600s; bumped so the job survives the time
       # it takes to review and approve the request during a release.
       - name: Submit Windows installers to SignPath
-        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_ENABLED == 'true'
+        if: matrix.platform == 'windows-latest' && env.SIGNPATH_ENABLED == 'true'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -374,7 +434,7 @@ jobs:
           output-artifact-directory: 'signed'
 
       - name: Re-sign updater and upload signed Windows installers
-        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_ENABLED == 'true'
+        if: matrix.platform == 'windows-latest' && env.SIGNPATH_ENABLED == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -397,13 +457,13 @@ jobs:
           Remove-Item "$($env:MSI_REAL_PATH).sig" -ErrorAction SilentlyContinue
           pnpm tauri signer sign $env:EXE_REAL_PATH
           pnpm tauri signer sign $env:MSI_REAL_PATH
-          gh release upload $env:GITHUB_REF_NAME `
+          gh release upload $env:RELEASE_TAG `
             $env:EXE_REAL_PATH "$($env:EXE_REAL_PATH).sig" `
             $env:MSI_REAL_PATH "$($env:MSI_REAL_PATH).sig" `
             --clobber --repo $env:GITHUB_REPOSITORY
 
   publish-host-packages:
-    needs: [build-host-packages, publish-tauri]
+    needs: [prepare-release, build-host-packages, publish-tauri]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -415,27 +475,36 @@ jobs:
       - name: Verify and publish host packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
         run: |
           set -euo pipefail
           cd host-packages
           sha256sum -c ./*.sha256
           test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
-          gh release upload "$GITHUB_REF_NAME" ./*.tar.gz ./*.zip ./*.sha256 \
+          gh release upload "$RELEASE_TAG" ./*.tar.gz ./*.zip ./*.sha256 \
             --clobber --repo "$GITHUB_REPOSITORY"
 
   patch-updater-manifest:
-    needs: [publish-tauri, publish-host-packages]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [prepare-release, publish-tauri, publish-host-packages]
     runs-on: ubuntu-latest
+    concurrency:
+      group: desktop-release-publication
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source }}
       - name: Patch latest.json with re-signed AppImage and Windows signatures
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_MATRIX: ${{ needs.prepare-release.outputs.matrix }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="$RELEASE_TAG"
           DL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
 
           # Download latest.json if available
@@ -443,9 +512,8 @@ jobs:
             --pattern "latest.json" --clobber || true
 
           if [ ! -f "latest.json" ]; then
-            echo "No latest.json found in release; publishing release draft."
-            gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY" || true
-            exit 0
+            echo "Missing updater manifest; keeping release in draft."
+            exit 1
           fi
 
           # Download re-signed signatures if available
@@ -493,7 +561,36 @@ jobs:
             ' latest.json > latest.json.tmp && mv latest.json.tmp latest.json
           fi
 
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { verifyUpdaterManifest } from './scripts/release/desktop-release.mjs';
+          verifyUpdaterManifest(JSON.parse(readFileSync('latest.json', 'utf8')), {
+            version: process.env.RELEASE_VERSION,
+            tag: process.env.RELEASE_TAG,
+            matrix: JSON.parse(process.env.RELEASE_MATRIX),
+          }, process.env.GITHUB_REPOSITORY);
+          NODE
+
           gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
 
-          # Undraft and publish the release
-          gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY" || true
+      - name: Publish verified release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_LATEST: ${{ needs.prepare-release.outputs.latest }}
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_ID: ${{ needs.prepare-release.outputs.release-id }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const { resolve } = require('node:path');
+            const { compareVersions } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
+            let latest = process.env.RELEASE_LATEST === 'true';
+            if (latest) {
+              const published = await github.rest.repos.getLatestRelease(context.repo).catch((error) => {
+                if (error.status !== 404) throw error;
+                return null;
+              });
+              const current = published?.data.tag_name.match(/^v(\d+\.\d+\.\d+)$/)?.[1];
+              if (current && compareVersions(process.env.RELEASE_VERSION, current) <= 0) latest = false;
+            }
+            await github.rest.repos.updateRelease({ ...context.repo, release_id: Number(process.env.RELEASE_ID), draft: false, make_latest: latest ? 'true' : 'false' });

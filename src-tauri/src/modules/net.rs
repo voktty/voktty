@@ -145,15 +145,26 @@ async fn classify_and_collect_safe_ips(
     host: &str,
     allow_private: bool,
 ) -> Result<Vec<IpAddr>, String> {
-    let (worst, ips) = resolve_and_classify(host).await?;
-    match worst {
-        IpKind::BlockedMetadata => return Err(format!("host not allowed: {host}")),
-        IpKind::Loopback | IpKind::Private if !allow_private => {
-            return Err(format!(
-                "host {host} resolves to a private/loopback address; this endpoint requires explicit opt-in",
-            ));
+    let (_, ips) = resolve_and_classify(host).await?;
+    select_safe_ips(host, ips, allow_private)
+}
+
+fn select_safe_ips(
+    host: &str,
+    ips: Vec<IpAddr>,
+    allow_private: bool,
+) -> Result<Vec<IpAddr>, String> {
+    let kinds = ips.iter().map(|ip| ip_kind(*ip));
+    if !allow_private {
+        for kind in kinds {
+            match kind {
+                IpKind::BlockedMetadata => return Err(format!("host not allowed: {host}")),
+                IpKind::Loopback | IpKind::Private => return Err(format!(
+                    "host {host} resolves to a private/loopback address; this endpoint requires explicit opt-in",
+                )),
+                IpKind::Public => {}
+            }
         }
-        _ => {}
     }
     let safe: Vec<IpAddr> = ips
         .into_iter()
@@ -185,30 +196,14 @@ pub(crate) async fn resolve_safe_http_target(
         .host_str()
         .ok_or_else(|| "missing host".to_string())?
         .to_string();
-    let (kind, resolved) = resolve_and_classify(&host).await?;
-    match kind {
-        IpKind::BlockedMetadata => return Err(format!("host not allowed: {host}")),
-        IpKind::Loopback | IpKind::Private if !allow_private => {
-            return Err(format!(
-                "host {host} resolves to a private/loopback address; this endpoint requires explicit opt-in",
-            ));
-        }
-        _ => {}
-    }
-    let ips: Vec<IpAddr> = resolved
-        .into_iter()
-        .filter(|ip| match ip_kind(*ip) {
-            IpKind::BlockedMetadata => false,
-            IpKind::Loopback | IpKind::Private => allow_private,
-            IpKind::Public => true,
-        })
-        .collect();
-    if ips.is_empty() {
-        return Err(format!("host {host}: no safe IPs"));
-    }
+    let (_, resolved) = resolve_and_classify(&host).await?;
+    let ips = select_safe_ips(&host, resolved, allow_private)?;
+    let is_private_network = ips
+        .iter()
+        .any(|ip| matches!(ip_kind(*ip), IpKind::Loopback | IpKind::Private));
     Ok(SafeHttpTarget {
         url: parsed,
-        is_private_network: matches!(kind, IpKind::Loopback | IpKind::Private),
+        is_private_network,
         host,
         ips,
     })
@@ -223,7 +218,13 @@ pub(crate) fn build_pinned_http_client(
         .iter()
         .map(|ip| SocketAddr::new(*ip, 0))
         .collect();
-    reqwest::Client::builder()
+    let builder = reqwest::Client::builder();
+    let builder = if target.is_private_network {
+        builder.no_proxy()
+    } else {
+        builder
+    };
+    builder
         .connect_timeout(timeout.min(Duration::from_secs(10)))
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::none())
@@ -268,6 +269,12 @@ pub async fn lm_ping(base_url: String) -> Result<u16, String> {
     let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::none());
+    if safe_ips
+        .iter()
+        .any(|ip| matches!(ip_kind(*ip), IpKind::Private | IpKind::Loopback))
+    {
+        builder = builder.no_proxy();
+    }
     let addrs: Vec<SocketAddr> = safe_ips.iter().map(|ip| SocketAddr::new(*ip, 0)).collect();
     builder = builder.resolve_to_addrs(&host, &addrs);
     let client = builder.build().map_err(|e| e.to_string())?;
@@ -276,7 +283,21 @@ pub async fn lm_ping(base_url: String) -> Result<u16, String> {
         .send()
         .await
         .map(|r| r.status().as_u16())
-        .map_err(|e| e.to_string())
+        .map_err(connection_error_detail)
+}
+
+fn connection_error_detail(error: reqwest::Error) -> String {
+    use std::error::Error;
+    let error = error.without_url();
+    let mut detail = error.to_string();
+    let mut source = error.source();
+    for _ in 0..4 {
+        let Some(cause) = source else { break };
+        detail.push_str(": ");
+        detail.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    detail.chars().take(512).collect()
 }
 // AI HTTP proxy — bypasses webview CORS / Mixed-Content / PNA so local-network
 // model servers (LM Studio, Ollama, vLLM) work in the production bundle.
@@ -310,6 +331,12 @@ fn build_safe_client(
     pinned: &[(String, Vec<IpAddr>)],
 ) -> Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder().connect_timeout(Duration::from_secs(10));
+    if pinned.iter().any(|(_, ips)| {
+        ips.iter()
+            .any(|ip| matches!(ip_kind(*ip), IpKind::Private | IpKind::Loopback))
+    }) {
+        builder = builder.no_proxy();
+    }
     // Pin reqwest's resolver to the IPs we just classified. Without this,
     // reqwest's own DNS lookup could return a different (private/metadata) IP
     // for the same hostname between classify and connect — classic DNS
@@ -520,6 +547,63 @@ mod tests {
         );
         // IPv6 link-local fe80::/10
         assert_eq!(ip_kind("fe80::1".parse().unwrap()), IpKind::BlockedMetadata);
+    }
+
+    #[test]
+    fn lan_probe_pins_only_safe_addresses_from_mixed_mdns_results() {
+        let lan: IpAddr = "192.168.1.42".parse().unwrap();
+        let link_local: IpAddr = "fe80::42".parse().unwrap();
+        assert_eq!(
+            select_safe_ips("server.local", vec![link_local, lan], true).unwrap(),
+            vec![lan],
+        );
+        assert!(select_safe_ips("server.local", vec![lan, link_local], false).is_err());
+        assert!(select_safe_ips("server.local", vec![link_local], true).is_err());
+    }
+
+    #[test]
+    fn metadata_addresses_never_enter_the_pinned_connection_set() {
+        let lan: IpAddr = "192.168.1.42".parse().unwrap();
+        let metadata: IpAddr = "169.254.169.254".parse().unwrap();
+        assert_eq!(
+            select_safe_ips("server.test", vec![metadata, lan], true).unwrap(),
+            vec![lan],
+        );
+        assert!(select_safe_ips("169.254.169.254", vec![metadata], true).is_err());
+        assert!(select_safe_ips("server.test", vec![metadata, lan], false).is_err());
+    }
+
+    #[tokio::test]
+    async fn local_model_client_reaches_only_the_safe_pinned_address() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = [0; 4096];
+            let bytes = stream.read(&mut request).unwrap();
+            assert!(String::from_utf8_lossy(&request[..bytes]).starts_with("GET /v1/models "));
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"data\":[]}").unwrap();
+        });
+        let ips = select_safe_ips(
+            "model.local",
+            vec!["fe80::1".parse().unwrap(), "127.0.0.1".parse().unwrap()],
+            true,
+        )
+        .unwrap();
+        let client = build_safe_client(true, &[("model.local".into(), ips)]).unwrap();
+        let result = client
+            .get(format!("http://model.local:{port}/v1/models"))
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(result.status(), 200);
+        assert_eq!(result.text().await.unwrap(), "{\"data\":[]}");
+        server.join().unwrap();
     }
 
     #[test]

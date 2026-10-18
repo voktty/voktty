@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useEffect, useRef } from "react";
 import type { Live } from "../store/chatStore";
 import { redactSensitive } from "./redact";
+import { selectAiWorkspaceCwd } from "./selectAiWorkspaceCwd";
 import { isLocalPath } from "@/modules/workspace";
 import type { EditorPaneHandle } from "@/modules/editor";
 import {
@@ -82,31 +83,27 @@ export function useAiLiveBridge(params: Params) {
     const findCwd = () => {
       const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
       const active = tabs.find((x) => x.id === activeId);
-      if (active?.kind === "terminal") {
-        return (
-          findLeafCwd(active.paneTree, active.activeLeafId) ??
-          active.cwd ??
-          null
-        );
-      }
-      for (let i = tabs.length - 1; i >= 0; i--) {
-        const t = tabs[i];
-        if (t.kind !== "terminal") continue;
-        const cwd = findLeafCwd(t.paneTree, t.activeLeafId) ?? t.cwd;
-        if (cwd) return cwd;
-      }
-      return explorerRoot ?? launchCwd ?? home ?? null;
+      return selectAiWorkspaceCwd(
+        active,
+        tabs,
+        explorerRoot ?? launchCwd ?? home ?? null,
+      );
     };
 
     const findLocalCwd = (): string | null => {
       const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
       const active = tabs.find((x) => x.id === activeId);
-      if (active && isLocalTab(active) && active.kind === "terminal") {
-        const cwd =
-          findLeafCwd(active.paneTree, active.activeLeafId) ??
-          active.cwd ??
-          null;
-        if (cwd && isLocalPath(cwd)) return cwd;
+      if (active && isLocalTab(active)) {
+        if (active.kind === "harness" && active.cwd && isLocalPath(active.cwd)) {
+          return active.cwd;
+        }
+        if (active.kind === "terminal") {
+          const cwd =
+            findLeafCwd(active.paneTree, active.activeLeafId) ??
+            active.cwd ??
+            null;
+          if (cwd && isLocalPath(cwd)) return cwd;
+        }
       }
       for (let i = tabs.length - 1; i >= 0; i--) {
         const t = tabs[i];
