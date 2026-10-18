@@ -7,6 +7,7 @@ import {
 import { setLastWslDistro } from "@/modules/settings/store";
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
+import { IS_WINDOWS } from "@/lib/platform";
 
 export type SshConnectionConfig = {
   host: string;
@@ -100,6 +101,22 @@ export function isWslWorkspacePath(path: string): boolean {
 
 export function isWindowsNativePath(path: string): boolean {
   return /^[a-zA-Z]:[/\\]/.test(path) || /^[/\\]{2}/.test(path);
+}
+
+export function isLocalPath(path: string | null | undefined): boolean {
+  if (!path || typeof path !== "string") return false;
+  const trimmed = path.trim();
+  if (!trimmed) return false;
+  if (
+    trimmed.startsWith("remote://") ||
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
+  ) {
+    return false;
+  }
+  if (IS_WINDOWS) {
+    return isWindowsNativePath(trimmed);
+  }
+  return trimmed.startsWith("/") || trimmed.startsWith("~");
 }
 
 function sshWorkspaceOwnsPath(

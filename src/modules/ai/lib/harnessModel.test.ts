@@ -20,7 +20,9 @@ const {
   homeDir: vi.fn(),
   chatContext: {
     cwd: "/workspace/project" as string | null,
+    localCwd: undefined as string | null | undefined,
     workspaceRoot: "/workspace/fallback" as string | null,
+    localWorkspaceRoot: undefined as string | null | undefined,
   },
 }));
 
@@ -53,7 +55,13 @@ vi.mock("@/modules/ai/store/chatStore", () => ({
     getState: () => ({
       live: {
         getCwd: () => chatContext.cwd,
+        ...(chatContext.localCwd !== undefined && {
+          getLocalCwd: () => chatContext.localCwd ?? null,
+        }),
         getWorkspaceRoot: () => chatContext.workspaceRoot,
+        ...(chatContext.localWorkspaceRoot !== undefined && {
+          getLocalWorkspaceRoot: () => chatContext.localWorkspaceRoot ?? null,
+        }),
       },
     }),
   },
@@ -69,7 +77,9 @@ describe("HarnessLanguageModel", () => {
     releaseBridge.mockReset();
     homeDir.mockReset();
     chatContext.cwd = "/workspace/project";
+    chatContext.localCwd = undefined;
     chatContext.workspaceRoot = "/workspace/fallback";
+    chatContext.localWorkspaceRoot = undefined;
   });
 
   it("routes Codex through the existing text adapter with the active cwd", async () => {
@@ -109,6 +119,61 @@ describe("HarnessLanguageModel", () => {
     });
 
     expect(result.text).toBe("OK");
+  });
+
+  it("prefers getLocalCwd over getCwd when present", async () => {
+    chatContext.cwd = "/workspace/remote-ssh";
+    chatContext.localCwd = "C:\\local\\project";
+    runCodexTextPrompt.mockResolvedValue("OK");
+
+    await expect(
+      generateText({
+        model: createHarnessModel("harness-codex"),
+        prompt: "Reply with OK.",
+      }),
+    ).resolves.toMatchObject({ text: "OK" });
+
+    expect(runCodexTextPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "C:\\local\\project" }),
+    );
+  });
+
+  it("falls back to native home when getLocalCwd is null and getCwd is a remote tab", async () => {
+    chatContext.cwd = "/workspace/app_projects/webserver";
+    chatContext.localCwd = null;
+    chatContext.workspaceRoot = "/workspace/fallback";
+    chatContext.localWorkspaceRoot = null;
+    homeDir.mockResolvedValue("C:\\Users\\local-user");
+    runCodexTextPrompt.mockResolvedValue("OK");
+
+    await expect(
+      generateText({
+        model: createHarnessModel("harness-codex"),
+        prompt: "Reply with OK.",
+      }),
+    ).resolves.toMatchObject({ text: "OK" });
+
+    expect(runCodexTextPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "C:\\Users\\local-user" }),
+    );
+  });
+
+  it("ignores explicitly remote URLs like remote:// in getCwd", async () => {
+    chatContext.cwd = "remote://ssh/1/workspace/webserver";
+    chatContext.workspaceRoot = "remote://ssh/1/workspace";
+    homeDir.mockResolvedValue("C:\\Users\\local-user");
+    runCodexTextPrompt.mockResolvedValue("OK");
+
+    await expect(
+      generateText({
+        model: createHarnessModel("harness-codex"),
+        prompt: "Reply with OK.",
+      }),
+    ).resolves.toMatchObject({ text: "OK" });
+
+    expect(runCodexTextPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "C:\\Users\\local-user" }),
+    );
   });
 
   it("uses native home when the settings window has no chat workspace", async () => {

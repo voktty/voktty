@@ -759,6 +759,11 @@ pub fn harness_spawn(
     }
 
     let workdir = expand_home(&cwd);
+    let workdir = if workdir.is_dir() {
+        workdir
+    } else {
+        crate::modules::workspace::native_spawn_dir(None)
+    };
     if !workdir.is_dir() {
         return Err(format!(
             "Working directory does not exist: {}",

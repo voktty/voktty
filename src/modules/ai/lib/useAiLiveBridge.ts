@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useEffect, useRef } from "react";
 import type { Live } from "../store/chatStore";
 import { redactSensitive } from "./redact";
+import { isLocalPath } from "@/modules/workspace";
 import type { EditorPaneHandle } from "@/modules/editor";
 import {
   collectWorkspaceProblems,
@@ -64,6 +65,20 @@ export function useAiLiveBridge(params: Params) {
   ref.current = params;
 
   useEffect(() => {
+    const isLocalTab = (tab: Tab): boolean => {
+      if (
+        "workspaceEnv" in tab &&
+        tab.workspaceEnv &&
+        tab.workspaceEnv.kind !== "local"
+      ) {
+        return false;
+      }
+      if (tab.kind === "terminal" && tab.collaboration?.mode === "guest") {
+        return false;
+      }
+      return true;
+    };
+
     const findCwd = () => {
       const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
       const active = tabs.find((x) => x.id === activeId);
@@ -83,8 +98,39 @@ export function useAiLiveBridge(params: Params) {
       return explorerRoot ?? launchCwd ?? home ?? null;
     };
 
+    const findLocalCwd = (): string | null => {
+      const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
+      const active = tabs.find((x) => x.id === activeId);
+      if (active && isLocalTab(active) && active.kind === "terminal") {
+        const cwd =
+          findLeafCwd(active.paneTree, active.activeLeafId) ??
+          active.cwd ??
+          null;
+        if (cwd && isLocalPath(cwd)) return cwd;
+      }
+      for (let i = tabs.length - 1; i >= 0; i--) {
+        const t = tabs[i];
+        if (t.kind !== "terminal" || !isLocalTab(t)) continue;
+        const cwd = findLeafCwd(t.paneTree, t.activeLeafId) ?? t.cwd;
+        if (cwd && isLocalPath(cwd)) return cwd;
+      }
+      if (isLocalPath(explorerRoot)) return explorerRoot;
+      if (isLocalPath(launchCwd)) return launchCwd;
+      if (isLocalPath(home)) return home;
+      return null;
+    };
+
+    const findLocalWorkspaceRoot = (): string | null => {
+      const { explorerRoot, launchCwd, home } = ref.current;
+      if (isLocalPath(explorerRoot)) return explorerRoot;
+      if (isLocalPath(launchCwd)) return launchCwd;
+      if (isLocalPath(home)) return home;
+      return null;
+    };
+
     setLive({
       getCwd: findCwd,
+      getLocalCwd: findLocalCwd,
       getTerminalContext: () => {
         const { activeId, tabs } = ref.current;
         const t = tabs.find((x) => x.id === activeId);
@@ -112,6 +158,7 @@ export function useAiLiveBridge(params: Params) {
         const { explorerRoot, launchCwd, home } = ref.current;
         return explorerRoot ?? launchCwd ?? home ?? null;
       },
+      getLocalWorkspaceRoot: findLocalWorkspaceRoot,
       getFileCitationSource: () => {
         const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
         const active = tabs.find((tab) => tab.id === activeId);

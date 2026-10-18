@@ -41,10 +41,12 @@ export type FileCitationSource =
 
 export type Live = {
   getCwd: () => string | null;
+  getLocalCwd?: () => string | null;
   getTerminalContext: () => string | null;
   isActiveTerminalPrivate: () => boolean;
   injectIntoActivePty: (text: string) => boolean;
   getWorkspaceRoot: () => string | null;
+  getLocalWorkspaceRoot?: () => string | null;
   getFileCitationSource: () => FileCitationSource;
   getActiveFile: () => string | null;
   getEditorBuffers: () => Promise<DevelopmentBuffer[]>;
@@ -177,10 +179,12 @@ type StoreState = {
 
 const NOOP_LIVE: Live = {
   getCwd: () => null,
+  getLocalCwd: () => null,
   getTerminalContext: () => null,
   isActiveTerminalPrivate: () => false,
   injectIntoActivePty: () => false,
   getWorkspaceRoot: () => null,
+  getLocalWorkspaceRoot: () => null,
   getFileCitationSource: () => ({ kind: "local", root: null }),
   getActiveFile: () => null,
   getEditorBuffers: async () => [],

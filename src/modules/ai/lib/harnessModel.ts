@@ -44,6 +44,15 @@ type HarnessStreamPart =
     ? Part
     : never;
 
+function isExplicitlyRemotePath(path: string | null | undefined): boolean {
+  if (!path || typeof path !== "string") return false;
+  const trimmed = path.trim();
+  return (
+    trimmed.startsWith("remote://") ||
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
+  );
+}
+
 export function createHarnessModel(modelId: string): LanguageModel {
   return new HarnessLanguageModel(modelId);
 }
@@ -156,7 +165,30 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
     const { binary, labelKey, run, stop } = this.resolveAgent();
     const formattedPrompt = this.formatPrompt(options.prompt);
     const live = useChatStore.getState().live;
-    const cwd = live.getCwd() ?? live.getWorkspaceRoot() ?? (await homeDir());
+    const rawLocalCwd = live.getLocalCwd ? live.getLocalCwd() : null;
+    const rawLocalWorkspace = live.getLocalWorkspaceRoot
+      ? live.getLocalWorkspaceRoot()
+      : null;
+    const rawCwd = live.getCwd();
+    const rawWorkspace = live.getWorkspaceRoot();
+
+    const localCwd = isExplicitlyRemotePath(rawLocalCwd) ? null : rawLocalCwd;
+    const localWorkspace = isExplicitlyRemotePath(rawLocalWorkspace)
+      ? null
+      : rawLocalWorkspace;
+    const fallbackCwd =
+      live.getLocalCwd || isExplicitlyRemotePath(rawCwd) ? null : rawCwd;
+    const fallbackWorkspace =
+      live.getLocalWorkspaceRoot || isExplicitlyRemotePath(rawWorkspace)
+        ? null
+        : rawWorkspace;
+
+    const cwd =
+      localCwd ??
+      localWorkspace ??
+      fallbackCwd ??
+      fallbackWorkspace ??
+      (await homeDir());
 
     if (!cwd) throw new Error(t("agentHistory.harnessWorkspaceRequired"));
 
