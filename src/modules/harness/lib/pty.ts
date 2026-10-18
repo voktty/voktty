@@ -4,16 +4,15 @@ import {
   openRemoteWorkspace,
   type RemoteSshConnection,
 } from "@/modules/remote/client";
+import { isPathWithinRemoteRoot } from "@/modules/remote";
 import {
   parseRemotePath,
   remoteProjectForPath,
 } from "@/modules/connections/model/remoteProjects";
 import {
+  findSshProfile,
   remoteSshConnectionForProfile,
-  remoteSshConnectionIdForEnvironment,
-  remoteSshEnvironmentId,
 } from "@/modules/connections/model/remoteSshProfiles";
-import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import {
   shouldPickSshMultiplexer,
@@ -105,65 +104,6 @@ function closeRemoteWorkspaceOnce(id: string, sessionId: number) {
   return close;
 }
 
-function findSshProfile(environmentId: string): SshConnection | undefined {
-  const activeEnv = useWorkspaceEnvStore.getState().env;
-  const decodedId = remoteSshConnectionIdForEnvironment(environmentId);
-  const candidateId = decodedId ?? environmentId;
-
-  // 1. Check if the active workspace SSH connection matches
-  if (activeEnv.kind === "ssh") {
-    const activeConn = activeEnv.connection;
-    if (
-      activeConn.id === candidateId ||
-      activeConn.id === environmentId ||
-      (decodedId && activeConn.id === decodedId) ||
-      remoteSshEnvironmentId(activeConn.id) === environmentId ||
-      activeConn.name.toLowerCase() === candidateId.toLowerCase() ||
-      activeConn.host.toLowerCase() === candidateId.toLowerCase()
-    ) {
-      return activeConn;
-    }
-  }
-
-  // 2. Check saved connections in preferences
-  const saved = usePreferencesStore.getState().sshConnections;
-  const directMatch = saved.find(
-    (c) =>
-      c.id === candidateId ||
-      c.id === environmentId ||
-      (decodedId && c.id === decodedId) ||
-      remoteSshEnvironmentId(c.id) === environmentId,
-  );
-  if (directMatch) return directMatch;
-
-  const nameOrHostMatch = saved.find(
-    (c) =>
-      c.name?.toLowerCase() === candidateId.toLowerCase() ||
-      c.host?.toLowerCase() === candidateId.toLowerCase() ||
-      c.name?.toLowerCase() === environmentId.toLowerCase() ||
-      c.host?.toLowerCase() === environmentId.toLowerCase(),
-  );
-  if (nameOrHostMatch) return nameOrHostMatch;
-
-  const sshConfigAlias = environmentId.match(/^ssh-config-(.+)-\d+-[a-z0-9]+$/)?.[1];
-  if (sshConfigAlias) {
-    const aliasMatch = saved.find(
-      (c) =>
-        c.name?.toLowerCase() === sshConfigAlias.toLowerCase() ||
-        c.host?.toLowerCase() === sshConfigAlias.toLowerCase() ||
-        c.id.includes(sshConfigAlias),
-    );
-    if (aliasMatch) return aliasMatch;
-  }
-
-  // 3. Fallback to active SSH workspace connection if present
-  if (activeEnv.kind === "ssh" && activeEnv.connection) {
-    return activeEnv.connection;
-  }
-
-  return undefined;
-}
-
 async function openRemoteTerminalTarget(
   id: string,
   cwd: string,
@@ -201,12 +141,15 @@ async function openRemoteTerminalTarget(
   }
 
   const activeEnv = useWorkspaceEnvStore.getState().env;
-  const canReuseActiveSession =
+  const isMatchingEnv =
     activeEnv.kind === "ssh" &&
     activeEnv.sessionId !== undefined &&
     (activeEnv.connection.id === profile.id ||
       activeEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
       activeEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
+
+  const canReuseActiveSession =
+    isMatchingEnv && isPathWithinRemoteRoot(activeEnv, remotePath.hostPath);
 
   if (canReuseActiveSession && activeEnv.kind === "ssh" && activeEnv.sessionId !== undefined) {
     return {
@@ -240,6 +183,21 @@ async function openRemoteTerminalTarget(
     nativeConnection,
     remotePath.hostPath,
   );
+
+  if (
+    activeEnv.kind === "local" ||
+    (activeEnv.kind === "ssh" &&
+      (activeEnv.connection.id === profile.id ||
+        activeEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+        activeEnv.connection.name.toLowerCase() === profile.name.toLowerCase()))
+  ) {
+    useWorkspaceEnvStore.getState().setEnv({
+      kind: "ssh",
+      connection: selectedProfile,
+      root: remoteSession.workspace_root,
+      sessionId: remoteSession.session_id,
+    });
+  }
 
   return {
     cwd: remotePath.hostPath,

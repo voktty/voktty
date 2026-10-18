@@ -72,7 +72,10 @@ import {
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import {
+  findSshProfile,
+  remoteSshConnectionIdForEnvironment,
+} from "@/modules/connections/model/remoteSshProfiles";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   PlayIcon,
@@ -397,7 +400,8 @@ function RemoteConnectionsBlock() {
   const currentProjectPath = lastProjectPath() ?? "";
   const parsedCurrentProject = parseRemotePath(currentProjectPath);
   const currentConnectionId = parsedCurrentProject
-    ? remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId)
+    ? (findSshProfile(parsedCurrentProject.environmentId)?.id ??
+       remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId))
     : undefined;
 
   const handleConnect = (conn: SshConnection) => {
@@ -468,12 +472,13 @@ function RemoteConnectionsBlock() {
           <div className="mt-2 divide-y divide-border/30 rounded-lg border border-border/30 overflow-hidden bg-background/50">
             {connections.map((conn) => {
               const pingStatus = pingMap[conn.id];
-              const isConnected =
-                (activeSshConn &&
+              const isConnected = Boolean(
+                activeSshConn &&
                   (activeSshConn.id === conn.id ||
                     (activeSshConn.host === conn.host &&
-                      (activeSshConn.port ?? 22) === (conn.port ?? 22)))) ||
-                currentConnectionId === conn.id;
+                      (activeSshConn.port ?? 22) === (conn.port ?? 22))),
+              );
+              const isCurrentProject = currentConnectionId === conn.id;
 
               return (
                 <div
@@ -508,6 +513,12 @@ function RemoteConnectionsBlock() {
                     {pingStatus?.online ? (
                       <span className="font-mono text-[11px] text-emerald-500">
                         {pingStatus.latencyMs ?? 0} ms
+                      </span>
+                    ) : null}
+
+                    {isCurrentProject ? (
+                      <span className="inline-flex items-center rounded bg-indigo-500/15 px-2 py-0.5 text-[11px] font-medium text-indigo-400">
+                        {t("harness.connections.currentProject")}
                       </span>
                     ) : null}
 

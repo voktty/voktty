@@ -63,7 +63,7 @@ import {
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -940,27 +940,26 @@ function DesktopApp() {
       );
     }
     if (activeTab?.kind === "harness") {
-      if (activeHarnessCwd && activeHarnessCwd.startsWith("remote://voktty-ssh-")) {
+      if (activeHarnessCwd && activeHarnessCwd.startsWith("remote://")) {
         const parsed = parseRemotePath(activeHarnessCwd);
         if (parsed) {
-          const connId = remoteSshConnectionIdForEnvironment(parsed.environmentId);
-          const savedConnections = usePreferencesStore.getState().sshConnections ?? [];
-          const profile = connId
-            ? savedConnections.find((c) => c.id === connId)
-            : undefined;
+          const profile = findSshProfile(parsed.environmentId);
           if (profile) {
             const currentEnv = useWorkspaceEnvStore.getState().env;
-            const sessionId =
+            const isMatchingEnv =
               currentEnv.kind === "ssh" &&
               (currentEnv.connection.id === profile.id ||
-                (currentEnv.connection.host === profile.host &&
-                  (currentEnv.connection.port ?? 22) === (profile.port ?? 22)))
-                ? currentEnv.sessionId
-                : undefined;
+                currentEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+                currentEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
+            const sessionId = isMatchingEnv ? currentEnv.sessionId : undefined;
+            const sessionRoot =
+              sessionId !== undefined && currentEnv.kind === "ssh" && currentEnv.root
+                ? currentEnv.root
+                : (parsed.hostPath.startsWith("/") ? "/" : parsed.hostPath);
             return {
               kind: "ssh" as const,
               connection: profile,
-              root: parsed.hostPath,
+              root: sessionRoot,
               ...(sessionId !== undefined ? { sessionId } : {}),
             };
           }

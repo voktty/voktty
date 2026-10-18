@@ -1,6 +1,9 @@
 import { AddRemoteProjectDialog } from "@/modules/connections";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import {
+  findSshProfile,
+  remoteSshConnectionIdForEnvironment,
+} from "@/modules/connections/model/remoteSshProfiles";
 import { useTranslation } from "@/modules/i18n";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
@@ -42,7 +45,8 @@ export function HarnessConnectionsPage() {
   const currentProjectPath = lastProjectPath() ?? "";
   const parsedCurrentProject = parseRemotePath(currentProjectPath);
   const currentConnectionId = parsedCurrentProject
-    ? remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId)
+    ? (findSshProfile(parsedCurrentProject.environmentId)?.id ??
+       remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId))
     : undefined;
 
   const openFolder = (id?: string) => {

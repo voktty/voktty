@@ -14,9 +14,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { isPathInWorkspace, remoteReadDir } from "@/modules/remote";
+import {
+  isPathInWorkspace,
+  isPathWithinRemoteRoot,
+  remoteReadDir,
+} from "@/modules/remote";
+import { openRemoteWorkspace } from "@/modules/remote/client";
+import {
+  findSshProfile,
+  remoteSshConnectionForProfile,
+} from "@/modules/connections/model/remoteSshProfiles";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
   type WorkspaceEnv,
+  useWorkspaceEnvStore,
   workspaceEnvForNativePty,
   workspaceForNativeFs,
 } from "@/modules/workspace";
@@ -231,7 +242,60 @@ function CurrentSegmentDropdown({
   const load = useCallback(async () => {
     setError(null);
     try {
-      const workspace = workspaceEnv ?? { kind: "local" as const };
+      let workspace: WorkspaceEnv = workspaceEnv ?? { kind: "local" as const };
+      if (path.startsWith("remote://") && workspace.kind !== "ssh") {
+        const parsed = parseRemotePath(path);
+        if (parsed) {
+          const profile = findSshProfile(parsed.environmentId);
+          if (profile) {
+            const currentEnv = useWorkspaceEnvStore.getState().env;
+            const isMatch =
+              currentEnv.kind === "ssh" &&
+              (currentEnv.connection.id === profile.id ||
+                currentEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+                currentEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
+            workspace = {
+              kind: "ssh",
+              connection: profile,
+              root:
+                isMatch && currentEnv.root
+                  ? currentEnv.root
+                  : (parsed.hostPath.startsWith("/") ? "/" : parsed.hostPath),
+              ...(isMatch && currentEnv.sessionId !== undefined
+                ? { sessionId: currentEnv.sessionId }
+                : {}),
+            };
+          }
+        }
+      }
+
+      if (workspace.kind === "ssh") {
+        const nativeConn = remoteSshConnectionForProfile(workspace.connection);
+        if (workspace.sessionId === undefined) {
+          const parsed = parseRemotePath(path);
+          const target = parsed?.hostPath.startsWith("/") ? "/" : (workspace.root || ".");
+          const session = await openRemoteWorkspace(nativeConn, target).catch(() =>
+            openRemoteWorkspace(nativeConn, "."),
+          );
+          workspace = {
+            ...workspace,
+            root: session.workspace_root,
+            sessionId: session.session_id,
+          };
+          useWorkspaceEnvStore.getState().setEnv(workspace);
+        } else if (!isPathWithinRemoteRoot(workspace, path)) {
+          const session = await openRemoteWorkspace(nativeConn, "/").catch(() =>
+            openRemoteWorkspace(nativeConn, path),
+          );
+          workspace = {
+            ...workspace,
+            root: session.workspace_root,
+            sessionId: session.session_id,
+          };
+          useWorkspaceEnvStore.getState().setEnv(workspace);
+        }
+      }
+
       const dirs =
         workspace.kind === "ssh" && isPathInWorkspace(workspace, path)
           ? (await remoteReadDir(workspace, path))

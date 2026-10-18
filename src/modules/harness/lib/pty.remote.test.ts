@@ -332,4 +332,40 @@ describe("Harness remote terminals", () => {
       expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(71);
     });
   });
+
+  it("does not reuse active SSH session when target path is outside session root", async () => {
+    useWorkspaceEnvStore.setState({
+      env: {
+        kind: "ssh",
+        connection: profile,
+        root: "/root",
+        sessionId: 42,
+      },
+    });
+
+    await spawnPty(
+      "adhoc-outside-root",
+      "remote://voktty-ssh-profile-1/workspace/pepe",
+      80,
+      24,
+    );
+
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "build-host" }),
+      "/workspace/pepe",
+    );
+    expect(mocks.openPty).toHaveBeenCalledWith(
+      80,
+      24,
+      expect.anything(),
+      "/workspace/pepe",
+      false,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        kind: "ssh",
+        sessionId: 71,
+      }),
+    );
+  });
 });
