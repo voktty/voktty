@@ -647,6 +647,12 @@ export const en = {
         "Uses the browser's built-in speech recognition (Web Speech API). Free, no API key required. Quality depends on the OS and WebView engine.",
       contextLabel: "Context window",
       endpointNamePlaceholder: "My endpoint",
+      fetchModels: "Fetch models",
+      fetchModelsTitle: "Discover available models from endpoint",
+      fetchingModels: "Fetching models…",
+      modelsFound: "{count} models found",
+      customModelManual: "+ Custom model ID…",
+      selectModelPlaceholder: "Select a model",
       localMeta: {
         lmstudioDescription:
           "Run GGUF models through the LM Studio HTTP server (enable it in the Developer tab).",

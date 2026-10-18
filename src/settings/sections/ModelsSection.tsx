@@ -115,8 +115,10 @@ import {
   ChevronDown,
   InformationCircleIcon,
   Mic01Icon,
+  Refresh01Icon,
   UserMultiple02Icon,
 } from "@hugeicons/core-free-icons";
+import { fetchCompatibleModels } from "@/modules/ai/lib/fetchCompatibleModels";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1563,6 +1565,42 @@ function LocalProviderCard({
   const { status: testStatus, detail: testDetail, test } =
     useEndpointProbe(urlDraft);
 
+  const isCompatible = provider.id === "openai-compatible";
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
+  const [manualModelMode, setManualModelMode] = useState(false);
+
+  const fetchModels = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl ?? urlDraft).trim();
+    if (!targetUrl) return;
+    setIsFetchingModels(true);
+    setFetchModelsError(null);
+    try {
+      const keyToUse = compatKey ?? (keyDraft.trim() || undefined);
+      const models = await fetchCompatibleModels(targetUrl, {
+        apiKey: keyToUse,
+      });
+      setDiscoveredModels(models);
+      if (models.length > 0) {
+        setManualModelMode(false);
+        if (!modelDraft.trim() || !models.includes(modelDraft.trim())) {
+          const nextModel = models[0];
+          setModelDraft(nextModel);
+          void setModelId(nextModel);
+        }
+      } else {
+        setManualModelMode(true);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setFetchModelsError(msg);
+      setManualModelMode(true);
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
+
   useEffect(() => setUrlDraft(baseURL), [baseURL]);
   useEffect(() => setModelDraft(modelId), [modelId]);
   useEffect(() => setContextDraft(String(contextLimit ?? "")), [contextLimit]);
@@ -1633,7 +1671,12 @@ function LocalProviderCard({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void test()}
+                onClick={async () => {
+                  await test();
+                  if (isCompatible) {
+                    void fetchModels();
+                  }
+                }}
                 disabled={!urlDraft.trim() || testStatus === "testing"}
                 className="h-8 px-3 text-[11px]"
               >
@@ -1644,17 +1687,98 @@ function LocalProviderCard({
         )}
 
         <FieldRow label={t("settings.models.modelId")}>
-          <Input
-            value={modelDraft}
-            onChange={(e) => setModelDraft(e.target.value)}
-            onBlur={() => {
-              const v = modelDraft.trim();
-              if (v !== modelId) void setModelId(v);
-            }}
-            placeholder={meta.modelPlaceholder}
-            spellCheck={false}
-            className="h-8 font-mono text-[11.5px]"
-          />
+          <div className="flex flex-col flex-1 gap-1.5">
+            <div className="flex flex-1 gap-1.5">
+              {isCompatible && discoveredModels.length > 0 && !manualModelMode ? (
+                <Select
+                  value={modelDraft}
+                  onValueChange={(val) => {
+                    if (val === "__manual__") {
+                      setManualModelMode(true);
+                    } else {
+                      setModelDraft(val);
+                      if (val !== modelId) void setModelId(val);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-8 flex-1 font-mono text-[11.5px]">
+                    <SelectValue
+                      placeholder={t("settings.models.selectModelPlaceholder")}
+                    />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    {discoveredModels.map((m) => (
+                      <SelectItem
+                        key={m}
+                        value={m}
+                        className="font-mono text-[11.5px]"
+                      >
+                        {m}
+                      </SelectItem>
+                    ))}
+                    <SelectItem
+                      value="__manual__"
+                      className="text-[11.5px] text-muted-foreground border-t border-border/40 mt-1"
+                    >
+                      {t("settings.models.customModelManual")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={modelDraft}
+                  onChange={(e) => setModelDraft(e.target.value)}
+                  onBlur={() => {
+                    const v = modelDraft.trim();
+                    if (v !== modelId) void setModelId(v);
+                  }}
+                  placeholder={meta.modelPlaceholder}
+                  spellCheck={false}
+                  className="h-8 flex-1 font-mono text-[11.5px]"
+                />
+              )}
+              {isCompatible ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void fetchModels()}
+                    disabled={!urlDraft.trim() || isFetchingModels}
+                    className="h-8 px-2.5 text-[11px] gap-1 shrink-0"
+                    title={t("settings.models.fetchModelsTitle")}
+                  >
+                    <HugeiconsIcon
+                      icon={Refresh01Icon}
+                      size={11}
+                      className={cn(isFetchingModels && "animate-spin")}
+                    />
+                    {isFetchingModels
+                      ? t("settings.models.fetchingModels")
+                      : t("settings.models.fetchModels")}
+                  </Button>
+                  {discoveredModels.length > 0 && manualModelMode ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setManualModelMode(false)}
+                      className="h-8 px-2 text-[10.5px] text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      {t("settings.models.modelsFound", {
+                        count: discoveredModels.length,
+                      })}
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+            {isCompatible && fetchModelsError ? (
+              <span className="text-[10.5px] text-destructive/80 truncate">
+                {fetchModelsError}
+              </span>
+            ) : null}
+          </div>
         </FieldRow>
 
         {setContextLimit ? (
@@ -1767,6 +1891,41 @@ function CustomEndpointCard({
   const { status: testStatus, detail: testDetail, test } =
     useEndpointProbe(urlDraft);
 
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
+  const [manualModelMode, setManualModelMode] = useState(false);
+
+  const fetchModels = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl ?? urlDraft).trim();
+    if (!targetUrl) return;
+    setIsFetchingModels(true);
+    setFetchModelsError(null);
+    try {
+      const keyToUse = endpointKey ?? (keyDraft.trim() || undefined);
+      const models = await fetchCompatibleModels(targetUrl, {
+        apiKey: keyToUse,
+      });
+      setDiscoveredModels(models);
+      if (models.length > 0) {
+        setManualModelMode(false);
+        if (!modelDraft.trim() || !models.includes(modelDraft.trim())) {
+          const nextModel = models[0];
+          setModelDraft(nextModel);
+          void onUpdate({ modelId: nextModel });
+        }
+      } else {
+        setManualModelMode(true);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setFetchModelsError(msg);
+      setManualModelMode(true);
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
+
   useEffect(() => setNameDraft(endpoint.name), [endpoint.name]);
   useEffect(() => setUrlDraft(endpoint.baseURL), [endpoint.baseURL]);
   useEffect(() => setModelDraft(endpoint.modelId), [endpoint.modelId]);
@@ -1861,7 +2020,10 @@ function CustomEndpointCard({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void test()}
+                onClick={async () => {
+                  await test();
+                  void fetchModels();
+                }}
                 disabled={!urlDraft.trim() || testStatus === "testing"}
                 className="h-8 px-3 text-[11px]"
               >
@@ -1871,17 +2033,94 @@ function CustomEndpointCard({
           </FieldRow>
 
           <FieldRow label={t("settings.models.modelId")}>
-            <Input
-              value={modelDraft}
-              onChange={(e) => setModelDraft(e.target.value)}
-              onBlur={() => {
-                const v = modelDraft.trim();
-                if (v !== endpoint.modelId) void onUpdate({ modelId: v });
-              }}
-              placeholder="gpt-4o, qwen3-max, glm-4.6, …"
-              spellCheck={false}
-              className="h-8 font-mono text-[11.5px]"
-            />
+            <div className="flex flex-col flex-1 gap-1.5">
+              <div className="flex flex-1 gap-1.5">
+                {discoveredModels.length > 0 && !manualModelMode ? (
+                  <Select
+                    value={modelDraft}
+                    onValueChange={(val) => {
+                      if (val === "__manual__") {
+                        setManualModelMode(true);
+                      } else {
+                        setModelDraft(val);
+                        if (val !== endpoint.modelId) void onUpdate({ modelId: val });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 flex-1 font-mono text-[11.5px]">
+                      <SelectValue
+                        placeholder={t("settings.models.selectModelPlaceholder")}
+                      />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      {discoveredModels.map((m) => (
+                        <SelectItem
+                          key={m}
+                          value={m}
+                          className="font-mono text-[11.5px]"
+                        >
+                          {m}
+                        </SelectItem>
+                      ))}
+                      <SelectItem
+                        value="__manual__"
+                        className="text-[11.5px] text-muted-foreground border-t border-border/40 mt-1"
+                      >
+                        {t("settings.models.customModelManual")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={modelDraft}
+                    onChange={(e) => setModelDraft(e.target.value)}
+                    onBlur={() => {
+                      const v = modelDraft.trim();
+                      if (v !== endpoint.modelId) void onUpdate({ modelId: v });
+                    }}
+                    placeholder="gpt-4o, qwen3-max, glm-4.6, …"
+                    spellCheck={false}
+                    className="h-8 flex-1 font-mono text-[11.5px]"
+                  />
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void fetchModels()}
+                  disabled={!urlDraft.trim() || isFetchingModels}
+                  className="h-8 px-2.5 text-[11px] gap-1 shrink-0"
+                  title={t("settings.models.fetchModelsTitle")}
+                >
+                  <HugeiconsIcon
+                    icon={Refresh01Icon}
+                    size={11}
+                    className={cn(isFetchingModels && "animate-spin")}
+                  />
+                  {isFetchingModels
+                    ? t("settings.models.fetchingModels")
+                    : t("settings.models.fetchModels")}
+                </Button>
+                {discoveredModels.length > 0 && manualModelMode ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setManualModelMode(false)}
+                    className="h-8 px-2 text-[10.5px] text-muted-foreground hover:text-foreground shrink-0"
+                  >
+                    {t("settings.models.modelsFound", {
+                      count: discoveredModels.length,
+                    })}
+                  </Button>
+                ) : null}
+              </div>
+              {fetchModelsError ? (
+                <span className="text-[10.5px] text-destructive/80 truncate">
+                  {fetchModelsError}
+                </span>
+              ) : null}
+            </div>
           </FieldRow>
 
           <FieldRow label={t("settings.models.autocompleteProfile")}>

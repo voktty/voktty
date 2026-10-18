@@ -661,6 +661,12 @@ export const es: TranslationSchema = {
         "Usa el reconocimiento de voz integrado del navegador (Web Speech API). Gratis, sin clave de API. La calidad depende del SO y del motor WebView.",
       contextLabel: "Ventana de contexto",
       endpointNamePlaceholder: "Mi endpoint",
+      fetchModels: "Cargar modelos",
+      fetchModelsTitle: "Descubrir modelos disponibles del endpoint",
+      fetchingModels: "Cargando modelos…",
+      modelsFound: "{count} modelos encontrados",
+      customModelManual: "+ ID de modelo personalizado…",
+      selectModelPlaceholder: "Selecciona un modelo",
       localMeta: {
         lmstudioDescription:
           "Ejecuta modelos GGUF mediante el servidor HTTP de LM Studio (actívalo en la pestaña Developer).",
