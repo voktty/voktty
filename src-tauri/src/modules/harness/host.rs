@@ -193,6 +193,7 @@ struct LiveChild {
     stdin: Mutex<ChildStdin>,
     pid: u32,
     account: Option<HarnessAccount>,
+    _askpass: Option<super::ssh_askpass::Askpass>,
 }
 
 struct LiveSse {
@@ -738,6 +739,49 @@ fn build_exec_command(command: &str, args: &[String]) -> Command {
     c
 }
 
+fn parse_remote_cwd(cwd: &str) -> Option<String> {
+    if !cwd.starts_with("remote://") {
+        return None;
+    }
+    let rest = &cwd["remote://".len()..];
+    let slash = rest.find('/')?;
+    let host_path = &rest[slash + 1..];
+    if host_path.is_empty() {
+        Some(".".to_string())
+    } else if host_path.starts_with('/')
+        || (host_path.len() >= 2
+            && host_path.as_bytes()[0].is_ascii_alphabetic()
+            && host_path.as_bytes()[1] == b':')
+    {
+        Some(host_path.to_string())
+    } else {
+        Some(format!("/{host_path}"))
+    }
+}
+
+fn build_remote_agent_command(
+    target_dir: &str,
+    command: &str,
+    args: &[String],
+) -> String {
+    let quoted_dir = super::remote_ssh::shell_quote(target_dir);
+    let mut cmd_parts = vec![super::remote_ssh::shell_quote(command)];
+    for arg in args {
+        cmd_parts.push(super::remote_ssh::shell_quote(arg));
+    }
+    let exec_cmd = format!("exec {}", cmd_parts.join(" "));
+
+    let script = format!(
+        "[ -f \"$HOME/.profile\" ] && . \"$HOME/.profile\" >/dev/null 2>&1; \
+         [ -f \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\" >/dev/null 2>&1; \
+         [ -f \"$HOME/.zshrc\" ] && . \"$HOME/.zshrc\" >/dev/null 2>&1; \
+         export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:/usr/local/bin:$PATH\"; \
+         cd -- {quoted_dir} && {exec_cmd}"
+    );
+
+    format!("${{SHELL:-/bin/sh}} -l -c {}", super::remote_ssh::shell_quote(&script))
+}
+
 /// Off the main thread: fork/exec, and `apply_gui_env` can wait on the first
 /// login-shell read. Callers await this before writing to the child. Kill can
 /// still race the fork, so a cancelled spawn must not reinsert the child.
@@ -752,56 +796,94 @@ pub fn harness_spawn(
     cwd: String,
     network_allowlist: Option<Vec<String>>,
     account: Option<HarnessAccount>,
+    remote_connection: Option<crate::modules::remote::RemoteSshConnection>,
+    remote_cwd: Option<String>,
 ) -> Result<u32, String> {
     let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
     if let Some(prev) = prev {
         terminate(prev.pid);
     }
 
-    let workdir = expand_home(&cwd);
-    let workdir = if workdir.is_dir() {
-        workdir
-    } else {
-        crate::modules::workspace::native_spawn_dir(None)
-    };
-    if !workdir.is_dir() {
-        return Err(format!(
-            "Working directory does not exist: {}",
-            workdir.display()
-        ));
-    }
-
-    let mut cmd = build_exec_command(&command, &args);
-
-    cmd.current_dir(&workdir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    prepare_child(&mut cmd, &command);
-    // After prepare_child: apply_gui_env unconditionally overwrites PATH, so
-    // control env (and any PATH prepend for the bundled CLI) must come last.
-    if let Some(control) = app.try_state::<control::ControlState>() {
-        if let Some(env) = control.harness_env(&session_id) {
-            apply_harness_control_env(&mut cmd, &env);
-        }
-    }
-
-    apply_provider_account(&app, &mut cmd, account.as_ref())?;
-
+    let mut _remote_askpass = None;
     let mut network_proxy: Option<net_proxy::ProxyHandle> = None;
-    if let Some(hosts) = &network_allowlist {
-        let allowlist = net_proxy::compile_allowlist_hosts(hosts)
-            .map_err(|e| format!("invalid network allowlist: {e}"))?;
-        let proxy = net_proxy::start(allowlist)
-            .map_err(|e| format!("failed to start network sandbox proxy: {e}"))?;
-        apply_network_proxy_env(&mut cmd, &proxy);
-        network_proxy = Some(proxy);
-    }
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Failed to start {command}: {e}"))?;
-    let pid = child.id();
+    let (mut child, pid) = if let Some(ref conn) = remote_connection {
+        crate::modules::remote::validate_connection(conn)?;
+        let remote_state = app
+            .try_state::<crate::modules::remote::RemoteState>()
+            .ok_or_else(|| "Remote state is unavailable".to_string())?;
+        let askpass = crate::modules::remote::start_ssh_askpass(&app, &remote_state)?;
+
+        let parsed_remote_cwd = parse_remote_cwd(&cwd);
+        let target_dir = remote_cwd
+            .as_deref()
+            .filter(|d| !d.trim().is_empty())
+            .or(parsed_remote_cwd.as_deref())
+            .unwrap_or(".");
+        let remote_script = build_remote_agent_command(target_dir, &command, &args);
+
+        let mut ssh_cmd = Command::new("ssh");
+        ssh_cmd
+            .args(crate::modules::remote::ssh_args(conn))
+            .arg(&remote_script)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        askpass.configure(&mut ssh_cmd)?;
+        crate::modules::proc::hide_console(&mut ssh_cmd);
+
+        let child = ssh_cmd
+            .spawn()
+            .map_err(|e| format!("Failed to start remote harness via SSH ({command}): {e}"))?;
+        let pid = child.id();
+        _remote_askpass = Some(askpass);
+        (child, pid)
+    } else {
+        let workdir = expand_home(&cwd);
+        let workdir = if workdir.is_dir() {
+            workdir
+        } else {
+            crate::modules::workspace::native_spawn_dir(None)
+        };
+        if !workdir.is_dir() {
+            return Err(format!(
+                "Working directory does not exist: {}",
+                workdir.display()
+            ));
+        }
+
+        let mut cmd = build_exec_command(&command, &args);
+
+        cmd.current_dir(&workdir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        prepare_child(&mut cmd, &command);
+        // After prepare_child: apply_gui_env unconditionally overwrites PATH, so
+        // control env (and any PATH prepend for the bundled CLI) must come last.
+        if let Some(control) = app.try_state::<control::ControlState>() {
+            if let Some(env) = control.harness_env(&session_id) {
+                apply_harness_control_env(&mut cmd, &env);
+            }
+        }
+
+        apply_provider_account(&app, &mut cmd, account.as_ref())?;
+
+        if let Some(hosts) = &network_allowlist {
+            let allowlist = net_proxy::compile_allowlist_hosts(hosts)
+                .map_err(|e| format!("invalid network allowlist: {e}"))?;
+            let proxy = net_proxy::start(allowlist)
+                .map_err(|e| format!("failed to start network sandbox proxy: {e}"))?;
+            apply_network_proxy_env(&mut cmd, &proxy);
+            network_proxy = Some(proxy);
+        }
+
+        let child = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to start {command}: {e}"))?;
+        let pid = child.id();
+        (child, pid)
+    };
 
     let stdin = child
         .stdin
@@ -820,6 +902,7 @@ pub fn harness_spawn(
         stdin: Mutex::new(stdin),
         pid,
         account,
+        _askpass: _remote_askpass,
     });
     if let Some(rejected) = host.install_spawn(session_id.clone(), epoch, kill_all, live) {
         // A kill, or a newer spawn, won the race while this one was forking.
@@ -2774,6 +2857,7 @@ mod tests {
                 stdin: Mutex::new(stdin),
                 pid,
                 account: None,
+                _askpass: None,
             }),
             child,
         )
@@ -3489,6 +3573,7 @@ mod proxy_lifecycle_tests {
                 stdin: Mutex::new(stdin),
                 pid,
                 account: None,
+                _askpass: None,
             }),
             child,
         )
@@ -3660,5 +3745,34 @@ mod binary_resolution_tests {
         std::fs::remove_file(&cmd).unwrap();
         assert_eq!(existing_binary(bare), None);
         std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn parse_remote_cwd_extracts_host_path() {
+        assert_eq!(
+            parse_remote_cwd("remote://env-123/workspace/project"),
+            Some("/workspace/project".to_string())
+        );
+        assert_eq!(
+            parse_remote_cwd("remote://env-123/C:/work/project"),
+            Some("C:/work/project".to_string())
+        );
+        assert_eq!(parse_remote_cwd("/local/path"), None);
+        assert_eq!(parse_remote_cwd("C:\\local\\path"), None);
+    }
+
+    #[test]
+    fn build_remote_agent_command_constructs_login_shell_exec() {
+        let cmd = build_remote_agent_command(
+            "/workspace/project",
+            "codex",
+            &["app-server".to_string()],
+        );
+        assert!(cmd.starts_with("${SHELL:-/bin/sh} -l -c "));
+        assert!(cmd.contains("/workspace/project"));
+        assert!(cmd.contains("exec"));
+        assert!(cmd.contains("codex"));
+        assert!(cmd.contains("app-server"));
+        assert!(cmd.contains("PATH="));
     }
 }

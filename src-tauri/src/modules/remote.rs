@@ -247,7 +247,7 @@ struct SshPromptEvent {
     confirm: bool,
 }
 
-fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<Askpass, String> {
+pub(crate) fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<Askpass, String> {
     let app = app.clone();
     let prompts = Arc::clone(&state.ssh_prompts);
     Askpass::start(move |message, confirm| {
@@ -1640,7 +1640,7 @@ fn get_windows_cpu() -> f32 {
     0.0
 }
 
-fn validate_connection(connection: &RemoteSshConnection) -> Result<(), String> {
+pub(crate) fn validate_connection(connection: &RemoteSshConnection) -> Result<(), String> {
     if connection.host.trim().is_empty() || has_control_or_space(&connection.host) {
         return Err("SSH host is invalid".to_string());
     }
@@ -1712,7 +1712,7 @@ fn ssh_destination(connection: &RemoteSshConnection) -> String {
     }
 }
 
-fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
+pub(crate) fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     let mut args = vec!["-T".to_string()];
     let user_extra = connection
         .extra_args

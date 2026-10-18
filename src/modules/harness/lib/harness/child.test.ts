@@ -229,3 +229,57 @@ describe("child bridge", () => {
     release();
   });
 });
+
+describe("remote spawnChild", () => {
+  it("cleans command executable name for remote target", async () => {
+    const { cleanRemoteCommand } = await loadChild();
+    expect(cleanRemoteCommand("C:\\Users\\user\\AppData\\npm\\codex.cmd")).toBe("codex");
+    expect(cleanRemoteCommand("/usr/bin/claude")).toBe("claude");
+    expect(cleanRemoteCommand("agent.exe")).toBe("agent");
+    expect(cleanRemoteCommand("my-agent.sh")).toBe("my-agent");
+  });
+
+  it("resolves remote SSH connection and passes it to harness_spawn", async () => {
+    installResolvedListeners();
+    const child = await loadChild();
+    const { usePreferencesStore } = await import("@/modules/settings/preferences");
+    usePreferencesStore.setState({
+      sshConnections: [
+        {
+          id: "ssh-config-test-1",
+          name: "Test Server",
+          host: "192.168.1.4",
+          user: "root",
+          port: 22,
+        },
+      ],
+    });
+
+    const release = await child.acquireHarnessBridge();
+    mocks.invoke.mockResolvedValue(42);
+
+    await child.spawnChild(
+      "session-1",
+      "C:\\tools\\codex.cmd",
+      ["app-server"],
+      "remote://voktty-ssh-ssh-config-test-1/workspace/project",
+    );
+
+    expect(mocks.invoke).toHaveBeenCalledWith("harness_spawn", {
+      sessionId: "session-1",
+      command: "codex",
+      args: ["app-server"],
+      cwd: "remote://voktty-ssh-ssh-config-test-1/workspace/project",
+      networkAllowlist: null,
+      account: undefined,
+      remoteConnection: {
+        host: "192.168.1.4",
+        user: "root",
+        port: 22,
+      },
+      remoteCwd: "/workspace/project",
+    });
+
+    release();
+  });
+});

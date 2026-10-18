@@ -2,6 +2,8 @@ import { deleteGeneratedImages, saveGeneratedImage } from "../fs";
 import { nativeModelId } from "../models";
 import { sameProviderAccountId } from "../providerAccounts";
 import type { RuntimeMode } from "../session";
+import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { questionPromptTitle, type UserQuestionReply } from "../userQuestion";
 import {
   killChild,
@@ -457,7 +459,10 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     resumeByThread.delete(input.sessionId);
   }
 
-  const { path } = await resolveCodexBinaryImpl();
+  const isRemote = isRemoteProjectPath(input.cwd);
+  const { path } = isRemote
+    ? { path: "codex" }
+    : await resolveCodexBinaryImpl();
   const liveRef: { current: Live | null } = { current: null };
 
   const rpc = new JsonRpcClient(
@@ -509,20 +514,25 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     { includeJsonrpc: false, label: "codex" },
   );
 
+  let lastStderr = "";
   watchChild(
     input.sessionId,
     (line) => rpc.pushLine(line),
     (code) => {
-      rpc.close(new Error("Codex app-server exited"));
+      const exitError = lastStderr.trim() || "Codex app-server exited";
+      rpc.close(new Error(exitError));
       liveByThread.delete(input.sessionId);
       input.onEvent({ type: "session.ended", code });
       const live = liveRef.current;
-      live?.turnFailed?.(new Error("Codex app-server exited"));
+      live?.turnFailed?.(new Error(exitError));
       if (live) {
         clearServerRequests(live);
         live.turnDone = null;
         live.turnFailed = null;
       }
+    },
+    (stderrLine) => {
+      lastStderr = stderrLine;
     },
   );
 
@@ -556,6 +566,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     const model = nativeModelId(input.model);
     const serviceTier = input.modelSettings?.serviceTier;
     const effort = input.modelSettings?.reasoningEffort;
+    const effectiveCwd = parseRemotePath(input.cwd)?.hostPath ?? input.cwd;
 
     let threadId: string | undefined;
     let didResume = false;
@@ -567,7 +578,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
           {
             threadId: resume.threadId,
             ...buildThreadStartParams({
-              cwd: input.cwd,
+              cwd: effectiveCwd,
               runtimeMode: input.runtimeMode,
               model,
               serviceTier,
@@ -586,7 +597,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       const opened = await rpc.request<{ thread?: { id?: string } }>(
         "thread/start",
         buildThreadStartParams({
-          cwd: input.cwd,
+          cwd: effectiveCwd,
           runtimeMode: input.runtimeMode,
           model,
           serviceTier,

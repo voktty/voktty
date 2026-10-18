@@ -5,6 +5,7 @@ import type {
   TaskListItem,
   TaskListMeta,
 } from "../session";
+import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { loadClaudeHooks } from "../settings";
 import {
   killChild,
@@ -417,7 +418,10 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     resumeByThread.delete(input.sessionId);
   }
 
-  const { path } = await resolveClaudeBinaryImpl();
+  const isRemote = isRemoteProjectPath(input.cwd);
+  const { path } = isRemote
+    ? { path: "claude" }
+    : await resolveClaudeBinaryImpl();
   const liveRef: { current: Live | null } = { current: null };
   const claudeSessionId =
     canResume && resume ? resume.sessionId : crypto.randomUUID();
@@ -469,6 +473,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   };
   liveRef.current = live;
 
+  let lastStderr = "";
   watchChild(
     input.sessionId,
     (line) => {
@@ -480,13 +485,17 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       liveByThread.delete(input.sessionId);
       input.onEvent({ type: "session.ended", code });
       const current = liveRef.current;
-      current?.turnFailed?.(new Error("Claude Code exited"));
+      const exitError = lastStderr.trim() || "Claude Code exited";
+      current?.turnFailed?.(new Error(exitError));
       current?.initDone?.();
       if (current) {
         current.turnDone = null;
         current.turnFailed = null;
         current.initDone = null;
       }
+    },
+    (stderrLine) => {
+      lastStderr = stderrLine;
     },
   );
 

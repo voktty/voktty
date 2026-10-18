@@ -1,6 +1,15 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HarnessId } from "@/modules/harness/lib/session";
+import type { RemoteSshConnection } from "@/modules/remote/client";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import {
+  remoteSshConnectionFor,
+  remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment,
+} from "@/modules/connections/model/remoteSshProfiles";
+import { remoteMachineFor } from "@/modules/connections/model/connections";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 
 export interface ChildBackend {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
@@ -274,6 +283,27 @@ export function unwatchSse(sessionId: string) {
   ownedSse.delete(sessionId);
 }
 
+export function cleanRemoteCommand(command: string): string {
+  const base = command.split(/[/\\]/).pop() || command;
+  return base.replace(/\.(cmd|exe|bat|sh)$/i, "");
+}
+
+export async function resolveRemoteSshConnection(
+  environmentId: string,
+): Promise<RemoteSshConnection> {
+  const saved = usePreferencesStore.getState().sshConnections ?? [];
+  const connectionId = remoteSshConnectionIdForEnvironment(environmentId);
+  if (connectionId) {
+    const profile = saved.find((c) => c.id === connectionId);
+    if (profile) return remoteSshConnectionForProfile(profile);
+  }
+  const machine = await remoteMachineFor(environmentId);
+  if (machine) return remoteSshConnectionFor(machine, saved);
+  throw new Error(
+    `The saved SSH connection for remote environment "${environmentId}" is missing.`,
+  );
+}
+
 export async function spawnChild(
   sessionId: string,
   command: string,
@@ -285,13 +315,27 @@ export async function spawnChild(
   livePid.delete(sessionId);
   pendingExit.delete(sessionId);
   ownedChildren.add(sessionId);
+
+  let remoteConnection: RemoteSshConnection | null = null;
+  let remoteCwd: string | null = null;
+  let execCommand = command;
+
+  const remote = parseRemotePath(cwd);
+  if (remote) {
+    remoteConnection = await resolveRemoteSshConnection(remote.environmentId);
+    remoteCwd = remote.hostPath;
+    execCommand = cleanRemoteCommand(command);
+  }
+
   const pid = await invoke<number>("harness_spawn", {
     sessionId,
-    command,
+    command: execCommand,
     args,
     cwd,
     networkAllowlist: networkAllowlist ?? null,
     account,
+    remoteConnection,
+    remoteCwd,
   });
   if (typeof pid !== "number" || pid <= 0) return;
   livePid.set(sessionId, pid);
