@@ -1,9 +1,11 @@
 name: Build Android APK
 
 on:
-  push:
-    branches:
-      - main
+  # Desactivado temporalmente del pipeline automatico hasta estabilizar movil/Android.
+  # Se puede reactivar descomentando el bloque 'push' cuando sea estable.
+  # push:
+  #   branches:
+  #     - main
   workflow_dispatch:
 
 jobs:

@@ -17,6 +17,19 @@ vi.mock("@tauri-apps/api/event", () => ({ listen }));
 import type { Live } from "../store/chatStore";
 import { useAiLiveBridge } from "./useAiLiveBridge";
 import type { Tab } from "@/modules/tabs";
+import { IS_WINDOWS } from "@/lib/platform";
+
+const LOCAL_APP_PATH = IS_WINDOWS
+  ? "C:\\proyectos\\local-app"
+  : "/home/user/proyectos/local-app";
+const LAUNCH_PATH = IS_WINDOWS
+  ? "C:\\proyectos\\launch"
+  : "/home/user/proyectos/launch";
+const HOME_PATH = IS_WINDOWS ? "C:\\Users\\user" : "/home/user";
+const VOKTTY_PATH = IS_WINDOWS
+  ? "C:\\proyectos\\voktty"
+  : "/home/user/proyectos/voktty";
+const APP_PATH = IS_WINDOWS ? "C:\\proyectos\\app" : "/home/user/proyectos/app";
 
 describe("useAiLiveBridge", () => {
   let container: HTMLDivElement | null = null;
@@ -77,9 +90,9 @@ describe("useAiLiveBridge", () => {
         id: 1,
         title: "Terminal",
         kind: "terminal",
-        cwd: "C:\\proyectos\\local-app",
+        cwd: LOCAL_APP_PATH,
         workspaceEnv: { kind: "local" },
-        paneTree: { kind: "leaf", leafId: 1, cwd: "C:\\proyectos\\local-app" },
+        paneTree: { kind: "leaf", leafId: 1, cwd: LOCAL_APP_PATH },
         activeLeafId: 1,
       } as unknown as Tab,
     ];
@@ -87,14 +100,14 @@ describe("useAiLiveBridge", () => {
     renderBridge({
       activeId: 1,
       tabs,
-      launchCwd: "C:\\proyectos\\launch",
-      home: "C:\\Users\\user",
+      launchCwd: LAUNCH_PATH,
+      home: HOME_PATH,
     });
 
     expect(liveCapture).not.toBeNull();
-    expect(liveCapture?.getCwd()).toBe("C:\\proyectos\\local-app");
-    expect(liveCapture?.getLocalCwd?.()).toBe("C:\\proyectos\\local-app");
-    expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe("C:\\proyectos\\launch");
+    expect(liveCapture?.getCwd()).toBe(LOCAL_APP_PATH);
+    expect(liveCapture?.getLocalCwd?.()).toBe(LOCAL_APP_PATH);
+    expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe(LAUNCH_PATH);
   });
 
   it("skips remote SSH tabs for getLocalCwd and falls back to local launchCwd/home", () => {
@@ -122,16 +135,16 @@ describe("useAiLiveBridge", () => {
       activeId: 2,
       tabs,
       explorerRoot: "/workspace/app_projects/webserver",
-      launchCwd: "C:\\proyectos\\voktty",
-      home: "C:\\Users\\user",
+      launchCwd: VOKTTY_PATH,
+      home: HOME_PATH,
     });
 
     expect(liveCapture).not.toBeNull();
     // getCwd retains the remote path for terminal features
     expect(liveCapture?.getCwd()).toBe("/workspace/app_projects/webserver");
     // getLocalCwd skips the SSH tab and returns the local launch directory
-    expect(liveCapture?.getLocalCwd?.()).toBe("C:\\proyectos\\voktty");
-    expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe("C:\\proyectos\\voktty");
+    expect(liveCapture?.getLocalCwd?.()).toBe(VOKTTY_PATH);
+    expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe(VOKTTY_PATH);
   });
 
   it("skips Docker tabs for getLocalCwd", () => {
@@ -153,12 +166,12 @@ describe("useAiLiveBridge", () => {
     renderBridge({
       activeId: 3,
       tabs,
-      home: "C:\\Users\\user",
+      home: HOME_PATH,
     });
 
     expect(liveCapture).not.toBeNull();
     expect(liveCapture?.getCwd()).toBe("/app");
-    expect(liveCapture?.getLocalCwd?.()).toBe("C:\\Users\\user");
+    expect(liveCapture?.getLocalCwd?.()).toBe(HOME_PATH);
   });
 
   it("ignores remote:// explorer roots in getLocalWorkspaceRoot", () => {
@@ -166,10 +179,10 @@ describe("useAiLiveBridge", () => {
       activeId: 99,
       tabs: [],
       explorerRoot: "remote://ssh/conn1/root",
-      launchCwd: "C:\\proyectos\\app",
-      home: "C:\\Users\\user",
+      launchCwd: APP_PATH,
+      home: HOME_PATH,
     });
 
-    expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe("C:\\proyectos\\app");
+    expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe(APP_PATH);
   });
 });
