@@ -6,11 +6,16 @@ import {
   segmentsFromCwd,
 } from "./pathUtils";
 
-function shape(cwd: string, home: string | null) {
-  return segmentsFromCwd(cwd, home).map((s) => ({
+function shape(
+  cwd: string,
+  home: string | null,
+  sshConnections?: readonly { id: string; name: string }[],
+) {
+  return segmentsFromCwd(cwd, home, sshConnections).map((s) => ({
     label: s.label,
     fullPath: s.fullPath,
     isHome: s.isHome,
+    ...(s.isRemote !== undefined ? { isRemote: s.isRemote } : {}),
   }));
 }
 
@@ -68,6 +73,56 @@ describe("segmentsFromCwd", () => {
     ]);
     expect(shape("/", null)).toEqual([
       { label: "/", fullPath: "/", isHome: false },
+    ]);
+  });
+
+  it("formats remote:// paths using ssh connection names or extracted host aliases", () => {
+    const rawUri =
+      "remote://voktty-ssh-ssh-config-forgenex-code1-1788527679157-h2bqx/workspace/pepe";
+    expect(shape(rawUri, null)).toEqual([
+      {
+        label: "forgenex-code1",
+        fullPath:
+          "remote://voktty-ssh-ssh-config-forgenex-code1-1788527679157-h2bqx/",
+        isHome: false,
+        isRemote: true,
+      },
+      {
+        label: "workspace",
+        fullPath:
+          "remote://voktty-ssh-ssh-config-forgenex-code1-1788527679157-h2bqx/workspace",
+        isHome: false,
+      },
+      {
+        label: "pepe",
+        fullPath:
+          "remote://voktty-ssh-ssh-config-forgenex-code1-1788527679157-h2bqx/workspace/pepe",
+        isHome: false,
+      },
+    ]);
+
+    const matchingConn = [
+      { id: "custom-conn-id", name: "Production Server" },
+    ];
+    expect(
+      shape("remote://voktty-ssh-custom-conn-id/var/log", null, matchingConn),
+    ).toEqual([
+      {
+        label: "Production Server",
+        fullPath: "remote://voktty-ssh-custom-conn-id/",
+        isHome: false,
+        isRemote: true,
+      },
+      {
+        label: "var",
+        fullPath: "remote://voktty-ssh-custom-conn-id/var",
+        isHome: false,
+      },
+      {
+        label: "log",
+        fullPath: "remote://voktty-ssh-custom-conn-id/var/log",
+        isHome: false,
+      },
     ]);
   });
 

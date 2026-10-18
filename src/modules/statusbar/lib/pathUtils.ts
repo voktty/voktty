@@ -4,6 +4,7 @@ export type Segment = {
   label: string;
   fullPath: string;
   isHome: boolean;
+  isRemote?: boolean;
 };
 
 const WINDOWS_DRIVE = /^([A-Za-z]:)(.*)$/;
@@ -29,6 +30,7 @@ function normalize(p: string | null | undefined): string {
 export function segmentsFromCwd(
   cwd: string | null | undefined,
   home: string | null | undefined,
+  sshConnections?: readonly { id: string; name: string }[],
 ): Segment[] {
   if (typeof cwd !== "string" || cwd.trim() === "") {
     return [];
@@ -37,6 +39,51 @@ export function segmentsFromCwd(
   const normCwd = normalize(cwd);
   if (!normCwd) {
     return [];
+  }
+
+  if (normCwd.startsWith("remote://")) {
+    const withoutPrefix = normCwd.slice("remote://".length);
+    const slashIdx = withoutPrefix.indexOf("/");
+    const environmentId =
+      slashIdx === -1 ? withoutPrefix : withoutPrefix.slice(0, slashIdx);
+    const hostPath = slashIdx === -1 ? "/" : withoutPrefix.slice(slashIdx);
+
+    let profileName: string | undefined;
+    if (environmentId.startsWith("voktty-ssh-")) {
+      try {
+        const decoded = decodeURIComponent(
+          environmentId.slice("voktty-ssh-".length),
+        );
+        const found = sshConnections?.find((c) => c.id === decoded);
+        if (found?.name) {
+          profileName = found.name;
+        } else {
+          const match = /^ssh-config-(.+)-\d+-[a-z0-9]+$/.exec(decoded);
+          if (match) {
+            profileName = match[1];
+          } else {
+            profileName = decoded;
+          }
+        }
+      } catch {
+        profileName = environmentId;
+      }
+    }
+    const label = profileName || environmentId;
+    const rootSegment: Segment = {
+      label,
+      fullPath: `remote://${environmentId}/`,
+      isHome: false,
+      isRemote: true,
+    };
+    const tailParts = hostPath.replace(/^\//, "").split("/").filter(Boolean);
+    const segments: Segment[] = [rootSegment];
+    let acc = `remote://${environmentId}`;
+    for (const part of tailParts) {
+      acc = `${acc}/${part}`;
+      segments.push({ label: part, fullPath: acc, isHome: false });
+    }
+    return segments;
   }
 
   const normHome =

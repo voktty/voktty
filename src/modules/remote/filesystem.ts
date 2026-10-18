@@ -8,6 +8,7 @@ import { isWslWorkspacePath, type WorkspaceEnv } from "@/modules/workspace";
 import { toDirEntries, toFileStat } from "@/modules/ssh-native/adapt";
 import { nativeHandleFor } from "@/modules/ssh-native/handles";
 import { SshNativeCallError } from "@/modules/ssh-native/client";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
   sftpCreateDir,
   sftpCreateFile,
@@ -69,6 +70,12 @@ function requireSession(env: RemoteWorkspaceEnv): number {
 }
 
 function normalizePath(path: string): string {
+  if (path.startsWith("remote://")) {
+    const parsed = parseRemotePath(path);
+    if (parsed) {
+      return parsed.hostPath.replace(/\\/g, "/").replace(/\/+/g, "/");
+    }
+  }
   return path.replace(/\\/g, "/").replace(/\/+/g, "/");
 }
 
@@ -81,6 +88,7 @@ export function isPathInRemoteWorkspace(
   path: string,
 ): env is RemoteWorkspaceEnv {
   if (!env || env.kind !== "ssh") return false;
+  if (path.startsWith("remote://")) return true;
   if (isWindowsLocalPath(path)) return false;
   return path.startsWith("/") || path === "." || !path.includes(":");
 }
@@ -192,7 +200,8 @@ async function helperReadDir(
 }
 
 export const remoteReadDir = withRemoteBackend(
-  async (handle, path: string) => toDirEntries(await sftpReadDir(handle, path)),
+  async (handle, path: string) =>
+    toDirEntries(await sftpReadDir(handle, normalizePath(path))),
   helperReadDir,
 );
 
@@ -207,8 +216,9 @@ function helperReadFile(
 
 export const remoteReadFile = withRemoteBackend(
   async (handle, path: string): Promise<RemoteFileText> => {
-    const content = await sftpReadText(handle, path);
-    const stat = await sftpStat(handle, path);
+    const norm = normalizePath(path);
+    const content = await sftpReadText(handle, norm);
+    const stat = await sftpStat(handle, norm);
     return { content, size: stat.size, mtime: stat.modifiedMs ?? 0 };
   },
   helperReadFile,
@@ -243,8 +253,9 @@ async function helperReadBinaryFile(
 
 export const remoteReadBinaryFile = withRemoteBackend(
   async (handle, path: string): Promise<RemoteFileBinary> => {
-    const bytes = decodeBase64Bytes(await sftpReadBinary(handle, path));
-    const stat = await sftpStat(handle, path);
+    const norm = normalizePath(path);
+    const bytes = decodeBase64Bytes(await sftpReadBinary(handle, norm));
+    const stat = await sftpStat(handle, norm);
     return { bytes, size: bytes.length, mtime: stat.modifiedMs ?? 0 };
   },
   helperReadBinaryFile,
@@ -291,8 +302,9 @@ async function helperWriteFile(
 
 export const remoteWriteFile = withRemoteBackend(
   async (handle, path: string, content: string) => {
-    await sftpWriteText(handle, path, content);
-    return (await sftpStat(handle, path)).modifiedMs ?? 0;
+    const norm = normalizePath(path);
+    await sftpWriteText(handle, norm, content);
+    return (await sftpStat(handle, norm)).modifiedMs ?? 0;
   },
   helperWriteFile,
 );
@@ -307,7 +319,8 @@ function helperStat(
 }
 
 export const remoteStat = withRemoteBackend(
-  async (handle, path: string) => toFileStat(await sftpStat(handle, path)),
+  async (handle, path: string) =>
+    toFileStat(await sftpStat(handle, normalizePath(path))),
   helperStat,
 );
 
@@ -321,7 +334,8 @@ function helperCreateFile(
 }
 
 export const remoteCreateFile = withRemoteBackend(
-  (handle, path: string) => sftpCreateFile(handle, path).then(() => undefined),
+  (handle, path: string) =>
+    sftpCreateFile(handle, normalizePath(path)).then(() => undefined),
   helperCreateFile,
 );
 
@@ -335,7 +349,8 @@ function helperCreateDir(
 }
 
 export const remoteCreateDir = withRemoteBackend(
-  (handle, path: string) => sftpCreateDir(handle, path).then(() => undefined),
+  (handle, path: string) =>
+    sftpCreateDir(handle, normalizePath(path)).then(() => undefined),
   helperCreateDir,
 );
 
@@ -352,7 +367,9 @@ function helperRename(
 
 export const remoteRename = withRemoteBackend(
   (handle, from: string, to: string) =>
-    sftpRename(handle, from, to).then(() => undefined),
+    sftpRename(handle, normalizePath(from), normalizePath(to)).then(
+      () => undefined,
+    ),
   helperRename,
 );
 
@@ -366,6 +383,7 @@ function helperDelete(
 }
 
 export const remoteDelete = withRemoteBackend(
-  (handle, path: string) => sftpDelete(handle, path).then(() => undefined),
+  (handle, path: string) =>
+    sftpDelete(handle, normalizePath(path)).then(() => undefined),
   helperDelete,
 );

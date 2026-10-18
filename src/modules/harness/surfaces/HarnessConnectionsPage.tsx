@@ -14,20 +14,17 @@ import {
   useWorkspaceEnvStore,
   workspaceScopeKey,
 } from "@/modules/workspace";
-import {
-  AlertCircleIcon,
-  StopIcon,
-  Tick02Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import {
+  Check,
+  CircleAlert,
   FolderOpen,
   Internet,
   Loader,
   Play,
   RefreshCw,
   RotateCcw,
+  Square,
 } from "../chrome/icons";
 import { lastProjectPath } from "../lib/recents";
 
@@ -221,11 +218,7 @@ export function HarnessConnectionsPage() {
                           {/* Active Workspace / Connection status */}
                           {isSshActive ? (
                             <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-500">
-                              <HugeiconsIcon
-                                icon={Tick02Icon}
-                                size={12}
-                                strokeWidth={2.5}
-                              />
+                              <Check className="size-3" strokeWidth={2.5} />
                               <span>{t("harness.connections.connected")}</span>
                             </span>
                           ) : isConnConnecting ? (
@@ -238,11 +231,7 @@ export function HarnessConnectionsPage() {
                               className="inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-rose-400"
                               title={connectionAttempt?.state.error ?? undefined}
                             >
-                              <HugeiconsIcon
-                                icon={AlertCircleIcon}
-                                size={12}
-                                strokeWidth={2}
-                              />
+                              <CircleAlert className="size-3" strokeWidth={2} />
                               <span>Error</span>
                             </span>
                           ) : null}
@@ -280,7 +269,7 @@ export function HarnessConnectionsPage() {
                             onClick={handleDisconnect}
                             title={t("harness.connections.disconnect")}
                           >
-                            <HugeiconsIcon icon={StopIcon} size={13} />
+                            <Square className="size-3.5" />
                             <span>{t("harness.connections.disconnect")}</span>
                           </button>
                         </>
@@ -312,10 +301,8 @@ export function HarnessConnectionsPage() {
                   {/* Failure details if connection failed */}
                   {isConnFailed && connectionAttempt?.state.error ? (
                     <div className="flex items-start gap-2 rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 text-[11px] text-rose-300">
-                      <HugeiconsIcon
-                        icon={AlertCircleIcon}
-                        size={14}
-                        className="shrink-0 text-rose-400 mt-0.5"
+                      <CircleAlert
+                        className="size-3.5 shrink-0 text-rose-400 mt-0.5"
                       />
                       <span className="leading-relaxed">
                         {connectionAttempt.state.error}

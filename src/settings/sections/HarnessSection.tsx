@@ -71,6 +71,9 @@ import {
 } from "@/modules/ssh";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   PlayIcon,
   Refresh01Icon,
@@ -391,6 +394,11 @@ function RemoteConnectionsBlock() {
   const { pingMap, refreshPings } = useSshPing(connections, true);
   const env = useWorkspaceEnvStore((s) => s.env);
   const activeSshConn = env.kind === "ssh" ? env.connection : null;
+  const currentProjectPath = lastProjectPath() ?? "";
+  const parsedCurrentProject = parseRemotePath(currentProjectPath);
+  const currentConnectionId = parsedCurrentProject
+    ? remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId)
+    : undefined;
 
   const handleConnect = (conn: SshConnection) => {
     window.dispatchEvent(
@@ -461,10 +469,11 @@ function RemoteConnectionsBlock() {
             {connections.map((conn) => {
               const pingStatus = pingMap[conn.id];
               const isConnected =
-                activeSshConn &&
-                (activeSshConn.id === conn.id ||
-                  (activeSshConn.host === conn.host &&
-                    (activeSshConn.port ?? 22) === (conn.port ?? 22)));
+                (activeSshConn &&
+                  (activeSshConn.id === conn.id ||
+                    (activeSshConn.host === conn.host &&
+                      (activeSshConn.port ?? 22) === (conn.port ?? 22)))) ||
+                currentConnectionId === conn.id;
 
               return (
                 <div

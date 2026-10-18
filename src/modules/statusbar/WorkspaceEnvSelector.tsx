@@ -24,6 +24,7 @@ import {
   type WorkspaceEnv,
   workspaceScopeKey,
 } from "@/modules/workspace";
+import { Button } from "@/components/ui/button";
 import {
   Add01Icon,
   AlertCircleIcon,
@@ -36,6 +37,7 @@ import {
   ServerStack01Icon,
   ServerStack03Icon,
   Settings01Icon,
+  StopIcon,
   Tick02Icon,
   UsbIcon,
 } from "@hugeicons/core-free-icons";
@@ -247,6 +249,35 @@ export function WorkspaceEnvSelector({
         className="w-80 max-w-[92vw] max-h-[75vh] flex flex-col p-1.5 overflow-hidden rounded-xl border border-border/70 bg-popover/95 shadow-2xl backdrop-blur-xl"
       >
         <div className="flex-1 overflow-y-auto overscroll-contain pr-1 space-y-1 text-xs [-ms-overflow-style:none] [scrollbar-width:thin]">
+          {/* Active SSH Connection with 1-click Disconnect */}
+          {env.kind === "ssh" && (
+            <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 mb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold text-foreground truncate">
+                    {env.connection.name}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground truncate font-mono">
+                    {formatSshSubtitle(env.connection)}
+                  </div>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-6 px-2 text-[11px] gap-1 cursor-pointer shrink-0"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
+                  setDropdownOpen(false);
+                }}
+              >
+                <HugeiconsIcon icon={StopIcon} size={11} />
+                <span>{t("harness.connections.disconnect")}</span>
+              </Button>
+            </div>
+          )}
+
           {/* 1. LOCAL ENVIRONMENTS SECTION */}
           <div>
             <div

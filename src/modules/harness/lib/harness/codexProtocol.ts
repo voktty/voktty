@@ -38,9 +38,9 @@ export function runtimeModeToCodexConfig(mode: RuntimeMode): CodexThreadConfig {
     case "supervised":
       return {
         approvalPolicy: "untrusted",
-        sandbox: "read-only",
+        sandbox: "workspace-write",
         approvalsReviewer: "user",
-        sandboxPolicy: { type: "readOnly" },
+        sandboxPolicy: { type: "workspaceWrite" },
       };
     case "auto-accept-edits":
       return {
@@ -66,9 +66,9 @@ export function runtimeModeToCodexConfig(mode: RuntimeMode): CodexThreadConfig {
     default:
       return {
         approvalPolicy: "untrusted",
-        sandbox: "read-only",
+        sandbox: "workspace-write",
         approvalsReviewer: "user",
-        sandboxPolicy: { type: "readOnly" },
+        sandboxPolicy: { type: "workspaceWrite" },
       };
   }
 }

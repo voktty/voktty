@@ -25,6 +25,7 @@ import {
   Folder01Icon,
   Home03Icon,
   MoreHorizontalIcon,
+  ServerStack01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
@@ -65,12 +66,13 @@ export function CwdBreadcrumb({
   onCd,
 }: Props) {
   const { t } = useTranslation();
+  const sshConnections = usePreferencesStore((s) => s.sshConnections);
   const navigationHome = breadcrumbHomeForWorkspace(home, workspaceEnv);
   // File mode: dir segments navigate; filename is the terminal leaf.
   if (typeof filePath === "string" && filePath.trim() !== "") {
     const dir = dirname(filePath);
     const name = basename(filePath);
-    const segments = segmentsFromCwd(dir, navigationHome);
+    const segments = segmentsFromCwd(dir, navigationHome, sshConnections);
     const first = segments[0];
     const middle = segments.slice(1);
     return (
@@ -80,6 +82,7 @@ export function CwdBreadcrumb({
             <BreadcrumbSegment
               label={first.label}
               isHome={first.isHome}
+              isRemote={first.isRemote}
               onClick={() => onCd(first.fullPath)}
             />
           ) : null}
@@ -91,6 +94,7 @@ export function CwdBreadcrumb({
               <BreadcrumbSegment
                 label={s.label}
                 isHome={s.isHome}
+                isRemote={s.isRemote}
                 onClick={() => onCd(s.fullPath)}
               />
             </span>
@@ -109,7 +113,7 @@ export function CwdBreadcrumb({
     );
   }
 
-  const segments = segmentsFromCwd(cwd, navigationHome);
+  const segments = segmentsFromCwd(cwd, navigationHome, sshConnections);
   if (segments.length === 0) {
     return (
       <span className="text-[10.5px] text-muted-foreground/70">{t("statusbar.cwd.noDirectory")}</span>
@@ -133,6 +137,7 @@ export function CwdBreadcrumb({
           <BreadcrumbSegment
             label={firstParent.label}
             isHome={firstParent.isHome}
+            isRemote={firstParent.isRemote}
             onClick={() => onCd(firstParent.fullPath)}
           />
         ) : null}
@@ -144,6 +149,7 @@ export function CwdBreadcrumb({
             <BreadcrumbSegment
               label={s.label}
               isHome={s.isHome}
+              isRemote={s.isRemote}
               onClick={() => onCd(s.fullPath)}
             />
           </span>
@@ -164,10 +170,12 @@ export function CwdBreadcrumb({
 function BreadcrumbSegment({
   label,
   isHome,
+  isRemote,
   onClick,
 }: {
   label: string;
   isHome: boolean;
+  isRemote?: boolean;
   onClick: () => void;
 }) {
   const { t } = useTranslation();
@@ -180,7 +188,13 @@ function BreadcrumbSegment({
               variant="outline"
               className="h-4.5 gap-0.5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
             >
-              {isHome ? (
+              {isRemote ? (
+                <HugeiconsIcon
+                  icon={ServerStack01Icon}
+                  className="size-2.5"
+                  strokeWidth={1.75}
+                />
+              ) : isHome ? (
                 <HugeiconsIcon
                   icon={Home03Icon}
                   className="size-2.5"
@@ -314,7 +328,7 @@ function CollapsedSegments({
   segments,
   onCd,
 }: {
-  segments: { fullPath: string; label: string; isHome: boolean }[];
+  segments: { fullPath: string; label: string; isHome: boolean; isRemote?: boolean }[];
   onCd: (p: string) => void;
 }) {
   const { t } = useTranslation();
@@ -343,7 +357,7 @@ function CollapsedSegments({
                 className="text-[11px]"
               >
                 <HugeiconsIcon
-                  icon={s.isHome ? Home03Icon : Folder01Icon}
+                  icon={s.isRemote ? ServerStack01Icon : s.isHome ? Home03Icon : Folder01Icon}
                   className="size-3 text-muted-foreground"
                   strokeWidth={1.75}
                 />

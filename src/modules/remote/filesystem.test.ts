@@ -40,6 +40,10 @@ describe("remote filesystem paths", () => {
     expect(remoteRelativePath(env, "/srv/other/main.rs")).toBe(
       "/srv/other/main.rs",
     );
+    expect(remoteRelativePath(env, "remote://env-1/srv/project")).toBe(".");
+    expect(
+      remoteRelativePath(env, "remote://env-1/srv/project/src/main.rs"),
+    ).toBe("src/main.rs");
   });
 
   it("routes POSIX paths through the workspace backend", () => {
@@ -49,6 +53,9 @@ describe("remote filesystem paths", () => {
     expect(isPathInWorkspace(wsl, "/home/serge/project")).toBe(true);
     expect(isPathInWorkspace(wsl, "C:/project")).toBe(false);
     expect(isPathInWorkspace(env, "/srv/other/main.rs")).toBe(true);
+    expect(isPathInWorkspace(env, "remote://env-1/srv/other/main.rs")).toBe(
+      true,
+    );
     expect(isPathInWorkspace(env, "C:/project")).toBe(false);
     expect(isPathInWorkspace(local, "C:/project")).toBe(true);
     expect(isPathInWorkspace(local, "/srv/project")).toBe(!IS_WINDOWS);

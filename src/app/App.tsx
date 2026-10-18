@@ -62,6 +62,8 @@ import {
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -906,6 +908,18 @@ function DesktopApp() {
       ) ?? null
     );
   }, [activeTabKey, activeViewSpace, viewSpaces]);
+  const [harnessCwd, setHarnessCwd] = useState<string | null>(() => {
+    try {
+      return lastProjectPath();
+    } catch {
+      return null;
+    }
+  });
+
+  const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
+  const activeHarnessCwd =
+    activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
+
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
     if (activeTab?.kind === "terminal") {
@@ -925,16 +939,44 @@ function DesktopApp() {
         pathTab.path,
       );
     }
-    return activeSpace?.env ?? LOCAL_WORKSPACE;
-  }, [activeSpaceTabCount, activeTab, activeSpace?.env]);
-
-  const [harnessCwd, setHarnessCwd] = useState<string | null>(() => {
-    try {
-      return lastProjectPath();
-    } catch {
-      return null;
+    if (activeTab?.kind === "harness") {
+      if (activeHarnessCwd && activeHarnessCwd.startsWith("remote://voktty-ssh-")) {
+        const parsed = parseRemotePath(activeHarnessCwd);
+        if (parsed) {
+          const connId = remoteSshConnectionIdForEnvironment(parsed.environmentId);
+          const savedConnections = usePreferencesStore.getState().sshConnections ?? [];
+          const profile = connId
+            ? savedConnections.find((c) => c.id === connId)
+            : undefined;
+          if (profile) {
+            const currentEnv = useWorkspaceEnvStore.getState().env;
+            const sessionId =
+              currentEnv.kind === "ssh" &&
+              (currentEnv.connection.id === profile.id ||
+                (currentEnv.connection.host === profile.host &&
+                  (currentEnv.connection.port ?? 22) === (profile.port ?? 22)))
+                ? currentEnv.sessionId
+                : undefined;
+            return {
+              kind: "ssh" as const,
+              connection: profile,
+              root: parsed.hostPath,
+              ...(sessionId !== undefined ? { sessionId } : {}),
+            };
+          }
+        }
+      }
+      if (activeSpace?.env && activeSpace.env.kind !== "local") {
+        return activeSpace.env;
+      }
+      const currentEnv = useWorkspaceEnvStore.getState().env;
+      if (currentEnv.kind === "ssh") {
+        return currentEnv;
+      }
+      return LOCAL_WORKSPACE;
     }
-  });
+    return activeSpace?.env ?? LOCAL_WORKSPACE;
+  }, [activeSpaceTabCount, activeTab, activeSpace?.env, activeHarnessCwd]);
 
   useEffect(() => {
     const handleHarnessCwd = (e: Event) => {
@@ -966,10 +1008,6 @@ function DesktopApp() {
     return () =>
       window.removeEventListener("voktty:harness-cwd-change", handleHarnessCwd);
   }, [effectiveActiveId, updateTab]);
-
-  const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
-  const activeHarnessCwd =
-    activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
 
   const localFallbackRoot =
     localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null;
@@ -1939,13 +1977,48 @@ function DesktopApp() {
 
   useEffect(() => {
     const disconnectHandler = () => {
-      void handleWorkspaceChange(LOCAL_WORKSPACE);
+      const current = useWorkspaceEnvStore.getState().env;
+      if (current.kind === "ssh" && current.sessionId !== undefined) {
+        void closeRemoteWorkspace(current.sessionId).catch(() => {});
+      }
+      if (activeSpaceId) {
+        useSpaces.getState().setEnv(activeSpaceId, LOCAL_WORKSPACE);
+        useSpaces
+          .getState()
+          .setRoot(
+            activeSpaceId,
+            localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+          );
+      }
+      setWorkspaceEnv(LOCAL_WORKSPACE);
+      if (activeTab?.kind === "harness") {
+        const fallback = localHome ?? "~";
+        setHarnessCwd(fallback);
+        updateTab(activeTab.id, { cwd: fallback });
+        window.dispatchEvent(
+          new CustomEvent("voktty:harness-select-project", {
+            detail: { path: fallback },
+          }),
+        );
+      }
+      toast.success(
+        t("harness.connections.disconnected") || "Sesión remota desconectada",
+      );
     };
     window.addEventListener("voktty:disconnect-ssh", disconnectHandler);
     return () => {
       window.removeEventListener("voktty:disconnect-ssh", disconnectHandler);
     };
-  }, [handleWorkspaceChange]);
+  }, [
+    activeSpaceId,
+    activeTab,
+    localHome,
+    localLaunchCwd,
+    initialLaunchCwd,
+    setWorkspaceEnv,
+    updateTab,
+    t,
+  ]);
 
   const handleShareTerminal = useCallback(
     (tabId: number) => {

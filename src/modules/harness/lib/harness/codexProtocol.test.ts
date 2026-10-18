@@ -76,12 +76,12 @@ describe("codexCommandText", () => {
 });
 
 describe("runtimeModeToCodexConfig", () => {
-  it("maps supervised to untrusted read-only", () => {
+  it("maps supervised to untrusted workspace-write", () => {
     expect(runtimeModeToCodexConfig("supervised")).toEqual({
       approvalPolicy: "untrusted",
-      sandbox: "read-only",
+      sandbox: "workspace-write",
       approvalsReviewer: "user",
-      sandboxPolicy: { type: "readOnly" },
+      sandboxPolicy: { type: "workspaceWrite" },
     });
   });
 
