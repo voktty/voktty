@@ -70,6 +70,7 @@ import {
   useSshPing,
 } from "@/modules/ssh";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
@@ -395,16 +396,26 @@ function RemoteConnectionsBlock() {
   const { t } = useTranslation();
   const connections = useSshConnections();
   const { pingMap, refreshPings } = useSshPing(connections, true);
+  const harnessEnv = useHarnessEnvStore((s) => s.env);
+  const isHarnessConnecting = useHarnessEnvStore((s) => s.connecting);
   const env = useWorkspaceEnvStore((s) => s.env);
-  const activeSshConn = env.kind === "ssh" ? env.connection : null;
+  const activeSshConn =
+    harnessEnv.kind === "ssh"
+      ? harnessEnv.connection
+      : env.kind === "ssh"
+        ? env.connection
+        : null;
   const currentProjectPath = lastProjectPath() ?? "";
   const parsedCurrentProject = parseRemotePath(currentProjectPath);
   const currentConnectionId = parsedCurrentProject
     ? (findSshProfile(parsedCurrentProject.environmentId)?.id ??
        remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId))
-    : undefined;
+    : (harnessEnv.kind === "ssh" ? harnessEnv.connection.id : undefined);
 
-  const handleConnect = (conn: SshConnection) => {
+  const handleConnect = async (conn: SshConnection) => {
+    try {
+      await useHarnessEnvStore.getState().connect(conn);
+    } catch {}
     window.dispatchEvent(
       new CustomEvent("voktty:connect-ssh", {
         detail: { connection: conn, forcePickSession: false, openTab: false },
@@ -412,7 +423,8 @@ function RemoteConnectionsBlock() {
     );
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    await useHarnessEnvStore.getState().disconnect();
     window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
   };
 
@@ -547,6 +559,7 @@ function RemoteConnectionsBlock() {
                       <Button
                         size="sm"
                         variant="secondary"
+                        disabled={isHarnessConnecting}
                         className="h-6 px-2 text-[11px] gap-1 cursor-pointer"
                         onClick={() => handleConnect(conn)}
                       >

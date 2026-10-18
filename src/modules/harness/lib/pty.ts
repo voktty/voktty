@@ -14,6 +14,7 @@ import {
   remoteSshConnectionForProfile,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useHarnessEnvStore } from "./harnessEnvStore";
 import {
   shouldPickSshMultiplexer,
   sshMultiplexerSettingsForSelection,
@@ -140,6 +141,32 @@ async function openRemoteTerminalTarget(
     }
   }
 
+  const harnessEnv = useHarnessEnvStore.getState().env;
+  const isMatchingHarnessEnv =
+    harnessEnv.kind === "ssh" &&
+    harnessEnv.sessionId !== undefined &&
+    (harnessEnv.connection.id === profile.id ||
+      harnessEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+      harnessEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
+
+  const canReuseHarnessSession =
+    isMatchingHarnessEnv &&
+    harnessEnv.kind === "ssh" &&
+    isPathWithinRemoteRoot(harnessEnv, remotePath.hostPath);
+
+  if (canReuseHarnessSession && harnessEnv.kind === "ssh" && harnessEnv.sessionId !== undefined) {
+    return {
+      cwd: remotePath.hostPath,
+      workspace: {
+        kind: "ssh" as const,
+        connection: selectedProfile,
+        root: harnessEnv.root || remotePath.hostPath,
+        sessionId: harnessEnv.sessionId,
+      },
+      close: undefined,
+    };
+  }
+
   const activeEnv = useWorkspaceEnvStore.getState().env;
   const isMatchingEnv =
     activeEnv.kind === "ssh" &&
@@ -183,21 +210,6 @@ async function openRemoteTerminalTarget(
     nativeConnection,
     remotePath.hostPath,
   );
-
-  if (
-    activeEnv.kind === "local" ||
-    (activeEnv.kind === "ssh" &&
-      (activeEnv.connection.id === profile.id ||
-        activeEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-        activeEnv.connection.name.toLowerCase() === profile.name.toLowerCase()))
-  ) {
-    useWorkspaceEnvStore.getState().setEnv({
-      kind: "ssh",
-      connection: selectedProfile,
-      root: remoteSession.workspace_root,
-      sessionId: remoteSession.session_id,
-    });
-  }
 
   return {
     cwd: remotePath.hostPath,

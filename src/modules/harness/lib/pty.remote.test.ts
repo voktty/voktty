@@ -40,6 +40,7 @@ vi.mock("@/modules/ssh/types", () => ({
 }));
 
 import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useHarnessEnvStore } from "./harnessEnvStore";
 import { killPty, spawnPty } from "./pty";
 
 const projectPath = "remote://voktty-ssh-profile-1/srv/app";
@@ -83,6 +84,7 @@ describe("Harness remote terminals", () => {
     });
     mocks.openPty.mockResolvedValue(fakePty(91));
     useWorkspaceEnvStore.setState({ env: { kind: "local" } });
+    useHarnessEnvStore.setState({ env: { kind: "local" }, connecting: false, error: null });
   });
 
   it("opens the Harness PTY through the saved profile's native SSH helper", async () => {

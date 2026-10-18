@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import {
+  findSshProfile,
   remoteSshConnectionFor,
   remoteSshConnectionForProfile,
-  remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
 import {
   parseRemotePath,
@@ -68,19 +68,9 @@ async function withGitWorkspace<T>(
     }
     const savedConnections =
       usePreferencesStore.getState().sshConnections ?? [];
-    const connectionId = remoteSshConnectionIdForEnvironment(
-      project.environmentId,
-    );
+    const profile = findSshProfile(project.environmentId, savedConnections);
     let connection: RemoteSshConnection;
-    if (connectionId) {
-      const profile = savedConnections.find(
-        (entry) => entry.id === connectionId,
-      );
-      if (!profile) {
-        throw new Error(
-          "The saved SSH connection for this project is missing.",
-        );
-      }
+    if (profile) {
       connection = remoteSshConnectionForProfile(profile);
     } else {
       const machine = await remoteMachineFor(project.environmentId);

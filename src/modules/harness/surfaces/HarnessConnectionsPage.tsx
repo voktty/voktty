@@ -17,6 +17,7 @@ import {
   useWorkspaceEnvStore,
   workspaceScopeKey,
 } from "@/modules/workspace";
+import { useHarnessEnvStore } from "../lib/harnessEnvStore";
 import { useState } from "react";
 import {
   Check,
@@ -39,6 +40,9 @@ export function HarnessConnectionsPage() {
   const [connectionId, setConnectionId] = useState<string>();
   const [isRefreshingPings, setIsRefreshingPings] = useState(false);
 
+  const harnessEnv = useHarnessEnvStore((s) => s.env);
+  const isHarnessConnecting = useHarnessEnvStore((s) => s.connecting);
+  const harnessError = useHarnessEnvStore((s) => s.error);
   const env = useWorkspaceEnvStore((s) => s.env);
   const connectionAttempts = useWorkspaceEnvStore((s) => s.connectionAttempts);
 
@@ -47,14 +51,17 @@ export function HarnessConnectionsPage() {
   const currentConnectionId = parsedCurrentProject
     ? (findSshProfile(parsedCurrentProject.environmentId)?.id ??
        remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId))
-    : undefined;
+    : (harnessEnv.kind === "ssh" ? harnessEnv.connection.id : undefined);
 
   const openFolder = (id?: string) => {
     setConnectionId(id);
     setDialogOpen(true);
   };
 
-  const handleConnect = (conn: SshConnection) => {
+  const handleConnect = async (conn: SshConnection) => {
+    try {
+      await useHarnessEnvStore.getState().connect(conn);
+    } catch {}
     window.dispatchEvent(
       new CustomEvent("voktty:connect-ssh", {
         detail: { connection: conn, forcePickSession: false, openTab: false },
@@ -62,13 +69,16 @@ export function HarnessConnectionsPage() {
     );
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    await useHarnessEnvStore.getState().disconnect();
     window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
   };
 
-  const handleReconnect = (conn: SshConnection) => {
+  const handleReconnect = async (conn: SshConnection) => {
+    await useHarnessEnvStore.getState().disconnect();
     window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
     setTimeout(() => {
+      void useHarnessEnvStore.getState().connect(conn).catch(() => {});
       window.dispatchEvent(
         new CustomEvent("voktty:connect-ssh", {
           detail: { connection: conn, forcePickSession: false, openTab: false },
@@ -142,15 +152,24 @@ export function HarnessConnectionsPage() {
               const connectionAttempt =
                 connectionAttempts[workspaceScopeKey(candidateEnv)];
               const isConnConnecting =
+                isHarnessConnecting ||
                 connectionAttempt?.state.phase === "resolving" ||
                 connectionAttempt?.state.phase === "connecting" ||
                 connectionAttempt?.state.phase === "reconnecting";
-              const isConnFailed = connectionAttempt?.state.phase === "failed";
+              const isConnFailed =
+                Boolean(harnessError) || connectionAttempt?.state.phase === "failed";
               const isSshActive =
-                env.kind === "ssh" &&
-                (env.connection.id === connection.id ||
-                  (env.connection.host === connection.host &&
-                    (env.connection.port ?? 22) === (connection.port ?? 22)));
+                (harnessEnv.kind === "ssh" &&
+                  (harnessEnv.connection.id === connection.id ||
+                    (harnessEnv.connection.host.toLowerCase() ===
+                      connection.host.toLowerCase() &&
+                      (harnessEnv.connection.port ?? 22) ===
+                        (connection.port ?? 22)))) ||
+                (env.kind === "ssh" &&
+                  (env.connection.id === connection.id ||
+                    (env.connection.host.toLowerCase() ===
+                      connection.host.toLowerCase() &&
+                      (env.connection.port ?? 22) === (connection.port ?? 22))));
               const isCurrentProject = currentConnectionId === connection.id;
 
               return (

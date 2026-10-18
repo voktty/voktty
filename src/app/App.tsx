@@ -62,8 +62,6 @@ import {
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
-import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -940,39 +938,7 @@ function DesktopApp() {
       );
     }
     if (activeTab?.kind === "harness") {
-      if (activeHarnessCwd && activeHarnessCwd.startsWith("remote://")) {
-        const parsed = parseRemotePath(activeHarnessCwd);
-        if (parsed) {
-          const profile = findSshProfile(parsed.environmentId);
-          if (profile) {
-            const currentEnv = useWorkspaceEnvStore.getState().env;
-            const isMatchingEnv =
-              currentEnv.kind === "ssh" &&
-              (currentEnv.connection.id === profile.id ||
-                currentEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-                currentEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
-            const sessionId = isMatchingEnv ? currentEnv.sessionId : undefined;
-            const sessionRoot =
-              sessionId !== undefined && currentEnv.kind === "ssh" && currentEnv.root
-                ? currentEnv.root
-                : (parsed.hostPath.startsWith("/") ? "/" : parsed.hostPath);
-            return {
-              kind: "ssh" as const,
-              connection: profile,
-              root: sessionRoot,
-              ...(sessionId !== undefined ? { sessionId } : {}),
-            };
-          }
-        }
-      }
-      if (activeSpace?.env && activeSpace.env.kind !== "local") {
-        return activeSpace.env;
-      }
-      const currentEnv = useWorkspaceEnvStore.getState().env;
-      if (currentEnv.kind === "ssh") {
-        return currentEnv;
-      }
-      return LOCAL_WORKSPACE;
+      return activeSpace?.env ?? LOCAL_WORKSPACE;
     }
     return activeSpace?.env ?? LOCAL_WORKSPACE;
   }, [activeSpaceTabCount, activeTab, activeSpace?.env, activeHarnessCwd]);
@@ -1757,7 +1723,7 @@ function DesktopApp() {
         if (connected?.kind !== "ssh") {
           throw new Error(t("feedback.remoteSessionFailed"));
         }
-        if (activeSpaceId)
+        if (activeSpaceId && openTab)
           useSpaces.getState().setEnv(activeSpaceId, connected);
         if (openTab) {
           const opened = newSshTab(connected.root, targetLabel, connected);

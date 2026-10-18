@@ -4,9 +4,9 @@ import type { HarnessId } from "@/modules/harness/lib/session";
 import type { RemoteSshConnection } from "@/modules/remote/client";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
+  findSshProfile,
   remoteSshConnectionFor,
   remoteSshConnectionForProfile,
-  remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -292,11 +292,8 @@ export async function resolveRemoteSshConnection(
   environmentId: string,
 ): Promise<RemoteSshConnection> {
   const saved = usePreferencesStore.getState().sshConnections ?? [];
-  const connectionId = remoteSshConnectionIdForEnvironment(environmentId);
-  if (connectionId) {
-    const profile = saved.find((c) => c.id === connectionId);
-    if (profile) return remoteSshConnectionForProfile(profile);
-  }
+  const profile = findSshProfile(environmentId, saved);
+  if (profile) return remoteSshConnectionForProfile(profile);
   const machine = await remoteMachineFor(environmentId);
   if (machine) return remoteSshConnectionFor(machine, saved);
   throw new Error(

@@ -1,9 +1,9 @@
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import type { RemoteMachine } from "@/modules/connections/model/protocol";
 import {
+  findSshProfile,
   remoteSshConnectionFor,
   remoteSshConnectionForProfile,
-  remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
@@ -62,13 +62,9 @@ async function openService(
   dependencies: OpenDependencies,
 ): Promise<RemoteOpenCodeService> {
   const savedConnections = dependencies.sshConnections();
-  const connectionId = remoteSshConnectionIdForEnvironment(environmentId);
+  const profile = findSshProfile(environmentId, savedConnections);
   let connection: RemoteSshConnection;
-  if (connectionId) {
-    const profile = savedConnections.find((entry) => entry.id === connectionId);
-    if (!profile) {
-      throw new Error("The saved SSH connection for this project is missing.");
-    }
+  if (profile) {
     connection = remoteSshConnectionForProfile(profile);
   } else {
     const machine = await dependencies.machineFor(environmentId);

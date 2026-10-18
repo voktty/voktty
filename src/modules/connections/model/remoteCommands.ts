@@ -27,8 +27,8 @@ import {
   remoteProjectForPath,
 } from "./remoteProjects";
 import {
+  findSshProfile,
   remoteSshConnectionForProfile,
-  remoteSshConnectionIdForEnvironment,
 } from "./remoteSshProfiles";
 
 /** File commands a connected machine answers exactly as this computer does. */
@@ -3075,8 +3075,10 @@ async function runNativeProfileCommand(
 ): Promise<unknown> {
   if (!PROFILE_HELPER_COMMANDS.has(command))
     throw new Error(PROFILE_UNAVAILABLE);
-  const connectionId = remoteSshConnectionIdForEnvironment(environmentId);
-  if (!connectionId) throw new Error("The saved SSH connection id is invalid.");
+  const savedConnections = usePreferencesStore.getState().sshConnections ?? [];
+  const profile = findSshProfile(environmentId, savedConnections);
+  if (!profile)
+    throw new Error("The saved SSH connection for this project is missing.");
   const project = remoteProjectForPath(references[0].value);
   if (!project) throw new Error("This path is outside a saved remote project.");
   for (const reference of references) {
@@ -3096,11 +3098,6 @@ async function runNativeProfileCommand(
   if (normalizedProjectRoot === "/" && project.cwd !== "/") {
     throw new Error("The saved remote project root is invalid.");
   }
-  const profile = (usePreferencesStore.getState().sshConnections ?? []).find(
-    (entry) => entry.id === connectionId,
-  );
-  if (!profile)
-    throw new Error("The saved SSH connection for this project is missing.");
   const session = await openRemoteWorkspace(
     remoteSshConnectionForProfile(profile),
     normalizedProjectRoot,

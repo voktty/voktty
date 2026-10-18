@@ -31,6 +31,7 @@ import {
   workspaceEnvForNativePty,
   workspaceForNativeFs,
 } from "@/modules/workspace";
+import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import {
   ArrowDown01Icon,
   Folder01Icon,
@@ -248,21 +249,28 @@ function CurrentSegmentDropdown({
         if (parsed) {
           const profile = findSshProfile(parsed.environmentId);
           if (profile) {
+            const harnessEnv = useHarnessEnvStore.getState().env;
             const currentEnv = useWorkspaceEnvStore.getState().env;
+            const isHarnessMatch =
+              harnessEnv.kind === "ssh" &&
+              (harnessEnv.connection.id === profile.id ||
+                harnessEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+                harnessEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
             const isMatch =
               currentEnv.kind === "ssh" &&
               (currentEnv.connection.id === profile.id ||
                 currentEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
                 currentEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
+            const activeMatch = isHarnessMatch ? harnessEnv : isMatch ? currentEnv : null;
             workspace = {
               kind: "ssh",
               connection: profile,
               root:
-                isMatch && currentEnv.root
-                  ? currentEnv.root
+                activeMatch?.root
+                  ? activeMatch.root
                   : (parsed.hostPath.startsWith("/") ? "/" : parsed.hostPath),
-              ...(isMatch && currentEnv.sessionId !== undefined
-                ? { sessionId: currentEnv.sessionId }
+              ...(activeMatch?.sessionId !== undefined
+                ? { sessionId: activeMatch.sessionId }
                 : {}),
             };
           }
@@ -282,7 +290,7 @@ function CurrentSegmentDropdown({
             root: session.workspace_root,
             sessionId: session.session_id,
           };
-          useWorkspaceEnvStore.getState().setEnv(workspace);
+          useHarnessEnvStore.getState().setEnv(workspace);
         } else if (!isPathWithinRemoteRoot(workspace, path)) {
           const session = await openRemoteWorkspace(nativeConn, "/").catch(() =>
             openRemoteWorkspace(nativeConn, path),
@@ -292,7 +300,7 @@ function CurrentSegmentDropdown({
             root: session.workspace_root,
             sessionId: session.session_id,
           };
-          useWorkspaceEnvStore.getState().setEnv(workspace);
+          useHarnessEnvStore.getState().setEnv(workspace);
         }
       }
 

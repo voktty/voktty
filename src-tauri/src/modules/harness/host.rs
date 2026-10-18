@@ -776,7 +776,9 @@ fn build_remote_agent_command(
          [ -f \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\" >/dev/null 2>&1; \
          [ -f \"$HOME/.zshrc\" ] && . \"$HOME/.zshrc\" >/dev/null 2>&1; \
          export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:/usr/local/bin:$PATH\"; \
-         cd -- {quoted_dir} && {exec_cmd}"
+         mkdir -p -- {quoted_dir} 2>/dev/null; \
+         cd -- {quoted_dir} 2>/dev/null || cd; \
+         {exec_cmd}"
     );
 
     format!("${{SHELL:-/bin/sh}} -l -c {}", super::remote_ssh::shell_quote(&script))

@@ -39,9 +39,9 @@ import { listWorktrees, type Worktree } from "../lib/worktrees";
 import { sessionInWorktree } from "../lib/sessionWorktrees";
 import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useHarnessEnvStore } from "../lib/harnessEnvStore";
 import {
   claimDueAutomations,
   listAutomations,
@@ -4233,13 +4233,13 @@ export function HarnessApp({
 
   const lastAttemptedRemoteProjectRef = useRef<string | null>(null);
   const sshConnections = usePreferencesStore((s) => s.sshConnections);
-  const activeWorkspaceEnv = useWorkspaceEnvStore((s) => s.env);
+  const harnessEnv = useHarnessEnvStore((s) => s.env);
 
   useEffect(() => {
     if (
       !projectCwd ||
       projectCwd === "~" ||
-      !projectCwd.startsWith("remote://voktty-ssh-")
+      !projectCwd.startsWith("remote://")
     ) {
       lastAttemptedRemoteProjectRef.current = null;
       return;
@@ -4249,28 +4249,25 @@ export function HarnessApp({
     }
     const parsed = parseRemotePath(projectCwd);
     if (!parsed) return;
-    const connId = remoteSshConnectionIdForEnvironment(parsed.environmentId);
-    if (!connId) return;
-    const profile = sshConnections?.find((c) => c.id === connId);
+    const profile = findSshProfile(parsed.environmentId, sshConnections);
     if (!profile) return;
     if (
-      activeWorkspaceEnv.kind === "ssh" &&
-      activeWorkspaceEnv.connection.id === profile.id
+      harnessEnv.kind === "ssh" &&
+      (harnessEnv.connection.id === profile.id ||
+        harnessEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
+        harnessEnv.connection.name.toLowerCase() === profile.name.toLowerCase())
     ) {
       lastAttemptedRemoteProjectRef.current = projectCwd;
       return;
     }
     lastAttemptedRemoteProjectRef.current = projectCwd;
-    window.dispatchEvent(
-      new CustomEvent("voktty:connect-ssh", {
-        detail: {
-          connection: profile,
-          forcePickSession: false,
-          openTab: false,
-        },
-      }),
-    );
-  }, [projectCwd, sshConnections, activeWorkspaceEnv]);
+    void useHarnessEnvStore
+      .getState()
+      .connect(profile, parsed.hostPath)
+      .catch((err) => {
+        console.warn("[harness] Failed to connect remote session:", err);
+      });
+  }, [projectCwd, sshConnections, harnessEnv]);
 
 
   const initialSessionHandled = useRef(false);
