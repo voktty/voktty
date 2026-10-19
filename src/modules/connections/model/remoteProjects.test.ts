@@ -1,5 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 import {
+  forgetRemoteProject,
+  rememberRemoteProject,
   remotePath,
   remoteProjectFor,
   remoteProjectForPath,
@@ -87,4 +89,16 @@ it("keeps OSC terminal working directories in the remote path namespace", () => 
   expect(terminalProjectPath("/local/app", "/local/app/src")).toBe(
     "/local/app/src",
   );
+});
+
+it("removes remote projects with forgetRemoteProject", () => {
+  const project = rememberRemoteProject("env-1", {
+    id: "proj-1",
+    cwd: "/var/www/app",
+    name: "app",
+  });
+  expect(remoteProjectFor(project.key)).toBeDefined();
+
+  forgetRemoteProject(project.key);
+  expect(remoteProjectFor(project.key)).toBeUndefined();
 });

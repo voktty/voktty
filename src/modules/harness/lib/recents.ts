@@ -7,16 +7,25 @@ const RAIL_PINNED_KEY = "monocode.projectRailPinned";
 const ARCHIVED_KEY = "monocode.archivedProjects";
 const ARCHIVED_CHANGED = "monocode:archived-projects-changed";
 const RECENTS_CHANGED = "monocode:recent-projects-changed";
+const REMOTE_PROJECTS_CHANGED = "terax:remote-projects-changed";
 const MAX = 500;
+
+let remoteProjectCleaner: ((path: string) => void) | undefined;
+
+export function setRemoteProjectCleaner(cleaner: (path: string) => void): void {
+  remoteProjectCleaner = cleaner;
+}
 
 export function subscribeProjectPathsChanged(onChange: () => void): () => void {
   const handler = () => onChange();
   window.addEventListener(RECENTS_CHANGED, handler);
   window.addEventListener(ARCHIVED_CHANGED, handler);
+  window.addEventListener(REMOTE_PROJECTS_CHANGED, handler);
   window.addEventListener("storage", handler);
   return () => {
     window.removeEventListener(RECENTS_CHANGED, handler);
     window.removeEventListener(ARCHIVED_CHANGED, handler);
+    window.removeEventListener(REMOTE_PROJECTS_CHANGED, handler);
     window.removeEventListener("storage", handler);
   };
 }
@@ -80,13 +89,16 @@ function save(next: RecentProject[]) {
   } catch {
     // private mode / quota
   }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(RECENTS_CHANGED));
+  }
 }
 
 export function rememberProject(path: string): RecentProject[] {
   const normalized = normalize(path);
   if (normalized === "~" || !looksLikeProject(normalized)) return loadRecents();
   dropArchived(normalized);
-  const prev = loadRecents().filter((p) => p.path !== normalized);
+  const prev = loadRecents().filter((p) => !sameProjectPath(p.path, normalized));
   const next = [{ path: normalized, openedAt: Date.now() }, ...prev].slice(
     0,
     MAX,
@@ -98,21 +110,23 @@ export function rememberProject(path: string): RecentProject[] {
 /** Drops a project from the rail: its recent entry, saved order slot, and pin. */
 function dropFromRail(path: string): RecentProject[] {
   const normalized = normalize(path);
-  const next = loadRecents().filter((item) => item.path !== normalized);
+  const next = loadRecents().filter((item) => !sameProjectPath(item.path, normalized));
   save(next);
   saveProjectRailOrder(
-    loadProjectRailOrder().filter((entry) => entry !== normalized),
+    loadProjectRailOrder().filter((entry) => !sameProjectPath(entry, normalized)),
   );
   savePinnedProjects(
-    loadPinnedProjects().filter((entry) => entry !== normalized),
+    loadPinnedProjects().filter((entry) => !sameProjectPath(entry, normalized)),
   );
   return next;
 }
 
 /** Removes a project from the rail and from the archive (Delete). */
 export function forgetProject(path: string): RecentProject[] {
-  dropArchived(path);
-  return dropFromRail(path);
+  const normalized = normalize(path);
+  dropArchived(normalized);
+  remoteProjectCleaner?.(normalized);
+  return dropFromRail(normalized);
 }
 
 /** Removes a project from the rail and files it in the archive (Archive). */
@@ -120,7 +134,7 @@ export function archiveProject(path: string): RecentProject[] {
   const normalized = normalize(path);
   if (!looksLikeProject(normalized)) return loadRecents();
   const recents = dropFromRail(normalized);
-  const rest = loadArchivedProjects().filter((item) => item.path !== normalized);
+  const rest = loadArchivedProjects().filter((item) => !sameProjectPath(item.path, normalized));
   saveArchived([{ path: normalized, archivedAt: Date.now() }, ...rest]);
   return recents;
 }
@@ -172,7 +186,7 @@ function saveArchived(next: ArchivedProject[]) {
 function dropArchived(path: string) {
   const normalized = normalize(path);
   const prev = loadArchivedProjects();
-  const next = prev.filter((item) => item.path !== normalized);
+  const next = prev.filter((item) => !sameProjectPath(item.path, normalized));
   if (next.length === prev.length) return;
   saveArchived(next);
 }
@@ -216,6 +230,9 @@ function savePathList(key: string, paths: string[]) {
     localStorage.setItem(key, JSON.stringify(paths));
   } catch {
     // private mode / quota
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(RECENTS_CHANGED));
   }
 }
 

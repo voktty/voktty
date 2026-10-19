@@ -1,6 +1,7 @@
 import {
   isRemoteProjectPath,
   REMOTE_PROJECT_PREFIX,
+  setRemoteProjectCleaner,
 } from "@/modules/harness/lib/recents";
 import type { HostProject } from "./protocol";
 
@@ -154,3 +155,36 @@ export function remoteProjectsOn(environmentId: string): RemoteProject[] {
     (project) => project.environmentId === environmentId,
   );
 }
+
+export function forgetRemoteProject(path: string): void {
+  if (!isRemoteProjectPath(path)) return;
+  const targetNorm = slashed(path).replace(/\/+$/, "").toLowerCase();
+  const all = readAll();
+  let changed = false;
+  const next: Record<string, RemoteProject> = {};
+  for (const [k, proj] of Object.entries(all)) {
+    const keyNorm = slashed(k).replace(/\/+$/, "").toLowerCase();
+    const projKeyNorm = slashed(
+      remoteProjectKey(proj.environmentId, proj.cwd),
+    )
+      .replace(/\/+$/, "")
+      .toLowerCase();
+    if (keyNorm === targetNorm || projKeyNorm === targetNorm) {
+      changed = true;
+      continue;
+    }
+    next[k] = proj;
+  }
+  if (!changed) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+    localStorage.setItem(LEGACY_KEY, JSON.stringify(next));
+  } catch {
+    /* quota */
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(REMOTE_PROJECTS_CHANGED));
+  }
+}
+
+setRemoteProjectCleaner(forgetRemoteProject);

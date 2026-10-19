@@ -4407,6 +4407,12 @@ export function HarnessApp({
           setProjectCwd("~");
           setComposerFocused(true);
         }
+        if (
+          isRemoteProjectPath(normalized) &&
+          (!next || !isRemoteProjectPath(next.path))
+        ) {
+          void useHarnessEnvStore.getState().disconnect().catch(() => {});
+        }
       }
     },
     [activeTabId, onSelectProject, persistSession],

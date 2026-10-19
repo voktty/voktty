@@ -52,10 +52,12 @@ import {
   collectRailProjects,
   loadPinnedProjects,
   loadProjectRailOrder,
+  normalizeProjectPath,
   projectRailSections,
   sameProjectPath,
   savePinnedProjects,
   saveProjectRailOrder,
+  subscribeProjectPathsChanged,
   syncProjectRailOrder,
   type RecentProject,
 } from "../lib/recents";
@@ -324,6 +326,14 @@ export function ProjectRail({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    return subscribeProjectPathsChanged(() => {
+      setRailOrder(loadProjectRailOrder());
+      setPinnedPaths(loadPinnedProjects());
+    });
+  }, []);
+
   const busy = useMemo(() => {
     const set = new Set<string>();
     for (const path of busyPaths ?? []) set.add(path);
@@ -592,7 +602,14 @@ export function ProjectRail({
           );
         });
     } else if (action === "archive") {
-      onRemoveProject?.(path, { purgeData: false });
+      const targetPath = normalizeProjectPath(path);
+      setRailOrder((prev) =>
+        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
+      );
+      setPinnedPaths((prev) =>
+        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
+      );
+      onRemoveProject?.(targetPath, { purgeData: false });
     } else if (action === "delete") {
       setRemoving({
         path,
@@ -603,8 +620,15 @@ export function ProjectRail({
 
   const onConfirmDelete = () => {
     if (!removing) return;
-    assignProjectGroup(removing.path, null);
-    onRemoveProject?.(removing.path, { purgeData: true });
+    const targetPath = normalizeProjectPath(removing.path);
+    assignProjectGroup(targetPath, null);
+    setRailOrder((prev) =>
+      prev.filter((entry) => !sameProjectPath(entry, targetPath)),
+    );
+    setPinnedPaths((prev) =>
+      prev.filter((entry) => !sameProjectPath(entry, targetPath)),
+    );
+    onRemoveProject?.(targetPath, { purgeData: true });
     setRemoving(null);
   };
 

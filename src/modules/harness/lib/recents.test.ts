@@ -12,6 +12,7 @@ import {
   rememberProject,
   savePinnedProjects,
   saveProjectRailOrder,
+  setRemoteProjectCleaner,
   syncProjectRailOrder,
 } from "./recents";
 
@@ -177,6 +178,23 @@ describe("forgetProject", () => {
     expect(loadRecents().map((item) => item.path)).toEqual(["/tmp/keep"]);
     expect(loadProjectRailOrder()).toEqual(["/tmp/keep"]);
     expect(loadPinnedProjects()).toEqual([]);
+  });
+
+  it("drops remote project and triggers remoteProjectCleaner", () => {
+    let cleaned: string | undefined;
+    setRemoteProjectCleaner((path) => {
+      cleaned = path;
+    });
+
+    const remoteKey = "remote://ssh-myserver/var/www/site";
+    rememberProject(remoteKey);
+    saveProjectRailOrder([remoteKey]);
+
+    expect(loadRecents().map((item) => item.path)).toContain(remoteKey);
+    forgetProject(remoteKey);
+    expect(loadRecents().map((item) => item.path)).not.toContain(remoteKey);
+    expect(loadProjectRailOrder()).not.toContain(remoteKey);
+    expect(cleaned).toBe(remoteKey);
   });
 });
 
