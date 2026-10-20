@@ -4746,6 +4746,8 @@ export const en = {
       browseFolders: "Browse folders",
       hideFolderBrowser: "Hide folder browser",
       pathErrors: {
+        notDirectory: "The path is not a folder.",
+        unavailable: "This folder cannot be opened on the server: {reason}",
         required: "Enter a folder path.",
         absolute: "Enter an absolute path beginning with /.",
         control: "The path cannot contain line breaks or control characters.",

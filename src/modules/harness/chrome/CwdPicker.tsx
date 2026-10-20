@@ -14,6 +14,11 @@ import {
   sameProjectPath,
   type RecentProject,
 } from "../lib/recents";
+import { AddRemoteProjectDialog } from "@/modules/connections/ui/AddRemoteProjectDialog";
+import {
+  parseRemotePath,
+} from "@/modules/connections/model/remoteProjects";
+import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { LAYER } from "../lib/layers";
 import { Popover } from "./Popover";
@@ -68,6 +73,7 @@ export function CwdPicker({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [remoteBrowseOpen, setRemoteBrowseOpen] = useState(false);
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -76,6 +82,10 @@ export function CwdPicker({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  const remoteLocation = parseRemotePath(cwd);
+  const remoteProfileId = remoteLocation
+    ? remoteSshConnectionIdForEnvironment(remoteLocation.environmentId)
+    : undefined;
   const inProject = looksLikeProject(cwd);
   const label = prettyCwd(cwd);
   const otherRecents = useMemo(
@@ -129,6 +139,10 @@ export function CwdPicker({
     if (row.kind === "more") return;
     dismiss(true);
     if (row.kind === "browse") {
+      if (remoteProfileId) {
+        setRemoteBrowseOpen(true);
+        return;
+      }
       const selected = await pickFolder();
       if (selected) onCwdChange(selected);
       return;
@@ -409,6 +423,17 @@ export function CwdPicker({
             </button>
           ))}
         </Popover>
+      ) : null}
+      {remoteBrowseOpen && remoteProfileId ? (
+        <AddRemoteProjectDialog
+          initialConnectionId={remoteProfileId}
+          initialPath={remoteLocation?.hostPath}
+          onCancel={() => setRemoteBrowseOpen(false)}
+          onOpen={(key) => {
+            setRemoteBrowseOpen(false);
+            onCwdChange(key);
+          }}
+        />
       ) : null}
     </div>
   );

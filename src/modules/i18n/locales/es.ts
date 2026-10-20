@@ -4862,6 +4862,8 @@ export const es: TranslationSchema = {
       browseFolders: "Explorar carpetas",
       hideFolderBrowser: "Ocultar explorador",
       pathErrors: {
+        notDirectory: "La ruta no es una carpeta.",
+        unavailable: "No se puede abrir esta carpeta en el servidor: {reason}",
         required: "Escribe la ruta de una carpeta.",
         absolute: "Escribe una ruta absoluta que comience por /.",
         control:

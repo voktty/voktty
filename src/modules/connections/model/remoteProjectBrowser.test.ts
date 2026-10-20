@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  absoluteToBrowseRelative,
+  browseStartCandidates,
+  lexicalAbsolutePath,
   normalizeRemoteDirectoryRelative,
   normalizeRemoteProjectPath,
   remoteDirectoryListing,
@@ -35,7 +38,7 @@ describe("native remote project browser paths", () => {
     ).toEqual({
       path: "/home/dev/repo",
       relativePath: "repo",
-      parentRelativePath: null,
+      parentRelativePath: "",
       entries: [
         {
           name: "src",
@@ -64,10 +67,45 @@ describe("native remote project browser paths", () => {
       { name: "nested/name", kind: "directory" },
       { name: "windows\\path", kind: "directory" },
     ]);
-    expect(listing.parentRelativePath).toBeNull();
+    expect(listing.parentRelativePath).toBe("");
+    expect(remoteDirectoryListing("/srv", "", []).parentRelativePath).toBeNull();
     expect(listing.entries.map((entry) => entry.name)).toEqual(["src"]);
     expect(
       remoteDirectoryListing("/srv", "repo/src", []).parentRelativePath,
     ).toBe("repo");
+  });
+});
+
+describe("browsing above a project root", () => {
+  it("collapses dot segments without leaving the root", () => {
+    expect(lexicalAbsolutePath("/srv//app/./src/../lib/")).toBe("/srv/app/lib");
+    expect(lexicalAbsolutePath("/../../etc")).toBe("/etc");
+    expect(lexicalAbsolutePath("/")).toBe("/");
+    expect(absoluteToBrowseRelative("/srv/app")).toBe("srv/app");
+    expect(absoluteToBrowseRelative("/")).toBe("");
+  });
+
+  it("tries the typed folder, its ancestors, the profile folder, the home and the root", () => {
+    expect(
+      browseStartCandidates({
+        typed: "/srv/app/missing",
+        initialDirectory: "/data/work",
+        user: "dev",
+      }),
+    ).toEqual([
+      "/srv/app/missing",
+      "/srv/app",
+      "/srv",
+      "/data/work",
+      "/data",
+      "/home/dev",
+      "/",
+    ]);
+  });
+
+  it("falls back to the user's home and the root without a typed path", () => {
+    expect(browseStartCandidates({ user: "root" })).toEqual(["/root", "/"]);
+    expect(browseStartCandidates({ user: "bad user;rm" })).toEqual(["/"]);
+    expect(browseStartCandidates({ typed: "relative/path" })).toEqual(["/"]);
   });
 });

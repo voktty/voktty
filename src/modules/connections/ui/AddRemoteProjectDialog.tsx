@@ -7,16 +7,18 @@ import { SearchableSelect } from "@/modules/harness/chrome/SearchableSelect";
 import { LAYER } from "@/modules/harness/lib/layers";
 import { useTranslation } from "@/modules/i18n";
 import {
-  closeRemoteWorkspace,
-  openRemoteWorkspace,
   type RemoteSessionInfo,
   requestRemoteResult,
 } from "@/modules/remote/client";
+import { remoteSessions } from "@/modules/remote/sessionManager";
+import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useSshConnections } from "@/modules/ssh/sshStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  absoluteToBrowseRelative,
+  browseStartCandidates,
   normalizeRemoteDirectoryRelative,
   normalizeRemoteProjectPath,
   type RemoteDirectoryListing,
@@ -29,10 +31,13 @@ import { rememberRemoteProject } from "../model/remoteProjects";
 /** Adds a remote project using a saved SSH profile. Browsing is optional. */
 export function AddRemoteProjectDialog({
   initialConnectionId,
+  initialPath,
   onCancel,
   onOpen,
 }: {
   initialConnectionId?: string;
+  /** Folder to start from instead of the saved profile folder. */
+  initialPath?: string;
   onCancel: () => void;
   /** Receives the new project's rail key. */
   onOpen: (key: string) => void;
@@ -72,6 +77,9 @@ export function AddRemoteProjectDialog({
   const requestVersion = useRef(0);
   const sessionRef = useRef<RemoteSessionInfo | undefined>(undefined);
   const rootRef = useRef<string | undefined>(undefined);
+  const profileId = profile?.id;
+  const profileUser = profile?.user;
+  const profileInitialDirectory = profile?.initialDirectory;
   const setRemotePath = useCallback((next: string) => {
     pathRef.current = next;
     setPath(next);
@@ -84,14 +92,20 @@ export function AddRemoteProjectDialog({
 
   useEffect(() => {
     if (profile?.id !== connectionId) return;
-    const initialPath = profile?.initialDirectory?.trim() ?? "";
-    setRemotePath(remoteProjectPathIssue(initialPath) ? "" : initialPath);
+    const startPath = (initialPath ?? profile?.initialDirectory)?.trim() ?? "";
+    setRemotePath(remoteProjectPathIssue(startPath) ? "" : startPath);
     setDirectory(undefined);
     setBrowseRequested(false);
     setBrowseRequest({ root: undefined });
     setConnecting(false);
     setError("");
-  }, [connectionId, profile?.id, profile?.initialDirectory, setRemotePath]);
+  }, [
+    connectionId,
+    initialPath,
+    profile?.id,
+    profile?.initialDirectory,
+    setRemotePath,
+  ]);
 
   const cancel = useCallback(() => {
     alive.current = false;
@@ -119,14 +133,14 @@ export function AddRemoteProjectDialog({
   }, [cancel]);
 
   const browse = useCallback(
-    async (next = "", updatePath = true) => {
+    async (next = "", updatePath = true, silent = false): Promise<boolean> => {
       const session = sessionRef.current;
       const root = rootRef.current;
-      if (!session || !root) return;
+      if (!session || !root) return false;
       const version = ++requestVersion.current;
       setLoading(true);
       setOpening(false);
-      setError("");
+      if (!silent) setError("");
       try {
         const relativePath = normalizeRemoteDirectoryRelative(next);
         const value = await requestRemoteResult<{
@@ -143,7 +157,7 @@ export function AddRemoteProjectDialog({
           sessionRef.current?.session_id !== session.session_id ||
           version !== requestVersion.current
         )
-          return;
+          return false;
         const listing = remoteDirectoryListing(
           root,
           relativePath,
@@ -151,9 +165,11 @@ export function AddRemoteProjectDialog({
         );
         setDirectory(listing);
         if (updatePath || !pathRef.current.trim()) setRemotePath(listing.path);
+        return true;
       } catch (reason) {
-        if (alive.current && version === requestVersion.current)
+        if (!silent && alive.current && version === requestVersion.current)
           setError(String(reason).replace(/^Error: /, ""));
+        return false;
       } finally {
         if (alive.current && version === requestVersion.current)
           setLoading(false);
@@ -162,9 +178,12 @@ export function AddRemoteProjectDialog({
     [setRemotePath],
   );
 
+  // The browser uses a session rooted at "/" so the user can go above the
+  // folder they typed. It is only a viewer: a project's own root still
+  // confines every later file command.
   useEffect(() => {
     let disposed = false;
-    let sessionId: number | undefined;
+    let lease: RemoteSessionLease | undefined;
     if (!browseRequested) {
       setDirectory(undefined);
       setConnecting(false);
@@ -174,26 +193,36 @@ export function AddRemoteProjectDialog({
     requestVersion.current++;
     setDirectory(undefined);
     setError("");
-    if (!connection) {
+    if (!connection || !profileId) {
       if (connectionState.error) setError(connectionState.error);
       setLoading(false);
       return;
     }
     setLoading(true);
     setConnecting(true);
-    void openRemoteWorkspace(connection, browseRequest.root, {
-      installShellIntegration: false,
-    })
-      .then(async (session) => {
-        sessionId = session.session_id;
+    void remoteSessions
+      .acquire({ profileId, root: "/" }, connection)
+      .then(async (acquired) => {
         if (disposed || !alive.current) {
-          await closeRemoteWorkspace(session.session_id).catch(() => undefined);
+          acquired.release();
           return;
         }
-        sessionRef.current = session;
-        rootRef.current = session.workspace_root;
+        lease = acquired;
+        sessionRef.current = acquired.info;
+        rootRef.current = acquired.info.workspace_root;
         setConnecting(false);
-        await browse("", false);
+        const candidates = browseStartCandidates({
+          typed: browseRequest.root,
+          initialDirectory: profileInitialDirectory,
+          user: profileUser,
+        });
+        for (const [index, candidate] of candidates.entries()) {
+          const last = index === candidates.length - 1;
+          if (
+            await browse(absoluteToBrowseRelative(candidate), false, !last)
+          )
+            return;
+        }
       })
       .catch((reason: unknown) => {
         if (!disposed && alive.current) {
@@ -205,13 +234,11 @@ export function AddRemoteProjectDialog({
     return () => {
       disposed = true;
       requestVersion.current++;
-      if (sessionRef.current?.session_id === sessionId) {
+      if (lease && sessionRef.current?.session_id === lease.info.session_id) {
         sessionRef.current = undefined;
         rootRef.current = undefined;
       }
-      if (sessionId !== undefined) {
-        void closeRemoteWorkspace(sessionId).catch(() => undefined);
-      }
+      lease?.release();
       if (alive.current) setConnecting(false);
     };
   }, [
@@ -220,8 +247,10 @@ export function AddRemoteProjectDialog({
     browseRequest,
     connection,
     connectionState.error,
+    profileId,
+    profileInitialDirectory,
+    profileUser,
   ]);
-
   const open = async () => {
     if (!profile || opening || loading) return;
     const pathIssue = remoteProjectPathIssue(path);
@@ -238,6 +267,7 @@ export function AddRemoteProjectDialog({
     setError("");
     try {
       const remotePath = normalizeRemoteProjectPath(path);
+      await assertRemoteDirectory(profile.id, connection, remotePath);
       const parts = remotePath.split("/").filter(Boolean);
       const name = parts[parts.length - 1] ?? profile.name;
       const environmentId = remoteSshEnvironmentId(profile.id);
@@ -249,8 +279,16 @@ export function AddRemoteProjectDialog({
       if (alive.current && version === requestVersion.current)
         onOpen(project.key);
     } catch (reason) {
-      if (alive.current && version === requestVersion.current)
-        setError(String(reason).replace(/^Error: /, ""));
+      if (alive.current && version === requestVersion.current) {
+        const message = String(reason).replace(/^Error: /, "");
+        setError(
+          message === "notDirectory"
+            ? t("harness.connections.pathErrors.notDirectory")
+            : t("harness.connections.pathErrors.unavailable", {
+                reason: message,
+              }),
+        );
+      }
     } finally {
       if (alive.current && version === requestVersion.current)
         setOpening(false);
@@ -459,6 +497,26 @@ export function AddRemoteProjectDialog({
     </div>,
     document.body,
   );
+}
+
+/** Registers only folders that exist, so a typo fails here and not on first use. */
+async function assertRemoteDirectory(
+  profileId: string,
+  connection: Parameters<typeof remoteSessions.use>[1],
+  path: string,
+): Promise<void> {
+  const relative = absoluteToBrowseRelative(path);
+  const stat = await remoteSessions.use(
+    { profileId, root: "/" },
+    connection,
+    (session) =>
+      requestRemoteResult<{ kind: "file" | "dir" }>(
+        session.session_id,
+        "fs.stat",
+        { path: relative || "." },
+      ),
+  );
+  if (stat.kind !== "dir") throw new Error("notDirectory");
 }
 
 function FolderRow({ name, onOpen }: { name: string; onOpen: () => void }) {

@@ -64,7 +64,8 @@ export function remoteDirectoryListing(
   const relative = normalizeRemoteDirectoryRelative(relativePath);
   const parentParts = relative.split("/").filter(Boolean);
   parentParts.pop();
-  const parentRelativePath = parentParts.length ? parentParts.join("/") : null;
+  // The root has no parent; a first-level folder returns to the root ("").
+  const parentRelativePath = relative ? parentParts.join("/") : null;
   return {
     path: remoteDirectoryPath(root, relative),
     relativePath: relative,
@@ -88,4 +89,55 @@ export function remoteDirectoryListing(
         };
       }),
   };
+}
+
+/** Collapses `.`, `..` and repeated slashes without ever leaving the root. */
+export function lexicalAbsolutePath(path: string): string {
+  const parts: string[] = [];
+  for (const part of path.trim().split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  return `/${parts.join("/")}`;
+}
+
+/** The path below the `/` browse root, as the helper expects it. */
+export function absoluteToBrowseRelative(path: string): string {
+  return lexicalAbsolutePath(path).slice(1);
+}
+
+const SAFE_USER = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Folders to try, in order, when opening the browser: the typed path and its
+ * existing ancestors, the profile's initial folder, a guess at the user's
+ * home, and finally the root, so it always shows something.
+ */
+export function browseStartCandidates(input: {
+  typed?: string;
+  initialDirectory?: string;
+  user?: string;
+}): string[] {
+  const candidates: string[] = [];
+  const add = (path: string) => {
+    if (!candidates.includes(path)) candidates.push(path);
+  };
+  const chain = (value: string | undefined) => {
+    if (!value || remoteProjectPathIssue(value)) return;
+    let current = lexicalAbsolutePath(value);
+    while (current !== "/") {
+      add(current);
+      current = lexicalAbsolutePath(`${current}/..`);
+    }
+  };
+  chain(input.typed);
+  chain(input.initialDirectory);
+  const user = input.user?.trim();
+  if (user && SAFE_USER.test(user)) add(user === "root" ? "/root" : `/home/${user}`);
+  add("/");
+  return candidates;
 }
