@@ -23,6 +23,7 @@ import {
   remoteDirectoryListing,
   remoteProjectPathIssue,
 } from "../model/remoteProjectBrowser";
+import { sshProjectId } from "../model/remoteProjectRegistration";
 import { rememberRemoteProject } from "../model/remoteProjects";
 
 /** Adds a remote project using a saved SSH profile. Browsing is optional. */
@@ -241,7 +242,7 @@ export function AddRemoteProjectDialog({
       const name = parts[parts.length - 1] ?? profile.name;
       const environmentId = remoteSshEnvironmentId(profile.id);
       const project = rememberRemoteProject(environmentId, {
-        id: `ssh-${profile.id}-${remotePath}`,
+        id: sshProjectId(profile.id, remotePath),
         cwd: remotePath,
         name,
       });

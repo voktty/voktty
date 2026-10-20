@@ -7,9 +7,41 @@ export type RemoteCommandRunner = (
 ) => Promise<unknown>;
 
 let remoteRunner: RemoteCommandRunner | undefined;
+let remoteRunnerLoad: Promise<RemoteCommandRunner> | undefined;
 
 export function setRemoteCommandRunner(runner: RemoteCommandRunner) {
   remoteRunner = runner;
+}
+
+export class RemoteRunnerUnavailableError extends Error {
+  readonly code = "remote-runner-unavailable";
+  readonly cause?: unknown;
+  constructor(cause?: unknown) {
+    super(
+      "Remote file commands are unavailable: the remote command module could not be loaded.",
+    );
+    this.name = "RemoteRunnerUnavailableError";
+    this.cause = cause;
+  }
+}
+
+/** The runner registers itself when its module loads. Loading it on the first
+ * remote request keeps it out of the eager bundle without depending on
+ * another surface (such as Settings) having been opened first. */
+async function resolveRemoteRunner(): Promise<RemoteCommandRunner> {
+  if (remoteRunner) return remoteRunner;
+  remoteRunnerLoad ??= import("@/modules/connections/model/remoteCommands")
+    .then(() => {
+      if (!remoteRunner) throw new RemoteRunnerUnavailableError();
+      return remoteRunner;
+    })
+    .catch((reason: unknown) => {
+      remoteRunnerLoad = undefined;
+      throw reason instanceof RemoteRunnerUnavailableError
+        ? reason
+        : new RemoteRunnerUnavailableError(reason);
+    });
+  return remoteRunnerLoad;
 }
 
 const isRemotePath = (value: unknown): boolean =>
@@ -31,9 +63,10 @@ export function invokeWorkspace<T>(
       ? isRemotePath((options as Record<string, unknown>).cwd)
       : false;
   if (args && (PATH_ARGS.some((key) => isRemotePath(args[key])) || remoteOptions)) {
-    if (!remoteRunner)
-      return Promise.reject(new Error("Connecting to the machine…"));
-    return remoteRunner(command, args) as Promise<T>;
+    if (remoteRunner) return remoteRunner(command, args) as Promise<T>;
+    return resolveRemoteRunner().then(
+      (runner) => runner(command, args) as Promise<T>,
+    );
   }
   return invoke<T>(command, args);
 }

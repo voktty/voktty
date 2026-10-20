@@ -39,6 +39,7 @@ import { listWorktrees, type Worktree } from "../lib/worktrees";
 import { sessionInWorktree } from "../lib/sessionWorktrees";
 import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { registerSshProjectPath } from "@/modules/connections/model/remoteProjectRegistration";
 import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useHarnessEnvStore } from "../lib/harnessEnvStore";
@@ -4156,6 +4157,10 @@ export function HarnessApp({
       setAutomationsViewOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
+      registerSshProjectPath(
+        normalized,
+        usePreferencesStore.getState().sshConnections ?? [],
+      );
       workspaceNavigation.selectProject(normalized);
 
       const activeWorkspace = tabsRef.current.find(
@@ -4249,6 +4254,7 @@ export function HarnessApp({
     }
     const parsed = parseRemotePath(projectCwd);
     if (!parsed) return;
+    registerSshProjectPath(projectCwd, sshConnections ?? []);
     const profile = findSshProfile(parsed.environmentId, sshConnections);
     if (!profile) return;
     if (
