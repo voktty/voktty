@@ -166,7 +166,7 @@ describe("Harness connections settings", () => {
 
   it("selects remote project in Harness when Connect is clicked", async () => {
     const onSelectProject = vi.fn();
-    window.addEventListener("voktty:harness-select-project", onSelectProject);
+    window.addEventListener("voktty:open-harness", onSelectProject);
     try {
       await render();
       const connectBtn = Array.from(container.querySelectorAll("button")).find(
@@ -182,7 +182,7 @@ describe("Harness connections settings", () => {
       }>;
       expect(event.detail.path).toBe("remote://voktty-ssh-profile-1/home/dev");
     } finally {
-      window.removeEventListener("voktty:harness-select-project", onSelectProject);
+      window.removeEventListener("voktty:open-harness", onSelectProject);
     }
   });
 

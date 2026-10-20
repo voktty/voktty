@@ -3,9 +3,13 @@ import type { SshConnectionConfig } from "@/modules/workspace";
 
 export type { SshConnectionConfig };
 
+/** Which surface opens when the saved connection is chosen. */
+export type SshSurface = "terminal" | "harness";
+
 export type SshConnection = SshConnectionConfig & {
   id: string;
   name: string;
+  defaultSurface?: SshSurface;
 };
 
 export type SshPingResult = {

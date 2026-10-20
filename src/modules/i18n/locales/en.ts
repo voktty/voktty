@@ -3218,6 +3218,11 @@ export const en = {
     noConnections: "No saved connections",
     newConnection: "New SSH connection",
     manageConnections: "Manage SSH connections",
+    harnessConnected: "Connected for the Harness",
+    defaultSurface: {
+      terminal: "Opens as a terminal. Click to open as Harness",
+      harness: "Opens as Harness. Click to open as a terminal",
+    },
     importConfig: "Import from ~/.ssh/config",
     importSuccess: "Imported {imported} new hosts (found {total} in config).",
     noConfigFound: "No hosts found in ~/.ssh/config.",
@@ -4718,7 +4723,9 @@ export const en = {
       refreshPings: "Refresh status",
       pinging: "Checking…",
       offline: "Unreachable",
-      remoteHarnessDesc:
+      statusBarHint:
+      "Open and close SSH connections from the connection menu in the bottom bar. Mark a connection as Harness there to open it as a Harness project instead of a terminal.",
+    remoteHarnessDesc:
         "Allows running AI agents (Codex, Claude, etc.) and commands on remote SSH servers with real-time status and feedback.",
       openFolder: "Open folder",
       openRemoteProject: "Open remote project",

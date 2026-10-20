@@ -62,6 +62,13 @@ import {
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { remoteSshEnvironmentId } from "@/modules/connections/model/remoteSshProfiles";
+import {
+  closeSshProfileSessions,
+  DISCONNECT_SSH_EVENT,
+  OPEN_HARNESS_EVENT,
+} from "@/modules/connections/model/sshConnectionActions";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -118,7 +125,8 @@ import {
   recordQuickOpenFile,
   workspaceRelativePath,
 } from "@/modules/quick-open";
-import { closeRemoteWorkspace, openRemoteWorkspace } from "@/modules/remote";
+import { openRemoteWorkspace } from "@/modules/remote";
+import { closeRemoteSessionById } from "@/modules/remote/sessionManager";
 import { SerialConnectModal } from "@/modules/serial";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -538,7 +546,7 @@ function DesktopApp() {
       tabsRef.current,
       useSpaces.getState().spaces,
     )) {
-      void closeRemoteWorkspace(sessionId).catch(() => {});
+      void closeRemoteSessionById("workspace", sessionId).catch(() => {});
     }
     explorerWorkspaceEnvsRef.current.clear();
     setExplorerWorkspaceRevision((revision) => revision + 1);
@@ -1150,7 +1158,7 @@ function DesktopApp() {
         explorerWorkspaceEnvsRef.current.delete(id);
         setExplorerWorkspaceRevision((revision) => revision + 1);
         for (const sessionId of sessionsToClose) {
-          void closeRemoteWorkspace(sessionId).catch(() => {});
+          void closeRemoteSessionById("workspace", sessionId).catch(() => {});
         }
       }
       if (closingTab && closingTab.kind === "preview" && closingTab.url) {
@@ -1255,7 +1263,7 @@ function DesktopApp() {
       }
 
       for (const sessionId of explorerSessionsToClose) {
-        void closeRemoteWorkspace(sessionId).catch(() => {});
+        void closeRemoteSessionById("workspace", sessionId).catch(() => {});
       }
 
       const closedIds = closeTabs(anchorId, plan);
@@ -1941,22 +1949,42 @@ function DesktopApp() {
   );
 
   useEffect(() => {
-    const disconnectHandler = () => {
+    const disconnectHandler = (event: Event) => {
+      const requested = (event as CustomEvent<{ connectionId?: unknown }>)
+        .detail?.connectionId;
+      const connectionId =
+        typeof requested === "string" && requested ? requested : undefined;
       const current = useWorkspaceEnvStore.getState().env;
-      if (current.kind === "ssh" && current.sessionId !== undefined) {
-        void closeRemoteWorkspace(current.sessionId).catch(() => {});
+      const targetId =
+        connectionId ?? (current.kind === "ssh" ? current.connection.id : null);
+      const workspaceAffected =
+        current.kind === "ssh" &&
+        (!connectionId || current.connection.id === connectionId);
+      if (targetId) void closeSshProfileSessions(targetId).catch(() => {});
+      if (workspaceAffected && current.kind === "ssh") {
+        if (current.sessionId !== undefined) {
+          void closeRemoteSessionById("workspace", current.sessionId).catch(() => {});
+        }
+        if (activeSpaceId) {
+          useSpaces.getState().setEnv(activeSpaceId, LOCAL_WORKSPACE);
+          useSpaces
+            .getState()
+            .setRoot(
+              activeSpaceId,
+              localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+            );
+        }
+        setWorkspaceEnv(LOCAL_WORKSPACE);
       }
-      if (activeSpaceId) {
-        useSpaces.getState().setEnv(activeSpaceId, LOCAL_WORKSPACE);
-        useSpaces
-          .getState()
-          .setRoot(
-            activeSpaceId,
-            localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
-          );
-      }
-      setWorkspaceEnv(LOCAL_WORKSPACE);
-      if (activeTab?.kind === "harness") {
+      const harnessProjectOnProfile =
+        targetId !== null &&
+        activeTab?.kind === "harness" &&
+        parseRemotePath(activeTab.cwd ?? "")?.environmentId ===
+          remoteSshEnvironmentId(targetId);
+      if (
+        activeTab?.kind === "harness" &&
+        (workspaceAffected || harnessProjectOnProfile)
+      ) {
         const fallback = localHome ?? "~";
         setHarnessCwd(fallback);
         updateTab(activeTab.id, { cwd: fallback });
@@ -1970,9 +1998,9 @@ function DesktopApp() {
         t("harness.connections.disconnected") || "Sesión remota desconectada",
       );
     };
-    window.addEventListener("voktty:disconnect-ssh", disconnectHandler);
+    window.addEventListener(DISCONNECT_SSH_EVENT, disconnectHandler);
     return () => {
-      window.removeEventListener("voktty:disconnect-ssh", disconnectHandler);
+      window.removeEventListener(DISCONNECT_SSH_EVENT, disconnectHandler);
     };
   }, [
     activeSpaceId,
@@ -1985,6 +2013,27 @@ function DesktopApp() {
     t,
   ]);
 
+  useEffect(() => {
+    const openHarnessHandler = (event: Event) => {
+      const path = (event as CustomEvent<{ path?: unknown }>).detail?.path;
+      if (typeof path !== "string" || !path) return;
+      const existing = tabsRef.current.find(
+        (tab): tab is HarnessTab =>
+          tab.kind === "harness" && tab.spaceId === activeSpaceIdRef.current,
+      );
+      if (!existing) {
+        newHarnessTab(undefined, path);
+        return;
+      }
+      setActiveId(existing.id);
+      window.dispatchEvent(
+        new CustomEvent("voktty:harness-select-project", { detail: { path } }),
+      );
+    };
+    window.addEventListener(OPEN_HARNESS_EVENT, openHarnessHandler);
+    return () =>
+      window.removeEventListener(OPEN_HARNESS_EVENT, openHarnessHandler);
+  }, [newHarnessTab, setActiveId]);
   const handleShareTerminal = useCallback(
     (tabId: number) => {
       const tab = tabsRef.current.find((candidate) => candidate.id === tabId);
@@ -3562,7 +3611,7 @@ function DesktopApp() {
             useSpaces.getState().spaces,
           );
           if (sessionsToClose.includes(prepared.workspaceEnv.sessionId)) {
-            void closeRemoteWorkspace(prepared.workspaceEnv.sessionId).catch(
+            void closeRemoteSessionById("workspace", prepared.workspaceEnv.sessionId).catch(
               () => {},
             );
           }
@@ -3584,7 +3633,7 @@ function DesktopApp() {
           useSpaces.getState().spaces,
         );
         if (sessionsToClose.includes(previousExplorerEnv.sessionId)) {
-          void closeRemoteWorkspace(previousExplorerEnv.sessionId).catch(
+          void closeRemoteSessionById("workspace", previousExplorerEnv.sessionId).catch(
             () => {},
           );
         }

@@ -29,6 +29,7 @@ const info = (id: number) => ({
 });
 
 beforeEach(async () => {
+  await useHarnessEnvStore.getState().disconnect();
   await remoteSessions.closeAll();
   useHarnessEnvStore.setState({ env: { kind: "local" }, connecting: false, error: null });
   mocks.openRemoteWorkspace.mockReset().mockResolvedValue(info(5));

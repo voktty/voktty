@@ -23,9 +23,15 @@ import {
   ComputerTerminal02Icon,
   Search01Icon,
   ServerStack01Icon,
+  SparklesIcon,
   UsbIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { toast } from "sonner";
+import {
+  openSshProfileInHarness,
+  surfaceOf,
+} from "./model/sshConnectionActions";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -133,6 +139,17 @@ export function ConnectionsLaunchpad({
 }: ConnectionsLaunchpadProps) {
   const { t } = useTranslation();
   const sshConnections = useSshConnections();
+  const openProfileInHarness = useCallback(
+    (connection: SshConnection) => {
+      openSshProfileInHarness(connection).catch((reason: unknown) =>
+        toast.error(t("ssh.connectionFailed", { name: connection.name }), {
+          description:
+            reason instanceof Error ? reason.message : String(reason),
+        }),
+      );
+    },
+    [t],
+  );
   const rdpConnections = useRdpConnections();
   const distros = useWorkspaceEnvStore((state) => state.distros);
   const refreshDistros = useWorkspaceEnvStore((state) => state.refreshDistros);
@@ -182,8 +199,22 @@ export function ConnectionsLaunchpad({
       detail: formatSshSubtitle(connection),
       type: "SSH",
       icon: ServerStack01Icon,
-      run: () => onConnectSsh(connection),
+      run: () =>
+        surfaceOf(connection) === "harness"
+          ? openProfileInHarness(connection)
+          : onConnectSsh(connection),
     }));
+    const sshHarnessItems = sshConnections
+      .filter((connection) => surfaceOf(connection) !== "harness")
+      .map((connection) => ({
+        id: `ssh-harness-${connection.id}`,
+        section: "available" as const,
+        label: connection.name,
+        detail: formatSshSubtitle(connection),
+        type: "Harness",
+        icon: SparklesIcon,
+        run: () => openProfileInHarness(connection),
+      }));
     const wslItems = distros.map((distro) => ({
       id: `wsl-${distro.name}`,
       section: "available" as const,
@@ -226,6 +257,7 @@ export function ConnectionsLaunchpad({
     return [
       ...activeItems,
       ...sshItems,
+      ...sshHarnessItems,
       ...wslItems,
       ...dockerItems,
       ...rdpItems,
@@ -239,6 +271,7 @@ export function ConnectionsLaunchpad({
     onConnectSsh,
     onNewWsl,
     onSelectTab,
+    openProfileInHarness,
     rdpConnections,
     sshConnections,
     t,

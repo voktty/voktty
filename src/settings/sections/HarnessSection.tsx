@@ -63,28 +63,8 @@ import { SectionHeader } from "../components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { HarnessProviderAccounts } from "@/modules/harness/components/HarnessProviderAccounts";
 import { HarnessUsageDisplaySettings } from "@/modules/harness/components/HarnessUsageDisplaySettings";
-import {
-  formatSshSubtitle,
-  type SshConnection,
-  useSshConnections,
-  useSshPing,
-} from "@/modules/ssh";
-import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
-import { parseRemotePath, remotePath } from "@/modules/connections/model/remoteProjects";
-import {
-  findSshProfile,
-  remoteSshConnectionIdForEnvironment,
-  remoteSshEnvironmentId,
-} from "@/modules/connections/model/remoteSshProfiles";
-import { lastProjectPath } from "@/modules/harness/lib/recents";
-import {
-  PlayIcon,
-  Refresh01Icon,
-  ServerStack01Icon,
-  StopIcon,
-  Tick02Icon,
-} from "@hugeicons/core-free-icons";
+import { ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 function Row({
@@ -392,49 +372,10 @@ function ProvidersBlock() {
   );
 }
 
+/** Connecting lives in the status bar of the main window: this window cannot
+ * reach the Harness session, so it only links to the profile manager. */
 function RemoteConnectionsBlock() {
   const { t } = useTranslation();
-  const connections = useSshConnections();
-  const { pingMap, refreshPings } = useSshPing(connections, true);
-  const harnessEnv = useHarnessEnvStore((s) => s.env);
-  const isHarnessConnecting = useHarnessEnvStore((s) => s.connecting);
-  const activeSshConn =
-    harnessEnv.kind === "ssh" ? harnessEnv.connection : null;
-  const currentProjectPath = lastProjectPath() ?? "";
-  const parsedCurrentProject = parseRemotePath(currentProjectPath);
-  const currentConnectionId = parsedCurrentProject
-    ? (findSshProfile(parsedCurrentProject.environmentId)?.id ??
-       remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId))
-    : (harnessEnv.kind === "ssh" ? harnessEnv.connection.id : undefined);
-
-  const handleConnect = async (conn: SshConnection) => {
-    try {
-      const nextEnv = await useHarnessEnvStore.getState().connect(conn);
-      if (nextEnv.kind === "ssh") {
-        const remoteUri = remotePath(
-          remoteSshEnvironmentId(conn.id),
-          nextEnv.root,
-        );
-        window.dispatchEvent(
-          new CustomEvent("voktty:harness-select-project", {
-            detail: { path: remoteUri },
-          }),
-        );
-      }
-    } catch (err) {
-      console.error("[harness] Failed to connect:", err);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    await useHarnessEnvStore.getState().disconnect();
-    window.dispatchEvent(
-      new CustomEvent("voktty:harness-select-project", {
-        detail: { path: "~" },
-      }),
-    );
-  };
-
   return (
     <section
       className="flex flex-col gap-2"
@@ -442,149 +383,22 @@ function RemoteConnectionsBlock() {
     >
       <SubHeading title={t("harness.connections.title")} />
       <p className="pb-2 text-[12px] leading-relaxed text-muted-foreground">
-        {t("harness.connections.remoteHarnessDesc")}
+        {t("harness.connections.statusBarHint")}
       </p>
-
-      <div className="flex flex-col gap-2 rounded-xl border border-border/40 bg-card/40 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <HugeiconsIcon
-              icon={ServerStack01Icon}
-              size={16}
-              className="text-primary"
-            />
-            <span className="text-[13px] font-medium text-foreground">
-              {connections.length === 0
-                ? t("harness.connections.emptyTitle")
-                : `${connections.length} ${
-                    connections.length === 1
-                      ? "perfil SSH guardado"
-                      : "perfiles SSH guardados"
-                  }`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2.5 text-[11px] gap-1 cursor-pointer"
-              onClick={() => void refreshPings()}
-              title={t("harness.connections.refreshPings")}
-            >
-              <HugeiconsIcon icon={Refresh01Icon} size={12} />
-              <span>{t("harness.connections.refreshPings")}</span>
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2.5 text-[11px] gap-1 cursor-pointer"
-              onClick={() => void openSettingsWindow("ssh")}
-            >
-              <HugeiconsIcon icon={ServerStack01Icon} size={12} />
-              <span>{t("harness.connections.manageProfiles")}</span>
-            </Button>
-          </div>
-        </div>
-
-        {connections.length > 0 ? (
-          <div className="mt-2 divide-y divide-border/30 rounded-lg border border-border/30 overflow-hidden bg-background/50">
-            {connections.map((conn) => {
-              const pingStatus = pingMap[conn.id];
-              const isConnected = Boolean(
-                activeSshConn &&
-                  (activeSshConn.id === conn.id ||
-                    (activeSshConn.host === conn.host &&
-                      (activeSshConn.port ?? 22) === (conn.port ?? 22))),
-              );
-              const isCurrentProject = currentConnectionId === conn.id;
-
-              return (
-                <div
-                  key={conn.id}
-                  className={`flex items-center justify-between gap-3 px-3 py-2 text-[12px] ${
-                    isConnected ? "bg-emerald-500/5" : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`size-2 rounded-full shrink-0 ${
-                        isConnected
-                          ? "bg-emerald-500 animate-pulse"
-                          : pingStatus?.online
-                            ? "bg-emerald-500/70"
-                            : pingStatus && !pingStatus.online
-                              ? "bg-rose-500"
-                              : "bg-muted-foreground/40"
-                      }`}
-                    />
-                    <div className="min-w-0">
-                      <div className="font-medium text-foreground truncate">
-                        {conn.name}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground truncate font-mono">
-                        {formatSshSubtitle(conn)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {pingStatus?.online ? (
-                      <span className="font-mono text-[11px] text-emerald-500">
-                        {pingStatus.latencyMs ?? 0} ms
-                      </span>
-                    ) : null}
-
-                    {isCurrentProject ? (
-                      <span className="inline-flex items-center rounded bg-indigo-500/15 px-2 py-0.5 text-[11px] font-medium text-indigo-400">
-                        {t("harness.connections.currentProject")}
-                      </span>
-                    ) : null}
-
-                    {isConnected ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
-                        <HugeiconsIcon
-                          icon={Tick02Icon}
-                          size={12}
-                          strokeWidth={2.5}
-                        />
-                        {t("harness.connections.connected")}
-                      </span>
-                    ) : null}
-
-                    {isConnected ? (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-6 px-2 text-[11px] gap-1 cursor-pointer"
-                        onClick={handleDisconnect}
-                      >
-                        <HugeiconsIcon icon={StopIcon} size={11} />
-                        {t("harness.connections.disconnect")}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={isHarnessConnecting}
-                        className="h-6 px-2 text-[11px] gap-1 cursor-pointer"
-                        onClick={() => handleConnect(conn)}
-                      >
-                        <HugeiconsIcon icon={PlayIcon} size={11} />
-                        {t("harness.connections.connect")}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
+      <div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2.5 text-[11px] gap-1 cursor-pointer"
+          onClick={() => void openSettingsWindow("ssh")}
+        >
+          <HugeiconsIcon icon={ServerStack01Icon} size={12} />
+          <span>{t("harness.connections.manageProfiles")}</span>
+        </Button>
       </div>
     </section>
   );
 }
-
 export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { t } = useTranslation();
   return (

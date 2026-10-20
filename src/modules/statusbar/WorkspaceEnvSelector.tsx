@@ -6,6 +6,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { IS_WINDOWS } from "@/lib/platform";
+import {
+  closeSshProfileSessions,
+  isProfileConnected,
+  openSshProfileInHarness,
+  otherSurface,
+  profileLinks,
+  requestSshDisconnect,
+  surfaceOf,
+} from "@/modules/connections/model/sshConnectionActions";
+import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import { useRemoteSessionSnapshots } from "@/modules/remote/useRemoteSessions";
 import { useTranslation } from "@/modules/i18n";
 import { type RdpConnectionProfile, useRdpConnections } from "@/modules/rdp";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
@@ -37,12 +48,14 @@ import {
   ServerStack01Icon,
   ServerStack03Icon,
   Settings01Icon,
+  SparklesIcon,
   StopIcon,
   Tick02Icon,
   UsbIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 const STORAGE_KEY = "voktty-env-selector-collapsed";
 
@@ -107,6 +120,8 @@ export function WorkspaceEnvSelector({
   const connectionAttempts = useWorkspaceEnvStore((s) => s.connectionAttempts);
   const refreshDistros = useWorkspaceEnvStore((s) => s.refreshDistros);
   const sshConnections = useSshConnections();
+  const harnessEnv = useHarnessEnvStore((s) => s.env);
+  const pool = useRemoteSessionSnapshots();
   const rdpConnections = useRdpConnections();
   const { pingMap, refreshPings } = useSshPing(sshConnections, dropdownOpen);
 
@@ -170,6 +185,25 @@ export function WorkspaceEnvSelector({
             : IS_WINDOWS
               ? t("workspace.windowsLocal")
               : t("workspace.localShell");
+
+  const openProfileInHarness = (conn: SshConnection) => {
+    const toastId = `harness-ssh-${conn.id}`;
+    toast.loading(t("terminal.connection.connecting", { name: conn.name }), {
+      id: toastId,
+    });
+    openSshProfileInHarness(conn)
+      .then(() =>
+        toast.success(t("terminal.connection.connected", { name: conn.name }), {
+          id: toastId,
+        }),
+      )
+      .catch((reason: unknown) =>
+        toast.error(t("ssh.connectionFailed", { name: conn.name }), {
+          id: toastId,
+          description: reason instanceof Error ? reason.message : String(reason),
+        }),
+      );
+  };
 
   const triggerButton = (
     <button
@@ -268,7 +302,7 @@ export function WorkspaceEnvSelector({
                 variant="destructive"
                 className="h-6 px-2 text-[11px] gap-1 cursor-pointer shrink-0"
                 onClick={() => {
-                  window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh"));
+                  requestSshDisconnect(env.connection.id);
                   setDropdownOpen(false);
                 }}
               >
@@ -277,6 +311,41 @@ export function WorkspaceEnvSelector({
               </Button>
             </div>
           )}
+
+          {/* Harness-only SSH connection: same one-click Disconnect */}
+          {harnessEnv.kind === "ssh" &&
+            !(env.kind === "ssh" && env.connection.id === harnessEnv.connection.id) && (
+              <div className="flex items-center justify-between p-2 rounded-lg bg-violet-500/10 border border-violet-500/25 mb-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <HugeiconsIcon
+                    icon={SparklesIcon}
+                    size={13}
+                    strokeWidth={1.75}
+                    className="shrink-0 text-violet-400"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold text-foreground truncate">
+                      {harnessEnv.connection.name}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {t("ssh.harnessConnected")}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-6 px-2 text-[11px] gap-1 cursor-pointer shrink-0"
+                  onClick={() => {
+                    requestSshDisconnect(harnessEnv.connection.id);
+                    setDropdownOpen(false);
+                  }}
+                >
+                  <HugeiconsIcon icon={StopIcon} size={11} />
+                  <span>{t("harness.connections.disconnect")}</span>
+                </Button>
+              </div>
+            )}
 
           {/* 1. LOCAL ENVIRONMENTS SECTION */}
           <div>
@@ -431,11 +500,19 @@ export function WorkspaceEnvSelector({
                         connectionAttempt?.state.phase === "reconnecting";
                       const isConnFailed =
                         connectionAttempt?.state.phase === "failed";
+                      const links = profileLinks(conn.id, {
+                        workspaceEnv: env,
+                        harnessEnv,
+                        pool,
+                      });
+                      const surface = surfaceOf(conn);
                       const isSshActive =
-                        env.kind === "ssh" &&
-                        (env.connection.id === conn.id ||
-                          (env.connection.host === conn.host &&
-                            (env.connection.port ?? 22) === (conn.port ?? 22)));
+                        links.harness ||
+                        (env.kind === "ssh" &&
+                          (env.connection.id === conn.id ||
+                            (env.connection.host === conn.host &&
+                              (env.connection.port ?? 22) ===
+                                (conn.port ?? 22))));
                       return (
                         <DropdownMenuItem
                           key={conn.id}
@@ -445,7 +522,8 @@ export function WorkspaceEnvSelector({
                               event.preventDefault();
                               return;
                             }
-                            onConnectSsh?.(conn);
+                            if (surface === "harness") openProfileInHarness(conn);
+                            else onConnectSsh?.(conn);
                           }}
                           className={`flex items-center justify-between gap-2 py-1.5 ${
                             isConnConnecting
@@ -571,6 +649,77 @@ export function WorkspaceEnvSelector({
                                 strokeWidth={1.75}
                               />
                             </button>
+                            <button
+                              type="button"
+                              aria-label={t(
+                                surface === "harness"
+                                  ? "ssh.defaultSurface.harness"
+                                  : "ssh.defaultSurface.terminal",
+                              )}
+                              aria-pressed={surface === "harness"}
+                              title={t(
+                                surface === "harness"
+                                  ? "ssh.defaultSurface.harness"
+                                  : "ssh.defaultSurface.terminal",
+                              )}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onPointerUp={(event) => event.stopPropagation()}
+                              onPointerCancel={(event) =>
+                                event.stopPropagation()
+                              }
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void updateSshConnection(conn.id, {
+                                  defaultSurface: otherSurface(surface),
+                                });
+                              }}
+                              className={`flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent cursor-pointer ${
+                                surface === "harness"
+                                  ? "text-violet-400"
+                                  : "text-muted-foreground/70 hover:text-foreground"
+                              }`}
+                            >
+                              <HugeiconsIcon
+                                icon={
+                                  surface === "harness"
+                                    ? SparklesIcon
+                                    : ComputerTerminal02Icon
+                                }
+                                size={12}
+                                strokeWidth={1.75}
+                              />
+                            </button>
+                            {isProfileConnected(links) && (
+                              <button
+                                type="button"
+                                aria-label={t("harness.connections.disconnect")}
+                                title={t("harness.connections.disconnect")}
+                                onPointerDown={(event) =>
+                                  event.stopPropagation()
+                                }
+                                onPointerUp={(event) => event.stopPropagation()}
+                                onPointerCancel={(event) =>
+                                  event.stopPropagation()
+                                }
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (links.workspace || links.harness) {
+                                    requestSshDisconnect(conn.id);
+                                  } else {
+                                    void closeSshProfileSessions(conn.id);
+                                  }
+                                }}
+                                className="flex size-5 shrink-0 items-center justify-center rounded text-destructive/80 hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                              >
+                                <HugeiconsIcon
+                                  icon={StopIcon}
+                                  size={11}
+                                  strokeWidth={2}
+                                />
+                              </button>
+                            )}
                             <button
                               type="button"
                               data-inline-rename

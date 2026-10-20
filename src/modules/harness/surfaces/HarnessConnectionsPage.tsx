@@ -1,9 +1,12 @@
 import { AddRemoteProjectDialog } from "@/modules/connections";
-import { parseRemotePath, remotePath } from "@/modules/connections/model/remoteProjects";
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import {
+  closeSshProfileSessions,
+  openSshProfileInHarness,
+} from "@/modules/connections/model/sshConnectionActions";
 import {
   findSshProfile,
   remoteSshConnectionIdForEnvironment,
-  remoteSshEnvironmentId,
 } from "@/modules/connections/model/remoteSshProfiles";
 import { useTranslation } from "@/modules/i18n";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
@@ -60,25 +63,14 @@ export function HarnessConnectionsPage() {
 
   const handleConnect = async (conn: SshConnection) => {
     try {
-      const nextEnv = await useHarnessEnvStore.getState().connect(conn);
-      if (nextEnv.kind === "ssh") {
-        const remoteUri = remotePath(
-          remoteSshEnvironmentId(conn.id),
-          nextEnv.root,
-        );
-        window.dispatchEvent(
-          new CustomEvent("voktty:harness-select-project", {
-            detail: { path: remoteUri },
-          }),
-        );
-      }
+      await openSshProfileInHarness(conn);
     } catch (err) {
       console.error("[harness] Failed to connect:", err);
     }
   };
 
-  const handleDisconnect = async () => {
-    await useHarnessEnvStore.getState().disconnect();
+  const handleDisconnect = async (conn: SshConnection) => {
+    await closeSshProfileSessions(conn.id);
     window.dispatchEvent(
       new CustomEvent("voktty:harness-select-project", {
         detail: { path: "~" },
@@ -87,25 +79,9 @@ export function HarnessConnectionsPage() {
   };
 
   const handleReconnect = async (conn: SshConnection) => {
-    await useHarnessEnvStore.getState().disconnect();
-    try {
-      const nextEnv = await useHarnessEnvStore.getState().connect(conn);
-      if (nextEnv.kind === "ssh") {
-        const remoteUri = remotePath(
-          remoteSshEnvironmentId(conn.id),
-          nextEnv.root,
-        );
-        window.dispatchEvent(
-          new CustomEvent("voktty:harness-select-project", {
-            detail: { path: remoteUri },
-          }),
-        );
-      }
-    } catch (err) {
-      console.error("[harness] Failed to reconnect:", err);
-    }
+    await closeSshProfileSessions(conn.id);
+    await handleConnect(conn);
   };
-
   const onRefreshPingsClick = async () => {
     setIsRefreshingPings(true);
     try {
@@ -299,7 +275,7 @@ export function HarnessConnectionsPage() {
                           <button
                             type="button"
                             className="flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 text-[12px] font-medium text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer"
-                            onClick={handleDisconnect}
+                            onClick={() => handleDisconnect(connection)}
                             title={t("harness.connections.disconnect")}
                           >
                             <Square className="size-3.5" />

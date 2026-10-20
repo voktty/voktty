@@ -3305,6 +3305,11 @@ export const es: TranslationSchema = {
     noConnections: "No hay conexiones guardadas",
     newConnection: "Nueva conexión SSH",
     manageConnections: "Gestionar conexiones SSH",
+    harnessConnected: "Conectado para el Harness",
+    defaultSurface: {
+      terminal: "Se abre como terminal. Pulsa para abrir como Harness",
+      harness: "Se abre como Harness. Pulsa para abrir como terminal",
+    },
     importConfig: "Importar de ~/.ssh/config",
     importSuccess:
       "Se importaron {imported} nuevos hosts ({total} encontrados en config).",
@@ -4834,7 +4839,9 @@ export const es: TranslationSchema = {
       refreshPings: "Actualizar estado",
       pinging: "Comprobando…",
       offline: "Sin respuesta",
-      remoteHarnessDesc:
+      statusBarHint:
+      "Abre y cierra conexiones SSH desde el menu de conexiones de la barra inferior. Alli puedes marcar una conexion como Harness para abrirla como proyecto del Harness en lugar de una terminal.",
+    remoteHarnessDesc:
         "Permite ejecutar agentes de IA (Codex, Claude, etc.) y comandos en servidores SSH remotos con estado y feedback en tiempo real.",
       openFolder: "Abrir carpeta",
       openRemoteProject: "Abrir proyecto remoto",

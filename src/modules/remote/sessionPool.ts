@@ -144,6 +144,16 @@ export class RemoteSessionPool {
     this.discard(id, entry, "The remote session was lost.");
   }
 
+  /** Closes one session now, whatever still leases it. */
+  async closeSession(sessionId: number): Promise<void> {
+    for (const [id, entry] of [...this.entries]) {
+      if (entry.info?.session_id === sessionId) {
+        await this.discard(id, entry, null);
+        return;
+      }
+    }
+  }
+
   /** Closes every session of a profile, such as on an explicit disconnect. */
   async closeProfile(profileId: string): Promise<void> {
     const closing: Promise<void>[] = [];

@@ -1,6 +1,9 @@
 import { native } from "@/modules/ai/lib/native";
 import { t } from "@/modules/i18n";
-import { closeRemoteWorkspace, openRemoteWorkspace } from "@/modules/remote";
+import {
+  closeRemoteSessionById,
+  openHeldRemoteSession,
+} from "@/modules/remote/sessionManager";
 import { useSpaces } from "@/modules/spaces/lib/useSpaces";
 import type { Tab } from "@/modules/tabs";
 import {
@@ -38,7 +41,9 @@ async function connectRemoteEnv(
   const initial = env.connection.initialDirectory?.trim();
   const rootCandidate =
     env.root && env.root !== "." ? env.root : (initial || ".");
-  const session = await openRemoteWorkspace(
+  const session = await openHeldRemoteSession(
+    "workspace",
+    env.connection.id,
     env.connection,
     rootCandidate,
   );
@@ -74,7 +79,7 @@ async function closeRemoteEnv(
     ) {
       return;
     }
-    await closeRemoteWorkspace(env.sessionId).catch(() => {});
+    await closeRemoteSessionById("workspace", env.sessionId).catch(() => {});
   }
 }
 
@@ -317,7 +322,7 @@ export function useWorkspaceSwitcher({
       const releaseOwnSession = async () => {
         const sessionId = releasableSessionId(prepared, openedSessionId);
         if (sessionId === undefined) return;
-        await closeRemoteWorkspace(sessionId).catch(() => {});
+        await closeRemoteSessionById("workspace", sessionId).catch(() => {});
       };
 
       let nextHome: string;
