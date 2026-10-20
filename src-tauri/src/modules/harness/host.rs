@@ -1047,7 +1047,8 @@ fn remote_agent_restrictions(
                 .to_string(),
         );
     }
-    if account.is_some() {
+    // Callers always name an account; `default` means the provider's own login.
+    if account.is_some_and(|account| account.id != "default") {
         return Err(
             "Provider accounts are stored on this computer and do not apply to a remote host. Use the default account for remote projects."
                 .to_string(),
@@ -4056,6 +4057,11 @@ mod binary_resolution_tests {
         let sandbox = vec!["api.openai.com".to_string()];
         let error = remote_agent_restrictions(Some(&sandbox), None).unwrap_err();
         assert!(error.contains("network sandbox"));
+        let default = HarnessAccount {
+            provider: "codex".to_string(),
+            id: "default".to_string(),
+        };
+        assert!(remote_agent_restrictions(None, Some(&default)).is_ok());
         let account = HarnessAccount {
             provider: "codex".to_string(),
             id: "work".to_string(),
