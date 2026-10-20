@@ -11,6 +11,7 @@ import {
   resolveWorkspaceFileReference,
   resolveWorkspacePath,
   slash,
+  setRemoteRootLabelResolver,
 } from "./paths";
 
 describe("resolveWorkspaceFileReference", () => {
@@ -167,5 +168,16 @@ describe("path relations", () => {
     expect(
       displayPath("c:/USERS/me/App/src/a.ts", "C:/Users/ME/app"),
     ).toBe("src/a.ts");
+  });
+});
+
+describe("projectName for remote projects", () => {
+  it("uses the last folder, or the connection name for the root", () => {
+    setRemoteRootLabelResolver((id) => (id === "voktty-ssh-p1" ? "forgenex-code1" : undefined));
+    expect(projectName("remote://voktty-ssh-p1/config/workspace")).toBe("workspace");
+    expect(projectName("remote://voktty-ssh-p1/")).toBe("forgenex-code1");
+    expect(projectName("remote://voktty-ssh-p1")).toBe("forgenex-code1");
+    expect(projectName("remote://voktty-ssh-unknown/")).toBe("/");
+    expect(projectName("/home/me/app")).toBe("app");
   });
 });

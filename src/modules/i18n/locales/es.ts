@@ -5019,6 +5019,11 @@ export const es: TranslationSchema = {
       viewPrDetails: "Ver PR #{number}: {title}",
       deleteProjectNamed: "Eliminar {name}",
       deleteProjectNamedQuestion: "¿Eliminar “{name}”?",
+      removeUnavailableTitle: "Quitar {count} {count, plural, one {proyecto no disponible} other {proyectos no disponibles}}",
+      removeUnavailableDescription: "Estas carpetas ya no existen en este equipo. Solo se quitan de la lista de proyectos; no se toca nada en disco.",
+      removeUnavailableMore: "y {count} mas",
+      removeUnavailablePurge: "Borrar tambien sus conversaciones guardadas",
+      removeUnavailableConfirm: "Quitar {count}",
       deleteProjectDescription:
         "Se eliminarán todas las conversaciones de este proyecto. También desaparecerá de la barra lateral. La carpeta en disco no se modifica, y al abrirla de nuevo el proyecto estará vacío.",
       savedConversationRemoval:

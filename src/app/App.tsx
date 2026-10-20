@@ -63,12 +63,13 @@ import {
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import { remoteSshEnvironmentId } from "@/modules/connections/model/remoteSshProfiles";
 import {
   closeSshProfileSessions,
   DISCONNECT_SSH_EVENT,
   OPEN_HARNESS_EVENT,
+  relatedProfileIds,
 } from "@/modules/connections/model/sshConnectionActions";
+import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -1957,10 +1958,23 @@ function DesktopApp() {
       const current = useWorkspaceEnvStore.getState().env;
       const targetId =
         connectionId ?? (current.kind === "ssh" ? current.connection.id : null);
+      const saved = usePreferencesStore.getState().sshConnections ?? [];
+      const ids =
+        targetId === null
+          ? new Set<string>()
+          : relatedProfileIds(
+              targetId,
+              saved,
+              current.kind === "ssh" ? [current.connection] : [],
+            );
       const workspaceAffected =
         current.kind === "ssh" &&
-        (!connectionId || current.connection.id === connectionId);
-      if (targetId) void closeSshProfileSessions(targetId).catch(() => {});
+        (targetId === null ||
+          ids.has(current.connection.id) ||
+          current.connection.id === targetId);
+      if (targetId) {
+        void closeSshProfileSessions(targetId, ids).catch(() => {});
+      }
       if (workspaceAffected && current.kind === "ssh") {
         if (current.sessionId !== undefined) {
           void closeRemoteSessionById("workspace", current.sessionId).catch(() => {});
@@ -1976,25 +1990,32 @@ function DesktopApp() {
         }
         setWorkspaceEnv(LOCAL_WORKSPACE);
       }
-      const harnessProjectOnProfile =
-        targetId !== null &&
-        activeTab?.kind === "harness" &&
-        parseRemotePath(activeTab.cwd ?? "")?.environmentId ===
-          remoteSshEnvironmentId(targetId);
-      if (
-        activeTab?.kind === "harness" &&
-        (workspaceAffected || harnessProjectOnProfile)
-      ) {
-        const fallback = localHome ?? "~";
-        setHarnessCwd(fallback);
-        updateTab(activeTab.id, { cwd: fallback });
-        window.dispatchEvent(
-          new CustomEvent("voktty:harness-select-project", {
-            detail: { path: fallback },
-          }),
-        );
-      }
-      toast.success(
+      const onDisconnectedProfile = (cwd: string | undefined) => {
+        const environmentId = parseRemotePath(cwd ?? "")?.environmentId;
+        const profileId =
+          environmentId === undefined
+            ? undefined
+            : remoteSshConnectionIdForEnvironment(environmentId);
+        return profileId !== undefined && ids.has(profileId);
+      };
+      const fallback = localHome ?? "~";
+      for (const tab of tabsRef.current) {
+        if (tab.kind !== "harness") continue;
+        const resets =
+          tab.id === activeTab?.id
+            ? workspaceAffected || onDisconnectedProfile(tab.cwd)
+            : onDisconnectedProfile(tab.cwd);
+        if (!resets) continue;
+        updateTab(tab.id, { cwd: fallback });
+        if (tab.id === activeTab?.id) {
+          setHarnessCwd(fallback);
+          window.dispatchEvent(
+            new CustomEvent("voktty:harness-select-project", {
+              detail: { path: fallback },
+            }),
+          );
+        }
+      }      toast.success(
         t("harness.connections.disconnected") || "Sesión remota desconectada",
       );
     };

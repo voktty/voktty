@@ -12,6 +12,7 @@ import {
   openSshProfileInHarness,
   otherSurface,
   profileLinks,
+  relatedProfileIds,
   requestSshDisconnect,
   surfaceOf,
 } from "@/modules/connections/model/sshConnectionActions";
@@ -500,11 +501,12 @@ export function WorkspaceEnvSelector({
                         connectionAttempt?.state.phase === "reconnecting";
                       const isConnFailed =
                         connectionAttempt?.state.phase === "failed";
-                      const links = profileLinks(conn.id, {
-                        workspaceEnv: env,
-                        harnessEnv,
-                        pool,
-                      });
+                      const related = relatedProfileIds(conn.id, sshConnections);
+                      const links = profileLinks(
+                        conn.id,
+                        { workspaceEnv: env, harnessEnv, pool },
+                        related,
+                      );
                       const surface = surfaceOf(conn);
                       const isSshActive =
                         links.harness ||
@@ -708,7 +710,7 @@ export function WorkspaceEnvSelector({
                                   if (links.workspace || links.harness) {
                                     requestSshDisconnect(conn.id);
                                   } else {
-                                    void closeSshProfileSessions(conn.id);
+                                    void closeSshProfileSessions(conn.id, related);
                                   }
                                 }}
                                 className="flex size-5 shrink-0 items-center justify-center rounded text-destructive/80 hover:bg-destructive/10 hover:text-destructive cursor-pointer"

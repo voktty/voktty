@@ -8,7 +8,17 @@ import {
   remoteProjectForPath,
   type RemoteProject,
 } from "./remoteProjects";
+import { setRemoteRootLabelResolver } from "@/modules/harness/lib/paths";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { remoteSshConnectionIdForEnvironment } from "./remoteSshProfiles";
+
+setRemoteRootLabelResolver((environmentId) => {
+  const profileId = remoteSshConnectionIdForEnvironment(environmentId);
+  if (!profileId) return undefined;
+  return usePreferencesStore
+    .getState()
+    .sshConnections?.find((profile) => profile.id === profileId)?.name;
+});
 
 type SavedProfile = { id: string; name: string };
 

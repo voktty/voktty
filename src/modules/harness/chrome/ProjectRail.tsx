@@ -94,6 +94,8 @@ import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { RailAction, RailSearch } from "./RailAction";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
+import { RemoveUnavailableProjectsDialog } from "./RemoveUnavailableProjectsDialog";
+import { removableUnavailableProjects } from "../lib/projectCleanup";
 import { ProjectBackgroundDialog } from "./ProjectBackgroundDialog";
 import { TabVisitNav } from "./TitleBar";
 import { SettingsNav } from "./SettingsRail";
@@ -309,6 +311,7 @@ export function ProjectRail({
     name: string;
   } | null>(null);
   const [remoteProjectDialogOpen, setRemoteProjectDialogOpen] = useState(false);
+  const [removingUnavailable, setRemovingUnavailable] = useState(false);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
@@ -352,6 +355,11 @@ export function ProjectRail({
   );
   const { unavailablePaths, recheckPath } =
     useProjectAvailability(allProjectPaths);
+  const removableUnavailable = useMemo(
+    () =>
+      removableUnavailableProjects(allProjectPaths, unavailablePaths, busy, cwd),
+    [allProjectPaths, busy, cwd, unavailablePaths],
+  );
   const sections = useMemo(
     () =>
       projectRailSections(
@@ -632,6 +640,21 @@ export function ProjectRail({
     setRemoving(null);
   };
 
+  const onConfirmRemoveUnavailable = ({ purgeData }: { purgeData: boolean }) => {
+    for (const path of removableUnavailable) {
+      const targetPath = normalizeProjectPath(path);
+      assignProjectGroup(targetPath, null);
+      setRailOrder((prev) =>
+        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
+      );
+      setPinnedPaths((prev) =>
+        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
+      );
+      onRemoveProject?.(targetPath, { purgeData });
+    }
+    setRemovingUnavailable(false);
+  };
+
   const pinnedIds = sections.pinned.map((item) => item.path);
   const projectIds = groupedProjectSections.ungrouped.map((item) => item.path);
   const pinnedSortable = useSortable(pinnedIds, onReorderPinned, {
@@ -807,6 +830,10 @@ export function ProjectRail({
               onAdd={onOpenProject}
               onOpenRemoteProject={() => setRemoteProjectDialogOpen(true)}
               onAddGroup={projectGroups.length === 0 ? createGroup : undefined}
+              unavailableCount={
+                onRemoveProject ? removableUnavailable.length : 0
+              }
+              onRemoveUnavailable={() => setRemovingUnavailable(true)}
               cwd={cwd}
               busy={busy}
               unavailablePaths={unavailablePaths}
@@ -944,6 +971,13 @@ export function ProjectRail({
             setProjectGroupMenu(null);
             menuTrigger.current?.focus();
           }}
+        />
+      ) : null}
+      {removingUnavailable && removableUnavailable.length > 0 ? (
+        <RemoveUnavailableProjectsDialog
+          paths={removableUnavailable}
+          onCancel={() => setRemovingUnavailable(false)}
+          onConfirm={onConfirmRemoveUnavailable}
         />
       ) : null}
       {removing ? (
@@ -1216,11 +1250,15 @@ function ProjectSectionHeader({
   onAdd,
   onOpenRemoteProject,
   onAddGroup,
+  unavailableCount = 0,
+  onRemoveUnavailable,
 }: {
   label: string;
   onAdd?: () => void;
   onOpenRemoteProject?: () => void;
   onAddGroup?: (x: number, y: number) => void;
+  unavailableCount?: number;
+  onRemoveUnavailable?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -1228,6 +1266,18 @@ function ProjectSectionHeader({
       <span className="min-w-0 flex-1 truncate px-1 text-xs text-content/50">
         {label}
       </span>
+      {onRemoveUnavailable && unavailableCount > 0 ? (
+        <button
+          type="button"
+          title={t("harness.chrome.removeUnavailableTitle", { count: unavailableCount })}
+          aria-label={t("harness.chrome.removeUnavailableTitle", { count: unavailableCount })}
+          onClick={onRemoveUnavailable}
+          className="flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] text-amber-400/90 hover:bg-content/8 hover:text-amber-300"
+        >
+          <Trash2 className="size-3.5" strokeWidth={1.75} />
+          <span>{unavailableCount}</span>
+        </button>
+      ) : null}
       {onAddGroup ? (
         <button
           type="button"
@@ -1496,6 +1546,8 @@ function ProjectSection({
   onAdd,
   onOpenRemoteProject,
   onAddGroup,
+  unavailableCount,
+  onRemoveUnavailable,
   cwd,
   busy,
   unavailablePaths,
@@ -1518,6 +1570,8 @@ function ProjectSection({
   onAdd?: () => void;
   onOpenRemoteProject?: () => void;
   onAddGroup?: (x: number, y: number) => void;
+  unavailableCount?: number;
+  onRemoveUnavailable?: () => void;
   cwd: string;
   busy: Set<string>;
   unavailablePaths: Set<string>;
@@ -1541,6 +1595,8 @@ function ProjectSection({
         onAdd={onAdd}
         onOpenRemoteProject={onOpenRemoteProject}
         onAddGroup={onAddGroup}
+        unavailableCount={unavailableCount}
+        onRemoveUnavailable={onRemoveUnavailable}
       />
       {items.length === 0 && emptyLabel ? (
         <p className="px-4 pb-1 text-[11px] leading-tight text-content/40">

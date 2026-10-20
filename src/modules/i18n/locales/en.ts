@@ -4898,6 +4898,11 @@ export const en = {
       viewPrDetails: "View PR #{number}: {title}",
       deleteProjectNamed: "Delete {name}",
       deleteProjectNamedQuestion: "Delete “{name}”?",
+      removeUnavailableTitle: "Remove {count} unavailable {count, plural, one {project} other {projects}}",
+      removeUnavailableDescription: "These folders no longer exist on this computer. They are only removed from the project list; nothing on disk is touched.",
+      removeUnavailableMore: "and {count} more",
+      removeUnavailablePurge: "Also delete their saved conversations",
+      removeUnavailableConfirm: "Remove {count}",
       deleteProjectDescription:
         "All conversations for this project will be deleted. It also leaves the sidebar. The folder on disk stays put, and opening it again brings the project back empty.",
       savedConversationRemoval:

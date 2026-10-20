@@ -31,6 +31,8 @@ import {
   openSshProfileInHarness,
   otherSurface,
   profileLinks,
+  relatedProfileIds,
+  sameSshTarget,
   sshRowActions,
   surfaceOf,
 } from "./sshConnectionActions";
@@ -167,5 +169,34 @@ describe("closeSshProfileSessions", () => {
     await closeSshProfileSessions("p1");
     expect(mocks.disconnect).not.toHaveBeenCalled();
     expect(mocks.closeProfile).toHaveBeenCalledWith("p1");
+  });
+});
+
+describe("profiles that reach the same server", () => {
+  const a = { id: "ssh-1", name: "code1", host: "192.168.1.4", user: "abc", port: 9191 };
+  const b = { id: "ssh-config-code1", name: "forgenex-code1", host: "192.168.1.4", user: "ABC", port: 9191 };
+  const other = { id: "ssh-3", name: "code2", host: "192.168.1.4", user: "abc", port: 9192 };
+
+  it("matches host, user and port ignoring case and the default port", () => {
+    expect(sameSshTarget(a, b)).toBe(true);
+    expect(sameSshTarget(a, other)).toBe(false);
+    expect(sameSshTarget({ host: "h" }, { host: "H", port: 22 })).toBe(true);
+  });
+
+  it("collects every saved duplicate and tolerates an unsaved origin", () => {
+    expect([...relatedProfileIds("ssh-1", [a, b, other])].sort()).toEqual(["ssh-1", "ssh-config-code1"]);
+    expect([...relatedProfileIds("ghost", [a, b])]).toEqual(["ghost"]);
+    expect([...relatedProfileIds("ghost", [a], [{ ...b, id: "ghost" }])].sort()).toEqual(["ghost", "ssh-1"]);
+  });
+
+  it("treats a connection opened through a duplicate as connected, and closes it", async () => {
+    const related = relatedProfileIds("ssh-1", [a, b]);
+    mocks.env = { kind: "ssh", connection: { id: "ssh-config-code1" } };
+    expect(
+      profileLinks("ssh-1", { workspaceEnv: local, harnessEnv: mocks.env, pool: [] }, related).harness,
+    ).toBe(true);
+    await closeSshProfileSessions("ssh-1", related);
+    expect(mocks.disconnect).toHaveBeenCalledTimes(1);
+    expect(mocks.closeProfile.mock.calls.map((call) => call[0]).sort()).toEqual(["ssh-1", "ssh-config-code1"]);
   });
 });

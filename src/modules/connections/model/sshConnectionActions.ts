@@ -41,17 +41,17 @@ export function profileLinks(
     harnessEnv: HarnessEnvLike;
     pool: readonly RemoteSessionSnapshot[];
   },
+  relatedIds: ReadonlySet<string> = new Set([profileId]),
 ): ProfileLinks {
+  const ours = (id: string) => id === profileId || relatedIds.has(id);
   return {
     workspace:
       state.workspaceEnv.kind === "ssh" &&
-      state.workspaceEnv.connection.id === profileId,
+      ours(state.workspaceEnv.connection.id),
     harness:
-      state.harnessEnv.kind === "ssh" &&
-      state.harnessEnv.connection.id === profileId,
+      state.harnessEnv.kind === "ssh" && ours(state.harnessEnv.connection.id),
     pooledSessions: state.pool.filter(
-      (entry) =>
-        entry.key.profileId === profileId && entry.sessionId !== undefined,
+      (entry) => ours(entry.key.profileId) && entry.sessionId !== undefined,
     ).length,
   };
 }
@@ -67,6 +67,35 @@ export function sshRowActions(links: ProfileLinks): SshRowAction[] {
   const actions: SshRowAction[] = ["open-terminal", "open-harness"];
   if (isProfileConnected(links)) actions.push("disconnect");
   return actions;
+}
+
+type SshTarget = { host: string; user?: string; port?: number };
+
+const targetKey = (target: SshTarget) =>
+  `${(target.user ?? "").trim().toLowerCase()}@${target.host.trim().toLowerCase()}:${target.port ?? 22}`;
+
+export function sameSshTarget(left: SshTarget, right: SshTarget): boolean {
+  return targetKey(left) === targetKey(right);
+}
+
+/**
+ * Ids of every saved profile that reaches the same server as `profileId`.
+ * Profiles are often saved twice (typed by hand and imported from ssh config),
+ * and a connection opened through one must be closed through the other too.
+ */
+export function relatedProfileIds(
+  profileId: string,
+  saved: readonly (SshTarget & { id: string })[],
+  extra: readonly (SshTarget & { id: string })[] = [],
+): Set<string> {
+  const all = [...saved, ...extra];
+  const ids = new Set<string>([profileId]);
+  const origin = all.find((profile) => profile.id === profileId);
+  if (!origin) return ids;
+  for (const profile of all) {
+    if (sameSshTarget(profile, origin)) ids.add(profile.id);
+  }
+  return ids;
 }
 
 export function harnessProjectPath(profileId: string, root: string): string {
@@ -92,12 +121,21 @@ export async function openSshProfileInHarness(
 /** Closes every session a profile holds, whichever surface opened it. */
 export async function closeSshProfileSessions(
   profileId: string,
+  relatedIds: ReadonlySet<string> = new Set([profileId]),
 ): Promise<void> {
   const harness = useHarnessEnvStore.getState().env;
-  if (harness.kind === "ssh" && harness.connection.id === profileId) {
+  if (
+    harness.kind === "ssh" &&
+    (relatedIds.has(harness.connection.id) ||
+      harness.connection.id === profileId)
+  ) {
     await useHarnessEnvStore.getState().disconnect();
   }
-  await remoteSessions.closeProfile(profileId);
+  await Promise.all(
+    [...new Set([profileId, ...relatedIds])].map((id) =>
+      remoteSessions.closeProfile(id),
+    ),
+  );
 }
 
 /** Asks the app to disconnect a profile: workspace terminals, Harness and pool. */

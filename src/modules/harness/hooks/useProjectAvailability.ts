@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { normalizeProjectPath, sameProjectPath } from "../lib/recents";
+import {
+  isRemoteProjectPath,
+  normalizeProjectPath,
+  sameProjectPath,
+} from "../lib/recents";
 
 export type ProjectAvailability = {
   unavailablePaths: Set<string>;
@@ -15,7 +19,9 @@ export function useProjectAvailability(paths: string[]): ProjectAvailability {
 
   const recheckPath = useCallback(async (path: string): Promise<boolean> => {
     const norm = normalizeProjectPath(path);
-    if (!norm || norm === "~" || norm === "/") return true;
+    // A project on a remote host cannot be judged from this computer.
+    if (!norm || norm === "~" || norm === "/" || isRemoteProjectPath(norm))
+      return true;
     try {
       const infos = await invoke<
         Array<{ path: string; isDir: boolean; name?: string }>
@@ -41,7 +47,9 @@ export function useProjectAvailability(paths: string[]): ProjectAvailability {
   }, []);
 
   const checkAvailability = useCallback(async () => {
-    const valid = paths.filter((p) => p && p !== "~" && p !== "/");
+    const valid = paths.filter(
+      (p) => p && p !== "~" && p !== "/" && !isRemoteProjectPath(p),
+    );
     if (valid.length === 0) {
       setUnavailablePaths(new Set());
       return;

@@ -4171,6 +4171,11 @@ export function HarnessApp({
             (session) => session.id === activeWorkspace.focusedId,
           )
         : undefined;
+      // Leaving a conversation, whatever the two projects are, must not depend on
+      // the next periodic save to keep it in its project's session list.
+      if (current && shouldPersistSession(current)) {
+        void upsertSession(current).catch(() => undefined);
+      }
       const decision = planProjectReturn({
         memory: readProjectReturnMemory(),
         tabs: tabsRef.current,

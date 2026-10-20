@@ -213,7 +213,26 @@ export function displayPath(path: string, cwd?: string): string {
 }
 
 /** Folder name for tab labels - `~` when the cwd is home. */
+let remoteRootLabel: ((environmentId: string) => string | undefined) | undefined;
+
+/** Names the root folder of a remote project after its connection instead of
+ * the internal environment id. Set once by the connections module. */
+export function setRemoteRootLabelResolver(
+  resolver: (environmentId: string) => string | undefined,
+): void {
+  remoteRootLabel = resolver;
+}
+
+function remoteProjectName(cwd: string): string | undefined {
+  const match = /^remote:\/\/([^/]+)(\/.*)?$/.exec(cwd.replace(/\\/g, "/"));
+  if (!match) return undefined;
+  const parts = (match[2] ?? "").split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? remoteRootLabel?.(match[1]) ?? "/";
+}
+
 export function projectName(cwd: string): string {
+  const remoteName = remoteProjectName(cwd);
+  if (remoteName !== undefined) return remoteName;
   if (!cwd || prettyCwd(cwd) === "~") return "~";
   const trimmed = trimSlash(cwd);
   if (/^[A-Za-z]:$/.test(trimmed)) return trimmed;
