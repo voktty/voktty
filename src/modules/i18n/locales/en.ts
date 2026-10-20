@@ -5551,6 +5551,7 @@ export const en = {
       useReset: "Use reset",
       spendReset: "Spend this reset now?",
       loadingUsage: "Loading usage…",
+      lastAttempt: "Last attempt took {seconds}s. Press refresh to try again.",
       usageUnavailable: "Usage unavailable",
       rateLimitDetails: "Rate-limit details",
       updatedJustNow: "Updated just now",

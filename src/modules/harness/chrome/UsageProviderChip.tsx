@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { lastUsageAttempt } from "../lib/usageDiagnostics";
 import { useTranslation } from "@/modules/i18n";
 import { displayProviderAccountLabel } from "../lib/providerAccounts";
 import {
@@ -1042,6 +1043,7 @@ function EmptyUsageState({
   loading: boolean;
 }) {
   const { t } = useTranslation();
+  const attempt = loading ? undefined : lastUsageAttempt(limits.provider);
   return (
     <div className="rounded-lg bg-content/[0.04] px-3 py-4 text-center ring-1 ring-inset ring-content/[0.06]">
       <p className="text-[11px] font-medium text-content/65">
@@ -1054,6 +1056,13 @@ function EmptyUsageState({
       {limits.error ? (
         <p className="mx-auto mt-1 max-w-[15rem] text-[10px] leading-4 text-content/40">
           {limits.error}
+        </p>
+      ) : null}
+      {attempt && limits.status !== "ok" ? (
+        <p className="mx-auto mt-1 max-w-[15rem] text-[10px] leading-4 text-content/30">
+          {t("harness.accounts.lastAttempt", {
+            seconds: (attempt.durationMs / 1000).toFixed(1),
+          })}
         </p>
       ) : null}
     </div>

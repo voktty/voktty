@@ -8,6 +8,10 @@ import {
   formatWindowLabel,
   idleRateLimits,
   isRateLimitSnapshotStale,
+  RATE_LIMIT_ERROR_RETRY_MS,
+  RATE_LIMIT_POLL_MS,
+  RATE_LIMIT_TICK_MS,
+  RATE_LIMIT_UNAVAILABLE_RETRY_MS,
   mapUsageWindow,
   parseClaudeOAuthUsage,
   parseCodexRateLimits,
@@ -331,11 +335,11 @@ describe("shouldFetchRateLimits", () => {
     expect(isRateLimitSnapshotStale(idleRateLimits("claude"), now)).toBe(true);
   });
 
-  it("does not keep polling a provider that is not connected", () => {
+  it("does not hammer a provider that is not connected", () => {
     const disconnected = {
       ...idleRateLimits("codex"),
       status: "unavailable" as const,
-      updatedAt: now - RATE_LIMIT_MIN_REFETCH_MS,
+      updatedAt: now - 30_000,
       error: "Codex CLI not found",
     };
     expect(isRateLimitSnapshotStale(disconnected, now)).toBe(false);
@@ -356,7 +360,7 @@ describe("shouldFetchRateLimits", () => {
     const disconnected = {
       ...idleRateLimits("claude"),
       status: "unavailable" as const,
-      updatedAt: now - RATE_LIMIT_MIN_REFETCH_MS,
+      updatedAt: now - 30_000,
       error: "Claude not signed in",
     };
     expect(
@@ -372,7 +376,74 @@ describe("shouldFetchRateLimits", () => {
     ).toBe(true);
   });
 
-  it("retries a disconnected provider only when forced", () => {
+  it("retries a disconnected provider after a short wait, so a transient fault heals", () => {
+    const base = {
+      ...idleRateLimits("codex"),
+      status: "unavailable" as const,
+      error: "Codex CLI not found",
+    };
+    expect(
+      shouldFetchProvider(
+        { ...base, updatedAt: now - RATE_LIMIT_UNAVAILABLE_RETRY_MS + 1 },
+        { visible: true, now },
+      ),
+    ).toBe(false);
+    expect(
+      shouldFetchProvider(
+        { ...base, updatedAt: now - RATE_LIMIT_UNAVAILABLE_RETRY_MS },
+        { visible: true, now },
+      ),
+    ).toBe(true);
+    expect(
+      shouldFetchProvider(
+        { ...base, updatedAt: now - RATE_LIMIT_UNAVAILABLE_RETRY_MS },
+        { visible: false, now },
+      ),
+    ).toBe(false);
+  });
+
+  it("retries an empty failure within a minute but keeps the cadence when numbers are shown", () => {
+    const failed = {
+      ...idleRateLimits("claude"),
+      status: "error" as const,
+      error: "Claude usage request failed (429)",
+      updatedAt: now - RATE_LIMIT_ERROR_RETRY_MS,
+    };
+    expect(shouldFetchProvider(failed, { visible: true, now })).toBe(true);
+    const withNumbers = {
+      ...failed,
+      session: { usedPercent: 10, windowMinutes: 300, resetsAt: null },
+    };
+    expect(shouldFetchProvider(withNumbers, { visible: true, now })).toBe(false);
+    expect(
+      shouldFetchProvider(
+        { ...withNumbers, updatedAt: now - RATE_LIMIT_MIN_REFETCH_MS },
+        { visible: true, now },
+      ),
+    ).toBe(true);
+  });
+
+  it("lets the ticker apply a slower age to healthy snapshots only", () => {
+    const healthy = {
+      ...idleRateLimits("claude"),
+      status: "ok" as const,
+      session: { usedPercent: 10, windowMinutes: 300, resetsAt: null },
+      updatedAt: now - RATE_LIMIT_MIN_REFETCH_MS,
+    };
+    const tickAge = RATE_LIMIT_POLL_MS - RATE_LIMIT_TICK_MS;
+    expect(shouldFetchProvider(healthy, { visible: true, now })).toBe(true);
+    expect(
+      shouldFetchProvider(healthy, { visible: true, now, minAgeMs: tickAge }),
+    ).toBe(false);
+    expect(
+      shouldFetchProvider(
+        { ...healthy, updatedAt: now - tickAge },
+        { visible: true, now, minAgeMs: tickAge },
+      ),
+    ).toBe(true);
+  });
+
+  it("retries a disconnected provider when forced", () => {
     const disconnected = {
       ...idleRateLimits("codex"),
       status: "unavailable" as const,
@@ -382,5 +453,36 @@ describe("shouldFetchRateLimits", () => {
     expect(
       shouldFetchProvider(disconnected, { force: true, visible: true, now }),
     ).toBe(true);
+  });
+});
+
+describe("Codex monthly window", () => {
+  it("reads the single 30 day window a free plan reports as monthly", () => {
+    const limits = parseCodexRateLimits({
+      rateLimits: {
+        primary: { usedPercent: 12, windowDurationMins: 43_200, resetsAt: 1_795_115_725 },
+        secondary: null,
+        planType: "free",
+      },
+    });
+    expect(limits.session).toBeNull();
+    expect(limits.weekly).toBeNull();
+    expect(limits.monthly).toEqual({
+      usedPercent: 12,
+      windowMinutes: 43_200,
+      resetsAt: 1_795_115_725_000,
+    });
+  });
+
+  it("still maps 5 hour and weekly windows as before", () => {
+    const limits = parseCodexRateLimits({
+      rateLimits: {
+        primary: { usedPercent: 30, windowDurationMins: 300, resetsAt: 1_795_000_000 },
+        secondary: { usedPercent: 60, windowDurationMins: 10_080, resetsAt: 1_795_500_000 },
+      },
+    });
+    expect(limits.session?.usedPercent).toBe(30);
+    expect(limits.weekly?.usedPercent).toBe(60);
+    expect(limits.monthly).toBeNull();
   });
 });

@@ -5677,6 +5677,7 @@ export const es: TranslationSchema = {
       useReset: "Usar reinicio",
       spendReset: "¿Usar este reinicio ahora?",
       loadingUsage: "Cargando consumo…",
+      lastAttempt: "El ultimo intento tardo {seconds} s. Pulsa actualizar para reintentar.",
       usageUnavailable: "Consumo no disponible",
       rateLimitDetails: "Detalles del límite",
       updatedJustNow: "Actualizado ahora mismo",

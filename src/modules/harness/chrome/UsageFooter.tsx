@@ -15,6 +15,7 @@ import {
   fetchingRateLimits,
   idleRateLimits,
   RATE_LIMIT_POLL_MS,
+  RATE_LIMIT_TICK_MS,
   shouldFetchProvider,
   unavailableRateLimits,
   type ProviderRateLimits,
@@ -26,6 +27,7 @@ import {
   fetchCodexRateLimits,
   fetchOpencodeGoRateLimits,
 } from "../lib/rateLimitsFetch";
+import { createInflightTracker } from "../lib/usageInflight";
 import { HARNESS_LABEL, HARNESS_TITLE, type HarnessId } from "../lib/session";
 import { loginHarness, supportsHarnessLogin } from "../lib/harness/auth";
 import {
@@ -101,7 +103,7 @@ export function UsageFooter({
   const [now, setNow] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
   const [, setAccountsVersion] = useState(0);
-  const inflight = useRef<Promise<void> | null>(null);
+  const inflight = useRef(createInflightTracker<RateLimitProvider>());
   const claudeRef = useRef(claude);
   const codexRef = useRef(codex);
   const opencodeRef = useRef(opencode);
@@ -136,20 +138,25 @@ export function UsageFooter({
   );
 
   const refresh = useCallback(
-    (force = false) => {
-      if (inflight.current) return inflight.current;
+    (force = false, minAgeMs?: number) => {
+      const tracker = inflight.current;
       const visible = document.visibilityState === "visible";
+      const options = { force, visible, minAgeMs };
+      // A provider already being read is left alone; the others still go.
       const fetchClaude =
         wantClaude &&
         claudeAccountAvailable &&
-        shouldFetchProvider(claudeRef.current, { force, visible });
+        !tracker.has("claude") &&
+        shouldFetchProvider(claudeRef.current, options);
       const fetchCodex =
         wantCodex &&
         codexAccountAvailable &&
-        shouldFetchProvider(codexRef.current, { force, visible });
+        !tracker.has("codex") &&
+        shouldFetchProvider(codexRef.current, options);
       const fetchOpencode =
         wantOpencode &&
-        shouldFetchProvider(opencodeRef.current, { force, visible });
+        !tracker.has("opencode") &&
+        shouldFetchProvider(opencodeRef.current, options);
       if (!fetchClaude && !fetchCodex && !fetchOpencode) return;
       if (force) setRefreshing(true);
       const jobs: Promise<void>[] = [];
@@ -157,36 +164,40 @@ export function UsageFooter({
         const accountId = claudeAccountId;
         setClaude((current) => fetchingRateLimits("claude", current));
         jobs.push(
-          fetchClaudeRateLimits(accountId).then((value) => {
-            if (accountId === claudeAccountRef.current) setClaude(value);
-          }),
+          tracker.track(
+            "claude",
+            fetchClaudeRateLimits(accountId).then((value) => {
+              if (accountId === claudeAccountRef.current) setClaude(value);
+            }),
+          ),
         );
       }
       if (fetchCodex) {
         const accountId = codexAccountId;
         setCodex((current) => fetchingRateLimits("codex", current));
         jobs.push(
-          fetchCodexRateLimits(accountId).then((value) => {
-            if (accountId === codexAccountRef.current) setCodex(value);
-          }),
+          tracker.track(
+            "codex",
+            fetchCodexRateLimits(accountId).then((value) => {
+              if (accountId === codexAccountRef.current) setCodex(value);
+            }),
+          ),
         );
       }
       if (fetchOpencode) {
         setOpencode((current) => fetchingRateLimits("opencode", current));
         jobs.push(
-          fetchOpencodeGoRateLimits().then((value) => {
-            setOpencode(value);
-          }),
+          tracker.track(
+            "opencode",
+            fetchOpencodeGoRateLimits().then((value) => {
+              setOpencode(value);
+            }),
+          ),
         );
       }
-      const run = Promise.allSettled(jobs)
-        .then(() => undefined)
-        .finally(() => {
-          inflight.current = null;
-          setRefreshing(false);
-        });
-      inflight.current = run;
-      return run;
+      return Promise.all(jobs).then(() => {
+        if (tracker.size === 0) setRefreshing(false);
+      });
     },
     [
       claudeAccountAvailable,
@@ -198,7 +209,6 @@ export function UsageFooter({
       wantOpencode,
     ],
   );
-
   useEffect(() => {
     const next = claudeAccountAvailable
       ? idleRateLimits("claude")
@@ -208,8 +218,8 @@ export function UsageFooter({
         );
     claudeRef.current = next;
     setClaude(next);
-    const pending = inflight.current;
-    if (pending) void pending.finally(() => refresh(true));
+    const pending = inflight.current.get("claude");
+    if (pending) void pending.then(() => refresh(true));
   }, [claudeAccountAvailable, claudeAccountId, refresh]);
 
   useEffect(() => {
@@ -221,13 +231,18 @@ export function UsageFooter({
         );
     codexRef.current = next;
     setCodex(next);
-    const pending = inflight.current;
-    if (pending) void pending.finally(() => refresh(true));
+    const pending = inflight.current.get("codex");
+    if (pending) void pending.then(() => refresh(true));
   }, [codexAccountAvailable, codexAccountId, refresh]);
 
   useEffect(() => {
     void refresh();
-    const poll = window.setInterval(() => void refresh(), RATE_LIMIT_POLL_MS);
+    // Healthy snapshots keep the slow cadence; failed ones come back within a
+    // minute or two, so a transient fault does not leave a dead chip.
+    const poll = window.setInterval(
+      () => void refresh(false, RATE_LIMIT_POLL_MS - RATE_LIMIT_TICK_MS),
+      RATE_LIMIT_TICK_MS,
+    );
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -245,7 +260,7 @@ export function UsageFooter({
 
   const consumeCodexReset = useCallback(
     async (creditId?: string) => {
-      while (inflight.current) await inflight.current;
+      await inflight.current.idle();
       setRefreshing(true);
       setCodex((current) => fetchingRateLimits("codex", current));
       let outcome: Awaited<ReturnType<typeof consumeCodexRateLimitResetCredit>>;
@@ -265,11 +280,8 @@ export function UsageFooter({
           throw error;
         }
       })();
-      const tracked = operation.finally(() => {
-        inflight.current = null;
-        setRefreshing(false);
-      });
-      inflight.current = tracked.catch(() => undefined);
+      const tracked = operation.finally(() => setRefreshing(false));
+      inflight.current.track("codex", tracked);
       await tracked;
       return outcome!;
     },
@@ -283,7 +295,7 @@ export function UsageFooter({
       fetchLimits: () => Promise<ProviderRateLimits>,
       setLimits: Dispatch<SetStateAction<ProviderRateLimits>>,
     ) => {
-      while (inflight.current) await inflight.current;
+      await inflight.current.idle();
       setRefreshing(true);
       setLimits((current) => fetchingRateLimits(provider, current));
       const operation = (async () => {
@@ -303,11 +315,8 @@ export function UsageFooter({
           throw error;
         }
       })();
-      const tracked = operation.finally(() => {
-        inflight.current = null;
-        setRefreshing(false);
-      });
-      inflight.current = tracked.catch(() => undefined);
+      const tracked = operation.finally(() => setRefreshing(false));
+      inflight.current.track(provider, tracked);
       await tracked;
     },
     [],
@@ -423,7 +432,6 @@ export function UsageFooter({
             className="grid size-4.5 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content disabled:opacity-50"
             aria-label={t("common.refresh")}
             title={t("common.refresh")}
-            disabled={refreshing}
             onClick={() => void refresh(true)}
           >
             <RefreshCw

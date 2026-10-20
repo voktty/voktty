@@ -48,6 +48,14 @@ export const MONTHLY_WINDOW_MINUTES = 43_200;
 export const RATE_LIMIT_POLL_MS = 15 * 60 * 1000;
 /** Skip focus/restore and timer refetches until the snapshot is this old. */
 export const RATE_LIMIT_MIN_REFETCH_MS = 5 * 60 * 1000;
+/** How often the footer looks for providers that need a retry. */
+export const RATE_LIMIT_TICK_MS = 60 * 1000;
+/** A failed read is retried this soon, so a transient fault heals itself. */
+export const RATE_LIMIT_ERROR_RETRY_MS = 60 * 1000;
+/** "Not connected" is retried more slowly: signing in elsewhere fixes it. */
+export const RATE_LIMIT_UNAVAILABLE_RETRY_MS = 2 * 60 * 1000;
+/** A read that has not finished by now is abandoned and reported as an error. */
+export const RATE_LIMIT_FETCH_DEADLINE_MS = 30 * 1000;
 
 export function isRateLimitSnapshotStale(
   limits: ProviderRateLimits | null | undefined,
@@ -55,21 +63,42 @@ export function isRateLimitSnapshotStale(
   minAgeMs = RATE_LIMIT_MIN_REFETCH_MS,
 ): boolean {
   if (!limits || limits.status === "idle") return true;
-  if (limits.status === "unavailable") return false;
   if (limits.updatedAt <= 0) return true;
-  return now - limits.updatedAt >= minAgeMs;
+  const age = now - limits.updatedAt;
+  if (limits.status === "unavailable") {
+    return age >= RATE_LIMIT_UNAVAILABLE_RETRY_MS;
+  }
+  // Only a failure with nothing to show retries early: an error that kept the
+  // last good numbers follows the normal refresh cadence.
+  if (
+    limits.status === "error" &&
+    !limits.session &&
+    !limits.weekly &&
+    !limits.monthly
+  ) {
+    return age >= RATE_LIMIT_ERROR_RETRY_MS;
+  }
+  return age >= minAgeMs;
 }
 
 export function shouldFetchProvider(
   limits: ProviderRateLimits,
-  input: { force?: boolean; visible: boolean; now?: number },
+  input: {
+    force?: boolean;
+    visible: boolean;
+    now?: number;
+    /** Age at which a healthy snapshot counts as stale. */
+    minAgeMs?: number;
+  },
 ): boolean {
   if (input.force) return true;
   if (!input.visible) return false;
-  if (limits.status === "unavailable") return false;
-  return isRateLimitSnapshotStale(limits, input.now ?? Date.now());
+  return isRateLimitSnapshotStale(
+    limits,
+    input.now ?? Date.now(),
+    input.minAgeMs,
+  );
 }
-
 export function shouldFetchRateLimits(input: {
   force?: boolean;
   visible: boolean;
@@ -332,7 +361,7 @@ export function parseCodexRateLimits(result: unknown): ProviderRateLimits {
     provider: "codex",
     session: mapCodexSnapshot(classified.session, SESSION_WINDOW_MINUTES),
     weekly: mapCodexSnapshot(classified.weekly, WEEKLY_WINDOW_MINUTES),
-    monthly: null,
+    monthly: mapCodexSnapshot(classified.monthly, MONTHLY_WINDOW_MINUTES),
     resetCredits: parseResetCredits(
       rec?.rateLimitResetCredits ?? rec?.rate_limit_reset_credits,
     ),
@@ -402,57 +431,54 @@ function snapshotFrom(
   };
 }
 
+type CodexWindowKind = "session" | "weekly" | "monthly";
+
 function classifyCodexWindows(input: {
   primary: CodexWindowSnapshot | null;
   secondary: CodexWindowSnapshot | null;
 }): {
   session: CodexWindowSnapshot | null;
   weekly: CodexWindowSnapshot | null;
+  monthly: CodexWindowSnapshot | null;
 } {
-  let session: CodexWindowSnapshot | null = null;
-  let weekly: CodexWindowSnapshot | null = null;
+  const found: Record<CodexWindowKind, CodexWindowSnapshot | null> = {
+    session: null,
+    weekly: null,
+    monthly: null,
+  };
   for (const window of [input.primary, input.secondary]) {
     if (!window) continue;
     const kind = classifyWindowDuration(window.windowDurationMins);
-    if (kind === "session" && !session) session = window;
-    else if (kind === "weekly" && !weekly) weekly = window;
+    if (kind && !found[kind]) found[kind] = window;
   }
   if (
-    !session &&
+    !found.session &&
     input.primary &&
     classifyWindowDuration(input.primary.windowDurationMins) === null
   ) {
-    session = input.primary;
+    found.session = input.primary;
   }
   if (
-    !weekly &&
+    !found.weekly &&
     input.secondary &&
     classifyWindowDuration(input.secondary.windowDurationMins) === null
   ) {
-    weekly = input.secondary;
+    found.weekly = input.secondary;
   }
-  return { session, weekly };
+  return found;
 }
 
 function classifyWindowDuration(
   duration: number | null,
-): "session" | "weekly" | null {
+): CodexWindowKind | null {
   if (duration == null || !Number.isFinite(duration)) return null;
-  if (
-    Math.abs(duration - SESSION_WINDOW_MINUTES) <=
-    WINDOW_DURATION_TOLERANCE_MINUTES
-  ) {
-    return "session";
-  }
-  if (
-    Math.abs(duration - WEEKLY_WINDOW_MINUTES) <=
-    WINDOW_DURATION_TOLERANCE_MINUTES
-  ) {
-    return "weekly";
-  }
+  const near = (target: number) =>
+    Math.abs(duration - target) <= WINDOW_DURATION_TOLERANCE_MINUTES;
+  if (near(SESSION_WINDOW_MINUTES)) return "session";
+  if (near(WEEKLY_WINDOW_MINUTES)) return "weekly";
+  if (near(MONTHLY_WINDOW_MINUTES)) return "monthly";
   return null;
 }
-
 function mapCodexSnapshot(
   raw: CodexWindowSnapshot | null,
   windowMinutes: number,

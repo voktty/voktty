@@ -5,9 +5,12 @@ import {
   parseClaudeOAuthUsage,
   parseCodexRateLimits,
   parseOpencodeGoUsage,
+  RATE_LIMIT_FETCH_DEADLINE_MS,
   unavailableRateLimits,
   type ProviderRateLimits,
+  type RateLimitProvider,
 } from "./rateLimits";
+import { recordUsageAttempt } from "./usageDiagnostics";
 import {
   killChild,
   resolveCodexBinary,
@@ -18,9 +21,56 @@ import {
 import { asRecord } from "./harness/codexProtocol";
 import { JsonRpcClient } from "./harness/jsonRpc";
 
-const USAGE_CHILD_ID = "voktty-codex-usage";
+const USAGE_CHILD_PREFIX = "voktty-codex-usage";
 const DISCOVERY_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 12_000;
+
+/**
+ * Runs one provider read with a hard deadline and records how it went. A read
+ * that hangs ends as an error instead of leaving the footer on "loading".
+ */
+export async function observeUsageFetch(
+  provider: RateLimitProvider,
+  accountId: string,
+  run: () => Promise<ProviderRateLimits>,
+  deadlineMs = RATE_LIMIT_FETCH_DEADLINE_MS,
+): Promise<ProviderRateLimits> {
+  const startedAt = Date.now();
+  let result: ProviderRateLimits;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    result = await Promise.race([
+      run(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `${provider} usage did not answer within ${Math.round(deadlineMs / 1000)}s`,
+              ),
+            ),
+          deadlineMs,
+        );
+      }),
+    ]);
+  } catch (error) {
+    result = errorRateLimits(
+      provider,
+      error instanceof Error ? error.message : String(error),
+    );
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  recordUsageAttempt({
+    provider,
+    accountId,
+    startedAt,
+    durationMs: Date.now() - startedAt,
+    status: result.status,
+    error: result.error,
+  });
+  return result;
+}
 
 type OpencodeGoUsageFetch = {
   status: "ok" | "error" | "unavailable" | string;
@@ -33,7 +83,11 @@ type OpencodeGoUsageFetch = {
  * Fetch OpenCode Go 5h / weekly / monthly usage via the official API.
  * Runs through a Tauri command so the webview CORS policy does not apply.
  */
-export async function fetchOpencodeGoRateLimits(): Promise<ProviderRateLimits> {
+export function fetchOpencodeGoRateLimits(): Promise<ProviderRateLimits> {
+  return observeUsageFetch("opencode", "default", readOpencodeGoRateLimits);
+}
+
+async function readOpencodeGoRateLimits(): Promise<ProviderRateLimits> {
   let result: OpencodeGoUsageFetch;
   try {
     result = await invoke<OpencodeGoUsageFetch>("fetch_opencode_go_usage");
@@ -84,8 +138,16 @@ type ClaudeUsageFetch = {
   error?: string | null;
 };
 
-export async function fetchClaudeRateLimits(
+export function fetchClaudeRateLimits(
   accountId = "default",
+): Promise<ProviderRateLimits> {
+  return observeUsageFetch("claude", accountId, () =>
+    readClaudeRateLimits(accountId),
+  );
+}
+
+async function readClaudeRateLimits(
+  accountId: string,
 ): Promise<ProviderRateLimits> {
   try {
     const result = await invoke<ClaudeUsageFetch>("fetch_claude_usage", {
@@ -117,8 +179,16 @@ export async function fetchClaudeRateLimits(
   }
 }
 
-export async function fetchCodexRateLimits(
+export function fetchCodexRateLimits(
   accountId = "default",
+): Promise<ProviderRateLimits> {
+  return observeUsageFetch("codex", accountId, () =>
+    readCodexRateLimits(accountId),
+  );
+}
+
+async function readCodexRateLimits(
+  accountId: string,
 ): Promise<ProviderRateLimits> {
   let path: string;
   try {
@@ -137,9 +207,16 @@ export async function fetchCodexRateLimits(
       accountId,
     );
     const parsed = parseCodexRateLimits(result);
-    if (parsed.session || parsed.weekly || parsed.resetCredits) return parsed;
+    if (
+      parsed.session ||
+      parsed.weekly ||
+      parsed.monthly ||
+      parsed.resetCredits
+    ) {
+      return parsed;
+    }
     const rec = asRecord(result);
-    if (rec && !parsed.session && !parsed.weekly) {
+    if (rec) {
       return unavailableRateLimits("codex", "No Codex usage data");
     }
     return parsed;
@@ -194,8 +271,12 @@ async function requestCodexAccount<T>(
   params: unknown,
   accountId: string,
 ): Promise<T> {
+  // One id per probe: two windows, or a probe racing the previous one, must
+  // never kill each other's process.
+  const childId = `${USAGE_CHILD_PREFIX}-${crypto.randomUUID().slice(0, 8)}`;
+  let stage = "starting Codex";
   const rpc = new JsonRpcClient(
-    USAGE_CHILD_ID,
+    childId,
     {
       onRequest: (id) => {
         void rpc.respond(id, {}).catch(() => undefined);
@@ -206,33 +287,25 @@ async function requestCodexAccount<T>(
 
   const stop = async () => {
     rpc.close();
-    unwatchChild(USAGE_CHILD_ID);
-    await killChild(USAGE_CHILD_ID).catch(() => undefined);
+    unwatchChild(childId);
+    await killChild(childId).catch(() => undefined);
   };
 
-  await killChild(USAGE_CHILD_ID).catch(() => undefined);
-
   watchChild(
-    USAGE_CHILD_ID,
+    childId,
     (line) => rpc.pushLine(line),
     () => rpc.close(new Error("Codex usage probe exited")),
   );
 
   try {
-    await spawnChild(
-      USAGE_CHILD_ID,
-      path,
-      ["app-server"],
-      cwd,
-      null,
-      {
-        provider: "codex",
-        id: accountId,
-      },
-    );
     return await withTimeout(
       DISCOVERY_TIMEOUT_MS,
       async () => {
+        await spawnChild(childId, path, ["app-server"], cwd, null, {
+          provider: "codex",
+          id: accountId,
+        });
+        stage = "initializing Codex";
         await rpc.request(
           "initialize",
           {
@@ -246,22 +319,23 @@ async function requestCodexAccount<T>(
           REQUEST_TIMEOUT_MS,
         );
         await rpc.notify("initialized", undefined);
-
+        stage = "reading usage";
         return rpc.request<T>(method, params, REQUEST_TIMEOUT_MS);
       },
       () => {
         void stop();
       },
+      () => stage,
     );
   } finally {
     await stop();
   }
 }
-
 async function withTimeout<T>(
   ms: number,
   work: () => Promise<T>,
   onTimeout: () => void,
+  describeStage: () => string,
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const pending = work();
@@ -271,7 +345,7 @@ async function withTimeout<T>(
       new Promise<T>((_, reject) => {
         timer = setTimeout(() => {
           onTimeout();
-          reject(new Error("Codex usage probe timed out"));
+          reject(new Error(`Codex usage probe timed out while ${describeStage()}`));
         }, ms);
       }),
     ]);
