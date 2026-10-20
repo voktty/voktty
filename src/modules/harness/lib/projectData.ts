@@ -2,7 +2,7 @@ import { projectKey } from "./paths";
 import { clearProjectLogo } from "./projectLogos";
 import { clearProjectChatBackground } from "./chatBackground";
 import { clearProjectChatBackgroundSetting } from "./projectChatBackground";
-import { normalizeProjectPath } from "./recents";
+import { isRemoteProjectPath, normalizeProjectPath } from "./recents";
 import { deleteSession, listSessionsByProject } from "./sessionStore";
 import { clearTabGroupSettings } from "./tabGroups";
 import { removeProjectGroupAssignment } from "./projectGroups";
@@ -18,7 +18,11 @@ export async function projectSessionCount(path: string): Promise<number> {
 export async function removeProjectData(path: string): Promise<void> {
   const normalized = normalizeProjectPath(path);
   const key = projectKey(normalized);
-  const sessions = await listSessionsByProject(normalized).catch(() => []);
+  // A remote project keeps its conversations in its own `.voktty` folder.
+  // Forgetting it from this app must not delete data that belongs to the folder.
+  const sessions = isRemoteProjectPath(normalized)
+    ? []
+    : await listSessionsByProject(normalized).catch(() => []);
   for (const session of sessions) {
     await deleteSession(session.id).catch(() => undefined);
   }

@@ -5,7 +5,16 @@ import { codexCommandPresentation } from "./harness/codexProtocol";
 import { recoverCursorSubagents } from "./harness/cursorSubagents";
 import { persistableAttachment } from "./attachments";
 import type { ContextUsage } from "./contextUsage";
+import { remoteProjectForPath, relativeWithinProject, parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { isRemoteProjectPath, normalizeProjectPath } from "./recents";
+import { remoteStoreIoFor } from "./remoteSessionIo";
+import {
+  createRemoteSessionStore,
+  localizeRecord,
+  localizeSummary,
+  portablePayload,
+  type RemoteSessionStore,
+} from "./remoteSessionStore";
 import { restoreOrchestrationProposal } from "@/modules/orchestration/model/orchestrationPlan";
 import type {
   AgentRunMeta,
@@ -44,7 +53,7 @@ export type SessionSummary = {
   automationId?: string;
 };
 
-type SessionRecord = {
+export type SessionRecord = {
   id: string;
   cwd: string;
   harness: string;
@@ -67,7 +76,7 @@ type SessionRecord = {
   updatedAt: number;
 };
 
-type SessionUpsertPayload = {
+export type SessionUpsertPayload = {
   id: string;
   cwd: string;
   harness: string;
@@ -91,7 +100,8 @@ export function shouldPersistSession(session: Session): boolean {
   return (
     !session.inboxAsk &&
     session.cwd !== "~" &&
-    !isRemoteProjectPath(session.cwd) &&
+    (!isRemoteProjectPath(session.cwd) ||
+      remoteProjectForPath(session.cwd) !== undefined) &&
     session.blocks.some((block) => block.role === "user")
   );
 }
@@ -241,6 +251,43 @@ function enqueueSessionWrite<T>(
   return run;
 }
 
+/**
+ * Conversations of a project on an SSH host are stored in that project's
+ * `.voktty` folder. This remembers which project holds each one so lookups by
+ * id alone know where to go.
+ */
+type RemoteHome = {
+  store: RemoteSessionStore;
+  environmentId: string;
+  projectKey: string;
+};
+const remoteStores = new Map<string, RemoteHome>();
+const remoteSessionHomes = new Map<string, RemoteHome>();
+
+function remoteHomeFor(cwd: string): RemoteHome | undefined {
+  const resolved = remoteStoreIoFor(cwd);
+  if (!resolved) return undefined;
+  const known = remoteStores.get(resolved.key);
+  if (known) return known;
+  const home: RemoteHome = {
+    store: createRemoteSessionStore(resolved.io),
+    environmentId: resolved.environmentId,
+    projectKey: resolved.key,
+  };
+  remoteStores.set(resolved.key, home);
+  return home;
+}
+
+async function upsertRemoteSession(
+  payload: SessionUpsertPayload,
+): Promise<SessionSummary | null> {
+  const home = remoteHomeFor(payload.cwd);
+  if (!home) return null;
+  remoteSessionHomes.set(payload.id, home);
+  const summary = await home.store.upsert(portablePayload(payload));
+  return localizeSummary(summary, home.environmentId);
+}
+
 export async function upsertSession(
   session: Session,
 ): Promise<SessionSummary | null> {
@@ -254,8 +301,10 @@ export async function upsertSession(
   } else {
     sessionWriteLeadById.delete(session.id);
   }
+  const remote = isRemoteProjectPath(session.cwd);
   const summary = await enqueueSessionWrite(session.id, async () => {
     if (deletedSessionIds.has(session.id)) return null;
+    if (remote) return upsertRemoteSession(payload);
     return invoke<SessionSummary>("session_upsert", {
       session: {
         ...payload,
@@ -285,8 +334,20 @@ export async function upsertSessions(
       continue;
     pending.set(session.id, sanitizeSessionForPersist(session));
   }
-  const payloads = [...pending.values()];
-  if (payloads.length === 0) return [];
+  const all = [...pending.values()];
+  if (all.length === 0) return [];
+  const remotePayloads = all.filter((payload) => isRemoteProjectPath(payload.cwd));
+  const payloads = all.filter((payload) => !isRemoteProjectPath(payload.cwd));
+  const remoteSummaries = (
+    await Promise.all(
+      remotePayloads.map((payload) =>
+        enqueueSessionWrite(payload.id, async () =>
+          deletedSessionIds.has(payload.id) ? null : upsertRemoteSession(payload),
+        ).catch(() => null),
+      ),
+    )
+  ).filter((summary): summary is SessionSummary => summary != null);
+  if (payloads.length === 0) return remoteSummaries.map(normalizeSummary);
 
   const previous = payloads.map(
     (payload) => sessionWriteQueues.get(payload.id) ?? Promise.resolve(),
@@ -302,9 +363,10 @@ export async function upsertSessions(
       }),
     ),
   );
-  return summaries.filter(
-    (summary): summary is SessionSummary => summary != null,
-  );
+  return [
+    ...remoteSummaries.map(normalizeSummary),
+    ...summaries.filter((summary): summary is SessionSummary => summary != null),
+  ];
 }
 
 /**
@@ -335,9 +397,28 @@ export async function listSessionsByProject(
   cwd: string,
 ): Promise<SessionSummary[]> {
   if (!cwd || cwd === "~") return [];
+  if (isRemoteProjectPath(cwd)) return listRemoteSessions(cwd);
   const rows = await invoke<SessionSummary[]>("session_list_by_project", {
     cwd: normalizeProjectPath(cwd),
   });
+  return rows.map(normalizeSummary);
+}
+
+async function listRemoteSessions(cwd: string): Promise<SessionSummary[]> {
+  const home = remoteHomeFor(cwd);
+  if (!home) return [];
+  const requested = parseRemotePath(cwd)?.hostPath;
+  const rows = (await home.store.list())
+    .map((summary) => localizeSummary(summary, home.environmentId))
+    .filter((summary) => {
+      remoteSessionHomes.set(summary.id, home);
+      const host = parseRemotePath(summary.cwd)?.hostPath;
+      return (
+        requested === undefined ||
+        host === undefined ||
+        relativeWithinProject(requested, host) !== undefined
+      );
+    });
   return rows.map(normalizeSummary);
 }
 
@@ -388,9 +469,14 @@ export async function searchSessions(options: {
 export async function getSession(sessionId: string): Promise<Session | null> {
   const cached = getCachedSession(sessionId);
   if (cached) return cached;
-  const record = await invoke<SessionRecord | null>("session_get", {
-    sessionId,
-  });
+  const remoteHome = remoteSessionHomes.get(sessionId);
+  const record = remoteHome
+    ? await remoteHome.store
+        .get(sessionId)
+        .then((found) =>
+          found ? localizeRecord(found, remoteHome.environmentId) : null,
+        )
+    : await invoke<SessionRecord | null>("session_get", { sessionId });
   if (!record) return null;
   const session = recordToSession(record);
   if (session.harness === "codex") {
@@ -466,9 +552,13 @@ export async function deleteSession(
   deletedSessionIds.add(sessionId);
   evictCachedSession(sessionId);
   try {
+    const remoteHome = remoteSessionHomes.get(sessionId);
     await enqueueSessionWrite(sessionId, () =>
-      invoke<void>("session_delete", { sessionId }),
+      remoteHome
+        ? remoteHome.store.remove(sessionId)
+        : invoke<void>("session_delete", { sessionId }),
     );
+    remoteSessionHomes.delete(sessionId);
     if (imagePaths?.length) {
       void deleteGeneratedImages(imagePaths).catch(() => undefined);
     }
@@ -482,8 +572,11 @@ export async function setSessionArchived(
   sessionId: string,
   archived: boolean,
 ): Promise<void> {
+  const remoteHome = remoteSessionHomes.get(sessionId);
   await enqueueSessionWrite(sessionId, () =>
-    invoke<void>("session_set_archived", { sessionId, archived }),
+    remoteHome
+      ? remoteHome.store.setFlag(sessionId, "archived", archived)
+      : invoke<void>("session_set_archived", { sessionId, archived }),
   );
 }
 
@@ -491,6 +584,11 @@ export async function setSessionPinned(
   sessionId: string,
   pinned: boolean,
 ): Promise<void> {
+  const remoteHome = remoteSessionHomes.get(sessionId);
+  if (remoteHome) {
+    await remoteHome.store.setFlag(sessionId, "pinned", pinned);
+    return;
+  }
   await invoke<void>("session_set_pinned", { sessionId, pinned });
 }
 
