@@ -229,6 +229,109 @@ pub fn find_executable(name: &str, search_path: &str) -> Option<PathBuf> {
         })
 }
 
+// --- probe -----------------------------------------------------------------
+
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+const PROBE_OUTPUT_BYTES: usize = 4096;
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeResult {
+    pub found: bool,
+    pub path: Option<String>,
+    /// First line printed by `--version`, trimmed and bounded.
+    pub version: Option<String>,
+    /// Why no version was read when the binary exists (timeout, failure).
+    pub error: Option<String>,
+}
+
+/// Locates an agent binary and asks it for its version. Never runs anything
+/// but an allowlisted agent name found on the search path.
+#[cfg(unix)]
+pub fn probe_agent(command: &str, search_path: &str) -> Result<ProbeResult, ProcError> {
+    use std::process::{Command, Stdio};
+
+    validate_command(command)?;
+    let Some(executable) = find_executable(command, search_path) else {
+        return Ok(ProbeResult {
+            found: false,
+            path: None,
+            version: None,
+            error: None,
+        });
+    };
+    let path = executable.to_string_lossy().into_owned();
+    let mut child = match Command::new(&executable)
+        .arg("--version")
+        .env("PATH", search_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            return Ok(ProbeResult {
+                found: true,
+                path: Some(path),
+                version: None,
+                error: Some(format!("could not run the binary: {error}")),
+            })
+        }
+    };
+    let mut stdout = child.stdout.take();
+    let reader = std::thread::spawn(move || {
+        let mut buffer = Vec::new();
+        if let Some(stream) = stdout.as_mut() {
+            let _ = stream
+                .by_ref()
+                .take(PROBE_OUTPUT_BYTES as u64)
+                .read_to_end(&mut buffer);
+            // Keep draining so a chatty binary is never blocked on a full pipe.
+            let _ = io::copy(stream, &mut io::sink());
+        }
+        buffer
+    });
+    let deadline = std::time::Instant::now() + PROBE_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20))
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    let output = reader.join().unwrap_or_default();
+    let version = String::from_utf8_lossy(&output)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(200).collect::<String>());
+    let error = match status {
+        None => Some("the version check timed out".to_string()),
+        Some(status) if !status.success() => Some("the version check failed".to_string()),
+        Some(_) => None,
+    };
+    Ok(ProbeResult {
+        found: true,
+        path: Some(path),
+        version: if error.is_some() { None } else { version },
+        error,
+    })
+}
+
+#[cfg(not(unix))]
+pub fn probe_agent(_command: &str, _search_path: &str) -> Result<ProbeResult, ProcError> {
+    Err(ProcError::new(
+        "unsupported_platform",
+        "agent probing needs a Unix host",
+    ))
+}
 // --- log records -----------------------------------------------------------
 
 pub fn encode_record(stream: u8, data: &[u8]) -> Vec<u8> {
@@ -1433,6 +1536,40 @@ mod unix_tests {
         );
     }
 
+    #[test]
+    fn probe_reports_the_path_and_first_version_line_or_absence() {
+        let fx = fixture("codex", "echo 'codex-cli 1.2.3'; echo second");
+        let search = format!("{}:/usr/bin:/bin", fx.bin.path().display());
+        let found = probe_agent("codex", &search).unwrap();
+        assert!(found.found);
+        assert_eq!(found.version.as_deref(), Some("codex-cli 1.2.3"));
+        assert!(found.path.unwrap().ends_with("/codex"));
+
+        let missing = probe_agent("claude", &search).unwrap();
+        assert_eq!(
+            (missing.found, missing.path, missing.version),
+            (false, None, None)
+        );
+        assert_eq!(
+            probe_agent("sh", &search).unwrap_err().code,
+            "command_not_allowed"
+        );
+    }
+
+    #[test]
+    fn probe_marks_a_failing_or_silent_binary_without_a_version() {
+        let failing = fixture("codex", "echo boom; exit 3");
+        let search = format!("{}:/usr/bin:/bin", failing.bin.path().display());
+        let result = probe_agent("codex", &search).unwrap();
+        assert!(result.found);
+        assert_eq!(result.version, None);
+        assert_eq!(result.error.as_deref(), Some("the version check failed"));
+
+        let noisy = fixture("codex", "head -c 100000 /dev/zero | tr '\0' x");
+        let search = format!("{}:/usr/bin:/bin", noisy.bin.path().display());
+        let result = probe_agent("codex", &search).unwrap();
+        assert!(result.version.unwrap().len() <= 200);
+    }
     #[test]
     fn a_missing_binary_in_the_supervisor_ends_with_code_127() {
         let fx = fixture("codex", "exit 0");

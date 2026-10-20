@@ -799,8 +799,7 @@ fn build_remote_agent_command(target_dir: &str, command: &str, args: &[String]) 
          [ -f \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\" >/dev/null 2>&1; \
          [ -f \"$HOME/.zshrc\" ] && . \"$HOME/.zshrc\" >/dev/null 2>&1; \
          export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:/usr/local/bin:$PATH\"; \
-         mkdir -p -- {quoted_dir} 2>/dev/null; \
-         cd -- {quoted_dir} 2>/dev/null || cd; \
+         cd -- {quoted_dir} 2>/dev/null || {{ echo \"voktty: the remote folder does not exist: {quoted_dir}\" >&2; exit 66; }}; \
          {exec_cmd}"
     );
 
@@ -836,6 +835,7 @@ pub fn harness_spawn(
 
     if let Some(conn) = remote_connection.as_ref() {
         crate::modules::remote::validate_connection(conn)?;
+        remote_agent_restrictions(network_allowlist.as_deref(), account.as_ref())?;
         let target = RemoteTarget {
             connection: conn,
             dir: remote_cwd
@@ -1032,6 +1032,28 @@ pub fn harness_spawn(
     });
 
     Ok(pid)
+}
+
+/// Local controls that cannot follow an agent to another machine. Running
+/// without them would silently weaken what the user asked for, so the spawn is
+/// refused instead.
+fn remote_agent_restrictions(
+    network_allowlist: Option<&[String]>,
+    account: Option<&HarnessAccount>,
+) -> Result<(), String> {
+    if network_allowlist.is_some() {
+        return Err(
+            "The network sandbox cannot be applied to an agent on a remote host. Turn it off for this session or run the agent locally."
+                .to_string(),
+        );
+    }
+    if account.is_some() {
+        return Err(
+            "Provider accounts are stored on this computer and do not apply to a remote host. Use the default account for remote projects."
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 struct SpawnStamp {
@@ -4018,5 +4040,27 @@ mod binary_resolution_tests {
         assert!(cmd.contains("codex"));
         assert!(cmd.contains("app-server"));
         assert!(cmd.contains("PATH="));
+    }
+
+    #[test]
+    fn legacy_remote_command_fails_on_a_missing_folder_instead_of_creating_or_leaving_it() {
+        let cmd = build_remote_agent_command("/srv/missing", "codex", &[]);
+        assert!(!cmd.contains("mkdir"));
+        assert!(!cmd.contains("|| cd;"));
+        assert!(cmd.contains("exit 66"));
+    }
+
+    #[test]
+    fn remote_agents_refuse_local_only_controls() {
+        assert!(remote_agent_restrictions(None, None).is_ok());
+        let sandbox = vec!["api.openai.com".to_string()];
+        let error = remote_agent_restrictions(Some(&sandbox), None).unwrap_err();
+        assert!(error.contains("network sandbox"));
+        let account = HarnessAccount {
+            provider: "codex".to_string(),
+            id: "work".to_string(),
+        };
+        let error = remote_agent_restrictions(None, Some(&account)).unwrap_err();
+        assert!(error.contains("Provider accounts"));
     }
 }

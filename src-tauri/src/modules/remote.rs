@@ -1827,11 +1827,21 @@ fn get_windows_cpu() -> f32 {
 }
 
 pub(crate) fn validate_connection(connection: &RemoteSshConnection) -> Result<(), String> {
-    if connection.host.trim().is_empty() || has_control_or_space(&connection.host) {
+    if connection.host.trim().is_empty()
+        || has_control_or_space(&connection.host)
+        || connection.host.trim().starts_with('-')
+    {
         return Err("SSH host is invalid".to_string());
     }
-    if connection.user.as_deref().is_some_and(has_control_or_space) {
+    if connection
+        .user
+        .as_deref()
+        .is_some_and(|user| has_control_or_space(user) || user.starts_with('-'))
+    {
         return Err("SSH user is invalid".to_string());
+    }
+    if let Some(extra_args) = connection.extra_args.as_deref() {
+        validate_extra_args(extra_args)?;
     }
     if connection
         .extra_args
@@ -1850,6 +1860,67 @@ pub(crate) fn validate_connection(connection: &RemoteSshConnection) -> Result<()
     Ok(())
 }
 
+/// ssh options that take a value, and flags that do not. Anything else, and
+/// every positional word, is refused: extra arguments are placed before the
+/// destination, so a stray word would become the host to connect to.
+const SSH_FLAGS_WITH_VALUE: &[char] = &[
+    'B', 'b', 'c', 'D', 'e', 'F', 'I', 'i', 'J', 'L', 'l', 'm', 'o', 'p', 'R', 'S',
+];
+const SSH_FLAGS_WITHOUT_VALUE: &[char] = &[
+    '4', '6', 'A', 'a', 'C', 'g', 'K', 'k', 'q', 'v', 'X', 'x', 'Y', 'y',
+];
+/// `-o` keys that change what the helper connection runs or how it is framed.
+const SSH_FORBIDDEN_OPTIONS: &[&str] = &[
+    "remotecommand",
+    "requesttty",
+    "sessiontype",
+    "permitlocalcommand",
+    "localcommand",
+    "forkafterauthentication",
+    "stdinnull",
+];
+
+pub(crate) fn validate_extra_args(extra_args: &str) -> Result<(), String> {
+    let tokens = parse_extra_args(extra_args);
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        index += 1;
+        let Some(flags) = token.strip_prefix('-').filter(|flags| !flags.is_empty()) else {
+            return Err(format!("SSH argument {token:?} is not an option"));
+        };
+        for (position, flag) in flags.char_indices() {
+            if SSH_FLAGS_WITHOUT_VALUE.contains(&flag) {
+                continue;
+            }
+            if !SSH_FLAGS_WITH_VALUE.contains(&flag) {
+                return Err(format!("SSH option -{flag} is not allowed"));
+            }
+            let attached = &flags[position + flag.len_utf8()..];
+            let argument = if attached.is_empty() {
+                let next = tokens
+                    .get(index)
+                    .ok_or_else(|| format!("SSH option -{flag} needs a value"))?;
+                index += 1;
+                next.as_str()
+            } else {
+                attached
+            };
+            if flag == 'o' {
+                let key = argument
+                    .split(|c: char| c == '=' || c.is_whitespace())
+                    .next()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                if SSH_FORBIDDEN_OPTIONS.contains(&key.as_str()) {
+                    return Err(format!("SSH option {key} is not allowed"));
+                }
+            }
+            break;
+        }
+    }
+    Ok(())
+}
 fn has_control_or_space(value: &str) -> bool {
     value
         .chars()
@@ -1936,6 +2007,8 @@ pub(crate) fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
         args.extend(["-i".to_string(), expand_tilde(identity_file)]);
     }
     args.extend(user_extra);
+    // Everything after `--` is the destination, never an option.
+    args.push("--".to_string());
     args.push(ssh_destination(connection));
     args
 }
@@ -1962,12 +2035,14 @@ fn build_tunnel_ssh_args(
     let destination = args
         .pop()
         .ok_or_else(|| "SSH destination is missing".to_string())?;
+    args.pop();
     args.extend([
         "-N".to_string(),
         "-o".to_string(),
         "ExitOnForwardFailure=yes".to_string(),
         "-L".to_string(),
         format!("127.0.0.1:{local_port}:127.0.0.1:{remote_port}"),
+        "--".to_string(),
         destination,
     ]);
     Ok(args)
@@ -2629,6 +2704,7 @@ mod tests {
                 "C:/keys/id_ed25519",
                 "-o",
                 "ConnectTimeout=5",
+                "--",
                 "ubuntu@server.example"
             ]
         );
@@ -2656,6 +2732,50 @@ mod tests {
             args.last().map(String::as_str),
             Some("ubuntu@server.example")
         );
+    }
+
+    #[test]
+    fn extra_arguments_may_only_be_ssh_options() {
+        for allowed in [
+            "",
+            "-o ConnectTimeout=5",
+            "-oProxyJump=bastion -o StrictHostKeyChecking=no",
+            "-J jump@bastion -4 -vvv",
+            "-i ~/.ssh/id -F ~/.ssh/config",
+            "-o \"ServerAliveInterval 30\"",
+        ] {
+            assert_eq!(validate_extra_args(allowed), Ok(()), "{allowed}");
+        }
+        for rejected in [
+            "attacker.example",
+            "-- id",
+            "-W host:22",
+            "-t",
+            "-f",
+            "-o RemoteCommand=sh",
+            "-oRequestTTY=force",
+            "-o PermitLocalCommand=yes",
+            "-o",
+            "-i",
+            "-Z",
+            "-o ConnectTimeout=5 extra",
+        ] {
+            assert!(validate_extra_args(rejected).is_err(), "{rejected}");
+        }
+    }
+
+    #[test]
+    fn hosts_and_users_cannot_look_like_options() {
+        let mut conn = connection();
+        assert!(validate_connection(&conn).is_ok());
+        conn.host = "-oProxyCommand=id".to_string();
+        assert!(validate_connection(&conn).is_err());
+        conn.host = "server.example".to_string();
+        conn.user = Some("-oProxyCommand=id".to_string());
+        assert!(validate_connection(&conn).is_err());
+        conn.user = Some("ubuntu".to_string());
+        conn.extra_args = Some("evil.example".to_string());
+        assert!(validate_connection(&conn).is_err());
     }
 
     #[test]
@@ -2703,6 +2823,7 @@ mod tests {
         assert!(args.iter().any(|a| a == "UserKnownHostsFile=/dev/null"));
         assert!(args.iter().any(|a| a == "LogLevel=ERROR"));
         assert_eq!(args.last().map(String::as_str), Some("abc@192.168.1.4"));
+        assert_eq!(args[args.len() - 2], "--");
     }
 
     #[test]

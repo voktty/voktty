@@ -176,3 +176,24 @@ fn spawn_refuses_commands_outside_the_agent_allowlist_and_missing_binaries() {
     );
     assert_eq!(unknown.error.unwrap().code, "invalid_params");
 }
+
+#[test]
+fn agent_probe_reports_the_installed_version_and_rejects_other_commands() {
+    let home = tempfile::tempdir().unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let script = bin.path().join("claude");
+    fs::write(&script, "#!/bin/sh\necho '2.0.1 (Claude Code)'\n").unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    let mut helper = Helper::start(home.path(), bin.path(), work.path());
+
+    let found = helper.request("agent.probe", json!({ "command": "claude" }));
+    let result = found.result.expect("probe result");
+    assert_eq!(result["found"], true);
+    assert_eq!(result["version"], "2.0.1 (Claude Code)");
+
+    let missing = helper.request("agent.probe", json!({ "command": "codex" }));
+    assert_eq!(missing.result.unwrap()["found"], false);
+    let rejected = helper.request("agent.probe", json!({ "command": "sh" }));
+    assert_eq!(rejected.error.unwrap().code, "command_not_allowed");
+}

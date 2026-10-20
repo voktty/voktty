@@ -25,17 +25,18 @@ use search::{run_search, PreparedSearch, RemoteSearchState};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
-    read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse, METHOD_COPY,
-    METHOD_COUNT_TEXT_LINES, METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
-    METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL,
-    METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH,
-    METHOD_PROC_CLOSE, METHOD_PROC_DETACH, METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN,
-    METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
-    METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME,
-    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
-    METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
-    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
-    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
+    read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
+    METHOD_AGENT_PROBE, METHOD_COPY, METHOD_COUNT_TEXT_LINES, METHOD_CREATE_DIR,
+    METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC, METHOD_GIT_EXEC_WORKSPACE,
+    METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL, METHOD_HANDSHAKE,
+    METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH, METHOD_PROC_CLOSE,
+    METHOD_PROC_DETACH, METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN, METHOD_PTY_CLOSE,
+    METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE,
+    METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME, METHOD_REPLACE_APPLY,
+    METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
+    METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY,
+    METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE, PROTOCOL_VERSION,
+    REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -278,6 +279,24 @@ impl RemoteServer {
         }
     }
 
+    fn agent_probe(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<AgentProbeParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default();
+        let search_path =
+            agent_proc::agent_search_path(std::env::var("PATH").ok().as_deref(), &home);
+        match agent_proc::probe_agent(&params.command, &search_path) {
+            Ok(result) => RemoteResponse::success(request.id, json!(result)),
+            Err(error) => Self::proc_failure(request.id, error),
+        }
+    }
+
     fn write_proc(&mut self, attach_id: u64, data: Vec<u8>) {
         if let Some(host) = self.proc_host.as_ref() {
             host.write(attach_id, data);
@@ -325,6 +344,7 @@ impl RemoteServer {
             METHOD_PROC_DETACH | METHOD_PROC_KILL | METHOD_PROC_CLOSE | METHOD_PROC_LIST => {
                 self.proc_control(request)
             }
+            METHOD_AGENT_PROBE => self.agent_probe(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -384,7 +404,8 @@ impl RemoteServer {
                     METHOD_PROC_DETACH,
                     METHOD_PROC_KILL,
                     METHOD_PROC_CLOSE,
-                    METHOD_PROC_LIST
+                    METHOD_PROC_LIST,
+                    METHOD_AGENT_PROBE
                 ]
             }),
         )
@@ -2324,6 +2345,12 @@ struct WorkspaceEditPreviewParams {
 #[serde(rename_all = "camelCase")]
 struct WorkspaceEditApplyParams {
     targets: Vec<WorkspaceTextEditTarget>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgentProbeParams {
+    command: String,
 }
 
 #[derive(Deserialize)]

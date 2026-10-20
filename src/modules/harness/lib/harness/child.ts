@@ -12,10 +12,12 @@ import {
   remoteSshConnectionForProfile,
   remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
+import { probeRemoteAgent } from "@/modules/remote/agentProbe";
 import {
   openHeldRemoteSession,
   releaseHeldRemoteSession,
 } from "@/modules/remote/sessionManager";
+import { checkRemoteAgentProbe } from "./remoteAgents";
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 
@@ -327,7 +329,11 @@ async function holdRemoteProjectSession(
   environmentId: string,
   connection: RemoteSshConnection,
   cwd: string,
-): Promise<{ sessionId: number; root: string } | null> {
+): Promise<{
+  sessionId: number;
+  root: string;
+  capabilities: string[];
+} | null> {
   const profileId = remoteSshConnectionIdForEnvironment(environmentId);
   const project = remoteProjectForPath(cwd);
   if (!profileId || !project) return null;
@@ -338,7 +344,11 @@ async function holdRemoteProjectSession(
       connection,
       project.cwd,
     );
-    return { sessionId: session.session_id, root: session.workspace_root };
+    return {
+      sessionId: session.session_id,
+      root: session.workspace_root,
+      capabilities: session.capabilities,
+    };
   } catch {
     return null;
   }
@@ -367,6 +377,11 @@ export async function spawnChild(
     remoteConnection = await resolveRemoteSshConnection(remote.environmentId);
     remoteCwd = remote.hostPath;
     execCommand = cleanRemoteCommand(command);
+    // The helper confines the agent to the project root, so only a saved
+    // project may host one.
+    if (!remoteProjectForPath(cwd)) {
+      throw new Error("This path is outside a saved remote project.");
+    }
     releaseRemoteHold(sessionId);
     const held = await holdRemoteProjectSession(
       remote.environmentId,
@@ -377,6 +392,19 @@ export async function spawnChild(
       remoteHolds.set(sessionId, held.sessionId);
       remoteSessionId = held.sessionId;
       remoteRoot = held.root;
+      if (held.capabilities.includes("agent.probe")) {
+        const probe = await probeRemoteAgent(held.sessionId, execCommand).catch(
+          () => undefined,
+        );
+        if (probe) {
+          try {
+            checkRemoteAgentProbe(execCommand, probe);
+          } catch (error) {
+            releaseRemoteHold(sessionId);
+            throw error;
+          }
+        }
+      }
     }
   }
 

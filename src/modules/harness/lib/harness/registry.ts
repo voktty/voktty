@@ -1,4 +1,5 @@
 import type { GitRangeContext, GitStagedContext } from "../fs";
+import { assertRemoteAgentSupported } from "./remoteAgents";
 import type { PrContent } from "../gitText";
 import { hasLiveCatalog } from "../models";
 import type { Block, HarnessId, TaskListMeta } from "../session";
@@ -147,6 +148,7 @@ export async function sendHarnessTurn(
   if (!adapter.live) {
     throw new Error(`${input.harness} is not connected yet`);
   }
+  assertRemoteAgentSupported(input.harness, input.cwd);
   cancelIdlePark(input.sessionId);
   try {
     await adapter.sendTurn(input);

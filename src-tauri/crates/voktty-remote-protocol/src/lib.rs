@@ -43,6 +43,7 @@ pub const METHOD_PROC_DETACH: &str = "proc.detach";
 pub const METHOD_PROC_KILL: &str = "proc.kill";
 pub const METHOD_PROC_CLOSE: &str = "proc.close";
 pub const METHOD_PROC_LIST: &str = "proc.list";
+pub const METHOD_AGENT_PROBE: &str = "agent.probe";
 pub const REMOTE_SHELL_INTEGRATION_VERSION: &str = "3";
 
 /// Agent CLIs that `proc.spawn` may start. The helper never runs arbitrary

@@ -231,3 +231,37 @@ describe("harness registry", () => {
     expect(restoreTaskLists).toHaveBeenCalledWith("s1", [taskList]);
   });
 });
+
+describe("remote projects", () => {
+  afterEach(() => resetHarnessIdlePark());
+
+  const turn = (harness: "cursor" | "codex", cwd: string) =>
+    ({
+      harness,
+      sessionId: "s1",
+      cwd,
+      model: "m",
+      text: "hi",
+    }) as SendTurnInput & { harness: HarnessId };
+
+  it("refuses a harness without a remote path before its adapter runs", async () => {
+    const sendTurn = vi.fn(async () => {});
+    registerHarness(stub("cursor", { sendTurn }));
+    await expect(
+      sendHarnessTurn(turn("cursor", "remote://voktty-ssh-p1/srv/app")),
+    ).rejects.toThrow(/cursor cannot run on a remote host/);
+    expect(sendTurn).not.toHaveBeenCalled();
+  });
+
+  it("lets supported agents and local projects through", async () => {
+    const remoteSend = vi.fn(async () => {});
+    const localSend = vi.fn(async () => {});
+    registerHarness(stub("codex", { sendTurn: remoteSend }));
+    await sendHarnessTurn(turn("codex", "remote://voktty-ssh-p1/srv/app"));
+    expect(remoteSend).toHaveBeenCalledOnce();
+
+    registerHarness(stub("cursor", { sendTurn: localSend }));
+    await sendHarnessTurn(turn("cursor", "/home/me/app"));
+    expect(localSend).toHaveBeenCalledOnce();
+  });
+});
