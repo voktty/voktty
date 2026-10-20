@@ -1,7 +1,9 @@
+mod agent_proc;
 mod file_preview;
 mod git_output;
 mod line_metrics;
 mod opencode_service;
+mod proc_host;
 mod search;
 
 use std::collections::{HashMap, HashSet};
@@ -18,6 +20,7 @@ use base64::Engine;
 use git_output::read_capped;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use proc_host::{FrameSink, ProcHost};
 use search::{run_search, PreparedSearch, RemoteSearchState};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -25,13 +28,14 @@ use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse, METHOD_COPY,
     METHOD_COUNT_TEXT_LINES, METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
     METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL,
-    METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PTY_CLOSE,
-    METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE,
-    METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME, METHOD_REPLACE_APPLY,
-    METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
-    METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY,
-    METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE, PROTOCOL_VERSION,
-    REMOTE_SHELL_INTEGRATION_VERSION,
+    METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH,
+    METHOD_PROC_CLOSE, METHOD_PROC_DETACH, METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN,
+    METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
+    METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME,
+    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
+    METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
+    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
+    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -110,6 +114,7 @@ struct RemoteServer {
     ptys: Arc<Mutex<HashMap<u64, Arc<RemotePty>>>>,
     watcher: Option<Arc<Mutex<RemoteWatch>>>,
     search: RemoteSearchState,
+    proc_host: Option<ProcHost>,
 }
 
 type SharedOutput = Arc<Mutex<BufWriter<io::Stdout>>>;
@@ -148,6 +153,134 @@ impl RemoteServer {
             ptys: Arc::new(Mutex::new(HashMap::new())),
             watcher: None,
             search: RemoteSearchState::default(),
+            proc_host: None,
+        }
+    }
+
+    fn proc_host(&mut self) -> Result<&mut ProcHost, agent_proc::ProcError> {
+        if self.proc_host.is_none() {
+            let home = std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .filter(|home| home.is_absolute())
+                .ok_or_else(|| agent_proc::ProcError {
+                    code: "no_home",
+                    message: "HOME is not set on this host".to_string(),
+                })?;
+            #[cfg(unix)]
+            let launcher: proc_host::Launcher = {
+                let executable =
+                    std::env::current_exe().map_err(|error| agent_proc::ProcError {
+                        code: "io_error",
+                        message: error.to_string(),
+                    })?;
+                Box::new(agent_proc::detached_supervisor_launcher(executable))
+            };
+            #[cfg(not(unix))]
+            let launcher: proc_host::Launcher = Box::new(|_| {
+                Err(io::Error::other(
+                    "persistent agent processes need a Unix host",
+                ))
+            });
+            let host = ProcHost::new(home, launcher);
+            host.cleanup_expired();
+            self.proc_host = Some(host);
+        }
+        Ok(self.proc_host.as_mut().expect("initialized above"))
+    }
+
+    fn proc_failure(id: String, error: agent_proc::ProcError) -> RemoteResponse {
+        RemoteResponse::failure(id, error.code, error.message)
+    }
+
+    fn proc_spawn(&mut self, request: RemoteRequest, sink: FrameSink) -> RemoteResponse {
+        let params = match serde_json::from_value::<ProcSpawnParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        let cwd = match self.resolve_existing_directory(params.cwd.as_deref().unwrap_or(".")) {
+            Ok(path) => path,
+            Err(error) => return RemoteResponse::failure(request.id, "invalid_cwd", error),
+        };
+        let spec = agent_proc::SpawnSpec {
+            command: params.command.clone(),
+            args: params.args.unwrap_or_default(),
+            cwd,
+            label: params.label,
+            search_path: None,
+        };
+        match self
+            .proc_host()
+            .and_then(|host| host.spawn(spec, params.attach_id, sink))
+        {
+            Ok(result) => RemoteResponse::success(request.id, result),
+            Err(error) => Self::proc_failure(request.id, error),
+        }
+    }
+
+    fn proc_attach(&mut self, request: RemoteRequest, sink: FrameSink) -> RemoteResponse {
+        let params = match serde_json::from_value::<ProcAttachParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        match self.proc_host().and_then(|host| {
+            host.attach(
+                &params.proc_id,
+                params.attach_id,
+                params.from_offset.unwrap_or(0),
+                sink,
+            )
+        }) {
+            Ok(result) => RemoteResponse::success(request.id, result),
+            Err(error) => Self::proc_failure(request.id, error),
+        }
+    }
+
+    fn proc_control(&mut self, request: RemoteRequest) -> RemoteResponse {
+        let id = request.id.clone();
+        let outcome = match request.method.as_str() {
+            METHOD_PROC_LIST => self.proc_host().map(|host| host.list()),
+            METHOD_PROC_DETACH => {
+                match serde_json::from_value::<ProcDetachParams>(request.params) {
+                    Ok(params) => self
+                        .proc_host()
+                        .map(|host| json!({ "detached": host.detach(params.attach_id) })),
+                    Err(error) => {
+                        return RemoteResponse::failure(id, "invalid_params", error.to_string())
+                    }
+                }
+            }
+            METHOD_PROC_KILL => match serde_json::from_value::<ProcKillParams>(request.params) {
+                Ok(params) => self.proc_host().and_then(|host| {
+                    host.kill(&params.proc_id, params.signal.as_deref())
+                        .map(|_| json!({}))
+                }),
+                Err(error) => {
+                    return RemoteResponse::failure(id, "invalid_params", error.to_string())
+                }
+            },
+            _ => match serde_json::from_value::<ProcCloseParams>(request.params) {
+                Ok(params) => self.proc_host().and_then(|host| {
+                    host.close(&params.proc_id, params.force.unwrap_or(false))
+                        .map(|_| json!({}))
+                }),
+                Err(error) => {
+                    return RemoteResponse::failure(id, "invalid_params", error.to_string())
+                }
+            },
+        };
+        match outcome {
+            Ok(result) => RemoteResponse::success(id, result),
+            Err(error) => Self::proc_failure(id, error),
+        }
+    }
+
+    fn write_proc(&mut self, attach_id: u64, data: Vec<u8>) {
+        if let Some(host) = self.proc_host.as_ref() {
+            host.write(attach_id, data);
         }
     }
 
@@ -189,6 +322,9 @@ impl RemoteServer {
             METHOD_GIT_EXEC_WORKSPACE => self.git_exec_workspace(request),
             METHOD_GIT_EXEC_WORKSPACE_INPUT => self.git_exec_workspace_input(request),
             METHOD_OPENCODE_SERVICE => self.opencode_service(request),
+            METHOD_PROC_DETACH | METHOD_PROC_KILL | METHOD_PROC_CLOSE | METHOD_PROC_LIST => {
+                self.proc_control(request)
+            }
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -242,7 +378,13 @@ impl RemoteServer {
                     METHOD_GIT_EXEC,
                     METHOD_GIT_EXEC_WORKSPACE,
                     METHOD_GIT_EXEC_WORKSPACE_INPUT,
-                    METHOD_OPENCODE_SERVICE
+                    METHOD_OPENCODE_SERVICE,
+                    METHOD_PROC_SPAWN,
+                    METHOD_PROC_ATTACH,
+                    METHOD_PROC_DETACH,
+                    METHOD_PROC_KILL,
+                    METHOD_PROC_CLOSE,
+                    METHOD_PROC_LIST
                 ]
             }),
         )
@@ -2185,6 +2327,43 @@ struct WorkspaceEditApplyParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProcSpawnParams {
+    command: String,
+    attach_id: u64,
+    args: Option<Vec<String>>,
+    cwd: Option<String>,
+    label: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProcAttachParams {
+    proc_id: String,
+    attach_id: u64,
+    from_offset: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProcDetachParams {
+    attach_id: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProcKillParams {
+    proc_id: String,
+    signal: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProcCloseParams {
+    proc_id: String,
+    force: Option<bool>,
+}
+#[derive(Deserialize)]
 struct PtyOpenParams {
     #[serde(rename = "ptyId")]
     pty_id: u64,
@@ -2557,6 +2736,10 @@ fn send_frame(output: &SharedOutput, frame: &Frame) -> io::Result<()> {
 fn run_stdio() -> io::Result<()> {
     let mut stdin = io::stdin().lock();
     let stdout = Arc::new(Mutex::new(BufWriter::new(io::stdout())));
+    let sink: FrameSink = {
+        let output = stdout.clone();
+        Arc::new(move |frame| send_frame(&output, &frame))
+    };
     let mut server = RemoteServer::new();
     while let Some(frame) = read_frame(&mut stdin)? {
         match frame {
@@ -2570,6 +2753,8 @@ fn run_stdio() -> io::Result<()> {
                 } else {
                     match request.method.as_str() {
                         METHOD_PTY_OPEN => server.open_pty(request, stdout.clone()),
+                        METHOD_PROC_SPAWN => server.proc_spawn(request, sink.clone()),
+                        METHOD_PROC_ATTACH => server.proc_attach(request, sink.clone()),
                         METHOD_WATCH_ADD => server.add_watch(request, stdout.clone()),
                         METHOD_WATCH_TREE_ADD => server.add_watch_tree(request, stdout.clone()),
                         METHOD_GREP => {
@@ -2586,9 +2771,12 @@ fn run_stdio() -> io::Result<()> {
             Frame::PtyInput { pty_id, data } => {
                 let _ = server.write_pty(pty_id, &data);
             }
+            Frame::ProcInput { attach_id, data } => server.write_proc(attach_id, data),
             Frame::Response(_)
             | Frame::PtyOutput { .. }
             | Frame::PtyExit { .. }
+            | Frame::ProcOutput { .. }
+            | Frame::ProcExit { .. }
             | Frame::FsChanged(_) => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -2601,9 +2789,21 @@ fn run_stdio() -> io::Result<()> {
 }
 
 fn main() {
-    if std::env::args().nth(1).as_deref() != Some("--stdio") {
-        eprintln!("voktty-remote requires --stdio");
-        std::process::exit(2);
+    let mut args = std::env::args().skip(1);
+    match args.next().as_deref() {
+        Some("--stdio") => {}
+        #[cfg(unix)]
+        Some("--proc-supervisor") => {
+            let Some(dir) = args.next() else {
+                eprintln!("--proc-supervisor requires a process directory");
+                std::process::exit(2);
+            };
+            std::process::exit(agent_proc::run_supervisor(Path::new(&dir)));
+        }
+        _ => {
+            eprintln!("voktty-remote requires --stdio");
+            std::process::exit(2);
+        }
     }
     if let Err(error) = run_stdio() {
         eprintln!("voktty-remote stopped: {error}");

@@ -37,7 +37,34 @@ pub const METHOD_GIT_EXEC: &str = "git.exec";
 pub const METHOD_GIT_EXEC_WORKSPACE: &str = "git.execWorkspace";
 pub const METHOD_GIT_EXEC_WORKSPACE_INPUT: &str = "git.execWorkspaceInput";
 pub const METHOD_OPENCODE_SERVICE: &str = "opencode.service";
+pub const METHOD_PROC_SPAWN: &str = "proc.spawn";
+pub const METHOD_PROC_ATTACH: &str = "proc.attach";
+pub const METHOD_PROC_DETACH: &str = "proc.detach";
+pub const METHOD_PROC_KILL: &str = "proc.kill";
+pub const METHOD_PROC_CLOSE: &str = "proc.close";
+pub const METHOD_PROC_LIST: &str = "proc.list";
 pub const REMOTE_SHELL_INTEGRATION_VERSION: &str = "3";
+
+/// Agent CLIs that `proc.spawn` may start. The helper never runs arbitrary
+/// commands: a request names one of these binaries and nothing else.
+pub const REMOTE_AGENT_COMMANDS: &[&str] = &[
+    "codex",
+    "claude",
+    "opencode",
+    "gemini",
+    "cursor-agent",
+    "grok",
+    "pi",
+    "omp",
+    "fx",
+    "hermes",
+];
+
+/// Output stream tags carried by `ProcOutput` frames and the process log.
+pub const PROC_STREAM_STDOUT: u8 = 1;
+pub const PROC_STREAM_STDERR: u8 = 2;
+/// `ProcExit::code` when the process ended without an exit code (signal).
+pub const PROC_NO_EXIT_CODE: i32 = i32::MIN;
 
 const FRAME_REQUEST: u8 = 1;
 const FRAME_RESPONSE: u8 = 2;
@@ -45,6 +72,9 @@ const FRAME_PTY_INPUT: u8 = 3;
 const FRAME_PTY_OUTPUT: u8 = 4;
 const FRAME_PTY_EXIT: u8 = 5;
 const FRAME_FS_CHANGED: u8 = 6;
+const FRAME_PROC_INPUT: u8 = 7;
+const FRAME_PROC_OUTPUT: u8 = 8;
+const FRAME_PROC_EXIT: u8 = 9;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RemoteRequest {
@@ -78,10 +108,41 @@ impl RemoteRequest {
 pub enum Frame {
     Request(RemoteRequest),
     Response(RemoteResponse),
-    PtyInput { pty_id: u64, data: Vec<u8> },
-    PtyOutput { pty_id: u64, data: Vec<u8> },
-    PtyExit { pty_id: u64, code: i32 },
+    PtyInput {
+        pty_id: u64,
+        data: Vec<u8>,
+    },
+    PtyOutput {
+        pty_id: u64,
+        data: Vec<u8>,
+    },
+    PtyExit {
+        pty_id: u64,
+        code: i32,
+    },
     FsChanged(RemoteFsChanged),
+    /// Bytes for a persistent process stdin, addressed by attachment.
+    ProcInput {
+        attach_id: u64,
+        data: Vec<u8>,
+    },
+    /// A chunk of process output. `next_offset` is the log position after the
+    /// chunk; a client that reattaches passes the last one it applied.
+    ProcOutput {
+        attach_id: u64,
+        stream: u8,
+        next_offset: u64,
+        data: Vec<u8>,
+    },
+    /// The process ended. `reason` is empty for an ordinary exit and names the
+    /// cause otherwise (for example `command_not_found` or `log_limit`).
+    ProcExit {
+        attach_id: u64,
+        code: i32,
+        signal: i32,
+        next_offset: u64,
+        reason: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -102,6 +163,36 @@ pub fn write_frame(writer: &mut impl Write, frame: &Frame) -> io::Result<()> {
             (FRAME_PTY_EXIT, payload)
         }
         Frame::FsChanged(changed) => (FRAME_FS_CHANGED, json_payload(changed)?),
+        Frame::ProcInput { attach_id, data } => (FRAME_PROC_INPUT, pty_payload(*attach_id, data)),
+        Frame::ProcOutput {
+            attach_id,
+            stream,
+            next_offset,
+            data,
+        } => {
+            let mut payload = Vec::with_capacity(17 + data.len());
+            payload.extend_from_slice(&attach_id.to_be_bytes());
+            payload.push(*stream);
+            payload.extend_from_slice(&next_offset.to_be_bytes());
+            payload.extend_from_slice(data);
+            (FRAME_PROC_OUTPUT, payload)
+        }
+        Frame::ProcExit {
+            attach_id,
+            code,
+            signal,
+            next_offset,
+            reason,
+        } => {
+            let reason = truncate_reason(reason);
+            let mut payload = Vec::with_capacity(24 + reason.len());
+            payload.extend_from_slice(&attach_id.to_be_bytes());
+            payload.extend_from_slice(&code.to_be_bytes());
+            payload.extend_from_slice(&signal.to_be_bytes());
+            payload.extend_from_slice(&next_offset.to_be_bytes());
+            payload.extend_from_slice(reason.as_bytes());
+            (FRAME_PROC_EXIT, payload)
+        }
     };
     let frame_len = payload
         .len()
@@ -152,9 +243,51 @@ pub fn read_frame(reader: &mut impl Read) -> io::Result<Option<Frame>> {
             Frame::PtyExit { pty_id, code }
         }
         FRAME_FS_CHANGED => Frame::FsChanged(parse_json(payload)?),
+        FRAME_PROC_INPUT => {
+            let (attach_id, data) = parse_pty_payload(payload)?;
+            Frame::ProcInput { attach_id, data }
+        }
+        FRAME_PROC_OUTPUT => {
+            if payload.len() < 17 {
+                return Err(invalid_data("invalid process output payload"));
+            }
+            Frame::ProcOutput {
+                attach_id: u64::from_be_bytes(payload[..8].try_into().expect("checked length")),
+                stream: payload[8],
+                next_offset: u64::from_be_bytes(payload[9..17].try_into().expect("checked length")),
+                data: payload[17..].to_vec(),
+            }
+        }
+        FRAME_PROC_EXIT => {
+            if payload.len() < 24 || payload.len() > 24 + MAX_EXIT_REASON_BYTES {
+                return Err(invalid_data("invalid process exit payload"));
+            }
+            Frame::ProcExit {
+                attach_id: u64::from_be_bytes(payload[..8].try_into().expect("checked length")),
+                code: i32::from_be_bytes(payload[8..12].try_into().expect("checked length")),
+                signal: i32::from_be_bytes(payload[12..16].try_into().expect("checked length")),
+                next_offset: u64::from_be_bytes(
+                    payload[16..24].try_into().expect("checked length"),
+                ),
+                reason: String::from_utf8_lossy(&payload[24..]).into_owned(),
+            }
+        }
         _ => return Err(invalid_data("unknown frame type")),
     };
     Ok(Some(frame))
+}
+
+const MAX_EXIT_REASON_BYTES: usize = 256;
+
+fn truncate_reason(reason: &str) -> &str {
+    if reason.len() <= MAX_EXIT_REASON_BYTES {
+        return reason;
+    }
+    let mut end = MAX_EXIT_REASON_BYTES;
+    while !reason.is_char_boundary(end) {
+        end -= 1;
+    }
+    &reason[..end]
 }
 
 fn json_payload(value: &impl Serialize) -> io::Result<Vec<u8>> {
@@ -318,6 +451,30 @@ mod tests {
             Frame::FsChanged(RemoteFsChanged {
                 paths: vec!["/srv/app/src/main.rs".to_string()],
             }),
+            Frame::ProcInput {
+                attach_id: 7,
+                data: b"{\"id\":1}\n".to_vec(),
+            },
+            Frame::ProcOutput {
+                attach_id: 7,
+                stream: PROC_STREAM_STDERR,
+                next_offset: 1 << 40,
+                data: vec![0, 255, 10],
+            },
+            Frame::ProcExit {
+                attach_id: 7,
+                code: PROC_NO_EXIT_CODE,
+                signal: 9,
+                next_offset: 4096,
+                reason: "log_limit".to_string(),
+            },
+            Frame::ProcExit {
+                attach_id: 8,
+                code: 0,
+                signal: 0,
+                next_offset: 0,
+                reason: String::new(),
+            },
         ];
 
         let mut encoded = Vec::new();
@@ -353,6 +510,59 @@ mod tests {
                 .kind(),
             ErrorKind::InvalidData
         );
+    }
+
+    #[test]
+    fn process_frames_reject_malformed_payloads() {
+        for (kind, length) in [
+            (FRAME_PROC_INPUT, 3usize),
+            (FRAME_PROC_OUTPUT, 16),
+            (FRAME_PROC_EXIT, 23),
+        ] {
+            let mut bytes = ((length + 1) as u32).to_be_bytes().to_vec();
+            bytes.push(kind);
+            bytes.extend(vec![0u8; length]);
+            assert_eq!(
+                read_frame(&mut Cursor::new(bytes))
+                    .expect_err("short process payload must fail")
+                    .kind(),
+                ErrorKind::InvalidData
+            );
+        }
+    }
+
+    #[test]
+    fn long_exit_reasons_are_cut_on_a_character_boundary() {
+        let reason = "é".repeat(400);
+        let mut encoded = Vec::new();
+        write_frame(
+            &mut encoded,
+            &Frame::ProcExit {
+                attach_id: 1,
+                code: 1,
+                signal: 0,
+                next_offset: 0,
+                reason,
+            },
+        )
+        .expect("frame should encode");
+        let Some(Frame::ProcExit { reason, .. }) =
+            read_frame(&mut Cursor::new(encoded)).expect("frame should decode")
+        else {
+            panic!("expected a process exit frame");
+        };
+        assert!(reason.len() <= MAX_EXIT_REASON_BYTES);
+        assert!(reason.chars().all(|c| c == 'é'));
+    }
+
+    #[test]
+    fn agent_commands_are_bare_names() {
+        for name in REMOTE_AGENT_COMMANDS {
+            assert!(!name.is_empty());
+            assert!(name
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte == b'-'));
+        }
     }
 
     #[test]

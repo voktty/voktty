@@ -9203,6 +9203,7 @@ dependencies = [
  "grep-regex",
  "grep-searcher",
  "ignore",
+ "libc",
  "notify",
  "portable-pty",
  "serde",
