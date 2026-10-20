@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertRemoteAgentSupported,
+  assertRemoteAttachments,
   checkRemoteAgentProbe,
   compareVersions,
   parseVersion,
@@ -79,5 +80,38 @@ describe("probe results", () => {
   it("does not judge a version it cannot read or an agent without a minimum", () => {
     expect(() => checkRemoteAgentProbe("opencode", { found: true, version: null })).not.toThrow();
     expect(() => checkRemoteAgentProbe("claude", { found: true, version: "0.0.1" })).not.toThrow();
+  });
+});
+
+describe("remote attachments", () => {
+  const image = {
+    id: "1",
+    name: "shot.png",
+    mimeType: "image/png",
+    kind: "image",
+    size: 10,
+    data: "AAAA",
+  } as never;
+  const pathImage = { ...(image as object), id: "2", name: "big.png", data: undefined, path: "C:/big.png" } as never;
+  const doc = {
+    id: "3",
+    name: "spec.pdf",
+    mimeType: "application/pdf",
+    kind: "file",
+    size: 99,
+    path: "C:/spec.pdf",
+  } as never;
+
+  it("lets inline images through and refuses anything that needs a local path", () => {
+    expect(() => assertRemoteAttachments([image], remote)).not.toThrow();
+    expect(() => assertRemoteAttachments([image, doc, pathImage], remote)).toThrow(
+      /spec\.pdf, big\.png cannot be sent to an agent on a remote host/,
+    );
+  });
+
+  it("never restricts local projects or empty attachment lists", () => {
+    expect(() => assertRemoteAttachments([doc], "/home/me/app")).not.toThrow();
+    expect(() => assertRemoteAttachments(undefined, remote)).not.toThrow();
+    expect(() => assertRemoteAttachments([], remote)).not.toThrow();
   });
 });

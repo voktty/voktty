@@ -6138,6 +6138,8 @@ export const es: TranslationSchema = {
   sessionReview: {
     changedFiles:
       "{count} {count, plural, one {archivo modificado} other {archivos modificados}}",
+    remoteUnavailable:
+      "Revisar, Conservar y Deshacer aun no estan disponibles para proyectos en un host remoto.",
     undo: "Deshacer",
     keep: "Conservar",
     review: "Revisar",

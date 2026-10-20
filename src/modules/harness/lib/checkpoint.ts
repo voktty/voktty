@@ -1,5 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { GitDiffStats } from "./fs";
+import { isRemoteProjectPath } from "./recents";
+
+/** Snapshots, Keep and Undo run on this computer's filesystem, so a project on
+ * a remote host has none. Callers see an empty review rather than an error. */
+export function checkpointsAvailable(cwd: string): boolean {
+  return !isRemoteProjectPath(cwd);
+}
+
+export class CheckpointUnavailableError extends Error {
+  readonly code = "checkpoint-unavailable";
+  constructor() {
+    super("Session review, Keep and Undo are not available for remote projects yet.");
+    this.name = "CheckpointUnavailableError";
+  }
+}
 
 export type CheckpointFile = {
   path: string;
@@ -74,6 +89,7 @@ export function ensureSessionCheckpoint(
   sessionId: string,
   cwd: string,
 ): Promise<void> {
+  if (!checkpointsAvailable(cwd)) return Promise.resolve();
   return enqueueCheckpoint(sessionId, () =>
     invoke<void>("session_checkpoint_ensure", { sessionId, cwd }),
   );
@@ -95,7 +111,7 @@ export function prepareSessionCheckpoint(
   cwd: string,
   paths: string[],
 ): Promise<void> {
-  if (paths.length === 0) return Promise.resolve();
+  if (paths.length === 0 || !checkpointsAvailable(cwd)) return Promise.resolve();
   return enqueueCheckpoint(sessionId, () =>
     invoke<void>("session_checkpoint_prepare", {
       sessionId,
@@ -110,7 +126,7 @@ export function captureSessionCheckpoint(
   cwd: string,
   paths: string[],
 ): Promise<void> {
-  if (paths.length === 0) return Promise.resolve();
+  if (paths.length === 0 || !checkpointsAvailable(cwd)) return Promise.resolve();
   return enqueueCheckpoint(sessionId, () =>
     invoke<void>("session_checkpoint_capture", {
       sessionId,
@@ -124,7 +140,7 @@ export function syncSessionCheckpoint(
   sessionId: string,
   cwd: string,
 ): Promise<void> {
-  if (!cwd || cwd === "~") return Promise.resolve();
+  if (!cwd || cwd === "~" || !checkpointsAvailable(cwd)) return Promise.resolve();
   return enqueueCheckpoint(sessionId, () =>
     invoke<void>("session_checkpoint_sync", { sessionId, cwd }),
   );
@@ -134,6 +150,7 @@ export function sessionCheckpointStatus(
   sessionId: string,
   cwd: string,
 ): Promise<CheckpointStatus> {
+  if (!checkpointsAvailable(cwd)) return Promise.resolve({ files: [] });
   return enqueueCheckpoint(sessionId, () =>
     invoke<CheckpointStatus>("session_checkpoint_status", {
       sessionId,
@@ -148,6 +165,7 @@ export function sessionCheckpointFileDiff(
   cwd: string,
   relative: string,
 ): Promise<CheckpointFileDiff> {
+  if (!checkpointsAvailable(cwd)) return Promise.reject(new CheckpointUnavailableError());
   return enqueueCheckpoint(sessionId, () =>
     invoke<CheckpointFileDiff>("session_checkpoint_file_diff", {
       sessionId,
@@ -161,7 +179,8 @@ export function sessionCheckpointStats(
   cwd: string,
   sessionIds: string[],
 ): Promise<Record<string, GitDiffStats>> {
-  if (!cwd || cwd === "~" || sessionIds.length === 0) return Promise.resolve({});
+  if (!cwd || cwd === "~" || sessionIds.length === 0 || !checkpointsAvailable(cwd))
+    return Promise.resolve({});
   return invoke<Record<string, GitDiffStats>>("session_checkpoint_stats", {
     cwd,
     sessionIds,
@@ -173,6 +192,7 @@ export function undoSessionChanges(
   cwd: string,
   relative?: string,
 ): Promise<CheckpointStatus> {
+  if (!checkpointsAvailable(cwd)) return Promise.reject(new CheckpointUnavailableError());
   return enqueueCheckpoint(sessionId, () =>
     invoke<CheckpointStatus>("session_checkpoint_undo", {
       sessionId,
@@ -187,6 +207,7 @@ export function keepSessionChanges(
   cwd: string,
   relative?: string,
 ): Promise<CheckpointStatus> {
+  if (!checkpointsAvailable(cwd)) return Promise.reject(new CheckpointUnavailableError());
   return enqueueCheckpoint(sessionId, () =>
     invoke<CheckpointStatus>("session_checkpoint_keep", {
       sessionId,

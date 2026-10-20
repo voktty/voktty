@@ -6005,6 +6005,8 @@ export const en = {
   },
   sessionReview: {
     changedFiles: "Changed {count} {count, plural, one {file} other {files}}",
+    remoteUnavailable:
+      "Review, Keep and Undo are not available for projects on a remote host yet.",
     undo: "Undo",
     keep: "Keep",
     review: "Review",

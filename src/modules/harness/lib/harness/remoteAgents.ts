@@ -1,5 +1,6 @@
 import type { HarnessId } from "@/modules/harness/lib/session";
 import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
+import type { Attachment } from "@/modules/harness/lib/session";
 
 export type RemoteAgentSpec = {
   /** Binary the host helper starts. */
@@ -33,7 +34,8 @@ export class RemoteAgentError extends Error {
     readonly code:
       | "remote-agent-unsupported"
       | "remote-agent-missing"
-      | "remote-agent-version",
+      | "remote-agent-version"
+      | "remote-agent-attachment",
     message: string,
   ) {
     super(message);
@@ -61,6 +63,30 @@ export function assertRemoteAgentSupported(
   throw new RemoteAgentError(
     "remote-agent-unsupported",
     `${harness} cannot run on a remote host yet. Use ${supported} for this project, or open the project locally.`,
+  );
+}
+
+/** An inline image travels in the prompt itself; everything else is read by the agent from a path on this computer. */
+function travelsInline(file: Attachment): boolean {
+  return Boolean(file.data) && file.kind === "image";
+}
+
+/**
+ * A remote agent cannot read a path on this computer, so anything that is not
+ * an inline image is refused instead of being sent as a path that does not
+ * exist on the host.
+ */
+export function assertRemoteAttachments(
+  attachments: readonly Attachment[] | undefined,
+  cwd: string,
+): void {
+  if (!attachments?.length || !isRemoteProjectPath(cwd)) return;
+  const blocked = attachments.filter((file) => !travelsInline(file));
+  if (blocked.length === 0) return;
+  const names = blocked.map((file) => file.name).join(", ");
+  throw new RemoteAgentError(
+    "remote-agent-attachment",
+    `${names} cannot be sent to an agent on a remote host. Only images can be attached to a remote project for now; copy other files into the project instead.`,
   );
 }
 

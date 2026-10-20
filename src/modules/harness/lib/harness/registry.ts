@@ -1,5 +1,8 @@
 import type { GitRangeContext, GitStagedContext } from "../fs";
-import { assertRemoteAgentSupported } from "./remoteAgents";
+import {
+  assertRemoteAgentSupported,
+  assertRemoteAttachments,
+} from "./remoteAgents";
 import type { PrContent } from "../gitText";
 import { hasLiveCatalog } from "../models";
 import type { Block, HarnessId, TaskListMeta } from "../session";
@@ -149,6 +152,7 @@ export async function sendHarnessTurn(
     throw new Error(`${input.harness} is not connected yet`);
   }
   assertRemoteAgentSupported(input.harness, input.cwd);
+  assertRemoteAttachments(input.attachments, input.cwd);
   cancelIdlePark(input.sessionId);
   try {
     await adapter.sendTurn(input);

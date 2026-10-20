@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, FileDiff } from "./icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/modules/i18n";
 import {
+  checkpointsAvailable,
   keepSessionChanges,
   sessionCheckpointStatus,
   subscribeReviewChanged,
@@ -92,6 +93,16 @@ export function SessionReview({
 
   // The card represents the result of a turn. Keep it out of the live turn,
   // then refresh and reveal it once the turn has settled.
+  if (enabled && !busy && cwd && cwd !== "~" && !checkpointsAvailable(cwd)) {
+    return (
+      <div
+        className="px-4 pt-1 pb-2 font-sans text-[11px] text-content/45"
+        data-session-review-remote-note
+      >
+        {t("sessionReview.remoteUnavailable")}
+      </div>
+    );
+  }
   if (busy || files.length === 0) return null;
 
   const disabled = acting != null;
