@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
   checkWorktreeRemoval,
   createWorktree,
@@ -92,7 +93,8 @@ const tree = {
   sessionIds: [],
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await remoteSessions.closeAll();
   vi.clearAllMocks();
   mocks.remoteMachineFor.mockResolvedValue({
     id: "machine-1",
@@ -137,6 +139,7 @@ describe("remote Harness worktrees", () => {
     expect(result.worktrees[1].path).toBe(
       "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
     );
+    await remoteSessions.closeAll();
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(session.session_id);
   });
 
@@ -165,6 +168,7 @@ describe("remote Harness worktrees", () => {
     expect(result.path).toBe(
       "remote://machine-1/srv/app/.git/voktty-worktrees/voktty-feature-123",
     );
+    await remoteSessions.closeAll();
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(session.session_id);
     expect(mocks.notifyGitChanged).toHaveBeenCalledOnce();
   });

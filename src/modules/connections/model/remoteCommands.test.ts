@@ -70,6 +70,7 @@ import { searchProject } from "@/modules/harness/lib/search";
 import { runRemoteCommand } from "./remoteCommands";
 import { parseRemotePath, remotePath } from "./remoteProjects";
 import { remoteSshEnvironmentId } from "./remoteSshProfiles";
+import { remoteSessions } from "@/modules/remote/sessionManager";
 
 const storage = new Map<string, string>();
 if (typeof globalThis.localStorage === "undefined") {
@@ -89,7 +90,8 @@ if (typeof globalThis.localStorage === "undefined") {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await remoteSessions.closeAll();
   remoteRequest.mockReset();
   invokeLocal.mockReset();
   openRemoteWorkspace.mockReset().mockResolvedValue({
@@ -304,6 +306,7 @@ it("loads remote Git status and statistics through the native helper", async () 
     }),
   );
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -356,6 +359,7 @@ it("counts untracked direct-profile Git files through the bounded SSH helper", a
     paths: ["src/binary.bin", "src/new file.ts"],
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -407,6 +411,7 @@ it("counts files at the maximum Git index size within the SSH RPC cap", async ()
   if (!countCall) throw new Error("Expected a bounded line-count request.");
   expect((countCall[2] as { paths: string[] }).paths).toHaveLength(20_000);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -439,6 +444,7 @@ it("rejects malformed line-count responses from the SSH helper", async () => {
     gitDiffIndex(remotePath(environmentId, "/srv/app")),
   ).rejects.toThrow("The remote helper returned invalid line counts.");
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -462,7 +468,9 @@ it("stages and unstages remote paths with literal Git pathspecs", async () => {
     ["--literal-pathspecs", "restore", "--staged", "--", "."],
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(4);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("reads bounded staged Git context through the native SSH helper", async () => {
@@ -502,6 +510,7 @@ it("reads bounded staged Git context through the native SSH helper", async () =>
     patch: "diff --git a/src/main.ts b/src/main.ts\n",
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -518,6 +527,7 @@ it("returns an empty commit history for a saved SSH folder outside Git", async (
   ).resolves.toEqual({ head: null, commits: [] });
   expect(requestRemoteResult).toHaveBeenCalledTimes(1);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -592,6 +602,7 @@ it("commits remote staged changes with bounded message and helper timeout", asyn
     maxOutputBytes: 64 * 1024,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1219,7 +1230,9 @@ it("refuses to read or commit a Git repository above the saved project root", as
   ).rejects.toThrow("Git repository root is outside the saved project");
   expect(requestRemoteResult).toHaveBeenCalledTimes(6);
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(5);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("rejects oversized remote commit messages before invoking Git", async () => {
@@ -1230,6 +1243,7 @@ it("rejects oversized remote commit messages before invoking Git", async () => {
   ).rejects.toThrow("Commit message is too large");
   expect(requestRemoteResult).not.toHaveBeenCalled();
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1263,6 +1277,7 @@ it("sets the upstream to origin on the first native SSH push", async () => {
     maxOutputBytes: 64 * 1024,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1353,7 +1368,9 @@ it("fetches and reads a configured remote URL through the native SSH helper", as
     maxOutputBytes: 64 * 1024,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("returns no URL for an invalid remote name without invoking Git config", async () => {
@@ -1424,7 +1441,9 @@ it("pulls only by fast-forward and syncs by pull then push", async () => {
     maxOutputBytes: 64 * 1024,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("syncs a branch without upstream by setting its selected remote", async () => {
@@ -1509,6 +1528,7 @@ it("lists local and remote-only branches through the native SSH helper", async (
     ],
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1525,6 +1545,7 @@ it("returns an empty branch list for a saved SSH folder outside Git", async () =
   });
   expect(requestRemoteResult).toHaveBeenCalledTimes(1);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1594,6 +1615,7 @@ it("loads bounded commit history through the native SSH helper", async () => {
     ],
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1677,7 +1699,9 @@ it("lists files and reads commit diffs through root-confined Git calls", async (
     tooLarge: false,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("marks truncated commit blobs as too large without returning partial text", async () => {
@@ -1744,6 +1768,7 @@ it("rejects invalid history paths and commit ids before invoking unsafe Git args
     ),
   ).toEqual([["rev-parse", "--show-toplevel"]]);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1792,6 +1817,7 @@ it("checks out a selected remote branch with a local tracking branch", async () 
     "origin/feature/remote",
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1828,6 +1854,7 @@ it("rejects invalid remote branch names before running a checkout", async () => 
     expect.objectContaining({ args: expect.arrayContaining(["checkout"]) }),
   );
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1865,6 +1892,7 @@ it("normalizes a remote checkout blocked by local changes", async () => {
     "Your local changes would be overwritten. Commit or stash them first.",
   );
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -1908,7 +1936,9 @@ it("creates remote branches and stashes tracked plus untracked changes", async (
     ]),
   );
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("lists and mutates Git History stashes through bounded native SSH Git calls", async () => {
@@ -2104,6 +2134,7 @@ it("stages unsaved SSH editor contents through bounded helper stdin", async () =
     ],
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2126,6 +2157,7 @@ it("rejects unsaved staging when the SSH helper has no bounded-input capability"
   ).rejects.toThrow("Update the Voktty remote helper");
   expect(requestRemoteResult).not.toHaveBeenCalled();
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2142,6 +2174,7 @@ it("caps SSH editor contents before sending them to the helper", async () => {
   ).rejects.toThrow("File too large");
   expect(requestRemoteResult).not.toHaveBeenCalled();
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2187,7 +2220,9 @@ it("discards only unstaged remote changes and preserves staged content", async (
     ["--literal-pathspecs", "clean", "-fd", "--", "."],
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
-  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  await remoteSessions.closeAll();
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(1);
 });
 
 it("rejects remote Git paths that escape the saved project", async () => {
@@ -2218,6 +2253,7 @@ it("discards an untracked remote file without a shell path", async () => {
     }),
   );
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2267,6 +2303,7 @@ it("loads an unstaged remote Git diff with bounded helper reads", async () => {
     path: "new.txt",
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2282,6 +2319,7 @@ it("rejects truncated remote Git status instead of parsing partial paths", async
   ).rejects.toThrow("Remote Git output exceeded its size limit");
   expect(requestRemoteResult).toHaveBeenCalledTimes(1);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2326,6 +2364,7 @@ it("marks remote file diffs too large when the helper caps a Git blob", async ()
     binary: false,
     tooLarge: true,
   });
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2420,6 +2459,7 @@ it("runs saved SSH profile file operations through the Voktty helper", async () 
     path: ".",
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2443,6 +2483,7 @@ it("previews direct-profile SSH files through the bounded helper capability", as
     startLine: 3,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2466,6 +2507,7 @@ it("falls back to bounded full-file reads for older SSH helpers", async () => {
     path: "note.txt",
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2485,6 +2527,7 @@ it("rejects oversized line previews from an SSH helper", async () => {
   await expect(
     readFilePreview(remotePath(environmentId, "/srv/app/note.txt")),
   ).rejects.toThrow("The remote helper returned an invalid file preview.");
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2589,6 +2632,7 @@ it("lists saved SSH project files with Git ignore rules through the native helpe
       path: remotePath(environmentId, "/srv/app/src/main.ts"),
     },
   ]);
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2678,6 +2722,7 @@ it("searches saved SSH projects through bounded helper grep results", async () =
     maxResults: 500,
   });
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2702,6 +2747,7 @@ it("rejects helper search results that escape the saved project root", async () 
     }),
   ).rejects.toThrow("search path outside the project");
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
@@ -2720,6 +2766,7 @@ it("rejects saved profile paths and Git results outside the project", async () =
   ).rejects.toThrow("Git returned a path outside the saved project");
   expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
   expect(remoteRequest).not.toHaveBeenCalled();
+  await remoteSessions.closeAll();
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 

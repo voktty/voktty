@@ -34,6 +34,13 @@ export function remoteSshConnectionIdForEnvironment(
   }
 }
 
+/**
+ * Resolves the saved profile that owns a remote environment id. A
+ * `voktty-ssh-*` id only matches the saved profile with that exact id. Older
+ * identities may also match a unique saved name or host. An unknown id never
+ * falls back to the active connection: running on the wrong host is worse than
+ * failing visibly.
+ */
 export function findSshProfile(
   environmentId: string,
   savedConnections?: SshConnection[],
@@ -41,62 +48,45 @@ export function findSshProfile(
 ): SshConnection | undefined {
   const env = activeEnv ?? useWorkspaceEnvStore.getState().env;
   const decodedId = remoteSshConnectionIdForEnvironment(environmentId);
-  const candidateId = decodedId ?? environmentId;
+  const saved =
+    savedConnections ?? usePreferencesStore.getState().sshConnections ?? [];
 
-  // 1. Check if the active workspace SSH connection matches
-  if (env.kind === "ssh") {
-    const activeConn = env.connection;
-    if (
-      activeConn.id === candidateId ||
-      activeConn.id === environmentId ||
-      (decodedId && activeConn.id === decodedId) ||
-      remoteSshEnvironmentId(activeConn.id) === environmentId ||
-      activeConn.name.toLowerCase() === candidateId.toLowerCase() ||
-      activeConn.host.toLowerCase() === candidateId.toLowerCase()
-    ) {
-      return activeConn;
-    }
-  }
-
-  // 2. Check saved connections in preferences
-  const saved = savedConnections ?? usePreferencesStore.getState().sshConnections ?? [];
-  const directMatch = saved.find(
-    (c) =>
-      c.id === candidateId ||
-      c.id === environmentId ||
-      (decodedId && c.id === decodedId) ||
-      remoteSshEnvironmentId(c.id) === environmentId,
-  );
-  if (directMatch) return directMatch;
-
-  const nameOrHostMatch = saved.find(
-    (c) =>
-      c.name?.toLowerCase() === candidateId.toLowerCase() ||
-      c.host?.toLowerCase() === candidateId.toLowerCase() ||
-      c.name?.toLowerCase() === environmentId.toLowerCase() ||
-      c.host?.toLowerCase() === environmentId.toLowerCase(),
-  );
-  if (nameOrHostMatch) return nameOrHostMatch;
-
-  const sshConfigAlias = environmentId.match(/^ssh-config-(.+)-\d+-[a-z0-9]+$/)?.[1];
-  if (sshConfigAlias) {
-    const aliasMatch = saved.find(
-      (c) =>
-        c.name?.toLowerCase() === sshConfigAlias.toLowerCase() ||
-        c.host?.toLowerCase() === sshConfigAlias.toLowerCase() ||
-        c.id.includes(sshConfigAlias),
-    );
-    if (aliasMatch) return aliasMatch;
-  }
-
-  // 3. Fallback to active SSH workspace connection if present
-  if (env.kind === "ssh" && env.connection) {
+  const exactId = decodedId ?? environmentId;
+  const direct = saved.find((c) => c.id === exactId);
+  if (direct) return direct;
+  if (env.kind === "ssh" && env.connection.id === exactId) {
     return env.connection;
   }
+  if (decodedId !== undefined || environmentId.startsWith(ENVIRONMENT_PREFIX)) {
+    return undefined;
+  }
 
+  const unique = (matches: SshConnection[]) =>
+    matches.length === 1 ? matches[0] : undefined;
+  const lowered = environmentId.toLowerCase();
+  const byLabel = unique(
+    saved.filter(
+      (c) => c.name?.toLowerCase() === lowered || c.host?.toLowerCase() === lowered,
+    ),
+  );
+  if (byLabel) return byLabel;
+
+  const sshConfigAlias = environmentId.match(
+    /^ssh-config-(.+)-\d+-[a-z0-9]+$/,
+  )?.[1];
+  if (sshConfigAlias) {
+    const alias = sshConfigAlias.toLowerCase();
+    return unique(
+      saved.filter(
+        (c) =>
+          c.name?.toLowerCase() === alias ||
+          c.host?.toLowerCase() === alias ||
+          c.id.includes(sshConfigAlias),
+      ),
+    );
+  }
   return undefined;
 }
-
 export function remoteSshConnectionForProfile(
   profile: SshConnection,
 ): RemoteSshConnection {

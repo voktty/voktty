@@ -10,11 +10,8 @@ import {
   remoteProjectForPath,
   remotePath,
 } from "@/modules/connections/model/remoteProjects";
-import {
-  closeRemoteWorkspace,
-  openRemoteWorkspace,
-  type RemoteSshConnection,
-} from "@/modules/remote/client";
+import type { RemoteSshConnection } from "@/modules/remote/client";
+import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
   currentWorkspaceEnv,
   isWindowsNativePath,
@@ -78,26 +75,25 @@ async function withGitWorkspace<T>(
         throw new Error("The remote machine is no longer connected.");
       connection = remoteSshConnectionFor(machine, savedConnections);
     }
-    const session = await openRemoteWorkspace(connection, project.cwd);
-    const workspace: GitWorkspace = {
-      kind: "ssh",
-      root: session.workspace_root,
-      sessionId: session.session_id,
-      connection: {
-        host: connection.host,
-        ...(connection.user ? { user: connection.user } : {}),
-        ...(connection.port ? { port: connection.port } : {}),
-      },
-    };
-    try {
-      return await operation({
-        cwd: session.workspace_root,
-        workspace,
-        environmentId: project.environmentId,
-      });
-    } finally {
-      await closeRemoteWorkspace(session.session_id).catch(() => undefined);
-    }
+    return remoteSessions.use(
+      { profileId: profile?.id ?? project.environmentId, root: project.cwd },
+      connection,
+      (session) =>
+        operation({
+          cwd: session.workspace_root,
+          workspace: {
+            kind: "ssh",
+            root: session.workspace_root,
+            sessionId: session.session_id,
+            connection: {
+              host: connection.host,
+              ...(connection.user ? { user: connection.user } : {}),
+              ...(connection.port ? { port: connection.port } : {}),
+            },
+          },
+          environmentId: project.environmentId,
+        }),
+    );
   }
 
   let env = currentWorkspaceEnv();
@@ -132,24 +128,28 @@ async function withGitWorkspace<T>(
     });
   }
 
-  const session = await openRemoteWorkspace(env.connection, cwd || env.root);
-  try {
-    return await operation({
-      cwd,
-      workspace: {
-        kind: "ssh",
-        root: session.workspace_root,
-        sessionId: session.session_id,
-        connection: {
-          host: env.connection.host,
-          ...(env.connection.user ? { user: env.connection.user } : {}),
-          ...(env.connection.port ? { port: env.connection.port } : {}),
+  const connection = env.connection;
+  return remoteSessions.use(
+    {
+      profileId: `ssh:${connection.user ?? ""}@${connection.host}:${connection.port ?? 22}`,
+      root: cwd || env.root,
+    },
+    connection,
+    (session) =>
+      operation({
+        cwd,
+        workspace: {
+          kind: "ssh",
+          root: session.workspace_root,
+          sessionId: session.session_id,
+          connection: {
+            host: connection.host,
+            ...(connection.user ? { user: connection.user } : {}),
+            ...(connection.port ? { port: connection.port } : {}),
+          },
         },
-      },
-    });
-  } finally {
-    await closeRemoteWorkspace(session.session_id).catch(() => undefined);
-  }
+      }),
+  );
 }
 
 function remapWorktrees(result: Worktrees, environmentId?: string): Worktrees {

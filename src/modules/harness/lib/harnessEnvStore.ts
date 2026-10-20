@@ -2,9 +2,10 @@ import { create } from "zustand";
 import type { SshConnection } from "@/modules/ssh";
 import {
   closeRemoteWorkspace,
-  openRemoteWorkspace,
   type RemoteSessionInfo,
 } from "@/modules/remote/client";
+import { remoteSessions } from "@/modules/remote/sessionManager";
+import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
 import { remoteSshConnectionForProfile } from "@/modules/connections/model/remoteSshProfiles";
 
 export type HarnessRemoteEnv =
@@ -32,6 +33,15 @@ type HarnessEnvState = {
   setEnv: (env: HarnessRemoteEnv) => void;
 };
 
+/** The Harness holds one lease on the shared session so file, Git and terminal
+ * work for the connected profile reuse it instead of opening their own. */
+let heldLease: RemoteSessionLease | undefined;
+
+function releaseHeldLease() {
+  heldLease?.release();
+  heldLease = undefined;
+}
+
 export const useHarnessEnvStore = create<HarnessEnvState>((set, get) => ({
   env: { kind: "local" },
   connecting: false,
@@ -47,11 +57,15 @@ export const useHarnessEnvStore = create<HarnessEnvState>((set, get) => ({
       const root =
         candidateRoot && candidateRoot !== "~"
           ? candidateRoot
-          : (profile.initialDirectory?.trim() || ".");
-      const session: RemoteSessionInfo = await openRemoteWorkspace(
-        nativeConn,
-        root,
-      ).catch(() => openRemoteWorkspace(nativeConn, "."));
+          : profile.initialDirectory?.trim() || ".";
+      const lease = await remoteSessions
+        .acquire({ profileId: profile.id, root }, nativeConn)
+        .catch(() =>
+          remoteSessions.acquire({ profileId: profile.id, root: "." }, nativeConn),
+        );
+      releaseHeldLease();
+      heldLease = lease;
+      const session: RemoteSessionInfo = lease.info;
       const nextEnv: HarnessRemoteEnv = {
         kind: "ssh",
         connection: profile,
@@ -69,8 +83,15 @@ export const useHarnessEnvStore = create<HarnessEnvState>((set, get) => ({
 
   disconnect: async () => {
     const current = get().env;
-    if (current.kind === "ssh" && current.sessionId !== undefined) {
-      await closeRemoteWorkspace(current.sessionId).catch(() => {});
+    releaseHeldLease();
+    if (current.kind === "ssh") {
+      const pooled = remoteSessions
+        .snapshot()
+        .some((entry) => entry.sessionId === current.sessionId);
+      await remoteSessions.closeProfile(current.connection.id);
+      if (current.sessionId !== undefined && !pooled) {
+        await closeRemoteWorkspace(current.sessionId).catch(() => undefined);
+      }
     }
     set({ env: { kind: "local" }, connecting: false, error: null });
   },

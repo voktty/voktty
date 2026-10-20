@@ -7,11 +7,10 @@ import {
   setRemoteCommandRunner,
 } from "@/modules/harness/lib/fs";
 import {
-  closeRemoteWorkspace,
-  openRemoteWorkspace,
   RemoteRequestError,
   requestRemoteResult,
 } from "@/modules/remote/client";
+import { remoteSessions } from "@/modules/remote/sessionManager";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { remoteMachineFor, remoteRequest } from "./connections";
 import {
@@ -3098,49 +3097,47 @@ async function runNativeProfileCommand(
   if (normalizedProjectRoot === "/" && project.cwd !== "/") {
     throw new Error("The saved remote project root is invalid.");
   }
-  const session = await openRemoteWorkspace(
+  return remoteSessions.use(
+    { profileId: profile.id, root: normalizedProjectRoot },
     remoteSshConnectionForProfile(profile),
-    normalizedProjectRoot,
+    async (session) => {
+      const sessionRoot = normalizeRemoteAbsolute(session.workspace_root);
+      if (sessionRoot !== normalizedProjectRoot) {
+        throw new Error(
+          "The native SSH helper did not open the saved project root.",
+        );
+      }
+      if (
+        command === "git_stage_contents" &&
+        !session.capabilities.includes(HELPER_GIT_EXEC_WORKSPACE_INPUT)
+      ) {
+        throw new Error(
+          "Update the Voktty remote helper to stage unsaved editor contents.",
+        );
+      }
+      return runProfileFileCommand(
+        command,
+        args,
+        environmentId,
+        session.session_id,
+        sessionRoot,
+        session.capabilities.includes(HELPER_FS.countTextLines),
+        session.capabilities.includes(HELPER_FS.readFilePreview),
+        (value) => {
+          if (typeof value !== "string") {
+            throw new Error("The remote command is missing a project path.");
+          }
+          const parsed = parseRemotePath(value);
+          if (!parsed || parsed.environmentId !== environmentId) {
+            throw new Error(
+              "Files can only be accessed within one remote project.",
+            );
+          }
+          return relativeToRemoteRoot(sessionRoot, parsed.hostPath);
+        },
+      );
+    },
   );
-  try {
-    const sessionRoot = normalizeRemoteAbsolute(session.workspace_root);
-    if (sessionRoot !== normalizedProjectRoot) {
-      throw new Error(
-        "The native SSH helper did not open the saved project root.",
-      );
-    }
-    if (
-      command === "git_stage_contents" &&
-      !session.capabilities.includes(HELPER_GIT_EXEC_WORKSPACE_INPUT)
-    ) {
-      throw new Error(
-        "Update the Voktty remote helper to stage unsaved editor contents.",
-      );
-    }
-    return await runProfileFileCommand(
-      command,
-      args,
-      environmentId,
-      session.session_id,
-      sessionRoot,
-      session.capabilities.includes(HELPER_FS.countTextLines),
-      session.capabilities.includes(HELPER_FS.readFilePreview),
-      (value) => {
-        if (typeof value !== "string") {
-          throw new Error("The remote command is missing a project path.");
-        }
-        const parsed = parseRemotePath(value);
-        if (!parsed || parsed.environmentId !== environmentId) {
-          throw new Error(
-            "Files can only be accessed within one remote project.",
-          );
-        }
-        return relativeToRemoteRoot(sessionRoot, parsed.hostPath);
-      },
-    );
-  } finally {
-    await closeRemoteWorkspace(session.session_id).catch(() => undefined);
-  }
 }
 
 /** Runs a file command whose paths are `remote://` paths on the machine that
