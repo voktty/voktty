@@ -49,6 +49,7 @@ import {
   loadRemoteGitTagPush,
   resolveRemoteGitRepo,
 } from "./remoteGitHistory";
+import { remoteGitPanel } from "./remoteGitPanel.wire";
 
 export type ReadResult =
   | { kind: "text"; content: string; size: number }
@@ -548,22 +549,26 @@ export const native = {
           workspace: resolveGitWorkspace(repoRoot, workspace),
         }),
   gitStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    invoke<GitStatusSnapshot>("git_status", {
-      repoRoot,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.status(repoRoot)
+      : invoke<GitStatusSnapshot>("git_status", {
+          repoRoot,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitDiff: (
     repoRoot: string,
     path: string | null,
     staged: boolean,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<GitDiffResult>("git_diff", {
-      repoRoot,
-      path,
-      staged,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.diff(repoRoot, path, staged)
+      : invoke<GitDiffResult>("git_diff", {
+          repoRoot,
+          path,
+          staged,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitDiffContent: (
     repoRoot: string,
     path: string,
@@ -571,35 +576,43 @@ export const native = {
     originalPath?: string | null,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<GitDiffContentResult>("git_diff_content", {
-      repoRoot,
-      path,
-      staged,
-      originalPath: originalPath ?? null,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.diffContent(repoRoot, path, staged)
+      : invoke<GitDiffContentResult>("git_diff_content", {
+          repoRoot,
+          path,
+          staged,
+          originalPath: originalPath ?? null,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitStage: (repoRoot: string, paths: string[], workspace?: WorkspaceEnv) =>
-    invoke<void>("git_stage", {
-      repoRoot,
-      paths,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.stage(repoRoot, paths)
+      : invoke<void>("git_stage", {
+          repoRoot,
+          paths,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitUnstage: (repoRoot: string, paths: string[], workspace?: WorkspaceEnv) =>
-    invoke<void>("git_unstage", {
-      repoRoot,
-      paths,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.unstage(repoRoot, paths)
+      : invoke<void>("git_unstage", {
+          repoRoot,
+          paths,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitDiscard: (
     repoRoot: string,
     entries: GitDiscardEntry[],
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_discard", {
-      repoRoot,
-      entries,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.discard(repoRoot, entries)
+      : invoke<void>("git_discard", {
+          repoRoot,
+          entries,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   /** Stages `contents` as the full new blob for `path`, leaving the working tree untouched. */
   gitStageHunk: (
     repoRoot: string,
@@ -607,12 +620,14 @@ export const native = {
     contents: string,
     workspace?: WorkspaceEnv,
   ) =>
-    invoke<void>("git_stage_hunk", {
-      repoRoot,
-      path,
-      contents,
-      workspace: resolveGitWorkspace(repoRoot, workspace),
-    }),
+    isDirectSshProfilePath(repoRoot)
+      ? remoteGitPanel.stageHunk(repoRoot, path, contents)
+      : invoke<void>("git_stage_hunk", {
+          repoRoot,
+          path,
+          contents,
+          workspace: resolveGitWorkspace(repoRoot, workspace),
+        }),
   gitCommit: (
     repoRoot: string,
     message: string,
@@ -753,10 +768,12 @@ export const native = {
       workspace: resolveGitWorkspace(path, workspace),
     }),
   gitInit: (cwd: string, workspace?: WorkspaceEnv) =>
-    invoke<void>("git_init", {
-      cwd,
-      workspace: resolveGitWorkspace(cwd, workspace),
-    }),
+    isDirectSshProfilePath(cwd)
+      ? remoteGitPanel.init(cwd)
+      : invoke<void>("git_init", {
+          cwd,
+          workspace: resolveGitWorkspace(cwd, workspace),
+        }),
   gitClone: (
     url: string,
     parentDir: string,

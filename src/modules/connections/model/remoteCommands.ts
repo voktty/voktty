@@ -172,6 +172,8 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_range_context",
   "git_pr_status",
   "git_pr_create",
+  "git_init",
+  "git_patch",
 ]);
 
 /** Commands the legacy Host answers that a saved SSH profile does not. Worktrees
@@ -2686,6 +2688,47 @@ async function runProfileFileCommand(
           : "drop",
       args.index,
     );
+  }
+  if (command === "git_init") {
+    const cwd = relativePath(args.cwd);
+    const result = await runHelperGit(
+      sessionId,
+      cwd,
+      ["init"],
+      64 * 1024,
+      true,
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(
+        result.stderr.trim() || result.stdout.trim() || "git init failed.",
+      );
+    }
+    return;
+  }
+  if (command === "git_patch") {
+    const cwd = relativePath(args.cwd);
+    await assertProfileGitRoot(sessionId, root, cwd);
+    const relative =
+      args.relative === undefined || args.relative === null
+        ? undefined
+        : helperRelativePath(args.relative);
+    const result = await runHelperGit(
+      sessionId,
+      cwd,
+      [
+        "--literal-pathspecs",
+        "diff",
+        "--no-color",
+        "--no-ext-diff",
+        ...(args.staged === true ? ["--cached"] : []),
+        "--",
+        ...(relative ? [relative] : ["."]),
+      ],
+      MAX_GIT_OUTPUT_BYTES,
+      true,
+      true,
+    );
+    return { diffText: result.stdout, truncated: result.stdoutTruncated };
   }
   if (
     command === "git_range_context" ||

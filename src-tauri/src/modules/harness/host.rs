@@ -827,6 +827,7 @@ pub fn harness_spawn(
     remote_cwd: Option<String>,
     remote_session_id: Option<u64>,
     remote_root: Option<String>,
+    remote_relative_cwd: Option<String>,
 ) -> Result<u32, String> {
     let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
     if let Some(prev) = prev {
@@ -846,6 +847,7 @@ pub fn harness_spawn(
                 .unwrap_or_else(|| ".".to_string()),
             session_id: remote_session_id,
             root: remote_root.clone(),
+            relative_dir: remote_relative_cwd.filter(|dir| safe_relative_dir(dir)),
         };
         let stamp = SpawnStamp { epoch, kill_all };
         if let Some(pid) = spawn_persistent_remote(
@@ -1070,6 +1072,18 @@ struct RemoteTarget<'a> {
     session_id: Option<u64>,
     /// Root folder of that session, used when it has to be reopened.
     root: Option<String>,
+    /// Agent folder relative to the project root. Preferred over `dir`, which
+    /// the helper cannot match when the root has symbolic links.
+    relative_dir: Option<String>,
+}
+
+/// A folder below the project root: no absolute path and no `..` segment.
+fn safe_relative_dir(dir: &str) -> bool {
+    !dir.is_empty()
+        && !dir.starts_with('/')
+        && !dir.contains('\\')
+        && !dir.chars().any(char::is_control)
+        && dir.split('/').all(|part| part != "..")
 }
 
 /// Placeholder pids for remote agents. They never reach a signal call and
@@ -1197,7 +1211,8 @@ fn spawn_persistent_remote(
         session_id: session_id.to_string(),
         pid,
     });
-    let params = spawn_params(command, args, &target.dir, None);
+    let folder = target.relative_dir.as_deref().unwrap_or(&target.dir);
+    let params = spawn_params(command, args, folder, None);
     let agent = match RemoteAgent::start(
         session,
         provider,
@@ -4049,6 +4064,16 @@ mod binary_resolution_tests {
         assert!(!cmd.contains("mkdir"));
         assert!(!cmd.contains("|| cd;"));
         assert!(cmd.contains("exit 66"));
+    }
+
+    #[test]
+    fn relative_agent_folders_cannot_leave_the_project() {
+        for ok in [".", "src", "src/app", "a b/c"] {
+            assert!(safe_relative_dir(ok), "{ok}");
+        }
+        for bad in ["", "/etc", "../x", "a/../b", "a\\b", "a\nb"] {
+            assert!(!safe_relative_dir(bad), "{bad:?}");
+        }
     }
 
     #[test]

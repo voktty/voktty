@@ -51,6 +51,22 @@ function hostPathIsWithin(root: string, candidate: string): boolean {
   return normalizedCandidate.startsWith(`${normalizedRoot}${separator}`);
 }
 
+/** `.` for the project root itself, or the path below it, such as `src/app`.
+ * Undefined when the path is not inside the project. */
+export function relativeWithinProject(
+  projectCwd: string,
+  hostPath: string,
+): string | undefined {
+  const root = normalizedHostPath(projectCwd);
+  const target = normalizedHostPath(hostPath);
+  if (!root || !target || !hostPathIsWithin(projectCwd, hostPath)) return undefined;
+  if (target === root) return ".";
+  const prefix = root.endsWith("/") ? root : `${root}/`;
+  const slashedTarget = slashed(hostPath).replace(/\/+$/, "");
+  const cut = slashedTarget.length - (target.length - prefix.length);
+  return slashedTarget.slice(cut).replace(/^\/+/, "") || ".";
+}
+
 export function remoteProjectKey(environmentId: string, cwd: string): string {
   return remotePath(environmentId, slashed(cwd).replace(/\/+$/, ""));
 }

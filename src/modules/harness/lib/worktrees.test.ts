@@ -112,6 +112,20 @@ beforeEach(async () => {
 });
 
 describe("remote Harness worktrees", () => {
+  it("treats a folder that is not a Git repository as having no worktrees", async () => {
+    mocks.invoke.mockRejectedValueOnce(
+      "git worktree list failed: fatal: not a git repository (or any parent up to mount point /)",
+    );
+    await expect(listWorktrees("remote://machine-1/srv/app")).resolves.toEqual({
+      worktrees: [],
+      defaultRoot: "remote://machine-1/srv/app",
+    });
+
+    mocks.invoke.mockRejectedValueOnce(new Error("permission denied"));
+    await expect(listWorktrees("remote://machine-1/srv/app")).rejects.toThrow(
+      "permission denied",
+    );
+  });
   it("lists through Voktty's native SSH helper and remaps host paths", async () => {
     mocks.invoke.mockResolvedValueOnce({
       worktrees: [{ ...tree, path: "/srv/app" }, tree],

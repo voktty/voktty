@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 import {
   forgetRemoteProject,
+  relativeWithinProject,
   rememberRemoteProject,
   remotePath,
   remoteProjectFor,
@@ -101,4 +102,14 @@ it("removes remote projects with forgetRemoteProject", () => {
 
   forgetRemoteProject(project.key);
   expect(remoteProjectFor(project.key)).toBeUndefined();
+});
+
+it("expresses a folder relative to its project root", () => {
+  expect(relativeWithinProject("/config", "/config")).toBe(".");
+  expect(relativeWithinProject("/config/", "/config/workspace/ahorrio")).toBe(
+    "workspace/ahorrio",
+  );
+  expect(relativeWithinProject("/", "/srv/app")).toBe("srv/app");
+  expect(relativeWithinProject("/config", "/config-other/x")).toBeUndefined();
+  expect(relativeWithinProject("/config", "/config/../etc")).toBeUndefined();
 });

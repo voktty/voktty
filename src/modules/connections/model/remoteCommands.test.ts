@@ -609,6 +609,56 @@ it("looks up and creates GitHub pull requests for a saved SSH repository from th
     head: "feature/demo",
   });
 });
+it("initializes a repository in a saved SSH folder that is not one yet", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const calls: string[][] = [];
+  requestRemoteResult.mockImplementation(
+    async (_id: number, method: string, params: Record<string, unknown>) => {
+      if (method !== "git.execWorkspace") throw new Error("Unexpected method");
+      calls.push(params.args as string[]);
+      return gitExecResult("Initialized empty Git repository\n");
+    },
+  );
+  await runRemoteCommand("git_init", {
+    cwd: remotePath(environmentId, "/srv/app/sub"),
+  });
+  expect(calls).toEqual([["init"]]);
+  expect(requestRemoteResult.mock.calls[0]?.[2]).toMatchObject({ cwd: "sub" });
+});
+
+it("reports a failed git init with the server message", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValue(
+    gitExecResult("", 128, "fatal: cannot mkdir .git: Permission denied"),
+  );
+  await expect(
+    runRemoteCommand("git_init", { cwd: remotePath(environmentId, "/srv/app") }),
+  ).rejects.toThrow("Permission denied");
+});
+
+it("reads a literal-pathspec patch for one file or the whole repository", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  const diffs: string[][] = [];
+  requestRemoteResult.mockImplementation(
+    async (_id: number, _method: string, params: Record<string, unknown>) => {
+      const args = params.args as string[];
+      if (args[0] === "rev-parse") return gitExecResult("/srv/app\n");
+      diffs.push(args);
+      return gitExecResult("diff --git a/a b/a\n");
+    },
+  );
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(
+    runRemoteCommand("git_patch", { cwd, relative: "a.ts", staged: true }),
+  ).resolves.toEqual({ diffText: "diff --git a/a b/a\n", truncated: false });
+  await runRemoteCommand("git_patch", { cwd, relative: null, staged: false });
+  expect(diffs[0]).toEqual([
+    "--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--cached", "--", "a.ts",
+  ]);
+  expect(diffs[1]).toEqual([
+    "--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--", ".",
+  ]);
+});
 it("returns an empty commit history for a saved SSH folder outside Git", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockResolvedValueOnce(

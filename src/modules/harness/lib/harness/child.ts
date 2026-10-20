@@ -4,6 +4,7 @@ import type { HarnessId } from "@/modules/harness/lib/session";
 import type { RemoteSshConnection } from "@/modules/remote/client";
 import {
   parseRemotePath,
+  relativeWithinProject,
   remoteProjectForPath,
 } from "@/modules/connections/model/remoteProjects";
 import {
@@ -370,6 +371,7 @@ export async function spawnChild(
   let remoteCwd: string | null = null;
   let remoteSessionId: number | null = null;
   let remoteRoot: string | null = null;
+  let remoteRelativeCwd: string | null = null;
   let execCommand = command;
 
   const remote = parseRemotePath(cwd);
@@ -379,9 +381,13 @@ export async function spawnChild(
     execCommand = cleanRemoteCommand(command);
     // The helper confines the agent to the project root, so only a saved
     // project may host one.
-    if (!remoteProjectForPath(cwd)) {
+    const project = remoteProjectForPath(cwd);
+    if (!project) {
       throw new Error("This path is outside a saved remote project.");
     }
+    // The helper resolves folders below its canonical root, so the agent folder
+    // is sent relative to the project instead of as the path typed by the user.
+    remoteRelativeCwd = relativeWithinProject(project.cwd, remote.hostPath) ?? null;
     releaseRemoteHold(sessionId);
     const held = await holdRemoteProjectSession(
       remote.environmentId,
@@ -421,6 +427,7 @@ export async function spawnChild(
       remoteCwd,
       remoteSessionId,
       remoteRoot,
+      remoteRelativeCwd,
     });
   } catch (error) {
     releaseRemoteHold(sessionId);

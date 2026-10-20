@@ -318,6 +318,7 @@ describe("remote spawnChild", () => {
       remoteCwd: "/workspace/project",
       remoteSessionId: null,
       remoteRoot: null,
+      remoteRelativeCwd: ".",
     });
 
     release();
@@ -375,6 +376,7 @@ describe("remote spawnChild", () => {
       expect.objectContaining({
         remoteSessionId: 9,
         remoteRoot: "/workspace/project",
+        remoteRelativeCwd: "src",
       }),
     );
     expect(mocks.closeRemote).not.toHaveBeenCalled();

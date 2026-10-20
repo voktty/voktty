@@ -173,13 +173,23 @@ function workspaceArgs(workspace: GitWorkspace) {
   return workspace.kind === "local" ? {} : { workspace };
 }
 
-export const listWorktrees = (cwd: string) =>
+/** A folder that is not a Git repository simply has no worktrees. */
+export function isNotARepositoryError(error: unknown): boolean {
+  return /not a git repository/i.test(
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+export const listWorktrees = (cwd: string): Promise<Worktrees> =>
   withGitWorkspace(cwd, ({ cwd: nativeCwd, workspace, environmentId }) =>
     invoke<Worktrees>("git_worktrees", {
       cwd: nativeCwd,
       ...workspaceArgs(workspace),
     }).then((result) => remapWorktrees(result, environmentId)),
-  );
+  ).catch((error: unknown) => {
+    if (isNotARepositoryError(error)) return { worktrees: [], defaultRoot: cwd };
+    throw error;
+  });
 
 export async function createWorktree(
   cwd: string,
