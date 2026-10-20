@@ -83,6 +83,7 @@ pub struct RemoteState {
     sessions: Arc<Mutex<HashMap<u64, Arc<RemoteSession>>>>,
     next_id: Arc<AtomicU64>,
     next_pty_id: Arc<AtomicU64>,
+    next_attach_id: Arc<AtomicU64>,
     next_tunnel_id: Arc<AtomicU64>,
     next_request_id: Arc<AtomicU64>,
     ssh_prompts: Arc<Mutex<HashMap<String, mpsc::SyncSender<Option<String>>>>>,
@@ -94,6 +95,7 @@ impl Default for RemoteState {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             next_id: Arc::new(AtomicU64::new(1)),
             next_pty_id: Arc::new(AtomicU64::new(1)),
+            next_attach_id: Arc::new(AtomicU64::new(1)),
             next_tunnel_id: Arc::new(AtomicU64::new(1)),
             next_request_id: Arc::new(AtomicU64::new(1)),
             ssh_prompts: Arc::new(Mutex::new(HashMap::new())),
@@ -299,7 +301,25 @@ pub fn remote_ssh_prompt_answer(
         .map_err(|_| "SSH prompt expired".to_string())
 }
 
-struct RemoteSession {
+/// Output of a persistent remote process, delivered on the helper reader thread.
+pub(crate) enum ProcEvent {
+    Output {
+        stream: u8,
+        next_offset: u64,
+        data: Vec<u8>,
+    },
+    Exit {
+        code: Option<i32>,
+        signal: Option<i32>,
+        reason: String,
+    },
+    /// The SSH channel ended; the process may still be running on the host.
+    Lost,
+}
+
+pub(crate) type ProcListener = Arc<dyn Fn(ProcEvent) + Send + Sync>;
+
+pub(crate) struct RemoteSession {
     child: Mutex<Child>,
     stdin: Mutex<BufWriter<ChildStdin>>,
     tunnels: Mutex<HashMap<u64, RemoteTunnel>>,
@@ -339,6 +359,7 @@ struct RemotePtyHandlers {
 struct RemoteRouting {
     pending: Mutex<HashMap<String, mpsc::Sender<Result<RemoteResponse, String>>>>,
     ptys: Mutex<HashMap<u64, RemotePtyHandlers>>,
+    procs: Mutex<HashMap<u64, ProcListener>>,
     app: AppHandle,
     session_id: AtomicU64,
 }
@@ -531,6 +552,85 @@ impl RemoteSession {
             ptys.remove(&pty_id);
         }
     }
+
+    pub(crate) fn register_proc(
+        &self,
+        attach_id: u64,
+        listener: ProcListener,
+    ) -> Result<(), String> {
+        let mut procs = self
+            .routing
+            .procs
+            .lock()
+            .map_err(|_| "remote process state is poisoned".to_string())?;
+        if procs.insert(attach_id, listener).is_some() {
+            return Err("duplicate remote process attachment".to_string());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn unregister_proc(&self, attach_id: u64) {
+        if let Ok(mut procs) = self.routing.procs.lock() {
+            procs.remove(&attach_id);
+        }
+    }
+
+    /// Sends stdin bytes to a persistent process in bounded frames.
+    pub(crate) fn proc_write(&self, attach_id: u64, data: &[u8]) -> Result<(), String> {
+        const CHUNK: usize = 256 * 1024;
+        for chunk in data.chunks(CHUNK) {
+            self.send(&Frame::ProcInput {
+                attach_id,
+                data: chunk.to_vec(),
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Runs a helper request and returns its result, or the helper error as `code: message`.
+    pub(crate) fn call(
+        &self,
+        id: String,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, RemoteCallError> {
+        let request = RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id,
+            method: method.to_string(),
+            params,
+        };
+        let response = self.request(&request).map_err(RemoteCallError::Transport)?;
+        if response.ok {
+            return Ok(response.result.unwrap_or(serde_json::Value::Null));
+        }
+        let error = response.error;
+        Err(RemoteCallError::Helper {
+            code: error.as_ref().map(|e| e.code.clone()).unwrap_or_default(),
+            message: error
+                .map(|e| e.message)
+                .unwrap_or_else(|| "remote helper rejected the request".to_string()),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum RemoteCallError {
+    /// The SSH channel failed or the helper did not answer.
+    Transport(String),
+    Helper {
+        code: String,
+        message: String,
+    },
+}
+
+impl std::fmt::Display for RemoteCallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Transport(message) => f.write_str(message),
+            Self::Helper { code, message } => write!(f, "{code}: {message}"),
+        }
+    }
 }
 
 impl RemoteRouting {
@@ -538,6 +638,7 @@ impl RemoteRouting {
         Self {
             pending: Mutex::new(HashMap::new()),
             ptys: Mutex::new(HashMap::new()),
+            procs: Mutex::new(HashMap::new()),
             app,
             session_id: AtomicU64::new(0),
         }
@@ -596,7 +697,49 @@ impl RemoteRouting {
                 }
                 Ok(())
             }
-            Frame::Request(_) | Frame::PtyInput { .. } => {
+            Frame::ProcOutput {
+                attach_id,
+                stream,
+                next_offset,
+                data,
+            } => {
+                let listener = self
+                    .procs
+                    .lock()
+                    .map_err(|_| "remote process state is poisoned".to_string())?
+                    .get(&attach_id)
+                    .cloned();
+                if let Some(listener) = listener {
+                    listener(ProcEvent::Output {
+                        stream,
+                        next_offset,
+                        data,
+                    });
+                }
+                Ok(())
+            }
+            Frame::ProcExit {
+                attach_id,
+                code,
+                signal,
+                reason,
+                ..
+            } => {
+                let listener = self
+                    .procs
+                    .lock()
+                    .map_err(|_| "remote process state is poisoned".to_string())?
+                    .remove(&attach_id);
+                if let Some(listener) = listener {
+                    listener(ProcEvent::Exit {
+                        code: (code != voktty_remote_protocol::PROC_NO_EXIT_CODE).then_some(code),
+                        signal: (signal != 0).then_some(signal),
+                        reason,
+                    });
+                }
+                Ok(())
+            }
+            Frame::Request(_) | Frame::PtyInput { .. } | Frame::ProcInput { .. } => {
                 Err("remote helper sent a client-only frame".to_string())
             }
         }
@@ -612,6 +755,14 @@ impl RemoteRouting {
             for (_, handlers) in ptys.drain() {
                 let _ = handlers.on_exit.send(-1);
             }
+        }
+        let listeners: Vec<ProcListener> = self
+            .procs
+            .lock()
+            .map(|mut procs| procs.drain().map(|(_, listener)| listener).collect())
+            .unwrap_or_default();
+        for listener in listeners {
+            listener(ProcEvent::Lost);
         }
     }
 }
@@ -862,6 +1013,41 @@ impl RemoteState {
     fn next_request_id(&self, operation: &str) -> String {
         let id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         format!("{operation}-{id}")
+    }
+}
+
+impl RemoteState {
+    pub(crate) fn session(&self, session_id: u64) -> Result<Arc<RemoteSession>, String> {
+        remote_session(self, session_id)
+    }
+
+    pub(crate) fn next_attach_id(&self) -> u64 {
+        self.next_attach_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub(crate) fn request_id(&self, operation: &str) -> String {
+        self.next_request_id(operation)
+    }
+
+    /// Opens a session on the calling thread and registers it like `remote_open`.
+    pub(crate) fn open_blocking(
+        &self,
+        app: AppHandle,
+        connection: RemoteSshConnection,
+        workspace_root: Option<String>,
+    ) -> Result<(u64, Arc<RemoteSession>), String> {
+        validate_connection(&connection)?;
+        let (session, mut info) =
+            open_remote_session(app, self.clone(), connection, workspace_root, false)?;
+        let session_id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        info.session_id = session_id;
+        session.set_id(session_id);
+        let session = Arc::new(session);
+        self.sessions
+            .lock()
+            .map_err(|_| "remote session state is poisoned".to_string())?
+            .insert(session_id, session.clone());
+        Ok((session_id, session))
     }
 }
 

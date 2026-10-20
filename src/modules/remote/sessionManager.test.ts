@@ -13,6 +13,7 @@ vi.mock("./client", () => ({
 import {
   closeRemoteSessionById,
   openHeldRemoteSession,
+  releaseHeldRemoteSession,
   remoteSessions,
 } from "./sessionManager";
 
@@ -88,4 +89,15 @@ it("does not close twice a session the pool already discarded", async () => {
   mocks.close.mockClear();
   await closeRemoteSessionById("workspace", 5);
   expect(mocks.close).not.toHaveBeenCalled();
+});
+
+it("releases one hold at a time so concurrent agents keep the session alive", async () => {
+  await openHeldRemoteSession("agent", "p1", connection, "/srv/app");
+  await openHeldRemoteSession("agent", "p1", connection, "/srv/app");
+  await releaseHeldRemoteSession("agent", 5);
+  expect(mocks.close).not.toHaveBeenCalled();
+  await releaseHeldRemoteSession("agent", 5);
+  expect(mocks.close).toHaveBeenCalledWith(5);
+  await releaseHeldRemoteSession("agent", 5);
+  expect(mocks.close).toHaveBeenCalledTimes(1);
 });

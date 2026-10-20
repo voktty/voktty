@@ -5,11 +5,37 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: { payload: never }) => void>(),
   invoke: vi.fn(),
   listen: vi.fn(),
+  openRemote: vi.fn(),
+  closeRemote: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
+vi.mock("@/modules/remote/client", () => ({
+  openRemoteWorkspace: mocks.openRemote,
+  closeRemoteWorkspace: mocks.closeRemote,
+}));
 vi.mock("@tauri-apps/api/event", () => ({ listen: mocks.listen }));
 
+const storage = new Map<string, string>();
+if (typeof globalThis.localStorage === "undefined") {
+  Object.defineProperty(globalThis, "localStorage", {
+    value: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, String(value)),
+      removeItem: (key: string) => storage.delete(key),
+      clear: () => storage.clear(),
+    },
+    configurable: true,
+    writable: true,
+  });
+}
+if (typeof globalThis.window === "undefined") {
+  globalThis.window = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => true,
+  } as unknown as Window & typeof globalThis;
+}
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -278,8 +304,103 @@ describe("remote spawnChild", () => {
         port: 22,
       },
       remoteCwd: "/workspace/project",
+      remoteSessionId: null,
+      remoteRoot: null,
     });
 
+    release();
+  });
+
+  it("keeps the project helper session open for a remote agent and releases it when stopped", async () => {
+    installResolvedListeners();
+    const child = await loadChild();
+    const { usePreferencesStore } = await import("@/modules/settings/preferences");
+    usePreferencesStore.setState({
+      sshConnections: [
+        { id: "p1", name: "Test Server", host: "192.168.1.4", user: "root", port: 22 },
+      ],
+    });
+    const { rememberRemoteProject, remotePath } = await import(
+      "@/modules/connections/model/remoteProjects"
+    );
+    const { remoteSshEnvironmentId } = await import(
+      "@/modules/connections/model/remoteSshProfiles"
+    );
+    const environmentId = remoteSshEnvironmentId("p1");
+    rememberRemoteProject(environmentId, {
+      id: "project",
+      cwd: "/workspace/project",
+      name: "project",
+    });
+    mocks.openRemote.mockReset().mockResolvedValue({
+      session_id: 9,
+      architecture: "x86_64",
+      workspace_root: "/workspace/project",
+      helper_version: "1",
+      capabilities: ["proc.spawn"],
+    });
+    mocks.closeRemote.mockReset().mockResolvedValue(undefined);
+    mocks.invoke.mockResolvedValue(42);
+
+    const release = await child.acquireHarnessBridge();
+    await child.spawnChild(
+      "session-2",
+      "codex",
+      ["app-server"],
+      remotePath(environmentId, "/workspace/project/src"),
+    );
+
+    expect(mocks.openRemote).toHaveBeenCalledOnce();
+    expect(mocks.openRemote.mock.calls[0]?.[1]).toBe("/workspace/project");
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "harness_spawn",
+      expect.objectContaining({
+        remoteSessionId: 9,
+        remoteRoot: "/workspace/project",
+      }),
+    );
+    expect(mocks.closeRemote).not.toHaveBeenCalled();
+
+    await child.killChild("session-2");
+    await Promise.resolve();
+    expect(mocks.closeRemote).toHaveBeenCalledWith(9);
+
+    release();
+  });
+
+  it("releases the held helper session when the native spawn fails", async () => {
+    installResolvedListeners();
+    const child = await loadChild();
+    const { usePreferencesStore } = await import("@/modules/settings/preferences");
+    usePreferencesStore.setState({
+      sshConnections: [
+        { id: "p2", name: "Other", host: "192.168.1.5", user: "root", port: 22 },
+      ],
+    });
+    const { rememberRemoteProject, remotePath } = await import(
+      "@/modules/connections/model/remoteProjects"
+    );
+    const { remoteSshEnvironmentId } = await import(
+      "@/modules/connections/model/remoteSshProfiles"
+    );
+    const environmentId = remoteSshEnvironmentId("p2");
+    rememberRemoteProject(environmentId, { id: "p", cwd: "/srv/p", name: "p" });
+    mocks.openRemote.mockReset().mockResolvedValue({
+      session_id: 11,
+      architecture: "x86_64",
+      workspace_root: "/srv/p",
+      helper_version: "1",
+      capabilities: [],
+    });
+    mocks.closeRemote.mockReset().mockResolvedValue(undefined);
+    mocks.invoke.mockRejectedValue(new Error("codex is not installed"));
+
+    const release = await child.acquireHarnessBridge();
+    await expect(
+      child.spawnChild("session-3", "codex", [], remotePath(environmentId, "/srv/p")),
+    ).rejects.toThrow("codex is not installed");
+    await Promise.resolve();
+    expect(mocks.closeRemote).toHaveBeenCalledWith(11);
     release();
   });
 });

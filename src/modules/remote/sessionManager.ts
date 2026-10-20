@@ -20,7 +20,7 @@ export const remoteSessions = new RemoteSessionPool({
 });
 
 /** Surfaces that keep a session by numeric id until they close it. */
-export type SessionHolder = "workspace" | "harness";
+export type SessionHolder = "workspace" | "harness" | "agent";
 
 const holds = new Map<
   number,
@@ -43,6 +43,27 @@ export async function openHeldRemoteSession(
   const id = lease.info.session_id;
   holds.set(id, [...(holds.get(id) ?? []), { holder, lease }]);
   return lease.info;
+}
+
+/**
+ * Releases exactly one hold of `holder`, for holders that keep one hold per
+ * user (each running agent). The session closes once nothing else uses it.
+ */
+export async function releaseHeldRemoteSession(
+  holder: SessionHolder,
+  sessionId: number,
+): Promise<void> {
+  const all = holds.get(sessionId) ?? [];
+  const index = all.findIndex((hold) => hold.holder === holder);
+  if (index < 0) return;
+  const [hold] = all.splice(index, 1);
+  if (all.length > 0) holds.set(sessionId, all);
+  else holds.delete(sessionId);
+  hold.lease.release();
+  const entry = remoteSessions
+    .snapshot()
+    .find((candidate) => candidate.sessionId === sessionId);
+  if (entry && entry.leases <= 0) await remoteSessions.closeSession(sessionId);
 }
 
 /**

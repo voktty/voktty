@@ -190,10 +190,35 @@ fn apply_provider_account(
 }
 
 struct LiveChild {
-    stdin: Mutex<ChildStdin>,
+    /// Absent for an agent that runs on a remote host: `remote` carries its input.
+    stdin: Mutex<Option<ChildStdin>>,
+    /// Real process id for local children; a unique placeholder for remote ones.
     pid: u32,
     account: Option<HarnessAccount>,
     _askpass: Option<super::ssh_askpass::Askpass>,
+    remote: Option<Arc<super::remote_agent::RemoteAgent>>,
+}
+
+impl LiveChild {
+    /// Stops the child. A remote agent is stopped on its host, never by pid.
+    fn terminate(&self) {
+        match &self.remote {
+            Some(remote) => remote.kill(),
+            None => terminate(self.pid),
+        }
+    }
+}
+
+/// Terminates a batch of children, signalling local pids together.
+fn terminate_children(children: &[Arc<LiveChild>]) {
+    let mut local_pids = Vec::new();
+    for child in children {
+        match &child.remote {
+            Some(remote) => remote.kill(),
+            None => local_pids.push(child.pid),
+        }
+    }
+    terminate_all(&local_pids);
 }
 
 struct LiveSse {
@@ -293,7 +318,7 @@ impl HarnessHost {
             return Some(live);
         }
         if let Some(prev) = inner.children.insert(session_id, live) {
-            terminate(prev.pid);
+            prev.terminate();
         }
         None
     }
@@ -332,9 +357,8 @@ impl HarnessHost {
         for (session_id, _) in &children {
             self.stop_sse(session_id);
         }
-        let pids: Vec<u32> = children.iter().map(|(_, child)| child.pid).collect();
-        drop(children);
-        terminate_all(&pids);
+        let kids: Vec<Arc<LiveChild>> = children.into_iter().map(|(_, child)| child).collect();
+        terminate_children(&kids);
     }
 
     fn remove_if_pid(&self, session_id: &str, pid: u32) -> Option<Arc<LiveChild>> {
@@ -379,10 +403,13 @@ impl HarnessHost {
             inner.children.drain().map(|(_, child)| child).collect()
         };
         self.stop_all_sse();
-        let pids: Vec<u32> = kids.iter().map(|live| live.pid).collect();
-        // Drop stdin before signaling so ACP CLIs that watch the pipe can exit.
-        drop(kids);
-        terminate_all(&pids);
+        // Close stdin before signaling so ACP CLIs that watch the pipe can exit.
+        for kid in &kids {
+            if let Ok(mut stdin) = kid.stdin.lock() {
+                stdin.take();
+            }
+        }
+        terminate_children(&kids);
     }
 
     fn insert_sse(&self, session_id: String, live: Arc<LiveSse>) -> Option<Arc<LiveSse>> {
@@ -799,10 +826,41 @@ pub fn harness_spawn(
     account: Option<HarnessAccount>,
     remote_connection: Option<crate::modules::remote::RemoteSshConnection>,
     remote_cwd: Option<String>,
+    remote_session_id: Option<u64>,
+    remote_root: Option<String>,
 ) -> Result<u32, String> {
     let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
     if let Some(prev) = prev {
-        terminate(prev.pid);
+        prev.terminate();
+    }
+
+    if let Some(conn) = remote_connection.as_ref() {
+        crate::modules::remote::validate_connection(conn)?;
+        let target = RemoteTarget {
+            connection: conn,
+            dir: remote_cwd
+                .as_deref()
+                .filter(|dir| !dir.trim().is_empty())
+                .map(str::to_string)
+                .or_else(|| parse_remote_cwd(&cwd))
+                .unwrap_or_else(|| ".".to_string()),
+            session_id: remote_session_id,
+            root: remote_root.clone(),
+        };
+        let stamp = SpawnStamp { epoch, kill_all };
+        if let Some(pid) = spawn_persistent_remote(
+            &app,
+            &host,
+            &session_id,
+            stamp,
+            &target,
+            &command,
+            &args,
+            account.clone(),
+        )? {
+            return Ok(pid);
+        }
+        // The host predates persistent agents: use a plain SSH exec below.
     }
 
     let mut _remote_askpass = None;
@@ -900,17 +958,18 @@ pub fn harness_spawn(
         .ok_or_else(|| "Failed to open harness stderr".to_string())?;
 
     let live = Arc::new(LiveChild {
-        stdin: Mutex::new(stdin),
+        stdin: Mutex::new(Some(stdin)),
         pid,
         account,
         _askpass: _remote_askpass,
+        remote: None,
     });
     if let Some(rejected) = host.install_spawn(session_id.clone(), epoch, kill_all, live) {
         // A kill, or a newer spawn, won the race while this one was forking.
         // Returning `Ok` here would hand the caller a dead pid to store as the
         // session's live child, and this child's stdout would be parsed as the
         // stream that replaced it. Reap it without emitting anything.
-        terminate(rejected.pid);
+        rejected.terminate();
         thread::spawn(move || {
             let _ = child.wait();
         });
@@ -975,6 +1034,183 @@ pub fn harness_spawn(
     Ok(pid)
 }
 
+struct SpawnStamp {
+    epoch: u64,
+    kill_all: u64,
+}
+
+struct RemoteTarget<'a> {
+    connection: &'a crate::modules::remote::RemoteSshConnection,
+    /// Folder the agent runs in, as a path on the host.
+    dir: String,
+    /// Helper session the caller already holds, so no new login is needed.
+    session_id: Option<u64>,
+    /// Root folder of that session, used when it has to be reopened.
+    root: Option<String>,
+}
+
+/// Placeholder pids for remote agents. They never reach a signal call and
+/// stay far above the range real pids use.
+static NEXT_REMOTE_PID: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(0xC000_0000);
+
+const LINK_EVENT: &str = "harness-remote-link";
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HarnessLink {
+    session_id: String,
+    state: &'static str,
+}
+
+struct HostAgentEvents {
+    app: AppHandle,
+    session_id: String,
+    pid: u32,
+}
+
+impl super::remote_agent::AgentEvents for HostAgentEvents {
+    fn stdout(&self, line: String) {
+        let _ = self.app.emit(
+            STDOUT_EVENT,
+            HarnessLine {
+                session_id: self.session_id.clone(),
+                line,
+            },
+        );
+    }
+
+    fn stderr(&self, line: String) {
+        let _ = self.app.emit(
+            STDERR_EVENT,
+            HarnessLine {
+                session_id: self.session_id.clone(),
+                line,
+            },
+        );
+    }
+
+    fn link(&self, state: super::remote_agent::AgentLink) {
+        let _ = self.app.emit(
+            LINK_EVENT,
+            HarnessLink {
+                session_id: self.session_id.clone(),
+                state: match state {
+                    super::remote_agent::AgentLink::Reconnecting => "reconnecting",
+                    super::remote_agent::AgentLink::Connected => "connected",
+                },
+            },
+        );
+    }
+
+    fn exit(&self, code: Option<i32>, reason: Option<String>) {
+        if let Some(reason) = reason.filter(|reason| reason != "cancelled") {
+            self.stderr(reason);
+        }
+        if let Some(host) = self.app.try_state::<HarnessHost>() {
+            if host.remove_if_pid(&self.session_id, self.pid).is_some() {
+                host.stop_sse(&self.session_id);
+            }
+        }
+        let _ = self.app.emit(
+            EXIT_EVENT,
+            HarnessExit {
+                session_id: self.session_id.clone(),
+                code,
+                pid: self.pid,
+            },
+        );
+    }
+}
+
+/// Starts an agent CLI on an SSH host through the helper so it survives a
+/// dropped connection. `Ok(None)` means the host's helper predates persistent
+/// agents and the caller should fall back to a plain SSH exec.
+#[allow(clippy::too_many_arguments)]
+fn spawn_persistent_remote(
+    app: &AppHandle,
+    host: &HarnessHost,
+    session_id: &str,
+    stamp: SpawnStamp,
+    target: &RemoteTarget<'_>,
+    command: &str,
+    args: &[String],
+    account: Option<HarnessAccount>,
+) -> Result<Option<u32>, String> {
+    use super::remote_agent::{
+        spawn_params, AgentSession, ReconnectPolicy, RemoteAgent, SshAgentSession,
+        SshSessionProvider,
+    };
+    use crate::modules::remote::{RemoteCallError, RemoteState};
+
+    let state = app
+        .try_state::<RemoteState>()
+        .ok_or_else(|| "Remote state is unavailable".to_string())?
+        .inner()
+        .clone();
+    let root = target
+        .root
+        .clone()
+        .filter(|root| !root.trim().is_empty())
+        .unwrap_or_else(|| target.dir.clone());
+    let session = match target.session_id.and_then(|id| state.session(id).ok()) {
+        Some(session) => session,
+        None => {
+            state
+                .open_blocking(app.clone(), target.connection.clone(), Some(root.clone()))?
+                .1
+        }
+    };
+    let session: Arc<dyn AgentSession> = Arc::new(SshAgentSession::new(session, state.clone()));
+    let provider = Arc::new(SshSessionProvider {
+        app: app.clone(),
+        state,
+        connection: target.connection.clone(),
+        root,
+    });
+    let pid = NEXT_REMOTE_PID.fetch_add(1, Ordering::SeqCst);
+    let events = Arc::new(HostAgentEvents {
+        app: app.clone(),
+        session_id: session_id.to_string(),
+        pid,
+    });
+    let params = spawn_params(command, args, &target.dir, None);
+    let agent = match RemoteAgent::start(
+        session,
+        provider,
+        events,
+        params,
+        ReconnectPolicy::standard(),
+    ) {
+        Ok(agent) => agent,
+        Err(RemoteCallError::Helper { code, .. }) if code == "method_not_found" => return Ok(None),
+        Err(RemoteCallError::Helper { message, .. }) => {
+            return Err(format!(
+                "Failed to start {command} on the remote host: {message}"
+            ))
+        }
+        Err(RemoteCallError::Transport(message)) => {
+            return Err(format!(
+                "Failed to start {command} on the remote host: {message}"
+            ))
+        }
+    };
+    let live = Arc::new(LiveChild {
+        stdin: Mutex::new(None),
+        pid,
+        account,
+        _askpass: None,
+        remote: Some(agent),
+    });
+    if let Some(rejected) =
+        host.install_spawn(session_id.to_string(), stamp.epoch, stamp.kill_all, live)
+    {
+        rejected.terminate();
+        return Err(SPAWN_CANCELLED.to_string());
+    }
+    Ok(Some(pid))
+}
+
 #[tauri::command]
 pub fn harness_write(
     host: State<HarnessHost>,
@@ -984,7 +1220,15 @@ pub fn harness_write(
     let live = host
         .get(&session_id)
         .ok_or_else(|| "Harness process is not running".to_string())?;
-    let mut stdin = live.stdin.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(remote) = &live.remote {
+        let mut bytes = line.into_bytes();
+        bytes.push(b'\n');
+        return remote.write(&bytes);
+    }
+    let mut guard = live.stdin.lock().unwrap_or_else(|e| e.into_inner());
+    let stdin = guard
+        .as_mut()
+        .ok_or_else(|| "Harness process is not running".to_string())?;
     stdin
         .write_all(line.as_bytes())
         .and_then(|_| stdin.write_all(b"\n"))
@@ -996,7 +1240,7 @@ pub fn harness_write(
 pub fn harness_kill(host: State<HarnessHost>, session_id: String) -> Result<(), String> {
     host.stop_sse(&session_id);
     if let Some(live) = host.kill_session(&session_id) {
-        terminate(live.pid);
+        live.terminate();
     }
     Ok(())
 }
@@ -2855,10 +3099,11 @@ mod tests {
         let stdin = child.stdin.take().expect("test child stdin");
         (
             Arc::new(LiveChild {
-                stdin: Mutex::new(stdin),
+                stdin: Mutex::new(Some(stdin)),
                 pid,
                 account: None,
                 _askpass: None,
+                remote: None,
             }),
             child,
         )
@@ -3571,10 +3816,11 @@ mod proxy_lifecycle_tests {
         let stdin = child.stdin.take().expect("test child stdin");
         (
             Arc::new(LiveChild {
-                stdin: Mutex::new(stdin),
+                stdin: Mutex::new(Some(stdin)),
                 pid,
                 account: None,
                 _askpass: None,
+                remote: None,
             }),
             child,
         )

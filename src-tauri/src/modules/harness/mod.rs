@@ -21,6 +21,7 @@ mod pi_package;
 pub mod project_logo;
 pub mod rate_limits;
 pub mod reminders;
+pub(crate) mod remote_agent;
 pub mod remote_connections;
 pub mod remote_ssh;
 pub mod search;

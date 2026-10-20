@@ -2,12 +2,20 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HarnessId } from "@/modules/harness/lib/session";
 import type { RemoteSshConnection } from "@/modules/remote/client";
-import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import {
+  parseRemotePath,
+  remoteProjectForPath,
+} from "@/modules/connections/model/remoteProjects";
 import {
   findSshProfile,
   remoteSshConnectionFor,
   remoteSshConnectionForProfile,
+  remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
+import {
+  openHeldRemoteSession,
+  releaseHeldRemoteSession,
+} from "@/modules/remote/sessionManager";
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 
@@ -63,6 +71,15 @@ const sseBuffer = new Map<string, string[]>();
 const ownedChildren = new Set<string>();
 const ownedSse = new Set<string>();
 const livePid = new Map<string, number>();
+/** Helper session kept open for each running remote agent. */
+const remoteHolds = new Map<string, number>();
+
+function releaseRemoteHold(sessionId: string) {
+  const held = remoteHolds.get(sessionId);
+  if (held === undefined) return;
+  remoteHolds.delete(sessionId);
+  void releaseHeldRemoteSession("agent", held).catch(() => undefined);
+}
 const pendingExit = new Map<
   string,
   Array<{ code: number | null; pid: number }>
@@ -140,6 +157,7 @@ function ensureBridge() {
         const currentPid = livePid.get(sessionId);
         if (isCurrentChildExit(currentPid, pid)) {
           livePid.delete(sessionId);
+          releaseRemoteHold(sessionId);
           handler(code);
           return;
         }
@@ -194,6 +212,7 @@ function teardownBridge() {
   ownedChildren.clear();
   ownedSse.clear();
   livePid.clear();
+  for (const sessionId of [...remoteHolds.keys()]) releaseRemoteHold(sessionId);
   pendingExit.clear();
   void pending
     ?.then((fns) => fns.forEach((fn) => fn()))
@@ -301,6 +320,30 @@ export async function resolveRemoteSshConnection(
   );
 }
 
+/** Keeps the project's helper session open while a remote agent runs, so the
+ * agent starts without a second login. Failing to hold one is not an error:
+ * the native side opens its own. */
+async function holdRemoteProjectSession(
+  environmentId: string,
+  connection: RemoteSshConnection,
+  cwd: string,
+): Promise<{ sessionId: number; root: string } | null> {
+  const profileId = remoteSshConnectionIdForEnvironment(environmentId);
+  const project = remoteProjectForPath(cwd);
+  if (!profileId || !project) return null;
+  try {
+    const session = await openHeldRemoteSession(
+      "agent",
+      profileId,
+      connection,
+      project.cwd,
+    );
+    return { sessionId: session.session_id, root: session.workspace_root };
+  } catch {
+    return null;
+  }
+}
+
 export async function spawnChild(
   sessionId: string,
   command: string,
@@ -315,6 +358,8 @@ export async function spawnChild(
 
   let remoteConnection: RemoteSshConnection | null = null;
   let remoteCwd: string | null = null;
+  let remoteSessionId: number | null = null;
+  let remoteRoot: string | null = null;
   let execCommand = command;
 
   const remote = parseRemotePath(cwd);
@@ -322,19 +367,41 @@ export async function spawnChild(
     remoteConnection = await resolveRemoteSshConnection(remote.environmentId);
     remoteCwd = remote.hostPath;
     execCommand = cleanRemoteCommand(command);
+    releaseRemoteHold(sessionId);
+    const held = await holdRemoteProjectSession(
+      remote.environmentId,
+      remoteConnection,
+      cwd,
+    );
+    if (held) {
+      remoteHolds.set(sessionId, held.sessionId);
+      remoteSessionId = held.sessionId;
+      remoteRoot = held.root;
+    }
   }
 
-  const pid = await invoke<number>("harness_spawn", {
-    sessionId,
-    command: execCommand,
-    args,
-    cwd,
-    networkAllowlist: networkAllowlist ?? null,
-    account,
-    remoteConnection,
-    remoteCwd,
-  });
-  if (typeof pid !== "number" || pid <= 0) return;
+  let pid: number;
+  try {
+    pid = await invoke<number>("harness_spawn", {
+      sessionId,
+      command: execCommand,
+      args,
+      cwd,
+      networkAllowlist: networkAllowlist ?? null,
+      account,
+      remoteConnection,
+      remoteCwd,
+      remoteSessionId,
+      remoteRoot,
+    });
+  } catch (error) {
+    releaseRemoteHold(sessionId);
+    throw error;
+  }
+  if (typeof pid !== "number" || pid <= 0) {
+    releaseRemoteHold(sessionId);
+    return;
+  }
   livePid.set(sessionId, pid);
   const exits = pendingExit.get(sessionId);
   pendingExit.delete(sessionId);
@@ -349,6 +416,7 @@ export function writeChild(sessionId: string, line: string): Promise<void> {
 }
 
 export function killChild(sessionId: string): Promise<void> {
+  releaseRemoteHold(sessionId);
   livePid.delete(sessionId);
   pendingExit.delete(sessionId);
   unwatchChild(sessionId);
