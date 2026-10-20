@@ -63,3 +63,29 @@ describe("invokeWorkspace remote runner", () => {
     ).resolves.toBe("remote-result");
   });
 });
+
+describe("actions that only exist on this computer", () => {
+  it("reject remote paths with a typed error and keep local paths working", async () => {
+    mocks.invoke.mockResolvedValue(undefined);
+    const fs = await import("./fs");
+    const remote = "remote://voktty-ssh-a/srv/app";
+    await expect(fs.openInExternalEditor("code", remote)).rejects.toBeInstanceOf(
+      fs.RemoteActionUnavailableError,
+    );
+    await expect(fs.revealPath(remote)).rejects.toBeInstanceOf(
+      fs.RemoteActionUnavailableError,
+    );
+    await expect(fs.copyFileToClipboard(remote)).rejects.toBeInstanceOf(
+      fs.RemoteActionUnavailableError,
+    );
+    await expect(fs.cloneRepo("https://x/y.git", remote)).rejects.toBeInstanceOf(
+      fs.RemoteActionUnavailableError,
+    );
+    expect(mocks.invoke).not.toHaveBeenCalled();
+
+    await fs.revealPath("/home/me/app");
+    expect(mocks.invoke).toHaveBeenCalledWith("reveal_path", {
+      path: "/home/me/app",
+    });
+  });
+});

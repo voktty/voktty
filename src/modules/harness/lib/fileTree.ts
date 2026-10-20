@@ -8,6 +8,8 @@ const dirs = new Map<string, FsEntry[]>();
 const listeners = new Set<() => void>();
 
 const REFRESH_MS = 150;
+/** Remote listings share one SSH helper session, so refreshes stay bounded. */
+const REFRESH_CONCURRENCY = 4;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshing = false;
 let refreshAgain = false;
@@ -58,12 +60,17 @@ export function forgetDir(path: string) {
 export async function refreshCachedDirs(): Promise<void> {
   const paths = [...dirs.keys()];
   if (paths.length === 0) return;
-  await Promise.all(
-    paths.map((path) =>
-      refreshDir(path).catch(() => {
+  let next = 0;
+  const worker = async () => {
+    while (next < paths.length) {
+      const path = paths[next++];
+      await refreshDir(path).catch(() => {
         forgetDir(path);
-      }),
-    ),
+      });
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(REFRESH_CONCURRENCY, paths.length) }, worker),
   );
 }
 

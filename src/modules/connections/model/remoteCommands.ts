@@ -12,6 +12,15 @@ import {
 } from "@/modules/remote/client";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  type GithubBranchStatus,
+  type ProfileGit,
+  type ProfileGithub,
+  profileCreatePullRequest,
+  profilePullRequestStatus,
+  profileRangeContext,
+} from "./remoteProfileGitPr";
 import { remoteMachineFor, remoteRequest } from "./connections";
 import {
   parseGitBranches,
@@ -160,7 +169,16 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_stash_apply",
   "git_stash_pop",
   "git_stash_drop",
+  "git_range_context",
+  "git_pr_status",
+  "git_pr_create",
 ]);
+
+/** Commands the legacy Host answers that a saved SSH profile does not. Worktrees
+ * go through `harness/lib/worktrees.ts`; `git_head_message` has no caller. */
+export function profileUnsupportedHostCommands(): string[] {
+  return [...HOST_COMMANDS].filter((c) => !PROFILE_HELPER_COMMANDS.has(c)).sort();
+}
 
 const HELPER_FS = {
   listDir: "fs.readDir",
@@ -2456,6 +2474,23 @@ async function listProjectFilesWithHelper(
   );
 }
 
+/** GitHub is reached from this computer with the stored token, never through the remote host. */
+const PROFILE_GITHUB: ProfileGithub = {
+  branchStatus: (ownerRepo, head) =>
+    invoke<GithubBranchStatus>("git_review_github_branch_status", {
+      ownerRepo,
+      head,
+    }),
+  createPullRequest: ({ ownerRepo, title, body, base, head }) =>
+    invoke<string>("git_review_github_create_pr", {
+      ownerRepo,
+      title,
+      body,
+      base,
+      head,
+    }),
+};
+
 async function runProfileFileCommand(
   command: string,
   args: Record<string, unknown>,
@@ -2651,6 +2686,35 @@ async function runProfileFileCommand(
           : "drop",
       args.index,
     );
+  }
+  if (
+    command === "git_range_context" ||
+    command === "git_pr_status" ||
+    command === "git_pr_create"
+  ) {
+    const cwd = relativePath(args.cwd);
+    await assertProfileGitRoot(sessionId, root, cwd);
+    const git: ProfileGit = async (gitArgs) => {
+      const result = await runHelperGit(
+        sessionId,
+        cwd,
+        gitArgs,
+        MAX_GIT_OUTPUT_BYTES,
+        true,
+        true,
+      );
+      return { stdout: result.stdout, exitCode: result.exitCode };
+    };
+    if (command === "git_range_context") return profileRangeContext(git);
+    if (command === "git_pr_status") {
+      return profilePullRequestStatus(git, PROFILE_GITHUB);
+    }
+    return profileCreatePullRequest(git, PROFILE_GITHUB, {
+      title: String(args.title ?? ""),
+      body: String(args.body ?? ""),
+      base: String(args.base ?? ""),
+      head: String(args.head ?? ""),
+    });
   }
   if (command === "git_staged_context") {
     return nativeProfileGitStagedContext(

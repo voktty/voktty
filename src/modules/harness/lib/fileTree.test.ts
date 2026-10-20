@@ -79,3 +79,26 @@ describe("fileTree cache", () => {
     stop();
   });
 });
+
+describe("refreshCachedDirs concurrency", () => {
+  it("never lists more than four folders at once", async () => {
+    const base = "/tmp/many";
+    const paths = Array.from({ length: 10 }, (_, index) => `${base}/d${index}`);
+    listDir.mockResolvedValue([]);
+    await Promise.all(paths.map((path) => listCachedDir(path)));
+
+    let active = 0;
+    let peak = 0;
+    listDir.mockReset().mockImplementation(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active -= 1;
+      return [];
+    });
+    await refreshCachedDirs();
+    expect(listDir.mock.calls.length).toBeGreaterThanOrEqual(paths.length);
+    expect(peak).toBeLessThanOrEqual(4);
+    forgetDir(base);
+  });
+});

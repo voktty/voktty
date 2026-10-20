@@ -203,32 +203,6 @@ export async function createWorktree(
   );
 }
 
-export async function createOrchestrationWorktree(
-  cwd: string,
-  branch: string,
-): Promise<Worktree> {
-  const tree = await invoke<Worktree>("git_orchestration_worktree_create", {
-    cwd,
-    branch,
-  });
-  notifyGitChanged();
-  return tree;
-}
-
-export async function renameWorktreeBranch(
-  cwd: string,
-  path: string,
-  branch: string,
-): Promise<Worktree> {
-  const tree = await invoke<Worktree>("git_worktree_rename_branch", {
-    cwd,
-    path,
-    branch,
-  });
-  notifyGitChanged();
-  return tree;
-}
-
 export function temporaryWorktreeBranchName(
   id: string = crypto.randomUUID(),
 ): string {
@@ -268,26 +242,6 @@ export async function removeWorktree(
     }
     notifyGitChanged();
   });
-}
-
-export async function removeOrchestrationWorktree(
-  cwd: string,
-  path: string,
-): Promise<{ sessionIds: string[]; projectCwd: string }> {
-  const result = await invoke<{ sessionIds: string[]; projectCwd: string }>(
-    "git_orchestration_worktree_remove",
-    { cwd, path },
-  );
-  notifyGitChanged();
-  return result;
-}
-
-export async function removeOrchestrationBranch(
-  cwd: string,
-  branch: string,
-): Promise<void> {
-  await invoke<void>("git_orchestration_branch_remove", { cwd, branch });
-  notifyGitChanged();
 }
 
 /** Read-only preflight; final removal rechecks against Git's worktree list. */

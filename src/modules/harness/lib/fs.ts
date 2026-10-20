@@ -51,6 +51,19 @@ const isRemotePath = (value: unknown): boolean =>
 
 const PATH_ARGS = ["path", "cwd", "parent", "from", "destParent", "paths"];
 
+/** An action that only exists on this computer was asked for a remote path. */
+export class RemoteActionUnavailableError extends Error {
+  readonly code = "remote-action-unavailable";
+  constructor(action: string) {
+    super(`${action} is not available for remote projects.`);
+    this.name = "RemoteActionUnavailableError";
+  }
+}
+
+function requireLocalPath(action: string, path: string): void {
+  if (isRemotePath(path)) throw new RemoteActionUnavailableError(action);
+}
+
 /** Runs a command on the machine that owns its paths, so the same file and
  * Git UI works for a local project and one on a connected machine. */
 export function invokeWorkspace<T>(
@@ -87,10 +100,11 @@ export function listExternalEditors(): Promise<ExternalEditor[]> {
   return invoke<ExternalEditor[]>("list_external_editors");
 }
 
-export function openInExternalEditor(
+export async function openInExternalEditor(
   editorId: string,
   cwd: string,
 ): Promise<void> {
+  requireLocalPath("Opening in an external editor", cwd);
   return invoke<void>("open_in_external_editor", { editorId, cwd });
 }
 
@@ -372,7 +386,8 @@ export function movePath(from: string, destParent: string): Promise<string> {
   return invokeWorkspace<string>("move_path", { from, destParent });
 }
 
-export function revealPath(path: string): Promise<void> {
+export async function revealPath(path: string): Promise<void> {
+  requireLocalPath("Revealing in the file manager", path);
   return invoke<void>("reveal_path", { path });
 }
 
@@ -384,7 +399,8 @@ export function clipboardFilePaths(): Promise<string[]> {
 }
 
 /** Put the original file on the macOS clipboard, preserving its name and type. */
-export function copyFileToClipboard(path: string): Promise<void> {
+export async function copyFileToClipboard(path: string): Promise<void> {
+  requireLocalPath("Copying a file to the clipboard", path);
   return invoke<void>("copy_file_to_clipboard", { path });
 }
 
@@ -434,7 +450,8 @@ export async function pickFiles(title = "Attach files"): Promise<string[] | null
   }
 }
 
-export function cloneRepo(url: string, parent: string): Promise<string> {
+export async function cloneRepo(url: string, parent: string): Promise<string> {
+  requireLocalPath("Cloning into a remote folder", parent);
   return invoke<string>("clone_repo", { url, parent });
 }
 

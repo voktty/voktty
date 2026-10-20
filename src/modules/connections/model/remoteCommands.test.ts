@@ -67,7 +67,10 @@ import {
   writeTextFile,
 } from "@/modules/harness/lib/fs";
 import { searchProject } from "@/modules/harness/lib/search";
-import { runRemoteCommand } from "./remoteCommands";
+import {
+  profileUnsupportedHostCommands,
+  runRemoteCommand,
+} from "./remoteCommands";
 import { parseRemotePath, remotePath } from "./remoteProjects";
 import { remoteSshEnvironmentId } from "./remoteSshProfiles";
 import { remoteSessions } from "@/modules/remote/sessionManager";
@@ -514,6 +517,98 @@ it("reads bounded staged Git context through the native SSH helper", async () =>
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
+function prRepoHelper() {
+  const table: Record<string, string> = {
+    "symbolic-ref --short HEAD": "feature/demo\n",
+    remote: "origin\n",
+    "config --get remote.origin.url": "https://github.com/acme/app.git\n",
+    "symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
+    "show-ref --verify --quiet refs/remotes/origin/main": "",
+    "log --format=%s origin/main..HEAD": "add demo\n",
+    "diff --stat origin/main...HEAD": " a | 1 +\n",
+    "diff --no-ext-diff origin/main...HEAD": "diff --git a/a b/a\n",
+  };
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      const value = table[args.join(" ")];
+      return value === undefined
+        ? gitExecResult("", 1)
+        : gitExecResult(value);
+    },
+  );
+}
+
+it("builds the pull request range of a saved SSH repository through the helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  prRepoHelper();
+  await expect(
+    runRemoteCommand("git_range_context", {
+      cwd: remotePath(environmentId, "/srv/app"),
+    }),
+  ).resolves.toEqual({
+    base: "main",
+    head: "feature/demo",
+    commitSummary: "add demo\n",
+    diffSummary: " a | 1 +\n",
+    diffPatch: "diff --git a/a b/a\n",
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("looks up and creates GitHub pull requests for a saved SSH repository from this computer", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  prRepoHelper();
+  invokeLocal.mockImplementation(async (command: string) =>
+    command === "git_review_github_branch_status"
+      ? {
+          defaultBranch: "main",
+          pullRequest: {
+            number: 3,
+            title: "Demo",
+            htmlUrl: "https://github.com/acme/app/pull/3",
+            state: "open",
+          },
+        }
+      : "https://github.com/acme/app/pull/4",
+  );
+  const cwd = remotePath(environmentId, "/srv/app");
+  await expect(runRemoteCommand("git_pr_status", { cwd })).resolves.toEqual({
+    number: 3,
+    title: "Demo",
+    url: "https://github.com/acme/app/pull/3",
+    state: "open",
+  });
+  expect(invokeLocal).toHaveBeenCalledWith("git_review_github_branch_status", {
+    ownerRepo: "acme/app",
+    head: "feature/demo",
+  });
+  await expect(
+    runRemoteCommand("git_pr_create", {
+      cwd,
+      title: "Demo",
+      body: "Body",
+      base: "main",
+      head: "feature/demo",
+    }),
+  ).resolves.toBe("https://github.com/acme/app/pull/4");
+  expect(invokeLocal).toHaveBeenCalledWith("git_review_github_create_pr", {
+    ownerRepo: "acme/app",
+    title: "Demo",
+    body: "Body",
+    base: "main",
+    head: "feature/demo",
+  });
+});
 it("returns an empty commit history for a saved SSH folder outside Git", async () => {
   const { environmentId } = registerNativeProfileProject();
   requestRemoteResult.mockResolvedValueOnce(
@@ -2794,4 +2889,11 @@ it("refuses what the host cannot do and explains outdated hosts", async () => {
     runRemoteCommand("list_dir", { path: "remote://env/home/me" }),
   ).rejects.toThrow("Update Terax Host");
   expect(remoteRequest).toHaveBeenCalledTimes(1);
+});
+
+it("keeps saved SSH profiles at parity with every file and Git command the Host answers", () => {
+  expect(profileUnsupportedHostCommands()).toEqual([
+    "git_head_message",
+    "git_worktrees",
+  ]);
 });
