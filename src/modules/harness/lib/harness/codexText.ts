@@ -1,9 +1,9 @@
 import { modelsFor } from "../models";
 import {
   closeRetiredRawChildren,
+  type RawChildHandle,
   reserveRawChild,
   resolveCodexBinary,
-  type RawChildHandle,
 } from "./child";
 import {
   asRecord,
@@ -277,7 +277,10 @@ function startLive(
 ): Promise<LiveText> {
   assertEpoch(expected);
   const handle = reserveRawChild(TEXT_CHILD_ID);
-  if (handle.retired) throw new Error("Codex text generation was retired");
+  if (expected !== epoch || handle.retired) {
+    void handle.close().catch(() => undefined);
+    throw new Error("Codex text generation was retired");
+  }
   const previous = live;
   const previousOpening = opening;
   const sessionRef: { session: LiveText | null } = { session: null };

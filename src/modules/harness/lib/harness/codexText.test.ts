@@ -7,8 +7,8 @@ import {
   it,
   vi,
 } from "vitest";
-import { acquireHarnessBridge, configureChildBackend } from "./child";
 import * as childApi from "./child";
+import { acquireHarnessBridge, configureChildBackend } from "./child";
 
 const sent: string[] = [];
 let onLine: ((line: string) => void) | undefined;
@@ -349,6 +349,63 @@ it("invalidates both an unresolved warmup and already queued text work before re
       .map((call) => call.args.cwd),
   ).toEqual(["/new"]);
   expect(await queued).toBe("retired");
+});
+
+it("retires an unpublished reservation when predecessor cleanup synchronously stops text", async () => {
+  const previous = childApi.reserveRawChild("monocode-codex-text");
+  await previous.spawn("/fake/codex", [], "/external-old");
+  const sibling = childApi.reserveRawChild("codex-text-sibling");
+  await sibling.spawn("/fake/codex", [], "/sibling");
+  const reserve = childApi.reserveRawChild;
+  const captured: childApi.RawChildHandle[] = [];
+  const spy = vi.spyOn(childApi, "reserveRawChild").mockImplementation((id) => {
+    const handle = reserve(id);
+    captured.push(handle);
+    return handle;
+  });
+  let finish!: (value: { path: string }) => void;
+  const held = new Promise<{ path: string }>((resolve) => {
+    finish = resolve;
+  });
+  const resolveBinary = vi.fn(() => held);
+  binary = resolveBinary;
+  let stopping: Promise<void> | undefined;
+  kill = () => {
+    stopping ??= stopCodexTextPrompt();
+    return Promise.resolve();
+  };
+  const warming = warmupCodexText("/obsolete");
+  try {
+    for (let index = 0; index < 80; index += 1) await Promise.resolve();
+    expect(stopping).toBeDefined();
+    await stopping;
+    expect(resolveBinary).not.toHaveBeenCalled();
+    expect(captured).toHaveLength(1);
+    expect(captured[0].retired).toBe(true);
+    await captured[0].close();
+    expect(processes.has(sibling.nativeId)).toBe(true);
+    binary = undefined;
+    kill = undefined;
+    autoReply = true;
+    await warmupCodexText("/replacement");
+    expect(processes.has(latestId)).toBe(true);
+    expect(processes.has(sibling.nativeId)).toBe(true);
+    expect(
+      calls.some(
+        (call) =>
+          call.command === "harness_spawn" &&
+          call.args.sessionId === captured[0].nativeId,
+      ),
+    ).toBe(false);
+  } finally {
+    finish({ path: "/fake/codex" });
+    await warming;
+    await stopping;
+    binary = undefined;
+    kill = undefined;
+    spy.mockRestore();
+    await sibling.close();
+  }
 });
 
 it("starts generated-text threads as ephemeral Codex sessions", async () => {

@@ -1,11 +1,9 @@
 import { modelsFor } from "../models";
 import {
-  killChild,
+  closeRetiredRawChildren,
+  type RawChildHandle,
+  reserveRawChild,
   resolveClaudeBinary,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-  writeChild,
 } from "./child";
 import {
   assistantTextBlocks,
@@ -23,6 +21,9 @@ const REQUEST_TIMEOUT_MS = 45_000;
 const TEXT_MODEL = "claude-haiku-5-5";
 
 type LiveText = {
+  handle: RawChildHandle;
+  epoch: number;
+  opening?: Promise<LiveText>;
   cwd: string;
   providerAccountId?: string;
   model: string;
@@ -36,7 +37,27 @@ type LiveText = {
 };
 
 let live: LiveText | null = null;
+let opening: LiveText | null = null;
+let epoch = 0;
 let turns: Promise<void> = Promise.resolve();
+
+function isCurrent(session: LiveText): boolean {
+  return (
+    session.epoch === epoch &&
+    !session.closed &&
+    !session.handle.retired &&
+    (live === session || opening === session)
+  );
+}
+
+function assertEpoch(expected: number): void {
+  if (expected !== epoch) throw new Error("Claude text generation was retired");
+}
+
+function assertCurrent(session: LiveText): void {
+  if (!isCurrent(session))
+    throw new Error("Claude text generation was retired");
+}
 
 function pickTextModel(): string {
   const models = modelsFor("claude");
@@ -47,15 +68,26 @@ function pickTextModel(): string {
 }
 
 export async function stopClaudeTextPrompt(): Promise<void> {
-  await dropLive();
+  const current = live;
+  const pending = opening;
+  epoch += 1;
+  turns = Promise.resolve();
+  const closing = current ? dropLive(current) : Promise.resolve();
+  const starting =
+    pending && pending !== current ? dropLive(pending) : Promise.resolve();
+  const retired = closeRetiredRawChildren(TEXT_CHILD_ID).catch(() => undefined);
+  await Promise.all([closing, starting, retired]);
 }
 
 export function warmupClaudeText(cwd: string): Promise<void> {
   if (!cwd || cwd === "~") return Promise.resolve();
+  const expected = epoch;
+  const model = pickTextModel();
   const run = turns
     .catch(() => undefined)
     .then(async () => {
-      await ensureLive(cwd);
+      assertEpoch(expected);
+      await ensureLive(cwd, undefined, model, expected);
     });
   turns = run.then(
     () => undefined,
@@ -73,7 +105,14 @@ export async function runClaudeTextPrompt(input: {
   model?: string;
   signal?: AbortSignal;
 }): Promise<string> {
-  const run = turns.catch(() => undefined).then(() => promptOnLive(input));
+  const captured = { ...input, model: input.model ?? pickTextModel() };
+  const expected = epoch;
+  const run = turns
+    .catch(() => undefined)
+    .then(() => {
+      assertEpoch(expected);
+      return promptOnLive(captured, expected);
+    });
   turns = run.then(
     () => undefined,
     () => undefined,
@@ -81,25 +120,31 @@ export async function runClaudeTextPrompt(input: {
   return run;
 }
 
-async function promptOnLive(input: {
-  cwd: string;
-  providerAccountId?: string;
-  prompt: string;
-  timeoutMs?: number;
-  model?: string;
-  signal?: AbortSignal;
-}): Promise<string> {
+async function promptOnLive(
+  input: {
+    cwd: string;
+    providerAccountId?: string;
+    prompt: string;
+    timeoutMs?: number;
+    model?: string;
+    signal?: AbortSignal;
+  },
+  expected: number,
+): Promise<string> {
   input.signal?.throwIfAborted();
   const session = await ensureLive(
     input.cwd,
     input.providerAccountId,
     input.model,
+    expected,
   );
+  assertCurrent(session);
   input.signal?.throwIfAborted();
   session.output = "";
   session.collecting = true;
   const timeoutMs = input.timeoutMs ?? REQUEST_TIMEOUT_MS;
   let abortHandler: (() => void) | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const abortPromise = input.signal
     ? new Promise<never>((_, reject) => {
         const cancel = () => {
@@ -111,22 +156,24 @@ async function promptOnLive(input: {
         if (input.signal!.aborted) cancel();
       })
     : null;
+  void abortPromise?.catch(() => undefined);
 
   try {
     const turnPromise = new Promise<void>((resolve, reject) => {
       session.turnDone = resolve;
       session.turnFailed = reject;
     });
+    void turnPromise.catch(() => undefined);
 
-    await writeChild(
-      TEXT_CHILD_ID,
+    await session.handle.write(
       JSON.stringify(buildClaudeUserMessage({ text: input.prompt })),
     );
+    assertCurrent(session);
 
     await Promise.race([
       turnPromise,
       new Promise<void>((_, reject) => {
-        setTimeout(
+        timeout = setTimeout(
           () => reject(new Error("Claude text generation timed out")),
           timeoutMs,
         );
@@ -134,55 +181,77 @@ async function promptOnLive(input: {
       ...(abortPromise ? [abortPromise] : []),
     ]);
 
+    assertCurrent(session);
     const output = session.output.trim();
     if (!output) throw new Error("Claude returned empty output.");
     return output;
   } catch (error) {
-    if (session.closed) await dropLive();
+    if (session.closed) await dropLive(session);
     throw error;
   } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
     if (abortHandler && input.signal) {
       input.signal.removeEventListener("abort", abortHandler);
     }
     session.collecting = false;
     session.turnDone = null;
     session.turnFailed = null;
-    await dropLive();
+    await dropLive(session);
   }
 }
 
 async function ensureLive(
   cwd: string,
-  providerAccountId?: string,
-  model?: string,
+  providerAccountId: string | undefined,
+  model: string | undefined,
+  expected: number,
 ): Promise<LiveText> {
+  assertEpoch(expected);
   const wanted = model ?? pickTextModel();
-  // The model is part of the session identity: a live child was spawned for
-  // one model and cannot answer as another.
+  const current = live;
   if (
-    live &&
-    !live.closed &&
-    live.cwd === cwd &&
-    live.providerAccountId === providerAccountId &&
-    live.model === wanted
+    current &&
+    isCurrent(current) &&
+    current.cwd === cwd &&
+    current.providerAccountId === providerAccountId &&
+    current.model === wanted
   ) {
-    return live;
+    return current;
   }
-  await dropLive();
-  return startLive(cwd, providerAccountId, wanted);
+  const pending = opening;
+  if (
+    pending &&
+    isCurrent(pending) &&
+    pending.cwd === cwd &&
+    pending.providerAccountId === providerAccountId &&
+    pending.model === wanted &&
+    pending.opening
+  ) {
+    return pending.opening;
+  }
+  return startLive(cwd, providerAccountId, wanted, expected);
 }
 
-async function startLive(
+function startLive(
   cwd: string,
-  providerAccountId?: string,
-  model?: string,
+  providerAccountId: string | undefined,
+  model: string,
+  expected: number,
 ): Promise<LiveText> {
-  const { path } = await resolveClaudeBinary();
-  const resolvedModel = model ?? pickTextModel();
+  assertEpoch(expected);
+  const handle = reserveRawChild(TEXT_CHILD_ID);
+  if (expected !== epoch || handle.retired) {
+    void handle.close().catch(() => undefined);
+    throw new Error("Claude text generation was retired");
+  }
+  const previous = live;
+  const previousOpening = opening;
   const session: LiveText = {
+    handle,
+    epoch: expected,
     cwd,
     providerAccountId,
-    model: resolvedModel,
+    model,
     collecting: false,
     output: "",
     closed: false,
@@ -191,57 +260,65 @@ async function startLive(
     turnFailed: null,
     readyDone: null,
   };
+  opening = session;
+  if (previous) void dropLive(previous);
+  if (previousOpening && previousOpening !== previous)
+    void dropLive(previousOpening);
+  session.opening = initializeText(session);
+  void session.opening.catch(() => undefined);
+  return session.opening;
+}
 
-  watchChild(
-    TEXT_CHILD_ID,
-    (line) => handleLine(session, line),
-    () => {
-      session.closed = true;
-      if (live === session) live = null;
-      session.turnFailed?.(new Error("Claude text generator exited"));
-      session.readyDone?.();
-      session.turnDone = null;
-      session.turnFailed = null;
-      session.readyDone = null;
-    },
-  );
-
+async function initializeText(session: LiveText): Promise<LiveText> {
+  const { handle, cwd, providerAccountId, model } = session;
   try {
-    await spawnChild(
-      TEXT_CHILD_ID,
+    const { path } = await resolveClaudeBinary();
+    assertCurrent(session);
+    handle.watch(
+      (line) => {
+        if (isCurrent(session)) handleLine(session, line);
+      },
+      () => {
+        if (isCurrent(session))
+          void dropLive(session, new Error("Claude text generator exited"));
+      },
+    );
+    await handle.spawn(
       path,
-      buildClaudeSpawnArgs({
-        isolated: true,
-        model: resolvedModel,
-      }),
+      buildClaudeSpawnArgs({ isolated: true, model }),
       cwd,
       null,
       { provider: "claude", id: providerAccountId ?? "default" },
     );
-    live = session;
+    assertCurrent(session);
     await waitForReady(session, INIT_TIMEOUT_MS);
+    assertCurrent(session);
+    if (opening === session) opening = null;
+    live = session;
+    session.opening = undefined;
     return session;
   } catch (error) {
-    session.closed = true;
-    unwatchChild(TEXT_CHILD_ID);
-    await killChild(TEXT_CHILD_ID).catch(() => undefined);
+    await dropLive(
+      session,
+      error instanceof Error ? error : new Error(String(error)),
+    );
     throw error;
   }
 }
 
-async function dropLive(): Promise<void> {
-  const current = live;
-  live = null;
-  if (current) {
-    current.closed = true;
-    current.readyDone?.();
-    current.turnFailed?.(new Error("Claude text generator stopped"));
-    current.turnDone = null;
-    current.turnFailed = null;
-    current.readyDone = null;
+function dropLive(session: LiveText, error?: Error): Promise<void> {
+  if (live === session) live = null;
+  if (opening === session) opening = null;
+  if (!session.closed) {
+    session.closed = true;
+    session.readyDone?.();
+    session.turnFailed?.(error ?? new Error("Claude text generator stopped"));
+    session.turnDone = null;
+    session.turnFailed = null;
+    session.readyDone = null;
+    session.output = "";
   }
-  unwatchChild(TEXT_CHILD_ID);
-  await killChild(TEXT_CHILD_ID).catch(() => undefined);
+  return session.handle.close().catch(() => undefined);
 }
 
 function handleLine(session: LiveText, line: string): void {
