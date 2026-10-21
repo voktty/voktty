@@ -1,12 +1,10 @@
 import { nativeModelId } from "../models";
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
 import {
-  killChild,
+  closeRetiredRawChildren,
+  type RawChildHandle,
+  reserveRawChild,
   resolveGeminiBinary,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-  writeChild,
 } from "./child";
 import { snapshotRemainder } from "./streamText";
 import type {
@@ -21,7 +19,19 @@ type Resume = {
   cwd: string;
 };
 
+type Admission = {
+  sessionId: string;
+  cwd: string;
+  settingsKey: string;
+  handle?: RawChildHandle;
+  retired: boolean;
+  cancelled: boolean;
+  opening?: Promise<Live>;
+  live?: Live;
+};
+
 type Live = {
+  admission: Admission;
   cwd: string;
   settingsKey: string;
   conversationId?: string;
@@ -36,6 +46,53 @@ type Live = {
 };
 
 const liveBySession = new Map<string, Live>();
+const admissionBySession = new Map<string, Admission>();
+
+function isCurrent(admission: Admission): boolean {
+  return (
+    !admission.retired &&
+    !admission.handle?.retired &&
+    admissionBySession.get(admission.sessionId) === admission
+  );
+}
+
+function guardCurrent(admission: Admission): void {
+  if (!isCurrent(admission)) throw new Error("Antigravity session was retired");
+}
+
+function closeAdmission(admission: Admission, cancelled = true): Promise<void> {
+  admission.retired = true;
+  const id = admission.sessionId;
+  if (admissionBySession.get(id) === admission) admissionBySession.delete(id);
+  const live = admission.live;
+  if (liveBySession.get(id) === live) liveBySession.delete(id);
+  if (live) {
+    if (cancelled) live.cancelled = true;
+    live.muteUpdates = true;
+  }
+  const closing =
+    admission.handle?.close().catch(() => undefined) ?? Promise.resolve();
+  if (live) {
+    const done = live.turnDone;
+    live.turnDone = null;
+    live.turnFailed = null;
+    done?.();
+  }
+  return closing;
+}
+
+function snapshotInput(input: SendTurnInput): SendTurnInput {
+  return {
+    ...input,
+    modelSettings: input.modelSettings
+      ? { ...input.modelSettings }
+      : input.modelSettings,
+    networkAllowlist: input.networkAllowlist
+      ? [...input.networkAllowlist]
+      : input.networkAllowlist,
+    attachments: input.attachments?.map((attachment) => ({ ...attachment })),
+  };
+}
 const resumeBySession = new Map<string, Resume>();
 const cancelledSessions = new Set<string>();
 
@@ -48,31 +105,30 @@ export function setAgyBinaryResolver(
   resolveAgyBinaryImpl = fn;
 }
 
-export async function sendAgyTurn(input: SendTurnInput): Promise<void> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledSessions.delete(input.sessionId);
-    throw error;
+export async function sendAgyTurn(request: SendTurnInput): Promise<void> {
+  const input = snapshotInput(request);
+  const live = await ensureLive(input);
+  guardCurrent(live.admission);
+  if (live.admission.cancelled) {
+    live.admission.cancelled = false;
+    return;
   }
-  if (cancelledSessions.delete(input.sessionId)) return;
-
-  live.onEvent = input.onEvent;
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      if (!isCurrent(live.admission)) return;
+      live.onEvent = input.onEvent;
       live.cancelled = false;
       live.muteUpdates = false;
-      await runTurn(input.sessionId, live, input);
+      await runTurn(live, input);
     });
 
   try {
     await live.turns;
   } catch (error) {
     if (live.cancelled) return;
-    if (liveBySession.get(input.sessionId) === live) {
-      await stopAgySession(input.sessionId);
+    if (isCurrent(live.admission)) {
+      await closeAdmission(live.admission);
     }
     throw error;
   }
@@ -91,29 +147,33 @@ export function respondAgyApproval(
 export async function cancelAgyTurn(sessionId: string): Promise<void> {
   const live = liveBySession.get(sessionId);
   if (!live) {
-    cancelledSessions.add(sessionId);
+    const admission = admissionBySession.get(sessionId);
+    if (admission) admission.cancelled = true;
+    else cancelledSessions.add(sessionId);
     return;
   }
   live.cancelled = true;
   live.muteUpdates = true;
-  finishTurn(live);
   await stopAgySession(sessionId);
 }
 
 export async function stopAgySession(sessionId: string): Promise<void> {
   cancelledSessions.delete(sessionId);
-  const live = liveBySession.get(sessionId);
-  liveBySession.delete(sessionId);
-  if (live) {
-    live.muteUpdates = true;
-    live.turnDone?.();
-    live.turnDone = null;
-    live.turnFailed = null;
+  const current = admissionBySession.get(sessionId);
+  if (current) {
+    current.retired = true;
+    admissionBySession.delete(sessionId);
+    if (liveBySession.get(sessionId) === current.live)
+      liveBySession.delete(sessionId);
+    if (current.live) {
+      current.live.cancelled = true;
+      current.live.muteUpdates = true;
+    }
   }
-  unwatchChild(sessionId);
-  await killChild(sessionId).catch(() => undefined);
+  const retired = closeRetiredRawChildren(sessionId).catch(() => undefined);
+  const closing = current ? closeAdmission(current) : Promise.resolve();
+  await Promise.all([retired, closing]);
 }
-
 export async function forgetAgySession(sessionId: string): Promise<void> {
   resumeBySession.delete(sessionId);
   await stopAgySession(sessionId);
@@ -129,90 +189,125 @@ export function bindAgySession(
   resumeBySession.set(threadId, { conversationId, cwd });
 }
 
-async function ensureLive(input: SendTurnInput): Promise<Live> {
+function ensureLive(input: SendTurnInput): Promise<Live> {
   const settingsKey = agySettingsKey(input);
-  const existing = liveBySession.get(input.sessionId);
+  const existing = admissionBySession.get(input.sessionId);
   if (
     existing &&
+    isCurrent(existing) &&
     existing.cwd === input.cwd &&
     existing.settingsKey === settingsKey
   ) {
-    existing.onEvent = input.onEvent;
-    return existing;
+    if (existing.opening) return existing.opening;
+    if (existing.live) return Promise.resolve(existing.live);
   }
-  if (existing) await stopAgySession(input.sessionId);
-
-  const resume = resumeBySession.get(input.sessionId);
-  const canResume = resume != null && resume.cwd === input.cwd;
-  if (resume && !canResume) resumeBySession.delete(input.sessionId);
-
-  const { path } = await resolveAgyBinaryImpl();
-  const live: Live = {
+  const admission: Admission = {
+    sessionId: input.sessionId,
     cwd: input.cwd,
     settingsKey,
-    conversationId: canResume ? resume?.conversationId : undefined,
-    onEvent: input.onEvent,
-    cancelled: false,
-    muteUpdates: false,
-    turns: Promise.resolve(),
-    turnDone: null,
-    turnFailed: null,
-    turnEndPending: false,
-    emittedAssistant: "",
+    retired: false,
+    cancelled: cancelledSessions.delete(input.sessionId),
   };
-  const stderr: string[] = [];
-
-  watchChild(
-    input.sessionId,
-    (line) => handleAgyLine(input.sessionId, live, line),
-    (code) => {
-      if (liveBySession.get(input.sessionId) !== live) return;
-      liveBySession.delete(input.sessionId);
-      const detail = stderr[stderr.length - 1]?.trim();
-      const error = new Error(
-        detail ? `Antigravity exited: ${detail}` : "Antigravity exited",
-      );
-      if (!live.cancelled) live.turnFailed?.(error);
-      live.turnDone = null;
-      live.turnFailed = null;
-      if (!live.muteUpdates) {
-        live.onEvent({ type: "session.ended", code });
-      }
-      unwatchChild(input.sessionId);
-    },
-    (line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      stderr.push(trimmed);
-      if (stderr.length > 8) stderr.shift();
-    },
-  );
-
-  liveBySession.set(input.sessionId, live);
+  admissionBySession.set(input.sessionId, admission);
   try {
-    await spawnChild(
-      input.sessionId,
+    admission.handle = reserveRawChild(input.sessionId);
+    guardCurrent(admission);
+    if (existing) void closeAdmission(existing);
+    admission.opening = Promise.resolve().then(() =>
+      startLive(input, admission),
+    );
+    return admission.opening;
+  } catch (error) {
+    const restore =
+      admissionBySession.get(input.sessionId) === admission &&
+      existing &&
+      !existing.retired &&
+      !existing.handle?.retired;
+    void closeAdmission(admission);
+    if (restore) admissionBySession.set(input.sessionId, existing);
+    throw error;
+  }
+}
+
+async function startLive(
+  input: SendTurnInput,
+  admission: Admission,
+): Promise<Live> {
+  try {
+    guardCurrent(admission);
+    const resume = resumeBySession.get(input.sessionId);
+    const canResume = resume != null && resume.cwd === input.cwd;
+    if (resume && !canResume) resumeBySession.delete(input.sessionId);
+    const { path } = await resolveAgyBinaryImpl();
+    guardCurrent(admission);
+    const handle = admission.handle;
+    if (!handle) throw new Error("Antigravity session was retired");
+    const live: Live = {
+      admission,
+      cwd: input.cwd,
+      settingsKey: admission.settingsKey,
+      conversationId: canResume ? resume?.conversationId : undefined,
+      onEvent: input.onEvent,
+      cancelled: false,
+      muteUpdates: false,
+      turns: Promise.resolve(),
+      turnDone: null,
+      turnFailed: null,
+      turnEndPending: false,
+      emittedAssistant: "",
+    };
+    admission.live = live;
+    const stderr: string[] = [];
+    handle.watch(
+      (line) => handleAgyLine(input.sessionId, live, line),
+      (code) => {
+        if (!isCurrent(admission)) return;
+        const detail = stderr[stderr.length - 1]?.trim();
+        const error = new Error(
+          detail ? `Antigravity exited: ${detail}` : "Antigravity exited",
+        );
+        const failed = live.turnFailed;
+        const emit = live.onEvent;
+        const deliver = !live.muteUpdates;
+        live.turnDone = null;
+        live.turnFailed = null;
+        void closeAdmission(admission, false);
+        failed?.(error);
+        if (deliver && !admissionBySession.has(input.sessionId))
+          emit({ type: "session.ended", code });
+      },
+      (line) => {
+        if (!isCurrent(admission)) return;
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        stderr.push(trimmed);
+        if (stderr.length > 8) stderr.shift();
+      },
+    );
+    guardCurrent(admission);
+    liveBySession.set(input.sessionId, live);
+    await handle.spawn(
       path,
       buildAgySpawnArgs(input, canResume ? resume?.conversationId : undefined),
       input.cwd,
       input.networkAllowlist,
     );
+    guardCurrent(admission);
+    emitEvent(live, { type: "session.started" });
+    guardCurrent(admission);
+    emitEvent(live, { type: "status", text: "Antigravity active" });
+    guardCurrent(admission);
+    return live;
   } catch (error) {
-    liveBySession.delete(input.sessionId);
-    unwatchChild(input.sessionId);
+    void closeAdmission(admission);
     throw error;
   }
-
-  live.onEvent({ type: "session.started" });
-  live.onEvent({ type: "status", text: "Antigravity active" });
-  return live;
 }
 
-async function runTurn(
-  sessionId: string,
-  live: Live,
-  input: SendTurnInput,
-): Promise<void> {
+async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
+  guardCurrent(live.admission);
+  const handle = live.admission.handle;
+  if (!handle) throw new Error("Antigravity session was retired");
   const content = agyPrompt(input.text, input.attachments ?? []);
   if (!content.trim()) return;
 
@@ -221,19 +316,20 @@ async function runTurn(
     live.turnDone = resolve;
     live.turnFailed = reject;
   });
+  void turn.catch(() => undefined);
   settlePendingTurn(live);
 
   try {
-    await writeChild(
-      sessionId,
-      JSON.stringify({ event: "user", message: { content } }),
-    );
+    await handle.write(JSON.stringify({ event: "user", message: { content } }));
+    if (live.cancelled) return;
+    guardCurrent(live.admission);
     settlePendingTurn(live);
     await turn;
+    if (!live.cancelled) guardCurrent(live.admission);
   } catch (error) {
     if (live.cancelled) return;
     const failure = error instanceof Error ? error : new Error(String(error));
-    live.onEvent({ type: "session.error", message: failure.message });
+    emitEvent(live, { type: "session.error", message: failure.message });
     throw failure;
   } finally {
     live.turnDone = null;
@@ -301,6 +397,7 @@ export function parseAgyLine(line: string): Record<string, unknown> | null {
 }
 
 function handleAgyLine(sessionId: string, live: Live, line: string): void {
+  if (!isCurrent(live.admission)) return;
   const event = parseAgyLine(line);
   if (!event || live.muteUpdates) return;
 
@@ -333,9 +430,9 @@ function handleStepUpdate(
   const assistant = stringField(step, "text_delta");
   const thought = stringField(step, "thought_delta");
 
-  if (thought) live.onEvent({ type: "reasoning.delta", text: thought });
+  if (thought) emitEvent(live, { type: "reasoning.delta", text: thought });
   if (assistant && type === "thought") {
-    live.onEvent({ type: "reasoning.delta", text: assistant });
+    emitEvent(live, { type: "reasoning.delta", text: assistant });
   } else if (assistant) {
     emitAssistant(live, assistant);
   }
@@ -348,7 +445,7 @@ function handleStepUpdate(
   const callId =
     stringField(step, "tool_id") ??
     `agy-tool-${numberField(step, "step_index") ?? Date.now()}`;
-  live.onEvent({
+  emitEvent(live, {
     type: "tool.started",
     callId,
     title: toolName ?? "Tool execution",
@@ -385,7 +482,7 @@ function handleResult(
       stringField(result, "error") ??
       stringField(result, "message") ??
       `Antigravity turn failed with status ${status}`;
-    live.onEvent({ type: "session.error", message });
+    emitEvent(live, { type: "session.error", message });
   }
   finishTurn(live, [
     { type: "message.completed" },
@@ -398,17 +495,21 @@ function bindConversation(
   live: Live,
   conversationId: string | undefined,
 ): void {
+  if (!isCurrent(live.admission) || live.muteUpdates) return;
   const id = conversationId?.trim();
   if (!id || id === live.conversationId) return;
   live.conversationId = id;
   resumeBySession.set(sessionId, { conversationId: id, cwd: live.cwd });
-  live.onEvent({ type: "session.providerBound", providerSessionId: id });
+  emitEvent(live, { type: "session.providerBound", providerSessionId: id });
 }
 
+function emitEvent(live: Live, event: HarnessEvent): void {
+  if (isCurrent(live.admission) && !live.muteUpdates) live.onEvent(event);
+}
 function emitAssistant(live: Live, text: string): void {
   if (!text) return;
   live.emittedAssistant += text;
-  live.onEvent({ type: "message.delta", text });
+  emitEvent(live, { type: "message.delta", text });
 }
 
 function emitUsage(live: Live, usage: Record<string, unknown> | null): void {
@@ -419,13 +520,13 @@ function emitUsage(live: Live, usage: Record<string, unknown> | null): void {
     numberField(usage, "totalTokens") ??
     numberField(usage, "inputTokens");
   if (used !== undefined) {
-    live.onEvent({ type: "context", used, window: 1_000_000 });
+    emitEvent(live, { type: "context", used, window: 1_000_000 });
   }
 }
 
 function finishTurn(live: Live, events: HarnessEvent[] = []): void {
   live.turnEndPending = false;
-  for (const event of events) live.onEvent(event);
+  for (const event of events) emitEvent(live, event);
   const done = live.turnDone;
   const failed = live.turnFailed;
   live.turnDone = null;
@@ -494,6 +595,7 @@ function numberField(
 /** Exported for tests. */
 export function __agyTestReset(): void {
   liveBySession.clear();
+  admissionBySession.clear();
   resumeBySession.clear();
   cancelledSessions.clear();
   resolveAgyBinaryImpl = resolveGeminiBinary;

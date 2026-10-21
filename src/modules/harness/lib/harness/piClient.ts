@@ -15,11 +15,16 @@ export class PiRpc {
   private readonly pending = new Map<string, Pending>();
   private closed = false;
 
+  private readonly writer: (line: string) => Promise<void>;
+
   constructor(
     private readonly sessionId: string,
     private readonly onFrame: (rec: Record<string, unknown>) => void,
     private readonly label = "Pi",
-  ) {}
+    writer?: (line: string) => Promise<void>,
+  ) {
+    this.writer = writer ?? ((line) => writeChild(this.sessionId, line));
+  }
 
   pushLine(line: string) {
     const rec = parseJsonLine(line);
@@ -31,7 +36,9 @@ export class PiRpc {
       if (!pending) return;
       if (!response.success) {
         pending.reject(
-          new Error(response.error || `${this.label} ${response.command} failed`),
+          new Error(
+            response.error || `${this.label} ${response.command} failed`,
+          ),
         );
         return;
       }
@@ -47,15 +54,18 @@ export class PiRpc {
   ): Promise<Record<string, unknown>> {
     if (this.closed) throw new Error(`${this.label} process is not running`);
     const id = stringField(command, "id") ?? `mc_${this.nextId++}`;
-    if (this.pending.has(id)) throw new Error(`Duplicate RPC request id: ${id}`);
+    if (this.pending.has(id))
+      throw new Error(`Duplicate RPC request id: ${id}`);
     const payload = { ...command, id };
+    let captured!: Pending;
     const pending = new Promise<Record<string, unknown>>((resolve, reject) => {
       const timer = setTimeout(() => {
+        if (this.pending.get(id) !== captured) return;
         this.pending.delete(id);
         const type = stringField(command, "type") ?? "command";
         reject(new Error(`${this.label} ${type} timed out`));
       }, timeoutMs);
-      this.pending.set(id, {
+      captured = {
         resolve: (value) => {
           clearTimeout(timer);
           resolve(value);
@@ -64,15 +74,22 @@ export class PiRpc {
           clearTimeout(timer);
           reject(error);
         },
-      });
+      };
+      this.pending.set(id, captured);
     });
-    void writeChild(this.sessionId, JSON.stringify(payload)).catch((error) => {
-      const message =
-        error instanceof Error ? error : new Error(String(error));
-      const request = this.pending.get(id);
+    void pending.catch(() => undefined);
+    const failed = (error: unknown) => {
+      if (this.pending.get(id) !== captured) return;
       this.pending.delete(id);
-      request?.reject(message);
-    });
+      captured.reject(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    };
+    try {
+      void this.writer(JSON.stringify(payload)).catch(failed);
+    } catch (error) {
+      failed(error);
+    }
     return pending;
   }
 

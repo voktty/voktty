@@ -7,6 +7,30 @@ let onLine: ((line: string) => void) | undefined;
 
 vi.mock("./child", () => ({
   resolveGeminiBinary: async () => ({ path: "/fake/agy" }),
+  closeRetiredRawChildren: async () => undefined,
+  reserveRawChild: (logicalSessionId: string) => {
+    let retired = false;
+    return {
+      nativeId: "fake-opaque",
+      logicalSessionId,
+      get retired() {
+        return retired;
+      },
+      spawn: async (command: string, args: string[], cwd: string) => {
+        spawns.push({ command, args, cwd });
+      },
+      watch: (line: (value: string) => void) => {
+        onLine = line;
+        return () => undefined;
+      },
+      write: async (line: string) => {
+        writes.push(line);
+      },
+      close: async () => {
+        retired = true;
+      },
+    };
+  },
   spawnChild: async (
     _id: string,
     command: string,
