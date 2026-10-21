@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
-  disconnect: vi.fn(),
+  disconnectProfiles: vi.fn(),
   closeProfile: vi.fn(),
   env: { kind: "local" } as
     | { kind: "local" }
@@ -14,7 +14,7 @@ vi.mock("@/modules/harness/lib/harnessEnvStore", () => ({
     getState: () => ({
       env: mocks.env,
       connect: mocks.connect,
-      disconnect: mocks.disconnect,
+      disconnectProfiles: mocks.disconnectProfiles,
     }),
   },
 }));
@@ -69,7 +69,7 @@ beforeEach(() => {
   localStorage.clear();
   dispatched.length = 0;
   mocks.connect.mockReset();
-  mocks.disconnect.mockReset().mockResolvedValue(undefined);
+  mocks.disconnectProfiles.mockReset().mockResolvedValue(undefined);
   mocks.closeProfile.mockReset().mockResolvedValue(undefined);
   mocks.env = { kind: "local" };
 });
@@ -85,8 +85,18 @@ describe("surfaces", () => {
 
 describe("profile links and row actions", () => {
   const pool = [
-    { key: { profileId: "p1", root: "/a" }, sessionId: 4, leases: 0, state: {} },
-    { key: { profileId: "p2", root: "/b" }, sessionId: undefined, leases: 1, state: {} },
+    {
+      key: { profileId: "p1", root: "/a" },
+      sessionId: 4,
+      leases: 0,
+      state: {},
+    },
+    {
+      key: { profileId: "p2", root: "/b" },
+      sessionId: undefined,
+      leases: 1,
+      state: {},
+    },
   ] as never;
 
   it("matches a profile only by exact id on every source", () => {
@@ -152,7 +162,9 @@ describe("openSshProfileInHarness", () => {
     await expect(openSshProfileInHarness(profile)).rejects.toThrow(
       "auth failed",
     );
-    expect(dispatched.filter((e) => e.type === OPEN_HARNESS_EVENT)).toHaveLength(0);
+    expect(
+      dispatched.filter((e) => e.type === OPEN_HARNESS_EVENT),
+    ).toHaveLength(0);
   });
 });
 
@@ -160,22 +172,41 @@ describe("closeSshProfileSessions", () => {
   it("disconnects the Harness when it holds the profile and always closes pooled sessions", async () => {
     mocks.env = { kind: "ssh", connection: { id: "p1" } };
     await closeSshProfileSessions("p1");
-    expect(mocks.disconnect).toHaveBeenCalledTimes(1);
+    expect(mocks.disconnectProfiles).toHaveBeenCalledTimes(1);
     expect(mocks.closeProfile).toHaveBeenCalledWith("p1");
   });
 
-  it("leaves a Harness connected to another profile alone", async () => {
+  it("clears a background profile without targeting the selected unrelated profile", async () => {
     mocks.env = { kind: "ssh", connection: { id: "other" } };
     await closeSshProfileSessions("p1");
-    expect(mocks.disconnect).not.toHaveBeenCalled();
+    expect(mocks.disconnectProfiles).toHaveBeenCalledWith(new Set(["p1"]));
     expect(mocks.closeProfile).toHaveBeenCalledWith("p1");
+    expect(mocks.closeProfile).not.toHaveBeenCalledWith("other");
   });
 });
 
 describe("profiles that reach the same server", () => {
-  const a = { id: "ssh-1", name: "code1", host: "192.168.1.4", user: "abc", port: 9191 };
-  const b = { id: "ssh-config-code1", name: "forgenex-code1", host: "192.168.1.4", user: "ABC", port: 9191 };
-  const other = { id: "ssh-3", name: "code2", host: "192.168.1.4", user: "abc", port: 9192 };
+  const a = {
+    id: "ssh-1",
+    name: "code1",
+    host: "192.168.1.4",
+    user: "abc",
+    port: 9191,
+  };
+  const b = {
+    id: "ssh-config-code1",
+    name: "forgenex-code1",
+    host: "192.168.1.4",
+    user: "ABC",
+    port: 9191,
+  };
+  const other = {
+    id: "ssh-3",
+    name: "code2",
+    host: "192.168.1.4",
+    user: "abc",
+    port: 9192,
+  };
 
   it("matches host, user and port ignoring case and the default port", () => {
     expect(sameSshTarget(a, b)).toBe(true);
@@ -184,19 +215,30 @@ describe("profiles that reach the same server", () => {
   });
 
   it("collects every saved duplicate and tolerates an unsaved origin", () => {
-    expect([...relatedProfileIds("ssh-1", [a, b, other])].sort()).toEqual(["ssh-1", "ssh-config-code1"]);
+    expect([...relatedProfileIds("ssh-1", [a, b, other])].sort()).toEqual([
+      "ssh-1",
+      "ssh-config-code1",
+    ]);
     expect([...relatedProfileIds("ghost", [a, b])]).toEqual(["ghost"]);
-    expect([...relatedProfileIds("ghost", [a], [{ ...b, id: "ghost" }])].sort()).toEqual(["ghost", "ssh-1"]);
+    expect(
+      [...relatedProfileIds("ghost", [a], [{ ...b, id: "ghost" }])].sort(),
+    ).toEqual(["ghost", "ssh-1"]);
   });
 
   it("treats a connection opened through a duplicate as connected, and closes it", async () => {
     const related = relatedProfileIds("ssh-1", [a, b]);
     mocks.env = { kind: "ssh", connection: { id: "ssh-config-code1" } };
     expect(
-      profileLinks("ssh-1", { workspaceEnv: local, harnessEnv: mocks.env, pool: [] }, related).harness,
+      profileLinks(
+        "ssh-1",
+        { workspaceEnv: local, harnessEnv: mocks.env, pool: [] },
+        related,
+      ).harness,
     ).toBe(true);
     await closeSshProfileSessions("ssh-1", related);
-    expect(mocks.disconnect).toHaveBeenCalledTimes(1);
-    expect(mocks.closeProfile.mock.calls.map((call) => call[0]).sort()).toEqual(["ssh-1", "ssh-config-code1"]);
+    expect(mocks.disconnectProfiles).toHaveBeenCalledTimes(1);
+    expect(mocks.closeProfile.mock.calls.map((call) => call[0]).sort()).toEqual(
+      ["ssh-1", "ssh-config-code1"],
+    );
   });
 });

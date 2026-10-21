@@ -123,24 +123,16 @@ export async function closeSshProfileSessions(
   profileId: string,
   relatedIds: ReadonlySet<string> = new Set([profileId]),
 ): Promise<void> {
-  const harness = useHarnessEnvStore.getState().env;
-  if (
-    harness.kind === "ssh" &&
-    (relatedIds.has(harness.connection.id) ||
-      harness.connection.id === profileId)
-  ) {
-    await useHarnessEnvStore.getState().disconnect();
-  }
-  await Promise.all(
-    [...new Set([profileId, ...relatedIds])].map((id) =>
-      remoteSessions.closeProfile(id),
-    ),
-  );
+  const ids = new Set([profileId, ...relatedIds]);
+  await useHarnessEnvStore.getState().disconnectProfiles(ids);
+  await Promise.all([...ids].map((id) => remoteSessions.closeProfile(id)));
 }
 
 /** Asks the app to disconnect a profile: workspace terminals, Harness and pool. */
 export function requestSshDisconnect(profileId: string): void {
   window.dispatchEvent(
-    new CustomEvent(DISCONNECT_SSH_EVENT, { detail: { connectionId: profileId } }),
+    new CustomEvent(DISCONNECT_SSH_EVENT, {
+      detail: { connectionId: profileId },
+    }),
   );
 }
