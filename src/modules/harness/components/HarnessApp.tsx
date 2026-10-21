@@ -29,6 +29,7 @@ import { useSessionReminders } from "../hooks/useSessionReminders";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import { useUnseenFinishedSessions } from "../hooks/useUnseenFinishedSessions";
 import { useIdleSessionDetach } from "../hooks/useIdleSessionDetach";
+import { useRemoteSessionAlerts } from "../hooks/useRemoteSessionAlerts";
 import { useWorkspaceNavigation } from "../hooks/useWorkspaceNavigation";
 import {
   type WorktreeFocus,
@@ -1672,6 +1673,7 @@ export function HarnessApp({
   // Tabs are views. Hidden idle sessions drop their child. A visible session
   // keeps its child for a few minutes after a turn so follow-ups stay instant,
   // then parks it and resumes on the next prompt.
+  useRemoteSessionAlerts();
   useIdleSessionDetach({
     sessions,
     sessionsRef,

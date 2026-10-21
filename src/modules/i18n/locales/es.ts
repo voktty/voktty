@@ -5070,6 +5070,10 @@ export const es: TranslationSchema = {
       agentSaid: "El agente dijo: {text}",
       toolCall: "Llamada de herramienta: {text}",
       planNoLongerInSession: "Este plan ya no está en la sesión.",
+      remoteSessionSaveFailed:
+        "No se pudo guardar esta conversación en la carpeta .voktty del proyecto: {error}",
+      remoteSessionNotSaved:
+        "Esta conversación no se guarda porque {path} no es un proyecto guardado. Añade la carpeta como proyecto para conservar su historial.",
       providerNotConnected:
         "{harness} aún no está conectado. Instala e inicia sesión en ese proveedor y vuelve a intentarlo.",
       errorWithMessage: "Error: {message}",

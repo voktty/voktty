@@ -8,6 +8,7 @@ import type { ContextUsage } from "./contextUsage";
 import { remoteProjectForPath, relativeWithinProject, parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { isRemoteProjectPath, normalizeProjectPath } from "./recents";
 import { remoteStoreIoFor } from "./remoteSessionIo";
+import { reportRemoteSessionProblem } from "./remoteSessionAlerts";
 import {
   createRemoteSessionStore,
   localizeRecord,
@@ -282,16 +283,32 @@ async function upsertRemoteSession(
   payload: SessionUpsertPayload,
 ): Promise<SessionSummary | null> {
   const home = remoteHomeFor(payload.cwd);
-  if (!home) return null;
+  if (!home) {
+    reportRemoteSessionProblem("no-saved-project", payload.cwd);
+    return null;
+  }
   remoteSessionHomes.set(payload.id, home);
-  const summary = await home.store.upsert(portablePayload(payload));
-  return localizeSummary(summary, home.environmentId);
+  try {
+    const summary = await home.store.upsert(portablePayload(payload));
+    return localizeSummary(summary, home.environmentId);
+  } catch (error) {
+    reportRemoteSessionProblem("save-failed", payload.cwd, error);
+    throw error;
+  }
 }
 
 export async function upsertSession(
   session: Session,
 ): Promise<SessionSummary | null> {
   if (!shouldPersistSession(session) || deletedSessionIds.has(session.id)) {
+    if (
+      isRemoteProjectPath(session.cwd) &&
+      !session.inboxAsk &&
+      remoteProjectForPath(session.cwd) === undefined &&
+      session.blocks.some((block) => block.role === "user")
+    ) {
+      reportRemoteSessionProblem("no-saved-project", session.cwd);
+    }
     return null;
   }
   cacheSession(session);

@@ -4947,6 +4947,10 @@ export const en = {
       agentSaid: "Agent said: {text}",
       toolCall: "Tool call: {text}",
       planNoLongerInSession: "This plan is no longer in the session.",
+      remoteSessionSaveFailed:
+        "This conversation could not be saved in the project's .voktty folder: {error}",
+      remoteSessionNotSaved:
+        "This conversation is not being saved because {path} is not a saved project. Add the folder as a project to keep its history.",
       providerNotConnected:
         "{harness} is not connected yet. Install and sign in to that provider, then retry.",
       errorWithMessage: "Error: {message}",

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const host = vi.hoisted(() => ({
   files: new Map<string, string>(),
   dirs: new Set<string>(),
+  failWrites: false,
   invoke: vi.fn(),
 }));
 
@@ -18,6 +19,7 @@ vi.mock("./fs", () => ({
       return found === undefined ? missing() : found;
     }
     if (command === "write_text_file") {
+      if (host.failWrites) throw new Error("write_failed: permission denied");
       const path = args.path as string;
       const parent = path.slice(0, path.lastIndexOf("/"));
       if (!host.dirs.has(parent)) return missing();
@@ -68,6 +70,10 @@ if (typeof globalThis.window === "undefined") {
 
 import { rememberRemoteProject } from "@/modules/connections/model/remoteProjects";
 import {
+  resetRemoteSessionProblems,
+  subscribeRemoteSessionProblems,
+} from "./remoteSessionAlerts";
+import {
   deleteSession,
   getSession,
   listSessionsByProject,
@@ -96,6 +102,7 @@ const session = (id: string, cwd = project) =>
 beforeEach(() => {
   host.files.clear();
   host.dirs.clear();
+  host.failWrites = false;
   host.dirs.add(root);
   host.invoke.mockReset().mockRejectedValue(new Error("local store must not be used"));
   localStorage.clear();
@@ -168,5 +175,35 @@ describe("conversations of a remote project", () => {
       "inside",
       "root",
     ]);
+  });
+
+  it("reports a conversation that cannot be written instead of dropping it silently", async () => {
+    resetRemoteSessionProblems();
+    const problems: { kind: string; message: string }[] = [];
+    const stop = subscribeRemoteSessionProblems((problem) =>
+      problems.push(problem),
+    );
+    host.failWrites = true;
+
+    await expect(upsertSession(session("fresh"))).rejects.toThrow();
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0].kind).toBe("save-failed");
+    stop();
+  });
+
+  it("says so when the folder is not a saved project", async () => {
+    resetRemoteSessionProblems();
+    const problems: { kind: string }[] = [];
+    const stop = subscribeRemoteSessionProblems((problem) =>
+      problems.push(problem),
+    );
+
+    const summary = await upsertSession(session("lost", `remote://${env}/etc`));
+
+    expect(summary).toBeNull();
+    expect(problems.map((problem) => problem.kind)).toEqual(["no-saved-project"]);
+    expect(host.files.size).toBe(0);
+    stop();
   });
 });
