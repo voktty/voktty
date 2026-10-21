@@ -19,6 +19,7 @@ import type {
   SendTurnInput,
 } from "../lib/harness/types";
 import { registerHarnessSessionHandle } from "../lib/harnessControlBridge";
+import { publishHarnessProject } from "@/modules/surfaces";
 import { defaultSessionChoice } from "../lib/models";
 import {
   loadRecents,
@@ -84,11 +85,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
 
   useEffect(() => {
     if (session.cwd && session.cwd !== "~") {
-      window.dispatchEvent(
-        new CustomEvent("voktty:harness-cwd-change", {
-          detail: { cwd: session.cwd },
-        }),
-      );
+      publishHarnessProject(session.cwd);
     }
   }, [session.cwd]);
 

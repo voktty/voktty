@@ -1,8 +1,9 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
+import { removeHarnessSurface } from "@/modules/surfaces";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
 
@@ -40,6 +41,7 @@ function HarnessWorkbench({
 }) {
   const { t } = useTranslation();
   const [view, setView] = useState<"harness" | "native">("harness");
+  useEffect(() => () => removeHarnessSurface(tab.id), [tab.id]);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -67,7 +69,11 @@ function HarnessWorkbench({
         ))}
       </div>
       <div className="min-h-0 flex-1" hidden={view !== "harness"}>
-        <LazyHarnessApp initialCwd={tab.cwd} initialSessionId={tab.sessionId} />
+        <LazyHarnessApp
+          initialCwd={tab.cwd}
+          initialSessionId={tab.sessionId}
+          surfaceOwnerId={tab.id}
+        />
       </div>
       {view === "native" && (
         <div className="min-h-0 flex-1">

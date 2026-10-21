@@ -4,6 +4,13 @@ import {
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
 import { coerceCwd, firstCwd } from "@/app/lib/activeCwd";
+import {
+  installLegacyHarnessSurfaceEvents,
+  publishActiveSurface,
+  resolveActiveSurface,
+  selectHarnessSurface,
+  useHarnessSurfaceStore,
+} from "@/modules/surfaces";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
 import { planTerminalTitle } from "@/app/lib/terminalTitle";
 import { TransferQueuePanel } from "@/modules/ssh-native/components/TransferQueuePanel";
@@ -926,21 +933,21 @@ function DesktopApp() {
   const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
   const activeHarnessCwd =
     activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
-  const [harnessFocusCwd, setHarnessFocusCwd] = useState<string | null>(null);
+  const harnessSurfaceOwnerId = activeHarnessTab?.id;
+  const harnessFocusCwd = useHarnessSurfaceStore(
+    (s) => selectHarnessSurface(s, harnessSurfaceOwnerId).focusFolder,
+  );
+  const harnessReportedProject = useHarnessSurfaceStore(
+    (s) => selectHarnessSurface(s, harnessSurfaceOwnerId).projectCwd,
+  );
   // What the explorer and breadcrumb show while the Harness is active: the
   // folder of the focused surface (terminal or conversation), else its project.
-  const activeHarnessFolder = firstCwd(harnessFocusCwd, activeHarnessCwd);
-  useEffect(() => {
-    const onFocusFolder = (event: Event) => {
-      const cwd = coerceCwd(
-        (event as CustomEvent<{ cwd?: unknown }>).detail?.cwd,
-      );
-      if (cwd !== null) setHarnessFocusCwd(cwd);
-    };
-    window.addEventListener("voktty:harness-focus-folder", onFocusFolder);
-    return () =>
-      window.removeEventListener("voktty:harness-focus-folder", onFocusFolder);
-  }, []);
+  const activeHarnessFolder = resolveActiveSurface({
+    kind: "harness",
+    projectCwd: activeHarnessCwd,
+    focusFolder: harnessFocusCwd,
+  }).folder;
+  useEffect(() => installLegacyHarnessSurfaceEvents(), []);
 
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
@@ -968,35 +975,19 @@ function DesktopApp() {
   }, [activeSpaceTabCount, activeTab, activeSpace?.env, activeHarnessCwd]);
 
   useEffect(() => {
-    const handleHarnessCwd = (e: Event) => {
-      const detail = (e as CustomEvent<{ cwd?: unknown }>).detail;
-      // The event type is an assertion, not a guarantee. A non-string here
-      // would be written straight into the persisted tab and survive
-      // restarts, so reject it loudly instead of storing it.
-      const cwd = coerceCwd(detail?.cwd);
-      if (cwd === null) {
-        if (detail?.cwd !== undefined) {
-          console.warn(
-            "[voktty] ignoring harness cwd change with a non-path value:",
-            detail.cwd,
-          );
-        }
-        return;
-      }
-      setHarnessCwd(cwd);
-      const harnessTab =
-        tabsRef.current.find(
-          (t): t is HarnessTab =>
-            t.id === effectiveActiveId && t.kind === "harness",
-        ) ?? tabsRef.current.find((t): t is HarnessTab => t.kind === "harness");
-      if (harnessTab && harnessTab.cwd !== cwd) {
-        updateTab(harnessTab.id, { cwd });
-      }
-    };
-    window.addEventListener("voktty:harness-cwd-change", handleHarnessCwd);
-    return () =>
-      window.removeEventListener("voktty:harness-cwd-change", handleHarnessCwd);
-  }, [effectiveActiveId, updateTab]);
+    if (harnessSurfaceOwnerId === undefined) return;
+    const cwd = coerceCwd(harnessReportedProject);
+    if (cwd === null) return;
+    const harnessTab = tabsRef.current.find(
+      (t): t is HarnessTab =>
+        t.id === harnessSurfaceOwnerId && t.kind === "harness",
+    );
+    if (!harnessTab) return;
+    setHarnessCwd(cwd);
+    if (harnessTab.cwd !== cwd) {
+      updateTab(harnessSurfaceOwnerId, { cwd });
+    }
+  }, [harnessSurfaceOwnerId, harnessReportedProject, updateTab]);
 
   const localFallbackRoot =
     localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null;
@@ -3810,6 +3801,41 @@ function DesktopApp() {
           lastProjectPath(),
         ),
   );
+  const selectedSurfaceOwnerId = activeTab?.id;
+  const selectedSurfaceTabKind = activeTab?.kind;
+  useEffect(() => {
+    if (
+      selectedSurfaceOwnerId === undefined ||
+      selectedSurfaceTabKind === undefined
+    ) {
+      publishActiveSurface(null);
+      return;
+    }
+    const kind =
+      selectedSurfaceTabKind === "terminal" || selectedSurfaceTabKind === "harness"
+        ? selectedSurfaceTabKind
+        : selectedSurfaceTabKind === "editor" ||
+            selectedSurfaceTabKind === "markdown"
+          ? "editor"
+          : "other";
+    publishActiveSurface({
+      kind,
+      ownerId: selectedSurfaceOwnerId,
+      projectCwd: kind === "harness" ? activeHarnessCwd : null,
+      focusFolder: kind === "harness" ? activeHarnessFolder : undefined,
+      cwd: activeCwd,
+      folder: kind === "editor" ? effectiveExplorerRoot : activeCwd,
+      workspaceEnv: activeTabWorkspaceEnv,
+    });
+  }, [
+    selectedSurfaceOwnerId,
+    selectedSurfaceTabKind,
+    activeHarnessCwd,
+    activeHarnessFolder,
+    activeCwd,
+    effectiveExplorerRoot,
+    activeTabWorkspaceEnv,
+  ]);
   const localWorkspaceRoot = localHome;
 
   const handleStatusBarCd = useCallback(

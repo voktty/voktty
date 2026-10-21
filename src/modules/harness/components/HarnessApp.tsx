@@ -45,6 +45,10 @@ import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useHarnessEnvStore } from "../lib/harnessEnvStore";
 import {
+  publishHarnessFocusFolder,
+  publishHarnessProject,
+} from "@/modules/surfaces";
+import {
   claimDueAutomations,
   listAutomations,
   recoverAutomationRuns,
@@ -716,12 +720,14 @@ export function HarnessApp({
   installedUpdate = null,
   initialCwd,
   initialSessionId,
+  surfaceOwnerId,
 }: {
   windowTransfer?: WindowTransferPayload | null;
   resumed?: ResumedWorkspace | null;
   installedUpdate?: InstalledUpdate | null;
   initialCwd?: string;
   initialSessionId?: string;
+  surfaceOwnerId?: number;
 } = {}) {
   markHarnessOpenPhase("rendered");
   const [projectCwd, setProjectCwd] = useState(
@@ -4238,13 +4244,9 @@ export function HarnessApp({
 
   useEffect(() => {
     if (projectCwd && projectCwd !== "~") {
-      window.dispatchEvent(
-        new CustomEvent("voktty:harness-cwd-change", {
-          detail: { cwd: projectCwd },
-        }),
-      );
+      publishHarnessProject(projectCwd, surfaceOwnerId);
     }
-  }, [projectCwd]);
+  }, [projectCwd, surfaceOwnerId]);
 
   // The app explorer and breadcrumb mirror the surface in use, not only the
   // project: a terminal that left the project folder is what the user is in.
@@ -4253,13 +4255,9 @@ export function HarnessApp({
     sidebarCwd;
   useEffect(() => {
     if (surfaceCwd && surfaceCwd !== "~") {
-      window.dispatchEvent(
-        new CustomEvent("voktty:harness-focus-folder", {
-          detail: { cwd: surfaceCwd },
-        }),
-      );
+      publishHarnessFocusFolder(surfaceCwd, surfaceOwnerId);
     }
-  }, [surfaceCwd]);
+  }, [surfaceCwd, surfaceOwnerId]);
 
   const lastAttemptedRemoteProjectRef = useRef<string | null>(null);
   const sshConnections = usePreferencesStore((s) => s.sshConnections);

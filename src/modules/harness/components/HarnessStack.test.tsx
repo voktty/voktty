@@ -9,15 +9,19 @@ const mounts = vi.hoisted(() => ({
   harness: vi.fn(),
   native: vi.fn(),
   release: vi.fn(),
+  removeSurface: vi.fn(),
 }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+vi.mock("@/modules/surfaces", () => ({
+  removeHarnessSurface: mounts.removeSurface,
+}));
 vi.mock("./HarnessApp", () => ({
-  HarnessApp: () => {
+  HarnessApp: ({ surfaceOwnerId }: { surfaceOwnerId?: number }) => {
     useEffect(() => {
-      mounts.harness();
-    }, []);
+      mounts.harness(surfaceOwnerId);
+    }, [surfaceOwnerId]);
     return createElement("div", { "data-harness": true }, "Harness");
   },
 }));
@@ -73,4 +77,23 @@ it("keeps Harness sessions mounted and releases native chat when the tab loses f
   });
   expect(container.querySelector("[data-native]")).toBeNull();
   expect(mounts.harness).toHaveBeenCalledTimes(1);
+});
+it("keeps owner reports when hidden and removes only the unmounted owner", async () => {
+  const otherTab = { id: 2, kind: "harness", cwd: "/other" } as HarnessTab;
+  const bothTabs = [...tabs, otherTab];
+  await act(async () => {
+    root.render(createElement(HarnessStack, { tabs: bothTabs, activeId: 1 }));
+  });
+  expect(mounts.harness).toHaveBeenCalledWith(1);
+  expect(mounts.harness).toHaveBeenCalledWith(2);
+  await act(async () => {
+    root.render(createElement(HarnessStack, { tabs: bothTabs, activeId: 2 }));
+  });
+  expect(mounts.harness).toHaveBeenCalledTimes(2);
+  expect(mounts.removeSurface).not.toHaveBeenCalled();
+  await act(async () => {
+    root.render(createElement(HarnessStack, { tabs: [otherTab], activeId: 2 }));
+  });
+  expect(mounts.removeSurface).toHaveBeenCalledTimes(1);
+  expect(mounts.removeSurface).toHaveBeenCalledWith(1);
 });
