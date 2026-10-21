@@ -3,6 +3,7 @@ import {
   HarnessEventQueue,
   isForegroundHarnessSession,
 } from "@/modules/harness/lib/harnessFlush";
+import { ownHarnessWindowCloseSubscription } from "@/modules/harness/lib/harnessWindowCloseSubscription";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1433,7 +1434,6 @@ export function HarnessApp({
   ]);
 
   useEffect(() => {
-    let unlistenClose: (() => void) | undefined;
     const releaseQuit = setQuitWorkspace(
       () => sessionsRef.current,
       () => tabsRef.current,
@@ -1444,11 +1444,11 @@ export function HarnessApp({
       flushHarnessEvents,
       keepWorkspaceTab,
     );
-    void getCurrentWindow()
-      .onCloseRequested((event: any) => {
+    const closeSubscription = ownHarnessWindowCloseSubscription(
+      (listener) => getCurrentWindow().onCloseRequested(listener),
+      () => {
         // Listening here makes close our job. Letting the default path run
         // calls JS `window.destroy`, which Tauri denies without a permission.
-        event.preventDefault();
         flushHarnessEvents();
         if (loadCloseToTray()) {
           void persistLiveTranscripts(sessionsRef.current);
@@ -1480,13 +1480,12 @@ export function HarnessApp({
         ).finally(() => {
           void closeCurrentWindow();
         });
-      })
-      .then((fn) => {
-        unlistenClose = fn;
-      });
+      },
+    );
+    void closeSubscription.ready.catch(() => undefined);
     return () => {
       releaseQuit();
-      unlistenClose?.();
+      closeSubscription.release();
     };
   }, [flushHarnessEvents, keepWorkspaceTab, readProjectReturnMemory]);
 
