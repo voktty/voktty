@@ -14,24 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import {
-  isPathInWorkspace,
-  isPathWithinRemoteRoot,
-  remoteReadDir,
-} from "@/modules/remote";
-import { openRemoteWorkspace } from "@/modules/remote/client";
-import {
-  findSshProfile,
-  remoteSshConnectionForProfile,
-} from "@/modules/connections/model/remoteSshProfiles";
-import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import {
-  type WorkspaceEnv,
-  useWorkspaceEnvStore,
-  workspaceEnvForNativePty,
-  workspaceForNativeFs,
-} from "@/modules/workspace";
-import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { readBreadcrumbDirectories } from "./lib/breadcrumbDirectories";
 import {
   ArrowDown01Icon,
   Folder01Icon,
@@ -41,8 +25,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
-import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   breadcrumbChildPath,
   breadcrumbHomeForWorkspace,
@@ -240,108 +223,25 @@ function CurrentSegmentDropdown({
   const [children, setChildren] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      let workspace: WorkspaceEnv = workspaceEnv ?? { kind: "local" as const };
-      if (path.startsWith("remote://") && workspace.kind !== "ssh") {
-        const parsed = parseRemotePath(path);
-        if (parsed) {
-          const profile = findSshProfile(parsed.environmentId);
-          if (profile) {
-            const harnessEnv = useHarnessEnvStore.getState().env;
-            const currentEnv = useWorkspaceEnvStore.getState().env;
-            const isHarnessMatch =
-              harnessEnv.kind === "ssh" &&
-              (harnessEnv.connection.id === profile.id ||
-                harnessEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-                harnessEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
-            const isMatch =
-              currentEnv.kind === "ssh" &&
-              (currentEnv.connection.id === profile.id ||
-                currentEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-                currentEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
-            const activeMatch = isHarnessMatch ? harnessEnv : isMatch ? currentEnv : null;
-            workspace = {
-              kind: "ssh",
-              connection: profile,
-              root:
-                activeMatch?.root
-                  ? activeMatch.root
-                  : (parsed.hostPath.startsWith("/") ? "/" : parsed.hostPath),
-              ...(activeMatch?.sessionId !== undefined
-                ? { sessionId: activeMatch.sessionId }
-                : {}),
-            };
-          }
-        }
-      }
-
-      if (workspace.kind === "ssh") {
-        const nativeConn = remoteSshConnectionForProfile(workspace.connection);
-        if (workspace.sessionId === undefined) {
-          const parsed = parseRemotePath(path);
-          const target = parsed?.hostPath.startsWith("/") ? "/" : (workspace.root || ".");
-          const session = await openRemoteWorkspace(nativeConn, target).catch(() =>
-            openRemoteWorkspace(nativeConn, "."),
-          );
-          workspace = {
-            ...workspace,
-            root: session.workspace_root,
-            sessionId: session.session_id,
-          };
-          useHarnessEnvStore.getState().setEnv(workspace);
-        } else if (!isPathWithinRemoteRoot(workspace, path)) {
-          const session = await openRemoteWorkspace(nativeConn, "/").catch(() =>
-            openRemoteWorkspace(nativeConn, path),
-          );
-          workspace = {
-            ...workspace,
-            root: session.workspace_root,
-            sessionId: session.session_id,
-          };
-          useHarnessEnvStore.getState().setEnv(workspace);
-        }
-      }
-
-      const dirs =
-        workspace.kind === "ssh" && isPathInWorkspace(workspace, path)
-          ? (await remoteReadDir(workspace, path))
-              .filter(
-                (entry) =>
-                  entry.kind === "dir" &&
-                  (showHidden || !entry.name.startsWith(".")),
-              )
-              .map((entry) => entry.name)
-          : workspace.kind === "docker"
-            ? (
-                await invoke<Array<{ name: string; kind: string }>>(
-                  "fs_read_dir",
-                  {
-                    path,
-                    showHidden,
-                    gitDecorations: false,
-                    workspace: workspaceEnvForNativePty(workspace),
-                  },
-                )
-              )
-                .filter((entry) => entry.kind === "dir")
-                .map((entry) => entry.name)
-            : await invoke<string[]>("list_subdirs", {
-                path,
-                showHidden,
-                workspace: workspaceForNativeFs(workspace, path),
-              });
-      setChildren(dirs);
-    } catch (e) {
-      setError(String(e));
-      setChildren([]);
-    }
-  }, [path, showHidden, workspaceEnv]);
-
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (!open) return;
+    let current = true;
+    setChildren(null);
+    setError(null);
+    void readBreadcrumbDirectories(path, workspaceEnv, showHidden).then(
+      (dirs) => {
+        if (current) setChildren(dirs);
+      },
+      (reason) => {
+        if (!current) return;
+        setError(String(reason));
+        setChildren([]);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [open, path, showHidden, workspaceEnv]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

@@ -16,7 +16,8 @@ import {
   requestSshDisconnect,
   surfaceOf,
 } from "@/modules/connections/model/sshConnectionActions";
-import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import { harnessProfileStatus } from "@/modules/connections/model/harnessProfileStatus";
 import { useRemoteSessionSnapshots } from "@/modules/remote/useRemoteSessions";
 import { useTranslation } from "@/modules/i18n";
 import { type RdpConnectionProfile, useRdpConnections } from "@/modules/rdp";
@@ -121,8 +122,13 @@ export function WorkspaceEnvSelector({
   const connectionAttempts = useWorkspaceEnvStore((s) => s.connectionAttempts);
   const refreshDistros = useWorkspaceEnvStore((s) => s.refreshDistros);
   const sshConnections = useSshConnections();
-  const harnessEnv = useHarnessEnvStore((s) => s.env);
+  const projects = useHarnessProjectEnvStore((s) => s.projects);
   const pool = useRemoteSessionSnapshots();
+  const harnessConnections = sshConnections.filter(
+    (connection) =>
+      harnessProfileStatus(connection, projects, pool).phase === "ready" &&
+      !(env.kind === "ssh" && env.connection.id === connection.id),
+  );
   const rdpConnections = useRdpConnections();
   const { pingMap, refreshPings } = useSshPing(sshConnections, dropdownOpen);
 
@@ -314,9 +320,11 @@ export function WorkspaceEnvSelector({
           )}
 
           {/* Harness-only SSH connection: same one-click Disconnect */}
-          {harnessEnv.kind === "ssh" &&
-            !(env.kind === "ssh" && env.connection.id === harnessEnv.connection.id) && (
-              <div className="flex items-center justify-between p-2 rounded-lg bg-violet-500/10 border border-violet-500/25 mb-1.5">
+          {harnessConnections.map((connection) => (
+              <div
+                key={connection.id}
+                className="flex items-center justify-between p-2 rounded-lg bg-violet-500/10 border border-violet-500/25 mb-1.5"
+              >
                 <div className="flex items-center gap-2 min-w-0">
                   <HugeiconsIcon
                     icon={SparklesIcon}
@@ -326,7 +334,7 @@ export function WorkspaceEnvSelector({
                   />
                   <div className="min-w-0">
                     <div className="text-[12px] font-semibold text-foreground truncate">
-                      {harnessEnv.connection.name}
+                      {connection.name}
                     </div>
                     <div className="text-[10px] text-muted-foreground truncate">
                       {t("ssh.harnessConnected")}
@@ -338,7 +346,7 @@ export function WorkspaceEnvSelector({
                   variant="destructive"
                   className="h-6 px-2 text-[11px] gap-1 cursor-pointer shrink-0"
                   onClick={() => {
-                    requestSshDisconnect(harnessEnv.connection.id);
+                    requestSshDisconnect(connection.id);
                     setDropdownOpen(false);
                   }}
                 >
@@ -346,7 +354,7 @@ export function WorkspaceEnvSelector({
                   <span>{t("harness.connections.disconnect")}</span>
                 </Button>
               </div>
-            )}
+            ))}
 
           {/* 1. LOCAL ENVIRONMENTS SECTION */}
           <div>
@@ -495,18 +503,30 @@ export function WorkspaceEnvSelector({
                       };
                       const connectionAttempt =
                         connectionAttempts[workspaceScopeKey(candidateEnv)];
+                      const harnessStatus = harnessProfileStatus(
+                        conn,
+                        projects,
+                        pool,
+                      );
                       const isConnConnecting =
+                        harnessStatus.phase === "connecting" ||
                         connectionAttempt?.state.phase === "resolving" ||
                         connectionAttempt?.state.phase === "connecting" ||
                         connectionAttempt?.state.phase === "reconnecting";
                       const isConnFailed =
+                        harnessStatus.phase === "error" ||
                         connectionAttempt?.state.phase === "failed";
+                      const connectionError =
+                        harnessStatus.error ?? connectionAttempt?.state.error;
                       const related = relatedProfileIds(conn.id, sshConnections);
-                      const links = profileLinks(
-                        conn.id,
-                        { workspaceEnv: env, harnessEnv, pool },
-                        related,
-                      );
+                      const links = {
+                        ...profileLinks(
+                          conn.id,
+                          { workspaceEnv: env, harnessEnv: { kind: "local" }, pool },
+                          related,
+                        ),
+                        harness: harnessStatus.phase === "ready",
+                      };
                       const surface = surfaceOf(conn);
                       const isSshActive =
                         links.harness ||
@@ -614,7 +634,7 @@ export function WorkspaceEnvSelector({
                                   <span
                                     className="rounded bg-destructive/15 px-1 py-0.2 text-[9px] font-medium text-destructive"
                                     title={
-                                      connectionAttempt.state.error ?? undefined
+                                      connectionError ?? undefined
                                     }
                                   >
                                     {t("terminal.connection.error")}
@@ -754,7 +774,7 @@ export function WorkspaceEnvSelector({
                               <span
                                 className="size-2 rounded-full bg-destructive"
                                 title={
-                                  connectionAttempt.state.error ?? undefined
+                                  connectionError ?? undefined
                                 }
                               />
                             ) : pingStatus?.loading ? (

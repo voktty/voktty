@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   openSettingsWindow: vi.fn(),
   useSshConnections: vi.fn(),
+  pool: null as unknown[] | null,
 }));
 
 vi.mock("@/modules/i18n", () => ({
@@ -79,6 +80,14 @@ vi.mock("@/modules/connections", () => ({
     ),
 }));
 
+vi.mock("@/modules/remote/useRemoteSessions", async () => {
+  const { remoteSessions } = await import("@/modules/remote/sessionManager");
+  return {
+    useRemoteSessionSnapshots: () => mocks.pool ?? remoteSessions.snapshot(),
+  };
+});
+
+import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { HarnessConnectionsPage } from "./HarnessConnectionsPage";
 
 let container: HTMLDivElement;
@@ -87,6 +96,14 @@ let root: Root;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.openSettingsWindow.mockReset();
+  mocks.pool = null;
+  useHarnessProjectEnvStore.setState({
+    projects: {},
+    projectId: null,
+    env: { kind: "local" },
+    connecting: false,
+    error: null,
+  });
   mocks.useSshConnections.mockReturnValue([
     { id: "profile-1", name: "Build host", user: "dev", host: "build-host" },
   ]);
@@ -186,27 +203,132 @@ describe("Harness connections settings", () => {
     }
   });
 
-  it("shows Disconnect and Reconnect when profile is connected", async () => {
-    const { useHarnessEnvStore } = await import("../lib/harnessEnvStore");
-    const originalEnv = useHarnessEnvStore.getState().env;
-    act(() => {
-      useHarnessEnvStore.setState({
-        env: {
-          kind: "ssh",
-          connection: { id: "profile-1", name: "Build host", user: "dev", host: "build-host" },
-          root: "/home/dev",
-          sessionId: 1,
-        },
-      });
+  it("keeps concurrent profiles independent of global selection and same-host duplicates", async () => {
+    const profiles = ["ready", "pending", "failed", "same-host"].map((id) => ({
+      id,
+      name: id,
+      host: "host.test",
+    }));
+    mocks.useSshConnections.mockReturnValue(profiles);
+    const identity = (id: string) => ({
+      projectId: `remote://voktty-ssh-${id}/srv/app`,
+      profileId: id,
+      requestedRoot: ".",
+      resolvedRoot: "/srv/app",
+      automatic: true,
     });
+    useHarnessProjectEnvStore.setState({
+      connecting: true,
+      error: "Unrelated global failure",
+      projectId: null,
+      projects: {
+        ready: {
+          identity: identity("ready"),
+          env: {
+            kind: "ssh",
+            connection: profiles[0],
+            root: "/srv/app",
+            sessionId: 9,
+          },
+          connecting: false,
+          error: null,
+        },
+        pending: {
+          identity: identity("pending"),
+          env: { kind: "local" },
+          connecting: true,
+          error: null,
+        },
+        failed: {
+          identity: identity("failed"),
+          env: { kind: "local" },
+          connecting: false,
+          error: "Owner denied",
+        },
+      },
+    });
+    mocks.pool = [
+      {
+        key: { profileId: "ready", root: "." },
+        sessionId: 9,
+        leases: 1,
+        state: { phase: "ready" },
+      },
+    ];
+    await render();
+    const rows = container.querySelectorAll("section > div.divide-y > div");
+    expect(rows).toHaveLength(4);
+    expect(rows[0].textContent).toContain("Connected");
+    expect(rows[0].textContent).toContain("Disconnect");
+    expect(rows[1].textContent).toContain("Connecting...");
+    expect(
+      rows[1].querySelector<HTMLButtonElement>('button[title="Connect"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(rows[2].textContent).toContain("Owner denied");
+    expect(rows[3].textContent).not.toContain("Connected");
+    expect(rows[3].textContent).not.toContain("Connecting...");
+    expect(rows[3].textContent).not.toContain("Error");
+    expect(container.textContent).not.toContain("Unrelated global failure");
+  });
+
+  it("does not report a saved profile whose live native binding changed as connected", async () => {
+    const saved = { id: "profile-1", name: "Build host", host: "new.test" };
+    mocks.useSshConnections.mockReturnValue([saved]);
+    useHarnessProjectEnvStore.setState({
+      projects: {
+        owner: {
+          identity: {
+            projectId: "opaque",
+            profileId: saved.id,
+            requestedRoot: ".",
+            resolvedRoot: "/srv/app",
+            automatic: false,
+          },
+          env: {
+            kind: "ssh",
+            connection: { ...saved, host: "old.test" },
+            root: "/srv/app",
+            sessionId: 9,
+          },
+          connecting: false,
+          error: null,
+        },
+      },
+    });
+    mocks.pool = [
+      {
+        key: { profileId: saved.id, root: "." },
+        sessionId: 9,
+        leases: 1,
+        state: { phase: "ready" },
+      },
+    ];
+    await render();
+    expect(container.textContent).not.toContain("Disconnect");
+    expect(container.textContent).not.toContain("Connected");
+  });
+
+  it("shows Disconnect and Reconnect when profile is connected", async () => {
+    const { useHarnessProjectEnvStore } = await import(
+      "../lib/harnessEnvStore"
+    );
+    const connection = {
+      id: "profile-1",
+      name: "Build host",
+      user: "dev",
+      host: "build-host",
+    };
+    await useHarnessProjectEnvStore.getState().connect(connection);
+    act(() => useHarnessProjectEnvStore.getState().selectProject(null));
 
     const onSelectProject = vi.fn();
     window.addEventListener("voktty:harness-select-project", onSelectProject);
     try {
       await render();
-      const disconnectBtn = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.includes("Disconnect"),
-      );
+      const disconnectBtn = Array.from(
+        container.querySelectorAll("button"),
+      ).find((button) => button.textContent?.includes("Disconnect"));
       if (!disconnectBtn) throw new Error("Missing disconnect button");
 
       await act(async () => disconnectBtn.click());
@@ -216,10 +338,13 @@ describe("Harness connections settings", () => {
       }>;
       expect(event.detail.path).toBe("~");
     } finally {
-      window.removeEventListener("voktty:harness-select-project", onSelectProject);
-      act(() => {
-        useHarnessEnvStore.setState({ env: originalEnv });
-      });
+      window.removeEventListener(
+        "voktty:harness-select-project",
+        onSelectProject,
+      );
+      await act(async () =>
+        useHarnessProjectEnvStore.getState().disconnectAll(),
+      );
     }
   });
 });

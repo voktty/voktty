@@ -4,10 +4,7 @@ import {
   closeSshProfileSessions,
   openSshProfileInHarness,
 } from "@/modules/connections/model/sshConnectionActions";
-import {
-  findSshProfile,
-  remoteSshConnectionIdForEnvironment,
-} from "@/modules/connections/model/remoteSshProfiles";
+import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
 import { useTranslation } from "@/modules/i18n";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
@@ -21,7 +18,9 @@ import {
   useWorkspaceEnvStore,
   workspaceScopeKey,
 } from "@/modules/workspace";
-import { useHarnessEnvStore } from "../lib/harnessEnvStore";
+import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import { harnessProfileStatus } from "@/modules/connections/model/harnessProfileStatus";
+import { useRemoteSessionSnapshots } from "@/modules/remote/useRemoteSessions";
 import { useState } from "react";
 import {
   Check,
@@ -44,17 +43,24 @@ export function HarnessConnectionsPage() {
   const [connectionId, setConnectionId] = useState<string>();
   const [isRefreshingPings, setIsRefreshingPings] = useState(false);
 
-  const harnessEnv = useHarnessEnvStore((s) => s.env);
-  const isHarnessConnecting = useHarnessEnvStore((s) => s.connecting);
-  const harnessError = useHarnessEnvStore((s) => s.error);
+  const projects = useHarnessProjectEnvStore((s) => s.projects);
+  const selectedProjectId = useHarnessProjectEnvStore((s) => s.projectId);
+  const pool = useRemoteSessionSnapshots();
   const connectionAttempts = useWorkspaceEnvStore((s) => s.connectionAttempts);
 
-  const currentProjectPath = lastProjectPath() ?? "";
+  const currentProjectPath = selectedProjectId ?? lastProjectPath() ?? "";
   const parsedCurrentProject = parseRemotePath(currentProjectPath);
-  const currentConnectionId = parsedCurrentProject
-    ? (findSshProfile(parsedCurrentProject.environmentId)?.id ??
-       remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId))
-    : (harnessEnv.kind === "ssh" ? harnessEnv.connection.id : undefined);
+  const selectedProject = Object.entries(projects).find(
+    ([ownerId]) => ownerId === selectedProjectId,
+  )?.[1];
+  const currentConnectionId = selectedProject
+    ? selectedProject.identity.profileId
+    : parsedCurrentProject
+      ? (remoteSshConnectionIdForEnvironment(parsedCurrentProject.environmentId) ??
+        connections.find(
+          (profile) => profile.id === parsedCurrentProject.environmentId,
+        )?.id)
+      : undefined;
 
   const openFolder = (id?: string) => {
     setConnectionId(id);
@@ -146,20 +152,25 @@ export function HarnessConnectionsPage() {
               };
               const connectionAttempt =
                 connectionAttempts[workspaceScopeKey(candidateEnv)];
+              const harnessStatus = harnessProfileStatus(
+                connection,
+                projects,
+                pool,
+              );
+              const isSshActive = harnessStatus.phase === "ready";
               const isConnConnecting =
-                isHarnessConnecting ||
-                connectionAttempt?.state.phase === "resolving" ||
-                connectionAttempt?.state.phase === "connecting" ||
-                connectionAttempt?.state.phase === "reconnecting";
+                !isSshActive &&
+                (harnessStatus.phase === "connecting" ||
+                  connectionAttempt?.state.phase === "resolving" ||
+                  connectionAttempt?.state.phase === "connecting" ||
+                  connectionAttempt?.state.phase === "reconnecting");
+              const connectionError =
+                harnessStatus.error ??
+                (connectionAttempt?.state.phase === "failed"
+                  ? connectionAttempt.state.error
+                  : null);
               const isConnFailed =
-                Boolean(harnessError) || connectionAttempt?.state.phase === "failed";
-              const isSshActive =
-                harnessEnv.kind === "ssh" &&
-                (harnessEnv.connection.id === connection.id ||
-                  (harnessEnv.connection.host.toLowerCase() ===
-                    connection.host.toLowerCase() &&
-                    (harnessEnv.connection.port ?? 22) ===
-                      (connection.port ?? 22)));
+                !isSshActive && !isConnConnecting && Boolean(connectionError);
               const isCurrentProject = currentConnectionId === connection.id;
 
               return (
@@ -238,7 +249,7 @@ export function HarnessConnectionsPage() {
                           ) : isConnFailed ? (
                             <span
                               className="inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-rose-400"
-                              title={connectionAttempt?.state.error ?? undefined}
+                              title={connectionError ?? undefined}
                             >
                               <CircleAlert className="size-3" strokeWidth={2} />
                               <span>Error</span>
@@ -308,13 +319,13 @@ export function HarnessConnectionsPage() {
                   </div>
 
                   {/* Failure details if connection failed */}
-                  {isConnFailed && connectionAttempt?.state.error ? (
+                  {isConnFailed && connectionError ? (
                     <div className="flex items-start gap-2 rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 text-[11px] text-rose-300">
                       <CircleAlert
                         className="size-3.5 shrink-0 text-rose-400 mt-0.5"
                       />
                       <span className="leading-relaxed">
-                        {connectionAttempt.state.error}
+                        {connectionError}
                       </span>
                     </div>
                   ) : null}
