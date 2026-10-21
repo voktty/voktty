@@ -36,6 +36,10 @@ import type { BlockMode } from "../block/lib/modeMachine";
 import { DormantRing } from "./dormantRing";
 import { PtyTextDecoder } from "./ptyText";
 import {
+  REMOTE_CWD_POLL_MS,
+  shouldFollowRemoteCwd,
+} from "./remoteCwdFollow";
+import {
   createShellIntegrationState,
   registerCwdHandler,
   registerOsc9ProgressHandler,
@@ -98,6 +102,9 @@ type Session = {
   shellOverride?: string;
   initialCwd: string | undefined;
   lastCwd: string | null;
+  shellReportedCwd: boolean;
+  openedAt: number;
+  cwdLookupInFlight: boolean;
   pendingExit: number | null;
   shellExited: boolean;
   callbacks: Callbacks;
@@ -800,6 +807,9 @@ function ensureSession(
     shellOverride,
     initialCwd,
     lastCwd: null,
+    shellReportedCwd: false,
+    openedAt: Date.now(),
+    cwdLookupInFlight: false,
     pendingExit: null,
     shellExited: false,
     callbacks: {},
@@ -834,6 +844,7 @@ function ensureSession(
     connectionState: IDLE_CONNECTION_STATE,
   };
   sessions.set(leafId, session);
+  if (workspaceEnv.kind === "ssh") ensureRemoteCwdFollower();
 
   session.ready = (async () => {
     await ensureMonoFontsLoaded();
@@ -1135,6 +1146,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
           shouldAcceptCwd: () => s.pty === null || !isAgentActivePty(s.pty.id),
           onCwd: (next) => {
             markSessionReady(leafId);
+            s.shellReportedCwd = true;
             if (s.lastCwd === next) return;
             s.lastCwd = next;
             s.callbacks.onCwd?.(next);
@@ -1176,6 +1188,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         term,
         (next) => {
           markSessionReady(leafId);
+          s.shellReportedCwd = true;
           if (s.lastCwd === next) return;
           s.lastCwd = next;
           s.callbacks.onCwd?.(next);
@@ -1822,6 +1835,44 @@ export async function getLiveLeafCwd(leafId: number): Promise<string | null> {
     } catch {}
   }
   return s.lastCwd;
+}
+
+let remoteCwdFollowerStarted = false;
+
+function followRemoteCwds(): void {
+  if (document.hidden) return;
+  const now = Date.now();
+  for (const [leafId, s] of sessions) {
+    if (
+      !shouldFollowRemoteCwd({
+        ssh: s.workspaceEnv.kind === "ssh",
+        hasPty: s.pty !== null,
+        shellExited: s.shellExited,
+        visible: s.visibleNow,
+        focused: s.focusedNow,
+        agentActive: s.pty !== null && isAgentActivePty(s.pty.id),
+        shellReportedCwd: s.shellReportedCwd,
+        openedForMs: now - s.openedAt,
+        lookupInFlight: s.cwdLookupInFlight,
+      })
+    ) {
+      continue;
+    }
+    s.cwdLookupInFlight = true;
+    void getLiveLeafCwd(leafId)
+      .catch(() => null)
+      .finally(() => {
+        s.cwdLookupInFlight = false;
+      });
+  }
+}
+
+// One shared timer: it does nothing unless a focused remote terminal needs the
+// helper's answer, so local-only use pays no cost.
+function ensureRemoteCwdFollower(): void {
+  if (remoteCwdFollowerStarted) return;
+  remoteCwdFollowerStarted = true;
+  window.setInterval(followRemoteCwds, REMOTE_CWD_POLL_MS);
 }
 
 export function terminalDebugStats() {

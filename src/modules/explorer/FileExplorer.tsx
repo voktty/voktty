@@ -378,6 +378,33 @@ export const FileExplorer = memo(
       setVisibleRootPath(parentPath);
     }, [onPrepareNavigationRoot, parentPath, rootPath, t, workspaceEnv]);
 
+    const moveExplorerTo = useCallback(
+      async (targetPath: string, silent: boolean) => {
+        if (refreshPendingNavigationRef.current === navigationKey) return;
+        refreshPendingNavigationRef.current = navigationKey;
+        const request = ++refreshRequestRef.current;
+        let environmentChanged = false;
+        try {
+          environmentChanged =
+            (await onPrepareNavigationRoot?.(targetPath)) ?? false;
+        } catch {
+          if (request !== refreshRequestRef.current) return;
+          if (!silent) toast.error(t("feedback.remoteSessionFailed"));
+          return;
+        } finally {
+          if (refreshPendingNavigationRef.current === navigationKey) {
+            refreshPendingNavigationRef.current = null;
+          }
+        }
+        if (request !== refreshRequestRef.current) return;
+        setVisibleRootPath(targetPath);
+        if (!environmentChanged) tree.refresh(targetPath);
+      },
+      [navigationKey, onPrepareNavigationRoot, t, tree],
+    );
+    const moveExplorerToRef = useRef(moveExplorerTo);
+    moveExplorerToRef.current = moveExplorerTo;
+
     const handleSyncToTerminal = useCallback(async () => {
       let targetPath = sourceRootPath;
       try {
@@ -385,33 +412,26 @@ export const FileExplorer = memo(
         if (liveCwd) targetPath = liveCwd;
       } catch {}
       if (!targetPath) return;
-      if (refreshPendingNavigationRef.current === navigationKey) return;
-      refreshPendingNavigationRef.current = navigationKey;
-      const request = ++refreshRequestRef.current;
-      let environmentChanged = false;
-      try {
-        environmentChanged =
-          (await onPrepareNavigationRoot?.(targetPath)) ?? false;
-      } catch {
-        if (request !== refreshRequestRef.current) return;
-        toast.error(t("feedback.remoteSessionFailed"));
+      await moveExplorerTo(targetPath, false);
+    }, [moveExplorerTo, onSyncToTerminal, sourceRootPath]);
+
+    // The terminal moved to a folder the current remote session cannot list,
+    // typically through a symlink or above the project root. Follow it once per
+    // folder instead of leaving the tree behind until Refresh is pressed.
+    const followedSourceRef = useRef<string | null>(null);
+    useEffect(() => {
+      if (
+        workspaceEnv.kind !== "ssh" ||
+        sourceRootPath === null ||
+        sourceRootIsReachable
+      ) {
+        followedSourceRef.current = null;
         return;
-      } finally {
-        if (refreshPendingNavigationRef.current === navigationKey) {
-          refreshPendingNavigationRef.current = null;
-        }
       }
-      if (request !== refreshRequestRef.current) return;
-      setVisibleRootPath(targetPath);
-      if (!environmentChanged) tree.refresh(targetPath);
-    }, [
-      navigationKey,
-      onPrepareNavigationRoot,
-      onSyncToTerminal,
-      sourceRootPath,
-      t,
-      tree,
-    ]);
+      if (followedSourceRef.current === sourceRootPath) return;
+      followedSourceRef.current = sourceRootPath;
+      void moveExplorerToRef.current(sourceRootPath, true);
+    }, [sourceRootIsReachable, sourceRootPath, workspaceEnv.kind]);
 
     const handleRefreshCurrent = useCallback(() => {
       if (rootPath) tree.refresh(rootPath);
