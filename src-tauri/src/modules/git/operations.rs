@@ -19,6 +19,7 @@ use crate::modules::git::utils::{
     split_upstream, ResolvedGitDirectory,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace_trust::authorize_and_remember;
 
 pub fn resolve_repo(
     registry: &WorkspaceRegistry,
@@ -1629,13 +1630,24 @@ pub fn add_safe_directory(
     ensure_git_available(workspace)?;
     let clean_path = safe_directory_path(path)?;
     if !workspace.is_remote() {
-        let _ = registry.authorize(clean_path);
+        let _ = authorize_and_remember(registry, Path::new(clean_path));
     }
     let normalized_path = if !workspace.is_remote() && clean_path.contains('\\') {
         clean_path.replace('\\', "/")
     } else {
         clean_path.to_string()
     };
+    let existing = run_git(
+        workspace,
+        None,
+        ["config", "--global", "--get-all", "safe.directory"],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    if existing.exit_code == Some(0)
+        && safe_directory_listed(&String::from_utf8_lossy(&existing.stdout), &normalized_path)
+    {
+        return Ok(());
+    }
     let output = run_git(
         workspace,
         None,
@@ -1650,6 +1662,14 @@ pub fn add_safe_directory(
     )?;
     ensure_success(&output, "failed to add git safe.directory exception")?;
     Ok(())
+}
+
+fn safe_directory_listed(configured: &str, path: &str) -> bool {
+    let wanted = path.trim_end_matches('/');
+    configured
+        .lines()
+        .map(str::trim)
+        .any(|entry| entry == "*" || (!entry.is_empty() && entry.trim_end_matches('/') == wanted))
 }
 
 fn safe_directory_path(path: &str) -> Result<&str> {
@@ -2620,6 +2640,15 @@ mod tests {
         assert!(safe_directory_path("  ").is_err());
         assert!(safe_directory_path("/repo\nother").is_err());
         assert_eq!(safe_directory_path("'/srv/repo'").unwrap(), "/srv/repo");
+    }
+
+    #[test]
+    fn safe_directory_listed_matches_exact_entries_and_the_wildcard() {
+        assert!(safe_directory_listed("/srv/a\n/srv/repo\n", "/srv/repo"));
+        assert!(safe_directory_listed("/srv/repo/\n", "/srv/repo"));
+        assert!(safe_directory_listed("*\n", "/srv/repo"));
+        assert!(!safe_directory_listed("/srv/repo2\n/srv\n", "/srv/repo"));
+        assert!(!safe_directory_listed("", "/srv/repo"));
     }
 
     #[test]

@@ -35,3 +35,4 @@ pub mod vibrancy;
 pub mod web_server;
 pub mod window;
 pub mod workspace;
+pub mod workspace_trust;

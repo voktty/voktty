@@ -185,6 +185,9 @@ pub fn bootstrap_registry(registry: &WorkspaceRegistry) {
     if let Some(home) = dirs::home_dir() {
         let _ = registry.authorize(home);
     }
+    if let Some(store) = crate::modules::workspace_trust::default_store_path() {
+        crate::modules::workspace_trust::load_into(registry, &store);
+    }
 }
 
 #[tauri::command]
