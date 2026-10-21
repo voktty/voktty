@@ -36,6 +36,7 @@ import {
   openRemoteWorkspace,
   type RemoteSessionInfo,
   type RemoteSshConnection,
+  RemoteTunnelCleanupPendingError,
   runRemoteOpenCodeServiceAction,
 } from "@/modules/remote/client";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -81,9 +82,22 @@ type Entry = {
   target?: ProfileTarget;
   isLive?: () => boolean;
   closing: boolean;
-  closed: Promise<void>;
-  resolveClosed: () => void;
+  cleanup?: () => Promise<void>;
+  closeAttempt?: Promise<void>;
 };
+
+function retryableCleanup(action: () => Promise<void>): () => Promise<void> {
+  let attempt: Promise<void> | undefined;
+  return () => {
+    if (attempt) return attempt;
+    const pending = Promise.resolve().then(action);
+    attempt = pending;
+    void pending.catch(() => {
+      if (attempt === pending) attempt = undefined;
+    });
+    return pending;
+  };
+}
 
 function remoteServicePort(output: string): number | null {
   for (const line of output.split("\n")) {
@@ -149,6 +163,7 @@ async function openService(
   dependencies: OpenDependencies,
   target: ProfileTarget | undefined,
   cancelled: () => boolean,
+  captureCleanup: (close: () => Promise<void>) => void,
 ): Promise<ServiceResource> {
   if (cancelled())
     throw new Error("Remote OpenCode service was closed before it was ready.");
@@ -182,29 +197,29 @@ async function openService(
           entry.leases > 0,
       );
   let tunnelId: number | undefined;
-  let closing: Promise<void> | undefined;
-  const close = () => {
-    closing ??= (async () => {
-      try {
-        if (tunnelId !== undefined)
-          await dependencies
-            .closeTunnel(session.session_id, tunnelId)
-            .catch(() => undefined);
-      } finally {
-        if (lease) {
-          lease.release();
-          const entry = dependencies.sessions
-            .snapshot()
-            .find((candidate) => candidate.sessionId === session.session_id);
-          if (entry?.leases === 0)
-            await dependencies.sessions.closeSession(session.session_id);
-        } else {
-          await dependencies.closeWorkspace(session.session_id);
-        }
+  let leaseReleased = false;
+  const close = retryableCleanup(async () => {
+    if (tunnelId !== undefined) {
+      await dependencies.closeTunnel(session.session_id, tunnelId);
+      tunnelId = undefined;
+    }
+    if (lease?.releaseAndClose) {
+      await lease.releaseAndClose();
+    } else if (lease) {
+      if (!leaseReleased) {
+        leaseReleased = true;
+        lease.release();
       }
-    })().catch(() => undefined);
-    return closing;
-  };
+      const entry = dependencies.sessions
+        .snapshot()
+        .find((candidate) => candidate.sessionId === session.session_id);
+      if (entry?.leases === 0)
+        await dependencies.sessions.closeSession(session.session_id);
+    } else {
+      await dependencies.closeWorkspace(session.session_id);
+    }
+  });
+  captureCleanup(close);
   const assertReady = () => {
     if (cancelled() || !isLive())
       throw new Error(
@@ -267,10 +282,16 @@ async function openService(
     if (!password)
       throw new Error("Remote OpenCode did not report a service password.");
 
-    const tunnel = await dependencies.openTunnel(
-      session.session_id,
-      remotePort,
-    );
+    const tunnel = await dependencies
+      .openTunnel(session.session_id, remotePort)
+      .catch((error: unknown) => {
+        if (
+          error instanceof RemoteTunnelCleanupPendingError &&
+          error.sessionId === session.session_id
+        )
+          tunnelId = error.tunnelId;
+        throw error;
+      });
     tunnelId = tunnel.tunnelId;
     assertReady();
     return {
@@ -286,7 +307,6 @@ async function openService(
   } catch (error) {
     if (target && isSessionLostError(error))
       dependencies.sessions.invalidate(target.key, session.session_id);
-    await close();
     throw error;
   }
 }
@@ -303,19 +323,38 @@ export function createRemoteOpenCodeServiceManager(
   const freshServiceKeys = new Map<string, string>();
   let freshServiceSequence = 0;
 
+  const retiredOwners = new Map<string, Map<Entry, string>>();
+  const retainRetiredOwner = (owner: string, key: string, entry: Entry) => {
+    let retired = retiredOwners.get(owner);
+    if (!retired) {
+      retired = new Map();
+      retiredOwners.set(owner, retired);
+    }
+    retired.set(entry, key);
+  };
+  const forgetRetiredOwner = (owner: string, entry: Entry) => {
+    const retired = retiredOwners.get(owner);
+    retired?.delete(entry);
+    if (retired?.size === 0) retiredOwners.delete(owner);
+  };
   const finishEntry = (key: string, entry: Entry) => {
     if (entries.get(key) === entry) entries.delete(key);
-    entry.resolveClosed();
+    for (const owner of retiredOwners.keys()) forgetRetiredOwner(owner, entry);
   };
 
-  const closeEntry = (key: string, entry: Entry) => {
-    if (entry.closing) return entry.closed;
+  const closeEntry = (key: string, entry: Entry): Promise<void> => {
+    if (entry.closeAttempt) return entry.closeAttempt;
     entry.closing = true;
-    void entry.resource
-      .then((resource) => resource.close())
-      .catch(() => undefined)
-      .finally(() => finishEntry(key, entry));
-    return entry.closed;
+    const pending = Promise.resolve().then(async () => {
+      await entry.resource.catch(() => undefined);
+      await entry.cleanup?.();
+      finishEntry(key, entry);
+    });
+    entry.closeAttempt = pending;
+    void pending.catch(() => {
+      if (entry.closeAttempt === pending) entry.closeAttempt = undefined;
+    });
+    return pending;
   };
 
   const detach = async (ownerId: string): Promise<void> => {
@@ -326,28 +365,45 @@ export function createRemoteOpenCodeServiceManager(
     const entry = entries.get(key);
     if (!entry) return;
     entry.owners.delete(ownerId);
-    if (entry.owners.size === 0) await closeEntry(key, entry);
+    if (entry.owners.size === 0) {
+      retainRetiredOwner(ownerId, key, entry);
+      await closeEntry(key, entry);
+    }
   };
 
   const captureRelease = (ownerId: string): (() => Promise<void>) => {
     const owner = ownerId;
     const key = ownerKeys.get(owner);
     const entry = key ? entries.get(key) : undefined;
+    const captured = new Map<Entry, string>();
+    if (key) {
+      if (entry) captured.set(entry, key);
+    } else {
+      for (const [retired, retiredKey] of retiredOwners.get(owner) ?? [])
+        captured.set(retired, retiredKey);
+    }
     // Retire before the caller awaits abort, so a late acquisition cannot publish.
     ownerAttempts.delete(owner);
     ownerKeys.delete(owner);
     ownerLocations.delete(owner);
     ownersNeedingFreshService.delete(owner);
     freshServiceKeys.delete(owner);
-    entry?.owners.delete(owner);
-    let closing: Promise<void> | undefined;
-    return () => {
-      closing ??=
-        key && entry && entry.owners.size === 0
-          ? closeEntry(key, entry)
-          : Promise.resolve();
-      return closing;
-    };
+    for (const [resource, resourceKey] of captured) {
+      resource.owners.delete(owner);
+      if (resource.owners.size === 0)
+        retainRetiredOwner(owner, resourceKey, resource);
+    }
+    return retryableCleanup(async () => {
+      const results = await Promise.allSettled(
+        [...captured].map(async ([resource, resourceKey]) => {
+          if (resource.owners.size === 0)
+            await closeEntry(resourceKey, resource);
+          else forgetRetiredOwner(owner, resource);
+        }),
+      );
+      const failure = results.find((result) => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
+    });
   };
 
   const release = (ownerId: string): Promise<void> => captureRelease(ownerId)();
@@ -408,7 +464,7 @@ export function createRemoteOpenCodeServiceManager(
     let entryKey = ownerKeys.get(owner);
     let entry = entryKey ? entries.get(entryKey) : undefined;
     if (entry?.closing) {
-      await entry.closed;
+      await closeEntry(entryKey ?? location, entry);
       if (!isCurrent())
         throw new Error(
           "Remote OpenCode service was closed before it was ready.",
@@ -425,7 +481,7 @@ export function createRemoteOpenCodeServiceManager(
       }
       entry = entries.get(entryKey);
       if (entry?.closing) {
-        await entry.closed;
+        await closeEntry(entryKey ?? location, entry);
         if (!isCurrent())
           throw new Error(
             "Remote OpenCode service was closed before it was ready.",
@@ -440,10 +496,6 @@ export function createRemoteOpenCodeServiceManager(
           "Close an unused remote OpenCode session before opening another machine.",
         );
       }
-      let resolveClosed: () => void = () => {};
-      const closed = new Promise<void>((resolve) => {
-        resolveClosed = resolve;
-      });
       const createdEntry: Entry = {
         owners: new Set(),
         resource: Promise.resolve().then(() =>
@@ -453,12 +505,13 @@ export function createRemoteOpenCodeServiceManager(
             dependencies,
             target,
             () => createdEntry.closing,
+            (close) => {
+              createdEntry.cleanup = close;
+            },
           ),
         ),
         target,
         closing: false,
-        closed,
-        resolveClosed,
       };
       const createdKey = entryKey;
       if (!createdKey)
@@ -469,7 +522,7 @@ export function createRemoteOpenCodeServiceManager(
         (resource) => {
           createdEntry.isLive = resource.isLive;
         },
-        () => finishEntry(createdKey, createdEntry),
+        () => undefined,
       );
     }
     if (
@@ -504,7 +557,7 @@ export function createRemoteOpenCodeServiceManager(
       return resource.service;
     } catch (error) {
       if (isCurrent() && ownerKeys.get(owner) === entryKey) {
-        await detach(owner);
+        await detach(owner).catch(() => undefined);
         if (isCurrent()) {
           freshServiceKeys.delete(owner);
           ownerAttempts.delete(owner);

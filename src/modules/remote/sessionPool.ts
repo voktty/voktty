@@ -26,6 +26,8 @@ export type RemoteSessionLease = {
   readonly info: RemoteSessionInfo;
   /** Idempotent. A lease from a closed or replaced session releases nothing. */
   release: () => void;
+  /** Releases once; last-owner cleanup retains its exact retry handle on failure. */
+  releaseAndClose?: () => Promise<void>;
 };
 
 export type RemoteSessionSnapshot = {
@@ -33,6 +35,7 @@ export type RemoteSessionSnapshot = {
   state: ResourceConnectionState;
   sessionId?: number;
   leases: number;
+  closing?: boolean;
 };
 
 export type RemoteSessionPoolDeps = {
@@ -43,6 +46,7 @@ export type RemoteSessionPoolDeps = {
   close: (sessionId: number) => Promise<void>;
   schedule: (task: () => void, delayMs: number) => () => void;
   idleMs: number;
+  maxSessions?: number;
 };
 
 type Entry = {
@@ -54,6 +58,8 @@ type Entry = {
   leases: number;
   generation: number;
   cancelIdle?: () => void;
+  closing?: boolean;
+  closeAttempt?: Promise<void>;
 };
 
 const SESSION_LOST =
@@ -68,16 +74,17 @@ export function remoteSessionKeyId(key: RemoteSessionKey): string {
   return `${key.profileId}\u0000${key.root}`;
 }
 
-/**
- * One helper session per (profile, root), shared by every consumer. Opens are
- * deduplicated, an unused session closes after an idle delay, and a session
- * the helper reports as lost is dropped so the next use reopens it.
- */
+/** One helper per (profile, root), including reservations awaiting cleanup ACK. */
 export class RemoteSessionPool {
   private readonly entries = new Map<string, Entry>();
   private readonly listeners = new Set<() => void>();
+  private readonly maxSessions: number;
 
-  constructor(private readonly deps: RemoteSessionPoolDeps) {}
+  constructor(private readonly deps: RemoteSessionPoolDeps) {
+    this.maxSessions = deps.maxSessions ?? 256;
+    if (!Number.isSafeInteger(this.maxSessions) || this.maxSessions <= 0)
+      throw new Error("Remote session limit must be a positive safe integer.");
+  }
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -90,6 +97,7 @@ export class RemoteSessionPool {
       state: entry.state,
       sessionId: entry.info?.session_id,
       leases: entry.leases,
+      ...(entry.closing ? { closing: true } : {}),
     }));
   }
 
@@ -101,6 +109,14 @@ export class RemoteSessionPool {
     const nativeConnection = { ...connection };
     const binding = normalizedRemoteSessionConnection(nativeConnection);
     let entry = this.entries.get(id);
+    if (entry?.closing) {
+      if (!entry.closeAttempt)
+        throw new Error(
+          "Remote session cleanup failed; retry closing it before reconnecting.",
+        );
+      await entry.closeAttempt;
+      return this.acquire(key, connection);
+    }
     if (
       entry &&
       (entry.info || entry.opening || entry.leases > 0) &&
@@ -109,8 +125,12 @@ export class RemoteSessionPool {
       throw new RemoteSessionConnectionChangedError();
     }
     if (!entry) {
+      if (this.entries.size >= this.maxSessions)
+        throw new Error(
+          "Remote session limit reached; close an unused session first.",
+        );
       entry = {
-        key,
+        key: Object.freeze({ ...key }),
         binding,
         state: IDLE_CONNECTION_STATE,
         leases: 0,
@@ -128,9 +148,8 @@ export class RemoteSessionPool {
     try {
       const info =
         entry.info ?? (await this.ensureOpen(entry, nativeConnection));
-      if (entry.generation !== generation) {
+      if (entry.generation !== generation)
         throw new Error("The remote session was closed before it was ready.");
-      }
       return this.leaseFor(entry, info, generation);
     } catch (reason) {
       if (entry.generation === generation) {
@@ -163,22 +182,23 @@ export class RemoteSessionPool {
     }
   }
 
-  /** Drops a session the transport reported as lost, without reopening it. */
+  /** Retires an exact lost session; failed native cleanup remains addressable. */
   invalidate(key: RemoteSessionKey, sessionId: number): void {
     const id = remoteSessionKeyId(key);
     const entry = this.entries.get(id);
     if (!entry || entry.info?.session_id !== sessionId) return;
-    this.discard(id, entry, "The remote session was lost.");
+    void this.discard(id, entry, "The remote session was lost.").catch(
+      () => undefined,
+    );
   }
 
-  /** Closes one session now, whatever still leases it. */
-  async closeSession(sessionId: number): Promise<void> {
-    for (const [id, entry] of [...this.entries]) {
-      if (entry.info?.session_id === sessionId) {
-        await this.discard(id, entry, null);
-        return;
-      }
+  /** Closes or retries one exact session now, whatever still leases it. */
+  closeSession(sessionId: number): Promise<void> {
+    for (const [id, entry] of this.entries) {
+      if (entry.info?.session_id === sessionId)
+        return this.discard(id, entry, null);
     }
+    return Promise.resolve();
   }
 
   /** Closes every session of a profile, such as on an explicit disconnect. */
@@ -209,38 +229,39 @@ export class RemoteSessionPool {
     );
     const attempt = entry.state.attempt;
     const generation = entry.generation;
+    let resolveOpen!: (info: RemoteSessionInfo) => void;
+    let rejectOpen!: (reason: unknown) => void;
+    const opening = new Promise<RemoteSessionInfo>((resolve, reject) => {
+      resolveOpen = resolve;
+      rejectOpen = reject;
+    });
+    entry.opening = opening;
     this.notify();
-    const opening = this.deps
-      .open(connection, entry.key.root)
-      .then(
-        (info) => {
-          if (entry.generation !== generation) {
-            void this.deps.close(info.session_id).catch(() => undefined);
-            throw new Error(
-              "The remote session was closed before it was ready.",
-            );
-          }
-          entry.info = info;
-          entry.state = settleConnectionAttempt(entry.state, attempt, "ready");
-          return info;
-        },
-        (reason: unknown) => {
-          if (entry.generation === generation) {
-            entry.state = settleConnectionAttempt(
-              entry.state,
-              attempt,
-              "failed",
-              reason instanceof Error ? reason.message : String(reason),
-            );
-          }
-          throw reason;
-        },
-      )
-      .finally(() => {
+    const settle = async () => {
+      try {
+        if (entry.closing)
+          throw new Error("The remote session was closed before it was ready.");
+        const info = await this.deps.open(connection, entry.key.root);
+        entry.info = info;
+        if (entry.generation !== generation)
+          throw new Error("The remote session was closed before it was ready.");
+        entry.state = settleConnectionAttempt(entry.state, attempt, "ready");
+        resolveOpen(info);
+      } catch (reason) {
+        if (entry.generation === generation)
+          entry.state = settleConnectionAttempt(
+            entry.state,
+            attempt,
+            "failed",
+            reason instanceof Error ? reason.message : String(reason),
+          );
+        rejectOpen(reason);
+      } finally {
         if (entry.opening === opening) entry.opening = undefined;
         this.notify();
-      });
-    entry.opening = opening;
+      }
+    };
+    void settle();
     return opening;
   }
 
@@ -250,14 +271,37 @@ export class RemoteSessionPool {
     generation: number,
   ): RemoteSessionLease {
     let released = false;
+    let closing: Promise<void> | undefined;
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (entry.generation !== generation) return;
+      entry.leases = Math.max(0, entry.leases - 1);
+      if (entry.leases === 0) this.scheduleIdleClose(entry);
+    };
     return {
       info,
-      release: () => {
-        if (released) return;
-        released = true;
-        if (entry.generation !== generation) return;
-        entry.leases = Math.max(0, entry.leases - 1);
-        if (entry.leases === 0) this.scheduleIdleClose(entry);
+      release,
+      releaseAndClose: () => {
+        if (closing) return closing;
+        release();
+        if (
+          entry.leases > 0 ||
+          this.entries.get(remoteSessionKeyId(entry.key)) !== entry
+        ) {
+          closing = Promise.resolve();
+          return closing;
+        }
+        const pending = this.discard(
+          remoteSessionKeyId(entry.key),
+          entry,
+          null,
+        );
+        closing = pending;
+        void pending.catch(() => {
+          if (closing === pending) closing = undefined;
+        });
+        return pending;
       },
     };
   }
@@ -268,14 +312,17 @@ export class RemoteSessionPool {
     entry.cancelIdle = this.deps.schedule(() => {
       entry.cancelIdle = undefined;
       if (entry.generation !== generation || entry.leases > 0) return;
-      void this.discard(remoteSessionKeyId(entry.key), entry, null);
+      void this.discard(remoteSessionKeyId(entry.key), entry, null).catch(
+        () => undefined,
+      );
     }, this.deps.idleMs);
   }
 
   private collect(id: string, entry: Entry): void {
-    if (entry.leases > 0 || entry.info || entry.opening) return;
+    if (entry.closing || entry.leases > 0 || entry.info || entry.opening)
+      return;
     if (entry.state.phase === "failed" || entry.state.phase === "idle") {
-      this.entries.delete(id);
+      if (this.entries.get(id) === entry) this.entries.delete(id);
       this.notify();
     }
   }
@@ -285,18 +332,45 @@ export class RemoteSessionPool {
     entry: Entry,
     reason: string | null,
   ): Promise<void> {
-    entry.cancelIdle?.();
-    entry.cancelIdle = undefined;
-    const sessionId = entry.info?.session_id;
-    entry.info = undefined;
-    entry.generation += 1;
-    entry.leases = 0;
+    if (this.entries.get(id) !== entry) return Promise.resolve();
+    if (entry.closeAttempt) return entry.closeAttempt;
+    if (!entry.closing) {
+      entry.cancelIdle?.();
+      entry.cancelIdle = undefined;
+      entry.generation += 1;
+      entry.leases = 0;
+      entry.closing = true;
+    }
     entry.state = disconnectConnection(entry.state, reason);
-    if (this.entries.get(id) === entry) this.entries.delete(id);
+    let resolveClose!: () => void;
+    let rejectClose!: (reason: unknown) => void;
+    const closing = new Promise<void>((resolve, reject) => {
+      resolveClose = resolve;
+      rejectClose = reject;
+    });
+    entry.closeAttempt = closing;
     this.notify();
-    return sessionId === undefined
-      ? Promise.resolve()
-      : this.deps.close(sessionId).catch(() => undefined);
+    const close = async () => {
+      try {
+        if (entry.opening) await entry.opening.catch(() => undefined);
+        if (entry.info) await this.deps.close(entry.info.session_id);
+        if (this.entries.get(id) === entry) this.entries.delete(id);
+        resolveClose();
+      } catch (failure) {
+        if (entry.closeAttempt === closing) {
+          entry.closeAttempt = undefined;
+          entry.state = disconnectConnection(
+            entry.state,
+            "Remote session cleanup failed.",
+          );
+        }
+        rejectClose(failure);
+      } finally {
+        this.notify();
+      }
+    };
+    void close();
+    return closing;
   }
 
   private notify(): void {

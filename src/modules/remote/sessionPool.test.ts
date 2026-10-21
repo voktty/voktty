@@ -20,18 +20,19 @@ function info(id: number): RemoteSessionInfo {
   };
 }
 
-function harness() {
+function harness(maxSessions?: number) {
   let nextId = 1;
   const timers: Array<{ task: () => void; delay: number; cancelled: boolean }> =
     [];
   const open = vi.fn(async (_connection: RemoteSshConnection, _root: string) =>
     info(nextId++),
   );
-  const close = vi.fn(async () => undefined);
+  const close = vi.fn(async (_sessionId: number): Promise<void> => undefined);
   const pool = new RemoteSessionPool({
     open,
     close,
     idleMs: 1000,
+    maxSessions,
     schedule: (task, delay) => {
       const timer = { task, delay, cancelled: false };
       timers.push(timer);
@@ -47,6 +48,236 @@ function harness() {
 }
 
 describe("RemoteSessionPool", () => {
+  it.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid quota %s",
+    (limit) => {
+      expect(() => harness(limit)).toThrow("positive safe integer");
+    },
+  );
+
+  it("keeps failed exact retirement addressable and counted until retry ACK", async () => {
+    const { pool, open, close } = harness(1);
+    const first = await pool.acquire(key, connection);
+    close.mockRejectedValueOnce(new Error("close uncertain"));
+    await expect(pool.closeSession(first.info.session_id)).rejects.toThrow(
+      "close uncertain",
+    );
+    expect(pool.snapshot()[0]).toMatchObject({
+      sessionId: 1,
+      closing: true,
+      leases: 0,
+    });
+    await expect(
+      pool.acquire({ ...key, root: "/srv/other" }, connection),
+    ).rejects.toThrow("limit");
+    await expect(pool.acquire(key, connection)).rejects.toThrow("cleanup");
+    expect(open).toHaveBeenCalledTimes(1);
+    await pool.closeSession(1);
+    expect(close.mock.calls).toEqual([[1], [1]]);
+    expect(pool.snapshot()).toEqual([]);
+    const newer = await pool.acquire(key, { host: "other.test" });
+    first.release();
+    expect(pool.snapshot()[0].leases).toBe(1);
+    await pool.closeSession(1);
+    expect(close).toHaveBeenCalledTimes(2);
+    await newer.releaseAndClose?.();
+  });
+
+  it("coalesces pending close ACK and blocks new admission", async () => {
+    const { pool, open, close } = harness(1);
+    await pool.acquire(key, connection);
+    let finish!: () => void;
+    close.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const first = pool.closeSession(1);
+    let secondSettled = false;
+    const second = pool.closeSession(1).then(() => {
+      secondSettled = true;
+    });
+    await Promise.resolve();
+    expect(secondSettled).toBe(false);
+    expect(pool.snapshot()).toHaveLength(1);
+    await expect(
+      pool.acquire({ ...key, root: "/srv/other" }, connection),
+    ).rejects.toThrow("limit");
+    expect(open).toHaveBeenCalledTimes(1);
+    finish();
+    await Promise.all([first, second]);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains cancelled pending acquisition until late known ID cleanup ACK", async () => {
+    const { pool, open, close } = harness(1);
+    let finishOpen!: (value: RemoteSessionInfo) => void;
+    open.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOpen = resolve;
+        }),
+    );
+    const pending = pool.acquire(key, connection);
+    const rejected = expect(pending).rejects.toThrow("closed before");
+    const closing = pool.closeProfile("p1");
+    const closeRejected = expect(closing).rejects.toThrow("close uncertain");
+    await expect(
+      pool.acquire({ ...key, root: "/srv/other" }, connection),
+    ).rejects.toThrow("limit");
+    close.mockRejectedValueOnce(new Error("close uncertain"));
+    finishOpen(info(7));
+    await rejected;
+    await closeRejected;
+    expect(pool.snapshot()[0]).toMatchObject({ sessionId: 7, closing: true });
+    await pool.closeSession(7);
+    expect(close.mock.calls).toEqual([[7], [7]]);
+    expect(pool.snapshot()).toEqual([]);
+  });
+
+  it("retries exact lease releaseAndClose without releasing siblings twice", async () => {
+    const { pool, close } = harness();
+    const a = await pool.acquire(key, connection);
+    const b = await pool.acquire(key, connection);
+    expect(a.releaseAndClose).toBeTypeOf("function");
+    await a.releaseAndClose?.();
+    expect(pool.snapshot()[0].leases).toBe(1);
+    expect(close).not.toHaveBeenCalled();
+    close.mockRejectedValueOnce(new Error("close uncertain"));
+    await expect(b.releaseAndClose?.()).rejects.toThrow("close uncertain");
+    await a.releaseAndClose?.();
+    expect(close).toHaveBeenCalledTimes(1);
+    await b.releaseAndClose?.();
+    expect(close.mock.calls).toEqual([[1], [1]]);
+    expect(pool.snapshot()).toEqual([]);
+  });
+
+  it("reserves before reentrant notification and deduplicates native opening", async () => {
+    const { pool, open } = harness(1);
+    let reentered = false;
+    let sibling!: Promise<Awaited<ReturnType<typeof pool.acquire>>>;
+    let overflow!: Promise<unknown>;
+    pool.subscribe(() => {
+      if (reentered) return;
+      reentered = true;
+      sibling = pool.acquire(key, connection);
+      overflow = expect(
+        pool.acquire({ ...key, root: "/srv/other" }, connection),
+      ).rejects.toThrow("limit");
+    });
+    const first = await pool.acquire(key, connection);
+    const second = await sibling;
+    await overflow;
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(pool.snapshot()[0].leases).toBe(2);
+    await first.releaseAndClose?.();
+    await second.releaseAndClose?.();
+  });
+
+  it.each(["idle", "lost"])(
+    "retains failed %s background cleanup without reopening",
+    async (trigger) => {
+      const { pool, open, close, fireIdle } = harness(1);
+      const lease = await pool.acquire(key, connection);
+      close.mockRejectedValueOnce(new Error("close uncertain"));
+      if (trigger === "idle") {
+        lease.release();
+        fireIdle();
+      } else pool.invalidate(key, 1);
+      await Promise.resolve();
+      expect(pool.snapshot()[0]).toMatchObject({
+        sessionId: 1,
+        closing: true,
+        leases: 0,
+        state: {
+          phase: "disconnected",
+          error: "Remote session cleanup failed.",
+        },
+      });
+      await expect(pool.acquire(key, connection)).rejects.toThrow("cleanup");
+      expect(open).toHaveBeenCalledTimes(1);
+      await pool.closeSession(1);
+      expect(close.mock.calls).toEqual([[1], [1]]);
+    },
+  );
+
+  it("counts a cancelled rejected opening until settlement without inventing a native ID", async () => {
+    const { pool, open, close } = harness(1);
+    let fail!: (reason: Error) => void;
+    open.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    const pending = pool.acquire(key, connection);
+    const rejected = expect(pending).rejects.toThrow("auth failed");
+    const closing = pool.closeProfile("p1");
+    expect(pool.snapshot()).toHaveLength(1);
+    await expect(
+      pool.acquire({ ...key, root: "/srv/other" }, connection),
+    ).rejects.toThrow("limit");
+    fail(new Error("auth failed"));
+    await rejected;
+    await closing;
+    expect(close).not.toHaveBeenCalled();
+    expect(pool.snapshot()).toEqual([]);
+  });
+
+  it("shares last lease close settlement and permits a changed binding only after ACK", async () => {
+    const { pool, open, close } = harness(1);
+    const lease = await pool.acquire(key, connection);
+    let finish!: () => void;
+    close.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const first = lease.releaseAndClose?.();
+    expect(lease.releaseAndClose?.()).toBe(first);
+    const newer = pool.acquire(key, { host: "other.test" });
+    expect(open).toHaveBeenCalledTimes(1);
+    finish();
+    await first;
+    const replacement = await newer;
+    expect(replacement.info.session_id).toBe(2);
+    lease.release();
+    await lease.releaseAndClose?.();
+    expect(pool.snapshot()[0].leases).toBe(1);
+    expect(close.mock.calls).toEqual([[1]]);
+    await replacement.releaseAndClose?.();
+  });
+
+  it("cancels from opening notification before invoking native allocation", async () => {
+    const { pool, open, close } = harness(1);
+    let retiring: Promise<void> | undefined;
+    pool.subscribe(() => {
+      if (!retiring && pool.snapshot()[0]?.state.phase === "connecting")
+        retiring = pool.closeProfile("p1");
+    });
+    await expect(pool.acquire(key, connection)).rejects.toThrow(
+      "closed before",
+    );
+    await retiring;
+    expect(open).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    expect(pool.snapshot()).toEqual([]);
+  });
+
+  it("uses a default shared reservation limit of 256", async () => {
+    const { pool, open } = harness();
+    for (let i = 0; i < 256; i += 1)
+      await pool.acquire({ profileId: `p${i}`, root: "/srv/app" }, connection);
+    await expect(
+      pool.acquire({ profileId: "overflow", root: "/srv/app" }, connection),
+    ).rejects.toThrow("limit");
+    expect(open).toHaveBeenCalledTimes(256);
+    expect(pool.snapshot()).toHaveLength(256);
+    await pool.closeAll();
+  });
+
   it("shares one open between concurrent consumers", async () => {
     const { pool, open } = harness();
     const [a, b] = await Promise.all([
@@ -130,6 +361,7 @@ describe("RemoteSessionPool", () => {
     expect(close).not.toHaveBeenCalled();
     fireIdle();
     expect(close).toHaveBeenCalledExactlyOnceWith(1);
+    await pool.closeSession(1);
     expect(pool.snapshot()).toEqual([]);
     const changed = await pool.acquire(key, { host: "other.test" });
     expect(changed.info.session_id).toBe(2);
@@ -243,6 +475,7 @@ describe("RemoteSessionPool", () => {
     expect(close).not.toHaveBeenCalled();
     fireIdle();
     expect(close).toHaveBeenCalledWith(1);
+    await pool.closeSession(1);
     expect(pool.snapshot()).toEqual([]);
   });
 
@@ -324,9 +557,10 @@ describe("RemoteSessionPool", () => {
     );
     const pending = pool.acquire(key, connection);
     const rejected = expect(pending).rejects.toThrow(/closed before/);
-    await pool.closeProfile("p1");
+    const closing = pool.closeProfile("p1");
     resolveOpen(info(7));
     await rejected;
+    await closing;
     expect(close).toHaveBeenCalledWith(7);
     expect(pool.snapshot()).toEqual([]);
   });

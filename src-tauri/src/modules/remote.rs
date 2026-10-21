@@ -4,7 +4,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -320,34 +320,176 @@ pub(crate) enum ProcEvent {
 pub(crate) type ProcListener = Arc<dyn Fn(ProcEvent) + Send + Sync>;
 
 pub(crate) struct RemoteSession {
-    child: Mutex<Child>,
+    resources: RemoteResources,
     stdin: Mutex<BufWriter<ChildStdin>>,
-    tunnels: Mutex<HashMap<u64, RemoteTunnel>>,
     routing: Arc<RemoteRouting>,
     connection: RemoteSshConnection,
     _askpass: Askpass,
 }
 
-struct RemoteTunnel {
-    child: Child,
+const REMOTE_PROCESS_STOP_TIMEOUT: Duration = Duration::from_secs(2);
+
+trait ProcessControl: Send {
+    fn exited(&mut self) -> std::io::Result<bool>;
+    fn kill_owned(&mut self) -> std::io::Result<()>;
 }
 
-impl RemoteTunnel {
-    fn stop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+impl ProcessControl for Child {
+    fn exited(&mut self) -> std::io::Result<bool> {
+        self.try_wait().map(|status| status.is_some())
+    }
+
+    fn kill_owned(&mut self) -> std::io::Result<()> {
+        self.kill()
+    }
+}
+
+fn stop_owned_process(child: &mut impl ProcessControl, timeout: Duration) -> Result<(), String> {
+    let deadline = Instant::now() + timeout;
+    if matches!(child.exited(), Ok(true)) {
+        return Ok(());
+    }
+    if child.kill_owned().is_err() {
+        return if matches!(child.exited(), Ok(true)) {
+            Ok(())
+        } else {
+            Err("could not stop owned remote SSH process".to_string())
+        };
+    }
+    loop {
+        match child.exited() {
+            Ok(true) => return Ok(()),
+            Err(_) => return Err("could not confirm owned remote SSH process exit".to_string()),
+            Ok(false) => {}
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err("timed out confirming owned remote SSH process exit".to_string());
+        }
+        std::thread::sleep(remaining.min(Duration::from_millis(20)));
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum RemoteTunnelOpenError {
+    Message(String),
+    CleanupPending {
+        code: &'static str,
+        #[serde(rename = "sessionId")]
+        session_id: u64,
+        #[serde(rename = "tunnelId")]
+        tunnel_id: u64,
+        message: &'static str,
+    },
+}
+
+impl From<String> for RemoteTunnelOpenError {
+    fn from(message: String) -> Self {
+        Self::Message(message)
+    }
+}
+
+struct RemoteTunnel<P = Child> {
+    child: P,
+}
+
+fn finish_tunnel_start<P: ProcessControl>(
+    tunnels: &mut HashMap<u64, RemoteTunnel<P>>,
+    session_id: u64,
+    tunnel_id: u64,
+    result: Result<RemoteTunnelInfo, String>,
+    timeout: Duration,
+) -> Result<RemoteTunnelInfo, RemoteTunnelOpenError> {
+    if result.is_err() {
+        let tunnel = tunnels
+            .get_mut(&tunnel_id)
+            .expect("registered opening tunnel");
+        if stop_owned_process(&mut tunnel.child, timeout).is_err() {
+            return Err(RemoteTunnelOpenError::CleanupPending {
+                code: "REMOTE_TUNNEL_CLEANUP_PENDING",
+                session_id,
+                tunnel_id,
+                message: "Remote SSH tunnel cleanup is pending.",
+            });
+        }
+        tunnels.remove(&tunnel_id);
+    }
+    result.map_err(Into::into)
+}
+
+struct RemoteResources<P = Child> {
+    child: Mutex<P>,
+    tunnels: Mutex<HashMap<u64, RemoteTunnel<P>>>,
+    retired: Arc<AtomicBool>,
+    close_lock: Mutex<()>,
+}
+
+impl<P: ProcessControl> RemoteResources<P> {
+    fn ensure_active(&self) -> Result<(), String> {
+        if self.retired.load(Ordering::Acquire) {
+            Err("remote SSH session is retired".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_tunnel_admission(
+        &self,
+        tunnels: &HashMap<u64, RemoteTunnel<P>>,
+    ) -> Result<(), String> {
+        self.ensure_active()?;
+        if tunnels.len() >= MAX_REMOTE_TUNNELS_PER_SESSION {
+            return Err(format!(
+                "remote session already has the maximum of {MAX_REMOTE_TUNNELS_PER_SESSION} tunnels"
+            ));
+        }
+        Ok(())
+    }
+
+    fn close_tunnel_with_timeout(&self, tunnel_id: u64, timeout: Duration) -> Result<(), String> {
+        let mut tunnels = self
+            .tunnels
+            .lock()
+            .map_err(|_| "remote tunnel state is poisoned")?;
+        if let Some(tunnel) = tunnels.get_mut(&tunnel_id) {
+            stop_owned_process(&mut tunnel.child, timeout)?;
+            tunnels.remove(&tunnel_id);
+        }
+        Ok(())
+    }
+
+    fn close_with_timeout(&self, timeout: Duration) -> Result<(), String> {
+        self.retired.store(true, Ordering::Release);
+        let _close = self
+            .close_lock
+            .lock()
+            .map_err(|_| "remote close state is poisoned")?;
+        let mut failed = false;
+        match self.tunnels.lock() {
+            Ok(mut tunnels) => tunnels.retain(|_, tunnel| {
+                let uncertain = stop_owned_process(&mut tunnel.child, timeout).is_err();
+                failed |= uncertain;
+                uncertain
+            }),
+            Err(_) => failed = true,
+        }
+        match self.child.lock() {
+            Ok(mut child) => failed |= stop_owned_process(&mut *child, timeout).is_err(),
+            Err(_) => failed = true,
+        }
+        if failed {
+            Err("could not confirm owned remote SSH resource retirement".to_string())
+        } else {
+            Ok(())
+        }
     }
 }
 
 fn tunnel_child_status(child: &mut Child) -> Result<Option<std::process::ExitStatus>, String> {
-    match child.try_wait() {
-        Ok(status) => Ok(status),
-        Err(error) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(format!("could not inspect remote SSH tunnel: {error}"))
-        }
-    }
+    child
+        .try_wait()
+        .map_err(|_| "could not inspect remote SSH tunnel".to_string())
 }
 
 #[derive(Clone)]
@@ -362,6 +504,7 @@ struct RemoteRouting {
     procs: Mutex<HashMap<u64, ProcListener>>,
     app: AppHandle,
     session_id: AtomicU64,
+    retired: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Serialize)]
@@ -373,26 +516,24 @@ struct RemoteChangedPayload {
 
 impl Drop for RemoteSession {
     fn drop(&mut self) {
-        if let Ok(mut tunnels) = self.tunnels.lock() {
-            for tunnel in tunnels.values_mut() {
-                tunnel.stop();
-            }
-            tunnels.clear();
-        }
-        if let Ok(mut child) = self.child.lock() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-        self.routing.fail_all("remote SSH session closed");
+        let _ = self.close();
     }
 }
 
 impl RemoteSession {
+    fn close(&self) -> Result<(), String> {
+        self.resources.retired.store(true, Ordering::Release);
+        self.routing.fail_all("remote SSH session closed");
+        self.resources
+            .close_with_timeout(REMOTE_PROCESS_STOP_TIMEOUT)
+    }
+
     fn set_id(&self, session_id: u64) {
         self.routing.session_id.store(session_id, Ordering::Release);
     }
 
     fn request(&self, request: &RemoteRequest) -> Result<RemoteResponse, String> {
+        self.resources.ensure_active()?;
         let (sender, receiver) = mpsc::channel();
         {
             let mut pending = self
@@ -400,6 +541,7 @@ impl RemoteSession {
                 .pending
                 .lock()
                 .map_err(|_| "remote request state is poisoned".to_string())?;
+            self.resources.ensure_active()?;
             if pending.insert(request.id.clone(), sender).is_some() {
                 return Err("duplicate remote request id".to_string());
             }
@@ -425,19 +567,25 @@ impl RemoteSession {
         })?
     }
 
-    fn open_tunnel(&self, tunnel_id: u64, remote_port: u16) -> Result<RemoteTunnelInfo, String> {
+    fn open_tunnel(
+        &self,
+        session_id: u64,
+        tunnel_id: u64,
+        remote_port: u16,
+    ) -> Result<RemoteTunnelInfo, RemoteTunnelOpenError> {
         if remote_port == 0 {
-            return Err("remote port must be greater than zero".to_string());
+            return Err("remote port must be greater than zero".to_string().into());
         }
 
+        self.resources.ensure_active()?;
         let mut tunnels = self
+            .resources
             .tunnels
             .lock()
             .map_err(|_| "remote tunnel state is poisoned".to_string())?;
-        if tunnels.len() >= MAX_REMOTE_TUNNELS_PER_SESSION {
-            return Err(format!(
-                "remote session already has the maximum of {MAX_REMOTE_TUNNELS_PER_SESSION} tunnels"
-            ));
+        self.resources.check_tunnel_admission(&tunnels)?;
+        if tunnels.contains_key(&tunnel_id) {
+            return Err("duplicate remote tunnel id".to_string().into());
         }
 
         let local_port = allocate_loopback_port()?;
@@ -450,15 +598,18 @@ impl RemoteSession {
             .stderr(Stdio::null());
         self._askpass.configure(&mut command)?;
         crate::modules::proc::hide_console(&mut command);
-        let mut child = command
+        let child = command
             .spawn()
             .map_err(|error| format!("could not start remote SSH tunnel: {error}"))?;
+        tunnels.insert(tunnel_id, RemoteTunnel { child });
+        let child = &mut tunnels.get_mut(&tunnel_id).expect("inserted tunnel").child;
 
         let address = SocketAddr::from(([127, 0, 0, 1], local_port));
         let started = Instant::now();
         let mut occupied_since = None;
-        loop {
-            if let Some(status) = tunnel_child_status(&mut child)? {
+        let result = (|| loop {
+            self.resources.ensure_active()?;
+            if let Some(status) = tunnel_child_status(child)? {
                 return Err(format!(
                     "remote SSH tunnel exited before becoming active (code {})",
                     status.code().unwrap_or(-1)
@@ -469,7 +620,7 @@ impl RemoteSession {
                 Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
                     let since = occupied_since.get_or_insert_with(Instant::now);
                     if since.elapsed() >= Duration::from_millis(150) {
-                        if let Some(status) = tunnel_child_status(&mut child)? {
+                        if let Some(status) = tunnel_child_status(child)? {
                             return Err(format!(
                                 "remote SSH tunnel exited before becoming active (code {})",
                                 status.code().unwrap_or(-1)
@@ -480,7 +631,7 @@ impl RemoteSession {
                             local_port,
                             remote_port,
                         };
-                        tunnels.insert(tunnel_id, RemoteTunnel { child });
+                        self.resources.ensure_active()?;
                         return Ok(info);
                     }
                 }
@@ -488,41 +639,37 @@ impl RemoteSession {
                     drop(listener);
                     occupied_since = None;
                 }
-                Err(error) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(format!(
-                        "could not verify remote SSH tunnel listener: {error}"
-                    ));
+                Err(_) => {
+                    return Err("could not verify remote SSH tunnel listener".to_string());
                 }
             }
 
             if started.elapsed() >= REMOTE_TUNNEL_START_TIMEOUT {
-                let _ = child.kill();
-                let _ = child.wait();
                 return Err("timed out waiting for the remote SSH tunnel to listen".to_string());
             }
             std::thread::sleep(Duration::from_millis(30));
-        }
+        })();
+        finish_tunnel_start(
+            &mut tunnels,
+            session_id,
+            tunnel_id,
+            result,
+            REMOTE_PROCESS_STOP_TIMEOUT,
+        )
     }
 
     fn close_tunnel(&self, tunnel_id: u64) -> Result<(), String> {
-        let tunnel = self
-            .tunnels
-            .lock()
-            .map_err(|_| "remote tunnel state is poisoned".to_string())?
-            .remove(&tunnel_id);
-        if let Some(mut tunnel) = tunnel {
-            tunnel.stop();
-        }
-        Ok(())
+        self.resources
+            .close_tunnel_with_timeout(tunnel_id, REMOTE_PROCESS_STOP_TIMEOUT)
     }
 
     fn send(&self, frame: &Frame) -> Result<(), String> {
+        self.resources.ensure_active()?;
         let mut stdin = self
             .stdin
             .lock()
             .map_err(|_| "remote helper input is poisoned".to_string())?;
+        self.resources.ensure_active()?;
         write_frame(&mut *stdin, frame).map_err(|error| error.to_string())?;
         stdin.flush().map_err(|error| error.to_string())
     }
@@ -538,6 +685,7 @@ impl RemoteSession {
             .ptys
             .lock()
             .map_err(|_| "remote PTY state is poisoned".to_string())?;
+        self.resources.ensure_active()?;
         if ptys
             .insert(pty_id, RemotePtyHandlers { on_data, on_exit })
             .is_some()
@@ -563,6 +711,7 @@ impl RemoteSession {
             .procs
             .lock()
             .map_err(|_| "remote process state is poisoned".to_string())?;
+        self.resources.ensure_active()?;
         if procs.insert(attach_id, listener).is_some() {
             return Err("duplicate remote process attachment".to_string());
         }
@@ -577,6 +726,7 @@ impl RemoteSession {
 
     /// Sends stdin bytes to a persistent process in bounded frames.
     pub(crate) fn proc_write(&self, attach_id: u64, data: &[u8]) -> Result<(), String> {
+        self.resources.ensure_active()?;
         const CHUNK: usize = 256 * 1024;
         for chunk in data.chunks(CHUNK) {
             self.send(&Frame::ProcInput {
@@ -634,17 +784,21 @@ impl std::fmt::Display for RemoteCallError {
 }
 
 impl RemoteRouting {
-    fn new(app: AppHandle) -> Self {
+    fn new(app: AppHandle, retired: Arc<AtomicBool>) -> Self {
         Self {
             pending: Mutex::new(HashMap::new()),
             ptys: Mutex::new(HashMap::new()),
             procs: Mutex::new(HashMap::new()),
             app,
             session_id: AtomicU64::new(0),
+            retired,
         }
     }
 
     fn route(&self, frame: Frame) -> Result<(), String> {
+        if self.retired.load(Ordering::Acquire) {
+            return Ok(());
+        }
         match frame {
             Frame::Response(response) => {
                 let sender = self
@@ -652,7 +806,7 @@ impl RemoteRouting {
                     .lock()
                     .map_err(|_| "remote request state is poisoned".to_string())?
                     .remove(&response.id);
-                if let Some(sender) = sender {
+                if let Some(sender) = sender.filter(|_| !self.retired.load(Ordering::Acquire)) {
                     let _ = sender.send(Ok(response));
                 }
                 Ok(())
@@ -664,7 +818,7 @@ impl RemoteRouting {
                     .map_err(|_| "remote PTY state is poisoned".to_string())?
                     .get(&pty_id)
                     .cloned();
-                if let Some(handlers) = handlers {
+                if let Some(handlers) = handlers.filter(|_| !self.retired.load(Ordering::Acquire)) {
                     if handlers.on_data.send(Response::new(data)).is_err() {
                         if let Ok(mut ptys) = self.ptys.lock() {
                             ptys.remove(&pty_id);
@@ -679,14 +833,14 @@ impl RemoteRouting {
                     .lock()
                     .map_err(|_| "remote PTY state is poisoned".to_string())?
                     .remove(&pty_id);
-                if let Some(handlers) = handlers {
+                if let Some(handlers) = handlers.filter(|_| !self.retired.load(Ordering::Acquire)) {
                     let _ = handlers.on_exit.send(code);
                 }
                 Ok(())
             }
             Frame::FsChanged(changed) => {
                 let session_id = self.session_id.load(Ordering::Acquire);
-                if session_id != 0 {
+                if session_id != 0 && !self.retired.load(Ordering::Acquire) {
                     let _ = self.app.emit(
                         "fs:changed",
                         RemoteChangedPayload {
@@ -709,7 +863,7 @@ impl RemoteRouting {
                     .map_err(|_| "remote process state is poisoned".to_string())?
                     .get(&attach_id)
                     .cloned();
-                if let Some(listener) = listener {
+                if let Some(listener) = listener.filter(|_| !self.retired.load(Ordering::Acquire)) {
                     listener(ProcEvent::Output {
                         stream,
                         next_offset,
@@ -730,7 +884,7 @@ impl RemoteRouting {
                     .lock()
                     .map_err(|_| "remote process state is poisoned".to_string())?
                     .remove(&attach_id);
-                if let Some(listener) = listener {
+                if let Some(listener) = listener.filter(|_| !self.retired.load(Ordering::Acquire)) {
                     listener(ProcEvent::Exit {
                         code: (code != voktty_remote_protocol::PROC_NO_EXIT_CODE).then_some(code),
                         signal: (signal != 0).then_some(signal),
@@ -822,12 +976,16 @@ pub async fn remote_tunnel_open(
     state: State<'_, RemoteState>,
     session_id: u64,
     remote_port: u16,
-) -> Result<RemoteTunnelInfo, String> {
+) -> Result<RemoteTunnelInfo, RemoteTunnelOpenError> {
     let session = remote_session(&state, session_id)?;
     let tunnel_id = state.next_tunnel_id.fetch_add(1, Ordering::Relaxed);
-    tauri::async_runtime::spawn_blocking(move || session.open_tunnel(tunnel_id, remote_port))
-        .await
-        .map_err(|error| format!("remote tunnel startup task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        session.open_tunnel(session_id, tunnel_id, remote_port)
+    })
+    .await
+    .map_err(|error| {
+        RemoteTunnelOpenError::Message(format!("remote tunnel startup task failed: {error}"))
+    })?
 }
 
 #[tauri::command]
@@ -836,7 +994,13 @@ pub async fn remote_tunnel_close(
     session_id: u64,
     tunnel_id: u64,
 ) -> Result<(), String> {
-    let session = remote_session(&state, session_id)?;
+    let Some(session) = find_remote_session(&state, session_id)? else {
+        return if allocated_remote_session_id(session_id, state.next_id.load(Ordering::Acquire)) {
+            Ok(())
+        } else {
+            Err("remote session not found".to_string())
+        };
+    };
     tauri::async_runtime::spawn_blocking(move || session.close_tunnel(tunnel_id))
         .await
         .map_err(|error| format!("remote tunnel close task failed: {error}"))?
@@ -1051,14 +1215,54 @@ impl RemoteState {
     }
 }
 
+fn allocated_remote_session_id(session_id: u64, next_id: u64) -> bool {
+    session_id > 0 && session_id < next_id
+}
+
 fn remote_session(state: &RemoteState, session_id: u64) -> Result<Arc<RemoteSession>, String> {
-    state
+    let session = find_remote_session(state, session_id)?
+        .ok_or_else(|| "remote session not found".to_string())?;
+    session.resources.ensure_active()?;
+    Ok(session)
+}
+
+fn find_remote_session(
+    state: &RemoteState,
+    session_id: u64,
+) -> Result<Option<Arc<RemoteSession>>, String> {
+    Ok(state
         .sessions
         .lock()
-        .map_err(|_| "remote session state is poisoned".to_string())?
+        .map_err(|_| "remote session state is poisoned")?
         .get(&session_id)
-        .cloned()
-        .ok_or_else(|| "remote session not found".to_string())
+        .cloned())
+}
+
+fn close_registered_owner<T>(
+    registry: &Mutex<HashMap<u64, Arc<T>>>,
+    id: u64,
+    owner: Option<Arc<T>>,
+    close: impl FnOnce(&T) -> Result<(), String>,
+) -> Result<(), String> {
+    let Some(owner) = owner else {
+        return Ok(());
+    };
+    close(&owner)?;
+    let removed = {
+        let mut registry = registry
+            .lock()
+            .map_err(|_| "remote session state is poisoned")?;
+        if registry
+            .get(&id)
+            .is_some_and(|current| Arc::ptr_eq(current, &owner))
+        {
+            registry.remove(&id)
+        } else {
+            None
+        }
+    };
+    drop(removed);
+    Ok(())
 }
 
 async fn remote_request_for_session(
@@ -1135,14 +1339,18 @@ async fn remote_watch_tree_request(
 }
 
 #[tauri::command]
-pub fn remote_close(state: State<'_, RemoteState>, session_id: u64) -> Result<(), String> {
-    let session = state
-        .sessions
-        .lock()
-        .map_err(|_| "remote session state is poisoned".to_string())?
-        .remove(&session_id);
-    drop(session);
-    Ok(())
+pub async fn remote_close(state: State<'_, RemoteState>, session_id: u64) -> Result<(), String> {
+    let owner = find_remote_session(&state, session_id)?;
+    if let Some(owner) = &owner {
+        owner.resources.retired.store(true, Ordering::Release);
+        owner.routing.fail_all("remote SSH session closed");
+    }
+    let registry = state.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        close_registered_owner(&registry, session_id, owner, RemoteSession::close)
+    })
+    .await
+    .map_err(|_| "remote close task failed".to_string())?
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -2506,7 +2714,8 @@ fn start_helper(
         return Err("remote helper stdout is unavailable".to_string());
     };
     let stderr = child.stderr.take();
-    let routing = Arc::new(RemoteRouting::new(app.clone()));
+    let retired = Arc::new(AtomicBool::new(false));
+    let routing = Arc::new(RemoteRouting::new(app.clone(), retired.clone()));
     let reader_routing = routing.clone();
     if let Err(error) = std::thread::Builder::new()
         .name("voktty-remote-reader".to_string())
@@ -2526,9 +2735,13 @@ fn start_helper(
             });
     }
     Ok(RemoteSession {
-        child: Mutex::new(child),
+        resources: RemoteResources {
+            child: Mutex::new(child),
+            tunnels: Mutex::new(HashMap::new()),
+            retired,
+            close_lock: Mutex::new(()),
+        },
         stdin: Mutex::new(BufWriter::new(stdin)),
-        tunnels: Mutex::new(HashMap::new()),
         routing,
         connection: connection.clone(),
         _askpass: askpass,
@@ -2631,6 +2844,360 @@ fn parse_session_info(
         helper_version: helper_version.to_string(),
         capabilities,
     })
+}
+
+#[cfg(test)]
+mod retirement_tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+
+    struct FakeProcess {
+        terminal: bool,
+        kill_failure: bool,
+        inspect_failure: bool,
+        ignore_kill: bool,
+        terminal_on_failed_kill: bool,
+        kills: Arc<AtomicU64>,
+    }
+
+    impl ProcessControl for FakeProcess {
+        fn exited(&mut self) -> std::io::Result<bool> {
+            if self.inspect_failure {
+                return Err(std::io::Error::other("private detail"));
+            }
+            Ok(self.terminal)
+        }
+        fn kill_owned(&mut self) -> std::io::Result<()> {
+            self.kills.fetch_add(1, Ordering::Relaxed);
+            if self.kill_failure {
+                self.terminal = self.terminal_on_failed_kill;
+                return Err(std::io::Error::other("private detail"));
+            }
+            if !self.ignore_kill {
+                self.terminal = true;
+            }
+            Ok(())
+        }
+    }
+
+    fn process() -> FakeProcess {
+        FakeProcess {
+            terminal: false,
+            kill_failure: false,
+            inspect_failure: false,
+            ignore_kill: false,
+            terminal_on_failed_kill: false,
+            kills: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    fn resources() -> RemoteResources<FakeProcess> {
+        RemoteResources {
+            child: Mutex::new(process()),
+            tunnels: Mutex::new(HashMap::new()),
+            retired: Arc::new(AtomicBool::new(false)),
+            close_lock: Mutex::new(()),
+        }
+    }
+
+    #[test]
+    fn failed_kill_retains_exact_tunnel_and_capacity_until_retry() {
+        let resources = resources();
+        let mut tunnels = resources.tunnels.lock().unwrap();
+        for id in 1..=8 {
+            let mut child = process();
+            child.kill_failure = id == 1;
+            tunnels.insert(id, RemoteTunnel { child });
+        }
+        let kills = tunnels[&1].child.kills.clone();
+        drop(tunnels);
+        assert!(resources
+            .close_tunnel_with_timeout(1, Duration::ZERO)
+            .is_err());
+        let mut tunnels = resources.tunnels.lock().unwrap();
+        assert_eq!(tunnels.len(), 8);
+        assert!(resources.check_tunnel_admission(&tunnels).is_err());
+        tunnels.get_mut(&1).unwrap().child.kill_failure = false;
+        drop(tunnels);
+        resources
+            .close_tunnel_with_timeout(1, Duration::ZERO)
+            .unwrap();
+        assert_eq!(kills.load(Ordering::Relaxed), 2);
+        assert_eq!(resources.tunnels.lock().unwrap().len(), 7);
+        resources
+            .close_tunnel_with_timeout(1, Duration::ZERO)
+            .unwrap();
+        assert_eq!(kills.load(Ordering::Relaxed), 2);
+        assert!(resources.tunnels.lock().unwrap().contains_key(&2));
+    }
+
+    #[test]
+    fn inspect_failure_and_timeout_never_acknowledge_or_drop_a_child() {
+        for inspect_failure in [true, false] {
+            let resources = resources();
+            let mut child = process();
+            child.inspect_failure = inspect_failure;
+            child.ignore_kill = true;
+            let kills = child.kills.clone();
+            resources
+                .tunnels
+                .lock()
+                .unwrap()
+                .insert(42, RemoteTunnel { child });
+            let error = resources
+                .close_tunnel_with_timeout(42, Duration::ZERO)
+                .unwrap_err();
+            assert!(!error.contains("private detail"));
+            assert!(resources.tunnels.lock().unwrap().contains_key(&42));
+            {
+                let mut tunnels = resources.tunnels.lock().unwrap();
+                let child = &mut tunnels.get_mut(&42).unwrap().child;
+                child.inspect_failure = false;
+                child.ignore_kill = false;
+            }
+            resources
+                .close_tunnel_with_timeout(42, Duration::ZERO)
+                .unwrap();
+            assert_eq!(kills.load(Ordering::Relaxed), 2);
+        }
+    }
+
+    #[test]
+    fn uncertain_startup_cleanup_receipt_keeps_exact_tunnel_and_live_sibling() {
+        for failure in 0..3 {
+            let resources = resources();
+            let mut child = process();
+            child.kill_failure = failure == 0;
+            child.ignore_kill = failure == 1;
+            child.inspect_failure = failure == 2;
+            let mut tunnels = resources.tunnels.lock().unwrap();
+            tunnels.insert(42, RemoteTunnel { child });
+            tunnels.insert(43, RemoteTunnel { child: process() });
+            let error = finish_tunnel_start(
+                &mut tunnels,
+                7,
+                42,
+                Err("private startup detail".to_string()),
+                Duration::ZERO,
+            )
+            .unwrap_err();
+            assert_eq!(
+                serde_json::to_value(error).unwrap(),
+                serde_json::json!({
+                    "code": "REMOTE_TUNNEL_CLEANUP_PENDING", "sessionId": 7, "tunnelId": 42,
+                    "message": "Remote SSH tunnel cleanup is pending."
+                })
+            );
+            assert_eq!(tunnels.len(), 2);
+            assert!(!tunnels[&43].child.terminal);
+            let child = &mut tunnels.get_mut(&42).unwrap().child;
+            child.kill_failure = false;
+            child.ignore_kill = false;
+            child.inspect_failure = false;
+            drop(tunnels);
+            resources
+                .close_tunnel_with_timeout(42, Duration::ZERO)
+                .unwrap();
+            assert!(resources.tunnels.lock().unwrap().contains_key(&43));
+        }
+    }
+
+    #[test]
+    fn confirmed_startup_cleanup_preserves_normal_string_error() {
+        let mut tunnels = HashMap::from([(42, RemoteTunnel { child: process() })]);
+        let error = finish_tunnel_start(
+            &mut tunnels,
+            7,
+            42,
+            Err("normal startup failure".to_string()),
+            Duration::ZERO,
+        )
+        .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!("normal startup failure")
+        );
+        assert!(tunnels.is_empty());
+        assert_eq!(
+            serde_json::to_value(RemoteTunnelOpenError::from("normal error".to_string())).unwrap(),
+            serde_json::json!("normal error")
+        );
+    }
+
+    #[test]
+    fn successful_tunnel_start_preserves_owner_and_success_shape() {
+        let mut tunnels = HashMap::from([(42, RemoteTunnel { child: process() })]);
+        let info = RemoteTunnelInfo {
+            tunnel_id: 42,
+            local_port: 1024,
+            remote_port: 4096,
+        };
+        let info = finish_tunnel_start(&mut tunnels, 7, 42, Ok(info), Duration::ZERO).unwrap();
+        assert_eq!(
+            serde_json::to_value(info).unwrap(),
+            serde_json::json!({
+                "tunnelId": 42, "localPort": 1024, "remotePort": 4096
+            })
+        );
+        assert!(!tunnels[&42].child.terminal);
+        assert_eq!(tunnels[&42].child.kills.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn missing_closed_tunnel_parents_acknowledge_only_allocated_ids() {
+        assert!(allocated_remote_session_id(7, 9));
+        assert!(!allocated_remote_session_id(0, 9));
+        assert!(!allocated_remote_session_id(9, 9));
+        assert!(!allocated_remote_session_id(u64::MAX, 9));
+    }
+
+    #[test]
+    fn failed_kill_acknowledges_only_a_confirmed_terminal_race() {
+        let mut child = process();
+        child.kill_failure = true;
+        child.terminal_on_failed_kill = true;
+        stop_owned_process(&mut child, Duration::ZERO).unwrap();
+        assert!(child.terminal);
+    }
+
+    #[test]
+    fn registry_retains_failure_and_late_closed_owner_does_not_touch_a_sibling() {
+        let owner = Arc::new(resources());
+        owner.child.lock().unwrap().kill_failure = true;
+        let sibling = Arc::new(resources());
+        let registry = Mutex::new(HashMap::from([(7, owner.clone()), (8, sibling.clone())]));
+        assert!(
+            close_registered_owner(&registry, 7, Some(owner.clone()), |resource| {
+                assert!(registry.try_lock().is_ok());
+                resource.close_with_timeout(Duration::ZERO)
+            })
+            .is_err()
+        );
+        assert!(Arc::ptr_eq(&registry.lock().unwrap()[&7], &owner));
+        owner.child.lock().unwrap().kill_failure = false;
+        close_registered_owner(&registry, 7, Some(owner.clone()), |resource| {
+            resource.close_with_timeout(Duration::ZERO)
+        })
+        .unwrap();
+        close_registered_owner(&registry, 7, None, |_| {
+            panic!("closed owner must not be looked up again")
+        })
+        .unwrap();
+        assert!(Arc::ptr_eq(&registry.lock().unwrap()[&8], &sibling));
+        assert!(!sibling.child.lock().unwrap().terminal);
+    }
+
+    #[test]
+    fn late_registry_ack_does_not_remove_a_replacement_object() {
+        let owner = Arc::new(resources());
+        let replacement = Arc::new(resources());
+        let registry = Mutex::new(HashMap::from([(7, owner.clone())]));
+        close_registered_owner(&registry, 7, Some(owner.clone()), |resource| {
+            registry.lock().unwrap().insert(7, replacement.clone());
+            resource.close_with_timeout(Duration::ZERO)
+        })
+        .unwrap();
+        assert!(Arc::ptr_eq(&registry.lock().unwrap()[&7], &replacement));
+        assert!(!replacement.child.lock().unwrap().terminal);
+    }
+
+    #[test]
+    fn terminal_evidence_acknowledges_without_a_second_kill() {
+        let mut child = process();
+        child.terminal = true;
+        stop_owned_process(&mut child, Duration::ZERO).unwrap();
+        assert_eq!(child.kills.load(Ordering::Relaxed), 0);
+        child.terminal = false;
+        stop_owned_process(&mut child, Duration::ZERO).unwrap();
+        stop_owned_process(&mut child, Duration::ZERO).unwrap();
+        assert_eq!(child.kills.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn session_retirement_blocks_admission_and_stops_helper_even_if_tunnel_fails() {
+        let resources = resources();
+        let mut child = process();
+        child.kill_failure = true;
+        resources
+            .tunnels
+            .lock()
+            .unwrap()
+            .insert(42, RemoteTunnel { child });
+        assert!(resources.close_with_timeout(Duration::ZERO).is_err());
+        assert!(resources.ensure_active().is_err());
+        assert!(resources.child.lock().unwrap().terminal);
+        assert!(resources.tunnels.lock().unwrap().contains_key(&42));
+        resources
+            .tunnels
+            .lock()
+            .unwrap()
+            .get_mut(&42)
+            .unwrap()
+            .child
+            .kill_failure = false;
+        resources.close_with_timeout(Duration::ZERO).unwrap();
+        assert!(resources.tunnels.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn concurrent_session_close_coalesces_on_captured_process_owner() {
+        let resources = Arc::new(resources());
+        let kills = resources.child.lock().unwrap().kills.clone();
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let owner = resources.clone();
+                std::thread::spawn(move || owner.close_with_timeout(Duration::ZERO))
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+        assert_eq!(kills.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn real_native_owned_process_close_requires_terminal_status() {
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("ping");
+            command.args(["-n", "31", "127.0.0.1"]);
+            command
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut command = Command::new("sleep");
+            command.arg("30");
+            command
+        };
+        crate::modules::proc::hide_console(&mut command);
+        let child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let owner = Arc::new(RemoteResources {
+            child: Mutex::new(child),
+            tunnels: Mutex::new(HashMap::new()),
+            retired: Arc::new(AtomicBool::new(false)),
+            close_lock: Mutex::new(()),
+        });
+        let retained_clone = owner.clone();
+        let registry = Mutex::new(HashMap::from([(7, owner)]));
+        close_registered_owner(&registry, 7, Some(retained_clone.clone()), |resources| {
+            resources.close_with_timeout(Duration::from_secs(2))
+        })
+        .unwrap();
+        assert!(registry.lock().unwrap().is_empty());
+        assert!(retained_clone
+            .child
+            .lock()
+            .unwrap()
+            .try_wait()
+            .unwrap()
+            .is_some());
+        retained_clone.close_with_timeout(Duration::ZERO).unwrap();
+    }
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ import {
   closeRemoteWorkspace,
   openRemoteTunnel,
   openRemoteWorkspace,
+  RemoteTunnelCleanupPendingError,
   type RemoteRequestError,
   requestRemote,
   requestRemoteResult,
@@ -87,6 +88,77 @@ describe("remote client", () => {
     });
     expect(invoke).toHaveBeenNthCalledWith(2, "remote_close", { sessionId: 7 });
   });
+
+  it("normalizes only a valid known-tunnel cleanup receipt to a safe Error subclass", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce({
+      code: "REMOTE_TUNNEL_CLEANUP_PENDING",
+      sessionId: 7,
+      tunnelId: 12,
+      message: "untrusted native detail",
+      privateField: "untrusted detail",
+    });
+    const error = await openRemoteTunnel(7, 4096).catch(
+      (reason: unknown) => reason,
+    );
+    expect(error).toBeInstanceOf(RemoteTunnelCleanupPendingError);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({
+      name: "RemoteTunnelCleanupPendingError",
+      code: "REMOTE_TUNNEL_CLEANUP_PENDING",
+      sessionId: 7,
+      tunnelId: 12,
+      message: "Remote tunnel startup failed and cleanup is pending.",
+    });
+    expect(error).not.toHaveProperty("privateField");
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("remote_tunnel_open", {
+      sessionId: 7,
+      remotePort: 4096,
+    });
+  });
+
+  it.each([
+    { code: "REMOTE_TUNNEL_CLEANUP_PENDING", sessionId: 8, tunnelId: 12 },
+    ...[
+      0,
+      -1,
+      1.5,
+      NaN,
+      Infinity,
+      Number.MAX_SAFE_INTEGER + 1,
+      "12",
+      undefined,
+    ].map((tunnelId) => ({
+      code: "REMOTE_TUNNEL_CLEANUP_PENDING",
+      sessionId: 7,
+      tunnelId,
+    })),
+    { code: "REMOTE_TUNNEL_CLEANUP_PENDING", sessionId: "7", tunnelId: 12 },
+    { code: "OTHER_NATIVE_ERROR", sessionId: 7, tunnelId: 12 },
+    {},
+    null,
+    "legacy native error",
+    new Error("legacy native Error"),
+  ])(
+    "preserves invalid or unrelated native tunnel errors unchanged: %o",
+    async (reason) => {
+      vi.mocked(invoke).mockRejectedValueOnce(reason);
+      await expect(openRemoteTunnel(7, 4096)).rejects.toBe(reason);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+    "does not normalize invalid matching session ID %s",
+    async (sessionId) => {
+      const reason = {
+        code: "REMOTE_TUNNEL_CLEANUP_PENDING",
+        sessionId,
+        tunnelId: 12,
+      };
+      vi.mocked(invoke).mockRejectedValueOnce(reason);
+      await expect(openRemoteTunnel(sessionId, 4096)).rejects.toBe(reason);
+    },
+  );
 
   it("opens and closes a loopback tunnel through its remote session", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({

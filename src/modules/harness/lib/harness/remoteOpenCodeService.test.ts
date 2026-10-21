@@ -12,6 +12,7 @@ import type { HarnessRemoteEnv } from "@/modules/harness/lib/harnessEnvStore";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import type { SshConnection } from "@/modules/ssh/types";
 import { RemoteSessionPool } from "@/modules/remote/sessionPool";
+import { RemoteTunnelCleanupPendingError } from "@/modules/remote/client";
 import { describe, expect, it, vi } from "vitest";
 import { createRemoteOpenCodeServiceManager } from "./remoteOpenCodeService";
 
@@ -88,6 +89,179 @@ const profile: SshConnection = {
 const profileCwd = remotePath(remoteSshEnvironmentId(profile.id), "/srv/app");
 
 describe("native remote OpenCode service", () => {
+  it("retains a registered failed tunnel receipt without closing its helper sibling", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    const held = await deps.sessions.acquire(
+      { profileId: profile.id, root: "/srv/app" },
+      remoteSshConnectionForProfile(profile),
+    );
+    deps.openTunnel.mockRejectedValueOnce(
+      new RemoteTunnelCleanupPendingError(7, 99),
+    );
+    deps.closeTunnel.mockRejectedValueOnce(
+      new Error("rollback remains uncertain"),
+    );
+    const manager = createRemoteOpenCodeServiceManager(deps, 1);
+    await expect(manager.acquire("a", profileCwd)).rejects.toThrow(
+      "cleanup is pending",
+    );
+    expect(deps.closeTunnel.mock.calls).toEqual([[7, 99]]);
+    expect(deps.sessions.snapshot()[0].leases).toBe(2);
+    expect(deps.closeWorkspace).not.toHaveBeenCalled();
+    await expect(
+      manager.acquire(
+        "b",
+        remotePath(remoteSshEnvironmentId(profile.id), "/srv/other"),
+      ),
+    ).rejects.toThrow("Close an unused remote OpenCode session");
+    await manager.release("a");
+    expect(deps.closeTunnel.mock.calls).toEqual([
+      [7, 99],
+      [7, 99],
+    ]);
+    expect(deps.sessions.snapshot()[0].leases).toBe(1);
+    expect(deps.closeWorkspace).not.toHaveBeenCalled();
+    held.release();
+    await deps.sessions.closeAll();
+  });
+
+  it("closes a registered failed tunnel before releasing its last helper lease", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    deps.openTunnel.mockRejectedValueOnce(
+      new RemoteTunnelCleanupPendingError(7, 99),
+    );
+    const order: string[] = [];
+    deps.closeTunnel.mockImplementation(async () => {
+      order.push("tunnel");
+    });
+    deps.closeWorkspace.mockImplementation(async () => {
+      order.push("helper");
+    });
+    const manager = createRemoteOpenCodeServiceManager(deps, 1);
+    await expect(manager.acquire("a", profileCwd)).rejects.toThrow(
+      "cleanup is pending",
+    );
+    expect(order).toEqual(["tunnel", "helper"]);
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 99);
+    expect(deps.closeWorkspace).toHaveBeenCalledExactlyOnceWith(7);
+    expect(deps.sessions.snapshot()).toEqual([]);
+  });
+
+  it("preserves a failed bootstrap receipt after the same owner closes a replacement", async () => {
+    const deps = dependencies();
+    let sessionId = 7;
+    deps.openWorkspace.mockImplementation(async () => ({
+      session_id: sessionId++,
+      architecture: "x86_64",
+      workspace_root: "/srv/app",
+      helper_version: "1.0.0",
+      capabilities: ["opencode.service"],
+    }));
+    deps.serviceAction.mockResolvedValueOnce("opencode 1.15.0");
+    deps.closeWorkspace.mockRejectedValueOnce(new Error("old cleanup failed"));
+    const manager = createRemoteOpenCodeServiceManager(deps, 2);
+    await expect(
+      manager.acquire("a", "remote://env-1/srv/app"),
+    ).rejects.toThrow("require OpenCode 2.0.15 or newer");
+    await manager.acquire("a", "remote://env-2/srv/app");
+    await manager.release("a");
+    expect(deps.closeWorkspace.mock.calls).toEqual([[7], [8]]);
+    await manager.release("a");
+    expect(deps.closeWorkspace.mock.calls).toEqual([[7], [8], [7]]);
+    await manager.release("a");
+    expect(deps.closeWorkspace).toHaveBeenCalledTimes(3);
+  });
+
+  it("retains service capacity and the lease until exact tunnel cleanup succeeds", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    deps.closeTunnel.mockRejectedValueOnce(new Error("tunnel cleanup failed"));
+    const manager = createRemoteOpenCodeServiceManager(deps, 1);
+    await manager.acquire("a", profileCwd);
+    const release = manager.captureRelease("a");
+    await expect(release()).rejects.toThrow("tunnel cleanup failed");
+    expect(deps.sessions.snapshot()[0].leases).toBe(1);
+    expect(deps.closeWorkspace).not.toHaveBeenCalled();
+    await expect(
+      manager.acquire(
+        "b",
+        remotePath(remoteSshEnvironmentId(profile.id), "/srv/other"),
+      ),
+    ).rejects.toThrow("Close an unused remote OpenCode session");
+    expect(deps.openWorkspace).toHaveBeenCalledTimes(1);
+    await release();
+    await release();
+    expect(deps.closeTunnel.mock.calls).toEqual([
+      [7, 12],
+      [7, 12],
+    ]);
+    expect(deps.closeWorkspace).toHaveBeenCalledExactlyOnceWith(7);
+    await manager.acquire(
+      "b",
+      remotePath(remoteSshEnvironmentId(profile.id), "/srv/other"),
+    );
+    await manager.release("b");
+  });
+
+  it("retries the captured helper without repeating a completed tunnel phase", async () => {
+    const deps = dependencies();
+    deps.closeWorkspace.mockRejectedValueOnce(
+      new Error("helper cleanup failed"),
+    );
+    const manager = createRemoteOpenCodeServiceManager(deps, 1);
+    await manager.acquire("a", "remote://env-1/srv/app");
+    const release = manager.captureRelease("a");
+    await expect(release()).rejects.toThrow("helper cleanup failed");
+    await expect(
+      manager.acquire("b", "remote://env-2/srv/app"),
+    ).rejects.toThrow("Close an unused remote OpenCode session");
+    await release();
+    await release();
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+    expect(deps.closeWorkspace.mock.calls).toEqual([[7], [7]]);
+  });
+
+  it("keeps a known bootstrap cleanup failure addressable after startup rejects", async () => {
+    const deps = dependencies();
+    deps.serviceAction.mockResolvedValueOnce("opencode 1.15.0");
+    deps.closeWorkspace.mockRejectedValueOnce(
+      new Error("bootstrap cleanup failed"),
+    );
+    const manager = createRemoteOpenCodeServiceManager(deps, 1);
+    await expect(
+      manager.acquire("a", "remote://env-1/srv/app"),
+    ).rejects.toThrow("require OpenCode 2.0.15 or newer");
+    await expect(
+      manager.acquire("b", "remote://env-2/srv/app"),
+    ).rejects.toThrow("Close an unused remote OpenCode session");
+    expect(deps.openWorkspace).toHaveBeenCalledTimes(1);
+    await manager.release("a");
+    expect(deps.closeWorkspace.mock.calls).toEqual([[7], [7]]);
+    await manager.acquire("b", "remote://env-2/srv/app");
+    await manager.release("b");
+  });
+
+  it("awaits pooled helper cleanup and retries through the captured lease", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    deps.closeWorkspace.mockRejectedValueOnce(
+      new Error("pooled cleanup failed"),
+    );
+    const manager = createRemoteOpenCodeServiceManager(deps, 1);
+    await manager.acquire("a", profileCwd);
+    const release = manager.captureRelease("a");
+    await expect(release()).rejects.toThrow("pooled cleanup failed");
+    expect(deps.sessions.snapshot()).toMatchObject([
+      { sessionId: 7, leases: 0, closing: true },
+    ]);
+    await release();
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+    expect(deps.closeWorkspace.mock.calls).toEqual([[7], [7]]);
+    expect(deps.sessions.snapshot()).toEqual([]);
+  });
+
   it("keeps whitespace-distinct logical owners independent during captured release", async () => {
     const deps = dependencies();
     deps.sshConnections.mockReturnValue([profile]);

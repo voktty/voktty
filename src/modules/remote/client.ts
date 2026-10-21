@@ -19,6 +19,18 @@ export type RemoteTunnelInfo = {
   remotePort: number;
 };
 
+export class RemoteTunnelCleanupPendingError extends Error {
+  readonly code = "REMOTE_TUNNEL_CLEANUP_PENDING";
+
+  constructor(
+    readonly sessionId: number,
+    readonly tunnelId: number,
+  ) {
+    super("Remote tunnel startup failed and cleanup is pending.");
+    this.name = "RemoteTunnelCleanupPendingError";
+  }
+}
+
 export type RemoteOpenCodeServiceAction =
   | "version"
   | "status"
@@ -86,6 +98,24 @@ export function openRemoteTunnel(
   return invoke<RemoteTunnelInfo>("remote_tunnel_open", {
     sessionId,
     remotePort,
+  }).catch((reason: unknown) => {
+    if (
+      typeof reason === "object" &&
+      reason !== null &&
+      "code" in reason &&
+      reason.code === "REMOTE_TUNNEL_CLEANUP_PENDING" &&
+      "sessionId" in reason &&
+      reason.sessionId === sessionId &&
+      Number.isSafeInteger(sessionId) &&
+      sessionId > 0 &&
+      "tunnelId" in reason &&
+      typeof reason.tunnelId === "number" &&
+      Number.isSafeInteger(reason.tunnelId) &&
+      reason.tunnelId > 0
+    ) {
+      throw new RemoteTunnelCleanupPendingError(sessionId, reason.tunnelId);
+    }
+    throw reason;
   });
 }
 
