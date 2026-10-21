@@ -13,6 +13,7 @@ const REFRESH_CONCURRENCY = 4;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshing = false;
 let refreshAgain = false;
+let forgetGeneration = 0;
 
 export function loadExpanded(cwd: string): Set<string> {
   const saved = expandedByProject.get(cwd);
@@ -45,12 +46,38 @@ export function listCachedDir(path: string): Promise<FsEntry[]> {
   });
 }
 
+function sameListing(a: FsEntry[], b: FsEntry[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (entry, index) =>
+        entry.path === b[index].path &&
+        entry.name === b[index].name &&
+        entry.isDir === b[index].isDir &&
+        entry.ignored === b[index].ignored,
+    )
+  );
+}
+
+/** Re-lists a folder without ever emptying its cached listing, so a tree that is
+ * already showing it never flashes back to a loading state. An unchanged result
+ * keeps the previous array, which lets consumers skip the render. */
+async function revalidateDir(path: string): Promise<FsEntry[]> {
+  const generation = forgetGeneration;
+  const entries = await listDir(path);
+  const previous = dirs.get(path);
+  if (previous && sameListing(previous, entries)) return previous;
+  // A forgotten folder must not be revived by a listing that started before it.
+  if (generation === forgetGeneration) dirs.set(path, entries);
+  return entries;
+}
+
 export function refreshDir(path: string): Promise<FsEntry[]> {
-  dirs.delete(path);
-  return listCachedDir(path);
+  return revalidateDir(path);
 }
 
 export function forgetDir(path: string) {
+  forgetGeneration += 1;
   for (const key of [...dirs.keys()]) {
     if (key === path || key.startsWith(`${path}/`)) dirs.delete(key);
   }
@@ -64,7 +91,7 @@ export async function refreshCachedDirs(): Promise<void> {
   const worker = async () => {
     while (next < paths.length) {
       const path = paths[next++];
-      await refreshDir(path).catch(() => {
+      await revalidateDir(path).catch(() => {
         forgetDir(path);
       });
     }

@@ -80,6 +80,63 @@ describe("fileTree cache", () => {
   });
 });
 
+describe("fileTree revalidation", () => {
+  beforeEach(() => {
+    forgetDir(root);
+    listDir.mockReset();
+  });
+
+  it("keeps the cached listing visible while a refresh is in flight", async () => {
+    listDir.mockResolvedValueOnce([entry("a.ts")]);
+    await listCachedDir(root);
+
+    let finish: (entries: FsEntry[]) => void = () => undefined;
+    listDir.mockReturnValueOnce(
+      new Promise<FsEntry[]>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const refreshing = refreshDir(root);
+    expect(peekDir(root)).toEqual([entry("a.ts")]);
+
+    finish([entry("a.ts"), entry("b.ts")]);
+    await refreshing;
+    expect(peekDir(root)).toEqual([entry("a.ts"), entry("b.ts")]);
+  });
+
+  it("returns the same array when nothing changed", async () => {
+    listDir.mockResolvedValueOnce([entry("a.ts")]);
+    const first = await listCachedDir(root);
+    listDir.mockResolvedValueOnce([entry("a.ts")]);
+    expect(await refreshDir(root)).toBe(first);
+    expect(peekDir(root)).toBe(first);
+  });
+
+  it("forgets a folder that can no longer be listed", async () => {
+    listDir.mockResolvedValueOnce([entry("a.ts")]);
+    await listCachedDir(root);
+    listDir.mockRejectedValueOnce(new Error("gone"));
+    await refreshCachedDirs();
+    expect(peekDir(root)).toBeNull();
+  });
+
+  it("does not revive a folder forgotten while its listing was in flight", async () => {
+    listDir.mockResolvedValueOnce([entry("a.ts")]);
+    await listCachedDir(root);
+    let finish: (entries: FsEntry[]) => void = () => undefined;
+    listDir.mockReturnValueOnce(
+      new Promise<FsEntry[]>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const refreshing = refreshDir(root);
+    forgetDir(root);
+    finish([entry("a.ts"), entry("b.ts")]);
+    await refreshing;
+    expect(peekDir(root)).toBeNull();
+  });
+});
+
 describe("refreshCachedDirs concurrency", () => {
   it("never lists more than four folders at once", async () => {
     const base = "/tmp/many";

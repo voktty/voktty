@@ -115,7 +115,8 @@ async function load(entry: Entry, force = false) {
     const index = await gitDiffIndex(entry.cwd);
     publish(entry, buildStatusMaps(index, entry.cwd));
   } catch {
-    publish(entry, EMPTY);
+    // A failed read (a dropped SSH call, a locked index) keeps the last known
+    // decorations instead of wiping every badge in the tree.
   } finally {
     entry.inFlight = false;
     if (entry.pending) {
