@@ -1,14 +1,11 @@
 import {
   acquireHarnessBridge,
-  killChild,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-  writeChild,
+  type RawChildHandle,
+  reserveRawChild,
 } from "./child";
+import { type NativeCommand, nativeCommandInvocation } from "./nativeCommands";
 import { PiRpc } from "./piClient";
-import { PI_FLAVOR, OMP_FLAVOR, type PiFlavor } from "./piFlavor";
-import { nativeCommandInvocation, type NativeCommand } from "./nativeCommands";
+import { OMP_FLAVOR, PI_FLAVOR, type PiFlavor } from "./piFlavor";
 import {
   asRecord,
   buildPiSpawnArgs,
@@ -40,43 +37,70 @@ export async function discoverOmpCommands(
   );
 }
 
+function assertActive(handle: RawChildHandle): void {
+  if (handle.retired) throw new Error("Harness child was retired.");
+}
+
 async function discoverCommands(
-  flavor: PiFlavor,
+  source: PiFlavor,
   cwd: string,
   command: string,
 ): Promise<unknown> {
-  const { path } = await flavor.resolveBinary();
-  const releaseBridge = await acquireHarnessBridge();
-  const childId = `monocode-${flavor.id}-skills-${crypto.randomUUID()}`;
+  const flavor = {
+    ...source,
+    isolateFlags: source.isolateFlags.slice(),
+    planTools: source.planTools.slice(),
+  };
+  const args = buildPiSpawnArgs(flavor, { noSession: true });
+  const resolveBinary = flavor.resolveBinary;
+  const handle = reserveRawChild(
+    `monocode-${flavor.id}-skills-${crypto.randomUUID()}`,
+  );
+  let releaseBridge: (() => void) | undefined;
   const replyToUi = (record: Record<string, unknown>) => {
+    if (handle.retired) return;
     const request = parseExtensionUiRequest(record);
     if (!request || !needsExtensionUiReply(request)) return;
-    void writeChild(
-      childId,
-      JSON.stringify(extensionUiResponse(request, "deny")),
-    ).catch(() => undefined);
+    void handle
+      .write(JSON.stringify(extensionUiResponse(request, "deny")))
+      .catch(() => undefined);
   };
-  const rpc = new PiRpc(childId, replyToUi, flavor.label);
-
+  let capturedRpc: PiRpc | undefined;
   try {
-    watchChild(
-      childId,
-      (line) => rpc.pushLine(line),
-      () => rpc.close(new Error(`${flavor.label} skill probe exited`)),
+    assertActive(handle);
+    const { path } = await resolveBinary();
+    assertActive(handle);
+    releaseBridge = await acquireHarnessBridge();
+    assertActive(handle);
+    const rpc = new PiRpc(
+      handle.logicalSessionId,
+      replyToUi,
+      flavor.label,
+      handle.write,
     );
-    await spawnChild(
-      childId,
-      path,
-      buildPiSpawnArgs(flavor, { noSession: true }),
-      cwd,
+    capturedRpc = rpc;
+    handle.watch(
+      (line) => {
+        if (!handle.retired) rpc.pushLine(line);
+      },
+      () => {
+        if (!handle.retired)
+          rpc.close(new Error(`${flavor.label} skill probe exited`));
+      },
     );
+    assertActive(handle);
+    await handle.spawn(path, args, cwd);
+    assertActive(handle);
     const response = await rpc.request({ type: command }, REQUEST_TIMEOUT_MS);
+    assertActive(handle);
     return asRecord(response)?.data;
   } finally {
-    rpc.close();
-    unwatchChild(childId);
-    await killChild(childId).catch(() => undefined);
-    releaseBridge();
+    capturedRpc?.close();
+    try {
+      await handle.close().catch(() => undefined);
+    } finally {
+      releaseBridge?.();
+    }
   }
 }
 

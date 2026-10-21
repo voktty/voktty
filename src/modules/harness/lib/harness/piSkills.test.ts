@@ -18,6 +18,25 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./child", () => ({
+  reserveRawChild: (logicalSessionId: string) => ({
+    logicalSessionId,
+    nativeId: `native-${logicalSessionId}`,
+    retired: false,
+    spawn: (command: string, args: string[], cwd: string) =>
+      mocks.spawnChild(logicalSessionId, command, args, cwd),
+    watch: (
+      line: (line: string) => void,
+      exit: (code: number | null) => void,
+    ) => {
+      mocks.watchChild(logicalSessionId, line, exit);
+      return () => undefined;
+    },
+    write: (line: string) => mocks.writeChild(logicalSessionId, line),
+    close: async () => {
+      mocks.unwatchChild(logicalSessionId);
+      await mocks.killChild(logicalSessionId);
+    },
+  }),
   acquireHarnessBridge: mocks.acquireHarnessBridge,
   killChild: mocks.killChild,
   resolveOmpBinary: mocks.resolveOmpBinary,
@@ -44,8 +63,8 @@ vi.mock("./piClient", () => ({
 }));
 
 import {
-  discoverPiSkills,
   discoverOmpCommands,
+  discoverPiSkills,
   ompCommandsFromRpcData,
   piSkillsFromRpcData,
 } from "./piSkills";

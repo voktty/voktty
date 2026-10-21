@@ -2,12 +2,19 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
-  killChild: vi.fn(async () => undefined),
+  killChild: vi.fn(async (_sessionId: string) => undefined),
   pushLine: vi.fn(),
   request: vi.fn(async () => ({ data: {} })),
   resolveOmpBinary: vi.fn(async () => ({ path: "/fake/omp" })),
   resolvePiBinary: vi.fn(async () => ({ path: "/fake/pi" })),
-  spawnChild: vi.fn(async () => undefined),
+  spawnChild: vi.fn(
+    async (
+      _sessionId: string,
+      _command: string,
+      _args: string[],
+      _cwd: string,
+    ) => undefined,
+  ),
   unwatchChild: vi.fn(),
   watchChild: vi.fn(),
 }));
@@ -15,6 +22,25 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../fs", () => ({ homeDir: vi.fn(async () => "/home/test") }));
 
 vi.mock("./child", () => ({
+  reserveRawChild: (logicalSessionId: string) => ({
+    logicalSessionId,
+    nativeId: `native-${logicalSessionId}`,
+    retired: false,
+    spawn: (command: string, args: string[], cwd: string) =>
+      mocks.spawnChild(logicalSessionId, command, args, cwd),
+    watch: (
+      line: (line: string) => void,
+      exit: (code: number | null) => void,
+    ) => {
+      mocks.watchChild(logicalSessionId, line, exit);
+      return () => undefined;
+    },
+    write: async () => undefined,
+    close: async () => {
+      mocks.unwatchChild(logicalSessionId);
+      await mocks.killChild(logicalSessionId);
+    },
+  }),
   killChild: mocks.killChild,
   resolveOmpBinary: mocks.resolveOmpBinary,
   resolvePiBinary: mocks.resolvePiBinary,
