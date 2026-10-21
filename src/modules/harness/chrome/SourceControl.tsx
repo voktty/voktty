@@ -32,7 +32,7 @@ export function SourceControl({
     }) => {
       const path = joinPath(input.repoRoot, input.path);
       if (onOpenDiff) {
-        onOpenDiff(path, { exact: true });
+        onOpenDiff(path, { exact: true, repoRoot: input.repoRoot });
       } else {
         onOpenFile(path);
       }

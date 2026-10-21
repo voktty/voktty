@@ -17,6 +17,7 @@ import {
   GitReviewQueue,
   type GitReviewQueueConfig,
 } from "@/modules/source-control/GitReviewQueue";
+import { canOfferTrust } from "@/modules/source-control/gitTrust";
 import { currentWorkspaceEnv, type WorkspaceEnv } from "@/modules/workspace";
 import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
@@ -697,16 +698,18 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                 {state.message}
               </p>
               <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void handleAuthorize()}
-                  disabled={authorizing}
-                  className="h-7 text-[11px]"
-                >
-                  {authorizing ? <Spinner className="mr-1.5 size-3" /> : null}
-                  {t("git.authorizeDirectory")}
-                </Button>
+                {canOfferTrust(state.message, source.repoRoot) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleAuthorize()}
+                    disabled={authorizing}
+                    className="h-7 text-[11px]"
+                  >
+                    {authorizing ? <Spinner className="mr-1.5 size-3" /> : null}
+                    {t("git.authorizeDirectory")}
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="secondary"

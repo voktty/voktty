@@ -3285,7 +3285,9 @@ export function HarnessApp({
                   tab,
                   newFileTab(
                     resolved,
-                    gitCwdRef.current || sidebarCwdRef.current,
+                    options?.repoRoot ||
+                      gitCwdRef.current ||
+                      sidebarCwdRef.current,
                     true,
                   ),
                 )

@@ -672,11 +672,16 @@ export async function resolveRemoteGitRepo(
   path: string,
 ): Promise<GitRepoInfo | null> {
   const parent = parentRemotePath(path);
-  const candidates = parent === path ? [path] : [parent, path];
+  // The path itself comes first: Git resolves a directory's repository upward on
+  // its own, and trying the parent first picked an enclosing repository over the
+  // project's own. The parent is only needed when `path` is a file.
+  const candidates = parent === path ? [path] : [path, parent];
   let lastError: unknown;
+  let answered = false;
   for (const candidate of candidates) {
     try {
       const history = await fetchRemoteGitHistory(candidate, 1);
+      answered = true;
       if (!history.repoRoot) continue;
       const head = history.commits.find((commit) => commit.head);
       const branch =
@@ -691,7 +696,7 @@ export async function resolveRemoteGitRepo(
       lastError = error;
     }
   }
-  if (lastError) throw lastError;
+  if (!answered && lastError) throw lastError;
   return null;
 }
 

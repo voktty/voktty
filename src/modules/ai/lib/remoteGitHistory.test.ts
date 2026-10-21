@@ -459,22 +459,27 @@ describe("remote Git history adapters", () => {
     ).rejects.toThrow("invalid Git comparison");
   });
 
+  const resolvedHistory = {
+    repoRoot: "remote://voktty-ssh-profile-1/srv/app",
+    head,
+    commits: [
+      {
+        sha: head,
+        shortSha: head.slice(0, 7),
+        parents: [],
+        author: "Ada",
+        timestamp: 1700000000,
+        subject: "Head commit",
+        refs: [{ name: "main", kind: "local" }],
+        head: true,
+      },
+    ],
+  };
+
   it("resolves a canonical repository root for a file inside a saved profile", async () => {
-    const runner = vi.fn().mockResolvedValue({
-      repoRoot: "remote://voktty-ssh-profile-1/srv/app",
-      head,
-      commits: [
-        {
-          sha: head,
-          shortSha: head.slice(0, 7),
-          parents: [],
-          author: "Ada",
-          timestamp: 1700000000,
-          subject: "Head commit",
-          refs: [{ name: "main", kind: "local" }],
-          head: true,
-        },
-      ],
+    const runner = vi.fn(async (_command: string, args: Record<string, unknown>) => {
+      if (String(args.cwd).endsWith("main.ts")) throw new Error("not a directory");
+      return resolvedHistory;
     });
     setRemoteCommandRunner(runner);
 
@@ -486,10 +491,37 @@ describe("remote Git history adapters", () => {
       upstream: null,
       isDetached: false,
     });
-    expect(runner).toHaveBeenCalledWith("git_history", {
+    expect(runner).toHaveBeenLastCalledWith("git_history", {
       cwd: "remote://voktty-ssh-profile-1/srv/app/src",
       limit: 1,
     });
+  });
+
+  it("resolves a project directory from itself before looking at its parent", async () => {
+    const runner = vi.fn().mockResolvedValue(resolvedHistory);
+    setRemoteCommandRunner(runner);
+
+    await resolveRemoteGitRepo("remote://voktty-ssh-profile-1/srv/app");
+
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(runner).toHaveBeenCalledWith("git_history", {
+      cwd: "remote://voktty-ssh-profile-1/srv/app",
+      limit: 1,
+    });
+  });
+
+  it("reports no repository instead of an error when the folder simply has none", async () => {
+    const runner = vi.fn(async (_command: string, args: Record<string, unknown>) => {
+      if (String(args.cwd).endsWith("/srv")) {
+        throw new Error("This path is outside a saved remote project.");
+      }
+      return { head: null, commits: [] };
+    });
+    setRemoteCommandRunner(runner);
+
+    await expect(
+      resolveRemoteGitRepo("remote://voktty-ssh-profile-1/srv/app"),
+    ).resolves.toBeNull();
   });
 
   it("maps bounded pages and follows only HEAD ancestors in current branch scope", () => {

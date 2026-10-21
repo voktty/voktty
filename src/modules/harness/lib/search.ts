@@ -36,6 +36,10 @@ export type EditorNavigationTarget = EditorNavigation & {
 export type FileOpenOptions = {
   /** The caller obtained this concrete path from the filesystem or file index. */
   exact?: boolean;
+  /** The repository root the opened change list belongs to. A working-tree diff
+   * must be resolved against it, not against the session folder, which can sit
+   * below the repository or reach it through a different path. */
+  repoRoot?: string;
 };
 
 export type OpenFileFn = (

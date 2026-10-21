@@ -12,6 +12,7 @@ import {
 import { t as translate } from "@/modules/i18n";
 import { useWorkspaceEnvStore, workspaceScopeKey } from "@/modules/workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { extractDubiousOwnershipPath, isRemoteWorkspacePath } from "./gitTrust";
 
 const AUTO_FETCH_THROTTLE_MS = 5 * 60_000;
 const AUTO_FETCH_LRU_LIMIT = 16;
@@ -389,37 +390,6 @@ function touchAutoFetch(map: Map<string, number>, key: string): void {
   }
 }
 
-function extractDubiousOwnershipPath(
-  error: unknown,
-  fallbackContextPath: string | null,
-): string | null {
-  const msg =
-    typeof error === "string"
-      ? error
-      : error instanceof Error
-        ? error.message
-        : "";
-  const lower = msg.toLowerCase();
-  if (
-    lower.includes("dubious ownership") ||
-    lower.includes("safe.directory") ||
-    lower.includes("outside the authorized workspace") ||
-    lower.includes("not in the list of safe directories") ||
-    lower.includes("unsafe repository") ||
-    lower.includes("unauthorized")
-  ) {
-    const match = msg.match(
-      /(?:repository\s+at|workspace:)\s+('[^']+'|"[^"]+"|[^\s,]+)/i,
-    );
-    if (match) {
-      const extracted = match[1].replace(/^['"]|['"]$/g, "").trim();
-      if (extracted.length > 0) return extracted;
-    }
-    return fallbackContextPath;
-  }
-  return null;
-}
-
 export function useSourceControl(
   contextPath: string | null,
   enabled: boolean = true,
@@ -596,10 +566,9 @@ export function useSourceControl(
         } catch (error) {
           if (!isCurrentContext()) return;
           const msg = normalizeError(error);
-          const dubiousPath = extractDubiousOwnershipPath(
-            error,
-            activeContextPath,
-          );
+          const dubiousPath = isRemoteWorkspacePath(activeContextPath)
+            ? null
+            : extractDubiousOwnershipPath(error, activeContextPath);
           setState((s) => ({
             ...s,
             contextPath: activeContextPath,
@@ -647,7 +616,7 @@ export function useSourceControl(
     async (path?: string) => {
       const pathToTrust =
         path ?? stateRef.current.dubiousOwnershipPath ?? contextPath;
-      if (!pathToTrust) return;
+      if (!pathToTrust || isRemoteWorkspacePath(pathToTrust)) return;
       const trustedContextKey = contextKeyRef.current;
       await native.workspaceAuthorize(pathToTrust).catch(() => {});
       await native.gitAddSafeDirectory(pathToTrust, workspaceEnv);
