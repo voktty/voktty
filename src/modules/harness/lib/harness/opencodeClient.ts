@@ -47,6 +47,7 @@ export type OpenCodeMessage = {
 };
 
 export class OpenCodeClient {
+  private readonly eventHandlers = new Map<string, (data: string) => void>();
   private readonly permissionSessions = new Map<string, string>();
   private readonly configuredModels = new Map<string, string>();
   private readonly configuredAgents = new Map<string, string>();
@@ -402,27 +403,37 @@ export class OpenCodeClient {
     const url = this.url(this.path("/event"));
     const translator =
       this.generation === "v2" ? new OpenCodeV2EventTranslator() : null;
-    watchSse(
-      sessionId,
-      (data) => {
-        const parsed = parseJson(data);
-        const rec = asRecord(parsed);
-        if (!rec) return;
-        if (!translator) {
-          onEvent(rec);
-          return;
-        }
-        const translated = translator.translate(normalizeOpenCodeV2Event(rec));
-        const mapped = translated && this.mapV2InteractiveEvent(translated);
-        if (mapped) onEvent(mapped);
-      },
-      onEnd,
-    );
-    await openHarnessSse(sessionId, url, this.headers());
+    if (!this.eventHandlers.has(sessionId) && this.eventHandlers.size >= 256)
+      throw new Error("HARNESS_SSE_CAPACITY");
+    const onData = (data: string) => {
+      const parsed = parseJson(data);
+      const rec = asRecord(parsed);
+      if (!rec) return;
+      if (!translator) {
+        onEvent(rec);
+        return;
+      }
+      const translated = translator.translate(normalizeOpenCodeV2Event(rec));
+      const mapped = translated && this.mapV2InteractiveEvent(translated);
+      if (mapped) onEvent(mapped);
+    };
+    watchSse(sessionId, onData, onEnd);
+    this.eventHandlers.set(sessionId, onData);
+    try {
+      await openHarnessSse(sessionId, url, this.headers());
+    } catch (error) {
+      if (this.eventHandlers.get(sessionId) === onData)
+        this.eventHandlers.delete(sessionId);
+      throw error;
+    }
   }
 
   async closeEvents(sessionId: string): Promise<void> {
-    await closeHarnessSse(sessionId).catch(() => undefined);
+    const handler = this.eventHandlers.get(sessionId);
+    if (handler) {
+      this.eventHandlers.delete(sessionId);
+      await closeHarnessSse(sessionId, handler).catch(() => undefined);
+    }
     this.permissionSessions.clear();
     this.forms.clear();
     this.configuredModels.clear();

@@ -34,11 +34,16 @@ let backend: ChildBackend | undefined;
 
 export function configureChildBackend(next: ChildBackend): void {
   if (backend || bridge || users)
-    throw new Error("Configure the child backend once before starting the bridge");
+    throw new Error(
+      "Configure the child backend once before starting the bridge",
+    );
   backend = next;
 }
 
-function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+function invoke<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
   return backend
     ? backend.invoke<T>(command, args)
     : tauriInvoke<T>(command, args);
@@ -73,6 +78,36 @@ const sseBuffer = new Map<string, string[]>();
 // is torn down, since nothing here ever watches or unwatches it.
 const ownedChildren = new Set<string>();
 const ownedSse = new Set<string>();
+type SseTransport = {
+  sessionId: string;
+  nativeId: string;
+  opening: Promise<void>;
+  closing?: Promise<void>;
+};
+const sseTransports = new Map<string, SseTransport>();
+const sseNativeOwners = new Map<string, SseTransport>();
+const sseResources = new Set<SseTransport>();
+const MAX_SSE_RESOURCES = 256;
+
+function retireSse(transport: SseTransport): Promise<void> {
+  if (sseTransports.get(transport.sessionId) === transport) {
+    sseTransports.delete(transport.sessionId);
+    ownedSse.delete(transport.sessionId);
+  }
+  sseNativeOwners.delete(transport.nativeId);
+  if (!transport.closing) {
+    transport.closing = transport.opening
+      .catch(() => undefined)
+      .then(() =>
+        invoke<void>("harness_sse_close", { sessionId: transport.nativeId }),
+      )
+      .then(() => {
+        sseResources.delete(transport);
+      });
+    void transport.closing.catch(() => undefined);
+  }
+  return transport.closing;
+}
 const livePid = new Map<string, number>();
 /** Helper session kept open for each running remote agent. */
 const remoteHolds = new Map<string, number>();
@@ -173,7 +208,12 @@ function ensureBridge() {
     ),
     register(
       listen<SsePayload>("harness-sse", (event) => {
-        const { sessionId, data } = event.payload;
+        if (bridgeAttempt !== attempt) return;
+        const transport = sseNativeOwners.get(event.payload.sessionId);
+        if (!transport || sseTransports.get(transport.sessionId) !== transport)
+          return;
+        const sessionId = transport.sessionId;
+        const data = event.payload.data;
         const handler = sseHandlers.get(sessionId);
         if (handler) {
           handler(data);
@@ -184,8 +224,13 @@ function ensureBridge() {
     ),
     register(
       listen<SseEndPayload>("harness-sse-end", (event) => {
-        const { sessionId, error } = event.payload;
-        sseEndHandlers.get(sessionId)?.(error ?? undefined);
+        if (bridgeAttempt !== attempt) return;
+        const transport = sseNativeOwners.get(event.payload.sessionId);
+        if (!transport || sseTransports.get(transport.sessionId) !== transport)
+          return;
+        sseEndHandlers.get(transport.sessionId)?.(
+          event.payload.error ?? undefined,
+        );
       }),
     ),
   ]).catch((error: unknown) => {
@@ -217,9 +262,7 @@ function teardownBridge() {
   livePid.clear();
   for (const sessionId of [...remoteHolds.keys()]) releaseRemoteHold(sessionId);
   pendingExit.clear();
-  void pending
-    ?.then((fns) => fns.forEach((fn) => fn()))
-    .catch(() => undefined);
+  void pending?.then((fns) => fns.forEach((fn) => fn())).catch(() => undefined);
 }
 
 export function startHarnessBridge(): () => void {
@@ -291,14 +334,23 @@ export function watchSse(
   onData: SseHandler,
   onEnd?: SseEndHandler,
 ) {
+  if (!sseHandlers.has(sessionId) && sseHandlers.size >= MAX_SSE_RESOURCES)
+    throw new Error("HARNESS_SSE_CAPACITY");
+  if (sseHandlers.has(sessionId)) unwatchSse(sessionId);
   const queued = sseBuffer.get(sessionId);
   sseBuffer.delete(sessionId);
   sseHandlers.set(sessionId, onData);
   if (onEnd) sseEndHandlers.set(sessionId, onEnd);
-  if (queued) queued.forEach(onData);
+  else sseEndHandlers.delete(sessionId);
+  for (const data of queued ?? []) {
+    if (sseHandlers.get(sessionId) !== onData) break;
+    onData(data);
+  }
 }
 
 export function unwatchSse(sessionId: string) {
+  const transport = sseTransports.get(sessionId);
+  if (transport) void retireSse(transport);
   sseHandlers.delete(sessionId);
   sseEndHandlers.delete(sessionId);
   sseBuffer.delete(sessionId);
@@ -387,7 +439,8 @@ export async function spawnChild(
     }
     // The helper resolves folders below its canonical root, so the agent folder
     // is sent relative to the project instead of as the path typed by the user.
-    remoteRelativeCwd = relativeWithinProject(project.cwd, remote.hostPath) ?? null;
+    remoteRelativeCwd =
+      relativeWithinProject(project.cwd, remote.hostPath) ?? null;
     releaseRemoteHold(sessionId);
     const held = await holdRemoteProjectSession(
       remote.environmentId,
@@ -459,6 +512,7 @@ export function killChild(sessionId: string): Promise<void> {
 }
 
 export function killAllChildren(): Promise<void> {
+  for (const transport of sseResources) void retireSse(transport);
   lineHandlers.clear();
   exitHandlers.clear();
   lineBuffer.clear();
@@ -532,13 +586,38 @@ export function openHarnessSse(
   url: string,
   headers?: Record<string, string>,
 ): Promise<void> {
+  if (sseResources.size >= MAX_SSE_RESOURCES)
+    return Promise.reject(new Error("HARNESS_SSE_CAPACITY"));
+  const previous = sseTransports.get(sessionId);
+  if (previous) void retireSse(previous);
+  const nativeId = `harness-sse-${crypto.randomUUID()}`;
+  const transport: SseTransport = {
+    sessionId,
+    nativeId,
+    opening: Promise.resolve().then(() =>
+      invoke<void>("harness_sse_open", { sessionId: nativeId, url, headers }),
+    ),
+  };
+  sseTransports.set(sessionId, transport);
+  sseNativeOwners.set(nativeId, transport);
+  sseResources.add(transport);
   ownedSse.add(sessionId);
-  return invoke("harness_sse_open", { sessionId, url, headers });
+  return transport.opening.catch(async (error: unknown) => {
+    if (sseTransports.get(sessionId) === transport) unwatchSse(sessionId);
+    await retireSse(transport).catch(() => undefined);
+    throw error;
+  });
 }
 
-export function closeHarnessSse(sessionId: string): Promise<void> {
+export function closeHarnessSse(
+  sessionId: string,
+  expectedHandler?: SseHandler,
+): Promise<void> {
+  if (expectedHandler && sseHandlers.get(sessionId) !== expectedHandler)
+    return Promise.resolve();
+  const transport = sseTransports.get(sessionId);
   unwatchSse(sessionId);
-  return invoke("harness_sse_close", { sessionId });
+  return transport ? retireSse(transport) : Promise.resolve();
 }
 
 export function execChild(
@@ -595,9 +674,7 @@ export function inspectHarnessBinary(
 ): Promise<HarnessBinaryInspection> {
   return resolveHarnessBinary(provider).then(async (resolved) => {
     try {
-      const version = (
-        await execChild(resolved.path, ["--version"])
-      ).trim();
+      const version = (await execChild(resolved.path, ["--version"])).trim();
       return /\d+\.\d+\.\d+/.test(version)
         ? { path: resolved.path, version }
         : { path: resolved.path, error: "CLI returned no valid version." };
