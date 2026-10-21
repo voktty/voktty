@@ -14,11 +14,15 @@ import {
   parseWorkspaceScopeKey,
   type WorkspaceEnv,
 } from "@/modules/workspace";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { activeSpaceEnv } from "./activeSpace";
-import { hydratePersistedSpaceTabs, planSpacesBoot } from "./bootPlan";
+import {
+  hydratePersistedSpaceTabs,
+  missingStartupHarnessTabs,
+  planSpacesBoot,
+} from "./bootPlan";
 import { bindRestoredSshSession } from "./restoreRemoteWorkspace";
-import { freshTerminalTab } from "./serialize";
+import { freshHarnessTab, freshTerminalTab } from "./serialize";
 import { loadAll, type SpaceMeta } from "./store";
 import { useSpaces } from "./useSpaces";
 
@@ -59,6 +63,11 @@ export function useSpacesBoot({
   adoptWorkspaceEnv,
 }: Params) {
   const attemptedRevision = useRef<number | null>(null);
+  const appliedDirectoryRequestId = useRef<string | null>(null);
+  const wasDirectoryRequestAppliedAtBoot = useCallback(
+    (requestId: string) => appliedDirectoryRequestId.current === requestId,
+    [],
+  );
   const [bootError, setBootError] = useState(false);
   const [retryRevision, setRetryRevision] = useState(0);
   const retryBoot = () => {
@@ -73,13 +82,20 @@ export function useSpacesBoot({
     void (async () => {
       let succeeded = false;
       try {
+        await usePreferencesStore.getState().init();
+        const startupSurface = usePreferencesStore.getState().startupSurface;
         const latestBootstrap = await refreshLaunchBootstrap();
         const bootRequest = selectBootLaunchRequest(
           latestBootstrap.requests,
           initialRequest,
         );
         const effectiveLaunchCwd = launchRequestCwd(bootRequest) ?? launchCwd;
-        const bootPlan = planSpacesBoot(bootRequest, effectiveLaunchCwd, home);
+        const bootPlan = planSpacesBoot(
+          bootRequest,
+          effectiveLaunchCwd,
+          home,
+          startupSurface,
+        );
         if (!bootPlan.restoreLastCleanSession) {
           const root = bootPlan.root;
           const now = Date.now();
@@ -91,9 +107,13 @@ export function useSpacesBoot({
             createdAt: now,
             updatedAt: now,
           };
-          const initialTabs = bootPlan.createTerminal
-            ? [freshTerminalTab(DEFAULT_SPACE_ID, root, allocId)]
-            : [];
+          const initialTabs = bootPlan.createHarness
+            ? [freshHarnessTab(DEFAULT_SPACE_ID, root, allocId)]
+            : bootPlan.createTerminal
+              ? [freshTerminalTab(DEFAULT_SPACE_ID, root, allocId)]
+              : [];
+          if (bootPlan.createHarness && root && !root.startsWith("remote://"))
+            await native.workspaceAuthorize(root);
           const activeTab = initialTabs[0] ?? null;
           setActiveSpaceForNewTabs(DEFAULT_SPACE_ID);
           useSpaces.getState().hydrate(
@@ -111,29 +131,36 @@ export function useSpacesBoot({
             },
           );
           replaceTabs(initialTabs, activeTab?.id ?? NO_ACTIVE_TAB_ID);
+          if (
+            bootRequest?.intent === "openDirectoryOnly" &&
+            (bootRequest.source === "coldStart" ||
+              bootRequest.source === "opened")
+          )
+            appliedDirectoryRequestId.current = bootRequest.requestId;
           succeeded = true;
           return;
         }
         const { spaces, activeId, states, session } = await loadAll();
 
         if (spaces.length === 0) {
-          const root = launchCwd ?? home ?? null;
-          // Hydrate prefs before reading the saved workspace env.
-          await usePreferencesStore
-            .getState()
-            .init()
-            .catch(() => {});
+          const root = bootPlan.root;
           const meta: SpaceMeta = {
             id: DEFAULT_SPACE_ID,
             name: "Default",
             root,
-            env: parseWorkspaceScopeKey(
-              usePreferencesStore.getState().defaultWorkspaceEnv,
-            ),
+            env: bootPlan.createHarness
+              ? LOCAL_WORKSPACE
+              : parseWorkspaceScopeKey(
+                  usePreferencesStore.getState().defaultWorkspaceEnv,
+                ),
             createdAt: Date.now(),
             updatedAt: Date.now(),
           };
-          const initialTab = freshTerminalTab(DEFAULT_SPACE_ID, root, allocId);
+          const initialTab = bootPlan.createHarness
+            ? freshHarnessTab(DEFAULT_SPACE_ID, root, allocId)
+            : freshTerminalTab(DEFAULT_SPACE_ID, root, allocId);
+          if (bootPlan.createHarness && root && !root.startsWith("remote://"))
+            await native.workspaceAuthorize(root);
           setActiveSpaceForNewTabs(DEFAULT_SPACE_ID);
           useSpaces.getState().hydrate(
             [meta],
@@ -150,6 +177,7 @@ export function useSpacesBoot({
           return;
         }
 
+        const persistedSpaces = spaces.map((space) => ({ ...space }));
         const restored = hydratePersistedSpaceTabs(spaces, states, allocId);
 
         for (const space of spaces) {
@@ -163,19 +191,27 @@ export function useSpacesBoot({
           activeId && spaces.some((s) => s.id === activeId)
             ? activeId
             : spaces[0].id;
+        const startupTabs =
+          startupSurface === "harness"
+            ? missingStartupHarnessTabs(persistedSpaces, restored, allocId)
+            : [];
+        const startupHarness = startupTabs.find(
+          (tab) => tab.spaceId === active,
+        );
+        const tabsWithStartup = [...restored, ...startupTabs];
         setActiveSpaceForNewTabs(active);
 
         // Apply the space's environment before authorizing restored terminals.
         // The active space may intentionally have no tabs.
         const persistedInActive = restored.filter((t) => t.spaceId === active);
         const env =
-          persistedInActive.length > 0
+          !startupHarness && persistedInActive.length > 0
             ? activeSpaceEnv(spaces, active)
             : LOCAL_WORKSPACE;
         const preparedEnv = await adoptWorkspaceEnv(env);
         const restoredState = bindRestoredSshSession({
           spaces,
-          tabs: restored,
+          tabs: tabsWithStartup,
           activeSpaceId: active,
           requested: env,
           prepared: preparedEnv,
@@ -192,16 +228,29 @@ export function useSpacesBoot({
           restoredState.spaces,
           active,
           initialActiveIndex,
-          loadedSession
+          loadedSession || startupTabs.length > 0
             ? {
-                viewSpaces: loadedSession.viewSpaces,
-                stripEntries: loadedSession.stripEntries,
-                activeStripItem: loadedSession.activeStripItem,
+                viewSpaces: loadedSession?.viewSpaces ?? [],
+                stripEntries: [
+                  ...(loadedSession?.stripEntries ??
+                    restored.map((tab) => ({
+                      kind: "standalone" as const,
+                      tabKey: tab.tabKey,
+                    }))),
+                  ...startupTabs.map((tab) => ({
+                    kind: "standalone" as const,
+                    tabKey: tab.tabKey,
+                  })),
+                ],
+                activeStripItem: startupHarness
+                  ? { kind: "tab", tabKey: startupHarness.tabKey }
+                  : (loadedSession?.activeStripItem ?? null),
               }
             : undefined,
         );
 
         const activeTab =
+          startupHarness ??
           (loadedSession?.activeTabKey
             ? restoredState.tabs.find(
                 (tab) => tab.tabKey === loadedSession.activeTabKey,
@@ -209,14 +258,22 @@ export function useSpacesBoot({
             : null) ??
           inActive[states.get(active)?.activeTabIndex ?? 0] ??
           inActive[0];
-        if (env.kind !== "ssh") {
+        const activeOrigin = persistedSpaces.find(
+          (space) => space.id === active,
+        );
+        if (
+          env.kind !== "ssh" &&
+          (activeTab?.kind !== "harness" || activeOrigin?.env.kind === "local")
+        ) {
           const activeRoot = restoredState.spaces.find(
             (space) => space.id === active,
           )?.root;
           const paths = new Set(activeTab ? uniqueCwds([activeTab]) : []);
           if (activeRoot) paths.add(activeRoot);
           await Promise.allSettled(
-            [...paths].map((cwd) => native.workspaceAuthorize(cwd)),
+            [...paths]
+              .filter((cwd) => !cwd.startsWith("remote://"))
+              .map((cwd) => native.workspaceAuthorize(cwd)),
           );
         }
         replaceTabs(restoredState.tabs, activeTab?.id ?? NO_ACTIVE_TAB_ID);
@@ -240,5 +297,5 @@ export function useSpacesBoot({
     adoptWorkspaceEnv,
     retryRevision,
   ]);
-  return { bootError, retryBoot };
+  return { bootError, retryBoot, wasDirectoryRequestAppliedAtBoot };
 }

@@ -3,6 +3,7 @@ import type { SshTunnelConfig } from "@/modules/ssh/tunnels/types";
 import { usePreferencesStore } from "./preferences";
 import {
   DEFAULT_PREFERENCES,
+  normalizeStartupSurface,
   type Preferences,
   writePreferencesBatch,
 } from "./store";
@@ -309,7 +310,9 @@ export async function importConfiguration(
 
   for (const [key, value] of Object.entries(incomingPrefs)) {
     if (key in DEFAULT_PREFERENCES && value !== undefined) {
-      validBatch[key as keyof Preferences] = value as never;
+      validBatch[key as keyof Preferences] = (key === "startupSurface"
+        ? normalizeStartupSurface(value)
+        : value) as never;
       prefCount++;
     }
   }

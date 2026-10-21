@@ -32,6 +32,7 @@ import {
   normalizeLaunchPaths,
 } from "@/lib/launchRequest";
 import { quoteShellArg } from "@/lib/shellQuote";
+import { shouldSkipBootDirectoryLaunchRequest } from "@/modules/spaces/lib/bootLaunchRequest";
 import { playErrorTone } from "@/lib/sound";
 import { IS_ANDROID } from "@/lib/platform";
 import { usePresence } from "@/lib/usePresence";
@@ -599,7 +600,7 @@ function DesktopApp() {
   }, [tabs, activeId, activeSpaceId]);
   const sourceControlSpaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
 
-  const { bootError, retryBoot } = useSpacesBoot({
+  const { bootError, retryBoot, wasDirectoryRequestAppliedAtBoot } = useSpacesBoot({
     ready: launchCwdResolved,
     initialRequest: initialLaunchRequest,
     launchCwd,
@@ -2205,7 +2206,13 @@ function DesktopApp() {
           openLaunchFiles(request.paths);
           return;
         case "openDirectoryOnly":
-          if (request.source === "coldStart") return;
+          if (
+            shouldSkipBootDirectoryLaunchRequest(
+              request,
+              wasDirectoryRequestAppliedAtBoot,
+            )
+          )
+            return;
           newTab(normalizeLaunchPaths(request.paths)[0], LOCAL_WORKSPACE);
           return;
         case "openDirectoryInCurrentSession":
@@ -2216,7 +2223,7 @@ function DesktopApp() {
           return;
       }
     },
-    [newTab, openLaunchFiles],
+    [newTab, openLaunchFiles, wasDirectoryRequestAppliedAtBoot],
   );
 
   const handleDroppedPath = useCallback(

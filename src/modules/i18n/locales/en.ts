@@ -280,6 +280,12 @@ export const en = {
         spaceViewLimitDesc:
           "Limit a visual space to a flat adaptive grid. Extra tabs remain standalone.",
         startupLabel: "Startup",
+        startupSurfaceTitle: "Startup surface",
+        startupSurfaceDesc:
+          "Use Harness for new projects. Existing tabs and layouts are restored; file-only launches stay in the editor. Changes apply on the next launch.",
+        startupHarness: "Harness",
+        startupTerminal: "Terminal",
+        startupSurfaceSaveError: "Could not save the startup surface.",
       },
       notifications: {
         title: "Notifications",

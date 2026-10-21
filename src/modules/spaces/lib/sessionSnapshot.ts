@@ -7,6 +7,7 @@ import {
   type TabKey,
 } from "@/modules/tabs/lib/tabIdentity";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
+import { isTabIconId } from "@/modules/tabs/lib/tabIcon";
 import {
   LOCAL_WORKSPACE,
   persistentWorkspaceEnv,
@@ -14,6 +15,7 @@ import {
 } from "@/modules/workspace";
 import {
   isSerializableTab,
+  isSerializedHarnessTab,
   type SerializedNode,
   type SerializedTab,
   serializeTabs,
@@ -186,9 +188,20 @@ function uniqueTabIdentity(
   while (seen.has(tabKey)) tabKey = createTabKey();
   seen.add(tabKey);
   const persistedTab =
-    tab.kind === "terminal" && tab.workspaceEnv
-      ? { ...tab, workspaceEnv: safeWorkspaceEnv(tab.workspaceEnv) }
-      : tab;
+    tab.kind === "harness"
+      ? {
+          kind: "harness" as const,
+          ...(tab.cwd !== undefined && { cwd: tab.cwd }),
+          ...(tab.sessionId !== undefined && { sessionId: tab.sessionId }),
+          ...(typeof tab.color === "string" && tab.color
+            ? { color: tab.color }
+            : {}),
+          ...(isTabIconId(tab.icon) ? { icon: tab.icon } : {}),
+          ...(tab.locked === true ? { locked: true } : {}),
+        }
+      : tab.kind === "terminal" && tab.workspaceEnv
+        ? { ...tab, workspaceEnv: safeWorkspaceEnv(tab.workspaceEnv) }
+        : tab;
   return {
     ...persistedTab,
     tabKey,
@@ -235,6 +248,7 @@ function validSerializedNode(
 function validSerializedTab(value: unknown): value is SerializedTab {
   if (!value || typeof value !== "object") return false;
   const tab = value as Record<string, unknown>;
+  if (tab.kind === "harness") return isSerializedHarnessTab(tab);
   if (tab.kind === "terminal") return validSerializedNode(tab.tree);
   if (tab.kind === "editor" || tab.kind === "markdown") {
     return typeof tab.path === "string" && tab.path.length > 0;
@@ -332,15 +346,15 @@ export function migrateLegacySpaces(
         (tab) => !("workspaceEnv" in tab && tab.workspaceEnv?.kind === "ssh"),
       )
       .map((tab, index) => {
-      const normalized = uniqueTabIdentity(
-        tab,
-        context.id,
-        seenTabKeys,
-        asTabKey(`tab-legacy-${encodeURIComponent(context.id)}-${index}`),
-      );
-      tabs.push(normalized);
-      return normalized;
-    });
+        const normalized = uniqueTabIdentity(
+          tab,
+          context.id,
+          seenTabKeys,
+          asTabKey(`tab-legacy-${encodeURIComponent(context.id)}-${index}`),
+        );
+        tabs.push(normalized);
+        return normalized;
+      });
     const selected = selectedLegacyIndices(
       contextTabs.length,
       state?.activeTabIndex ?? 0,

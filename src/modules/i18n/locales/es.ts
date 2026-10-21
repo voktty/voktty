@@ -288,6 +288,12 @@ export const es: TranslationSchema = {
         spaceViewLimitDesc:
           "Limita un espacio visual a una cuadrícula plana adaptativa. Las pestañas extra quedan independientes.",
         startupLabel: "Inicio",
+        startupSurfaceTitle: "Superficie de inicio",
+        startupSurfaceDesc:
+          "Usa el Harness para proyectos nuevos. Se restauran las pestañas y vistas existentes; abrir solo archivos mantiene el editor. Los cambios se aplican en el próximo inicio.",
+        startupHarness: "Harness",
+        startupTerminal: "Terminal",
+        startupSurfaceSaveError: "No se pudo guardar la superficie de inicio.",
       },
       notifications: {
         title: "Notificaciones",

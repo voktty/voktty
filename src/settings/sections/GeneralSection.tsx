@@ -46,6 +46,7 @@ import {
   setSpaceViewLimit,
   setExplorerGitDecorations,
   setRestoreWindowState,
+  setStartupSurface,
   setSoundEnabled,
   setSoundVolume,
   setShowHidden,
@@ -140,6 +141,7 @@ export function GeneralSection() {
   const { t, language, setLanguage } = useTranslation();
 
   const autostart = usePreferencesStore((s) => s.autostart);
+  const startupSurface = usePreferencesStore((s) => s.startupSurface);
   const restoreWindowState = usePreferencesStore((s) => s.restoreWindowState);
   const showHidden = usePreferencesStore((s) => s.showHidden);
   const explorerGitDecorations = usePreferencesStore(
@@ -933,6 +935,34 @@ export function GeneralSection() {
           {t("settings.general.window.startupLabel")}
         </span>
         <div className="flex flex-col gap-1.5">
+          <SettingRow
+            title={t("settings.general.window.startupSurfaceTitle")}
+            description={t("settings.general.window.startupSurfaceDesc")}
+          >
+            <Select
+              value={startupSurface}
+              onValueChange={(value) => {
+                void setStartupSurface(value).catch(() =>
+                  toast.error(t("settings.general.window.startupSurfaceSaveError")),
+                );
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-40 text-[12px]"
+                aria-label={t("settings.general.window.startupSurfaceTitle")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="harness">
+                  {t("settings.general.window.startupHarness")}
+                </SelectItem>
+                <SelectItem value="terminal">
+                  {t("settings.general.window.startupTerminal")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
           <SettingRow
             title={t("settings.general.window.autostartTitle")}
             description={t("settings.general.window.autostartDesc")}

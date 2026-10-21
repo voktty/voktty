@@ -34,6 +34,16 @@ import { isLegacyVariationId } from "@/modules/theme/legacyThemeIds";
 
 export type ThemePref = "system" | "light" | "dark";
 
+export type StartupSurface = "harness" | "terminal";
+
+export function isStartupSurface(value: unknown): value is StartupSurface {
+  return value === "harness" || value === "terminal";
+}
+
+export function normalizeStartupSurface(value: unknown): StartupSurface {
+  return isStartupSurface(value) ? value : "harness";
+}
+
 export const DEFAULT_THEME_ID = "voktty-default";
 export const DEFAULT_THEME_VARIATION = "default";
 
@@ -190,6 +200,7 @@ export type Preferences = {
   customInstructions: string;
   autostart: boolean;
   restoreWindowState: boolean;
+  startupSurface: StartupSurface;
   autocompleteEnabled: boolean;
   autocompleteTrigger: AutocompleteTrigger;
   autocompleteProvider: AutocompleteProviderId;
@@ -330,6 +341,7 @@ const KEY_EDITOR_FONT_SIZE = "editorFontSize";
 const KEY_CUSTOM_INSTRUCTIONS = "customInstructions";
 const KEY_AUTOSTART = "autostart";
 const KEY_RESTORE_WINDOW = "restoreWindowState";
+const KEY_STARTUP_SURFACE = "startupSurface";
 export type AutocompleteTrigger = "auto" | "manual";
 
 const KEY_AUTOCOMPLETE_ENABLED = "autocompleteEnabled";
@@ -483,6 +495,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   windowVibrancy: true,
   vibrancyOpacity: 0.85,
   restoreWindowState: true,
+  startupSurface: "harness",
   autocompleteEnabled: false,
   autocompleteTrigger: "auto",
   autocompleteProvider: "cerebras",
@@ -694,6 +707,7 @@ export async function loadPreferences(): Promise<Preferences> {
       get<string>(KEY_CUSTOM_INSTRUCTIONS) ??
       DEFAULT_PREFERENCES.customInstructions,
     autostart: get<boolean>(KEY_AUTOSTART) ?? DEFAULT_PREFERENCES.autostart,
+    startupSurface: normalizeStartupSurface(get<unknown>(KEY_STARTUP_SURFACE)),
     restoreWindowState:
       get<boolean>(KEY_RESTORE_WINDOW) ??
       DEFAULT_PREFERENCES.restoreWindowState,
@@ -1115,6 +1129,10 @@ export async function setAutostart(value: boolean): Promise<void> {
   await writePref(KEY_AUTOSTART, value);
 }
 
+export async function setStartupSurface(value: unknown): Promise<void> {
+  await writePref(KEY_STARTUP_SURFACE, normalizeStartupSurface(value));
+}
+
 export async function setRestoreWindowState(value: boolean): Promise<void> {
   await writePref(KEY_RESTORE_WINDOW, value);
 }
@@ -1513,6 +1531,7 @@ export async function onPreferencesChange(
     [KEY_CUSTOM_INSTRUCTIONS]: "customInstructions",
     [KEY_AUTOSTART]: "autostart",
     [KEY_RESTORE_WINDOW]: "restoreWindowState",
+    [KEY_STARTUP_SURFACE]: "startupSurface",
     [KEY_AUTOCOMPLETE_ENABLED]: "autocompleteEnabled",
     [KEY_AUTOCOMPLETE_TRIGGER]: "autocompleteTrigger",
     [KEY_AUTOCOMPLETE_PROVIDER]: "autocompleteProvider",
@@ -1587,13 +1606,23 @@ export async function onPreferencesChange(
   // arrive via the Tauri event emitted by writePref().
   const unsubLocal = await store.onChange<unknown>((key, value) => {
     const mapped = map[key];
-    if (mapped) cb(mapped, value);
+    if (mapped)
+      cb(
+        mapped,
+        mapped === "startupSurface" ? normalizeStartupSurface(value) : value,
+      );
   });
   const unsubEvent = await listen<{ key: string; value: unknown }>(
     PREFS_CHANGED_EVENT,
     (e) => {
       const mapped = map[e.payload.key];
-      if (mapped) cb(mapped, e.payload.value);
+      if (mapped)
+        cb(
+          mapped,
+          mapped === "startupSurface"
+            ? normalizeStartupSurface(e.payload.value)
+            : e.payload.value,
+        );
     },
   );
   return () => {
@@ -1657,6 +1686,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   customInstructions: KEY_CUSTOM_INSTRUCTIONS,
   autostart: KEY_AUTOSTART,
   restoreWindowState: KEY_RESTORE_WINDOW,
+  startupSurface: KEY_STARTUP_SURFACE,
   autocompleteEnabled: KEY_AUTOCOMPLETE_ENABLED,
   autocompleteTrigger: KEY_AUTOCOMPLETE_TRIGGER,
   autocompleteProvider: KEY_AUTOCOMPLETE_PROVIDER,
@@ -1736,8 +1766,10 @@ export async function writePreferencesBatch(
   for (const [key, value] of Object.entries(partial)) {
     const storageKey = PREF_KEY_TO_STORAGE_KEY[key as PrefKey];
     if (storageKey && value !== undefined) {
-      await store.set(storageKey, value);
-      await emit(PREFS_CHANGED_EVENT, { key: storageKey, value });
+      const normalized =
+        key === "startupSurface" ? normalizeStartupSurface(value) : value;
+      await store.set(storageKey, normalized);
+      await emit(PREFS_CHANGED_EVENT, { key: storageKey, value: normalized });
       if (AI_CONFIGURATION_KEYS.has(storageKey)) invalidatesAi = true;
     }
   }

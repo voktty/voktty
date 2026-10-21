@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import { isTabIconId, type TabIconId } from "@/modules/tabs/lib/tabIcon";
 import {
   asWorkspaceScopeId,
@@ -8,6 +9,7 @@ import {
 } from "@/modules/tabs/lib/tabIdentity";
 import type {
   EditorTab,
+  HarnessTab,
   MarkdownTab,
   PreviewTab,
   Tab,
@@ -37,6 +39,7 @@ export type SerializedTab = (
       customTitle?: string;
       workspaceEnv?: WorkspaceEnv;
     }
+  | { kind: "harness"; cwd?: string; sessionId?: string }
   | { kind: "editor"; path: string; workspaceEnv?: WorkspaceEnv }
   | { kind: "preview"; url: string; devServerScope?: string }
   | { kind: "markdown"; path: string; workspaceEnv?: WorkspaceEnv }
@@ -47,6 +50,21 @@ export type SerializedTab = (
   icon?: TabIconId;
   locked?: boolean;
 };
+
+export function isSerializedHarnessTab(
+  value: unknown,
+): value is Extract<SerializedTab, { kind: "harness" }> {
+  if (!value || typeof value !== "object") return false;
+  const tab = value as Record<string, unknown>;
+  return (
+    tab.kind === "harness" &&
+    (tab.cwd === undefined || typeof tab.cwd === "string") &&
+    (tab.sessionId === undefined ||
+      (typeof tab.sessionId === "string" &&
+        tab.sessionId.length <= 256 &&
+        /\S/u.test(tab.sessionId)))
+  );
+}
 
 function basename(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -81,6 +99,7 @@ export function isSerializableTab(tab: Tab): boolean {
   switch (tab.kind) {
     case "terminal":
       return !tab.private && !tab.collaboration;
+    case "harness":
     case "editor":
     case "preview":
     case "markdown":
@@ -100,6 +119,13 @@ function serializeTab(tab: Tab): SerializedTab | null {
     ...(tab.locked ? { locked: true } : {}),
   };
   switch (tab.kind) {
+    case "harness":
+      return {
+        kind: "harness",
+        ...baseProps,
+        ...(tab.cwd !== undefined && { cwd: tab.cwd }),
+        ...(tab.sessionId !== undefined && { sessionId: tab.sessionId }),
+      };
     case "terminal":
       return {
         kind: "terminal",
@@ -214,6 +240,16 @@ function hydrateTab(
     return null;
   }
   switch (s.kind) {
+    case "harness":
+      if (!isSerializedHarnessTab(s)) return null;
+      return {
+        ...freshHarnessTab(spaceId, s.cwd ?? null, allocId),
+        ...hydrateIdentity(s, spaceId),
+        ...(s.sessionId !== undefined && { sessionId: s.sessionId }),
+        ...(typeof s.color === "string" && s.color ? { color: s.color } : {}),
+        ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
+        ...(s.locked === true ? { locked: true } : {}),
+      };
     case "terminal": {
       const { tree, activeLeafId, firstLeafCwd } = hydrateTree(s.tree, allocId);
       const title =
@@ -292,6 +328,22 @@ function hydrateTab(
     default:
       return null;
   }
+}
+
+export function freshHarnessTab(
+  spaceId: string,
+  cwd: string | null,
+  allocId: () => number,
+): HarnessTab {
+  return {
+    id: allocId(),
+    ...createTabIdentity(spaceId),
+    kind: "harness",
+    spaceId,
+    cold: true,
+    title: t("harness.agentDevelopment"),
+    ...(cwd !== null && { cwd }),
+  };
 }
 
 export function freshTerminalTab(

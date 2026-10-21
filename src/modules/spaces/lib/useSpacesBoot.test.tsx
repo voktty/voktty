@@ -12,6 +12,11 @@ vi.mock("@/lib/launchRequest", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/launchRequest")>()),
   refreshLaunchBootstrap: mocks.refreshLaunchBootstrap,
 }));
+vi.mock("@/modules/settings/preferences", () => ({
+  usePreferencesStore: {
+    getState: () => ({ init: async () => {}, startupSurface: "harness" }),
+  },
+}));
 vi.mock("@/modules/tabs/lib/useTabs", () => ({
   DEFAULT_SPACE_ID: "default",
   NO_ACTIVE_TAB_ID: -1,
