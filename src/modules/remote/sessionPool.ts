@@ -22,6 +22,29 @@ export class RemoteSessionConnectionChangedError extends Error {
   }
 }
 
+const ADMISSION_MESSAGES = {
+  cleanup:
+    "Remote session cleanup failed; retry closing it before reconnecting.",
+  capacity: "Remote session limit reached; close an unused session first.",
+  retired: "The remote session was closed before it was ready.",
+};
+
+export class RemoteSessionAdmissionBlockedError extends Error {
+  readonly code = "REMOTE_SESSION_ADMISSION_BLOCKED";
+
+  constructor(readonly reason: "cleanup" | "capacity" | "retired") {
+    super(ADMISSION_MESSAGES[reason]);
+    this.name = "RemoteSessionAdmissionBlockedError";
+  }
+}
+
+export function isRemoteSessionAdmissionError(reason: unknown): boolean {
+  return (
+    reason instanceof RemoteSessionConnectionChangedError ||
+    reason instanceof RemoteSessionAdmissionBlockedError
+  );
+}
+
 export type RemoteSessionLease = {
   readonly info: RemoteSessionInfo;
   /** Idempotent. A lease from a closed or replaced session releases nothing. */
@@ -111,10 +134,12 @@ export class RemoteSessionPool {
     let entry = this.entries.get(id);
     if (entry?.closing) {
       if (!entry.closeAttempt)
-        throw new Error(
-          "Remote session cleanup failed; retry closing it before reconnecting.",
-        );
-      await entry.closeAttempt;
+        throw new RemoteSessionAdmissionBlockedError("cleanup");
+      try {
+        await entry.closeAttempt;
+      } catch {
+        throw new RemoteSessionAdmissionBlockedError("cleanup");
+      }
       return this.acquire(key, connection);
     }
     if (
@@ -126,9 +151,7 @@ export class RemoteSessionPool {
     }
     if (!entry) {
       if (this.entries.size >= this.maxSessions)
-        throw new Error(
-          "Remote session limit reached; close an unused session first.",
-        );
+        throw new RemoteSessionAdmissionBlockedError("capacity");
       entry = {
         key: Object.freeze({ ...key }),
         binding,
@@ -152,10 +175,10 @@ export class RemoteSessionPool {
         throw new Error("The remote session was closed before it was ready.");
       return this.leaseFor(entry, info, generation);
     } catch (reason) {
-      if (entry.generation === generation) {
-        entry.leases = Math.max(0, entry.leases - 1);
-        this.collect(id, entry);
-      }
+      if (entry.generation !== generation)
+        throw new RemoteSessionAdmissionBlockedError("retired");
+      entry.leases = Math.max(0, entry.leases - 1);
+      this.collect(id, entry);
       throw reason;
     }
   }

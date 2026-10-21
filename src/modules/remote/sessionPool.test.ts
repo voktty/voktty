@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { RemoteSessionInfo, RemoteSshConnection } from "./client";
 import {
   isSessionLostError,
+  isRemoteSessionAdmissionError,
+  RemoteSessionAdmissionBlockedError,
   RemoteSessionConnectionChangedError,
   RemoteSessionPool,
   type RemoteSessionKey,
@@ -47,7 +49,67 @@ function harness(maxSessions?: number) {
   return { pool, open, close, fireIdle };
 }
 
+describe("remote session admission errors", () => {
+  it.each([
+    new RemoteSessionConnectionChangedError(),
+    new RemoteSessionAdmissionBlockedError("cleanup"),
+    new RemoteSessionAdmissionBlockedError("capacity"),
+    new RemoteSessionAdmissionBlockedError("retired"),
+  ])("recognizes local typed admission barriers: %s", (reason) => {
+    expect(isRemoteSessionAdmissionError(reason)).toBe(true);
+  });
+
+  it.each([
+    new Error(
+      "Remote session cleanup failed; retry closing it before reconnecting.",
+    ),
+    new Error("Remote session limit reached; close an unused session first."),
+    { code: "REMOTE_SESSION_ADMISSION_BLOCKED", reason: "cleanup" },
+    "REMOTE_SESSION_CONNECTION_CHANGED",
+    null,
+  ])(
+    "does not classify ordinary or serialized errors by text or shape: %s",
+    (reason) => {
+      expect(isRemoteSessionAdmissionError(reason)).toBe(false);
+    },
+  );
+});
+
 describe("RemoteSessionPool", () => {
+  it("preserves direct cleanup failure while wrapping admission waiting on that cleanup", async () => {
+    const { pool, open, close } = harness(1);
+    const lease = await pool.acquire(key, connection);
+    let rejectClose!: (reason: Error) => void;
+    close.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectClose = reject;
+        }),
+    );
+    const failure = new Error("original close failure");
+    const closing = pool.closeSession(lease.info.session_id);
+    const directFailure = expect(closing).rejects.toBe(failure);
+    const blocked = pool.acquire(key, connection);
+    const admissionFailure = expect(blocked).rejects.toMatchObject({
+      code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+      reason: "cleanup",
+    });
+    rejectClose(failure);
+    await directFailure;
+    await admissionFailure;
+    expect(open).toHaveBeenCalledOnce();
+    expect(pool.snapshot()[0]).toMatchObject({
+      sessionId: lease.info.session_id,
+      closing: true,
+    });
+    await pool.closeSession(lease.info.session_id);
+    expect(close.mock.calls).toEqual([
+      [lease.info.session_id],
+      [lease.info.session_id],
+    ]);
+    expect(pool.snapshot()).toEqual([]);
+  });
+
   it.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
     "rejects invalid quota %s",
     (limit) => {
@@ -212,7 +274,10 @@ describe("RemoteSessionPool", () => {
         }),
     );
     const pending = pool.acquire(key, connection);
-    const rejected = expect(pending).rejects.toThrow("auth failed");
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+      reason: "retired",
+    });
     const closing = pool.closeProfile("p1");
     expect(pool.snapshot()).toHaveLength(1);
     await expect(

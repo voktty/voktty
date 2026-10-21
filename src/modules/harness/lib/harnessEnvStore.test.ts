@@ -646,6 +646,121 @@ it("does not deduplicate a mutated caller profile against its pending native att
   expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(5);
 });
 
+it("does not retry the default root while the original helper cleanup is retained", async () => {
+  mocks.openRemoteWorkspace
+    .mockResolvedValueOnce(info(10, "/original"))
+    .mockResolvedValueOnce(info(20, "/busy"))
+    .mockResolvedValue(info(30, "/fallback"));
+  const original = await remoteSessions.acquire(
+    { profileId: profile.id, root: "/original" },
+    { host: profile.host, port: 22 },
+  );
+  const busyProfile = { ...profile, id: "busy-profile", host: "busy.test" };
+  await useHarnessEnvStore.getState().connect(busyProfile as never, "/busy");
+  const busyId = harnessProjectEnvironmentId(busyProfile.id, "/busy");
+  const busyBefore = useHarnessEnvStore.getState().projects[busyId];
+  const busyPoolBefore = remoteSessions
+    .snapshot()
+    .find((entry) => entry.sessionId === 20);
+  mocks.closeRemoteWorkspace.mockImplementation((id: number) =>
+    id === 10
+      ? Promise.reject(new Error("native cleanup pending"))
+      : Promise.resolve(),
+  );
+  try {
+    if (!original.releaseAndClose)
+      throw new Error("Expected exact lease cleanup.");
+    await expect(original.releaseAndClose()).rejects.toThrow(
+      "native cleanup pending",
+    );
+    expect(
+      remoteSessions.snapshot().find((entry) => entry.sessionId === 10),
+    ).toMatchObject({ closing: true, leases: 0 });
+    await expect(
+      useHarnessEnvStore.getState().connect(profile as never, "/original"),
+    ).rejects.toMatchObject({
+      code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+      reason: "cleanup",
+    });
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(2);
+    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalledWith(
+      expect.anything(),
+      ".",
+    );
+    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalledWith(20);
+    expect(
+      remoteSessions.snapshot().find((entry) => entry.sessionId === 10),
+    ).toMatchObject({ closing: true, leases: 0 });
+    expect(
+      remoteSessions.snapshot().find((entry) => entry.sessionId === 20),
+    ).toEqual(busyPoolBefore);
+    expect(useHarnessEnvStore.getState().projects[busyId]).toEqual(busyBefore);
+  } finally {
+    mocks.closeRemoteWorkspace.mockResolvedValue(undefined);
+  }
+});
+
+it("does not retry the default root after real helper pool capacity rejection", async () => {
+  let nextId = 1000;
+  mocks.openRemoteWorkspace.mockImplementation((_connection, root: string) =>
+    Promise.resolve(info(nextId++, root)),
+  );
+  const busyProfile = { ...profile, id: "busy-profile", host: "busy.test" };
+  await useHarnessEnvStore.getState().connect(busyProfile as never, "/busy");
+  const busyId = harnessProjectEnvironmentId(busyProfile.id, "/busy");
+  const busyBefore = useHarnessEnvStore.getState().projects[busyId];
+  const leases = await Promise.all(
+    Array.from({ length: 255 }, (_, index) =>
+      remoteSessions.acquire(
+        { profileId: `capacity-${index}`, root: `/slot-${index}` },
+        { host: profile.host, port: 22 },
+      ),
+    ),
+  );
+  const acquire = vi.spyOn(remoteSessions, "acquire");
+  try {
+    expect(remoteSessions.snapshot()).toHaveLength(256);
+    await expect(
+      useHarnessEnvStore.getState().connect(profile as never, "/blocked"),
+    ).rejects.toMatchObject({
+      code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+      reason: "capacity",
+    });
+    expect(acquire).toHaveBeenCalledTimes(1);
+    expect(acquire).toHaveBeenCalledWith(
+      { profileId: profile.id, root: "/blocked" },
+      { host: profile.host, port: 22 },
+    );
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(256);
+    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
+    expect(useHarnessEnvStore.getState().projects[busyId]).toEqual(busyBefore);
+  } finally {
+    acquire.mockRestore();
+    for (const lease of leases) lease.release();
+  }
+});
+
+it.each([
+  "Remote session cleanup failed; retry closing it before reconnecting.",
+  "Remote session limit reached; close an unused session first.",
+])(
+  "preserves default-root fallback for ordinary bootstrap errors: %s",
+  async (message) => {
+    mocks.openRemoteWorkspace
+      .mockRejectedValueOnce(new Error(message))
+      .mockResolvedValueOnce(info(6, "/fallback"));
+    const env = await useHarnessEnvStore
+      .getState()
+      .connect(profile as never, "/unavailable");
+    expect(env).toMatchObject({ kind: "ssh", sessionId: 6, root: "/fallback" });
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(2);
+    expect(mocks.openRemoteWorkspace).toHaveBeenLastCalledWith(
+      expect.anything(),
+      ".",
+    );
+  },
+);
+
 it("treats a special project key as data rather than a prototype", async () => {
   await useHarnessEnvStore
     .getState()

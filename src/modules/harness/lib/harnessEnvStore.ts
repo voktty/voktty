@@ -3,7 +3,7 @@ import type { SshConnection } from "@/modules/ssh";
 import { closeRemoteWorkspace } from "@/modules/remote/client";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
-  RemoteSessionConnectionChangedError,
+  isRemoteSessionAdmissionError,
   type RemoteSessionLease,
 } from "@/modules/remote/sessionPool";
 import { sameRemoteSessionConnection } from "@/modules/remote/sessionConnectionIdentity";
@@ -261,7 +261,7 @@ async function connectProject(
           requests.get(projectId) !== token ||
           reason instanceof ProjectEnvironmentCancelledError ||
           reason instanceof ProjectEnvironmentCapacityError ||
-          reason instanceof RemoteSessionConnectionChangedError ||
+          isRemoteSessionAdmissionError(reason) ||
           root === "."
         ) {
           throw reason;

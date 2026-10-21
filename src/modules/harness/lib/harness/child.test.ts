@@ -512,6 +512,262 @@ describe("SSE transport incarnations", () => {
 });
 
 describe("remote spawnChild", () => {
+  async function admissionFixture() {
+    installResolvedListeners();
+    const child = await loadChild();
+    const { usePreferencesStore } = await import(
+      "@/modules/settings/preferences"
+    );
+    const profile = {
+      id: "admission",
+      name: "Admission",
+      host: "original.test",
+      user: "dev",
+      port: 22,
+    };
+    usePreferencesStore.setState({ sshConnections: [profile] });
+    const { rememberRemoteProject, remotePath } = await import(
+      "@/modules/connections/model/remoteProjects"
+    );
+    const { remoteSshEnvironmentId } = await import(
+      "@/modules/connections/model/remoteSshProfiles"
+    );
+    const environment = remoteSshEnvironmentId(profile.id);
+    const root = "/workspace/admission";
+    rememberRemoteProject(environment, {
+      id: "admission-project",
+      cwd: root,
+      name: "Admission",
+    });
+    let nextId = 100;
+    mocks.openRemote.mockReset().mockImplementation(async () => ({
+      session_id: nextId++,
+      architecture: "x86_64",
+      workspace_root: root,
+      helper_version: "1",
+      capabilities: [],
+    }));
+    mocks.closeRemote.mockReset().mockResolvedValue(undefined);
+    mocks.request.mockReset();
+    mocks.invoke.mockReset().mockResolvedValue(42);
+    const { remoteSessions } = await import("@/modules/remote/sessionManager");
+    const release = await child.acquireHarnessBridge();
+    return {
+      child,
+      remoteSessions,
+      release,
+      profile,
+      usePreferencesStore,
+      key: { profileId: profile.id, root },
+      connection: {
+        host: profile.host,
+        user: profile.user,
+        port: profile.port,
+      },
+      cwd: remotePath(environment, root),
+    };
+  }
+
+  it("does not bypass a live connection-binding rejection through native fallback", async () => {
+    const f = await admissionFixture();
+    const lease = await f.remoteSessions.acquire(f.key, f.connection);
+    const before = f.remoteSessions.snapshot();
+    f.usePreferencesStore.setState({
+      sshConnections: [{ ...f.profile, host: "replacement.test" }],
+    });
+    try {
+      await expect(
+        f.child.spawnChild("blocked", "codex", [], f.cwd),
+      ).rejects.toMatchObject({ code: "REMOTE_SESSION_CONNECTION_CHANGED" });
+      expect(mocks.invoke).not.toHaveBeenCalled();
+      expect(mocks.openRemote).toHaveBeenCalledOnce();
+      expect(f.remoteSessions.snapshot()).toEqual(before);
+    } finally {
+      await lease.releaseAndClose?.();
+      f.release();
+    }
+  });
+
+  it.each(["ready", "failed"])(
+    "does not fallback after pending helper retirement: %s",
+    async (outcome) => {
+      const f = await admissionFixture();
+      const info = {
+        session_id: 100,
+        architecture: "x86_64",
+        workspace_root: f.key.root,
+        helper_version: "1",
+        capabilities: [] as string[],
+      };
+      const opening = deferred<typeof info>();
+      const entered = deferred<void>();
+      const cleanup = deferred<void>();
+      mocks.openRemote.mockImplementationOnce(() => {
+        entered.resolve(undefined);
+        return opening.promise;
+      });
+      if (outcome === "ready")
+        mocks.closeRemote.mockReturnValueOnce(cleanup.promise);
+      const spawning = f.child.spawnChild("retired", "codex", [], f.cwd);
+      const rejected = expect(spawning).rejects.toMatchObject({
+        code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+        reason: "retired",
+      });
+      await entered.promise;
+      const closing = f.remoteSessions.closeProfile(f.profile.id);
+      if (outcome === "ready") opening.resolve(info);
+      else
+        opening.reject(
+          new Error("ordinary authentication failure after retirement"),
+        );
+      try {
+        await rejected;
+        expect(mocks.invoke).not.toHaveBeenCalled();
+        expect(mocks.openRemote).toHaveBeenCalledOnce();
+        if (outcome === "ready") {
+          expect(f.remoteSessions.snapshot()[0]).toMatchObject({
+            sessionId: info.session_id,
+            closing: true,
+          });
+          expect(mocks.closeRemote).toHaveBeenCalledExactlyOnceWith(
+            info.session_id,
+          );
+        } else {
+          expect(mocks.closeRemote).not.toHaveBeenCalled();
+        }
+      } finally {
+        cleanup.resolve(undefined);
+        await closing;
+        expect(f.remoteSessions.snapshot()).toEqual([]);
+        f.release();
+      }
+    },
+  );
+
+  it("does not bypass retained failed cleanup through native fallback", async () => {
+    const f = await admissionFixture();
+    const lease = await f.remoteSessions.acquire(f.key, f.connection);
+    mocks.closeRemote.mockRejectedValueOnce(new Error("close uncertain"));
+    await expect(
+      f.remoteSessions.closeSession(lease.info.session_id),
+    ).rejects.toThrow("close uncertain");
+    try {
+      await expect(
+        f.child.spawnChild("blocked", "codex", [], f.cwd),
+      ).rejects.toMatchObject({
+        code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+        reason: "cleanup",
+      });
+      expect(mocks.invoke).not.toHaveBeenCalled();
+      expect(mocks.openRemote).toHaveBeenCalledOnce();
+      expect(f.remoteSessions.snapshot()[0]).toMatchObject({
+        closing: true,
+        sessionId: lease.info.session_id,
+      });
+    } finally {
+      await f.remoteSessions.closeAll();
+      f.release();
+    }
+  });
+
+  it("propagates cleanup failure after waiting for the captured close attempt", async () => {
+    const f = await admissionFixture();
+    const lease = await f.remoteSessions.acquire(f.key, f.connection);
+    const gate = deferred<void>();
+    mocks.closeRemote.mockReturnValueOnce(gate.promise);
+    const closing = f.remoteSessions.closeSession(lease.info.session_id);
+    const closeRejected = expect(closing).rejects.toThrow(
+      "delayed close failure",
+    );
+    const spawning = f.child.spawnChild("blocked", "codex", [], f.cwd);
+    const spawnRejected = expect(spawning).rejects.toMatchObject({
+      code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+      reason: "cleanup",
+    });
+    await flush();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    gate.reject(new Error("delayed close failure"));
+    try {
+      await closeRejected;
+      await spawnRejected;
+      expect(mocks.invoke).not.toHaveBeenCalled();
+      expect(mocks.openRemote).toHaveBeenCalledOnce();
+    } finally {
+      await f.remoteSessions.closeAll();
+      f.release();
+    }
+  });
+
+  it("does not bypass the shared helper reservation budget through native fallback", async () => {
+    const f = await admissionFixture();
+    for (let i = 0; i < 256; i += 1)
+      await f.remoteSessions.acquire(
+        { profileId: `occupied-${i}`, root: f.key.root },
+        f.connection,
+      );
+    try {
+      await expect(
+        f.child.spawnChild("blocked", "codex", [], f.cwd),
+      ).rejects.toMatchObject({
+        code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+        reason: "capacity",
+      });
+      expect(mocks.invoke).not.toHaveBeenCalled();
+      expect(mocks.openRemote).toHaveBeenCalledTimes(256);
+      expect(f.remoteSessions.snapshot()).toHaveLength(256);
+    } finally {
+      await f.remoteSessions.closeAll();
+      f.release();
+    }
+  });
+
+  it.each([
+    "ordinary bootstrap unavailable",
+    "Remote session cleanup failed; retry closing it before reconnecting.",
+  ])(
+    "preserves ordinary unavailable-helper fallback without classifying message text: %s",
+    async (message) => {
+      const f = await admissionFixture();
+      mocks.openRemote.mockRejectedValueOnce(new Error(message));
+      try {
+        await f.child.spawnChild("fallback", "codex", [], f.cwd);
+        expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+          "harness_spawn",
+          expect.objectContaining({ remoteSessionId: null, remoteRoot: null }),
+        );
+      } finally {
+        f.release();
+      }
+    },
+  );
+
+  it("waits for successful cleanup and uses the newly admitted helper without fallback", async () => {
+    const f = await admissionFixture();
+    const lease = await f.remoteSessions.acquire(f.key, f.connection);
+    const gate = deferred<void>();
+    mocks.closeRemote.mockReturnValueOnce(gate.promise);
+    const closing = f.remoteSessions.closeSession(lease.info.session_id);
+    const spawning = f.child.spawnChild("new-owner", "codex", [], f.cwd);
+    await flush();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    gate.resolve(undefined);
+    try {
+      await closing;
+      await spawning;
+      expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+        "harness_spawn",
+        expect.objectContaining({
+          remoteSessionId: 101,
+          remoteRoot: f.key.root,
+        }),
+      );
+    } finally {
+      await f.child.killChild("new-owner");
+      await f.remoteSessions.closeAll();
+      f.release();
+    }
+  });
+
   it("cleans command executable name for remote target", async () => {
     const { cleanRemoteCommand } = await loadChild();
     expect(cleanRemoteCommand("C:\\Users\\user\\AppData\\npm\\codex.cmd")).toBe(

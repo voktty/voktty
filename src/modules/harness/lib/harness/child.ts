@@ -18,6 +18,7 @@ import {
   openHeldRemoteSession,
   releaseHeldRemoteSession,
 } from "@/modules/remote/sessionManager";
+import { isRemoteSessionAdmissionError } from "@/modules/remote/sessionPool";
 import { checkRemoteAgentProbe } from "./remoteAgents";
 import { remoteMachineFor } from "@/modules/connections/model/connections";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -379,8 +380,8 @@ export async function resolveRemoteSshConnection(
 }
 
 /** Keeps the project's helper session open while a remote agent runs, so the
- * agent starts without a second login. Failing to hold one is not an error:
- * the native side opens its own. */
+ * agent starts without a second login. Unavailable helpers may use native
+ * fallback; admission barriers must not start an independent connection. */
 async function holdRemoteProjectSession(
   environmentId: string,
   connection: RemoteSshConnection,
@@ -405,7 +406,8 @@ async function holdRemoteProjectSession(
       root: session.workspace_root,
       capabilities: session.capabilities,
     };
-  } catch {
+  } catch (reason) {
+    if (isRemoteSessionAdmissionError(reason)) throw reason;
     return null;
   }
 }
