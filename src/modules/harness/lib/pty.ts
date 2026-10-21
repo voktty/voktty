@@ -1,20 +1,16 @@
 import { openPty, type PtySession } from "@/modules/terminal/lib/pty-bridge";
-import {
-  closeRemoteWorkspace,
-  openRemoteWorkspace,
-  type RemoteSshConnection,
-} from "@/modules/remote/client";
-import { isPathWithinRemoteRoot } from "@/modules/remote";
+import { remoteSessions } from "@/modules/remote/sessionManager";
+import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
 import {
   parseRemotePath,
+  relativeWithinProject,
   remoteProjectForPath,
+  remoteProjectKey,
 } from "@/modules/connections/model/remoteProjects";
 import {
   findSshProfile,
   remoteSshConnectionForProfile,
 } from "@/modules/connections/model/remoteSshProfiles";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
-import { useHarnessEnvStore } from "./harnessEnvStore";
 import {
   shouldPickSshMultiplexer,
   sshMultiplexerSettingsForSelection,
@@ -26,6 +22,10 @@ import {
   type SshConnection,
 } from "@/modules/ssh/types";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  harnessProjectEnvironmentFor,
+  useHarnessProjectEnvStore,
+} from "./harnessEnvStore";
 
 type DataHandler = (data: Uint8Array) => void;
 type ExitHandler = (code: number | null) => void;
@@ -36,6 +36,7 @@ export type SshMultiplexerPicker = (
 export type PtyLaunchOptions = { multiplexerPicker?: SshMultiplexerPicker };
 
 const activeSessions = new Map<string, PtySession>();
+const spawnAttempts = new Map<string, object>();
 const remoteWorkspaceClosers = new Map<string, () => Promise<void>>();
 const dataHandlers = new Map<string, DataHandler>();
 const exitHandlers = new Map<string, ExitHandler>();
@@ -88,11 +89,20 @@ function clearBuffered(id: string) {
   dataBufferBytes.delete(id);
 }
 
-function closeRemoteWorkspaceOnce(id: string, sessionId: number) {
+function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
   let closing: Promise<void> | undefined;
   const close = () => {
     if (!closing) {
-      closing = closeRemoteWorkspace(sessionId)
+      closing = Promise.resolve()
+        .then(() => {
+          lease.release();
+          const entry = remoteSessions
+            .snapshot()
+            .find((candidate) => candidate.sessionId === lease.info.session_id);
+          if (entry?.leases === 0) {
+            return remoteSessions.closeSession(lease.info.session_id);
+          }
+        })
         .catch(() => undefined)
         .then(() => {
           if (remoteWorkspaceClosers.get(id) === close) {
@@ -123,7 +133,28 @@ async function openRemoteTerminalTarget(
     throw new Error("Remote terminal path is outside a saved project.");
   }
 
-  const profile = findSshProfile(remotePath.environmentId);
+  let root = project?.cwd ?? remotePath.hostPath;
+  let profile = findSshProfile(remotePath.environmentId, undefined, {
+    kind: "local",
+  });
+  if (!profile) {
+    const projectId = remoteProjectKey(remotePath.environmentId, root);
+    const scoped = harnessProjectEnvironmentFor(
+      projectId,
+      useHarnessProjectEnvStore.getState().projects,
+    ).env;
+    if (
+      scoped.kind === "ssh" &&
+      scoped.sessionId !== undefined &&
+      remoteProjectKey(remotePath.environmentId, scoped.root) === projectId &&
+      relativeWithinProject(scoped.root, remotePath.hostPath) !== undefined
+    ) {
+      profile = findSshProfile(remotePath.environmentId, [scoped.connection], {
+        kind: "local",
+      });
+      if (profile) root = scoped.root;
+    }
+  }
   if (!profile) {
     throw new Error("The saved SSH connection for this project is missing.");
   }
@@ -141,75 +172,11 @@ async function openRemoteTerminalTarget(
     }
   }
 
-  const harnessEnv = useHarnessEnvStore.getState().env;
-  const isMatchingHarnessEnv =
-    harnessEnv.kind === "ssh" &&
-    harnessEnv.sessionId !== undefined &&
-    (harnessEnv.connection.id === profile.id ||
-      harnessEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-      harnessEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
-
-  const canReuseHarnessSession =
-    isMatchingHarnessEnv &&
-    harnessEnv.kind === "ssh" &&
-    isPathWithinRemoteRoot(harnessEnv, remotePath.hostPath);
-
-  if (canReuseHarnessSession && harnessEnv.kind === "ssh" && harnessEnv.sessionId !== undefined) {
-    return {
-      cwd: remotePath.hostPath,
-      workspace: {
-        kind: "ssh" as const,
-        connection: selectedProfile,
-        root: harnessEnv.root || remotePath.hostPath,
-        sessionId: harnessEnv.sessionId,
-      },
-      close: undefined,
-    };
-  }
-
-  const activeEnv = useWorkspaceEnvStore.getState().env;
-  const isMatchingEnv =
-    activeEnv.kind === "ssh" &&
-    activeEnv.sessionId !== undefined &&
-    (activeEnv.connection.id === profile.id ||
-      activeEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-      activeEnv.connection.name.toLowerCase() === profile.name.toLowerCase());
-
-  const canReuseActiveSession =
-    isMatchingEnv && isPathWithinRemoteRoot(activeEnv, remotePath.hostPath);
-
-  if (canReuseActiveSession && activeEnv.kind === "ssh" && activeEnv.sessionId !== undefined) {
-    return {
-      cwd: remotePath.hostPath,
-      workspace: {
-        kind: "ssh" as const,
-        connection: selectedProfile,
-        root: activeEnv.root || remotePath.hostPath,
-        sessionId: activeEnv.sessionId,
-      },
-      close: undefined,
-    };
-  }
-
-  const nativeConnection: RemoteSshConnection = {
-    ...remoteSshConnectionForProfile(selectedProfile),
-    ...(selectedProfile.multiplexerMode
-      ? { multiplexerMode: selectedProfile.multiplexerMode }
-      : {}),
-    ...(selectedProfile.tmuxSessionName
-      ? { tmuxSessionName: selectedProfile.tmuxSessionName }
-      : {}),
-    ...(selectedProfile.activeMultiplexerSession
-      ? { activeMultiplexerSession: selectedProfile.activeMultiplexerSession }
-      : {}),
-    ...(selectedProfile.multiplexerAction
-      ? { multiplexerAction: selectedProfile.multiplexerAction }
-      : {}),
-  };
-  const remoteSession = await openRemoteWorkspace(
-    nativeConnection,
-    remotePath.hostPath,
+  const lease = await remoteSessions.acquire(
+    { profileId: profile.id, root },
+    remoteSshConnectionForProfile(profile),
   );
+  const remoteSession = lease.info;
 
   return {
     cwd: remotePath.hostPath,
@@ -219,13 +186,8 @@ async function openRemoteTerminalTarget(
       root: remoteSession.workspace_root,
       sessionId: remoteSession.session_id,
     },
-    close: closeRemoteWorkspaceOnce(id, remoteSession.session_id),
+    close: releaseRemoteLeaseOnce(id, lease),
   };
-}
-
-async function closeRemoteTerminalTarget(id: string) {
-  const close = remoteWorkspaceClosers.get(id);
-  if (close) await close();
 }
 
 export async function spawnPty(
@@ -235,34 +197,43 @@ export async function spawnPty(
   rows: number,
   options?: PtyLaunchOptions,
 ): Promise<void> {
+  const attempt = {};
+  spawnAttempts.set(id, attempt);
+  const isCurrent = () => spawnAttempts.get(id) === attempt;
   const existing = activeSessions.get(id);
-  if (existing) {
-    await existing.close().catch(() => undefined);
-    activeSessions.delete(id);
-  }
-  await closeRemoteTerminalTarget(id);
+  const closeExistingRemote = remoteWorkspaceClosers.get(id);
+  activeSessions.delete(id);
+  remoteWorkspaceClosers.delete(id);
+  if (existing) await existing.close().catch(() => undefined);
+  await closeExistingRemote?.();
+  if (!isCurrent()) return;
 
   // Normalize "~" or empty string to undefined so openPty uses default home/workspace root
   const effectiveCwd =
     !cwd || cwd === "~" || cwd.trim() === "" ? undefined : cwd;
-
-  const remoteTarget = effectiveCwd
-    ? await openRemoteTerminalTarget(
-        id,
-        effectiveCwd,
-        options?.multiplexerPicker,
-      )
-    : undefined;
   let session: PtySession | undefined;
-  let exitedBeforeOpen = false;
-  const closeRemote = remoteTarget?.close;
+  let exited = false;
+  let closeRemote: (() => Promise<void>) | undefined;
 
   try {
+    const remoteTarget = effectiveCwd
+      ? await openRemoteTerminalTarget(
+          id,
+          effectiveCwd,
+          options?.multiplexerPicker,
+        )
+      : undefined;
+    closeRemote = remoteTarget?.close;
+    if (!isCurrent()) {
+      await closeRemote?.();
+      return;
+    }
     session = await openPty(
       cols,
       rows,
       {
         onData: (bytes: Uint8Array) => {
+          if (!isCurrent() || exited) return;
           const handler = dataHandlers.get(id);
           if (handler) {
             handler(bytes);
@@ -271,14 +242,16 @@ export async function spawnPty(
           }
         },
         onExit: (code?: number) => {
+          if (exited) return;
+          exited = true;
           if (session) {
             if (activeSessions.get(id) === session) activeSessions.delete(id);
             void closeRemote?.();
-          } else {
-            exitedBeforeOpen = true;
           }
-          const handler = exitHandlers.get(id);
-          handler?.(code ?? null);
+          if (isCurrent()) {
+            exitHandlers.get(id)?.(code ?? null);
+            if (isCurrent()) spawnAttempts.delete(id);
+          }
         },
       },
       remoteTarget?.cwd ?? effectiveCwd,
@@ -288,17 +261,16 @@ export async function spawnPty(
       remoteTarget?.workspace,
     );
 
-    activeSessions.set(id, session);
-    if (closeRemote && !exitedBeforeOpen) {
-      remoteWorkspaceClosers.set(id, closeRemote);
-    }
-    if (exitedBeforeOpen) {
-      if (activeSessions.get(id) === session) activeSessions.delete(id);
+    if (!isCurrent() || exited) {
       await session.close().catch(() => undefined);
       await closeRemote?.();
+      return;
     }
+    activeSessions.set(id, session);
+    if (closeRemote) remoteWorkspaceClosers.set(id, closeRemote);
   } catch (error) {
     await closeRemote?.();
+    if (isCurrent()) spawnAttempts.delete(id);
     throw error;
   }
 }
@@ -337,20 +309,26 @@ export async function getPtyStatus(
 }
 
 export async function killPty(id: string): Promise<void> {
+  spawnAttempts.delete(id);
   const session = activeSessions.get(id);
+  const closeRemote = remoteWorkspaceClosers.get(id);
   activeSessions.delete(id);
+  remoteWorkspaceClosers.delete(id);
   dataHandlers.delete(id);
   exitHandlers.delete(id);
   clearBuffered(id);
   if (session) {
     await session.close().catch(() => undefined);
   }
-  await closeRemoteTerminalTarget(id);
+  await closeRemote?.();
 }
 
 export async function killAllPtys(): Promise<void> {
+  spawnAttempts.clear();
   const sessions = Array.from(activeSessions.values());
+  const closers = Array.from(remoteWorkspaceClosers.values());
   activeSessions.clear();
+  remoteWorkspaceClosers.clear();
   dataHandlers.clear();
   exitHandlers.clear();
   dataBuffer.clear();
@@ -358,9 +336,7 @@ export async function killAllPtys(): Promise<void> {
   await Promise.allSettled(
     sessions.map((s) => s.close().catch(() => undefined)),
   );
-  await Promise.allSettled(
-    Array.from(remoteWorkspaceClosers.values(), (close) => close()),
-  );
+  await Promise.allSettled(closers.map((close) => close()));
 }
 
 export function subscribePty(

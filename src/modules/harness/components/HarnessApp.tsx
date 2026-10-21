@@ -43,7 +43,15 @@ import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { registerSshProjectPath } from "@/modules/connections/model/remoteProjectRegistration";
 import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { useHarnessEnvStore } from "../lib/harnessEnvStore";
+import {
+  harnessProjectEnvironmentFor,
+  useHarnessProjectEnvStore,
+} from "@/modules/harness/lib/harnessEnvStore";
+import {
+  harnessProjectConnectionMatches,
+  harnessSshConnectionsMatch,
+} from "@/modules/harness/lib/harnessProjectConnection";
+import type { SshConnection } from "@/modules/ssh/types";
 import {
   publishHarnessFocusFolder,
   publishHarnessProject,
@@ -4259,44 +4267,51 @@ export function HarnessApp({
     }
   }, [surfaceCwd, surfaceOwnerId]);
 
-  const lastAttemptedRemoteProjectRef = useRef<string | null>(null);
+  const activeProjectCwd = sidebarCwdKey;
+  const lastAttemptedRemoteProjectRef = useRef<{
+    projectId: string;
+    profile: SshConnection;
+  } | null>(null);
   const sshConnections = usePreferencesStore((s) => s.sshConnections);
-  const harnessEnv = useHarnessEnvStore((s) => s.env);
+  const harnessEnv = useHarnessProjectEnvStore(
+    (s) => harnessProjectEnvironmentFor(activeProjectCwd, s.projects).env,
+  );
 
   useEffect(() => {
-    if (
-      !projectCwd ||
-      projectCwd === "~" ||
-      !projectCwd.startsWith("remote://")
-    ) {
+    useHarnessProjectEnvStore.getState().selectProject(activeProjectCwd);
+  }, [activeProjectCwd]);
+
+  useEffect(() => {
+    if (!activeProjectCwd || !isRemoteProjectPath(activeProjectCwd)) {
       lastAttemptedRemoteProjectRef.current = null;
       return;
     }
-    if (lastAttemptedRemoteProjectRef.current === projectCwd) {
-      return;
-    }
-    const parsed = parseRemotePath(projectCwd);
+    const parsed = parseRemotePath(activeProjectCwd);
     if (!parsed) return;
-    registerSshProjectPath(projectCwd, sshConnections ?? []);
+    registerSshProjectPath(activeProjectCwd, sshConnections ?? []);
     const profile = findSshProfile(parsed.environmentId, sshConnections);
     if (!profile) return;
+    const previous = lastAttemptedRemoteProjectRef.current;
     if (
-      harnessEnv.kind === "ssh" &&
-      (harnessEnv.connection.id === profile.id ||
-        harnessEnv.connection.host.toLowerCase() === profile.host.toLowerCase() ||
-        harnessEnv.connection.name.toLowerCase() === profile.name.toLowerCase())
+      previous?.projectId === activeProjectCwd &&
+      harnessSshConnectionsMatch(previous.profile, profile)
     ) {
-      lastAttemptedRemoteProjectRef.current = projectCwd;
       return;
     }
-    lastAttemptedRemoteProjectRef.current = projectCwd;
-    void useHarnessEnvStore
+    lastAttemptedRemoteProjectRef.current = {
+      projectId: activeProjectCwd,
+      profile: { ...profile },
+    };
+    if (harnessProjectConnectionMatches(harnessEnv, profile, parsed.hostPath)) {
+      return;
+    }
+    void useHarnessProjectEnvStore
       .getState()
-      .connect(profile, parsed.hostPath)
+      .connect(profile, parsed.hostPath, activeProjectCwd)
       .catch((err) => {
         console.warn("[harness] Failed to connect remote session:", err);
       });
-  }, [projectCwd, sshConnections, harnessEnv]);
+  }, [activeProjectCwd, sshConnections, harnessEnv]);
 
 
   const initialSessionHandled = useRef(false);
@@ -4342,6 +4357,12 @@ export function HarnessApp({
         ? forgetProject(normalized)
         : archiveProject(normalized);
       setRecents(remaining);
+      if (isRemoteProjectPath(normalized)) {
+        void useHarnessProjectEnvStore
+          .getState()
+          .disconnect(normalized)
+          .catch(() => {});
+      }
 
       const tabs = tabsRef.current;
       const sessions = sessionsRef.current;
@@ -4435,12 +4456,6 @@ export function HarnessApp({
         } else {
           setProjectCwd("~");
           setComposerFocused(true);
-        }
-        if (
-          isRemoteProjectPath(normalized) &&
-          (!next || !isRemoteProjectPath(next.path))
-        ) {
-          void useHarnessEnvStore.getState().disconnect().catch(() => {});
         }
       }
     },

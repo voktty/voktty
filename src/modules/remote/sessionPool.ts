@@ -6,8 +6,21 @@ import {
   settleConnectionAttempt,
 } from "@/modules/connections/lifecycle";
 import type { RemoteSessionInfo, RemoteSshConnection } from "./client";
+import {
+  normalizedRemoteSessionConnection,
+  sameRemoteSessionConnection,
+} from "./sessionConnectionIdentity";
 
 export type RemoteSessionKey = { profileId: string; root: string };
+
+export class RemoteSessionConnectionChangedError extends Error {
+  readonly code = "REMOTE_SESSION_CONNECTION_CHANGED";
+
+  constructor() {
+    super("The remote session connection configuration changed.");
+    this.name = "RemoteSessionConnectionChangedError";
+  }
+}
 
 export type RemoteSessionLease = {
   readonly info: RemoteSessionInfo;
@@ -34,6 +47,7 @@ export type RemoteSessionPoolDeps = {
 
 type Entry = {
   key: RemoteSessionKey;
+  binding: Readonly<RemoteSshConnection>;
   state: ResourceConnectionState;
   info?: RemoteSessionInfo;
   opening?: Promise<RemoteSessionInfo>;
@@ -84,15 +98,27 @@ export class RemoteSessionPool {
     connection: RemoteSshConnection,
   ): Promise<RemoteSessionLease> {
     const id = remoteSessionKeyId(key);
+    const nativeConnection = { ...connection };
+    const binding = normalizedRemoteSessionConnection(nativeConnection);
     let entry = this.entries.get(id);
+    if (
+      entry &&
+      (entry.info || entry.opening || entry.leases > 0) &&
+      !sameRemoteSessionConnection(entry.binding, binding)
+    ) {
+      throw new RemoteSessionConnectionChangedError();
+    }
     if (!entry) {
       entry = {
         key,
+        binding,
         state: IDLE_CONNECTION_STATE,
         leases: 0,
         generation: 0,
       };
       this.entries.set(id, entry);
+    } else if (!entry.info && !entry.opening && entry.leases === 0) {
+      entry.binding = binding;
     }
     entry.cancelIdle?.();
     entry.cancelIdle = undefined;
@@ -100,7 +126,8 @@ export class RemoteSessionPool {
     entry.leases += 1;
 
     try {
-      const info = entry.info ?? (await this.ensureOpen(entry, connection));
+      const info =
+        entry.info ?? (await this.ensureOpen(entry, nativeConnection));
       if (entry.generation !== generation) {
         throw new Error("The remote session was closed before it was ready.");
       }
@@ -189,7 +216,9 @@ export class RemoteSessionPool {
         (info) => {
           if (entry.generation !== generation) {
             void this.deps.close(info.session_id).catch(() => undefined);
-            throw new Error("The remote session was closed before it was ready.");
+            throw new Error(
+              "The remote session was closed before it was ready.",
+            );
           }
           entry.info = info;
           entry.state = settleConnectionAttempt(entry.state, attempt, "ready");

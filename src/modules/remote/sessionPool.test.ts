@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { RemoteSessionInfo, RemoteSshConnection } from "./client";
 import {
   isSessionLostError,
+  RemoteSessionConnectionChangedError,
   RemoteSessionPool,
   type RemoteSessionKey,
 } from "./sessionPool";
@@ -23,7 +24,9 @@ function harness() {
   let nextId = 1;
   const timers: Array<{ task: () => void; delay: number; cancelled: boolean }> =
     [];
-  const open = vi.fn(async () => info(nextId++));
+  const open = vi.fn(async (_connection: RemoteSshConnection, _root: string) =>
+    info(nextId++),
+  );
   const close = vi.fn(async () => undefined);
   const pool = new RemoteSessionPool({
     open,
@@ -53,6 +56,180 @@ describe("RemoteSessionPool", () => {
     expect(open).toHaveBeenCalledTimes(1);
     expect(a.info.session_id).toBe(b.info.session_id);
     expect(pool.snapshot()[0]?.leases).toBe(2);
+  });
+
+  it.each([
+    { host: "other.test" },
+    { user: "other-user" },
+    { port: 2222 },
+    { identityFile: "/keys/other" },
+    { extraArgs: "-o ProxyJump=other" },
+    { initialDirectory: "/srv/other" },
+  ])(
+    "rejects a changed live native binding without affecting busy sibling leases: %o",
+    async (changed) => {
+      const { pool, open, close } = harness();
+      const original: RemoteSshConnection = {
+        ...connection,
+        user: "dev",
+        identityFile: "/keys/build",
+        extraArgs: "-o ProxyJump=bastion",
+        initialDirectory: "/srv/app",
+      };
+      const project = await pool.acquire(key, original);
+      const pty = await pool.acquire(key, original);
+      project.release();
+      const before = pool.snapshot();
+      const rejected = pool.acquire(key, { ...original, ...changed });
+      await expect(rejected).rejects.toBeInstanceOf(
+        RemoteSessionConnectionChangedError,
+      );
+      await expect(rejected).rejects.toMatchObject({
+        code: "REMOTE_SESSION_CONNECTION_CHANGED",
+        message: "The remote session connection configuration changed.",
+      });
+      expect(pool.snapshot()).toEqual(before);
+      expect(pool.snapshot()[0]?.leases).toBe(1);
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(close).not.toHaveBeenCalled();
+      pty.release();
+    },
+  );
+
+  it("rejects changed configuration while a same-key native open is pending", async () => {
+    const { pool, open, close } = harness();
+    let resolveOpen!: (value: RemoteSessionInfo) => void;
+    open.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOpen = resolve;
+      }),
+    );
+    const pending = pool.acquire(key, connection);
+    const before = pool.snapshot();
+    await expect(
+      pool.acquire(key, { ...connection, user: "other-user" }),
+    ).rejects.toBeInstanceOf(RemoteSessionConnectionChangedError);
+    expect(pool.snapshot()).toEqual(before);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    resolveOpen(info(7));
+    const lease = await pending;
+    expect(lease.info.session_id).toBe(7);
+    expect(pool.snapshot()[0]?.leases).toBe(1);
+    lease.release();
+  });
+
+  it("retains idle collection when a changed binding is rejected after the last release", async () => {
+    const { pool, open, close, fireIdle } = harness();
+    (await pool.acquire(key, connection)).release();
+    await expect(
+      pool.acquire(key, { host: "other.test" }),
+    ).rejects.toBeInstanceOf(RemoteSessionConnectionChangedError);
+    expect(pool.snapshot()[0]?.leases).toBe(0);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    fireIdle();
+    expect(close).toHaveBeenCalledExactlyOnceWith(1);
+    expect(pool.snapshot()).toEqual([]);
+    const changed = await pool.acquire(key, { host: "other.test" });
+    expect(changed.info.session_id).toBe(2);
+    expect(open).toHaveBeenCalledTimes(2);
+    changed.release();
+  });
+
+  it("accepts new configuration after a fully released native session is closed", async () => {
+    const { pool, open, close } = harness();
+    const first = await pool.acquire(key, connection);
+    first.release();
+    await pool.closeSession(first.info.session_id);
+    const second = await pool.acquire(key, {
+      host: "other.test",
+      user: "other-user",
+    });
+    expect(second.info.session_id).toBe(2);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(close).toHaveBeenCalledExactlyOnceWith(1);
+    expect(pool.snapshot()[0]?.leases).toBe(1);
+    second.release();
+  });
+
+  it("allows changed configuration after a failed open has no native resources", async () => {
+    const { pool, open, close } = harness();
+    open.mockRejectedValueOnce(new Error("auth failed"));
+    await expect(pool.acquire(key, connection)).rejects.toThrow("auth failed");
+    const retry = await pool.acquire(key, { host: "other.test" });
+    expect(retry.info.session_id).toBe(1);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(close).not.toHaveBeenCalled();
+    retry.release();
+  });
+
+  it("accepts equivalent trimmed values, omitted defaults and PTY-only metadata changes", async () => {
+    const { pool, open } = harness();
+    const first = await pool.acquire(key, {
+      host: " example.test ",
+      user: " ",
+      identityFile: " ",
+      extraArgs: " ",
+      initialDirectory: " ",
+      multiplexerMode: "auto",
+    });
+    const second = await pool.acquire(key, {
+      ...connection,
+      multiplexerMode: "tmux",
+      activeMultiplexerSession: "other-terminal",
+    });
+    expect(first.info.session_id).toBe(second.info.session_id);
+    expect(pool.snapshot()[0]?.leases).toBe(2);
+    expect(open).toHaveBeenCalledTimes(1);
+    first.release();
+    second.release();
+  });
+
+  it("captures immutable pending native configuration despite caller mutation", async () => {
+    const { pool, open, close } = harness();
+    const mutable = { ...connection, user: "dev", identityFile: "/keys/build" };
+    let resolveOpen!: (value: RemoteSessionInfo) => void;
+    open.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOpen = resolve;
+      }),
+    );
+    const pending = pool.acquire(key, mutable);
+    mutable.host = "other.test";
+    mutable.user = "other-user";
+    mutable.identityFile = "/keys/other";
+    expect(open.mock.calls[0]?.[0]).toEqual({
+      ...connection,
+      user: "dev",
+      identityFile: "/keys/build",
+    });
+    expect(open.mock.calls[0]?.[0]).not.toBe(mutable);
+    await expect(pool.acquire(key, mutable)).rejects.toBeInstanceOf(
+      RemoteSessionConnectionChangedError,
+    );
+    expect(pool.snapshot()[0]?.leases).toBe(1);
+    resolveOpen(info(7));
+    const original = await pending;
+    await expect(pool.acquire(key, mutable)).rejects.toBeInstanceOf(
+      RemoteSessionConnectionChangedError,
+    );
+    const sibling = await pool.acquire(key, {
+      ...connection,
+      user: "dev",
+      identityFile: "/keys/build",
+    });
+    expect(pool.snapshot()[0]?.leases).toBe(2);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(Object.keys(pool.snapshot()[0] ?? {})).toEqual([
+      "key",
+      "state",
+      "sessionId",
+      "leases",
+    ]);
+    original.release();
+    sibling.release();
   });
 
   it("reuses a ready session and keeps it open until the idle delay", async () => {

@@ -10,6 +10,7 @@ import type {
   RemoteSshConnection,
 } from "@/modules/remote/client";
 import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
+import { sameRemoteSessionConnection } from "@/modules/remote/sessionConnectionIdentity";
 
 export const MAX_PROJECT_ENVIRONMENT_OWNERS = 256;
 
@@ -80,7 +81,8 @@ function sameTarget(a: ProjectEnvironmentTarget, b: ProjectEnvironmentTarget) {
   return (
     a.projectId === b.projectId &&
     a.profileId === b.profileId &&
-    a.root === b.root
+    a.root === b.root &&
+    sameRemoteSessionConnection(a.connection, b.connection)
   );
 }
 
@@ -190,6 +192,16 @@ export class ProjectEnvironmentRegistry {
     const cleanup = this.dispose(entry);
     this.notify();
     await cleanup;
+  }
+
+  async releaseOwners(ownerIds: ReadonlySet<string>): Promise<void> {
+    await this.releaseEntries(
+      [...this.entries.values()].filter((entry) => ownerIds.has(entry.ownerId)),
+      [...ownerIds].flatMap((id) => {
+        const cleanup = this.cleanups.get(id);
+        return cleanup ? [cleanup] : [];
+      }),
+    );
   }
 
   async releaseProfiles(profileIds: ReadonlySet<string>): Promise<void> {

@@ -21,6 +21,7 @@ vi.mock("@/modules/connections/model/remoteSshProfiles", () => ({
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
   harnessProjectEnvironmentId,
+  harnessProjectEnvironmentFor,
   useHarnessEnvStore,
   useHarnessProjectEnvStore,
 } from "./harnessEnvStore";
@@ -405,6 +406,244 @@ it("returns a rejected promise for malformed input rather than throwing into an 
   }).not.toThrow();
   await expect(connecting).rejects.toBeInstanceOf(TypeError);
   expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
+});
+
+it("reads, selects and closes the actual root of a default-root owner", async () => {
+  const owner = harnessProjectEnvironmentId("p1", ".");
+  const actual = harnessProjectEnvironmentId("p1", "/real");
+  mocks.openRemoteWorkspace.mockResolvedValue(info(5, "/real"));
+  await useHarnessEnvStore.getState().connect(profile as never, ".");
+  expect(
+    harnessProjectEnvironmentFor(actual, useHarnessEnvStore.getState().projects)
+      .env,
+  ).toMatchObject({ sessionId: 5, root: "/real" });
+  useHarnessEnvStore.getState().selectProject(actual);
+  expect(useHarnessEnvStore.getState().projectId).toBe(owner);
+  await useHarnessEnvStore
+    .getState()
+    .connect(profile as never, "/real", actual);
+  expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(remoteSessions.snapshot()[0].leases).toBe(1);
+  await useHarnessEnvStore.getState().disconnect(actual);
+  expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(5);
+  expect(useHarnessEnvStore.getState().projects).toEqual({});
+});
+
+it("reuses and closes a fallback owner through its confirmed actual root", async () => {
+  mocks.openRemoteWorkspace
+    .mockRejectedValueOnce(new Error("missing"))
+    .mockResolvedValueOnce(info(6, "/real"));
+  await useHarnessEnvStore.getState().connect(profile as never, "/missing");
+  const actual = harnessProjectEnvironmentId("p1", "/real");
+  await useHarnessEnvStore
+    .getState()
+    .connect(profile as never, "/real", actual);
+  expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(2);
+  expect(useHarnessEnvStore.getState().projectId).toBe(
+    harnessProjectEnvironmentId("p1", "/missing"),
+  );
+  await useHarnessEnvStore.getState().disconnect(actual);
+  expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(6);
+});
+
+it("reconnects a default-root alias at its actual root, not a changed login home", async () => {
+  mocks.openRemoteWorkspace
+    .mockResolvedValueOnce(info(5, "/real"))
+    .mockResolvedValueOnce(info(6, "/real"));
+  await useHarnessEnvStore.getState().connect(profile as never, ".");
+  const actual = harnessProjectEnvironmentId("p1", "/real");
+  await useHarnessEnvStore
+    .getState()
+    .reconnect(profile as never, "/real", actual);
+  expect(mocks.openRemoteWorkspace).toHaveBeenLastCalledWith(
+    expect.anything(),
+    "/real",
+  );
+  expect(Object.keys(useHarnessEnvStore.getState().projects)).toHaveLength(1);
+  expect(
+    harnessProjectEnvironmentFor(actual, useHarnessEnvStore.getState().projects)
+      .env,
+  ).toMatchObject({ sessionId: 6 });
+});
+
+it("keeps a known project alias addressable while its reconnect fails", async () => {
+  await useHarnessEnvStore.getState().connect(profile as never, ".");
+  mocks.openRemoteWorkspace.mockRejectedValue(new Error("auth failed"));
+  const actual = harnessProjectEnvironmentId("p1", "/srv/app");
+  await expect(
+    useHarnessEnvStore
+      .getState()
+      .reconnect(profile as never, "/srv/app", actual),
+  ).rejects.toThrow("auth failed");
+  expect(
+    harnessProjectEnvironmentFor(
+      actual,
+      useHarnessEnvStore.getState().projects,
+    ),
+  ).toMatchObject({
+    env: { kind: "local" },
+    connecting: false,
+    error: "auth failed",
+  });
+  await useHarnessEnvStore.getState().disconnect(actual);
+  expect(useHarnessEnvStore.getState().projects).toEqual({});
+});
+
+it("closes automatic aliases together without closing an explicit same-root owner", async () => {
+  mocks.openRemoteWorkspace
+    .mockResolvedValueOnce(info(5, "/real"))
+    .mockResolvedValueOnce(info(6, "/real"));
+  const actual = harnessProjectEnvironmentId("p1", "/real");
+  await Promise.all([
+    useHarnessEnvStore.getState().connect(profile as never, "."),
+    useHarnessEnvStore.getState().connect(profile as never, "/real", actual),
+  ]);
+  await useHarnessEnvStore
+    .getState()
+    .connect(profile as never, "/real", "alpha");
+  await useHarnessEnvStore.getState().disconnect(actual);
+  expect(Object.keys(useHarnessEnvStore.getState().projects)).toEqual([
+    "alpha",
+  ]);
+  expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(5);
+  expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalledWith(6);
+  expect(
+    remoteSessions.snapshot().find((entry) => entry.sessionId === 6)?.leases,
+  ).toBe(1);
+  expect(useHarnessEnvStore.getState().env).toMatchObject({ sessionId: 6 });
+});
+
+it("preserves a same-key reconnect created during atomic alias release", async () => {
+  const actual = harnessProjectEnvironmentId("p1", "/real");
+  const defaultId = harnessProjectEnvironmentId("p1", ".");
+  mocks.openRemoteWorkspace
+    .mockResolvedValueOnce(info(5, "/real"))
+    .mockResolvedValueOnce(info(6, "/real"));
+  await Promise.all([
+    useHarnessEnvStore.getState().connect(profile as never, "."),
+    useHarnessEnvStore.getState().connect(profile as never, "/real", actual),
+  ]);
+  await useHarnessEnvStore
+    .getState()
+    .connect(profile as never, "/real", "alpha");
+  useHarnessEnvStore.getState().selectProject(actual);
+  let requested = false;
+  let reconnected: Promise<unknown> | undefined;
+  const unsubscribe = useHarnessEnvStore.subscribe((state) => {
+    if (!requested && !state.projects[defaultId] && !state.projects[actual]) {
+      requested = true;
+      reconnected = state.connect(profile as never, "/real", actual);
+    }
+  });
+  try {
+    await useHarnessEnvStore.getState().disconnect(actual);
+    expect(reconnected).toBeDefined();
+    await reconnected;
+    expect(useHarnessEnvStore.getState().projectId).toBe(actual);
+    expect(useHarnessEnvStore.getState().projects[actual].env).toMatchObject({
+      sessionId: 6,
+    });
+    expect(
+      remoteSessions.snapshot().find((entry) => entry.sessionId === 6)?.leases,
+    ).toBe(2);
+    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalledWith(6);
+  } finally {
+    unsubscribe();
+  }
+});
+
+it("never reads another profile or local project through the selected facade", async () => {
+  await useHarnessEnvStore.getState().connect(profile as never, ".");
+  const projects = useHarnessEnvStore.getState().projects;
+  expect(
+    harnessProjectEnvironmentFor(
+      harnessProjectEnvironmentId("p2", "/srv/app"),
+      projects,
+    ).env,
+  ).toEqual({ kind: "local" });
+  expect(harnessProjectEnvironmentFor("/local", projects)).toBe(
+    harnessProjectEnvironmentFor(null, projects),
+  );
+});
+
+it("does not reuse a default-root alias after its saved host changes", async () => {
+  mocks.openRemoteWorkspace
+    .mockResolvedValueOnce(info(5, "/real"))
+    .mockResolvedValueOnce(info(6, "/real"));
+  await useHarnessEnvStore.getState().connect(profile as never, ".");
+  await useHarnessEnvStore
+    .getState()
+    .connect({ ...profile, host: "other.test" } as never, "/real");
+  expect(mocks.openRemoteWorkspace).toHaveBeenLastCalledWith(
+    { host: "other.test", port: 22 },
+    "/real",
+  );
+  expect(useHarnessEnvStore.getState().env).toMatchObject({
+    sessionId: 6,
+    connection: { host: "other.test" },
+  });
+});
+
+it("opens a fresh same-root session when the saved connection configuration changes", async () => {
+  await useHarnessEnvStore.getState().connect(profile as never, "/srv/app");
+  mocks.openRemoteWorkspace.mockResolvedValueOnce(info(6));
+  const env = await useHarnessEnvStore
+    .getState()
+    .connect({ ...profile, host: "other.test" } as never, "/srv/app");
+  expect(env).toMatchObject({
+    sessionId: 6,
+    connection: { host: "other.test" },
+  });
+  expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(2);
+  expect(mocks.openRemoteWorkspace).toHaveBeenLastCalledWith(
+    { host: "other.test", port: 22 },
+    "/srv/app",
+  );
+});
+
+it("rejects changed same-root credentials while another holder owns the old session", async () => {
+  await useHarnessEnvStore.getState().connect(profile as never, "/srv/app");
+  const other = await remoteSessions.acquire(
+    { profileId: "p1", root: "/srv/app" },
+    { host: "example.test", port: 22 },
+  );
+  try {
+    await expect(
+      useHarnessEnvStore
+        .getState()
+        .connect({ ...profile, host: "other.test" } as never, "/srv/app"),
+    ).rejects.toMatchObject({ code: "REMOTE_SESSION_CONNECTION_CHANGED" });
+    expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(1);
+    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
+    expect(remoteSessions.snapshot()[0].leases).toBe(1);
+    expect(useHarnessEnvStore.getState().env).toEqual({ kind: "local" });
+  } finally {
+    other.release();
+  }
+});
+
+it("does not deduplicate a mutated caller profile against its pending native attempt", async () => {
+  let finish!: (value: ReturnType<typeof info>) => void;
+  mocks.openRemoteWorkspace.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const mutable = { ...profile };
+  const first = useHarnessEnvStore
+    .getState()
+    .connect(mutable as never, "/srv/app");
+  const cancelled = expect(first).rejects.toThrow("cancelled");
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
+  mutable.host = "other.test";
+  await expect(
+    useHarnessEnvStore.getState().connect(mutable as never, "/srv/app"),
+  ).rejects.toMatchObject({ code: "REMOTE_SESSION_CONNECTION_CHANGED" });
+  finish(info(5));
+  await cancelled;
+  expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(1);
+  expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(5);
 });
 
 it("treats a special project key as data rather than a prototype", async () => {

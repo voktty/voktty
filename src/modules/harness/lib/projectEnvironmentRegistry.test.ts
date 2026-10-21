@@ -407,6 +407,99 @@ describe("ProjectEnvironmentRegistry", () => {
     expect(values[2].release).not.toHaveBeenCalled();
   });
 
+  it("deletes all captured aliases before notification and preserves a reentrant same-key reconnect", async () => {
+    const { registry, acquire, release } = harness();
+    const defaultLease = lease(1);
+    const fallbackLease = lease(2);
+    const siblingLease = lease(3);
+    const replacementLease = lease(4);
+    const cleanup = deferred<void>();
+    acquire
+      .mockResolvedValueOnce(defaultLease)
+      .mockResolvedValueOnce(fallbackLease)
+      .mockResolvedValueOnce(siblingLease)
+      .mockResolvedValueOnce(replacementLease);
+    await registry.connect(
+      "default-alias",
+      target("canonical-project", "profile-a", "."),
+    );
+    await registry.connect(
+      "fallback-alias",
+      target("canonical-project", "profile-a", "/missing"),
+    );
+    await registry.connect(
+      "sibling",
+      target("other-project", "profile-b", "/other"),
+    );
+    release.mockImplementation(async (value) => {
+      value.release();
+      if (value === defaultLease || value === fallbackLease)
+        await cleanup.promise;
+    });
+    let reentered = false;
+    let replacement: Promise<RemoteSessionLease["info"]> | undefined;
+    const unsubscribe = registry.subscribe(() => {
+      if (reentered) return;
+      reentered = true;
+      expect(registry.snapshot().map((value) => value.ownerId)).toEqual([
+        "sibling",
+      ]);
+      replacement = registry.connect(
+        "fallback-alias",
+        target("canonical-project", "profile-a", "/home/work"),
+      );
+    });
+    const closing = registry.releaseOwners(
+      new Set(["default-alias", "fallback-alias"]),
+    );
+    expect(reentered).toBe(true);
+    expect(replacement).toBeDefined();
+    await flush();
+    expect(acquire).toHaveBeenCalledTimes(3);
+    cleanup.resolve();
+    await closing;
+    expect(await replacement).toBe(replacementLease.info);
+    unsubscribe();
+    expect(release).toHaveBeenCalledTimes(2);
+    expect(defaultLease.release).toHaveBeenCalledTimes(1);
+    expect(fallbackLease.release).toHaveBeenCalledTimes(1);
+    expect(siblingLease.release).not.toHaveBeenCalled();
+    expect(replacementLease.release).not.toHaveBeenCalled();
+    expect(registry.snapshot()).toEqual([
+      expect.objectContaining({
+        ownerId: "sibling",
+        session: siblingLease.info,
+      }),
+      expect.objectContaining({
+        ownerId: "fallback-alias",
+        session: replacementLease.info,
+        state: { phase: "ready", attempt: 1, error: null },
+      }),
+    ]);
+  });
+
+  it("awaits an existing owner cleanup barrier when batch release finds no current entry", async () => {
+    const { registry, acquire, release } = harness();
+    const cleanup = deferred<void>();
+    acquire.mockResolvedValue(lease());
+    release.mockReturnValueOnce(cleanup.promise);
+    await registry.connect("owner-a", target());
+    const closing = registry.releaseOwner("owner-a");
+    let batchFinished = false;
+    const batch = registry
+      .releaseOwners(new Set(["owner-a", "unknown-owner"]))
+      .then(() => {
+        batchFinished = true;
+      });
+    await flush();
+    expect(batchFinished).toBe(false);
+    expect(release).toHaveBeenCalledTimes(1);
+    cleanup.resolve();
+    await Promise.all([closing, batch]);
+    expect(batchFinished).toBe(true);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it("attempts every bulk cleanup before reporting a sanitized failure", async () => {
     const { registry, acquire, release } = harness();
     acquire.mockResolvedValueOnce(lease(1)).mockResolvedValueOnce(lease(2));

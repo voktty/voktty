@@ -2,13 +2,19 @@ import { create } from "zustand";
 import type { SshConnection } from "@/modules/ssh";
 import { closeRemoteWorkspace } from "@/modules/remote/client";
 import { remoteSessions } from "@/modules/remote/sessionManager";
-import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
-import { isConnectionPending } from "@/modules/connections/lifecycle";
-import { remotePath } from "@/modules/connections/model/remoteProjects";
 import {
-  remoteSshConnectionForProfile,
-  remoteSshEnvironmentId,
-} from "@/modules/connections/model/remoteSshProfiles";
+  RemoteSessionConnectionChangedError,
+  type RemoteSessionLease,
+} from "@/modules/remote/sessionPool";
+import { sameRemoteSessionConnection } from "@/modules/remote/sessionConnectionIdentity";
+import { isConnectionPending } from "@/modules/connections/lifecycle";
+import { remoteSshConnectionForProfile } from "@/modules/connections/model/remoteSshProfiles";
+import {
+  projectEnvironmentId as harnessProjectEnvironmentId,
+  projectEnvironmentOwnerId,
+  projectEnvironmentOwnerIds,
+  type ProjectEnvironmentIdentity,
+} from "./projectEnvironmentIdentity";
 import {
   MAX_PROJECT_ENVIRONMENT_OWNERS,
   ProjectEnvironmentCancelledError,
@@ -31,9 +37,13 @@ export type HarnessProjectEnvironment = {
   error: string | null;
 };
 
+export type HarnessProjectEnvironmentEntry = HarnessProjectEnvironment & {
+  identity: ProjectEnvironmentIdentity;
+};
+
 type HarnessEnvState = HarnessProjectEnvironment & {
   projectId: string | null;
-  projects: Record<string, HarnessProjectEnvironment>;
+  projects: Record<string, HarnessProjectEnvironmentEntry>;
   connect: (
     profile: SshConnection,
     targetRoot?: string,
@@ -53,6 +63,14 @@ type HarnessEnvState = HarnessProjectEnvironment & {
 
 const LOCAL_ENV: HarnessRemoteEnv = { kind: "local" };
 const profiles = new Map<string, SshConnection>();
+const automaticOwners = new Set<string>();
+const projectIds = new Map<string, string>();
+const detachedFailures = new Map<string, HarnessProjectEnvironmentEntry>();
+const EMPTY_PROJECT_ENVIRONMENT: HarnessProjectEnvironment = {
+  env: LOCAL_ENV,
+  connecting: false,
+  error: null,
+};
 const requests = new Map<string, object>();
 const pending = new Map<
   string,
@@ -82,20 +100,43 @@ const environments = new ProjectEnvironmentRegistry({
   release: releaseProjectLease,
 });
 
-export function harnessProjectEnvironmentId(
-  profileId: string,
-  root: string,
-): string {
-  return remotePath(remoteSshEnvironmentId(profileId), root);
+export { harnessProjectEnvironmentId };
+
+export function harnessProjectEnvironmentFor(
+  projectId: string | null,
+  projects: Readonly<Record<string, HarnessProjectEnvironmentEntry>>,
+): HarnessProjectEnvironment {
+  const ownerId =
+    projectId === null
+      ? undefined
+      : projectEnvironmentOwnerId(projectId, projects);
+  return ownerId === undefined ? EMPTY_PROJECT_ENVIRONMENT : projects[ownerId];
 }
 
 function refreshProjects(selectedProjectId?: string) {
-  const projects: Record<string, HarnessProjectEnvironment> =
+  const projects: Record<string, HarnessProjectEnvironmentEntry> =
     Object.create(null);
   for (const snapshot of environments.snapshot()) {
     const profile = profiles.get(snapshot.ownerId);
     if (!profile) continue;
+    const automatic = automaticOwners.has(snapshot.ownerId);
+    const projectId =
+      detachedFailures.get(snapshot.ownerId)?.identity.projectId ??
+      (automatic && snapshot.session
+        ? harnessProjectEnvironmentId(
+            snapshot.profileId,
+            snapshot.session.workspace_root,
+          )
+        : (projectIds.get(snapshot.ownerId) ?? snapshot.projectId));
+    projectIds.set(snapshot.ownerId, projectId);
     projects[snapshot.projectId] = {
+      identity: {
+        projectId,
+        profileId: snapshot.profileId,
+        requestedRoot: snapshot.requestedRoot,
+        resolvedRoot: snapshot.session?.workspace_root,
+        automatic,
+      },
       env: snapshot.session
         ? {
             kind: "ssh",
@@ -108,37 +149,64 @@ function refreshProjects(selectedProjectId?: string) {
       error: snapshot.state.error,
     };
   }
-  const selected =
+  for (const [ownerId, failure] of detachedFailures) {
+    if (!Object.getOwnPropertyDescriptor(projects, ownerId))
+      projects[ownerId] = failure;
+  }
+  const selectedInput =
     selectedProjectId ?? useHarnessProjectEnvStore.getState().projectId;
+  const selected =
+    selectedInput === null
+      ? null
+      : (projectEnvironmentOwnerId(selectedInput, projects) ?? selectedInput);
+  const report =
+    selected === null
+      ? undefined
+      : harnessProjectEnvironmentFor(selected, projects);
   useHarnessProjectEnvStore.setState({
     projects,
-    ...(selectedProjectId !== undefined
-      ? { projectId: selectedProjectId }
-      : {}),
-    ...(selected !== null
-      ? (projects[selected] ?? {
-          env: LOCAL_ENV,
-          connecting: false,
-          error: null,
-        })
+    projectId: selected,
+    ...(report
+      ? { env: report.env, connecting: report.connecting, error: report.error }
       : {}),
   });
 }
 
 async function connectProject(
-  profile: SshConnection,
+  inputProfile: SshConnection,
   targetRoot?: string,
   explicitProjectId?: string,
   force = false,
 ): Promise<HarnessRemoteEnv> {
+  const profile = Object.freeze({ ...inputProfile });
   const candidateRoot = targetRoot?.trim();
-  const root =
+  let root =
     candidateRoot && candidateRoot !== "~"
       ? candidateRoot
       : profile.initialDirectory?.trim() || ".";
-  const projectId =
+  const requestedProjectId =
     explicitProjectId ?? harnessProjectEnvironmentId(profile.id, root);
+  const automatic =
+    explicitProjectId === undefined ||
+    requestedProjectId === harnessProjectEnvironmentId(profile.id, root);
   const connection = remoteSshConnectionForProfile(profile);
+  const projects = useHarnessProjectEnvStore.getState().projects;
+  const alias = projectEnvironmentOwnerId(requestedProjectId, projects);
+  const aliasEntry = alias === undefined ? undefined : projects[alias];
+  const aliasProfile = alias === undefined ? undefined : profiles.get(alias);
+  const matchingAlias =
+    aliasEntry?.identity.automatic &&
+    aliasEntry.identity.profileId === profile.id &&
+    aliasProfile &&
+    ((alias !== undefined && detachedFailures.has(alias)) ||
+      sameRemoteSessionConnection(
+        remoteSshConnectionForProfile(aliasProfile),
+        connection,
+      ));
+  const projectId =
+    alias === requestedProjectId || matchingAlias
+      ? (alias ?? requestedProjectId)
+      : requestedProjectId;
   if (!projectId.trim() || projectId.length > 65536) {
     return Promise.reject(new Error("The project identity is invalid."));
   }
@@ -165,11 +233,19 @@ async function connectProject(
           entry.state.phase === "ready",
       );
   const replace = force || stale;
+  if (matchingAlias && cached?.session) {
+    root = replace ? cached.session.workspace_root : cached.requestedRoot;
+  }
   const previous = pending.get(projectId);
   if (
     !replace &&
     previous?.profileId === profile.id &&
-    previous.root === root
+    previous.root === root &&
+    aliasProfile !== undefined &&
+    sameRemoteSessionConnection(
+      remoteSshConnectionForProfile(aliasProfile),
+      connection,
+    )
   ) {
     useHarnessProjectEnvStore.getState().selectProject(projectId);
     return previous.promise;
@@ -185,6 +261,7 @@ async function connectProject(
           requests.get(projectId) !== token ||
           reason instanceof ProjectEnvironmentCancelledError ||
           reason instanceof ProjectEnvironmentCapacityError ||
+          reason instanceof RemoteSessionConnectionChangedError ||
           root === "."
         ) {
           throw reason;
@@ -208,6 +285,8 @@ async function connectProject(
         pending.delete(projectId);
         requests.delete(projectId);
         profiles.delete(projectId);
+        automaticOwners.delete(projectId);
+        projectIds.delete(projectId);
         if (useHarnessProjectEnvStore.getState().projectId === projectId) {
           useHarnessProjectEnvStore.setState({
             projectId: null,
@@ -235,6 +314,9 @@ async function connectProject(
     (admitted) => {
       requests.set(projectId, token);
       profiles.set(projectId, profile);
+      if (automatic) automaticOwners.add(projectId);
+      else automaticOwners.delete(projectId);
+      projectIds.set(projectId, automatic ? requestedProjectId : projectId);
       operation = consume(admitted);
       pending.set(projectId, {
         profileId: profile.id,
@@ -261,18 +343,50 @@ async function releaseLegacyEnvironment(env: HarnessRemoteEnv): Promise<void> {
   }
 }
 
+async function disconnectOwners(ids: string[]): Promise<void> {
+  const owners = new Set(ids);
+  const captured = useHarnessProjectEnvStore.getState().projects;
+  for (const id of owners) {
+    requests.delete(id);
+    pending.delete(id);
+  }
+  const releasing = environments.releaseOwners(owners);
+  const selected = useHarnessProjectEnvStore.getState().projectId;
+  if (selected !== null && owners.has(selected) && !requests.has(selected)) {
+    useHarnessProjectEnvStore.getState().selectProject(null);
+  }
+  try {
+    await releasing;
+  } catch (reason) {
+    for (const id of owners) {
+      if (!requests.has(id) && Object.getOwnPropertyDescriptor(captured, id)) {
+        detachedFailures.set(id, {
+          ...captured[id],
+          env: LOCAL_ENV,
+          connecting: false,
+          error: "Could not release the project environment.",
+        });
+      }
+    }
+    refreshProjects();
+    throw reason;
+  }
+  for (const id of owners) {
+    if (!requests.has(id)) {
+      profiles.delete(id);
+      projectIds.delete(id);
+      automaticOwners.delete(id);
+      detachedFailures.delete(id);
+    }
+  }
+}
+
 async function disconnectProject(projectId?: string): Promise<void> {
   const selected = useHarnessProjectEnvStore.getState();
   const id = projectId ?? selected.projectId;
   if (id !== null) {
-    requests.delete(id);
-    pending.delete(id);
-    const releasing = environments.releaseOwner(id);
-    if (useHarnessProjectEnvStore.getState().projectId === id) {
-      useHarnessProjectEnvStore.getState().selectProject(null);
-    }
-    await releasing;
-    if (!requests.has(id)) profiles.delete(id);
+    const owners = projectEnvironmentOwnerIds(id, selected.projects);
+    await disconnectOwners(owners.length ? owners : [id]);
     return;
   }
   // The breadcrumb still supplies unpooled environments through setEnv until
@@ -293,14 +407,24 @@ export const useHarnessProjectEnvStore = create<HarnessEnvState>(
       connectProject(profile, root, projectId, true),
     selectProject: (projectId) => {
       const projects = get().projects;
-      const project =
-        projectId !== null &&
-        Object.getOwnPropertyDescriptor(projects, projectId) !== undefined
-          ? projects[projectId]
-          : undefined;
+      const selected =
+        projectId === null
+          ? null
+          : (projectEnvironmentOwnerId(projectId, projects) ?? projectId);
+      const report = harnessProjectEnvironmentFor(selected, projects);
+      const current = get();
+      if (
+        current.projectId === selected &&
+        current.env === report.env &&
+        current.connecting === report.connecting &&
+        current.error === report.error
+      )
+        return;
       set({
-        projectId,
-        ...(project ?? { env: LOCAL_ENV, connecting: false, error: null }),
+        projectId: selected,
+        env: report.env,
+        connecting: report.connecting,
+        error: report.error,
       });
     },
     setEnv: (env) => {
@@ -317,24 +441,23 @@ export const useHarnessProjectEnvStore = create<HarnessEnvState>(
       else set({ projectId: null, env, connecting: false, error: null });
     },
     disconnectProfiles: async (profileIds) => {
-      const ids = environments
-        .snapshot()
-        .filter((entry) => profileIds.has(entry.profileId))
-        .map((entry) => entry.ownerId);
+      const ids = [...profiles.entries()]
+        .filter(([, profile]) => profileIds.has(profile.id))
+        .map(([ownerId]) => ownerId);
       const selected = get();
       const external =
         selected.projectId === null &&
         selected.env.kind === "ssh" &&
         profileIds.has(selected.env.connection.id);
-      await Promise.all(ids.map((id) => disconnectProject(id)));
+      await disconnectOwners(ids);
       if (external) await releaseLegacyEnvironment(selected.env);
     },
     disconnectAll: async () => {
       const selected = get();
       const external =
         selected.projectId === null && selected.env.kind === "ssh";
-      const ids = environments.snapshot().map((entry) => entry.ownerId);
-      await Promise.all(ids.map((id) => disconnectProject(id)));
+      const ids = [...profiles.keys()];
+      await disconnectOwners(ids);
       if (external) await releaseLegacyEnvironment(selected.env);
     },
   }),
