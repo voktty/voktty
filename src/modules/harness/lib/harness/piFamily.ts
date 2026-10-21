@@ -1,14 +1,7 @@
 import { nativeModelId } from "../models";
-import { taskListFromToolInput } from "../taskList";
 import { normalizeProjectPath } from "../recents";
+import { taskListFromToolInput } from "../taskList";
 import type { UserQuestionReply } from "../userQuestion";
-import type {
-  CommandContext,
-  NativeCommand,
-  NativeCommandProvider,
-} from "./nativeCommands";
-import { discoverOmpCommands, ompCommandsFromRpcData } from "./piSkills";
-import { OMP_FLAVOR } from "./piFlavor";
 import {
   killChild,
   spawnChild,
@@ -16,9 +9,14 @@ import {
   watchChild,
   writeChild,
 } from "./child";
-import type { PiFlavor } from "./piFlavor";
+import type {
+  CommandContext,
+  NativeCommand,
+  NativeCommandProvider,
+} from "./nativeCommands";
 import { PiRpc } from "./piClient";
-import { piSubagentEvents } from "./piSubagents";
+import type { PiFlavor } from "./piFlavor";
+import { OMP_FLAVOR } from "./piFlavor";
 import {
   agentEndWillRetry,
   asRecord,
@@ -35,6 +33,7 @@ import {
   isPiThinkingLevel,
   mergeToolInput,
   needsExtensionUiReply,
+  type PiExtensionUiRequest,
   parseExtensionUiRequest,
   parsePiModelRef,
   piNativeId,
@@ -54,8 +53,9 @@ import {
   toolTitle,
   tryParseJsonRecord,
   turnErrorFromEvent,
-  type PiExtensionUiRequest,
 } from "./piProtocol";
+import { discoverOmpCommands, ompCommandsFromRpcData } from "./piSkills";
+import { piSubagentEvents } from "./piSubagents";
 import type {
   ApprovalDecision,
   CompactContextInput,
@@ -80,6 +80,9 @@ type InFlightTool = {
 };
 
 type Live = {
+  operationToken: object;
+  isCurrent: () => boolean;
+  exitError?: Error;
   rpc: PiRpc;
   cwd: string;
   providerSessionId: string;
@@ -208,35 +211,57 @@ export function setPiBinaryResolver(
   stateFor(flavor).resolveBinary = fn;
 }
 
-/**
- * Live Pi adapter. Spawns `pi --mode rpc` with the user's config and extensions
- * loaded (no `--no-extensions`). Todos/subagents packages in `~/.pi/agent`
- * keep working; TUI-only widgets do not appear in MonoCode.
- */
+function snapshotInput<T extends HarnessSessionInput>(input: T): T {
+  return {
+    ...input,
+    modelSettings: input.modelSettings
+      ? { ...input.modelSettings }
+      : input.modelSettings,
+    networkAllowlist: input.networkAllowlist
+      ? [...input.networkAllowlist]
+      : input.networkAllowlist,
+  };
+}
+
 export async function sendTurn(
   flavor: PiFlavor,
-  input: SendTurnInput,
+  request: SendTurnInput,
 ): Promise<void> {
-  const { cancelledThreads } = stateFor(flavor);
+  const input = {
+    ...snapshotInput(request),
+    attachments: request.attachments?.map((attachment) => ({ ...attachment })),
+  };
+  const { cancelledThreads, liveByThread } = stateFor(flavor);
+  const admittedLive = liveByThread.get(input.sessionId);
+  const admittedOperation = admittedLive?.operationToken;
   let live: Live;
   try {
-    live = await ensureLive(flavor, input);
+    live = await ensureLive(flavor, input, false);
   } catch (error) {
     cancelledThreads.delete(input.sessionId);
     throw error;
   }
   if (cancelledThreads.delete(input.sessionId)) return;
-
-  live.onEvent = input.onEvent;
+  const operation =
+    admittedLive === live && admittedOperation
+      ? admittedOperation
+      : live.operationToken;
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      try {
+        assertCurrentOperation(live, operation);
+      } catch (error) {
+        if (error instanceof RetiredPiOperationError) return;
+        throw error;
+      }
+      live.onEvent = input.onEvent;
       live.cancelled = false;
       live.muteUpdates = false;
       try {
-        await runTurn(flavor, live, input);
+        await runTurn(flavor, live, input, operation);
       } catch (error) {
-        if (live.cancelled) return;
+        if (live.cancelled || error instanceof RetiredPiOperationError) return;
         throw error;
       }
     });
@@ -369,6 +394,14 @@ export async function cancelTurn(
     cancelledThreads.add(sessionId);
     return;
   }
+  live.operationToken = {};
+  const onEvent = live.onEvent;
+  const done = live.turnDone;
+  const hadTurn = live.activeTurn || done !== null;
+  live.turnDone = null;
+  live.turnFailed = null;
+  live.activeTurn = false;
+  live.turnEndPending = false;
   live.cancelled = true;
   live.muteUpdates = true;
   live.settleToken += 1;
@@ -377,11 +410,12 @@ export async function cancelTurn(
   for (const question of live.questions.values())
     question.resolve({ kind: "skipped" });
   live.questions.clear();
+  if (hadTurn) {
+    onEvent({ type: "message.completed" });
+    onEvent({ type: "reasoning.completed" });
+  }
+  done?.();
   await live.rpc.request({ type: "abort" }, 5_000).catch(() => undefined);
-  finishActiveTurn(live, [
-    { type: "message.completed" },
-    { type: "reasoning.completed" },
-  ]);
 }
 
 export async function stopSession(
@@ -393,6 +427,7 @@ export async function stopSession(
   const live = liveByThread.get(sessionId);
   liveByThread.delete(sessionId);
   if (live) {
+    live.operationToken = {};
     live.muteUpdates = true;
     live.settleToken += 1;
     for (const [, pending] of live.approvals) pending.resolve("deny");
@@ -432,6 +467,7 @@ export function bindSession(
 async function ensureLive(
   flavor: PiFlavor,
   input: HarnessSessionInput,
+  configureModel = true,
 ): Promise<Live> {
   const { liveByThread, resumeByThread } = stateFor(flavor);
   const existing = liveByThread.get(input.sessionId);
@@ -441,8 +477,12 @@ async function ensureLive(
     existing.cwd === input.cwd &&
     existing.planning === wantPlanning
   ) {
-    existing.onEvent = input.onEvent;
-    await applyModel(flavor, existing, input);
+    if (configureModel) {
+      const operation = existing.operationToken;
+      existing.onEvent = input.onEvent;
+      await applyModel(flavor, existing, input, operation);
+      assertCurrentOperation(existing, operation);
+    }
     return existing;
   }
   if (existing) {
@@ -463,7 +503,7 @@ async function ensureLive(
       canResume ? resume?.sessionId : undefined,
     );
   } catch (error) {
-    if (!canResume) throw error;
+    if (!canResume || error instanceof RetiredPiOperationError) throw error;
     resumeByThread.delete(input.sessionId);
     await stopSession(flavor, input.sessionId);
     return startLive(flavor, input, undefined);
@@ -493,6 +533,8 @@ async function startLive(
   );
 
   const live: Live = {
+    operationToken: {},
+    isCurrent: () => liveByThread.get(input.sessionId) === live,
     rpc,
     cwd: input.cwd,
     providerSessionId: resume ?? "",
@@ -529,7 +571,8 @@ async function startLive(
     input.sessionId,
     (line) => rpc.pushLine(line),
     (code) => {
-      rpc.close(new Error(`${flavor.label} exited`));
+      live.exitError = new Error(`${flavor.label} exited`);
+      rpc.close(live.exitError);
       liveByThread.delete(input.sessionId);
       input.onEvent({ type: "session.ended", code });
       const current = liveRef.current;
@@ -563,6 +606,7 @@ async function startLive(
   );
 
   liveByThread.set(input.sessionId, live);
+  const operation = live.operationToken;
 
   try {
     const stateFrame = await rpc.request(
@@ -570,7 +614,7 @@ async function startLive(
       INIT_TIMEOUT_MS,
     );
     bindState(flavor, input.sessionId, live, stateFrame.data);
-    await applyModel(flavor, live, input);
+    await applyModel(flavor, live, input, operation);
     if (live.providerSessionId) {
       live.onEvent({
         type: "session.providerBound",
@@ -580,7 +624,8 @@ async function startLive(
     live.onEvent({ type: "session.started" });
     return live;
   } catch (error) {
-    await stopSession(flavor, input.sessionId);
+    if (!(error instanceof RetiredPiOperationError))
+      await stopSession(flavor, input.sessionId);
     throw error;
   }
 }
@@ -589,8 +634,10 @@ async function runTurn(
   flavor: PiFlavor,
   live: Live,
   input: SendTurnInput,
+  operation: object,
 ): Promise<void> {
-  await applyModel(flavor, live, input);
+  await applyModel(flavor, live, input, operation);
+  assertCurrentOperation(live, operation);
   live.emittedAssistant = "";
   live.emittedReasoning = "";
   live.turnError = null;
@@ -624,7 +671,9 @@ async function runTurn(
       ),
       turnPromise.then(() => null),
     ]);
+    assertCurrentOperation(live, operation);
     input.onAccepted?.();
+    assertCurrentOperation(live, operation);
     if (
       flavor.id === "omp" &&
       asRecord(response?.data)?.agentInvoked === false
@@ -637,18 +686,20 @@ async function runTurn(
     settlePendingTurn(live);
     await turnPromise;
   } catch (error) {
-    if (live.cancelled) return;
+    if (live.cancelled || error instanceof RetiredPiOperationError) return;
     live.onEvent({
       type: "session.error",
       message: error instanceof Error ? error.message : String(error),
     });
     throw error;
   } finally {
-    live.activeTurn = false;
-    live.promptId = null;
     live.rpc.cancelRequest(promptId);
-    live.turnDone = null;
-    live.turnFailed = null;
+    if (live.operationToken === operation && live.promptId === promptId) {
+      live.activeTurn = false;
+      live.promptId = null;
+      live.turnDone = null;
+      live.turnFailed = null;
+    }
   }
 }
 
@@ -1040,15 +1091,42 @@ async function handleExtensionUi(
   ).catch(() => undefined);
 }
 
+class RetiredPiOperationError extends Error {
+  constructor() {
+    super("Pi operation was retired.");
+  }
+}
+
+function assertCurrentOperation(live: Live, operation: object): void {
+  if (live.operationToken !== operation) throw new RetiredPiOperationError();
+  if (!live.isCurrent()) throw live.exitError ?? new RetiredPiOperationError();
+}
+
+async function modelRequest(
+  live: Live,
+  operation: object,
+  command: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  assertCurrentOperation(live, operation);
+  const result = await live.rpc.request(command);
+  assertCurrentOperation(live, operation);
+  return result;
+}
+
 async function applyModel(
   flavor: PiFlavor,
   live: Live,
   input: HarnessSessionInput,
+  operation = live.operationToken,
 ): Promise<void> {
+  assertCurrentOperation(live, operation);
   const native = nativeModelId(input.model);
+  const thinking = input.modelSettings?.thinking;
+  const fast = input.modelSettings?.fast;
+  const onEvent = input.onEvent;
   const ref = parsePiModelRef(native);
   if (ref && native !== live.nativeModel) {
-    const result = await live.rpc.request({
+    const result = await modelRequest(live, operation, {
       type: "set_model",
       provider: ref.provider,
       modelId: ref.modelId,
@@ -1063,25 +1141,25 @@ async function applyModel(
   } else if (ref) {
     live.nativeModel = native;
   }
-
-  const thinking = input.modelSettings?.thinking;
   if (isPiThinkingLevel(thinking) && thinking !== live.thinking) {
-    await live.rpc
-      .request({ type: "set_thinking_level", level: thinking })
-      .catch(() => undefined);
+    try {
+      await modelRequest(live, operation, {
+        type: "set_thinking_level",
+        level: thinking,
+      });
+    } catch {
+      assertCurrentOperation(live, operation);
+    }
     live.thinking = thinking;
   }
-
-  const fast = input.modelSettings?.fast;
   if (
     flavor.id === "omp" &&
     (fast === "true" || fast === "false") &&
     (fast === "true") !== live.fastModeRequested
   ) {
     const enabled = fast === "true";
-    live.fastModeRequested = enabled;
     try {
-      const response = await live.rpc.request({
+      const response = await modelRequest(live, operation, {
         type: "set_fast_mode",
         enabled,
       });
@@ -1089,22 +1167,28 @@ async function applyModel(
       live.fastModeEnabled =
         typeof data?.enabled === "boolean" ? data.enabled : enabled;
     } catch (error) {
+      assertCurrentOperation(live, operation);
       if (enabled) {
         live.fastModeEnabled = false;
-        live.onEvent({
+        onEvent({
           type: "session.configChanged",
           modelSettings: { fast: "false" },
         });
-        live.onEvent({
+        assertCurrentOperation(live, operation);
+        onEvent({
           type: "status",
           text:
             error instanceof Error
               ? error.message
               : "Fast mode is unavailable for the current model.",
         });
+        assertCurrentOperation(live, operation);
       }
     }
+    assertCurrentOperation(live, operation);
+    live.fastModeRequested = enabled;
   }
+  assertCurrentOperation(live, operation);
 }
 
 function bindState(
