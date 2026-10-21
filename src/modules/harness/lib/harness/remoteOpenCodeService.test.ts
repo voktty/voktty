@@ -88,6 +88,317 @@ const profile: SshConnection = {
 const profileCwd = remotePath(remoteSshEnvironmentId(profile.id), "/srv/app");
 
 describe("native remote OpenCode service", () => {
+  it("keeps whitespace-distinct logical owners independent during captured release", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await manager.acquire("a", profileCwd);
+    await manager.acquire(" a ", profileCwd);
+    const releaseA = manager.captureRelease("a");
+    await releaseA();
+    expect(deps.closeTunnel).not.toHaveBeenCalled();
+    await manager.release(" a ");
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+    await expect(manager.acquire(" \t ", profileCwd)).rejects.toThrow(
+      "session id is required",
+    );
+  });
+
+  it("invalidates only the exact whitespace-distinct logical owner", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await manager.acquire("a", profileCwd);
+    await manager.acquire(" a ", profileCwd);
+    await manager.invalidate(" a ");
+    await manager.acquire(" a ", profileCwd);
+    await manager.release(" a ");
+    expect(deps.closeTunnel.mock.calls).toEqual([[7, 13]]);
+    expect(deps.closeWorkspace).not.toHaveBeenCalled();
+    await manager.release("a");
+    expect(deps.closeTunnel.mock.calls).toEqual([
+      [7, 13],
+      [7, 12],
+    ]);
+  });
+
+  it.each(["/srv/other", "/srv/app"])(
+    "does not release a replacement at %s through a captured old owner",
+    async (root) => {
+      const deps = dependencies();
+      deps.sshConnections.mockReturnValue([profile]);
+      const manager = createRemoteOpenCodeServiceManager(deps);
+      await manager.acquire("a", profileCwd);
+      const releaseOld = manager.captureRelease("a");
+      await releaseOld();
+      const replacementCwd = remotePath(
+        remoteSshEnvironmentId(profile.id),
+        root,
+      );
+      const replacement = await manager.acquire("a", replacementCwd);
+      await releaseOld();
+      await releaseOld();
+      expect(deps.closeTunnel.mock.calls).toEqual([[7, 12]]);
+      expect(deps.sessions.snapshot()[0].leases).toBe(1);
+      expect(await manager.acquire("a", replacementCwd)).toBe(replacement);
+      await manager.release("a");
+      expect(deps.closeTunnel.mock.calls).toEqual([
+        [7, 12],
+        [7, 13],
+      ]);
+    },
+  );
+
+  it("keeps a same-key resubscriber attached to its shared entry", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await manager.acquire("a", profileCwd);
+    await manager.acquire("sibling", profileCwd);
+    const releaseOld = manager.captureRelease("a");
+    await manager.release("a");
+    await manager.acquire("a", profileCwd);
+    await releaseOld();
+    await manager.release("sibling");
+    expect(deps.closeTunnel).not.toHaveBeenCalled();
+    expect(deps.sessions.snapshot()[0].leases).toBe(1);
+    await manager.release("a");
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+  });
+
+  it("captures independent sibling releases and consumes each only once", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await Promise.all([
+      manager.acquire("a", profileCwd),
+      manager.acquire("b", profileCwd),
+    ]);
+    const releaseA = manager.captureRelease("a");
+    await Promise.all([releaseA(), releaseA()]);
+    expect(deps.closeTunnel).not.toHaveBeenCalled();
+    const releaseB = manager.captureRelease("b");
+    await Promise.all([releaseB(), releaseB()]);
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+    expect(deps.closeWorkspace).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  it("makes concurrent captured cleanup callers await the same settlement", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    let finish!: () => void;
+    let started!: () => void;
+    const closingTunnel = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    deps.closeTunnel.mockImplementationOnce(() => {
+      started();
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await manager.acquire("a", profileCwd);
+    const release = manager.captureRelease("a");
+    const first = release();
+    await closingTunnel;
+    let secondSettled = false;
+    const second = release().then(() => {
+      secondSettled = true;
+    });
+    await Promise.resolve();
+    const settledBeforeClose = secondSettled;
+    finish();
+    await Promise.all([first, second]);
+    expect(settledBeforeClose).toBe(false);
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+    expect(deps.closeWorkspace).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  it.each([false, true])(
+    "keeps B after pending captured A settles (reject=%s)",
+    async (reject) => {
+      const deps = dependencies();
+      deps.sshConnections.mockReturnValue([profile]);
+      let finish!: (
+        tunnel: Awaited<ReturnType<typeof deps.openTunnel>>,
+      ) => void;
+      let fail!: (error: Error) => void;
+      let started!: () => void;
+      const opening = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      deps.openTunnel.mockImplementationOnce(() => {
+        started();
+        return new Promise((resolve, rejectOpening) => {
+          finish = resolve;
+          fail = rejectOpening;
+        });
+      });
+      const manager = createRemoteOpenCodeServiceManager(deps);
+      const acquiring = manager.acquire("a", profileCwd);
+      const rejected = expect(acquiring).rejects.toThrow(
+        reject ? "late failure" : "closed",
+      );
+      await opening;
+      const releaseOld = manager.captureRelease("a");
+      const retiring = manager.release("a");
+      const other = remotePath(
+        remoteSshEnvironmentId(profile.id),
+        "/srv/other",
+      );
+      const replacement = await manager.acquire("a", other);
+      const closingOld = releaseOld();
+      if (reject) fail(new Error("late failure"));
+      else finish({ tunnelId: 20, localPort: 43123, remotePort: 4096 });
+      await rejected;
+      await retiring;
+      await closingOld;
+      await releaseOld();
+      expect(await manager.acquire("a", other)).toBe(replacement);
+      expect(deps.sessions.snapshot()[0].leases).toBe(1);
+      expect(deps.closeTunnel.mock.calls).toEqual(reject ? [] : [[7, 20]]);
+      await manager.release("a");
+    },
+  );
+
+  it("retires a pending owner before its key is assigned", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    let finish!: () => void;
+    let started!: () => void;
+    const closingTunnel = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    deps.closeTunnel.mockImplementationOnce(() => {
+      started();
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await manager.acquire("old", profileCwd);
+    const retiring = manager.release("old");
+    await closingTunnel;
+    const acquiring = manager.acquire("a", profileCwd);
+    const rejected = expect(acquiring).rejects.toThrow("closed");
+    const releasePending = manager.captureRelease("a");
+    const replacement = manager.acquire("a", profileCwd);
+    finish();
+    await retiring;
+    await rejected;
+    await replacement;
+    await releasePending();
+    expect(deps.closeTunnel.mock.calls).toEqual([[7, 12]]);
+    expect(deps.sessions.snapshot()[0].leases).toBe(1);
+    await manager.release("a");
+  });
+
+  it.each([false, true])(
+    "retires pending A before callback invocation (same-key B=%s)",
+    async (replace) => {
+      const deps = dependencies();
+      deps.sshConnections.mockReturnValue([profile]);
+      let finish!: (
+        tunnel: Awaited<ReturnType<typeof deps.openTunnel>>,
+      ) => void;
+      let started!: () => void;
+      const opening = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      deps.openTunnel.mockImplementationOnce(() => {
+        started();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      });
+      const manager = createRemoteOpenCodeServiceManager(deps);
+      const acquiring = manager.acquire("a", profileCwd);
+      const rejected = expect(acquiring).rejects.toThrow("closed");
+      await opening;
+      const releaseOld = manager.captureRelease("a");
+      const replacement = replace
+        ? manager.acquire("a", profileCwd)
+        : undefined;
+      finish({ tunnelId: 20, localPort: 43123, remotePort: 4096 });
+      await rejected;
+      await replacement;
+      await releaseOld();
+      await releaseOld();
+      if (replace) {
+        expect(deps.closeTunnel).not.toHaveBeenCalled();
+        expect(deps.sessions.snapshot()[0].leases).toBe(1);
+        await manager.release("a");
+      }
+      expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 20);
+    },
+  );
+
+  it("lets ready same-key B adopt the detached entry before old cleanup", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    const first = await manager.acquire("a", profileCwd);
+    const releaseOld = manager.captureRelease("a");
+    expect(await manager.acquire("a", profileCwd)).toBe(first);
+    await releaseOld();
+    expect(deps.closeTunnel).not.toHaveBeenCalled();
+    await manager.release("a");
+    expect(deps.closeTunnel).toHaveBeenCalledExactlyOnceWith(7, 12);
+  });
+
+  it("never closes a newer same-key pooled generation through an old callback", async () => {
+    const deps = dependencies();
+    deps.sshConnections.mockReturnValue([profile]);
+    let sessionId = 7;
+    deps.openWorkspace.mockImplementation(async () => ({
+      session_id: sessionId++,
+      architecture: "x86_64",
+      workspace_root: "/srv/app",
+      helper_version: "1",
+      capabilities: [],
+    }));
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    await manager.acquire("a", profileCwd);
+    const releaseOld = manager.captureRelease("a");
+    deps.sessions.invalidate({ profileId: profile.id, root: "/srv/app" }, 7);
+    deps.sshConnections.mockReturnValue([{ ...profile, host: "changed-host" }]);
+    const replacement = await manager.acquire("a", profileCwd);
+    expect(replacement?.sessionId).toBe(8);
+    await releaseOld();
+    expect(deps.closeTunnel.mock.calls).toEqual([[7, 12]]);
+    expect(deps.closeWorkspace.mock.calls).toEqual([[7]]);
+    expect(deps.sessions.snapshot()[0].leases).toBe(1);
+    await manager.release("a");
+    expect(deps.closeTunnel.mock.calls).toEqual([
+      [7, 12],
+      [8, 13],
+    ]);
+  });
+
+  it("does not clear a replacement's fresh-service flag after failed retry", async () => {
+    const deps = dependencies();
+    const manager = createRemoteOpenCodeServiceManager(deps);
+    const cwd = "remote://env-1/srv/app";
+    await manager.acquire("a", cwd);
+    await manager.acquire("sibling", cwd);
+    const releaseOld = manager.captureRelease("a");
+    await manager.acquire("a", cwd);
+    await manager.invalidate("a");
+    deps.openWorkspace.mockRejectedValueOnce(new Error("SSH unavailable"));
+    await expect(manager.acquire("a", cwd)).rejects.toThrow("SSH unavailable");
+    await releaseOld();
+    await manager.acquire("a", cwd);
+    expect(deps.openTunnel).toHaveBeenCalledTimes(2);
+    await manager.release("a");
+    expect(deps.closeTunnel.mock.calls).toEqual([[7, 13]]);
+    await manager.release("sibling");
+    expect(deps.closeTunnel.mock.calls).toEqual([
+      [7, 13],
+      [7, 12],
+    ]);
+  });
+
   it("owns a lease independently of project, PTY and file holders", async () => {
     const deps = dependencies();
     deps.sshConnections.mockReturnValue([profile]);

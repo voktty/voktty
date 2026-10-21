@@ -329,16 +329,30 @@ export function createRemoteOpenCodeServiceManager(
     if (entry.owners.size === 0) await closeEntry(key, entry);
   };
 
-  const release = async (ownerId: string): Promise<void> => {
-    ownerId = ownerId.trim();
-    ownerAttempts.delete(ownerId);
-    ownersNeedingFreshService.delete(ownerId);
-    freshServiceKeys.delete(ownerId);
-    await detach(ownerId);
+  const captureRelease = (ownerId: string): (() => Promise<void>) => {
+    const owner = ownerId;
+    const key = ownerKeys.get(owner);
+    const entry = key ? entries.get(key) : undefined;
+    // Retire before the caller awaits abort, so a late acquisition cannot publish.
+    ownerAttempts.delete(owner);
+    ownerKeys.delete(owner);
+    ownerLocations.delete(owner);
+    ownersNeedingFreshService.delete(owner);
+    freshServiceKeys.delete(owner);
+    entry?.owners.delete(owner);
+    let closing: Promise<void> | undefined;
+    return () => {
+      closing ??=
+        key && entry && entry.owners.size === 0
+          ? closeEntry(key, entry)
+          : Promise.resolve();
+      return closing;
+    };
   };
 
+  const release = (ownerId: string): Promise<void> => captureRelease(ownerId)();
+
   const invalidate = async (ownerId: string): Promise<void> => {
-    ownerId = ownerId.trim();
     ownerAttempts.delete(ownerId);
     if (!ownerKeys.has(ownerId)) return;
     ownersNeedingFreshService.add(ownerId);
@@ -356,8 +370,9 @@ export function createRemoteOpenCodeServiceManager(
         throw new Error("Remote OpenCode path is invalid.");
       return undefined;
     }
-    const owner = ownerId.trim();
-    if (!owner) throw new Error("Remote OpenCode session id is required.");
+    const owner = ownerId;
+    if (!owner.trim())
+      throw new Error("Remote OpenCode session id is required.");
     const target = profileTargetFor(
       cwd,
       remote.environmentId,
@@ -499,7 +514,7 @@ export function createRemoteOpenCodeServiceManager(
     }
   };
 
-  return { acquire, release, invalidate };
+  return { acquire, release, captureRelease, invalidate };
 }
 
 const remoteOpenCodeServices = createRemoteOpenCodeServiceManager({
@@ -521,5 +536,7 @@ const remoteOpenCodeServices = createRemoteOpenCodeServiceManager({
 
 export const acquireRemoteOpenCodeService = remoteOpenCodeServices.acquire;
 export const releaseRemoteOpenCodeService = remoteOpenCodeServices.release;
+export const captureRemoteOpenCodeServiceRelease =
+  remoteOpenCodeServices.captureRelease;
 export const invalidateRemoteOpenCodeService =
   remoteOpenCodeServices.invalidate;

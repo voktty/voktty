@@ -228,6 +228,8 @@ struct LiveSse {
 struct HarnessInner {
     children: HashMap<String, Arc<LiveChild>>,
     epochs: HashMap<String, u64>,
+    /// Unique across IDs so retiring an entry cannot revive a stale stamp.
+    next_spawn_epoch: u64,
     /// Network sandbox proxies, one per session that opted in. Torn down
     /// (via `Drop`) whenever the entry is replaced or removed.
     proxies: HashMap<String, net_proxy::ProxyHandle>,
@@ -253,6 +255,7 @@ impl HarnessHost {
             inner: Mutex::new(HarnessInner {
                 children: HashMap::new(),
                 epochs: HashMap::new(),
+                next_spawn_epoch: 0,
                 proxies: HashMap::new(),
             }),
             sse: Mutex::new(HashMap::new()),
@@ -282,9 +285,12 @@ impl HarnessHost {
     fn begin_spawn(&self, session_id: &str) -> (u64, u64, Option<Arc<LiveChild>>) {
         let mut inner = self.lock_inner();
         let kill_all = self.kill_all_gen.load(Ordering::SeqCst);
-        let epoch = inner.epochs.entry(session_id.to_string()).or_insert(0);
-        *epoch += 1;
-        let epoch = *epoch;
+        inner.next_spawn_epoch = inner
+            .next_spawn_epoch
+            .checked_add(1)
+            .expect("Harness spawn epoch exhausted");
+        let epoch = inner.next_spawn_epoch;
+        inner.epochs.insert(session_id.to_string(), epoch);
         let prev = inner.children.remove(session_id);
         (epoch, kill_all, prev)
     }
@@ -325,7 +331,7 @@ impl HarnessHost {
 
     fn kill_session(&self, session_id: &str) -> Option<Arc<LiveChild>> {
         let mut inner = self.lock_inner();
-        *inner.epochs.entry(session_id.to_string()).or_insert(0) += 1;
+        inner.epochs.remove(session_id);
         inner.proxies.remove(session_id);
         inner.children.remove(session_id)
     }
@@ -345,7 +351,7 @@ impl HarnessHost {
             session_ids
                 .into_iter()
                 .filter_map(|session_id| {
-                    *inner.epochs.entry(session_id.clone()).or_insert(0) += 1;
+                    inner.epochs.remove(&session_id);
                     inner.proxies.remove(&session_id);
                     inner
                         .children
@@ -369,6 +375,7 @@ impl HarnessHost {
         // Only torn down here because the pid check above proves this is the
         // session's current child; a fresher respawn already replaced this
         // entry (different pid) and owns its own proxy by then.
+        inner.epochs.remove(session_id);
         inner.proxies.remove(session_id);
         inner.children.remove(session_id)
     }
@@ -399,6 +406,7 @@ impl HarnessHost {
         let kids: Vec<Arc<LiveChild>> = {
             let mut inner = self.lock_inner();
             self.kill_all_gen.fetch_add(1, Ordering::SeqCst);
+            inner.epochs.clear();
             inner.proxies.clear();
             inner.children.drain().map(|(_, child)| child).collect()
         };
@@ -786,6 +794,27 @@ fn parse_remote_cwd(cwd: &str) -> Option<String> {
     }
 }
 
+fn harness_control_session_id<'a>(
+    session_id: &'a str,
+    logical_session_id: Option<&'a str>,
+) -> Result<&'a str, String> {
+    let Some(logical_id) = logical_session_id else {
+        return Ok(session_id);
+    };
+    if logical_id.encode_utf16().take(257).count() > 256
+        || logical_id.contains('\0')
+        // Match the Session contract's ECMAScript whitespace without normalizing IDs.
+        || logical_id.chars().all(|ch| {
+            matches!(ch, '\u{9}'..='\u{d}' | ' ' | '\u{a0}' | '\u{1680}'
+                | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}'
+                | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')
+        })
+    {
+        return Err("Invalid logical Harness session id".into());
+    }
+    Ok(logical_id)
+}
+
 fn build_remote_agent_command(target_dir: &str, command: &str, args: &[String]) -> String {
     let quoted_dir = super::remote_ssh::shell_quote(target_dir);
     let mut cmd_parts = vec![super::remote_ssh::shell_quote(command)];
@@ -828,7 +857,10 @@ pub fn harness_spawn(
     remote_session_id: Option<u64>,
     remote_root: Option<String>,
     remote_relative_cwd: Option<String>,
+    logical_session_id: Option<String>,
 ) -> Result<u32, String> {
+    let control_session_id =
+        harness_control_session_id(&session_id, logical_session_id.as_deref())?;
     let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
     if let Some(prev) = prev {
         prev.terminate();
@@ -923,7 +955,7 @@ pub fn harness_spawn(
         // After prepare_child: apply_gui_env unconditionally overwrites PATH, so
         // control env (and any PATH prepend for the bundled CLI) must come last.
         if let Some(control) = app.try_state::<control::ControlState>() {
-            if let Some(env) = control.harness_env(&session_id) {
+            if let Some(env) = control.harness_env(control_session_id) {
                 apply_harness_control_env(&mut cmd, &env);
             }
         }
@@ -3756,6 +3788,54 @@ mod exec_allowlist_tests {
 mod harness_control_env_tests {
     use super::*;
 
+    #[test]
+    fn control_session_id_defaults_to_the_native_id_without_validation() {
+        for native_id in ["native-opaque", "", " ", "legacy\0id"] {
+            assert_eq!(
+                harness_control_session_id(native_id, None).unwrap(),
+                native_id
+            );
+        }
+    }
+
+    #[test]
+    fn control_session_id_preserves_exact_logical_unicode_identity() {
+        for logical_id in [
+            "logical-42",
+            " Session é e\u{301} 界 ",
+            "\u{85}",
+            "\u{200b}",
+        ] {
+            assert_eq!(
+                harness_control_session_id("native-opaque", Some(logical_id)).unwrap(),
+                logical_id,
+            );
+        }
+    }
+
+    #[test]
+    fn control_session_id_rejects_blank_and_nul_without_echoing_content() {
+        for invalid in ["", " \t\r\n", "\u{feff}\u{a0}\u{3000}", "logical\0secret"] {
+            assert_eq!(
+                harness_control_session_id("native-opaque", Some(invalid)).unwrap_err(),
+                "Invalid logical Harness session id",
+            );
+        }
+    }
+
+    #[test]
+    fn control_session_id_limits_utf16_units_not_bytes_or_unicode_scalars() {
+        for valid in ["界".repeat(256), "\u{1f680}".repeat(128)] {
+            assert_eq!(
+                harness_control_session_id("native-opaque", Some(&valid)).unwrap(),
+                valid,
+            );
+        }
+        for invalid in ["a".repeat(257), "\u{1f680}".repeat(129)] {
+            assert!(harness_control_session_id("native-opaque", Some(&invalid)).is_err());
+        }
+    }
+
     fn env_value(cmd: &Command, key: &str) -> Option<String> {
         cmd.get_envs().find_map(|(k, v)| {
             if k == std::ffi::OsStr::new(key) {
@@ -3822,6 +3902,128 @@ mod harness_control_env_tests {
             parts.contains(&PathBuf::from(staged)),
             "expected the staged PATH to survive, got {parts:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod epoch_lifecycle_tests {
+    use super::*;
+
+    fn inert_child(pid: u32, account: Option<HarnessAccount>) -> Arc<LiveChild> {
+        assert!(pid <= 1);
+        Arc::new(LiveChild {
+            stdin: Mutex::new(None),
+            pid,
+            account,
+            _askpass: None,
+            remote: None,
+        })
+    }
+
+    #[test]
+    fn stopped_fresh_ids_leave_no_epoch_history() {
+        let host = HarnessHost::new();
+        for index in 0..1024 {
+            let id = format!("native-{index}");
+            host.begin_spawn(&id);
+            host.kill_session(&id);
+            assert!(host.lock_inner().epochs.is_empty());
+        }
+    }
+
+    #[test]
+    fn killing_unknown_ids_does_not_allocate_epochs() {
+        let host = HarnessHost::new();
+        for index in 0..1024 {
+            assert!(host.kill_session(&format!("unknown-{index}")).is_none());
+        }
+        assert!(host.lock_inner().epochs.is_empty());
+    }
+
+    #[test]
+    fn current_exits_leave_no_epoch_history() {
+        let host = HarnessHost::new();
+        for index in 0..1024 {
+            let id = format!("native-{index}");
+            let (epoch, kill_all, _) = host.begin_spawn(&id);
+            assert!(host
+                .install_spawn(id.clone(), epoch, kill_all, inert_child(0, None))
+                .is_none());
+            assert!(host.remove_if_pid(&id, 0).is_some());
+            assert!(host.lock_inner().epochs.is_empty());
+        }
+    }
+
+    #[test]
+    fn kill_all_clears_live_and_pending_epochs() {
+        let host = HarnessHost::new();
+        for index in 0..256 {
+            let id = format!("native-{index}");
+            let (epoch, kill_all, _) = host.begin_spawn(&id);
+            if index % 2 == 0 {
+                assert!(host
+                    .install_spawn(id, epoch, kill_all, inert_child(0, None))
+                    .is_none());
+            }
+        }
+        host.kill_all();
+        assert!(host.lock_inner().epochs.is_empty());
+    }
+
+    #[test]
+    fn recreated_ids_reject_retired_child_and_proxy_stamps() {
+        let host = HarnessHost::new();
+        let (old_epoch, kill_all, _) = host.begin_spawn("s1");
+        host.kill_session("s1");
+        assert!(host.lock_inner().epochs.is_empty());
+        let (new_epoch, new_kill_all, _) = host.begin_spawn("s1");
+        assert_ne!(old_epoch, new_epoch);
+        assert!(host
+            .install_spawn("s1".into(), old_epoch, kill_all, inert_child(0, None))
+            .is_some());
+        let proxy = net_proxy::start(Vec::new()).expect("start proxy");
+        assert!(host
+            .install_proxy("s1", old_epoch, kill_all, proxy)
+            .is_some());
+        assert!(!host.has_proxy("s1"));
+        assert!(host.spawn_stamp_current("s1", new_epoch, new_kill_all));
+        assert!(host
+            .install_spawn("s1".into(), new_epoch, new_kill_all, inert_child(1, None))
+            .is_none());
+    }
+
+    #[test]
+    fn stale_pid_exit_preserves_a_new_pending_stamp() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        assert!(host
+            .install_spawn("s1".into(), epoch, kill_all, inert_child(0, None))
+            .is_none());
+        let (new_epoch, new_kill_all, _) = host.begin_spawn("s1");
+        assert!(host.remove_if_pid("s1", 0).is_none());
+        assert!(host.spawn_stamp_current("s1", new_epoch, new_kill_all));
+    }
+
+    #[test]
+    fn account_cleanup_reclaims_only_its_current_epoch() {
+        let host = HarnessHost::new();
+        let account = HarnessAccount {
+            provider: "codex".into(),
+            id: "work".into(),
+        };
+        let (epoch, kill_all, _) = host.begin_spawn("account-child");
+        assert!(host
+            .install_spawn(
+                "account-child".into(),
+                epoch,
+                kill_all,
+                inert_child(0, Some(account))
+            )
+            .is_none());
+        let (pending_epoch, pending_kill_all, _) = host.begin_spawn("other-pending");
+        host.kill_account("codex", "work");
+        assert!(!host.lock_inner().epochs.contains_key("account-child"));
+        assert!(host.spawn_stamp_current("other-pending", pending_epoch, pending_kill_all));
     }
 }
 

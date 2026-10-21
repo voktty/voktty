@@ -170,6 +170,7 @@ function ensureBridge() {
   const installation = Promise.all([
     register(
       listen<LinePayload>("harness-stdout", (event) => {
+        if (bridgeAttempt !== attempt) return;
         const { sessionId, line } = event.payload;
         const handler = lineHandlers.get(sessionId);
         if (handler) {
@@ -183,12 +184,14 @@ function ensureBridge() {
     ),
     register(
       listen<LinePayload>("harness-stderr", (event) => {
+        if (bridgeAttempt !== attempt) return;
         const { sessionId, line } = event.payload;
         stderrHandlers.get(sessionId)?.(line);
       }),
     ),
     register(
       listen<ExitPayload>("harness-exit", (event) => {
+        if (bridgeAttempt !== attempt) return;
         const { sessionId, code, pid } = event.payload;
         const handler = exitHandlers.get(sessionId);
         if (!handler || pid == null || pid <= 0) return;
@@ -414,6 +417,7 @@ export async function spawnChild(
   cwd: string,
   networkAllowlist?: string[] | null,
   account?: { provider: "claude" | "codex"; id: string },
+  logicalSessionId?: string,
 ): Promise<void> {
   livePid.delete(sessionId);
   pendingExit.delete(sessionId);
@@ -471,6 +475,7 @@ export async function spawnChild(
   try {
     pid = await invoke<number>("harness_spawn", {
       sessionId,
+      ...(logicalSessionId === undefined ? {} : { logicalSessionId }),
       command: execCommand,
       args,
       cwd,

@@ -91,6 +91,69 @@ describe("isCurrentChildExit", () => {
 });
 
 describe("child bridge", () => {
+  it("keeps logical control identity separate from the native process identity", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    await child.spawnChild(
+      "native-owner",
+      "agent",
+      [],
+      "/repo",
+      undefined,
+      undefined,
+      "logical-session",
+    );
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+      "harness_spawn",
+      expect.objectContaining({
+        sessionId: "native-owner",
+        logicalSessionId: "logical-session",
+      }),
+    );
+    release();
+  });
+
+  it("ignores retired bridge callbacks for stdout, stderr and process exit", async () => {
+    vi.useFakeTimers();
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const firstRelease = await child.acquireHarnessBridge();
+    const oldLine = mocks.handlers.get("harness-stdout");
+    const oldError = mocks.handlers.get("harness-stderr");
+    const oldExit = mocks.handlers.get("harness-exit");
+    firstRelease();
+    await vi.runAllTimersAsync();
+    const release = await child.acquireHarnessBridge();
+    const line = vi.fn();
+    const error = vi.fn();
+    const exit = vi.fn();
+    child.watchChild("current", line, exit, error);
+    await child.spawnChild("current", "agent", [], "/repo");
+    oldLine?.({ payload: { sessionId: "current", line: "retired" } as never });
+    oldError?.({ payload: { sessionId: "current", line: "retired" } as never });
+    oldExit?.({ payload: { sessionId: "current", pid: 42, code: 1 } as never });
+    expect(line).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(exit).not.toHaveBeenCalled();
+    mocks.handlers.get("harness-stdout")?.({
+      payload: { sessionId: "current", line: "live" } as never,
+    });
+    mocks.handlers.get("harness-stderr")?.({
+      payload: { sessionId: "current", line: "live error" } as never,
+    });
+    mocks.handlers.get("harness-exit")?.({
+      payload: { sessionId: "current", pid: 42, code: 0 } as never,
+    });
+    expect(line).toHaveBeenCalledExactlyOnceWith("live");
+    expect(error).toHaveBeenCalledExactlyOnceWith("live error");
+    expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+    release();
+    await vi.runAllTimersAsync();
+  });
+
   it("uses a headless backend without installing Tauri listeners", async () => {
     vi.useFakeTimers();
     const child = await loadChild();

@@ -10,7 +10,6 @@ import {
   type UserQuestionReply,
 } from "../userQuestion";
 import {
-  closeHarnessSse,
   execChild,
   freeHarnessPort,
   killChild,
@@ -64,7 +63,7 @@ import {
 import {
   acquireRemoteOpenCodeService,
   invalidateRemoteOpenCodeService,
-  releaseRemoteOpenCodeService,
+  captureRemoteOpenCodeServiceRelease,
 } from "./remoteOpenCodeService";
 import { streamTextDelta } from "./streamText";
 import type {
@@ -89,7 +88,33 @@ type PendingQuestion = {
   resolve: (reply: UserQuestionReply) => void;
 };
 
+type Owner = {
+  sessionId: string;
+  nativeId: string;
+  cwd: string;
+  retired: boolean;
+  ready: boolean;
+  cancelledTurn: boolean;
+  childOwned: boolean;
+  remoteOwned: boolean;
+  settled: Promise<void>;
+  settle: () => void;
+  startup?: Promise<Live>;
+  cleanup?: Promise<void>;
+  live?: Live;
+  client?: OpenCodeClient;
+  releaseRemote?: () => Promise<void>;
+  retiringTurns?: Promise<void>;
+  requests: Set<Promise<unknown>>;
+  remoteInvalidation?: Promise<void>;
+  abort?: Promise<void>;
+  closeEvents?: Promise<void>;
+  rejectReady?: () => void;
+  parkedResume?: Resume;
+};
+
 type Live = {
+  owner: Owner;
   client: OpenCodeClient;
   openCodeSessionId: string;
   cwd: string;
@@ -113,6 +138,7 @@ type Live = {
   turnFailed: ((error: Error) => void) | null;
   turnEndPending: boolean;
   activeTurn: boolean;
+  operation: object;
   inbox: OpenCodeV2InboxTracker;
   /**
    * The v2 prompt or compaction whose completion the current latch waits
@@ -130,6 +156,9 @@ type Live = {
 type Resume = {
   sessionId: string;
   cwd: string;
+  owner?: Owner;
+  barrier?: () => Promise<void>;
+  needsInterrupt?: boolean;
 };
 
 const SERVER_TIMEOUT_MS = 30_000;
@@ -137,7 +166,160 @@ const SERVER_TIMEOUT_MS = 30_000;
 const COMPACTION_TIMEOUT_MS = 30 * 60_000;
 const liveByThread = new Map<string, Live>();
 const resumeByThread = new Map<string, Resume>();
-const cancelledThreads = new Set<string>();
+const ownersByThread = new Map<string, Owner>();
+const ownedResources = new Set<Owner>();
+const MAX_OPEN_CODE_RESOURCES = 256;
+
+function isCurrentOwner(owner: Owner): boolean {
+  return !owner.retired && ownersByThread.get(owner.sessionId) === owner;
+}
+
+function assertCurrentOwner(owner: Owner): void {
+  if (!isCurrentOwner(owner))
+    throw new Error("OpenCode session startup was cancelled.");
+}
+
+function isCurrentLive(live: Live): boolean {
+  return (
+    isCurrentOwner(live.owner) &&
+    liveByThread.get(live.owner.sessionId) === live
+  );
+}
+
+function trackRequest<T>(owner: Owner, request: Promise<T>): Promise<T> {
+  owner.requests.add(request);
+  void request.then(
+    () => owner.requests.delete(request),
+    () => owner.requests.delete(request),
+  );
+  return request;
+}
+
+function emitLive(live: Live, event: HarnessEvent): void {
+  if (isCurrentLive(live)) live.onEvent(event);
+}
+
+function requestGuard(live: Live): () => void {
+  const operation = live.operation;
+  return () => {
+    if (!isCurrentLive(live) || live.operation !== operation || live.cancelled)
+      throw new Error("OpenCode request was cancelled.");
+  };
+}
+
+function retireOwner(owner: Owner, cancel = true): Promise<void> {
+  if (!owner.retired) {
+    owner.retired = true;
+    owner.rejectReady?.();
+    if (ownersByThread.get(owner.sessionId) === owner)
+      ownersByThread.delete(owner.sessionId);
+    if (liveByThread.get(owner.sessionId) === owner.live)
+      liveByThread.delete(owner.sessionId);
+    const resume = resumeByThread.get(owner.sessionId);
+    if (resume?.owner === owner) {
+      const barrier = async () => {
+        await resume.barrier?.();
+        await retireOwner(owner);
+        await owner.retiringTurns;
+      };
+      const parked = {
+        sessionId: resume.sessionId,
+        cwd: resume.cwd,
+        barrier: owner.client ? barrier : resume.barrier,
+        needsInterrupt: owner.client ? true : resume.needsInterrupt,
+      };
+      if (owner.client) owner.parkedResume = parked;
+      resumeByThread.set(owner.sessionId, parked);
+    }
+    if (owner.remoteOwned)
+      owner.releaseRemote = captureRemoteOpenCodeServiceRelease(
+        owner.sessionId,
+      );
+    const live = owner.live;
+    if (live) {
+      live.cancelled = cancel;
+      live.muteUpdates = true;
+      for (const pending of live.approvals.values()) pending.resolve("deny");
+      live.approvals.clear();
+      for (const pending of live.questions.values())
+        pending.resolve({ kind: "skipped" });
+      live.questions.clear();
+      live.activeTurn = false;
+      owner.retiringTurns = Promise.allSettled([
+        live.turns,
+        ...owner.requests,
+      ]).then(() => undefined);
+      live.turnDone?.();
+      live.turnDone = null;
+      live.turnFailed = null;
+      owner.abort = live.client.abortSession(live.openCodeSessionId);
+      void owner.abort.catch(() => undefined);
+    }
+    owner.closeEvents = owner.client?.closeEvents(owner.nativeId);
+    void owner.closeEvents?.catch(() => undefined);
+  }
+  if (owner.cleanup) return owner.cleanup;
+  const cleanup = cleanupOwner(owner);
+  owner.cleanup = cleanup;
+  void cleanup.catch(() => {
+    if (owner.cleanup === cleanup) owner.cleanup = undefined;
+  });
+  return cleanup;
+}
+
+async function cleanupOwner(owner: Owner): Promise<void> {
+  await owner.settled;
+  const abort = owner.abort ?? Promise.resolve();
+  const release = owner.releaseRemote;
+  const remoteCleanup = release
+    ? abort.catch(() => undefined).then(release)
+    : (owner.remoteInvalidation ?? Promise.resolve());
+  const results = await Promise.allSettled([
+    abort,
+    owner.closeEvents ??
+      owner.client?.closeEvents(owner.nativeId) ??
+      Promise.resolve(),
+    owner.childOwned ? killChild(owner.nativeId) : Promise.resolve(),
+    remoteCleanup,
+  ]);
+  if (owner.childOwned) unwatchChild(owner.nativeId);
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (results.every((result) => result.status === "fulfilled")) {
+    void (owner.retiringTurns ?? Promise.resolve()).then(() => {
+      const parked = owner.parkedResume;
+      const current = resumeByThread.get(owner.sessionId);
+      if (
+        parked &&
+        current &&
+        !current.owner &&
+        current.barrier === parked.barrier &&
+        current.sessionId === parked.sessionId &&
+        current.cwd === parked.cwd
+      ) {
+        resumeByThread.set(owner.sessionId, {
+          sessionId: parked.sessionId,
+          cwd: parked.cwd,
+          needsInterrupt: true,
+        });
+      }
+      owner.live = undefined;
+      owner.client = undefined;
+      owner.startup = undefined;
+      owner.releaseRemote = undefined;
+      owner.remoteInvalidation = undefined;
+      owner.abort = undefined;
+      owner.closeEvents = undefined;
+      owner.parkedResume = undefined;
+      owner.requests.clear();
+      ownedResources.delete(owner);
+    });
+  }
+  if (results[0].status === "rejected") owner.abort = undefined;
+  if (results[1].status === "rejected") owner.closeEvents = undefined;
+  if (failures.length) throw failures[0].reason;
+}
 
 let resolveOpenCodeBinaryImpl: () => Promise<{ path: string }> =
   resolveOpenCodeBinary;
@@ -150,14 +332,12 @@ export function setOpenCodeBinaryResolver(
 }
 
 export async function sendOpenCodeTurn(input: SendTurnInput): Promise<void> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
+  const live = await ensureLive(input);
+  if (!isCurrentLive(live)) return;
+  if (live.owner.cancelledTurn) {
+    live.owner.cancelledTurn = false;
+    return;
   }
-  if (cancelledThreads.delete(input.sessionId)) return;
 
   live.onEvent = input.onEvent;
   live.runtimeMode = input.runtimeMode;
@@ -165,6 +345,20 @@ export async function sendOpenCodeTurn(input: SendTurnInput): Promise<void> {
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      const operation = {};
+      live.operation = operation;
+      const requests = [...live.owner.requests];
+      await Promise.allSettled(requests);
+      if (!isCurrentLive(live) || live.operation !== operation) return;
+      if (requests.length)
+        live.client.invalidateConfiguration(live.openCodeSessionId);
+      if (live.cancelled) {
+        await trackRequest(
+          live.owner,
+          live.client.abortSession(live.openCodeSessionId, true),
+        );
+        if (!isCurrentLive(live) || live.operation !== operation) return;
+      }
       live.cancelled = false;
       live.muteUpdates = false;
       try {
@@ -180,14 +374,12 @@ export async function sendOpenCodeTurn(input: SendTurnInput): Promise<void> {
 export async function compactOpenCodeContext(
   input: CompactContextInput,
 ): Promise<void> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
+  const live = await ensureLive(input);
+  if (!isCurrentLive(live)) return;
+  if (live.owner.cancelledTurn) {
+    live.owner.cancelledTurn = false;
+    return;
   }
-  if (cancelledThreads.delete(input.sessionId)) return;
 
   const model = parseOpenCodeModelSlug(nativeModelId(input.model));
   if (!model) {
@@ -199,6 +391,20 @@ export async function compactOpenCodeContext(
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      const operation = {};
+      live.operation = operation;
+      const requests = [...live.owner.requests];
+      await Promise.allSettled(requests);
+      if (!isCurrentLive(live) || live.operation !== operation) return;
+      if (requests.length)
+        live.client.invalidateConfiguration(live.openCodeSessionId);
+      if (live.cancelled) {
+        await trackRequest(
+          live.owner,
+          live.client.abortSession(live.openCodeSessionId, true),
+        );
+        if (!isCurrentLive(live) || live.operation !== operation) return;
+      }
       live.cancelled = false;
       live.muteUpdates = false;
       try {
@@ -214,28 +420,51 @@ export async function compactOpenCodeContext(
 export async function rewindOpenCodeLastTurn(
   input: RewindLastTurnInput,
 ): Promise<RewindLastTurnResult> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
-  }
-  if (cancelledThreads.delete(input.sessionId)) return { submitted: false };
+  const live = await ensureLive(input);
+  if (!isCurrentLive(live) || live.owner.cancelledTurn)
+    return { submitted: false };
 
   live.onEvent = input.onEvent;
   await live.turns;
+  assertCurrentOwner(live.owner);
   if (live.activeTurn) {
     throw new Error("Stop the current turn before editing the last message");
   }
 
+  const operation = {};
+  live.operation = operation;
+  const requests = [...live.owner.requests];
+  await Promise.allSettled(requests);
+  if (!isCurrentLive(live) || live.operation !== operation)
+    return { submitted: false };
+  if (requests.length)
+    live.client.invalidateConfiguration(live.openCodeSessionId);
+  if (live.cancelled) {
+    await trackRequest(
+      live.owner,
+      live.client.abortSession(live.openCodeSessionId, true),
+    );
+    if (!isCurrentLive(live) || live.operation !== operation)
+      return { submitted: false };
+  }
+  live.cancelled = false;
+  const guard = requestGuard(live);
   const messageID = await latestOpenCodeUserMessageId(live);
-  await live.client.revertSession(live.openCodeSessionId, messageID);
+  guard();
+  await trackRequest(
+    live.owner,
+    live.client.revertSession(live.openCodeSessionId, messageID, guard),
+  );
+  guard();
   return { submitted: false };
 }
 
 async function latestOpenCodeUserMessageId(live: Live): Promise<string> {
-  const messages = await live.client.getMessages(live.openCodeSessionId);
+  const messages = await trackRequest(
+    live.owner,
+    live.client.getMessages(live.openCodeSessionId),
+  );
+  assertCurrentOwner(live.owner);
   const candidates: Array<{ id: string; created?: number }> = messages.flatMap(
     (message: { info?: Record<string, unknown>; parts?: unknown[] }) => {
       const info = asRecord(message.info);
@@ -255,7 +484,10 @@ async function latestOpenCodeUserMessageId(live: Live): Promise<string> {
     },
   );
   const timestamped = candidates.filter(
-    (candidate: { id: string; created?: number }): candidate is { id: string; created: number } =>
+    (candidate: {
+      id: string;
+      created?: number;
+    }): candidate is { id: string; created: number } =>
       candidate.created !== undefined,
   );
   const latest =
@@ -292,14 +524,18 @@ export async function steerOpenCodeTurn(input: SteerTurnInput): Promise<void> {
   ];
   if (parts.length === 0) return;
 
-  await live.client.promptAsync({
-    sessionID: live.openCodeSessionId,
-    model: parsed,
-    agent: input.modelSettings?.agent,
-    variant: input.modelSettings?.variant,
-    parts,
-    delivery: "steer",
-  });
+  await trackRequest(
+    live.owner,
+    live.client.promptAsync({
+      sessionID: live.openCodeSessionId,
+      model: parsed,
+      agent: input.modelSettings?.agent,
+      variant: input.modelSettings?.variant,
+      parts,
+      delivery: "steer",
+      guard: requestGuard(live),
+    }),
+  );
 }
 
 export function respondOpenCodeApproval(
@@ -325,11 +561,15 @@ export function respondOpenCodeQuestion(
 }
 
 export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
-  const live = liveByThread.get(sessionId);
-  if (!live) {
-    cancelledThreads.add(sessionId);
+  const owner = ownersByThread.get(sessionId);
+  if (!owner?.ready) {
+    if (owner) owner.cancelledTurn = true;
     return;
   }
+  const live = liveByThread.get(sessionId);
+  if (!live) return;
+  live.operation = {};
+  live.client.invalidateConfiguration(live.openCodeSessionId);
   live.cancelled = true;
   live.muteUpdates = true;
   for (const [, pending] of live.approvals) pending.resolve("deny");
@@ -337,7 +577,12 @@ export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
   for (const [, pending] of live.questions)
     pending.resolve({ kind: "skipped" });
   live.questions.clear();
-  await live.client.abortSession(live.openCodeSessionId);
+  const turnDone = live.turnDone;
+  await trackRequest(
+    live.owner,
+    live.client.abortSession(live.openCodeSessionId),
+  );
+  if (!isCurrentLive(live) || live.turnDone !== turnDone) return;
   finishActiveTurn(live, [
     { type: "message.completed" },
     { type: "reasoning.completed" },
@@ -345,33 +590,14 @@ export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
 }
 
 export async function stopOpenCodeSession(sessionId: string): Promise<void> {
-  cancelledThreads.delete(sessionId);
-  const live = liveByThread.get(sessionId);
-  liveByThread.delete(sessionId);
-  try {
-    if (live) {
-      live.muteUpdates = true;
-      for (const [, pending] of live.approvals) pending.resolve("deny");
-      live.approvals.clear();
-      for (const [, pending] of live.questions)
-        pending.resolve({ kind: "skipped" });
-      live.questions.clear();
-      live.activeTurn = false;
-      live.turnDone?.();
-      live.turnDone = null;
-      live.turnFailed = null;
-      await live.client.abortSession(live.openCodeSessionId);
-      await live.client.closeEvents(sessionId);
-    } else {
-      // A stream or server that ended on its own already dropped `live`, but
-      // its SSE handlers still hold it until the stream is closed.
-      await closeHarnessSse(sessionId).catch(() => undefined);
-    }
-  } finally {
-    unwatchChild(sessionId);
-    await killChild(sessionId).catch(() => undefined);
-    await releaseRemoteOpenCodeService(sessionId);
-  }
+  const captured = [...ownedResources].filter(
+    (owner) => owner.sessionId === sessionId,
+  );
+  const cleanups = captured.map((owner) => {
+    const cleanup = retireOwner(owner);
+    return owner.ready ? cleanup : Promise.resolve();
+  });
+  await Promise.all(cleanups);
 }
 
 export async function forgetOpenCodeSession(sessionId: string): Promise<void> {
@@ -385,121 +611,203 @@ export function bindOpenCodeSession(
   cwd: string,
 ): void {
   const sessionId = providerSessionId.trim();
-  if (!threadId || !sessionId || !cwd.trim()) return;
+  if (!threadId || !sessionId || !cwd.trim() || ownersByThread.has(threadId))
+    return;
+  const existing = resumeByThread.get(threadId);
+  if (existing?.sessionId === sessionId && existing.cwd === cwd) return;
   resumeByThread.set(threadId, { sessionId, cwd });
 }
 
 async function ensureLive(input: HarnessSessionInput): Promise<Live> {
+  const pending = ownersByThread.get(input.sessionId);
+  if (pending && pending.cwd === input.cwd && !pending.ready) {
+    const startup = pending.startup;
+    if (!startup) throw new Error("OpenCode startup reservation is not ready.");
+    const live = await startup;
+    assertCurrentOwner(pending);
+    assertNetworkSandbox(live.client.generation, input.networkAllowlist);
+    return live;
+  }
   const existing = liveByThread.get(input.sessionId);
-  if (existing) assertNetworkSandbox(existing.client.generation, input.networkAllowlist);
+  if (existing)
+    assertNetworkSandbox(existing.client.generation, input.networkAllowlist);
   if (existing && existing.cwd === input.cwd) {
     existing.onEvent = input.onEvent;
     if (existing.runtimeMode !== input.runtimeMode) {
-      await existing.client.updateSession(existing.openCodeSessionId, {
-        permission: buildOpenCodePermissionRules(input.runtimeMode),
-      });
+      await trackRequest(
+        existing.owner,
+        existing.client.updateSession(existing.openCodeSessionId, {
+          permission: buildOpenCodePermissionRules(input.runtimeMode),
+        }),
+      );
     }
+    assertCurrentOwner(existing.owner);
     existing.runtimeMode = input.runtimeMode;
     return existing;
   }
-  if (existing) {
+  if (ownedResources.size >= MAX_OPEN_CODE_RESOURCES)
+    throw new Error("OPENCODE_NATIVE_CAPACITY");
+  if (pending) {
     resumeByThread.delete(input.sessionId);
-    await stopOpenCodeSession(input.sessionId);
+    void retireOwner(pending).catch(() => undefined);
   }
+  let settle!: () => void;
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  const owner: Owner = {
+    sessionId: input.sessionId,
+    nativeId: `opencode-${crypto.randomUUID()}`,
+    cwd: input.cwd,
+    retired: false,
+    ready: false,
+    cancelledTurn: false,
+    childOwned: false,
+    remoteOwned: false,
+    settled,
+    settle,
+    requests: new Set(),
+  };
+  ownedResources.add(owner);
+  ownersByThread.set(input.sessionId, owner);
+  owner.startup = startLive(owner, input).catch(async (error) => {
+    await retireOwner(owner).catch(() => undefined);
+    throw error;
+  });
+  return owner.startup;
+}
 
-  const resume = resumeByThread.get(input.sessionId);
-  const canResume = resume != null && resume.cwd === input.cwd;
-  if (resume && resume.cwd !== input.cwd) {
-    resumeByThread.delete(input.sessionId);
-  }
-
-  const remote = parseRemotePath(input.cwd);
-  let localPath: string | undefined;
-  let generation: OpenCodeApiGeneration;
-  let service: OpenCodeV2Service | undefined;
-  if (remote) {
-    assertNetworkSandbox("v2", input.networkAllowlist);
-    service = await acquireRemoteOpenCodeService(input.sessionId, input.cwd);
-    if (!service)
-      throw new Error("Remote OpenCode service could not be opened.");
-    generation = "v2";
-    await refreshOpenCodeCatalog(input.cwd);
-  } else {
-    const binary = await resolveOpenCodeBinaryImpl();
-    localPath = binary.path;
-    generation = await assertOpenCodeVersion(localPath, input.cwd);
-    assertNetworkSandbox(generation, input.networkAllowlist);
-    service =
-      generation === "v2"
-        ? await resolveOpenCodeV2Service(localPath, input.cwd)
-        : undefined;
-  }
-
-  const liveRef: { current: Live | null } = { current: null };
-  let serverUrl = service?.url ?? "";
-  let serverExited: number | null | undefined;
-
-  if (generation === "v1") {
-    const path = localPath;
-    if (!path) throw new Error("The local OpenCode executable is unavailable.");
-    watchChild(
-      input.sessionId,
-      (line) => {
-        const parsed = parseServerUrlFromOutput(line);
-        if (parsed) serverUrl = parsed;
-      },
-      (code) => {
-        serverExited = code;
-        liveByThread.delete(input.sessionId);
-        const live = liveRef.current;
-        if (!live?.muteUpdates) {
-          (live?.onEvent ?? input.onEvent)({ type: "session.ended", code });
-        }
-        if (live) live.muteUpdates = true;
-        live?.turnFailed?.(new Error("OpenCode server exited"));
-        if (live) {
-          live.turnDone = null;
-          live.turnFailed = null;
-        }
-      },
-      (line) => {
-        const parsed = parseServerUrlFromOutput(line);
-        if (parsed) serverUrl = parsed;
-      },
-    );
-
-    const port = await freeHarnessPort();
-    await spawnChild(
-      input.sessionId,
-      path,
-      ["serve", `--hostname=127.0.0.1`, `--port=${port}`],
-      input.cwd,
-      input.networkAllowlist,
-    );
-  }
-
+async function startLive(
+  owner: Owner,
+  input: HarnessSessionInput,
+): Promise<Live> {
   try {
+    const resume = resumeByThread.get(input.sessionId);
+    const canResume = resume != null && resume.cwd === input.cwd;
+    if (canResume) resumeByThread.set(input.sessionId, { ...resume, owner });
+    if (resume && resume.cwd !== input.cwd) {
+      resumeByThread.delete(input.sessionId);
+    }
+
+    const remote = parseRemotePath(input.cwd);
+    let localPath: string | undefined;
+    let generation: OpenCodeApiGeneration;
+    let service: OpenCodeV2Service | undefined;
+    if (remote) {
+      assertNetworkSandbox("v2", input.networkAllowlist);
+      owner.remoteOwned = true;
+      service = await acquireRemoteOpenCodeService(input.sessionId, input.cwd);
+      assertCurrentOwner(owner);
+      if (!service)
+        throw new Error("Remote OpenCode service could not be opened.");
+      generation = "v2";
+      await refreshOpenCodeCatalog(input.cwd);
+      assertCurrentOwner(owner);
+    } else {
+      const binary = await resolveOpenCodeBinaryImpl();
+      assertCurrentOwner(owner);
+      localPath = binary.path;
+      generation = await assertOpenCodeVersion(localPath, input.cwd);
+      assertCurrentOwner(owner);
+      assertNetworkSandbox(generation, input.networkAllowlist);
+      service =
+        generation === "v2"
+          ? await resolveOpenCodeV2Service(localPath, input.cwd)
+          : undefined;
+      assertCurrentOwner(owner);
+    }
+
+    const liveRef: { current: Live | null } = { current: null };
+    let serverUrl = service?.url ?? "";
+    let serverExited: number | null | undefined;
+
+    if (generation === "v1") {
+      const path = localPath;
+      if (!path)
+        throw new Error("The local OpenCode executable is unavailable.");
+      owner.childOwned = true;
+      watchChild(
+        owner.nativeId,
+        (line) => {
+          if (!isCurrentOwner(owner)) return;
+          const parsed = parseServerUrlFromOutput(line);
+          if (parsed) serverUrl = parsed;
+        },
+        (code) => {
+          if (!isCurrentOwner(owner)) return;
+          serverExited = code;
+          const live = liveRef.current;
+          const onEvent = live?.muteUpdates
+            ? undefined
+            : (live?.onEvent ?? input.onEvent);
+          const failed = live?.turnFailed;
+          if (live) {
+            live.turnDone = null;
+            live.turnFailed = null;
+          }
+          void retireOwner(owner, false).catch(() => undefined);
+          failed?.(new Error("OpenCode server exited"));
+          onEvent?.({ type: "session.ended", code });
+        },
+        (line) => {
+          if (!isCurrentOwner(owner)) return;
+          const parsed = parseServerUrlFromOutput(line);
+          if (parsed) serverUrl = parsed;
+        },
+      );
+
+      const port = await freeHarnessPort();
+      assertCurrentOwner(owner);
+      await spawnChild(
+        owner.nativeId,
+        path,
+        ["serve", `--hostname=127.0.0.1`, `--port=${port}`],
+        input.cwd,
+        input.networkAllowlist,
+        undefined,
+        input.sessionId,
+      );
+      assertCurrentOwner(owner);
+    }
+
     const url =
       generation === "v2"
         ? serverUrl
         : await waitForServerUrl(
+            owner,
             () => serverUrl,
             () => serverExited,
             SERVER_TIMEOUT_MS,
           );
+    assertCurrentOwner(owner);
+    if (serverExited !== undefined)
+      throw new Error("OpenCode server exited before startup completed.");
     const client = new OpenCodeClient(
       url,
       service?.directory ?? input.cwd,
       generation,
       service?.password,
     );
+    owner.client = client;
+    if (canResume && (resume.barrier || resume.needsInterrupt)) {
+      await resume.barrier?.();
+      assertCurrentOwner(owner);
+      await client.abortSession(resume.sessionId, true).catch((error) => {
+        assertCurrentOwner(owner);
+        if (!isHttpNotFound(error) && !isOpenCodeNotFound(error)) throw error;
+      });
+      assertCurrentOwner(owner);
+    }
     const openCodeSession = await resolveSession(client, {
+      owner,
       resume: canResume ? resume : undefined,
       runtimeMode: input.runtimeMode,
       cwd: service?.directory ?? input.cwd,
     });
 
+    assertCurrentOwner(owner);
     const live: Live = {
+      owner,
       client,
       openCodeSessionId: openCodeSession.id,
       cwd: input.cwd,
@@ -523,63 +831,70 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       turnFailed: null,
       turnEndPending: false,
       activeTurn: false,
+      operation: {},
       inbox: new OpenCodeV2InboxTracker(),
       awaitedInbox: null,
     };
+    owner.live = live;
     liveRef.current = live;
     liveByThread.set(input.sessionId, live);
     resumeByThread.set(input.sessionId, {
       sessionId: openCodeSession.id,
       cwd: input.cwd,
+      owner,
     });
 
     await client.subscribeEvents(
-      input.sessionId,
+      owner.nativeId,
       (event) => {
-        if (live.muteUpdates) return;
+        if (!isCurrentLive(live) || live.muteUpdates) return;
         handleEvent(live, event);
       },
       (error) => {
-        if (live.muteUpdates || live.cancelled) return;
+        if (!isCurrentLive(live) || live.muteUpdates || live.cancelled) return;
         if (live.client.generation === "v2") {
-          live.muteUpdates = true;
-          live.activeTurn = false;
-          if (liveByThread.get(input.sessionId) === live) {
-            liveByThread.delete(input.sessionId);
-          }
           const message = error || "OpenCode event stream ended";
-          live.onEvent({ type: "session.error", message });
-          live.turnFailed?.(new Error(message));
+          const onEvent = live.onEvent;
+          const failed = live.turnFailed;
           live.turnDone = null;
           live.turnFailed = null;
-          void live.client.closeEvents(input.sessionId);
-          void invalidateRemoteOpenCodeService(input.sessionId).catch(
-            () => undefined,
-          );
+          if (owner.remoteOwned) {
+            owner.remoteOwned = false;
+            owner.remoteInvalidation = invalidateRemoteOpenCodeService(
+              owner.sessionId,
+            );
+            void owner.remoteInvalidation.catch(() => undefined);
+          }
+          void retireOwner(owner, false).catch(() => undefined);
+          failed?.(new Error(message));
+          onEvent({ type: "session.error", message });
           return;
         }
         if (error) {
-          live.onEvent({ type: "session.error", message: error });
+          emitLive(live, { type: "session.error", message: error });
           live.turnFailed?.(new Error(error));
         }
       },
     );
 
-    live.onEvent({
+    assertCurrentOwner(owner);
+    owner.ready = true;
+    emitLive(live, {
       type: "session.providerBound",
       providerSessionId: openCodeSession.id,
     });
-    live.onEvent({ type: "session.started" });
+    assertCurrentOwner(owner);
+    emitLive(live, { type: "session.started" });
     return live;
-  } catch (error) {
-    await stopOpenCodeSession(input.sessionId);
-    throw error;
+  } finally {
+    owner.settle();
   }
 }
 
 async function resolveSession(
   client: OpenCodeClient,
   input: {
+    owner: Owner;
     resume?: Resume;
     runtimeMode: RuntimeMode;
     cwd: string;
@@ -589,18 +904,23 @@ async function resolveSession(
   if (input.resume) {
     try {
       const adopted = await client.getSession(input.resume.sessionId);
+      assertCurrentOwner(input.owner);
       if (!adopted.directory || sameDirectory(adopted.directory, input.cwd)) {
         await client
           .updateSession(adopted.id, { permission })
           .catch(() => undefined);
         return adopted;
       }
-      const forked = await client.forkSession(adopted.id, input.cwd);
+      const forked = await client.forkSession(adopted.id, input.cwd, () =>
+        assertCurrentOwner(input.owner),
+      );
+      assertCurrentOwner(input.owner);
       await client
         .updateSession(forked.id, { permission })
         .catch(() => undefined);
       return forked;
     } catch (error) {
+      assertCurrentOwner(input.owner);
       if (
         !isOpenCodeNotFound(error) &&
         !isHttpNotFound(error) &&
@@ -609,6 +929,7 @@ async function resolveSession(
         throw error;
     }
   }
+  assertCurrentOwner(input.owner);
   return client.createSession({ permission });
 }
 
@@ -636,6 +957,8 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   ];
   if (parts.length === 0) return;
 
+  live.operation = {};
+  const guard = requestGuard(live);
   const turnPromise = new Promise<void>((resolve, reject) => {
     live.turnDone = resolve;
     live.turnFailed = reject;
@@ -653,8 +976,15 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
       agent: openCodeAgentForTurn(input),
       variant: input.modelSettings?.variant,
       parts,
+      guard,
     });
+    if (!isCurrentLive(live)) {
+      if (!live.cancelled) await turnPromise;
+      return;
+    }
+    if (live.cancelled) return;
     input.onAccepted?.();
+    if (!isCurrentLive(live)) return;
     if (v2) {
       admitAwaitedInbox(live, inboxID);
     }
@@ -662,7 +992,8 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     await turnPromise;
   } catch (error) {
     if (live.cancelled) return;
-    live.onEvent({
+    if (!isCurrentLive(live)) throw error;
+    emitLive(live, {
       type: "session.error",
       message: error instanceof Error ? error.message : String(error),
     });
@@ -678,11 +1009,13 @@ async function runCompaction(
   live: Live,
   model: { providerID: string; modelID: string },
 ): Promise<void> {
+  live.operation = {};
+  const guard = requestGuard(live);
   if (live.client.generation !== "v2") {
     // Unlike prompt_async, summarize responds only after the compaction pass.
     // Keep this outside the normal turn latch: its eventual session.status=idle
     // must not become a pending completion for the next user turn.
-    await live.client.summarizeSession(live.openCodeSessionId, model);
+    await live.client.summarizeSession(live.openCodeSessionId, model, guard);
     return;
   }
   // v2 only queues the compaction. Hold the turn chain until it actually
@@ -702,6 +1035,7 @@ async function runCompaction(
     const inboxID = await live.client.summarizeSession(
       live.openCodeSessionId,
       model,
+      guard,
     );
     admitAwaitedInbox(live, inboxID);
     await finished;
@@ -745,8 +1079,7 @@ function gateAwaitedInbox(
     (type === "session.status" &&
       stringField(asRecord(properties.status), "type") === "idle");
   const compactionEnd =
-    type === "session.compaction.ended" ||
-    type === "session.compaction.failed";
+    type === "session.compaction.ended" || type === "session.compaction.failed";
   if (!terminal && !compactionEnd) return false;
   if (!awaited.id) {
     if (awaited.uncorrelated) {
@@ -780,7 +1113,8 @@ function inboxFallbackOutcome(
       : undefined;
   }
   const execution = stringField(properties, "execution");
-  if (execution === "failed") return { kind: "failed", error: properties.error };
+  if (execution === "failed")
+    return { kind: "failed", error: properties.error };
   return { kind: execution === "interrupted" ? "interrupted" : "succeeded" };
 }
 
@@ -789,8 +1123,7 @@ function finishAwaitedInbox(
   fallback?: OpenCodeV2InboxOutcome,
 ): void {
   const awaited = live.awaitedInbox;
-  const outcome =
-    (awaited?.id && live.inbox.outcome(awaited.id)) || fallback;
+  const outcome = (awaited?.id && live.inbox.outcome(awaited.id)) || fallback;
   if (!awaited || !outcome) return;
   live.awaitedInbox = null;
   if (awaited.kind === "compaction") {
@@ -810,7 +1143,7 @@ function finishAwaitedInbox(
     return;
   }
   if (outcome.kind === "failed") {
-    live.onEvent({
+    emitLive(live, {
       type: "session.error",
       message: sessionErrorMessage(outcome.error),
     });
@@ -907,7 +1240,7 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
         live.partById.set(partID, { ...existing, text: nextText });
       }
       const mapped = textDeltaEvent(existing, deltaToEmit);
-      if (mapped) live.onEvent(mapped);
+      if (mapped) emitLive(live, mapped);
       break;
     }
     case "message.part.updated": {
@@ -975,18 +1308,22 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       if (live.planning) {
         const decision =
           kind === "read" || kind === "search" ? "allow" : "deny";
-        void live.client
-          .replyPermission(id, toOpenCodePermissionReply(decision))
-          .catch(() => undefined);
+        void trackRequest(
+          live.owner,
+          live.client.replyPermission(id, toOpenCodePermissionReply(decision)),
+        ).catch(() => undefined);
         break;
       }
       if (live.runtimeMode === "full-access") {
-        void live.client.replyPermission(id, "once").catch(() => undefined);
+        void trackRequest(
+          live.owner,
+          live.client.replyPermission(id, "once"),
+        ).catch(() => undefined);
         break;
       }
       const uiId = live.nextApprovalUiId++;
       if (callId) {
-        live.onEvent({
+        emitLive(live, {
           type: "tool.updated",
           callId,
           title,
@@ -994,7 +1331,7 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
           preview,
         });
       }
-      live.onEvent({
+      emitLive(live, {
         type: "approval.requested",
         requestId: uiId,
         title,
@@ -1011,7 +1348,7 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       if (!id) break;
       const questions = questionsFromUnknown(properties);
       const uiId = live.nextApprovalUiId++;
-      live.onEvent({
+      emitLive(live, {
         type: "question.asked",
         requestId: uiId,
         title: questionPromptTitle(questions) || "OpenCode question",
@@ -1025,7 +1362,7 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       const statusType = stringField(status, "type");
       if (statusType === "retry") {
         const message = stringField(status, "message");
-        if (message) live.onEvent({ type: "status", text: message });
+        if (message) emitLive(live, { type: "status", text: message });
         break;
       }
       if (statusType === "idle" && live.activeTurn) {
@@ -1048,7 +1385,7 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
     }
     case "session.error": {
       const message = sessionErrorMessage(properties.error);
-      live.onEvent({ type: "session.error", message });
+      emitLive(live, { type: "session.error", message });
       // A stale v2 failure with nothing waiting must not be saved as the next
       // turn's completion. v1 relies on that saved completion.
       if (live.client.generation !== "v2" || live.turnDone) {
@@ -1084,7 +1421,7 @@ function emitContext(live: Live, info: Record<string, unknown> | null): void {
     providerID && modelID
       ? modelContextWindow(`opencode:${providerID}/${modelID}`)
       : undefined;
-  live.onEvent({ type: "context", used, ...(window ? { window } : {}) });
+  emitLive(live, { type: "context", used, ...(window ? { window } : {}) });
 }
 
 function emitAssistantText(live: Live, part: OpenCodePart): void {
@@ -1097,7 +1434,7 @@ function emitAssistantText(live: Live, part: OpenCodePart): void {
   );
   live.emittedTextByPartId.set(part.id, latestText);
   const mapped = textDeltaEvent(part, deltaToEmit);
-  if (mapped) live.onEvent(mapped);
+  if (mapped) emitLive(live, mapped);
 }
 
 function emitTool(live: Live, part: OpenCodePart): void {
@@ -1121,9 +1458,9 @@ function emitTool(live: Live, part: OpenCodePart): void {
     tool;
   const detail = detailFromToolPart(part);
   const tasks = taskListFromToolInput(tool, state.input);
-  if (tasks) live.onEvent({ type: "tasks.updated", items: tasks });
+  if (tasks) emitLive(live, { type: "tasks.updated", items: tasks });
   if (status === "pending") {
-    live.onEvent({
+    emitLive(live, {
       type: "tool.started",
       callId,
       title,
@@ -1134,7 +1471,7 @@ function emitTool(live: Live, part: OpenCodePart): void {
     if (kind === "agent") trackSubagentRow(live, callId, part);
     return;
   }
-  live.onEvent({
+  emitLive(live, {
     type: status === "pending" ? "tool.started" : "tool.updated",
     callId,
     title,
@@ -1178,10 +1515,17 @@ function bindSubagentSession(
   if (live.subagentSessions.get(sessionId) === callId) return;
   live.subagentSessions.set(sessionId, callId);
   const model = live.subagentModels.get(sessionId);
-  if (model) live.onEvent({ type: "tool.updated", callId, kind: "agent", agentModel: model });
+  if (model)
+    emitLive(live, {
+      type: "tool.updated",
+      callId,
+      kind: "agent",
+      agentModel: model,
+    });
   const backlog = live.pendingSubagent.get(sessionId);
   live.pendingSubagent.delete(sessionId);
-  for (const part of backlog ?? []) emitSubagentStep(live, callId, sessionId, part);
+  for (const part of backlog ?? [])
+    emitSubagentStep(live, callId, sessionId, part);
 }
 
 function handleSubagentEvent(
@@ -1194,7 +1538,11 @@ function handleSubagentEvent(
   let ancestor: string | undefined = sessionId;
   const visited = new Set<string>();
   while (ancestor && !visited.has(ancestor)) {
-    if (ancestor === live.openCodeSessionId || live.subagentSessions.has(ancestor)) break;
+    if (
+      ancestor === live.openCodeSessionId ||
+      live.subagentSessions.has(ancestor)
+    )
+      break;
     visited.add(ancestor);
     ancestor = live.sessionParentById.get(ancestor);
   }
@@ -1206,14 +1554,27 @@ function handleSubagentEvent(
     const agent = stringField(info, "agent");
     const model = stringField(info, "modelID");
     // Nested agents share the outer trail, but have their own model.
-    if (role === "assistant" && model && !(agent && KNOWN_HIDDEN_AGENTS.has(agent)) &&
-        live.sessionParentById.get(sessionId) === live.openCodeSessionId) {
+    if (
+      role === "assistant" &&
+      model &&
+      !(agent && KNOWN_HIDDEN_AGENTS.has(agent)) &&
+      live.sessionParentById.get(sessionId) === live.openCodeSessionId
+    ) {
       live.subagentModels.set(sessionId, model);
       const callId = live.subagentSessions.get(sessionId);
-      if (callId) live.onEvent({ type: "tool.updated", callId, kind: "agent", agentModel: model });
+      if (callId)
+        emitLive(live, {
+          type: "tool.updated",
+          callId,
+          kind: "agent",
+          agentModel: model,
+        });
     }
     if (id && (role === "user" || role === "assistant")) {
-      live.messageRoleById.set(id, agent && KNOWN_HIDDEN_AGENTS.has(agent) ? "hidden" : role);
+      live.messageRoleById.set(
+        id,
+        agent && KNOWN_HIDDEN_AGENTS.has(agent) ? "hidden" : role,
+      );
       // Message metadata may follow the first part on a resumed stream.
       for (const part of live.partById.values()) {
         if (part.messageID === id) mirrorSubagentPart(live, sessionId, part);
@@ -1221,12 +1582,17 @@ function handleSubagentEvent(
     }
     return;
   }
-  let part = type === "message.part.updated" ? parsePart(properties.part) : null;
+  let part =
+    type === "message.part.updated" ? parsePart(properties.part) : null;
   if (type === "message.part.delta") {
     const id = stringField(properties, "partID");
     const existing = id ? live.partById.get(id) : undefined;
     const delta = streamTextDelta(properties.delta);
-    if (existing && delta && (existing.type === "text" || existing.type === "reasoning")) {
+    if (
+      existing &&
+      delta &&
+      (existing.type === "text" || existing.type === "reasoning")
+    ) {
       part = { ...existing, text: (existing.text ?? "") + delta };
     }
   }
@@ -1250,7 +1616,8 @@ function mirrorSubagentPart(
     emitSubagentStep(live, callId, sessionId, part);
     return;
   }
-  if (part.type !== "tool" && part.type !== "text" && part.type !== "reasoning") return;
+  if (part.type !== "tool" && part.type !== "text" && part.type !== "reasoning")
+    return;
   const backlog = live.pendingSubagent.get(sessionId) ?? [];
   const index = backlog.findIndex((entry) => entry.id === part.id);
   if (index >= 0) backlog[index] = part;
@@ -1273,7 +1640,7 @@ function emitSubagentStep(
   if (part.type === "text" || part.type === "reasoning") {
     const text = part.text?.trim();
     if (!text) return;
-    live.onEvent({
+    emitLive(live, {
       type: "agent.step",
       callId,
       stepId: `${sessionId}:${part.id}`,
@@ -1301,7 +1668,7 @@ function emitSubagentStep(
     (typeof state.title === "string" && state.title) ||
     tool;
   const failed = status === "error";
-  live.onEvent({
+  emitLive(live, {
     type: "agent.step",
     callId,
     stepId: `${sessionId}:${part.callID ?? part.id}`,
@@ -1325,14 +1692,18 @@ async function waitApproval(
   uiId: number,
   id: string,
 ): Promise<void> {
+  if (!isCurrentLive(live)) return;
   const decision = await new Promise<ApprovalDecision>((resolve) => {
     live.approvals.set(uiId, { id, resolve });
   });
   live.approvals.delete(uiId);
-  live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
-  await live.client
-    .replyPermission(id, toOpenCodePermissionReply(decision))
-    .catch(() => undefined);
+  if (!isCurrentLive(live)) return;
+  emitLive(live, { type: "approval.resolved", requestId: uiId, decision });
+  if (!isCurrentLive(live)) return;
+  await trackRequest(
+    live.owner,
+    live.client.replyPermission(id, toOpenCodePermissionReply(decision)),
+  ).catch(() => undefined);
 }
 
 async function waitQuestion(
@@ -1341,29 +1712,36 @@ async function waitQuestion(
   id: string,
   questions: UserQuestion[],
 ): Promise<void> {
+  if (!isCurrentLive(live)) return;
   const reply = await new Promise<UserQuestionReply>((resolve) => {
     live.questions.set(uiId, { id, questions, resolve });
   });
   live.questions.delete(uiId);
-  live.onEvent({
+  if (!isCurrentLive(live)) return;
+  emitLive(live, {
     type: "question.resolved",
     requestId: uiId,
     decision: reply.kind,
   });
+  if (!isCurrentLive(live)) return;
   if (reply.kind !== "answered") {
-    await live.client.rejectQuestion(id).catch(() => undefined);
+    await trackRequest(live.owner, live.client.rejectQuestion(id)).catch(
+      () => undefined,
+    );
     return;
   }
   const answers = questions.map((question) =>
     selectedAnswerLabels(question, reply),
   );
-  await live.client.replyQuestion(id, answers).catch(() => undefined);
+  await trackRequest(live.owner, live.client.replyQuestion(id, answers)).catch(
+    () => undefined,
+  );
 }
 
 function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
   live.turnEndPending = false;
   live.activeTurn = false;
-  for (const event of extraEvents) live.onEvent(event);
+  for (const event of extraEvents) emitLive(live, event);
   const done = live.turnDone;
   const failed = live.turnFailed;
   live.turnDone = null;
@@ -1420,9 +1798,7 @@ async function assertOpenCodeVersion(
   path: string,
   cwd: string,
 ): Promise<OpenCodeApiGeneration> {
-  const output = await execChild(path, ["--version"], cwd).catch(
-    () => "",
-  );
+  const output = await execChild(path, ["--version"], cwd).catch(() => "");
   const version = parseOpenCodeVersion(output);
   return assertSupportedOpenCodeVersion(version);
 }
@@ -1439,20 +1815,34 @@ function assertNetworkSandbox(
 }
 
 function waitForServerUrl(
+  owner: Owner,
   read: () => string,
   exited: () => number | null | undefined,
   timeoutMs: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const started = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (error?: Error, url = "") => {
+      clearTimeout(timer);
+      owner.rejectReady = undefined;
+      if (error) reject(error);
+      else resolve(url);
+    };
+    owner.rejectReady = () =>
+      finish(new Error("OpenCode session startup was cancelled."));
     const tick = () => {
+      if (!isCurrentOwner(owner)) {
+        owner.rejectReady?.();
+        return;
+      }
       const url = read();
       if (url) {
-        resolve(url);
+        finish(undefined, url);
         return;
       }
       if (exited() !== undefined) {
-        reject(
+        finish(
           new Error(
             `OpenCode server exited before startup completed (code: ${String(exited())}).`,
           ),
@@ -1460,10 +1850,10 @@ function waitForServerUrl(
         return;
       }
       if (Date.now() - started >= timeoutMs) {
-        reject(new Error("Timed out waiting for OpenCode server"));
+        finish(new Error("Timed out waiting for OpenCode server"));
         return;
       }
-      setTimeout(tick, 50);
+      timer = setTimeout(tick, 50);
     };
     tick();
   });
@@ -1473,5 +1863,6 @@ function waitForServerUrl(
 export function __openCodeTestReset(): void {
   liveByThread.clear();
   resumeByThread.clear();
-  cancelledThreads.clear();
+  ownersByThread.clear();
+  ownedResources.clear();
 }

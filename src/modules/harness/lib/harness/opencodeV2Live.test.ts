@@ -226,7 +226,11 @@ it("reports when OpenCode accepts a turn", async () => {
 it("rejects a closed v2 stream and reconnects without letting its late events finish the next turn", async () => {
   openCodeVersion = "opencode v2.0.15";
   const first = turn([]);
-  await waitFor(() => harnessHttp.mock.calls.some(([input]) => input.url.includes("/prompt")), "prompt");
+  await waitFor(
+    () =>
+      harnessHttp.mock.calls.some(([input]) => input.url.includes("/prompt")),
+    "prompt",
+  );
   const stale = onSseEvent;
   const failed = expect(first).rejects.toThrow("event stream ended");
   onSseEnd?.();
@@ -237,9 +241,15 @@ it("rejects a closed v2 stream and reconnects without letting its late events fi
   const events: HarnessEvent[] = [];
   const next = turn(events, { onAccepted: accepted });
   await waitFor(() => accepted.mock.calls.length > 0, "reconnected prompt");
-  stale?.({ type: "session.execution.succeeded", data: { sessionID: "session_1" } });
+  stale?.({
+    type: "session.execution.succeeded",
+    data: { sessionID: "session_1" },
+  });
   expect(events).not.toContainEqual({ type: "message.completed" });
-  onSseEvent?.({ type: "session.execution.succeeded", data: { sessionID: "session_1" } });
+  onSseEvent?.({
+    type: "session.execution.succeeded",
+    data: { sessionID: "session_1" },
+  });
   await next;
   expect(events).toContainEqual({ type: "message.completed" });
 });
@@ -273,11 +283,13 @@ it("keeps the v1 network sandbox on the owned server", async () => {
   const done = turn([], { networkAllowlist: ["api.example.com"] });
   await waitFor(() => spawnChild.mock.calls.length > 0, "server spawn");
   expect(spawnChild).toHaveBeenCalledWith(
-    "opencode-live",
+    expect.stringMatching(/^opencode-/),
     "/fake/opencode",
     expect.any(Array),
     "/repo",
     ["api.example.com"],
+    undefined,
+    "opencode-live",
   );
   idle();
   await done;

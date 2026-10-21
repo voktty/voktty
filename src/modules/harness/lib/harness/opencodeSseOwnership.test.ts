@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { acquireHarnessBridge } from "@/modules/harness/lib/harness/child";
+import { OpenCodeClient } from "@/modules/harness/lib/harness/opencodeClient";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(
@@ -28,13 +31,9 @@ afterEach(() => {
   mocks.invoke.mockClear();
 });
 
-async function fixture() {
-  vi.resetModules();
-  const child = await import("./child");
-  const { OpenCodeClient } = await import("./opencodeClient");
-  release = await child.acquireHarnessBridge();
-  return { child, OpenCodeClient };
-}
+beforeEach(async () => {
+  release = await acquireHarnessBridge();
+});
 function nativeIds() {
   return vi
     .mocked(mocks.invoke)
@@ -44,7 +43,6 @@ function nativeIds() {
 
 describe("OpenCode SSE owner cleanup", () => {
   it("does not let an old client close a replacement client's logical session", async () => {
-    const { OpenCodeClient } = await fixture();
     const old = new OpenCodeClient("http://127.0.0.1:1", "/old");
     const current = new OpenCodeClient("http://127.0.0.1:1", "/current");
     const onEvent = vi.fn();
@@ -68,7 +66,6 @@ describe("OpenCode SSE owner cleanup", () => {
   });
 
   it("does not close another client's stream when this client never subscribed", async () => {
-    const { OpenCodeClient } = await fixture();
     const current = new OpenCodeClient("http://127.0.0.1:1", "/current");
     await current.subscribeEvents("same", vi.fn());
     mocks.invoke.mockClear();

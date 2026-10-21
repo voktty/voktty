@@ -178,6 +178,156 @@ describe("OpenCodeClient v2", () => {
     );
   });
 
+  it.each(["prompt", "compact"])(
+    "cancels a guarded %s pipeline after held model configuration",
+    async (operation) => {
+      let finish!: (value: { status: number; body: string }) => void;
+      const configured = new Promise<{ status: number; body: string }>(
+        (resolve) => {
+          finish = resolve;
+        },
+      );
+      mocks.harnessHttp.mockImplementation((request: { url: string }) =>
+        new URL(request.url).pathname.endsWith("/model")
+          ? configured
+          : Promise.resolve({ status: 204, body: "" }),
+      );
+      let current = true;
+      const guard = () => {
+        if (!current) throw new Error("request cancelled");
+      };
+      const client = new OpenCodeClient("http://127.0.0.1:4096", "/repo", "v2");
+      const running = (
+        operation === "prompt"
+          ? client.promptAsync({
+              sessionID: "ses_1",
+              model: { providerID: "openai", modelID: "gpt-5" },
+              agent: "build",
+              parts: [{ type: "text", text: "stale" }],
+              guard,
+            })
+          : client.summarizeSession(
+              "ses_1",
+              { providerID: "openai", modelID: "gpt-5" },
+              guard,
+            )
+      ).catch((error) => error);
+      current = false;
+      finish({ status: 204, body: "" });
+      expect(await running).toMatchObject({ message: "request cancelled" });
+      expect(
+        mocks.harnessHttp.mock.calls.map(
+          ([request]) => new URL(request.url).pathname,
+        ),
+      ).toEqual(["/api/session/ses_1/model"]);
+    },
+  );
+
+  it("does not admit a guarded prompt after cancellation at the agent stage", async () => {
+    let finish!: (value: { status: number; body: string }) => void;
+    const configured = new Promise<{ status: number; body: string }>(
+      (resolve) => {
+        finish = resolve;
+      },
+    );
+    mocks.harnessHttp.mockImplementation((request: { url: string }) =>
+      new URL(request.url).pathname.endsWith("/agent")
+        ? configured
+        : Promise.resolve({ status: 204, body: "" }),
+    );
+    let current = true;
+    const guard = () => {
+      if (!current) throw new Error("request cancelled");
+    };
+    const client = new OpenCodeClient("http://127.0.0.1:4096", "/repo", "v2");
+    const running = client
+      .promptAsync({
+        sessionID: "ses_1",
+        model: { providerID: "openai", modelID: "gpt-5" },
+        agent: "build",
+        parts: [{ type: "text", text: "stale" }],
+        guard,
+      })
+      .catch((error) => error);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    current = false;
+    finish({ status: 204, body: "" });
+    expect(await running).toMatchObject({ message: "request cancelled" });
+    expect(
+      mocks.harnessHttp.mock.calls.map(
+        ([request]) => new URL(request.url).pathname,
+      ),
+    ).toEqual(["/api/session/ses_1/model", "/api/session/ses_1/agent"]);
+  });
+
+  it("keeps abort cleanup tolerant but exposes strict interrupt acknowledgement errors", async () => {
+    const client = new OpenCodeClient("http://127.0.0.1:4096", "/repo", "v2");
+    mocks.harnessHttp.mockRejectedValue(new Error("tunnel unavailable"));
+    await expect(client.abortSession("ses_1")).resolves.toBeUndefined();
+    await expect(client.abortSession("ses_1", true)).rejects.toThrow(
+      "tunnel unavailable",
+    );
+  });
+
+  it("cleans a captured fork rather than moving it after its owner retires", async () => {
+    let finish!: (value: { status: number; body: string }) => void;
+    const forked = new Promise<{ status: number; body: string }>((resolve) => {
+      finish = resolve;
+    });
+    mocks.harnessHttp.mockImplementation((request: { url: string }) =>
+      new URL(request.url).pathname.endsWith("/fork")
+        ? forked
+        : Promise.resolve({ status: 204, body: "" }),
+    );
+    let current = true;
+    const client = new OpenCodeClient("http://127.0.0.1:4096", "/repo", "v2");
+    const running = client
+      .forkSession("ses_1", "/other", () => {
+        if (!current) throw new Error("request cancelled");
+      })
+      .catch((error) => error);
+    current = false;
+    finish({
+      status: 200,
+      body: JSON.stringify({ data: { id: "captured_fork" } }),
+    });
+    expect(await running).toMatchObject({ message: "request cancelled" });
+    expect(
+      mocks.harnessHttp.mock.calls.map(([request]) => ({
+        path: new URL(request.url).pathname,
+        method: request.method,
+      })),
+    ).toEqual([
+      { path: "/api/session/ses_1/fork", method: "POST" },
+      { path: "/api/session/captured_fork", method: "DELETE" },
+    ]);
+  });
+
+  it("does not commit a staged rewind after its operation token is cancelled", async () => {
+    let finish!: (value: { status: number; body: string }) => void;
+    mocks.harnessHttp.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let current = true;
+    const client = new OpenCodeClient("http://127.0.0.1:4096", "/repo", "v2");
+    const running = client
+      .revertSession("ses_1", "msg_1", () => {
+        if (!current) throw new Error("request cancelled");
+      })
+      .catch((error) => error);
+    current = false;
+    finish({ status: 204, body: "" });
+    expect(await running).toMatchObject({ message: "request cancelled" });
+    expect(
+      mocks.harnessHttp.mock.calls.map(
+        ([request]) => new URL(request.url).pathname,
+      ),
+    ).toEqual(["/api/session/ses_1/revert/stage"]);
+  });
+
   it("normalizes v2 permission events and routes replies through the session", async () => {
     let receive: ((data: string) => void) | undefined;
     mocks.watchSse.mockImplementation(

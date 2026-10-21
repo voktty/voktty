@@ -149,7 +149,9 @@ export class OpenCodeClient {
   async forkSession(
     sessionID: string,
     directory: string,
+    guard?: () => void,
   ): Promise<OpenCodeSession> {
+    guard?.();
     const forked = normalizeSession(
       await this.request<OpenCodeSession>(
         "POST",
@@ -159,14 +161,20 @@ export class OpenCodeClient {
           : { query: { directory }, body: {} },
       ),
     );
-    if (this.generation === "v1") return forked;
+    if (this.generation === "v1") {
+      guard?.();
+      return forked;
+    }
     try {
+      guard?.();
       await this.request<unknown>(
         "POST",
         this.path(`/session/${enc(forked.id)}/move`),
         { body: { directory, delivery: "queue" } },
       );
+      guard?.();
       const moved = await this.getSession(forked.id);
+      guard?.();
       if (!moved.directory || !sameDirectory(moved.directory, directory)) {
         throw new Error(
           `OpenCode did not move the forked session to ${directory}`,
@@ -179,14 +187,16 @@ export class OpenCodeClient {
     }
   }
 
-  async abortSession(sessionID: string): Promise<void> {
-    await this.request<unknown>(
+  async abortSession(sessionID: string, strict = false): Promise<void> {
+    const request = this.request<unknown>(
       "POST",
       this.path(
         `/session/${enc(sessionID)}/${this.generation === "v2" ? "interrupt" : "abort"}`,
       ),
       this.generation === "v2" ? { query: { resume: "false" } } : { body: {} },
-    ).catch(() => undefined);
+    );
+    if (strict) await request;
+    else await request.catch(() => undefined);
   }
 
   /** Drop a throwaway session. Interrupt only stops the run. */
@@ -197,17 +207,24 @@ export class OpenCodeClient {
     ).catch(() => undefined);
   }
 
-  async revertSession(sessionID: string, messageID: string): Promise<void> {
+  async revertSession(
+    sessionID: string,
+    messageID: string,
+    guard?: () => void,
+  ): Promise<void> {
+    guard?.();
     if (this.generation === "v2") {
       await this.request<unknown>(
         "POST",
         this.path(`/session/${enc(sessionID)}/revert/stage`),
         { body: { messageID } },
       );
+      guard?.();
       await this.request<unknown>(
         "POST",
         this.path(`/session/${enc(sessionID)}/revert/commit`),
       );
+      guard?.();
       return;
     }
     await this.request<unknown>("POST", `/session/${enc(sessionID)}/revert`, {
@@ -222,14 +239,18 @@ export class OpenCodeClient {
   async summarizeSession(
     sessionID: string,
     model: { providerID: string; modelID: string },
+    guard?: () => void,
   ): Promise<string | undefined> {
+    guard?.();
     if (this.generation === "v2") {
-      await this.setModel(sessionID, model);
+      await this.setModel(sessionID, model, undefined, guard);
+      guard?.();
       const admitted = await this.request<unknown>(
         "POST",
         this.path(`/session/${enc(sessionID)}/compact`),
         { body: { delivery: "queue" } },
       );
+      guard?.();
       return stringField(asRecord(admitted), "id");
     }
     await this.request<unknown>(
@@ -240,6 +261,7 @@ export class OpenCodeClient {
         timeoutMs: 30 * 60_000,
       },
     );
+    guard?.();
     return undefined;
   }
 
@@ -251,14 +273,19 @@ export class OpenCodeClient {
     variant?: string;
     parts: OpenCodePromptPart[];
     delivery?: "queue" | "steer";
+    guard?: () => void;
   }): Promise<string | undefined> {
+    const guard = input.guard;
+    guard?.();
     if (this.generation === "v2") {
       await this.configureTurn(input);
+      input.guard?.();
       const admitted = await this.request<unknown>(
         "POST",
         this.path(`/session/${enc(input.sessionID)}/prompt`),
         { body: v2PromptBody(input.parts, input.delivery ?? "queue") },
       );
+      guard?.();
       return stringField(asRecord(admitted), "id");
     }
     await this.request<unknown>(
@@ -273,6 +300,7 @@ export class OpenCodeClient {
         },
       },
     );
+    guard?.();
     return undefined;
   }
 
@@ -440,6 +468,11 @@ export class OpenCodeClient {
     this.configuredAgents.clear();
   }
 
+  invalidateConfiguration(sessionID: string): void {
+    this.configuredModels.delete(sessionID);
+    this.configuredAgents.delete(sessionID);
+  }
+
   async listModels(): Promise<unknown[]> {
     return this.request<unknown[]>("GET", this.path("/model"));
   }
@@ -457,7 +490,22 @@ export class OpenCodeClient {
     model: { providerID: string; modelID: string };
     agent?: string;
     variant?: string;
+    guard?: () => void;
   }): Promise<void> {
+    if (input.guard) {
+      input.guard();
+      await this.setModel(
+        input.sessionID,
+        input.model,
+        input.variant,
+        input.guard,
+      );
+      input.guard();
+      if (input.agent)
+        await this.setAgent(input.sessionID, input.agent, input.guard);
+      input.guard();
+      return;
+    }
     const updates: Promise<void>[] = [
       this.setModel(input.sessionID, input.model, input.variant),
     ];
@@ -469,7 +517,9 @@ export class OpenCodeClient {
     sessionID: string,
     model: { providerID: string; modelID: string },
     variant?: string,
+    guard?: () => void,
   ): Promise<void> {
+    guard?.();
     const key = `${model.providerID}/${model.modelID}/${variant ?? ""}`;
     if (this.configuredModels.get(sessionID) === key) return;
     await this.request<unknown>(
@@ -485,16 +535,23 @@ export class OpenCodeClient {
         },
       },
     );
+    guard?.();
     this.configuredModels.set(sessionID, key);
   }
 
-  private async setAgent(sessionID: string, agent: string): Promise<void> {
+  private async setAgent(
+    sessionID: string,
+    agent: string,
+    guard?: () => void,
+  ): Promise<void> {
+    guard?.();
     if (this.configuredAgents.get(sessionID) === agent) return;
     await this.request<unknown>(
       "POST",
       this.path(`/session/${enc(sessionID)}/agent`),
       { body: { agent } },
     );
+    guard?.();
     this.configuredAgents.set(sessionID, agent);
   }
 
