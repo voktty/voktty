@@ -11,6 +11,7 @@ import { rememberLoadedSession } from "../lib/sessionCache";
 import { shouldPersistSession } from "../lib/sessionStore";
 import { sessionChildHarnesses } from "../lib/handoff";
 import type { Session } from "../lib/session";
+import { hasSessionDetachHold } from "../lib/sessionDetach";
 import { leafIds, type WorkspaceTab } from "../lib/layout";
 import { forgetHarnessSession } from "../lib/harness/registry";
 
@@ -50,6 +51,89 @@ export function useIdleSessionDetach({
   const unseenFinishedRef = useRef(unseenFinishedIds);
   unseenFinishedRef.current = unseenFinishedIds;
   const detachTimer = useRef<number | null>(null);
+  const pendingDetach = useRef(new Set<Session>());
+  const failedDetach = useRef(new WeakSet<Session>());
+  const detachOwner = useRef<object | null>(null);
+  useEffect(() => {
+    const owner = {};
+    detachOwner.current = owner;
+    return () => {
+      if (detachOwner.current !== owner) return;
+      detachOwner.current = null;
+      if (detachTimer.current != null) window.clearTimeout(detachTimer.current);
+      detachTimer.current = null;
+      pendingDetach.current.clear();
+    };
+  }, []);
+  useEffect(() => {
+    const owner = detachOwner.current;
+    if (!owner) return;
+    const committedIds = new Set(sessions.map((session) => session.id));
+    const pending = [...pendingDetach.current];
+    pendingDetach.current.clear();
+    const restore = (session: Session) => {
+      if (detachOwner.current !== owner) return;
+      setSessions((prev) =>
+        prev.some((current) => current.id === session.id)
+          ? prev
+          : [...prev, session],
+      );
+    };
+    for (const session of pending) {
+      if (
+        committedIds.has(session.id) ||
+        sessionsRef.current.some((current) => current.id === session.id)
+      )
+        continue;
+      const referenced = tabsRef.current.some((tab) =>
+        leafIds(tab.layout).includes(session.id),
+      );
+      const running = detachInputs.current.orchestrationRuns.some(
+        (run) =>
+          (run.leadId === session.id ||
+            run.leadId === session.orchestrationLeadId) &&
+          ["active", "paused"].includes(run.status),
+      );
+      if (
+        referenced ||
+        running ||
+        openingSessionIds.current.has(session.id) ||
+        skipForgetSessionIds.current.has(session.id) ||
+        (detachInputs.current.liveAgentsEnabled &&
+          unseenFinishedRef.current.has(session.id))
+      ) {
+        restore(session);
+        continue;
+      }
+      void Promise.all(
+        sessionChildHarnesses(session).map((harness) =>
+          forgetHarnessSession(harness, session.id),
+        ),
+      ).then(
+        () => {
+          if (
+            detachOwner.current === owner &&
+            !sessionsRef.current.some((current) => current.id === session.id) &&
+            shouldPersistSession(session)
+          ) {
+            rememberLoadedSession(loadedSessionCache.current, session);
+          }
+        },
+        () => {
+          failedDetach.current.add(session);
+          restore(session);
+        },
+      );
+    }
+  }, [
+    sessions,
+    sessionsRef,
+    tabsRef,
+    openingSessionIds,
+    skipForgetSessionIds,
+    loadedSessionCache,
+    setSessions,
+  ]);
   const detachIdleSessions = useCallback(() => {
     detachTimer.current = null;
     const sessions = sessionsRef.current;
@@ -61,6 +145,9 @@ export function useIdleSessionDetach({
     // and attachments mounted when the panel closes or switches items.
     for (const session of sessions) {
       if (session.inboxAsk) visibleIds.add(session.id);
+    }
+    for (const run of orchestrationRuns) {
+      if (["active", "paused"].includes(run.status)) visibleIds.add(run.leadId);
     }
     // Internal workers stay attached to the lead, even while idle between
     // turns. They must not be discarded merely because they have no tab.
@@ -81,32 +168,40 @@ export function useIdleSessionDetach({
       loadedSessionCache.current.delete(sessionId);
     }
     const keepUnseen = liveAgentsEnabled;
-    const idleDetached = sessions.filter(
-      (session) =>
-        !visibleIds.has(session.id) &&
-        !session.busy &&
-        !openingSessionIds.current.has(session.id) &&
-        !(keepUnseen && unseenFinishedRef.current.has(session.id)),
-    );
+    const isRetained = (session: Session) =>
+      visibleIds.has(session.id) ||
+      hasSessionDetachHold(session) ||
+      failedDetach.current.has(session) ||
+      openingSessionIds.current.has(session.id) ||
+      (keepUnseen && unseenFinishedRef.current.has(session.id)) ||
+      skipForgetSessionIds.current.has(session.id);
+    const isNowReferenced = (session: Session) =>
+      tabsRef.current.some((tab) => leafIds(tab.layout).includes(session.id));
+    const idleDetached = sessions.filter((session) => !isRetained(session));
     if (idleDetached.length === 0) return;
+    const detached = new Set<Session>();
     for (const session of idleDetached) {
-      if (skipForgetSessionIds.current.has(session.id)) continue;
-      if (shouldPersistSession(session)) {
-        rememberLoadedSession(loadedSessionCache.current, session);
-      }
+      if (isRetained(session)) continue;
       persistSession(session);
-      for (const harness of sessionChildHarnesses(session)) {
-        void forgetHarnessSession(harness, session.id);
+      if (
+        sessionsRef.current.find((entry) => entry.id === session.id) !==
+          session ||
+        isRetained(session) ||
+        isNowReferenced(session)
+      ) {
+        continue;
       }
+      if (pendingDetach.current.size >= 256) break;
+      pendingDetach.current.add(session);
+      detached.add(session);
     }
+    if (detached.size === 0) return;
     setSessions((prev) =>
       prev.filter(
         (session) =>
-          visibleIds.has(session.id) ||
-          session.busy ||
-          openingSessionIds.current.has(session.id) ||
-          (keepUnseen && unseenFinishedRef.current.has(session.id)) ||
-          skipForgetSessionIds.current.has(session.id),
+          !detached.has(session) ||
+          isRetained(session) ||
+          isNowReferenced(session),
       ),
     );
   }, [
@@ -121,10 +216,11 @@ export function useIdleSessionDetach({
 
   useEffect(() => {
     if (detachTimer.current != null) return;
-    detachTimer.current = window.setTimeout(
-      detachIdleSessions,
-      SESSION_DETACH_DELAY_MS,
-    );
+    const owner = detachOwner.current;
+    if (!owner) return;
+    detachTimer.current = window.setTimeout(() => {
+      if (detachOwner.current === owner) detachIdleSessions();
+    }, SESSION_DETACH_DELAY_MS);
   }, [
     sessions,
     tabs,
@@ -132,11 +228,4 @@ export function useIdleSessionDetach({
     orchestrationRuns,
     detachIdleSessions,
   ]);
-
-  useEffect(
-    () => () => {
-      if (detachTimer.current != null) window.clearTimeout(detachTimer.current);
-    },
-    [],
-  );
 }

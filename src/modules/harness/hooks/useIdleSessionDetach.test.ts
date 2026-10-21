@@ -21,14 +21,8 @@ import type { InboxAskContext } from "../lib/inboxAsk";
 type SessionRecord = Record<string, any>;
 import { useUnseenFinishedSessions } from "./useUnseenFinishedSessions";
 import { liveAgentsFromSessions } from "../lib/liveAgents";
-import {
-  newSession,
-  type Session,
-} from "../lib/session";
-import {
-  newTab,
-  type WorkspaceTab,
-} from "../lib/layout";
+import { newSession, type Session } from "../lib/session";
+import { newTab, type WorkspaceTab } from "../lib/layout";
 import { useIdleSessionDetach } from "./useIdleSessionDetach";
 
 const mocks = vi.hoisted(() => ({
@@ -216,6 +210,248 @@ async function advance(ms = 250) {
 }
 
 describe("useIdleSessionDetach", () => {
+  it.each(["active", "paused"] as const)(
+    "retains an unreferenced idle lead while orchestration is %s",
+    async (status) => {
+      const lead = chat("lead");
+      const workspace = mountWorkspace({
+        sessions: [lead],
+        tabs: [],
+        orchestrationRuns: [run(status)],
+        busySessionIds: new Set(),
+        liveAgentsEnabled: false,
+      });
+      await advance();
+      expect(workspace.snapshot().sessions).toEqual([lead]);
+      expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it("retains a failed cleanup without repeatedly forgetting or caching it", async () => {
+    const session = chat("failed");
+    mocks.forgetHarnessSession.mockRejectedValue(new Error("cleanup failed"));
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([session]);
+    expect(workspace.cache.has("failed")).toBe(false);
+    await advance(1000);
+    expect(mocks.forgetHarnessSession).toHaveBeenCalledExactlyOnceWith(
+      "claude",
+      "failed",
+    );
+  });
+
+  it("does not restore a removed incarnation over a replacement after late cleanup failure", async () => {
+    let reject: (reason: unknown) => void = () => undefined;
+    mocks.forgetHarnessSession.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    const session = chat("same");
+    const replacement = { ...session, busy: true };
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    await advance();
+    workspace.update({ sessions: [replacement] });
+    await act(async () => {
+      reject(new Error("cleanup failed"));
+    });
+    expect(workspace.snapshot().sessions).toEqual([replacement]);
+  });
+
+  it("restores a newly referenced session without forgetting it after a queued view update", async () => {
+    const session = chat("focused");
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    workspace.persistSession.mockImplementation(() =>
+      workspace.update({ tabs: [newTab("focused")] }),
+    );
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([session]);
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+  });
+
+  it("ignores a cached detach timer delivered after the owner is unmounted", async () => {
+    const timer = vi.spyOn(window, "setTimeout");
+    const session = chat("retired");
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    const callback = timer.mock.calls.find((call) => call[1] === 250)?.[0];
+    expect(typeof callback).toBe("function");
+    act(() => root?.unmount());
+    root = undefined;
+    if (typeof callback === "function") act(() => callback());
+    await advance();
+    expect(workspace.persistSession).not.toHaveBeenCalled();
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+    timer.mockRestore();
+  });
+
+  it.each([
+    ["question", { pendingQuestion: { requestId: 7, questions: [] } }],
+    [
+      "approval",
+      {
+        blocks: [
+          {
+            id: "approval",
+            role: "approval",
+            text: "Confirm",
+            approval: { requestId: 7 },
+          },
+        ],
+      },
+    ],
+    [
+      "active queue",
+      {
+        queuedMessages: [{ id: "queued", text: "Next", attachments: [] }],
+        queueStatus: "active",
+      },
+    ],
+    [
+      "paused queue",
+      {
+        queuedMessages: [{ id: "queued", text: "Next", attachments: [] }],
+        queueStatus: "paused",
+      },
+    ],
+    [
+      "resuming queue",
+      {
+        queuedMessages: [{ id: "queued", text: "Next", attachments: [] }],
+        queueStatus: "resuming",
+      },
+    ],
+    ["queue edit", { editingQueuedMessageId: "queued" }],
+    [
+      "handoff",
+      {
+        blocks: [
+          {
+            id: "handoff",
+            role: "handoff",
+            text: "",
+            handoff: { from: "claude", to: "codex", status: "preparing" },
+          },
+        ],
+      },
+    ],
+    [
+      "auto continue",
+      {
+        providerSessionId: "provider-thread",
+        blocks: [
+          {
+            id: "interrupt",
+            role: "system",
+            text: "Turn interrupted when MonoCode quit.",
+          },
+        ],
+      },
+    ],
+  ] satisfies Array<[string, Partial<Session>]>)(
+    "retains an unreferenced idle session with a live %s obligation",
+    async (_reason, patch) => {
+      const held = chat("held", patch);
+      const workspace = mountWorkspace({
+        sessions: [held],
+        tabs: [],
+        orchestrationRuns: [],
+        busySessionIds: new Set(),
+        liveAgentsEnabled: false,
+      });
+      await advance();
+      expect(workspace.snapshot().sessions).toEqual([held]);
+      expect(workspace.persistSession).not.toHaveBeenCalled();
+      expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+      expect(workspace.cache.has("held")).toBe(false);
+    },
+  );
+
+  it("detaches only after a pending question is cleared", async () => {
+    const held = chat("held", {
+      pendingQuestion: { requestId: 7, questions: [] },
+    });
+    const workspace = mountWorkspace({
+      sessions: [held],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    await advance();
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+    workspace.update({ sessions: [{ ...held, pendingQuestion: undefined }] });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([]);
+    expect(mocks.forgetHarnessSession).toHaveBeenCalledExactlyOnceWith(
+      "claude",
+      "held",
+    );
+  });
+
+  it("does not evict an idle session admitted reentrantly during persistence", async () => {
+    const detached = chat("old");
+    const admitted = chat("new");
+    const workspace = mountWorkspace({
+      sessions: [detached],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    workspace.persistSession.mockImplementation(() =>
+      workspace.update({ sessions: [detached, admitted] }),
+    );
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([admitted]);
+    expect(mocks.forgetHarnessSession).toHaveBeenCalledExactlyOnceWith(
+      "claude",
+      "old",
+    );
+  });
+
+  it("does not forget or evict a replacement that becomes busy during persistence", async () => {
+    const detached = chat("same");
+    const replacement = { ...detached, busy: true };
+    const workspace = mountWorkspace({
+      sessions: [detached],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+    });
+    workspace.persistSession.mockImplementation(() =>
+      workspace.update({ sessions: [replacement] }),
+    );
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([replacement]);
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+  });
   it("detaches idle workers when the lead tab closes after the run finishes", async () => {
     const workspace = mountWorkspace();
     workspace.finish();

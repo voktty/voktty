@@ -4,6 +4,7 @@ import {
   isForegroundHarnessSession,
 } from "@/modules/harness/lib/harnessFlush";
 import { ownHarnessWindowCloseSubscription } from "@/modules/harness/lib/harnessWindowCloseSubscription";
+import { ownHarnessUnloadSubscription } from "@/modules/harness/lib/harnessUnloadSubscription";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1075,30 +1076,35 @@ export function HarnessApp({
     registerBuiltinHarnesses();
     if (resumed?.sessions.length) bindResumedSessions(resumed.sessions);
     const stopBridge = startHarnessBridge();
-    const reap = () => {
-      if (isAppQuitting()) return;
-      flushHarnessEvents();
-      void persistQuitState(
-        sessionsRef.current,
-        tabsRef.current,
-        activeTabIdRef.current,
-        projectCwdRef.current,
-        readProjectReturnMemory(),
-        "unload",
-        projectTerminalsRef.current,
-      ).finally(() => {
-        void reapWindowRuntime(
-          sessionsRef.current,
-          tabsRef.current,
-          projectTerminalsRef.current,
-        );
-      });
-    };
-    window.addEventListener("pagehide", reap);
-    window.addEventListener("beforeunload", reap);
+    const unloadSubscription = ownHarnessUnloadSubscription({
+      target: window,
+      isAppQuitting,
+      flush: flushHarnessEvents,
+      getSessions: () => sessionsRef.current,
+      getTabs: () => tabsRef.current,
+      getActiveTabId: () => activeTabIdRef.current,
+      getProjectCwd: () => projectCwdRef.current,
+      getProjectReturnMemory: readProjectReturnMemory,
+      getProjectTerminals: () => projectTerminalsRef.current,
+      persist: (capture) =>
+        persistQuitState(
+          capture.sessions,
+          capture.tabs,
+          capture.activeTabId,
+          capture.projectCwd,
+          capture.projectReturnMemory,
+          "unload",
+          capture.projectTerminals,
+        ),
+      reap: (capture) =>
+        reapWindowRuntime(
+          capture.sessions,
+          capture.tabs,
+          capture.projectTerminals,
+        ),
+    });
     return () => {
-      window.removeEventListener("pagehide", reap);
-      window.removeEventListener("beforeunload", reap);
+      unloadSubscription.release();
       stopBridge();
       harnessEvents.cancelScheduled();
     };

@@ -12,6 +12,7 @@ import type { NativeCommandProvider } from "./nativeCommands";
 import type {
   ApprovalDecision,
   CompactContextInput,
+  HarnessEvent,
   RewindLastTurnInput,
   RewindLastTurnResult,
   SendTurnInput,
@@ -95,32 +96,193 @@ const adapters = new Map<HarnessId, HarnessAdapter>();
  * Resume state stays, so the next prompt respawns instead of starting over.
  */
 export const HARNESS_IDLE_PARK_MS = 5 * 60_000;
-const idleParkTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const MAX_HARNESS_ACTIVITIES = 256;
 
-function cancelIdlePark(sessionId: string): void {
-  const timer = idleParkTimers.get(sessionId);
-  if (timer) clearTimeout(timer);
-  idleParkTimers.delete(sessionId);
+type IdleParkState = {
+  adapter: HarnessAdapter;
+  sessionId: string;
+  active: number;
+  approvals: Set<number>;
+  questions: Set<number>;
+  inputOverflow: boolean;
+  timer?: { handle?: ReturnType<typeof setTimeout> };
+};
+
+const idleParkStates = new Set<IdleParkState>();
+let pendingActivities = 0;
+
+function currentState(adapter: HarnessAdapter, sessionId: string) {
+  for (const state of idleParkStates) {
+    if (state.adapter === adapter && state.sessionId === sessionId)
+      return state;
+  }
 }
 
-function scheduleIdlePark(harness: HarnessId, sessionId: string): void {
-  cancelIdlePark(sessionId);
-  idleParkTimers.set(
-    sessionId,
-    setTimeout(() => {
-      idleParkTimers.delete(sessionId);
-      void stopHarnessSession(harness, sessionId);
-    }, HARNESS_IDLE_PARK_MS),
+function isCurrent(state: IdleParkState): boolean {
+  return (
+    idleParkStates.has(state) &&
+    adapters.get(state.adapter.id) === state.adapter
   );
 }
 
-/** Test seam. */
+function cancelIdlePark(state: IdleParkState): void {
+  const timer = state.timer;
+  state.timer = undefined;
+  if (timer?.handle !== undefined) clearTimeout(timer.handle);
+}
+
+function invalidateIdlePark(adapter: HarnessAdapter, sessionId: string): void {
+  const state = currentState(adapter, sessionId);
+  if (!state) return;
+  idleParkStates.delete(state);
+  cancelIdlePark(state);
+}
+
+function reserveActivity(): () => void {
+  if (pendingActivities >= MAX_HARNESS_ACTIVITIES) {
+    throw new Error("HARNESS_ACTIVITY_CAPACITY");
+  }
+  pendingActivities++;
+  let settled = false;
+  return () => {
+    if (settled) return;
+    settled = true;
+    pendingActivities--;
+  };
+}
+
+function scheduleIdlePark(state: IdleParkState): void {
+  if (
+    !isCurrent(state) ||
+    state.active !== 0 ||
+    state.inputOverflow ||
+    state.approvals.size !== 0 ||
+    state.questions.size !== 0
+  )
+    return;
+  cancelIdlePark(state);
+  const timer: NonNullable<IdleParkState["timer"]> = {};
+  state.timer = timer;
+  timer.handle = setTimeout(() => {
+    if (
+      !isCurrent(state) ||
+      state.timer !== timer ||
+      state.active !== 0 ||
+      state.inputOverflow ||
+      state.approvals.size !== 0 ||
+      state.questions.size !== 0
+    )
+      return;
+    if (!state.adapter.live) {
+      idleParkStates.delete(state);
+      state.timer = undefined;
+      return;
+    }
+    if (pendingActivities >= MAX_HARNESS_ACTIVITIES) {
+      scheduleIdlePark(state);
+      return;
+    }
+    const finish = reserveActivity();
+    idleParkStates.delete(state);
+    state.timer = undefined;
+    void (async () => {
+      try {
+        await state.adapter.stopSession(state.sessionId);
+      } catch {
+        // Automatic parking is best effort, like adapter interrupt cleanup.
+      } finally {
+        finish();
+      }
+    })();
+  }, HARNESS_IDLE_PARK_MS);
+}
+
+function beginActivity(adapter: HarnessAdapter, sessionId: string) {
+  let state = currentState(adapter, sessionId);
+  if (!state && idleParkStates.size >= MAX_HARNESS_ACTIVITIES) {
+    throw new Error("HARNESS_ACTIVITY_CAPACITY");
+  }
+  const release = reserveActivity();
+  if (!state) {
+    state = {
+      adapter,
+      sessionId,
+      active: 0,
+      approvals: new Set(),
+      questions: new Set(),
+      inputOverflow: false,
+    };
+    idleParkStates.add(state);
+  }
+  const captured = state;
+  cancelIdlePark(captured);
+  captured.active++;
+  let settled = false;
+  return {
+    state: captured,
+    finish() {
+      if (settled) return;
+      settled = true;
+      captured.active--;
+      release();
+      scheduleIdlePark(captured);
+    },
+  };
+}
+
+function ownedEvents(
+  state: IdleParkState,
+  onEvent: (event: HarnessEvent) => void,
+) {
+  return (event: HarnessEvent) => {
+    if (isCurrent(state)) {
+      const requested =
+        event.type === "approval.requested" || event.type === "question.asked";
+      const resolved =
+        event.type === "approval.resolved" ||
+        event.type === "question.resolved";
+      if (requested || resolved) {
+        const requests =
+          event.type === "approval.requested" ||
+          event.type === "approval.resolved"
+            ? state.approvals
+            : state.questions;
+        if (requested) {
+          cancelIdlePark(state);
+          if (
+            state.approvals.size + state.questions.size <
+            MAX_HARNESS_ACTIVITIES
+          ) {
+            requests.add(event.requestId);
+          } else if (!requests.has(event.requestId)) {
+            state.inputOverflow = true;
+          }
+        } else {
+          requests.delete(event.requestId);
+          scheduleIdlePark(state);
+        }
+      }
+    }
+    onEvent(event);
+  };
+}
+
+/** Test seam. Outstanding operations keep their admission budget until settlement. */
 export function resetHarnessIdlePark(): void {
-  for (const timer of idleParkTimers.values()) clearTimeout(timer);
-  idleParkTimers.clear();
+  const states = [...idleParkStates];
+  idleParkStates.clear();
+  for (const state of states) cancelIdlePark(state);
 }
 
 export function registerHarness(adapter: HarnessAdapter): void {
+  const previous = adapters.get(adapter.id);
+  if (previous) {
+    for (const state of idleParkStates) {
+      if (state.adapter !== previous) continue;
+      idleParkStates.delete(state);
+      cancelIdlePark(state);
+    }
+  }
   adapters.set(adapter.id, adapter);
 }
 
@@ -153,11 +315,14 @@ export async function sendHarnessTurn(
   }
   assertRemoteAgentSupported(input.harness, input.cwd);
   assertRemoteAttachments(input.attachments, input.cwd);
-  cancelIdlePark(input.sessionId);
+  const activity = beginActivity(adapter, input.sessionId);
   try {
-    await adapter.sendTurn(input);
+    await adapter.sendTurn({
+      ...input,
+      onEvent: ownedEvents(activity.state, input.onEvent),
+    });
   } finally {
-    scheduleIdlePark(input.harness, input.sessionId);
+    activity.finish();
   }
 }
 
@@ -176,11 +341,14 @@ export async function compactHarnessContext(
   if (!adapter.compactContext) {
     throw new Error(`${input.harness} does not support manual compaction`);
   }
-  cancelIdlePark(input.sessionId);
+  const activity = beginActivity(adapter, input.sessionId);
   try {
-    await adapter.compactContext(input);
+    await adapter.compactContext({
+      ...input,
+      onEvent: ownedEvents(activity.state, input.onEvent),
+    });
   } finally {
-    scheduleIdlePark(input.harness, input.sessionId);
+    activity.finish();
   }
 }
 
@@ -204,11 +372,14 @@ export async function rewindHarnessLastTurn(
       `${input.harness} does not support editing the last message`,
     );
   }
-  cancelIdlePark(input.sessionId);
+  const activity = beginActivity(adapter, input.sessionId);
   try {
-    return await adapter.rewindLastTurn(input);
+    return await adapter.rewindLastTurn({
+      ...input,
+      onEvent: ownedEvents(activity.state, input.onEvent),
+    });
   } finally {
-    scheduleIdlePark(input.harness, input.sessionId);
+    activity.finish();
   }
 }
 
@@ -219,8 +390,12 @@ export async function steerHarnessTurn(
   if (!adapter.live) {
     throw new Error(`${input.harness} is not connected yet`);
   }
-  cancelIdlePark(input.sessionId);
-  await adapter.steerTurn(input);
+  const activity = beginActivity(adapter, input.sessionId);
+  try {
+    await adapter.steerTurn(input);
+  } finally {
+    activity.finish();
+  }
 }
 
 export async function cancelHarnessTurn(
@@ -229,9 +404,12 @@ export async function cancelHarnessTurn(
 ): Promise<void> {
   const adapter = getHarness(harness);
   if (!adapter?.live) return;
-  cancelIdlePark(sessionId);
-  await adapter.cancelTurn(sessionId);
-  scheduleIdlePark(harness, sessionId);
+  const activity = beginActivity(adapter, sessionId);
+  try {
+    await adapter.cancelTurn(sessionId);
+  } finally {
+    activity.finish();
+  }
 }
 
 export function respondHarnessApproval(
@@ -240,7 +418,14 @@ export function respondHarnessApproval(
   requestId: number,
   decision: ApprovalDecision,
 ): void {
-  getHarness(harness)?.respondApproval(sessionId, requestId, decision);
+  const adapter = getHarness(harness);
+  if (!adapter) return;
+  const activity = beginActivity(adapter, sessionId);
+  try {
+    adapter.respondApproval(sessionId, requestId, decision);
+  } finally {
+    activity.finish();
+  }
 }
 
 export function respondHarnessQuestion(
@@ -249,7 +434,14 @@ export function respondHarnessQuestion(
   requestId: number,
   reply: UserQuestionReply,
 ): void {
-  getHarness(harness)?.respondQuestion?.(sessionId, requestId, reply);
+  const adapter = getHarness(harness);
+  if (!adapter?.respondQuestion) return;
+  const activity = beginActivity(adapter, sessionId);
+  try {
+    adapter.respondQuestion(sessionId, requestId, reply);
+  } finally {
+    activity.finish();
+  }
 }
 
 export function keepHarnessQuestionOpen(
@@ -257,27 +449,48 @@ export function keepHarnessQuestionOpen(
   sessionId: string,
   requestId: number,
 ): void {
-  getHarness(harness)?.keepQuestionOpen?.(sessionId, requestId);
+  const adapter = getHarness(harness);
+  if (!adapter?.keepQuestionOpen) return;
+  const activity = beginActivity(adapter, sessionId);
+  try {
+    adapter.keepQuestionOpen(sessionId, requestId);
+  } finally {
+    activity.finish();
+  }
 }
 
 export async function stopHarnessSession(
   harness: HarnessId,
   sessionId: string,
 ): Promise<void> {
-  cancelIdlePark(sessionId);
   const adapter = getHarness(harness);
-  if (!adapter?.live) return;
-  await adapter.stopSession(sessionId);
+  if (!adapter) return;
+  if (!adapter.live) {
+    invalidateIdlePark(adapter, sessionId);
+    return;
+  }
+  const finish = reserveActivity();
+  invalidateIdlePark(adapter, sessionId);
+  try {
+    await adapter.stopSession(sessionId);
+  } finally {
+    finish();
+  }
 }
 
 export async function forgetHarnessSession(
   harness: HarnessId,
   sessionId: string,
 ): Promise<void> {
-  cancelIdlePark(sessionId);
   const adapter = getHarness(harness);
   if (!adapter) return;
-  await adapter.forgetSession(sessionId);
+  const finish = reserveActivity();
+  invalidateIdlePark(adapter, sessionId);
+  try {
+    await adapter.forgetSession(sessionId);
+  } finally {
+    finish();
+  }
 }
 
 export function bindHarnessSession(
@@ -290,7 +503,9 @@ export function bindHarnessSession(
   blocks?: Block[],
 ): void {
   const adapter = getHarness(harness);
-  adapter?.bindSession(threadId, providerSessionId, cwd, providerAccountId);
+  if (!adapter) return;
+  invalidateIdlePark(adapter, threadId);
+  adapter.bindSession(threadId, providerSessionId, cwd, providerAccountId);
   if (!blocks || !adapter?.restoreTaskLists) return;
   const lists = blocks.flatMap((block) =>
     block.role === "tasks" && block.taskList ? [block.taskList] : [],
@@ -313,7 +528,11 @@ export async function refreshHarnessCatalogs(
     [...adapters.values()]
       .filter((adapter) => wanted.has(adapter.id))
       .map(async (adapter) => {
-        if (!adapter.refreshCatalog || (!options?.force && hasLiveCatalog(adapter.id))) return;
+        if (
+          !adapter.refreshCatalog ||
+          (!options?.force && hasLiveCatalog(adapter.id))
+        )
+          return;
         await adapter.refreshCatalog().catch((error: unknown) => {
           console.debug(`[voktty] ${adapter.id} catalog`, error);
         });
