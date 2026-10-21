@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "syntax": "A placeholder is {name} where name matches ^[a-z][a-z0-9_]*$. Only the names listed here are replaced; any other {name} left in a deployed file is an error.",
+  "placeholders": [
+    {
+      "name": "project_name",
+      "description": "Human name of the project.",
+      "required": true,
+      "default": null,
+      "source": "Folder name, editable in the setup dialog."
+    },
+    {
+      "name": "project_summary",
+      "description": "One or two sentences on what the project is and who uses it.",
+      "required": false,
+      "default": "Describe the project here in one or two sentences.",
+      "source": "Setup dialog."
+    },
+    {
+      "name": "owner_title",
+      "description": "How the documents refer to the human who decides: product, releases, irreversible actions.",
+      "required": false,
+      "default": "the owner",
+      "source": "Setup dialog."
+    },
+    {
+      "name": "primary_branch",
+      "description": "The integration branch.",
+      "required": false,
+      "default": "main",
+      "source": "Detected from the repository HEAD, editable."
+    },
+    {
+      "name": "verify_commands",
+      "description": "The commands that must pass before work is called done, one per line, as a fenced shell block body.",
+      "required": false,
+      "default": "# Add the type check, lint and test commands of this project here.",
+      "source": "Detected from the project manifest when possible (package.json scripts, Cargo.toml, pyproject.toml, go.mod), editable."
+    },
+    {
+      "name": "language",
+      "description": "BCP 47 tag of the project language: the language agents write project content in (context, plans, tracking, handoffs, cards). Base files stay in English.",
+      "required": true,
+      "default": "en",
+      "source": "Chosen when the folder is set up; defaults to the Voktty interface language."
+    },
+    {
+      "name": "created_at",
+      "description": "ISO 8601 date of the first deployment.",
+      "required": true,
+      "default": null,
+      "source": "Deployment time."
+    },
+    {
+      "name": "kit_version",
+      "description": "Version of the template the project was created from.",
+      "required": true,
+      "default": null,
+      "source": "Template manifest."
+    },
+    {
+      "name": "default_runtime",
+      "description": "Adapter id used by agents that do not choose one. See team/agents.schema.json.",
+      "required": false,
+      "default": "claude-code",
+      "source": "Agent selected in Voktty at deployment."
+    },
+    {
+      "name": "default_model",
+      "description": "Model id for the default runtime. Empty means the runtime's own default.",
+      "required": false,
+      "default": "",
+      "source": "Model selected in Voktty at deployment."
+    }
+  ]
+}

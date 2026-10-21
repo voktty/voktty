@@ -1,0 +1,35 @@
+{
+  "kit": "voktty-workspace-kit",
+  "kitVersion": "{kit_version}",
+  "schema": 1,
+  "project": "{project_name}",
+  "language": "{language}",
+  "createdAt": "{created_at}",
+  "init": "INIT.md",
+  "roster": "team/agents.json",
+  "capture": {
+    "onSessionEnd": true,
+    "beforeCompaction": true,
+    "compactionThresholdPercent": 80,
+    "every": {
+      "turns": 40,
+      "minutes": 0,
+      "commits": 10
+    },
+    "staleAfterCommits": 20
+  },
+  "limits": {
+    "CONTEXT.md": { "maxChars": 4000 },
+    "PROJECT.md": { "maxChars": 12000 },
+    "plans/TRACKING.md": { "maxChars": 15000, "maxUpNext": 20 },
+    "plans/INDEX.md": { "maxChars": 8000 },
+    "continuity/CHANGELOG.md": { "maxChars": 15000 },
+    "continuity/handoffs/": { "maxFiles": 40, "maxAgeDays": 30 }
+  },
+  "archive": {
+    "dir": "archive",
+    "afterDays": 30,
+    "ritual": "weekly"
+  },
+  "runtimeDirs": ["state", "mailbox", "locks", "sessions"]
+}

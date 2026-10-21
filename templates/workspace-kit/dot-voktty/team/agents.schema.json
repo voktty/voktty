@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:voktty:workspace-kit:agents:1",
+  "title": "Voktty Workspace Kit agent roster",
+  "description": "Who the agents of a project are, which runtime and host each one uses and which folders each one owns. Shared through Git and edited from Voktty's agent board. Runtime-neutral: each adapter maps these fields to its own command line or session API. Session ids and live state are per machine and never stored here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "agents"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "host": { "$ref": "#/$defs/host" },
+        "session": { "$ref": "#/$defs/sessionPolicy" },
+        "workspace": { "$ref": "#/$defs/workspacePolicy" }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "forbiddenModels": {
+          "description": "Model id patterns no agent may run on. '*' matches any sequence; matching ignores case. An agent that finds itself on a forbidden model stops and reports instead of working.",
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "heavyTestLock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "$ref": "#/$defs/slug" },
+            "staleAfterMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
+          }
+        },
+        "messages": {
+          "description": "Message kinds agents may send each other. See team/MESSAGING.md.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["task", "verdict", "decision", "blocker", "status", "question"] }
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/agent" }
+    }
+  },
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "projectPath": {
+      "description": "Path relative to the project root, with forward slashes. No '..' segments, no absolute paths. A trailing '/' marks a folder.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+    },
+    "readPath": {
+      "description": "A folder the agent may read besides the project. Relative paths resolve from the project root and may leave it (for example a sibling repository). Voktty asks before granting any folder outside the project.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "adapter": {
+      "description": "Runtime adapter id. Known adapters are maintained by Voktty; 'generic' runs a command the user approved on this machine and talks to it through the file mailbox.",
+      "enum": [
+        "claude-code",
+        "codex",
+        "antigravity",
+        "opencode",
+        "gemini",
+        "cursor",
+        "grok",
+        "pi",
+        "hermes",
+        "generic"
+      ]
+    },
+    "effort": {
+      "description": "Reasoning effort. Adapters map it to the closest level the runtime supports and report the mapping.",
+      "enum": ["low", "medium", "high", "xhigh", "max"]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": { "$ref": "#/$defs/adapter" },
+        "model": {
+          "description": "Model id understood by the adapter. Empty means the runtime's default.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "effort": { "$ref": "#/$defs/effort" },
+        "command": {
+          "description": "Only for the 'generic' adapter: the executable to run. Never executed until the user approves it on this machine.",
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "host": {
+      "description": "Where the agent runs. 'local' is this computer; 'ssh:<name>' is the SSH connection with that name in Voktty. Connection details are never stored here: each machine maps the name to one of its own saved connections.",
+      "type": "string",
+      "pattern": "^(local|ssh:[A-Za-z0-9._-]{1,64})$"
+    },
+    "sessionPolicy": {
+      "description": "'new-per-task' starts a fresh session for every new task (cheaper; the handoff carries the context). 'resume' continues the last session of this agent on this machine.",
+      "enum": ["new-per-task", "resume"]
+    },
+    "workspacePolicy": {
+      "description": "'shared' works in the project checkout. 'worktree' gives the agent its own Git worktree that the orchestrator integrates.",
+      "enum": ["shared", "worktree"]
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "start"],
+      "properties": {
+        "name": { "$ref": "#/$defs/slug" },
+        "role": {
+          "description": "Role file, relative to the team/ folder.",
+          "type": "string",
+          "pattern": "^roles/[a-z0-9-]+\\.md$"
+        },
+        "start": {
+          "description": "'always' opens with the project; 'on-demand' opens when the orchestrator delegates to it.",
+          "enum": ["always", "on-demand"]
+        },
+        "description": { "type": "string", "maxLength": 300 },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "host": { "$ref": "#/$defs/host" },
+        "session": { "$ref": "#/$defs/sessionPolicy" },
+        "workspace": { "$ref": "#/$defs/workspacePolicy" },
+        "workdir": {
+          "description": "Folder the agent starts in, relative to the project root. Defaults to the root.",
+          "$ref": "#/$defs/projectPath"
+        },
+        "owns": {
+          "description": "Paths this agent may change and commit. Owned paths of different agents must not overlap.",
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/projectPath" }
+        },
+        "reads": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/readPath" }
+        }
+      }
+    }
+  }
+}

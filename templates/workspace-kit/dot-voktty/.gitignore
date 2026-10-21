@@ -1,0 +1,5 @@
+# Per-machine runtime state. The rest of .voktty/ belongs in Git.
+/state/
+/mailbox/
+/locks/
+/sessions/

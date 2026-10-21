@@ -1,0 +1,55 @@
+{
+  "$schema": "./agents.schema.json",
+  "version": 1,
+  "defaults": {
+    "runtime": {
+      "adapter": "{default_runtime}",
+      "model": "{default_model}",
+      "effort": "medium"
+    },
+    "host": "local",
+    "session": "new-per-task",
+    "workspace": "shared"
+  },
+  "policies": {
+    "forbiddenModels": [],
+    "heavyTestLock": {
+      "name": "heavy-tests",
+      "staleAfterMinutes": 30
+    },
+    "messages": ["verdict", "decision", "blocker", "task", "status"]
+  },
+  "agents": [
+    {
+      "name": "orchestrator",
+      "role": "roles/orchestrator.md",
+      "start": "always",
+      "description": "Talks with the owner, splits work, reviews and keeps plans, tracking and context up to date. Does not implement.",
+      "runtime": {
+        "effort": "high"
+      },
+      "owns": [
+        ".voktty/"
+      ],
+      "reads": []
+    },
+    {
+      "name": "developer",
+      "role": "roles/developer.md",
+      "start": "on-demand",
+      "description": "Implements and tests the components it owns.",
+      "owns": [
+        "src/"
+      ],
+      "reads": []
+    },
+    {
+      "name": "verifier",
+      "role": "roles/verifier.md",
+      "start": "on-demand",
+      "description": "Independent review, full test runs and release checks. Does not fix what it reviews.",
+      "owns": [],
+      "reads": []
+    }
+  ]
+}
