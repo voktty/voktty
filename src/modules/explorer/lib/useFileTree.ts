@@ -17,6 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { selectDirtyDirectories } from "./dirtyDirectories";
 import { parentPath as pathParent } from "./path";
+import { isRemoteProjectUri, remoteProjectReadDir } from "./remoteProjectDir";
 import {
   isNetworkFilesystemPath,
   listenFsChanged,
@@ -199,7 +200,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
 
   const addWatch = useCallback(
     (path: string) => {
-      if (watchedRef.current.has(path)) return;
+      if (isRemoteProjectUri(path) || watchedRef.current.has(path)) return;
       watchedRef.current.add(path);
       watchAdd([path], workspace);
     },
@@ -216,7 +217,9 @@ export function useFileTree(rootPath: string | null, options?: Options) {
 
   const fetchChildren = useCallback(
     async (path: string): Promise<boolean> => {
-      const isWorkspacePath = isPathInWorkspace(workspace, path);
+      const remoteProject = isRemoteProjectUri(path);
+      const isWorkspacePath =
+        !remoteProject && isPathInWorkspace(workspace, path);
       const requestWorkspace = isWorkspacePath ? workspace : LOCAL_WORKSPACE;
       const requestWorkspaceKey = workspaceScopeKey(requestWorkspace);
       // A space can change before its environment switch finishes. Do not send
@@ -227,8 +230,9 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         setNodes((s) => ({ ...s, [path]: { status: "loading" } }));
       }
       try {
-        const entries =
-          requestWorkspace.kind === "ssh"
+        const entries = remoteProject
+          ? await remoteProjectReadDir(path, showHiddenRef.current)
+          : requestWorkspace.kind === "ssh"
             ? (await remoteReadDir(requestWorkspace, path))
                 .filter(
                   (entry) =>
@@ -348,7 +352,9 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     listingMetadataRef.current.clear();
 
     void (async () => {
+      const remoteRoot = isRemoteProjectUri(rootPath);
       networkRoot =
+        !remoteRoot &&
         workspace.kind === "local" &&
         (isNetworkFilesystemPath(rootPath) ||
           (await invoke<boolean>("fs_is_network_path", {
@@ -361,6 +367,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
       const toWatch = [rootPath, ...restored];
       void fetchChildren(rootPath);
       for (const directory of restored) void fetchChildren(directory);
+      if (remoteRoot) return;
       for (const path of toWatch) watchedRef.current.add(path);
       watchAdd(toWatch, workspace);
     })();
@@ -404,6 +411,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   // their path text alone.
   useEffect(() => {
     if (!rootPath || workspace.kind !== "local") return;
+    if (isRemoteProjectUri(rootPath)) return;
     let disposed = false;
     let polling = false;
     let interval: ReturnType<typeof setInterval> | undefined;

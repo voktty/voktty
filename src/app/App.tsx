@@ -926,6 +926,21 @@ function DesktopApp() {
   const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
   const activeHarnessCwd =
     activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
+  const [harnessFocusCwd, setHarnessFocusCwd] = useState<string | null>(null);
+  // What the explorer and breadcrumb show while the Harness is active: the
+  // folder of the focused surface (terminal or conversation), else its project.
+  const activeHarnessFolder = firstCwd(harnessFocusCwd, activeHarnessCwd);
+  useEffect(() => {
+    const onFocusFolder = (event: Event) => {
+      const cwd = coerceCwd(
+        (event as CustomEvent<{ cwd?: unknown }>).detail?.cwd,
+      );
+      if (cwd !== null) setHarnessFocusCwd(cwd);
+    };
+    window.addEventListener("voktty:harness-focus-folder", onFocusFolder);
+    return () =>
+      window.removeEventListener("voktty:harness-focus-folder", onFocusFolder);
+  }, []);
 
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
@@ -994,8 +1009,8 @@ function DesktopApp() {
 
   const { explorerRoot, explorerTerminalId, inheritedCwdForNewTab } =
     useWorkspaceCwd(
-      activeTab?.kind === "harness" && activeHarnessCwd
-        ? { ...activeTab, cwd: activeHarnessCwd }
+      activeTab?.kind === "harness" && activeHarnessFolder
+        ? { ...activeTab, cwd: activeHarnessFolder }
         : activeTab,
       tabs,
       spaceFallbackRoot,
@@ -1004,7 +1019,7 @@ function DesktopApp() {
 
   const effectiveExplorerRoot =
     activeTab?.kind === "harness"
-      ? activeHarnessCwd || explorerRoot
+      ? activeHarnessFolder || explorerRoot
       : explorerRoot;
   const explorerTerminal =
     explorerTerminalId === null
@@ -3784,7 +3799,7 @@ function DesktopApp() {
   const activeCwd = firstCwd(
     activeTerminalLeafCwd,
     activeTab?.kind === "harness"
-      ? activeHarnessCwd
+      ? activeHarnessFolder
       : firstCwd(
           activeTab && "cwd" in activeTab
             ? (activeTab as { cwd?: unknown }).cwd

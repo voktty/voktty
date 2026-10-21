@@ -63,6 +63,7 @@ import { useGitStatus } from "./lib/useGitStatus";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
+import { isRemoteProjectUri } from "./lib/remoteProjectDir";
 import { nextVisibleRoot } from "./lib/visibleRoot";
 import { useTranslation } from "@/modules/i18n";
 import { isPathInWorkspace } from "@/modules/remote";
@@ -354,8 +355,12 @@ export const FileExplorer = memo(
       tree.renaming !== null || tree.pendingCreate !== null;
 
     const parentPath = rootPath ? pathParent(rootPath) : null;
+    // A remote project's boundary is the project itself; the Harness owns
+    // navigation beyond it.
     const canNavigateToParent =
-      parentPath !== null && parentPath !== rootPath;
+      parentPath !== null &&
+      parentPath !== rootPath &&
+      !isRemoteProjectUri(rootPath ?? "");
 
     const handleNavigateToParent = useCallback(async () => {
       if (!rootPath || !parentPath || parentPath === rootPath) return;

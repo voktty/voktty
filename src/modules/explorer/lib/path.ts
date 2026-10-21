@@ -1,6 +1,17 @@
+const REMOTE_ENVIRONMENT = /^remote:\/\/[^/]+/;
+
 export function parentPath(path: string): string {
   const normalized = path.replace(/\\/g, "/");
   if (!normalized) return normalized;
+
+  // `remote://<environment>/` is the top of another machine; never step above it.
+  const remote = REMOTE_ENVIRONMENT.exec(normalized);
+  if (remote) {
+    const root = `${remote[0]}/`;
+    const below = normalized.slice(remote[0].length).replace(/^\/+|\/+$/g, "");
+    if (!below.includes("/")) return root;
+    return `${remote[0]}/${below.slice(0, below.lastIndexOf("/"))}`;
+  }
 
   const trimmed =
     normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;

@@ -296,6 +296,19 @@ export function focusedFileTab(tab: WorkspaceTab): FilePaneTab | undefined {
   return pane?.files.find((file) => file.id === pane.activeFileId);
 }
 
+/** The folder of whatever the user is working in right now: the focused
+ * terminal or file tab, otherwise the focused conversation. Chrome that mirrors
+ * the working folder (the app explorer and breadcrumb) follows this, so a
+ * terminal that has moved away from the project is not hidden behind it. */
+export function focusedSurfaceCwd(
+  tab: WorkspaceTab,
+  sessions: readonly { id: string; cwd: string }[],
+): string | undefined {
+  const file = focusedFileTab(tab);
+  if (file) return file.cwd || undefined;
+  return sessions.find((session) => session.id === tab.focusedId)?.cwd;
+}
+
 /** Move terminal tabs out of file panes so the two never share a tab strip. */
 export function isolateTerminalPanes(tab: WorkspaceTab): WorkspaceTab {
   const existingTerminals = tab.terminalPanes ?? [];

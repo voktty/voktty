@@ -194,6 +194,7 @@ import {
   findSurfacePane,
   firstLeafId,
   focusedFileTab,
+  focusedSurfaceCwd,
   isFilesystemTab,
   isolateTerminalPanes,
   isTerminalTab,
@@ -4244,6 +4245,21 @@ export function HarnessApp({
       );
     }
   }, [projectCwd]);
+
+  // The app explorer and breadcrumb mirror the surface in use, not only the
+  // project: a terminal that left the project folder is what the user is in.
+  const surfaceCwd =
+    (activeTab ? focusedSurfaceCwd(activeTab, sessions) : undefined) ??
+    sidebarCwd;
+  useEffect(() => {
+    if (surfaceCwd && surfaceCwd !== "~") {
+      window.dispatchEvent(
+        new CustomEvent("voktty:harness-focus-folder", {
+          detail: { cwd: surfaceCwd },
+        }),
+      );
+    }
+  }, [surfaceCwd]);
 
   const lastAttemptedRemoteProjectRef = useRef<string | null>(null);
   const sshConnections = usePreferencesStore((s) => s.sshConnections);

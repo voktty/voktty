@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   closeLeaf,
   editorTabKey,
+  focusedSurfaceCwd,
   isChangesTab,
   isFilesystemTab,
   isReleaseNotesTab,
@@ -173,6 +174,41 @@ describe("openTerminalTab", () => {
     ]);
     expect(extra.path).toBe("repo 2");
     expect(layoutLeaves(next.layout)).toHaveLength(3);
+  });
+});
+
+describe("focusedSurfaceCwd", () => {
+  const sessions = [{ id: "session-a", cwd: "remote://voktty-ssh-a/srv/app" }];
+
+  it("follows the conversation while it has the focus", () => {
+    expect(focusedSurfaceCwd(newTab("session-a"), sessions)).toBe(
+      "remote://voktty-ssh-a/srv/app",
+    );
+  });
+
+  it("follows the focused terminal instead of the conversation's project", () => {
+    const moved = newTerminalFile("remote://voktty-ssh-a/srv/app/pkg");
+    const tab = openTerminalTab(newTab("session-a"), moved);
+    expect(tab.focusedId).toBe(tab.terminalPanes[0]?.id);
+    expect(focusedSurfaceCwd(tab, sessions)).toBe(
+      "remote://voktty-ssh-a/srv/app/pkg",
+    );
+  });
+
+  it("returns to the conversation when it is focused again", () => {
+    const tab = openTerminalTab(
+      newTab("session-a"),
+      newTerminalFile("/elsewhere"),
+    );
+    expect(focusedSurfaceCwd({ ...tab, focusedId: "session-a" }, sessions)).toBe(
+      "remote://voktty-ssh-a/srv/app",
+    );
+  });
+
+  it("has no answer when the focus points at nothing known", () => {
+    expect(
+      focusedSurfaceCwd({ ...newTab("session-a"), focusedId: "gone" }, sessions),
+    ).toBeUndefined();
   });
 });
 
