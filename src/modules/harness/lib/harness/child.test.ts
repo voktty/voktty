@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: { payload: never }) => void>(),
@@ -87,6 +87,510 @@ describe("isCurrentChildExit", () => {
     expect(isCurrentChildExit(undefined, 41)).toBe(false);
     expect(isCurrentChildExit(42, 41)).toBe(false);
     expect(isCurrentChildExit(42, 42)).toBe(true);
+  });
+});
+
+type RawTestHandle = {
+  readonly nativeId: string;
+  readonly logicalSessionId: string;
+  readonly retired: boolean;
+  spawn: (
+    ...args: Parameters<typeof import("./child").spawnChild> extends [
+      string,
+      ...infer Rest,
+    ]
+      ? Rest
+      : never
+  ) => Promise<void>;
+  watch: (
+    line: (line: string) => void,
+    exit: (code: number | null) => void,
+    stderr?: (line: string) => void,
+  ) => () => void;
+  write: (line: string) => Promise<void>;
+  close: () => Promise<void>;
+};
+
+function reserveTestRaw(
+  child: typeof import("./child"),
+  logicalSessionId: string,
+): RawTestHandle {
+  const owned = child as typeof child & {
+    reserveRawChild?: (id: string) => RawTestHandle;
+  };
+  if (owned.reserveRawChild) return owned.reserveRawChild(logicalSessionId);
+  let retired = false;
+  return {
+    nativeId: logicalSessionId,
+    logicalSessionId,
+    get retired() {
+      return retired;
+    },
+    spawn: (command, args, cwd, networkAllowlist, account) =>
+      child.spawnChild(
+        logicalSessionId,
+        command,
+        args,
+        cwd,
+        networkAllowlist,
+        account,
+      ),
+    watch: (line, exit, stderr) => {
+      child.watchChild(logicalSessionId, line, exit, stderr);
+      return () => child.unwatchChild(logicalSessionId);
+    },
+    write: (line) => child.writeChild(logicalSessionId, line),
+    close: () => {
+      retired = true;
+      return child.killChild(logicalSessionId);
+    },
+  };
+}
+
+function emitRaw(event: string, sessionId: string, line: string) {
+  mocks.handlers.get(event)?.({ payload: { sessionId, line } as never });
+}
+
+describe("raw child ownership", () => {
+  it("retries captured retired raw children without touching a later active replacement", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const old = child.reserveRawChild("logical");
+    await old.spawn("agent", [], "/repo");
+    const failure = new Error("native close failed");
+    mocks.invoke.mockRejectedValueOnce(failure);
+    await expect(old.close()).rejects.toBe(failure);
+    const cleanup = deferred<void>();
+    mocks.invoke.mockImplementation((command: string) =>
+      command === "harness_kill" ? cleanup.promise : Promise.resolve(42),
+    );
+    const retry =
+      (
+        child as typeof child & {
+          closeRetiredRawChildren?: (id: string) => Promise<void>;
+        }
+      ).closeRetiredRawChildren ?? (() => Promise.resolve());
+    const closing = retry("logical");
+    expect(
+      mocks.invoke.mock.calls.filter((call) => call[0] === "harness_kill"),
+    ).toHaveLength(2);
+    const replacement = child.reserveRawChild("logical");
+    await replacement.spawn("agent", [], "/repo");
+    expect(replacement.retired).toBe(false);
+    cleanup.resolve(undefined);
+    await closing;
+    expect(
+      mocks.invoke.mock.calls.filter((call) => call[0] === "harness_kill"),
+    ).toEqual([
+      ["harness_kill", { sessionId: old.nativeId }],
+      ["harness_kill", { sessionId: old.nativeId }],
+    ]);
+    mocks.invoke.mockClear();
+    await retry("logical");
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(replacement.retired).toBe(false);
+    await replacement.close();
+  });
+
+  it("has no retired retry tombstone after global exact cleanup succeeds", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const old = child.reserveRawChild("logical");
+    await old.spawn("agent", [], "/repo");
+    mocks.invoke.mockRejectedValueOnce(new Error("native close failed"));
+    await expect(old.close()).rejects.toThrow("native close failed");
+    mocks.invoke.mockResolvedValue(42);
+    await child.killAllChildren();
+    const replacement = child.reserveRawChild("logical");
+    await replacement.spawn("agent", [], "/repo");
+    mocks.invoke.mockClear();
+    const retry =
+      (
+        child as typeof child & {
+          closeRetiredRawChildren?: (id: string) => Promise<void>;
+        }
+      ).closeRetiredRawChildren ?? (() => Promise.resolve());
+    await retry("logical");
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(replacement.retired).toBe(false);
+    await replacement.close();
+  });
+  it("reserves reentrant raw admission before retiring the captured previous owner", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const old = child.reserveRawChild("logical");
+    await old.spawn("agent", [], "/repo");
+    const siblings = Array.from({ length: 254 }, (_, index) =>
+      child.reserveRawChild(`sibling-${index}`),
+    );
+    let nested: import("./child").RawChildHandle | undefined;
+    let admissionError: unknown;
+    let entered = false;
+    mocks.invoke.mockImplementation((command: string) => {
+      if (command === "harness_kill" && !entered) {
+        entered = true;
+        try {
+          nested = child.reserveRawChild("nested");
+        } catch (reason) {
+          admissionError = reason;
+        }
+      }
+      return Promise.resolve(42);
+    });
+    const replacement = child.reserveRawChild("logical");
+    expect(entered).toBe(true);
+    expect(admissionError).toMatchObject({
+      message: "HARNESS_RAW_CHILD_CAPACITY",
+    });
+    expect(nested).toBeUndefined();
+    expect(old.retired).toBe(true);
+    expect(replacement.retired).toBe(false);
+    expect(siblings[0].retired).toBe(false);
+    await old.close();
+    const finalSlot = child.reserveRawChild("final-slot");
+    expect(() => child.reserveRawChild("overflow")).toThrow(
+      "HARNESS_RAW_CHILD_CAPACITY",
+    );
+    await Promise.all(
+      [replacement, finalSlot, ...siblings].map((handle) => handle.close()),
+    );
+  });
+
+  it("keeps the previous owner intact after failed opaque ID allocation", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const old = child.reserveRawChild("logical");
+    await old.spawn("agent", [], "/repo");
+    mocks.invoke.mockClear();
+    const failure = new Error("opaque ID allocation failed");
+    const uuid = vi.spyOn(crypto, "randomUUID").mockImplementationOnce(() => {
+      throw failure;
+    });
+    try {
+      expect(() => child.reserveRawChild("logical")).toThrow(failure);
+      expect(old.retired).toBe(false);
+      expect(mocks.invoke).not.toHaveBeenCalled();
+    } finally {
+      uuid.mockRestore();
+      await old.close();
+    }
+  });
+  it("rejects invalid logical IDs without allocating receipts or invoking native code", async () => {
+    installResolvedListeners();
+    const child = await loadChild();
+    for (const invalid of ["", "\t \u2003", "with\0nul", "x".repeat(257)])
+      expect(() => reserveTestRaw(child, invalid)).toThrow(
+        "Invalid logical Harness session id",
+      );
+    const receipts = Array.from({ length: 256 }, (_, index) =>
+      reserveTestRaw(child, `valid-${index}`),
+    );
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    await Promise.all(receipts.map((receipt) => receipt.close()));
+  });
+  it("bounds retained raw receipts before disturbing an existing owner", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const handles = Array.from({ length: 256 }, (_, index) =>
+      reserveTestRaw(child, `slot-${index}`),
+    );
+    expect(() => reserveTestRaw(child, "slot-0")).toThrow(
+      "HARNESS_RAW_CHILD_CAPACITY",
+    );
+    expect(handles[0].retired).toBe(false);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    await handles[1].close();
+    const replacement = reserveTestRaw(child, "replacement");
+    await Promise.all(handles.map((handle) => handle.close()));
+    await replacement.close();
+    for (let index = 0; index < 260; index += 1)
+      await reserveTestRaw(child, "churn").close();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("snapshots admitted process inputs before asynchronous preparation", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const handle = reserveTestRaw(child, "logical");
+    const args = ["original"];
+    const network = ["original.test"];
+    const account = { provider: "codex" as const, id: "original-account" };
+    const spawning = handle.spawn("agent", args, "/repo", network, account);
+    args[0] = "mutated";
+    network[0] = "mutated.test";
+    account.id = "mutated-account";
+    await spawning;
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "harness_spawn",
+      expect.objectContaining({
+        args: ["original"],
+        networkAllowlist: ["original.test"],
+        account: { provider: "codex", id: "original-account" },
+      }),
+    );
+    await handle.close();
+  });
+
+  it("preserves a pid-known exit until its watcher is installed and delivers once", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    const handle = reserveTestRaw(child, "logical");
+    await handle.spawn("agent", [], "/repo");
+    mocks.handlers.get("harness-exit")?.({
+      payload: { sessionId: handle.nativeId, pid: 42, code: 7 } as never,
+    });
+    const exit = vi.fn();
+    handle.watch(vi.fn(), exit);
+    handle.watch(vi.fn(), exit);
+    mocks.handlers.get("harness-exit")?.({
+      payload: { sessionId: handle.nativeId, pid: 42, code: 7 } as never,
+    });
+    expect(exit).toHaveBeenCalledExactlyOnceWith(7);
+    await handle.close();
+    release();
+  });
+
+  it("retains synchronous native kill failures for exact retry", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const handle = reserveTestRaw(child, "logical");
+    await handle.spawn("agent", [], "/repo");
+    const failure = new Error("synchronous native failure");
+    mocks.invoke.mockImplementationOnce(() => {
+      throw failure;
+    });
+    await expect(handle.close()).rejects.toBe(failure);
+    mocks.invoke.mockResolvedValue(undefined);
+    await handle.close();
+    expect(
+      mocks.invoke.mock.calls.filter((call) => call[0] === "harness_kill"),
+    ).toHaveLength(2);
+  });
+
+  it("buffers both early streams with one combined bound and exact control identity", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    const original = "  logical / 雪  ";
+    const handle = reserveTestRaw(child, original);
+    await handle.spawn("agent", ["argument"], "/repo", ["example.test"], {
+      provider: "codex",
+      id: "account",
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "harness_spawn",
+      expect.objectContaining({
+        sessionId: handle.nativeId,
+        logicalSessionId: original,
+        command: "agent",
+        args: ["argument"],
+        cwd: "/repo",
+        networkAllowlist: ["example.test"],
+        account: { provider: "codex", id: "account" },
+      }),
+    );
+    const received: string[] = [];
+    for (let index = 0; index < 1002; index += 1)
+      emitRaw(
+        index % 2 ? "harness-stderr" : "harness-stdout",
+        handle.nativeId,
+        String(index),
+      );
+    handle.watch(
+      (line) => received.push(line),
+      vi.fn(),
+      (line) => received.push(line),
+    );
+    expect(received).toEqual(
+      Array.from({ length: 1000 }, (_, index) => String(index + 2)),
+    );
+    await handle.close();
+    release();
+  });
+
+  it.each(["retire", "replace", "dispose"])(
+    "revalidates every early frame after reentrant %s",
+    async (action) => {
+      installResolvedListeners();
+      mocks.invoke.mockResolvedValue(42);
+      const child = await loadChild();
+      const release = await child.acquireHarnessBridge();
+      const handle = reserveTestRaw(child, "logical");
+      await handle.spawn("agent", [], "/repo");
+      for (const line of ["first", "second", "third"])
+        emitRaw("harness-stdout", handle.nativeId, line);
+      const first: string[] = [];
+      const second: string[] = [];
+      let closing: Promise<void> | undefined;
+      handle.watch((line) => {
+        first.push(line);
+        if (action === "retire") closing = handle.close();
+        else if (action === "replace")
+          handle.watch((next) => second.push(next), vi.fn());
+        else handle.watch(vi.fn(), vi.fn())();
+      }, vi.fn());
+      expect(first).toEqual(["first"]);
+      if (action === "replace") expect(second).toEqual(["second", "third"]);
+      await (closing ?? handle.close());
+      release();
+    },
+  );
+
+  it("does not let an old watch disposer remove the current watcher", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    const handle = reserveTestRaw(child, "logical");
+    const oldDisposer = handle.watch(vi.fn(), vi.fn());
+    const line = vi.fn();
+    handle.watch(line, vi.fn());
+    oldDisposer();
+    await handle.spawn("agent", [], "/repo");
+    emitRaw("harness-stdout", handle.nativeId, "current");
+    expect(line).toHaveBeenCalledExactlyOnceWith("current");
+    await handle.close();
+    release();
+  });
+
+  it("retires before queued preparation without making any native call", async () => {
+    installResolvedListeners();
+    const child = await loadChild();
+    const handle = reserveTestRaw(child, "logical");
+    const spawning = handle.spawn("agent", [], "/repo");
+    const rejected = expect(spawning).rejects.toThrow("retired");
+    const closing = handle.close();
+    expect(handle.retired).toBe(true);
+    await rejected;
+    await closing;
+    await expect(handle.write("old")).rejects.toThrow("not running");
+    handle.watch(vi.fn(), vi.fn())();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it.each(["ready", "failed"])(
+    "kills again after a retired unabortable native invocation settles: %s",
+    async (outcome) => {
+      installResolvedListeners();
+      const opening = deferred<number>();
+      const entered = deferred<void>();
+      mocks.invoke.mockImplementation((command: string) => {
+        if (command === "harness_spawn") {
+          entered.resolve(undefined);
+          return opening.promise;
+        }
+        return Promise.resolve();
+      });
+      const child = await loadChild();
+      const handle = reserveTestRaw(child, "logical");
+      const spawning = handle.spawn("agent", [], "/repo");
+      const rejected = expect(spawning).rejects.toThrow(
+        outcome === "ready" ? "retired" : "native failed",
+      );
+      await entered.promise;
+      const closing = handle.close();
+      expect(handle.retired).toBe(true);
+      expect(mocks.invoke).toHaveBeenCalledWith("harness_kill", {
+        sessionId: handle.nativeId,
+      });
+      if (outcome === "ready") opening.resolve(42);
+      else opening.reject(new Error("native failed"));
+      await rejected;
+      await closing;
+      expect(
+        mocks.invoke.mock.calls.filter((call) => call[0] === "harness_kill"),
+      ).toEqual([
+        ["harness_kill", { sessionId: handle.nativeId }],
+        ["harness_kill", { sessionId: handle.nativeId }],
+      ]);
+    },
+  );
+
+  it("retains a failed cleanup receipt and retries it after its caller drops the handle", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const handle = reserveTestRaw(child, "logical");
+    await handle.spawn("agent", [], "/repo");
+    const failure = new Error("native close failed");
+    mocks.invoke.mockRejectedValueOnce(failure);
+    await expect(handle.close()).rejects.toBe(failure);
+    const reserved = Array.from({ length: 255 }, (_, index) =>
+      reserveTestRaw(child, `slot-${index}`),
+    );
+    expect(() => reserveTestRaw(child, "overflow")).toThrow(
+      "HARNESS_RAW_CHILD_CAPACITY",
+    );
+    mocks.invoke.mockResolvedValue(undefined);
+    await child.killAllChildren();
+    await flush();
+    expect(
+      mocks.invoke.mock.calls.filter(
+        (call) =>
+          call[0] === "harness_kill" && call[1]?.sessionId === handle.nativeId,
+      ),
+    ).toHaveLength(2);
+    const next = reserveTestRaw(child, "after-cleanup");
+    await next.close();
+    await Promise.all(reserved.map((receipt) => receipt.close()));
+  });
+  it("rejects old physical stdout and stderr on a same-bridge replacement", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    const a = reserveTestRaw(child, "logical");
+    a.watch(vi.fn(), vi.fn(), vi.fn());
+    await a.spawn("agent", [], "/repo");
+    await a.close();
+    const b = reserveTestRaw(child, "logical");
+    const line = vi.fn();
+    const error = vi.fn();
+    b.watch(line, vi.fn(), error);
+    await b.spawn("agent", [], "/repo");
+    const c = reserveTestRaw(child, "sibling");
+    const sibling = vi.fn();
+    c.watch(sibling, vi.fn());
+    await c.spawn("agent", [], "/repo");
+    emitRaw("harness-stdout", a.nativeId, '{"id":1,"result":"retired"}');
+    emitRaw("harness-stderr", a.nativeId, "retired error");
+    emitRaw("harness-stdout", c.nativeId, "sibling");
+    expect(sibling).toHaveBeenCalledExactlyOnceWith("sibling");
+    expect(line).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    await b.close();
+    await c.close();
+    release();
+  });
+
+  it("never redirects retired writes or repeated close to the replacement", async () => {
+    installResolvedListeners();
+    mocks.invoke.mockResolvedValue(42);
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    const a = reserveTestRaw(child, "logical");
+    await a.spawn("agent", [], "/repo");
+    await a.close();
+    const b = reserveTestRaw(child, "logical");
+    await b.spawn("agent", [], "/repo");
+    mocks.invoke.mockClear();
+    await a.write("retired input").catch(() => undefined);
+    await a.close();
+    expect(
+      mocks.invoke.mock.calls.some((call) => call[1]?.sessionId === b.nativeId),
+    ).toBe(false);
+    await b.close();
+    release();
   });
 });
 
@@ -567,6 +1071,91 @@ describe("remote spawnChild", () => {
       cwd: remotePath(environment, root),
     };
   }
+
+  it("raw ownership keeps the exact lease until native kill succeeds", async () => {
+    const f = await admissionFixture();
+    const handle = f.child.reserveRawChild("raw");
+    await handle.spawn("codex", [], f.cwd);
+    const failure = new Error("native agent cleanup failed");
+    mocks.invoke.mockRejectedValueOnce(failure);
+    await expect(handle.close()).rejects.toBe(failure);
+    expect(mocks.closeRemote).not.toHaveBeenCalled();
+    expect(f.remoteSessions.snapshot()[0]).toMatchObject({
+      sessionId: 100,
+      leases: 1,
+    });
+    expect(f.remoteSessions.snapshot()[0].closing).toBeFalsy();
+    mocks.invoke.mockResolvedValue(undefined);
+    await handle.close();
+    expect(mocks.closeRemote).toHaveBeenCalledExactlyOnceWith(100);
+    expect(f.remoteSessions.snapshot()).toEqual([]);
+    f.release();
+  });
+
+  it("raw ownership retries the same helper closer without repeating accepted native kill", async () => {
+    const f = await admissionFixture();
+    const handle = f.child.reserveRawChild("raw");
+    await handle.spawn("codex", [], f.cwd);
+    const failure = new Error("helper close failed");
+    mocks.closeRemote.mockRejectedValueOnce(failure);
+    await expect(handle.close()).rejects.toBe(failure);
+    expect(f.remoteSessions.snapshot()[0]).toMatchObject({
+      sessionId: 100,
+      closing: true,
+      leases: 0,
+    });
+    const blocked = f.child.reserveRawChild("blocked");
+    await expect(blocked.spawn("codex", [], f.cwd)).rejects.toMatchObject({
+      code: "REMOTE_SESSION_ADMISSION_BLOCKED",
+      reason: "cleanup",
+    });
+    await blocked.close();
+    expect(
+      mocks.invoke.mock.calls.filter((call) => call[0] === "harness_spawn"),
+    ).toHaveLength(1);
+    await handle.close();
+    expect(
+      mocks.invoke.mock.calls.filter((call) => call[0] === "harness_kill"),
+    ).toHaveLength(1);
+    expect(mocks.closeRemote.mock.calls).toEqual([[100], [100]]);
+    expect(f.remoteSessions.snapshot()).toEqual([]);
+    f.release();
+  });
+
+  it("raw ownership captures a late helper lease after retirement without agent spawn", async () => {
+    const f = await admissionFixture();
+    const opening = deferred<{
+      session_id: number;
+      architecture: string;
+      workspace_root: string;
+      helper_version: string;
+      capabilities: string[];
+    }>();
+    const entered = deferred<void>();
+    mocks.openRemote.mockImplementationOnce(() => {
+      entered.resolve(undefined);
+      return opening.promise;
+    });
+    const handle = f.child.reserveRawChild("raw");
+    const spawning = handle.spawn("codex", [], f.cwd);
+    const rejected = expect(spawning).rejects.toThrow("retired");
+    await entered.promise;
+    const closing = handle.close();
+    expect(handle.retired).toBe(true);
+    opening.resolve({
+      session_id: 100,
+      architecture: "x86_64",
+      workspace_root: f.key.root,
+      helper_version: "1",
+      capabilities: [],
+    });
+    await rejected;
+    await closing;
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.closeRemote).toHaveBeenCalledExactlyOnceWith(100);
+    expect(f.remoteSessions.snapshot()).toEqual([]);
+    f.release();
+  });
 
   it("does not bypass a live connection-binding rejection through native fallback", async () => {
     const f = await admissionFixture();

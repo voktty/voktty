@@ -1,7 +1,4 @@
-import { invoke as tauriInvoke } from "@tauri-apps/api/core";
-import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { HarnessId } from "@/modules/harness/lib/session";
-import type { RemoteSshConnection } from "@/modules/remote/client";
+import { remoteMachineFor } from "@/modules/connections/model/connections";
 import {
   parseRemotePath,
   relativeWithinProject,
@@ -13,15 +10,22 @@ import {
   remoteSshConnectionForProfile,
   remoteSshConnectionIdForEnvironment,
 } from "@/modules/connections/model/remoteSshProfiles";
+import type { HarnessId } from "@/modules/harness/lib/session";
 import { probeRemoteAgent } from "@/modules/remote/agentProbe";
+import type { RemoteSshConnection } from "@/modules/remote/client";
 import {
   openHeldRemoteSession,
   releaseHeldRemoteSession,
+  remoteSessions,
 } from "@/modules/remote/sessionManager";
-import { isRemoteSessionAdmissionError } from "@/modules/remote/sessionPool";
-import { checkRemoteAgentProbe } from "./remoteAgents";
-import { remoteMachineFor } from "@/modules/connections/model/connections";
+import {
+  isRemoteSessionAdmissionError,
+  type RemoteSessionLease,
+} from "@/modules/remote/sessionPool";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
+import { checkRemoteAgentProbe } from "./remoteAgents";
 
 export interface ChildBackend {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
@@ -135,6 +139,258 @@ export function isCurrentChildExit(
 }
 
 const MAX_BUFFERED = 1000;
+
+export interface RawChildHandle {
+  readonly nativeId: string;
+  readonly logicalSessionId: string;
+  readonly retired: boolean;
+  spawn(
+    command: string,
+    args: string[],
+    cwd: string,
+    networkAllowlist?: string[] | null,
+    account?: { provider: "claude" | "codex"; id: string },
+  ): Promise<void>;
+  watch(
+    onLine: LineHandler,
+    onExit: ExitHandler,
+    onStderr?: LineHandler,
+  ): () => void;
+  write(line: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+type RawWatcher = {
+  line: LineHandler;
+  exit: ExitHandler;
+  stderr?: LineHandler;
+};
+type RawChildOwner = {
+  nativeId: string;
+  logicalSessionId: string;
+  retired: boolean;
+  spawned: boolean;
+  nativeIssued: boolean;
+  nativeSettled: boolean;
+  nativeStopped: boolean;
+  exited: boolean;
+  operation?: Promise<void>;
+  closing?: Promise<void>;
+  cleaned: boolean;
+  lease?: RemoteSessionLease;
+  watcher?: RawWatcher;
+  frames: Array<{ stream: "stdout" | "stderr"; line: string }>;
+  exits: ExitPayload[];
+  pid?: number;
+};
+
+const MAX_RAW_CHILD_RESOURCES = 256;
+const rawChildren = new Map<string, RawChildOwner>();
+const rawLogicalChildren = new Map<string, RawChildOwner>();
+
+function assertRawActive(owner: RawChildOwner): void {
+  if (owner.retired) throw new Error("Harness child was retired.");
+}
+
+function drainRawFrames(owner: RawChildOwner): void {
+  const watcher = owner.watcher;
+  if (!watcher) return;
+  while (!owner.retired && owner.watcher === watcher && owner.frames.length) {
+    const frame = owner.frames.shift();
+    if (!frame) break;
+    if (frame.stream === "stdout") watcher.line(frame.line);
+    else watcher.stderr?.(frame.line);
+  }
+}
+
+function deliverRawLine(
+  owner: RawChildOwner,
+  stream: "stdout" | "stderr",
+  line: string,
+): void {
+  if (owner.retired) return;
+  owner.frames.push({ stream, line });
+  if (owner.frames.length > MAX_BUFFERED)
+    owner.frames.splice(0, owner.frames.length - MAX_BUFFERED);
+  drainRawFrames(owner);
+}
+
+function deliverRawExit(owner: RawChildOwner, event: ExitPayload): void {
+  if (owner.retired || owner.exited || !event.pid || event.pid <= 0) return;
+  if (!owner.pid || !owner.watcher) {
+    owner.exits.push(event);
+    if (owner.exits.length > 8) owner.exits.shift();
+    return;
+  }
+  if (event.pid !== owner.pid) return;
+  owner.pid = undefined;
+  owner.exited = true;
+  owner.exits.length = 0;
+  owner.watcher.exit(event.code);
+}
+
+function drainRawExits(owner: RawChildOwner): void {
+  if (owner.retired || !owner.watcher || !owner.pid) return;
+  const event = owner.exits.find((candidate) => candidate.pid === owner.pid);
+  if (event) deliverRawExit(owner, event);
+}
+
+function invokeRawKill(owner: RawChildOwner): Promise<void> {
+  try {
+    return invoke<void>("harness_kill", { sessionId: owner.nativeId });
+  } catch (reason) {
+    return Promise.reject(reason);
+  }
+}
+
+function closeRawChild(owner: RawChildOwner): Promise<void> {
+  owner.retired = true;
+  owner.watcher = undefined;
+  owner.frames.length = 0;
+  owner.exits.length = 0;
+  if (rawLogicalChildren.get(owner.logicalSessionId) === owner)
+    rawLogicalChildren.delete(owner.logicalSessionId);
+  if (owner.cleaned) return Promise.resolve();
+  if (owner.closing) return owner.closing;
+  let resolveCleanup!: () => void;
+  let rejectCleanup!: (reason: unknown) => void;
+  const closing = new Promise<void>((resolve, reject) => {
+    resolveCleanup = resolve;
+    rejectCleanup = reject;
+  });
+  owner.closing = closing;
+  const pendingInvocation = owner.nativeIssued && !owner.nativeSettled;
+  const initialKill =
+    owner.nativeIssued && !owner.nativeStopped
+      ? invokeRawKill(owner).then(
+          () => ({ ok: true as const }),
+          (error: unknown) => ({ ok: false as const, error }),
+        )
+      : Promise.resolve({ ok: true as const });
+  const cleanup = async () => {
+    const first = await initialKill;
+    await owner.operation?.catch(() => undefined);
+    if (pendingInvocation) {
+      // A kill may precede the unabortable native spawn's admission.
+      await invokeRawKill(owner);
+      owner.nativeStopped = true;
+    } else if (!first.ok) {
+      throw first.error;
+    } else if (owner.nativeIssued) {
+      owner.nativeStopped = true;
+    }
+    if (owner.lease) {
+      if (!owner.lease.releaseAndClose)
+        throw new Error(
+          "Remote helper cleanup acknowledgement is unavailable.",
+        );
+      await owner.lease.releaseAndClose();
+      owner.lease = undefined;
+    }
+    owner.cleaned = true;
+    owner.operation = undefined;
+    owner.pid = undefined;
+    rawChildren.delete(owner.nativeId);
+  };
+  void cleanup().then(resolveCleanup, rejectCleanup);
+  void closing.catch(() => {
+    if (owner.closing === closing) owner.closing = undefined;
+  });
+  return closing;
+}
+
+export function closeRetiredRawChildren(
+  logicalSessionId: string,
+): Promise<void> {
+  const captured = [...rawChildren.values()].filter(
+    (owner) => owner.retired && owner.logicalSessionId === logicalSessionId,
+  );
+  return Promise.all(captured.map((owner) => closeRawChild(owner))).then(
+    () => undefined,
+  );
+}
+
+export function reserveRawChild(logicalSessionId: string): RawChildHandle {
+  if (
+    logicalSessionId.length > 256 ||
+    logicalSessionId.includes("\0") ||
+    !logicalSessionId.trim()
+  )
+    throw new Error("Invalid logical Harness session id");
+  if (rawChildren.size >= MAX_RAW_CHILD_RESOURCES)
+    throw new Error("HARNESS_RAW_CHILD_CAPACITY");
+  const previous = rawLogicalChildren.get(logicalSessionId);
+  const nativeId = `harness-child-${crypto.randomUUID()}`;
+  const owner: RawChildOwner = {
+    nativeId,
+    logicalSessionId,
+    retired: false,
+    spawned: false,
+    nativeIssued: false,
+    nativeSettled: true,
+    nativeStopped: false,
+    exited: false,
+    cleaned: false,
+    frames: [],
+    exits: [],
+  };
+  const handle: RawChildHandle = {
+    nativeId,
+    logicalSessionId,
+    get retired() {
+      return owner.retired;
+    },
+    spawn: (command, args, cwd, networkAllowlist, account) => {
+      if (owner.retired)
+        return Promise.reject(new Error("Harness child was retired."));
+      if (owner.spawned)
+        return Promise.reject(new Error("Harness child was already started."));
+      owner.spawned = true;
+      const capturedArgs = args.slice();
+      const capturedNetwork =
+        networkAllowlist == null ? networkAllowlist : networkAllowlist.slice();
+      const capturedAccount = account ? { ...account } : undefined;
+      const operation = Promise.resolve().then(() =>
+        startChild(
+          nativeId,
+          command,
+          capturedArgs,
+          cwd,
+          capturedNetwork,
+          capturedAccount,
+          logicalSessionId,
+          owner,
+        ),
+      );
+      owner.operation = operation;
+      return operation.catch((reason: unknown) => {
+        void closeRawChild(owner).catch(() => undefined);
+        throw reason;
+      });
+    },
+    watch: (line, exit, stderr) => {
+      if (owner.retired) return () => undefined;
+      const watcher = { line, exit, stderr };
+      owner.watcher = watcher;
+      drainRawFrames(owner);
+      if (owner.watcher === watcher) drainRawExits(owner);
+      return () => {
+        if (owner.watcher === watcher) owner.watcher = undefined;
+      };
+    },
+    write: (line) => {
+      if (owner.retired || !owner.nativeIssued)
+        return Promise.reject(new Error("Harness process is not running"));
+      return invoke<void>("harness_write", { sessionId: nativeId, line });
+    },
+    close: () => closeRawChild(owner),
+  };
+  const frozenHandle = Object.freeze(handle);
+  rawChildren.set(nativeId, owner);
+  rawLogicalChildren.set(logicalSessionId, owner);
+  if (previous) void closeRawChild(previous).catch(() => undefined);
+  return frozenHandle;
+}
 let bridge: Promise<UnlistenFn[]> | null = null;
 let bridgeAttempt: symbol | null = null;
 let users = 0;
@@ -173,6 +429,11 @@ function ensureBridge() {
       listen<LinePayload>("harness-stdout", (event) => {
         if (bridgeAttempt !== attempt) return;
         const { sessionId, line } = event.payload;
+        const raw = rawChildren.get(sessionId);
+        if (raw) {
+          deliverRawLine(raw, "stdout", line);
+          return;
+        }
         const handler = lineHandlers.get(sessionId);
         if (handler) {
           handler(line);
@@ -187,6 +448,11 @@ function ensureBridge() {
       listen<LinePayload>("harness-stderr", (event) => {
         if (bridgeAttempt !== attempt) return;
         const { sessionId, line } = event.payload;
+        const raw = rawChildren.get(sessionId);
+        if (raw) {
+          deliverRawLine(raw, "stderr", line);
+          return;
+        }
         stderrHandlers.get(sessionId)?.(line);
       }),
     ),
@@ -194,6 +460,11 @@ function ensureBridge() {
       listen<ExitPayload>("harness-exit", (event) => {
         if (bridgeAttempt !== attempt) return;
         const { sessionId, code, pid } = event.payload;
+        const raw = rawChildren.get(sessionId);
+        if (raw) {
+          deliverRawExit(raw, event.payload);
+          return;
+        }
         const handler = exitHandlers.get(sessionId);
         if (!handler || pid == null || pid <= 0) return;
         const currentPid = livePid.get(sessionId);
@@ -251,6 +522,11 @@ function ensureBridge() {
 }
 
 function teardownBridge() {
+  for (const owner of rawChildren.values()) {
+    owner.watcher = undefined;
+    owner.frames.length = 0;
+    owner.exits.length = 0;
+  }
   const pending = bridge;
   bridge = null;
   bridgeAttempt = null;
@@ -386,6 +662,7 @@ async function holdRemoteProjectSession(
   environmentId: string,
   connection: RemoteSshConnection,
   cwd: string,
+  owner?: RawChildOwner,
 ): Promise<{
   sessionId: number;
   root: string;
@@ -395,19 +672,31 @@ async function holdRemoteProjectSession(
   const project = remoteProjectForPath(cwd);
   if (!profileId || !project) return null;
   try {
-    const session = await openHeldRemoteSession(
-      "agent",
-      profileId,
-      connection,
-      project.cwd,
-    );
+    let session: RemoteSessionLease["info"];
+    if (owner) {
+      assertRawActive(owner);
+      const lease = await remoteSessions.acquire(
+        { profileId, root: project.cwd },
+        connection,
+      );
+      owner.lease = lease;
+      assertRawActive(owner);
+      session = lease.info;
+    } else {
+      session = await openHeldRemoteSession(
+        "agent",
+        profileId,
+        connection,
+        project.cwd,
+      );
+    }
     return {
       sessionId: session.session_id,
       root: session.workspace_root,
       capabilities: session.capabilities,
     };
   } catch (reason) {
-    if (isRemoteSessionAdmissionError(reason)) throw reason;
+    if (owner?.retired || isRemoteSessionAdmissionError(reason)) throw reason;
     return null;
   }
 }
@@ -421,9 +710,33 @@ export async function spawnChild(
   account?: { provider: "claude" | "codex"; id: string },
   logicalSessionId?: string,
 ): Promise<void> {
-  livePid.delete(sessionId);
-  pendingExit.delete(sessionId);
-  ownedChildren.add(sessionId);
+  return startChild(
+    sessionId,
+    command,
+    args,
+    cwd,
+    networkAllowlist,
+    account,
+    logicalSessionId,
+  );
+}
+
+async function startChild(
+  sessionId: string,
+  command: string,
+  args: string[],
+  cwd: string,
+  networkAllowlist?: string[] | null,
+  account?: { provider: "claude" | "codex"; id: string },
+  logicalSessionId?: string,
+  owner?: RawChildOwner,
+): Promise<void> {
+  if (owner) assertRawActive(owner);
+  else {
+    livePid.delete(sessionId);
+    pendingExit.delete(sessionId);
+    ownedChildren.add(sessionId);
+  }
 
   let remoteConnection: RemoteSshConnection | null = null;
   let remoteCwd: string | null = null;
@@ -435,6 +748,7 @@ export async function spawnChild(
   const remote = parseRemotePath(cwd);
   if (remote) {
     remoteConnection = await resolveRemoteSshConnection(remote.environmentId);
+    if (owner) assertRawActive(owner);
     remoteCwd = remote.hostPath;
     execCommand = cleanRemoteCommand(command);
     // The helper confines the agent to the project root, so only a saved
@@ -447,25 +761,28 @@ export async function spawnChild(
     // is sent relative to the project instead of as the path typed by the user.
     remoteRelativeCwd =
       relativeWithinProject(project.cwd, remote.hostPath) ?? null;
-    releaseRemoteHold(sessionId);
+    if (!owner) releaseRemoteHold(sessionId);
     const held = await holdRemoteProjectSession(
       remote.environmentId,
       remoteConnection,
       cwd,
+      owner,
     );
+    if (owner) assertRawActive(owner);
     if (held) {
-      remoteHolds.set(sessionId, held.sessionId);
+      if (!owner) remoteHolds.set(sessionId, held.sessionId);
       remoteSessionId = held.sessionId;
       remoteRoot = held.root;
       if (held.capabilities.includes("agent.probe")) {
         const probe = await probeRemoteAgent(held.sessionId, execCommand).catch(
           () => undefined,
         );
+        if (owner) assertRawActive(owner);
         if (probe) {
           try {
             checkRemoteAgentProbe(execCommand, probe);
           } catch (error) {
-            releaseRemoteHold(sessionId);
+            if (!owner) releaseRemoteHold(sessionId);
             throw error;
           }
         }
@@ -475,26 +792,44 @@ export async function spawnChild(
 
   let pid: number;
   try {
-    pid = await invoke<number>("harness_spawn", {
-      sessionId,
-      ...(logicalSessionId === undefined ? {} : { logicalSessionId }),
-      command: execCommand,
-      args,
-      cwd,
-      networkAllowlist: networkAllowlist ?? null,
-      account,
-      remoteConnection,
-      remoteCwd,
-      remoteSessionId,
-      remoteRoot,
-      remoteRelativeCwd,
-    });
+    if (owner) {
+      assertRawActive(owner);
+      owner.nativeIssued = true;
+      owner.nativeSettled = false;
+    }
+    try {
+      pid = await invoke<number>("harness_spawn", {
+        sessionId,
+        ...(logicalSessionId === undefined ? {} : { logicalSessionId }),
+        command: execCommand,
+        args,
+        cwd,
+        networkAllowlist: networkAllowlist ?? null,
+        account,
+        remoteConnection,
+        remoteCwd,
+        remoteSessionId,
+        remoteRoot,
+        remoteRelativeCwd,
+      });
+    } finally {
+      if (owner) owner.nativeSettled = true;
+    }
   } catch (error) {
-    releaseRemoteHold(sessionId);
+    if (!owner) releaseRemoteHold(sessionId);
     throw error;
   }
+  if (owner) assertRawActive(owner);
   if (typeof pid !== "number" || pid <= 0) {
-    releaseRemoteHold(sessionId);
+    if (owner) void closeRawChild(owner).catch(() => undefined);
+    else releaseRemoteHold(sessionId);
+    return;
+  }
+  if (owner) {
+    owner.pid = pid;
+    const earlyExit = owner.exits.find((event) => event.pid === pid);
+    owner.exits.length = 0;
+    if (earlyExit) deliverRawExit(owner, earlyExit);
     return;
   }
   livePid.set(sessionId, pid);
@@ -519,6 +854,9 @@ export function killChild(sessionId: string): Promise<void> {
 }
 
 export function killAllChildren(): Promise<void> {
+  const rawCleanup = [...rawChildren.values()].map((owner) =>
+    closeRawChild(owner),
+  );
   for (const transport of sseResources) void retireSse(transport);
   lineHandlers.clear();
   exitHandlers.clear();
@@ -531,7 +869,9 @@ export function killAllChildren(): Promise<void> {
   ownedSse.clear();
   livePid.clear();
   pendingExit.clear();
-  return invoke("harness_kill_all");
+  return Promise.all([invoke<void>("harness_kill_all"), ...rawCleanup]).then(
+    () => undefined,
+  );
 }
 
 export function resolveCursorBinary(): Promise<{ path: string }> {

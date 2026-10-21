@@ -6,11 +6,10 @@ import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { questionPromptTitle, type UserQuestionReply } from "../userQuestion";
 import {
-  killChild,
+  closeRetiredRawChildren,
+  reserveRawChild,
   resolveCodexBinary,
-  spawnChild,
-  unwatchChild,
-  watchChild,
+  type RawChildHandle,
 } from "./child";
 import {
   asRecord,
@@ -70,6 +69,7 @@ type PendingQuestion = {
 const QUESTION_AUTO_RESOLVE_MS = 120_000;
 
 type Live = {
+  child: CodexChild;
   rpc: JsonRpcClient;
   threadId: string;
   cwd: string;
@@ -101,10 +101,7 @@ type Live = {
   openAgentRows: Map<string, string>;
 };
 
-function trackNotificationQueue(
-  live: Live,
-  queued: Promise<void>,
-): void {
+function trackNotificationQueue(live: Live, queued: Promise<void>): void {
   live.notificationQueue = queued;
   void queued.then(() => {
     if (live.notificationQueue === queued) live.notificationQueue = null;
@@ -117,9 +114,63 @@ type Resume = {
   providerAccountId?: string;
 };
 
+type CodexChild = {
+  handle: RawChildHandle;
+  cwd: string;
+  providerAccountId?: string;
+  rpc: JsonRpcClient | null;
+  live: Live | null;
+  opening?: Promise<Live>;
+  cancelled: boolean;
+};
+
 const liveByThread = new Map<string, Live>();
+const childByThread = new Map<string, CodexChild>();
 const resumeByThread = new Map<string, Resume>();
 const cancelledThreads = new Set<string>();
+
+function ownsChild(child: CodexChild): boolean {
+  return (
+    !child.handle.retired &&
+    childByThread.get(child.handle.logicalSessionId) === child
+  );
+}
+
+function isCurrentLive(live: Live): boolean {
+  return (
+    ownsChild(live.child) &&
+    liveByThread.get(live.child.handle.logicalSessionId) === live
+  );
+}
+
+function assertChild(child: CodexChild): void {
+  if (!ownsChild(child)) throw new Error("Codex session was retired");
+}
+
+function canResolveRequest(live: Live): boolean {
+  return (
+    isCurrentLive(live) ||
+    !childByThread.has(live.child.handle.logicalSessionId)
+  );
+}
+
+function closeChild(child: CodexChild, error?: Error): Promise<void> {
+  const id = child.handle.logicalSessionId;
+  if (childByThread.get(id) === child) childByThread.delete(id);
+  const current = child.live;
+  if (current && liveByThread.get(id) === current) liveByThread.delete(id);
+  if (current) {
+    current.muteUpdates = true;
+    if (!error) current.cancelled = true;
+    clearServerRequests(current);
+    if (error) current.turnFailed?.(error);
+    else current.turnDone?.();
+    current.turnDone = null;
+    current.turnFailed = null;
+  }
+  child.rpc?.close(error);
+  return child.handle.close().catch(() => undefined);
+}
 
 let resolveCodexBinaryImpl: () => Promise<{ path: string }> =
   resolveCodexBinary;
@@ -131,20 +182,35 @@ export function setCodexBinaryResolver(
   resolveCodexBinaryImpl = fn;
 }
 
-export async function sendCodexTurn(input: SendTurnInput): Promise<void> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
+function snapshotSessionInput<T extends HarnessSessionInput>(input: T): T {
+  return {
+    ...input,
+    networkAllowlist: input.networkAllowlist
+      ? [...input.networkAllowlist]
+      : input.networkAllowlist,
+    modelSettings: input.modelSettings
+      ? { ...input.modelSettings }
+      : input.modelSettings,
+  };
+}
+
+export async function sendCodexTurn(request: SendTurnInput): Promise<void> {
+  const input = {
+    ...snapshotSessionInput(request),
+    attachments: request.attachments?.map((attachment) => ({ ...attachment })),
+  };
+  const live = await ensureLive(input);
+  assertChild(live.child);
+  if (live.child.cancelled) {
+    live.child.cancelled = false;
+    return;
   }
-  if (cancelledThreads.delete(input.sessionId)) return;
 
   live.onEvent = input.onEvent;
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      if (!isCurrentLive(live)) return;
       live.runtimeMode = input.runtimeMode;
       live.planning = input.intent === "plan";
       live.cancelled = false;
@@ -160,21 +226,21 @@ export async function sendCodexTurn(input: SendTurnInput): Promise<void> {
 }
 
 export async function compactCodexContext(
-  input: CompactContextInput,
+  request: CompactContextInput,
 ): Promise<void> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
+  const input = snapshotSessionInput(request);
+  const live = await ensureLive(input);
+  assertChild(live.child);
+  if (live.child.cancelled) {
+    live.child.cancelled = false;
+    return;
   }
-  if (cancelledThreads.delete(input.sessionId)) return;
 
   live.onEvent = input.onEvent;
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      if (!isCurrentLive(live)) return;
       live.cancelled = false;
       live.muteUpdates = false;
       try {
@@ -188,24 +254,25 @@ export async function compactCodexContext(
 }
 
 export async function rewindCodexLastTurn(
-  input: RewindLastTurnInput,
+  request: RewindLastTurnInput,
 ): Promise<RewindLastTurnResult> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
+  const input = snapshotSessionInput(request);
+  const live = await ensureLive(input);
+  assertChild(live.child);
+  if (live.child.cancelled) {
+    live.child.cancelled = false;
+    return { submitted: false };
   }
-  if (cancelledThreads.delete(input.sessionId)) return { submitted: false };
 
   live.onEvent = input.onEvent;
   await live.turns;
+  assertChild(live.child);
   if (live.activeTurnId) {
     throw new Error("Stop the current turn before editing the last message");
   }
 
   const beforeTurnId = await lastUserTurnId(live, input.providerTurnId);
+  assertChild(live.child);
   await live.rpc.request("thread/revert", {
     threadId: live.threadId,
     beforeTurnId,
@@ -229,6 +296,7 @@ async function lastUserTurnId(
       itemsView: "summary",
     },
   );
+  assertChild(live.child);
   const turns = Array.isArray(page.data) ? page.data : [];
   const userTurn = turns.find((candidate) => {
     const turn = asRecord(candidate);
@@ -265,6 +333,7 @@ export async function steerCodexTurn(input: SteerTurnInput): Promise<void> {
   }
 
   await live.rpc.request("turn/steer", params);
+  assertChild(live.child);
   live.onEvent({ type: "turn.started", providerTurnId: turnId });
 }
 
@@ -313,9 +382,11 @@ export function respondCodexQuestion(
       }),
     )
     .then(() => {
-      if (live.questions.get(requestId) === pending) pending.resolve(reply);
+      if (isCurrentLive(live) && live.questions.get(requestId) === pending)
+        pending.resolve(reply);
     })
     .catch((error: unknown) => {
+      if (!isCurrentLive(live)) return;
       pending.sending = false;
       if (live.questions.get(requestId) !== pending) return;
       live.onEvent({
@@ -325,7 +396,10 @@ export function respondCodexQuestion(
     });
 }
 
-export function keepCodexQuestionOpen(sessionId: string, requestId: number): void {
+export function keepCodexQuestionOpen(
+  sessionId: string,
+  requestId: number,
+): void {
   const live = liveByThread.get(sessionId);
   const pending = live?.questions.get(requestId);
   if (!live || !pending || pending.timer === undefined) return;
@@ -369,9 +443,12 @@ function showNextQuestion(live: Live): void {
 export async function cancelCodexTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
   if (!live) {
-    cancelledThreads.add(sessionId);
+    const child = childByThread.get(sessionId);
+    if (child) child.cancelled = true;
+    else cancelledThreads.add(sessionId);
     return;
   }
+  if (!isCurrentLive(live)) return;
   live.cancelled = true;
   live.muteUpdates = true;
   clearServerRequests(live);
@@ -384,6 +461,7 @@ export async function cancelCodexTurn(sessionId: string): Promise<void> {
       })
       .catch(() => undefined);
   }
+  if (!isCurrentLive(live)) return;
   finishActiveTurn(live, [
     { type: "message.completed" },
     { type: "reasoning.completed" },
@@ -392,18 +470,10 @@ export async function cancelCodexTurn(sessionId: string): Promise<void> {
 
 export async function stopCodexSession(sessionId: string): Promise<void> {
   cancelledThreads.delete(sessionId);
-  const live = liveByThread.get(sessionId);
-  liveByThread.delete(sessionId);
-  if (live) {
-    live.muteUpdates = true;
-    clearServerRequests(live);
-    live.turnDone?.();
-    live.turnDone = null;
-    live.turnFailed = null;
-    live.rpc.close();
-  }
-  unwatchChild(sessionId);
-  await killChild(sessionId).catch(() => undefined);
+  const current = childByThread.get(sessionId);
+  const closing = current ? closeChild(current) : Promise.resolve();
+  const retired = closeRetiredRawChildren(sessionId).catch(() => undefined);
+  await Promise.all([closing, retired]);
 }
 
 export function forgetCodexSession(sessionId: string): Promise<void> {
@@ -426,26 +496,51 @@ export function bindCodexSession(
   });
 }
 
-async function ensureLive(input: HarnessSessionInput): Promise<Live> {
+function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const existing = liveByThread.get(input.sessionId);
-  if (
-    existing &&
-    existing.cwd === input.cwd &&
-    sameProviderAccountId(existing.providerAccountId, input.providerAccountId)
-  ) {
+  const previous = childByThread.get(input.sessionId);
+  const matching =
+    previous &&
+    ownsChild(previous) &&
+    previous.cwd === input.cwd &&
+    sameProviderAccountId(previous.providerAccountId, input.providerAccountId);
+  if (matching && existing && isCurrentLive(existing)) {
     existing.onEvent = input.onEvent;
-    return existing;
+    return Promise.resolve(existing);
   }
-  if (existing) {
+  if (matching && previous.opening) return previous.opening;
+
+  const handle = reserveRawChild(input.sessionId);
+  if (handle.retired) throw new Error("Codex session was retired");
+  const child: CodexChild = {
+    handle,
+    cwd: input.cwd,
+    providerAccountId: input.providerAccountId,
+    rpc: null,
+    live: null,
+    cancelled: cancelledThreads.delete(input.sessionId),
+  };
+  childByThread.set(input.sessionId, child);
+  if (previous) {
     if (
-      existing.cwd !== input.cwd ||
-      !sameProviderAccountId(existing.providerAccountId, input.providerAccountId)
+      previous.cwd !== input.cwd ||
+      !sameProviderAccountId(
+        previous.providerAccountId,
+        input.providerAccountId,
+      )
     ) {
       resumeByThread.delete(input.sessionId);
     }
-    await stopCodexSession(input.sessionId);
+    void closeChild(previous);
   }
+  child.opening = startLive(input, child);
+  return child.opening;
+}
 
+async function startLive(
+  input: HarnessSessionInput,
+  child: CodexChild,
+): Promise<Live> {
   const resume = resumeByThread.get(input.sessionId);
   const canResume =
     resume != null &&
@@ -459,96 +554,105 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     resumeByThread.delete(input.sessionId);
   }
 
-  const isRemote = isRemoteProjectPath(input.cwd);
-  const { path } = isRemote
-    ? { path: "codex" }
-    : await resolveCodexBinaryImpl();
-  const liveRef: { current: Live | null } = { current: null };
-
-  const rpc = new JsonRpcClient(
-    input.sessionId,
-    {
-      onNotification: (method, params) => {
-        const live = liveRef.current;
-        if (!live || live.muteUpdates) return;
-        if (live.notificationQueue) {
-          const turnGeneration = live.turnGeneration;
-          const queued = live.notificationQueue
-            .catch(() => undefined)
-            .then(() => {
-              if (
-                live.muteUpdates ||
-                live.cancelled ||
-                turnGeneration !== live.turnGeneration
-              ) {
-                return;
-              }
-              return handleNotification(live, method, params);
-            });
-          trackNotificationQueue(live, queued.catch(() => undefined));
-          return;
-        }
-        const result = handleNotification(live, method, params);
-        if (!result) return;
-        trackNotificationQueue(live, result.catch(() => undefined));
-      },
-      onRequest: (id, method, params) => {
-        const live = liveRef.current;
-        // The external clock can be requested before thread/start or resume
-        // returns, so it must not depend on the live session being bound.
-        const response =
-          method === "currentTime/read"
-            ? rpc.respond(id, { currentTimeAt: Math.floor(Date.now() / 1000) })
-            : live
-              ? handleServerRequest(live, id, method, params)
-              : undefined;
-        void response?.catch((error: unknown) => {
-          if (!live?.muteUpdates)
-            (live?.onEvent ?? input.onEvent)({
-              type: "session.error",
-              message: error instanceof Error ? error.message : String(error),
-            });
-        });
-      },
-    },
-    { includeJsonrpc: false, label: "codex" },
-  );
-
-  let lastStderr = "";
-  watchChild(
-    input.sessionId,
-    (line) => rpc.pushLine(line),
-    (code) => {
-      const exitError = lastStderr.trim() || "Codex app-server exited";
-      rpc.close(new Error(exitError));
-      liveByThread.delete(input.sessionId);
-      input.onEvent({ type: "session.ended", code });
-      const live = liveRef.current;
-      live?.turnFailed?.(new Error(exitError));
-      if (live) {
-        clearServerRequests(live);
-        live.turnDone = null;
-        live.turnFailed = null;
-      }
-    },
-    (stderrLine) => {
-      lastStderr = stderrLine;
-    },
-  );
-
-  await spawnChild(
-    input.sessionId,
-    path,
-    ["app-server"],
-    input.cwd,
-    input.networkAllowlist,
-    {
-      provider: "codex",
-      id: input.providerAccountId ?? "default",
-    },
-  );
-
   try {
+    const isRemote = isRemoteProjectPath(input.cwd);
+    const { path } = isRemote
+      ? { path: "codex" }
+      : await resolveCodexBinaryImpl();
+    assertChild(child);
+    const liveRef: { current: Live | null } = { current: null };
+
+    const rpc = new JsonRpcClient(
+      child.handle.nativeId,
+      {
+        onNotification: (method, params) => {
+          const live = liveRef.current;
+          if (!ownsChild(child) || !live || live.muteUpdates) return;
+          if (live.notificationQueue) {
+            const turnGeneration = live.turnGeneration;
+            const queued = live.notificationQueue
+              .catch(() => undefined)
+              .then(() => {
+                if (
+                  !ownsChild(child) ||
+                  live.muteUpdates ||
+                  live.cancelled ||
+                  turnGeneration !== live.turnGeneration
+                ) {
+                  return;
+                }
+                return handleNotification(live, method, params);
+              });
+            trackNotificationQueue(
+              live,
+              queued.catch(() => undefined),
+            );
+            return;
+          }
+          const result = handleNotification(live, method, params);
+          if (!result) return;
+          trackNotificationQueue(
+            live,
+            result.catch(() => undefined),
+          );
+        },
+        onRequest: (id, method, params) => {
+          if (!ownsChild(child)) return;
+          const live = liveRef.current;
+          // The external clock can be requested before thread/start or resume
+          // returns, so it must not depend on the live session being bound.
+          const response =
+            method === "currentTime/read"
+              ? rpc.respond(id, {
+                  currentTimeAt: Math.floor(Date.now() / 1000),
+                })
+              : live
+                ? handleServerRequest(live, id, method, params)
+                : undefined;
+          void response?.catch((error: unknown) => {
+            if (ownsChild(child) && !live?.muteUpdates)
+              (live?.onEvent ?? input.onEvent)({
+                type: "session.error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+          });
+        },
+      },
+      { includeJsonrpc: false, label: "codex", write: child.handle.write },
+    );
+    child.rpc = rpc;
+
+    let lastStderr = "";
+    child.handle.watch(
+      (line) => {
+        if (ownsChild(child)) rpc.pushLine(line);
+      },
+      (code) => {
+        if (!ownsChild(child)) return;
+        const exitError = new Error(
+          lastStderr.trim() || "Codex app-server exited",
+        );
+        const emit = liveRef.current?.onEvent ?? input.onEvent;
+        void closeChild(child, exitError);
+        emit({ type: "session.ended", code });
+      },
+      (stderrLine) => {
+        if (ownsChild(child)) lastStderr = stderrLine;
+      },
+    );
+
+    await child.handle.spawn(
+      path,
+      ["app-server"],
+      input.cwd,
+      input.networkAllowlist,
+      {
+        provider: "codex",
+        id: input.providerAccountId ?? "default",
+      },
+    );
+
+    assertChild(child);
     await rpc.request("initialize", {
       clientInfo: {
         name: "voktty",
@@ -561,7 +665,9 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
         experimentalApi: true,
       },
     });
+    assertChild(child);
     await rpc.notify("initialized", undefined);
+    assertChild(child);
 
     const model = nativeModelId(input.model);
     const serviceTier = input.modelSettings?.serviceTier;
@@ -585,9 +691,11 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
             }),
           },
         );
+        assertChild(child);
         threadId = opened.thread?.id ?? resume.threadId;
         didResume = true;
       } catch (error) {
+        assertChild(child);
         if (!isRecoverableThreadResumeError(error)) throw error;
         threadId = undefined;
       }
@@ -603,6 +711,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
           serviceTier,
         }),
       );
+      assertChild(child);
       threadId = opened.thread?.id?.trim();
     }
 
@@ -612,6 +721,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     void effort;
 
     const live: Live = {
+      child,
       rpc,
       threadId,
       cwd: input.cwd,
@@ -640,6 +750,8 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       pendingSubagent: new Map(),
       openAgentRows: new Map(),
     };
+    assertChild(child);
+    child.live = live;
     liveRef.current = live;
     liveByThread.set(input.sessionId, live);
     resumeByThread.set(input.sessionId, {
@@ -651,11 +763,15 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       type: "session.providerBound",
       providerSessionId: threadId,
     });
+    assertChild(child);
     live.onEvent({ type: "session.started" });
+    assertChild(child);
     return live;
   } catch (error) {
-    rpc.close(error instanceof Error ? error : new Error(String(error)));
-    await stopCodexSession(input.sessionId);
+    await closeChild(
+      child,
+      error instanceof Error ? error : new Error(String(error)),
+    );
     throw error;
   }
 }
@@ -690,6 +806,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     live.turnDone = resolve;
     live.turnFailed = reject;
   });
+  void turnPromise.catch(() => undefined);
   settlePendingTurn(live);
 
   try {
@@ -697,7 +814,9 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
       "turn/start",
       params,
     );
+    if (!isCurrentLive(live) || live.cancelled) return;
     input.onAccepted?.();
+    if (!isCurrentLive(live)) return;
     const turnId = response.turn?.id ?? live.activeTurnId;
     // turn/completed can arrive before turn/start returns; don't resurrect a
     // finished turn's id after finishActiveTurn cleared activeTurnId.
@@ -709,6 +828,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     await turnPromise;
   } catch (error) {
     if (live.cancelled) return;
+    if (!isCurrentLive(live)) throw error;
     live.onEvent({
       type: "session.error",
       message: error instanceof Error ? error.message : String(error),
@@ -728,12 +848,14 @@ async function runCompaction(live: Live): Promise<void> {
     live.turnDone = resolve;
     live.turnFailed = reject;
   });
+  void turnPromise.catch(() => undefined);
   settlePendingTurn(live);
 
   try {
     await live.rpc.request("thread/compact/start", {
       threadId: live.threadId,
     });
+    if (!isCurrentLive(live)) return;
     settlePendingTurn(live);
     await turnPromise;
   } finally {
@@ -747,6 +869,7 @@ function handleNotification(
   method: string,
   params: unknown,
 ): void | Promise<void> {
+  if (!isCurrentLive(live)) return;
   if (method === "serverRequest/resolved") {
     const rec = asRecord(params);
     if (rec?.threadId !== live.threadId) return;
@@ -831,6 +954,7 @@ function handleNotification(
     }
   }
   const finish = () => {
+    if (!isCurrentLive(live)) return;
     settleSubagentRows(live, rec);
     if (mapped.activeTurnId !== undefined) {
       live.activeTurnId = mapped.activeTurnId;
@@ -1006,6 +1130,7 @@ function showCodexAsyncQuestion(
   });
   showNextQuestion(live);
   void outcome.then((reply) => {
+    if (!canResolveRequest(live)) return;
     live.onEvent({
       type: "question.resolved",
       requestId: uiId,
@@ -1031,6 +1156,7 @@ async function materializeGeneratedImage(
       name: event.name,
     });
     if (
+      !isCurrentLive(live) ||
       live.cancelled ||
       live.muteUpdates ||
       turnGeneration !== live.turnGeneration
@@ -1049,6 +1175,7 @@ async function materializeGeneratedImage(
     });
   } catch (cause) {
     if (
+      !isCurrentLive(live) ||
       live.cancelled ||
       live.muteUpdates ||
       turnGeneration !== live.turnGeneration
@@ -1213,6 +1340,7 @@ async function handleServerRequest(
     });
     showNextQuestion(live);
     const reply = await outcome;
+    if (!canResolveRequest(live)) return;
     live.onEvent({
       type: "question.resolved",
       requestId: uiId,
@@ -1254,6 +1382,7 @@ async function handleServerRequest(
       title: confirmation.title,
     });
     const decision = await pending;
+    if (!canResolveRequest(live)) return;
     live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
     if (decision !== "cancelled")
       await live.rpc.respond(id, {
@@ -1310,6 +1439,7 @@ async function handleServerRequest(
       const pending = waitApproval(live, uiId, id, mapped.kind);
       live.onEvent(mapped.event);
       const decision = await pending;
+      if (!canResolveRequest(live)) return;
       live.onEvent({
         type: "approval.resolved",
         requestId: uiId,
@@ -1347,6 +1477,7 @@ async function handleServerRequest(
   const pending = waitApproval(live, uiId, id, mapped.kind);
   live.onEvent(mapped.event);
   const decision = await pending;
+  if (!canResolveRequest(live)) return;
   live.onEvent({
     type: "approval.resolved",
     requestId: uiId,
@@ -1388,6 +1519,9 @@ function autoApproval(
 
 /** Exported for tests. */
 export function __codexTestReset(): void {
+  const captured = [...childByThread.values()];
+  for (const child of captured) void closeChild(child);
+  childByThread.clear();
   liveByThread.clear();
   resumeByThread.clear();
   cancelledThreads.clear();

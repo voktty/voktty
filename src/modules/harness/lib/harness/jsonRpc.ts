@@ -29,6 +29,7 @@ export type JsonRpcClientOptions = {
   /** Include `"jsonrpc":"2.0"` on outbound messages. Default true (ACP). Codex omits it. */
   includeJsonrpc?: boolean;
   label?: string;
+  write?: (line: string) => Promise<void>;
 };
 
 /**
@@ -41,6 +42,7 @@ export class JsonRpcClient {
   private closed = false;
   private readonly includeJsonrpc: boolean;
   private readonly label: string;
+  private readonly write: (line: string) => Promise<void>;
 
   constructor(
     private readonly sessionId: string,
@@ -49,6 +51,7 @@ export class JsonRpcClient {
   ) {
     this.includeJsonrpc = options.includeJsonrpc !== false;
     this.label = options.label ?? "rpc";
+    this.write = options.write ?? ((line) => writeChild(sessionId, line));
   }
 
   pushLine(line: string) {
@@ -115,6 +118,8 @@ export class JsonRpcClient {
         },
       });
     });
+    // Cancellation can reject the response before an admitted write settles.
+    void response.catch(() => undefined);
     try {
       await this.send({
         ...(this.includeJsonrpc ? { jsonrpc: "2.0" } : {}),
@@ -163,7 +168,7 @@ export class JsonRpcClient {
   }
 
   private async send(payload: object): Promise<void> {
-    await writeChild(this.sessionId, JSON.stringify(payload));
+    await this.write(JSON.stringify(payload));
   }
 
   private handle(msg: JsonRpcMessage) {

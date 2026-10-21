@@ -1,10 +1,9 @@
 import { modelsFor } from "../models";
 import {
-  killChild,
+  closeRetiredRawChildren,
+  reserveRawChild,
   resolveCodexBinary,
-  spawnChild,
-  unwatchChild,
-  watchChild,
+  type RawChildHandle,
 } from "./child";
 import {
   asRecord,
@@ -23,6 +22,9 @@ const TEXT_MODEL = "gpt-6-luna";
 const TEXT_EFFORT = "low";
 
 type LiveText = {
+  handle: RawChildHandle;
+  epoch: number;
+  opening?: Promise<LiveText>;
   rpc: JsonRpcClient;
   cwd: string;
   providerAccountId?: string;
@@ -37,7 +39,26 @@ type LiveText = {
 };
 
 let live: LiveText | null = null;
+let opening: LiveText | null = null;
+let epoch = 0;
 let turns: Promise<void> = Promise.resolve();
+
+function isCurrent(session: LiveText): boolean {
+  return (
+    session.epoch === epoch &&
+    !session.closed &&
+    !session.handle.retired &&
+    (live === session || opening === session)
+  );
+}
+
+function assertEpoch(expected: number): void {
+  if (expected !== epoch) throw new Error("Codex text generation was retired");
+}
+
+function assertCurrent(session: LiveText): void {
+  if (!isCurrent(session)) throw new Error("Codex text generation was retired");
+}
 
 function pickTextModel(): string {
   const models = modelsFor("codex");
@@ -60,16 +81,26 @@ function pickTextEffort(modelId: string): string {
 }
 
 export async function stopCodexTextPrompt(): Promise<void> {
-  await dropLive();
+  const current = live;
+  const pending = opening;
+  epoch += 1;
+  turns = Promise.resolve();
+  const closing = current ? dropLive(current) : Promise.resolve();
+  const starting =
+    pending && pending !== current ? dropLive(pending) : Promise.resolve();
+  const retired = closeRetiredRawChildren(TEXT_CHILD_ID).catch(() => undefined);
+  await Promise.all([closing, starting, retired]);
 }
 
 /** Start the shared Codex app-server in the background so the first prompt is fast. */
 export function warmupCodexText(cwd: string): Promise<void> {
   if (!cwd || cwd === "~") return Promise.resolve();
+  const expected = epoch;
   const run = turns
     .catch(() => undefined)
     .then(async () => {
-      await ensureLive(cwd);
+      assertEpoch(expected);
+      await ensureLive(cwd, undefined, undefined, expected);
     });
   turns = run.then(
     () => undefined,
@@ -88,7 +119,14 @@ export async function runCodexTextPrompt(input: {
   model?: string;
   signal?: AbortSignal;
 }): Promise<string> {
-  const run = turns.catch(() => undefined).then(() => promptOnLive(input));
+  const captured = { ...input };
+  const expected = epoch;
+  const run = turns
+    .catch(() => undefined)
+    .then(() => {
+      assertEpoch(expected);
+      return promptOnLive(captured, expected);
+    });
   turns = run.then(
     () => undefined,
     () => undefined,
@@ -96,25 +134,31 @@ export async function runCodexTextPrompt(input: {
   return run;
 }
 
-async function promptOnLive(input: {
-  cwd: string;
-  providerAccountId?: string;
-  prompt: string;
-  timeoutMs?: number;
-  model?: string;
-  signal?: AbortSignal;
-}): Promise<string> {
+async function promptOnLive(
+  input: {
+    cwd: string;
+    providerAccountId?: string;
+    prompt: string;
+    timeoutMs?: number;
+    model?: string;
+    signal?: AbortSignal;
+  },
+  expected: number,
+): Promise<string> {
   input.signal?.throwIfAborted();
   const session = await ensureLive(
     input.cwd,
     input.providerAccountId,
     input.model,
+    expected,
   );
+  assertCurrent(session);
   input.signal?.throwIfAborted();
   session.output = "";
   session.collecting = true;
   const timeoutMs = input.timeoutMs ?? REQUEST_TIMEOUT_MS;
   let abortHandler: (() => void) | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const abortPromise = input.signal
     ? new Promise<never>((_, reject) => {
         const cancel = () => {
@@ -126,12 +170,14 @@ async function promptOnLive(input: {
         if (input.signal!.aborted) cancel();
       })
     : null;
+  void abortPromise?.catch(() => undefined);
 
   try {
     const turnPromise = new Promise<void>((resolve, reject) => {
       session.turnDone = resolve;
       session.turnFailed = reject;
     });
+    void turnPromise.catch(() => undefined);
 
     await session.rpc.request(
       "turn/start",
@@ -144,11 +190,12 @@ async function promptOnLive(input: {
       }),
       timeoutMs,
     );
+    assertCurrent(session);
 
     await Promise.race([
       turnPromise,
       new Promise<void>((_, reject) => {
-        setTimeout(
+        timeout = setTimeout(
           () => reject(new Error("Codex text generation timed out")),
           timeoutMs,
         );
@@ -156,79 +203,103 @@ async function promptOnLive(input: {
       ...(abortPromise ? [abortPromise] : []),
     ]);
 
+    assertCurrent(session);
     return session.output;
   } catch (error) {
-    await session.rpc
-      .request("turn/interrupt", { threadId: session.threadId })
-      .catch(() => undefined);
-    if (session.closed) await dropLive();
+    if (isCurrent(session)) {
+      await session.rpc
+        .request("turn/interrupt", { threadId: session.threadId })
+        .catch(() => undefined);
+    }
     throw error;
   } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
     if (abortHandler && input.signal) {
       input.signal.removeEventListener("abort", abortHandler);
     }
     session.collecting = false;
     session.turnDone = null;
     session.turnFailed = null;
-    await dropLive();
+    await dropLive(session);
   }
 }
 
 async function ensureLive(
   cwd: string,
-  providerAccountId?: string,
-  requestedModel?: string,
+  providerAccountId: string | undefined,
+  requestedModel: string | undefined,
+  expected: number,
 ): Promise<LiveText> {
+  assertEpoch(expected);
   const model = requestedModel ?? pickTextModel();
   const effort = pickTextEffort(model);
-  if (live && !live.closed) {
+  const current = live;
+  if (current && isCurrent(current)) {
     if (
-      live.cwd === cwd &&
-      live.model === model &&
-      live.effort === effort &&
-      live.providerAccountId === providerAccountId
+      current.cwd === cwd &&
+      current.model === model &&
+      current.effort === effort &&
+      current.providerAccountId === providerAccountId
     ) {
-      return live;
+      return current;
     }
-    if (live.providerAccountId !== providerAccountId) {
-      await dropLive();
-      return startLive(cwd, providerAccountId, model);
-    }
-    try {
-      live.model = model;
-      live.effort = effort;
-      await openThread(live, cwd);
-      return live;
-    } catch {
-      await dropLive();
+    if (current.providerAccountId === providerAccountId) {
+      try {
+        current.model = model;
+        current.effort = effort;
+        await openThread(current, cwd);
+        assertCurrent(current);
+        return current;
+      } catch (error) {
+        if (!isCurrent(current)) throw error;
+      }
     }
   }
-  return startLive(cwd, providerAccountId, model);
+  const pending = opening;
+  if (
+    pending &&
+    isCurrent(pending) &&
+    pending.cwd === cwd &&
+    pending.model === model &&
+    pending.providerAccountId === providerAccountId &&
+    pending.opening
+  ) {
+    return pending.opening;
+  }
+  return startLive(cwd, providerAccountId, model, expected);
 }
 
-async function startLive(
+function startLive(
   cwd: string,
-  providerAccountId?: string,
-  requestedModel?: string,
+  providerAccountId: string | undefined,
+  model: string,
+  expected: number,
 ): Promise<LiveText> {
-  await dropLive();
-  const { path } = await resolveCodexBinary();
+  assertEpoch(expected);
+  const handle = reserveRawChild(TEXT_CHILD_ID);
+  if (handle.retired) throw new Error("Codex text generation was retired");
+  const previous = live;
+  const previousOpening = opening;
   const sessionRef: { session: LiveText | null } = { session: null };
   const rpc = new JsonRpcClient(
-    TEXT_CHILD_ID,
+    handle.nativeId,
     {
       onNotification: (method, params) => {
-        handleNotification(sessionRef.session, method, params);
+        const session = sessionRef.session;
+        if (session && isCurrent(session))
+          handleNotification(session, method, params);
       },
       onRequest: (id, method, params) => {
-        void handleServerRequest(rpc, id, method, params);
+        const session = sessionRef.session;
+        if (session && isCurrent(session))
+          void handleServerRequest(rpc, id, method, params);
       },
     },
-    { includeJsonrpc: false, label: "codex-text" },
+    { includeJsonrpc: false, label: "codex-text", write: handle.write },
   );
-
-  const model = requestedModel ?? pickTextModel();
   const session: LiveText = {
+    handle,
+    epoch: expected,
     rpc,
     cwd,
     providerAccountId,
@@ -242,25 +313,33 @@ async function startLive(
     turnFailed: null,
   };
   sessionRef.session = session;
+  opening = session;
+  if (previous) void dropLive(previous);
+  if (previousOpening && previousOpening !== previous)
+    void dropLive(previousOpening);
+  session.opening = initializeText(session);
+  return session.opening;
+}
 
-  watchChild(
-    TEXT_CHILD_ID,
-    (line) => rpc.pushLine(line),
-    () => {
-      session.closed = true;
-      if (live === session) live = null;
-      session.turnFailed?.(new Error("Codex text generator exited"));
-      session.turnDone = null;
-      session.turnFailed = null;
-      rpc.close(new Error("Codex text generator exited"));
-    },
-  );
-
+async function initializeText(session: LiveText): Promise<LiveText> {
+  const { rpc, handle, cwd, providerAccountId } = session;
   try {
-    await spawnChild(TEXT_CHILD_ID, path, ["app-server"], cwd, null, {
+    const { path } = await resolveCodexBinary();
+    assertCurrent(session);
+    handle.watch(
+      (line) => {
+        if (isCurrent(session)) rpc.pushLine(line);
+      },
+      () => {
+        if (isCurrent(session))
+          void dropLive(session, new Error("Codex text generator exited"));
+      },
+    );
+    await handle.spawn(path, ["app-server"], cwd, null, {
       provider: "codex",
       id: providerAccountId ?? "default",
     });
+    assertCurrent(session);
     await rpc.request(
       "initialize",
       {
@@ -273,20 +352,25 @@ async function startLive(
       },
       INIT_TIMEOUT_MS,
     );
+    assertCurrent(session);
     await rpc.notify("initialized", undefined);
+    assertCurrent(session);
     await openThread(session, cwd);
+    assertCurrent(session);
+    if (opening === session) opening = null;
     live = session;
     return session;
   } catch (error) {
-    session.closed = true;
-    rpc.close(error instanceof Error ? error : new Error(String(error)));
-    unwatchChild(TEXT_CHILD_ID);
-    await killChild(TEXT_CHILD_ID).catch(() => undefined);
+    await dropLive(
+      session,
+      error instanceof Error ? error : new Error(String(error)),
+    );
     throw error;
   }
 }
 
 async function openThread(session: LiveText, cwd: string): Promise<void> {
+  assertCurrent(session);
   const opened = await session.rpc.request<{ thread?: { id?: string } }>(
     "thread/start",
     {
@@ -299,21 +383,24 @@ async function openThread(session: LiveText, cwd: string): Promise<void> {
     },
     INIT_TIMEOUT_MS,
   );
+  assertCurrent(session);
   const threadId = opened.thread?.id?.trim();
   if (!threadId) throw new Error("Codex did not return a thread id");
   session.cwd = cwd;
   session.threadId = threadId;
 }
 
-async function dropLive(): Promise<void> {
-  const current = live;
-  live = null;
-  if (current) {
-    current.closed = true;
-    current.rpc.close();
+function dropLive(session: LiveText, error?: Error): Promise<void> {
+  if (live === session) live = null;
+  if (opening === session) opening = null;
+  if (!session.closed) {
+    session.closed = true;
+    session.turnFailed?.(error ?? new Error("Codex text generation cancelled"));
+    session.turnDone = null;
+    session.turnFailed = null;
+    session.rpc.close(error);
   }
-  unwatchChild(TEXT_CHILD_ID);
-  await killChild(TEXT_CHILD_ID).catch(() => undefined);
+  return session.handle.close().catch(() => undefined);
 }
 
 function handleNotification(

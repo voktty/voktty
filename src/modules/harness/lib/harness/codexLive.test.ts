@@ -18,6 +18,36 @@ vi.mock("../fs", () => ({
 }));
 
 vi.mock("./child", () => ({
+  closeRetiredRawChildren: async () => undefined,
+  reserveRawChild: (logicalSessionId: string) => {
+    let retired = false;
+    let watched: ((line: string) => void) | undefined;
+    return {
+      nativeId: `fake-codex-${crypto.randomUUID()}`,
+      logicalSessionId,
+      get retired() {
+        return retired;
+      },
+      spawn: async () => undefined,
+      watch: (line: (value: string) => void) => {
+        watched = (value) => {
+          if (!retired) line(value);
+        };
+        onLine = watched;
+        return () => {
+          if (onLine === watched) onLine = undefined;
+        };
+      },
+      write: async (line: string) => {
+        if (retired) throw new Error("Harness process is not running");
+        sent.push(line);
+      },
+      close: async () => {
+        retired = true;
+        if (onLine === watched) onLine = undefined;
+      },
+    };
+  },
   resolveCodexBinary: async () => ({ path: "/fake/codex" }),
   spawnChild: async () => undefined,
   killChild: async () => undefined,
@@ -422,7 +452,8 @@ describe("codex live turn sequence", () => {
 
     expect(
       events.some(
-        (event) => event.type === "message.delta" && event.text === "after image",
+        (event) =>
+          event.type === "message.delta" && event.text === "after image",
       ),
     ).toBe(false);
     release?.();
@@ -431,7 +462,8 @@ describe("codex live turn sequence", () => {
 
     expect(
       events.some(
-        (event) => event.type === "message.delta" && event.text === "after image",
+        (event) =>
+          event.type === "message.delta" && event.text === "after image",
       ),
     ).toBe(true);
   });

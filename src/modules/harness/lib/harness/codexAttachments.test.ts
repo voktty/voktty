@@ -6,6 +6,60 @@ let onLine: ((line: string) => void) | undefined;
 let keepTurnOpen = false;
 
 vi.mock("./child", () => ({
+  closeRetiredRawChildren: async () => undefined,
+  reserveRawChild: (logicalSessionId: string) => {
+    let retired = false;
+    let watched: ((line: string) => void) | undefined;
+    return {
+      nativeId: `fake-codex-${crypto.randomUUID()}`,
+      logicalSessionId,
+      get retired() {
+        return retired;
+      },
+      spawn: async () => undefined,
+      watch: (line: (value: string) => void) => {
+        watched = (value) => {
+          if (!retired) line(value);
+        };
+        onLine = watched;
+        return () => {
+          if (onLine === watched) onLine = undefined;
+        };
+      },
+      write: async (line: string) => {
+        if (retired) throw new Error("Harness process is not running");
+        const message = JSON.parse(line);
+        sent.push(message);
+        if (message.id == null) return;
+        const result =
+          message.method === "thread/start"
+            ? { thread: { id: "thr_repro" } }
+            : message.method === "turn/start"
+              ? { turn: { id: "turn_repro", status: "inProgress" } }
+              : {};
+        watched?.(JSON.stringify({ id: message.id, result }));
+        if (message.method === "turn/start") {
+          watched?.(
+            JSON.stringify({
+              method: "turn/started",
+              params: { turn: { id: "turn_repro" } },
+            }),
+          );
+          if (!keepTurnOpen)
+            watched?.(
+              JSON.stringify({
+                method: "turn/completed",
+                params: { turn: { id: "turn_repro", status: "completed" } },
+              }),
+            );
+        }
+      },
+      close: async () => {
+        retired = true;
+        if (onLine === watched) onLine = undefined;
+      },
+    };
+  },
   resolveCodexBinary: async () => ({ path: "/fake/codex" }),
   spawnChild: async () => undefined,
   killChild: async () => undefined,
@@ -53,8 +107,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const { sendCodexTurn, steerCodexTurn, stopCodexSession, __codexTestReset } =
   await import("./codex");
-const { attachmentsFromPaths, prepareAttachments, promptBlocks } =
-  await import("../attachments");
+const { attachmentsFromPaths, prepareAttachments, promptBlocks } = await import(
+  "../attachments"
+);
 
 function completeTurn() {
   onLine!(
