@@ -76,11 +76,17 @@ pub struct RemoteTunnelInfo {
     pub remote_port: u16,
 }
 
+#[path = "remote_bootstrap.rs"]
+mod bootstrap;
+use bootstrap::{AuthBinding, BootstrapPermit, BootstrapRegistry, CLEANUP_PENDING};
+
 static GLOBAL_REMOTE: OnceLock<RemoteState> = OnceLock::new();
+static GLOBAL_BOOTSTRAP_STATE: OnceLock<(Arc<BootstrapRegistry>, Arc<AtomicU64>)> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct RemoteState {
     sessions: Arc<Mutex<HashMap<u64, Arc<RemoteSession>>>>,
+    bootstrap: Arc<BootstrapRegistry>,
     next_id: Arc<AtomicU64>,
     next_pty_id: Arc<AtomicU64>,
     next_attach_id: Arc<AtomicU64>,
@@ -91,9 +97,16 @@ pub struct RemoteState {
 
 impl Default for RemoteState {
     fn default() -> Self {
+        let (bootstrap, next_id) = GLOBAL_BOOTSTRAP_STATE.get_or_init(|| {
+            (
+                Arc::new(BootstrapRegistry::default()),
+                Arc::new(AtomicU64::new(1)),
+            )
+        });
         let state = Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
-            next_id: Arc::new(AtomicU64::new(1)),
+            bootstrap: bootstrap.clone(),
+            next_id: next_id.clone(),
             next_pty_id: Arc::new(AtomicU64::new(1)),
             next_attach_id: Arc::new(AtomicU64::new(1)),
             next_tunnel_id: Arc::new(AtomicU64::new(1)),
@@ -321,10 +334,10 @@ pub(crate) type ProcListener = Arc<dyn Fn(ProcEvent) + Send + Sync>;
 
 pub(crate) struct RemoteSession {
     resources: RemoteResources,
-    stdin: Mutex<BufWriter<ChildStdin>>,
+    stdin: Mutex<Option<BufWriter<ChildStdin>>>,
     routing: Arc<RemoteRouting>,
     connection: RemoteSshConnection,
-    _askpass: Askpass,
+    _askpass: Mutex<Option<Arc<Askpass>>>,
 }
 
 const REMOTE_PROCESS_STOP_TIMEOUT: Duration = Duration::from_secs(2);
@@ -460,23 +473,56 @@ impl<P: ProcessControl> RemoteResources<P> {
     }
 
     fn close_with_timeout(&self, timeout: Duration) -> Result<(), String> {
+        let deadline = Instant::now() + timeout;
         self.retired.store(true, Ordering::Release);
-        let _close = self
-            .close_lock
-            .lock()
-            .map_err(|_| "remote close state is poisoned")?;
+        let _close = loop {
+            match self.close_lock.try_lock() {
+                Ok(guard) => break guard,
+                Err(std::sync::TryLockError::Poisoned(error)) => break error.into_inner(),
+                Err(_) => {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        return Err("remote SSH resource close is pending".to_string());
+                    }
+                    std::thread::sleep(remaining.min(Duration::from_millis(20)));
+                }
+            }
+        };
         let mut failed = false;
-        match self.tunnels.lock() {
-            Ok(mut tunnels) => tunnels.retain(|_, tunnel| {
-                let uncertain = stop_owned_process(&mut tunnel.child, timeout).is_err();
+        let mut tunnels = match self.tunnels.try_lock() {
+            Ok(guard) => Some(guard),
+            Err(std::sync::TryLockError::Poisoned(error)) => Some(error.into_inner()),
+            Err(_) => {
+                failed = true;
+                None
+            }
+        };
+        if let Some(tunnels) = tunnels.as_mut() {
+            tunnels.retain(|_, tunnel| {
+                let uncertain = stop_owned_process(
+                    &mut tunnel.child,
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .is_err();
                 failed |= uncertain;
                 uncertain
-            }),
-            Err(_) => failed = true,
+            });
         }
-        match self.child.lock() {
-            Ok(mut child) => failed |= stop_owned_process(&mut *child, timeout).is_err(),
-            Err(_) => failed = true,
+        drop(tunnels);
+        let mut child = match self.child.try_lock() {
+            Ok(guard) => Some(guard),
+            Err(std::sync::TryLockError::Poisoned(error)) => Some(error.into_inner()),
+            Err(_) => {
+                failed = true;
+                None
+            }
+        };
+        if let Some(child) = child.as_mut() {
+            failed |= stop_owned_process(
+                &mut **child,
+                deadline.saturating_duration_since(Instant::now()),
+            )
+            .is_err();
         }
         if failed {
             Err("could not confirm owned remote SSH resource retirement".to_string())
@@ -596,7 +642,12 @@ impl RemoteSession {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        self._askpass.configure(&mut command)?;
+        self._askpass
+            .lock()
+            .map_err(|_| "remote authentication state is poisoned".to_string())?
+            .as_ref()
+            .ok_or_else(|| "remote SSH session is retired".to_string())?
+            .configure(&mut command)?;
         crate::modules::proc::hide_console(&mut command);
         let child = command
             .spawn()
@@ -670,7 +721,10 @@ impl RemoteSession {
             .lock()
             .map_err(|_| "remote helper input is poisoned".to_string())?;
         self.resources.ensure_active()?;
-        write_frame(&mut *stdin, frame).map_err(|error| error.to_string())?;
+        let stdin = stdin
+            .as_mut()
+            .ok_or_else(|| "remote helper input is closed".to_string())?;
+        write_frame(stdin, frame).map_err(|error| error.to_string())?;
         stdin.flush().map_err(|error| error.to_string())
     }
 
@@ -931,26 +985,27 @@ pub async fn remote_open(
 ) -> Result<RemoteSessionInfo, String> {
     validate_connection(&connection)?;
     let state_for_task = state.inner().clone();
-    let (session, mut info) = tauri::async_runtime::spawn_blocking(move || {
-        open_remote_session(
+    let permit = state.reserve_bootstrap(&connection)?;
+    let mut delivery = BootstrapDelivery {
+        owner: permit.owner.clone(),
+        delivered: false,
+    };
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let result = open_remote_session(
             app,
-            state_for_task,
+            state_for_task.clone(),
             connection,
             workspace_root,
             install_shell_integration,
+            &permit,
         )
+        .and_then(|(session, info)| state_for_task.publish_bootstrap(&permit, session, info));
+        permit.finish(result)
     })
     .await
-    .map_err(|error| format!("remote bootstrap task failed: {error}"))??;
-    let session_id = state.next_id.fetch_add(1, Ordering::Relaxed);
-    info.session_id = session_id;
-    session.set_id(session_id);
-    state
-        .sessions
-        .lock()
-        .map_err(|_| "remote session state is poisoned".to_string())?
-        .insert(session_id, Arc::new(session));
-    Ok(info)
+    .map_err(|_| "remote bootstrap task failed".to_string())?;
+    delivery.delivered = result.is_ok();
+    result.map(|(_, info)| info)
 }
 
 #[tauri::command]
@@ -1180,7 +1235,92 @@ impl RemoteState {
     }
 }
 
+fn reserve_global_bootstrap(connection: &RemoteSshConnection) -> Result<BootstrapPermit, String> {
+    let binding = AuthBinding::new(connection)?;
+    let (registry, next_id) = GLOBAL_BOOTSTRAP_STATE.get_or_init(|| {
+        (
+            Arc::new(BootstrapRegistry::default()),
+            Arc::new(AtomicU64::new(1)),
+        )
+    });
+    registry.reserve(next_id.fetch_add(1, Ordering::Relaxed), binding)
+}
+
+async fn run_bootstrap_task<T: Send + 'static>(
+    permit: BootstrapPermit,
+    work: impl FnOnce(&BootstrapPermit) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let mut delivery = BootstrapDelivery {
+        owner: permit.owner.clone(),
+        delivered: false,
+    };
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let result = work(&permit);
+        permit.finish(result)
+    })
+    .await
+    .map_err(|_| "remote bootstrap task failed".to_string())?;
+    delivery.delivered = result.is_ok();
+    result
+}
+
+struct BootstrapDelivery {
+    owner: Arc<bootstrap::BootstrapOwner>,
+    delivered: bool,
+}
+impl Drop for BootstrapDelivery {
+    fn drop(&mut self) {
+        if !self.delivered {
+            self.owner.retire();
+        }
+    }
+}
+
 impl RemoteState {
+    fn reserve_bootstrap(
+        &self,
+        connection: &RemoteSshConnection,
+    ) -> Result<BootstrapPermit, String> {
+        self.bootstrap.reserve(
+            self.next_id.fetch_add(1, Ordering::Relaxed),
+            AuthBinding::new(connection)?,
+        )
+    }
+
+    fn publish_bootstrap(
+        &self,
+        permit: &BootstrapPermit,
+        session: Arc<RemoteSession>,
+        mut info: RemoteSessionInfo,
+    ) -> Result<(Arc<RemoteSession>, RemoteSessionInfo), String> {
+        permit.prepare()?;
+        let owners = self
+            .bootstrap
+            .owners
+            .lock()
+            .map_err(|_| "remote bootstrap state is poisoned")?;
+        permit.owner.ensure_active()?;
+        if !owners
+            .get(&permit.owner.id)
+            .is_some_and(|owner| Arc::ptr_eq(owner, &permit.owner))
+        {
+            return Err(CLEANUP_PENDING.to_string());
+        }
+        session.set_id(permit.owner.id);
+        info.session_id = permit.owner.id;
+        *permit
+            .owner
+            .ready_registry
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(Arc::downgrade(&self.sessions));
+        self.sessions
+            .lock()
+            .map_err(|_| "remote session state is poisoned")?
+            .insert(permit.owner.id, session.clone());
+        permit.owner.published.store(true, Ordering::Release);
+        Ok((session, info))
+    }
+
     pub(crate) fn session(&self, session_id: u64) -> Result<Arc<RemoteSession>, String> {
         remote_session(self, session_id)
     }
@@ -1201,17 +1341,19 @@ impl RemoteState {
         workspace_root: Option<String>,
     ) -> Result<(u64, Arc<RemoteSession>), String> {
         validate_connection(&connection)?;
-        let (session, mut info) =
-            open_remote_session(app, self.clone(), connection, workspace_root, false)?;
-        let session_id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        info.session_id = session_id;
-        session.set_id(session_id);
-        let session = Arc::new(session);
-        self.sessions
-            .lock()
-            .map_err(|_| "remote session state is poisoned".to_string())?
-            .insert(session_id, session.clone());
-        Ok((session_id, session))
+        let permit = self.reserve_bootstrap(&connection)?;
+        let result = open_remote_session(
+            app,
+            self.clone(),
+            connection,
+            workspace_root,
+            false,
+            &permit,
+        )
+        .and_then(|(session, info)| self.publish_bootstrap(&permit, session, info));
+        permit
+            .finish(result)
+            .map(|(session, info)| (info.session_id, session))
     }
 }
 
@@ -1341,13 +1483,28 @@ async fn remote_watch_tree_request(
 #[tauri::command]
 pub async fn remote_close(state: State<'_, RemoteState>, session_id: u64) -> Result<(), String> {
     let owner = find_remote_session(&state, session_id)?;
-    if let Some(owner) = &owner {
+    let bootstrap = state.bootstrap.clone();
+    let captured = bootstrap
+        .owners
+        .lock()
+        .map_err(|_| "remote bootstrap state is poisoned")?
+        .get(&session_id)
+        .cloned();
+    if let Some(captured) = &captured {
+        captured.retire();
+    } else if let Some(owner) = &owner {
         owner.resources.retired.store(true, Ordering::Release);
         owner.routing.fail_all("remote SSH session closed");
     }
     let registry = state.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        close_registered_owner(&registry, session_id, owner, RemoteSession::close)
+        if let Some(captured) = captured {
+            captured.cleanup(Instant::now() + REMOTE_PROCESS_STOP_TIMEOUT)?;
+            bootstrap.remove(&captured);
+            Ok(())
+        } else {
+            close_registered_owner(&registry, session_id, owner, RemoteSession::close)
+        }
     })
     .await
     .map_err(|_| "remote close task failed".to_string())?
@@ -1653,7 +1810,8 @@ pub async fn ssh_fetch_metrics(
     let conn_clone = connection.clone();
     let state = state.inner().clone();
 
-    tokio::task::spawn_blocking(move || {
+    let permit = state.reserve_bootstrap(&connection)?;
+    run_bootstrap_task(permit, move |permit| {
         let p = conn_clone.port.unwrap_or(22);
         let target = format!("{}:{}", conn_clone.host.trim(), p);
         let start = std::time::Instant::now();
@@ -1670,13 +1828,19 @@ pub async fn ssh_fetch_metrics(
             }
         }
 
-        let askpass = start_ssh_askpass(&app, &state)?;
-        let output = run_ssh_capture_with_askpass(&conn_clone, METRICS_PROBE_SCRIPT, &askpass)?;
+        permit.prepare()?;
+        let askpass = Arc::new(start_ssh_askpass(&app, &state)?);
+        *permit
+            .owner
+            .askpass
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(askpass.clone());
+        let output =
+            run_ssh_capture_with_askpass(&conn_clone, METRICS_PROBE_SCRIPT, &askpass, permit)?;
         parse_metrics_line(&output, ping_ms)
             .ok_or_else(|| "Failed to parse remote server metrics".to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1831,13 +1995,20 @@ pub async fn ssh_list_multiplexer_sessions(
     let conn_clone = connection.clone();
     let state = state.inner().clone();
 
-    tokio::task::spawn_blocking(move || {
-        let askpass = start_ssh_askpass(&app, &state)?;
-        let output = run_ssh_capture_with_askpass(&conn_clone, MULTIPLEXER_PROBE_SCRIPT, &askpass)?;
+    let permit = state.reserve_bootstrap(&connection)?;
+    run_bootstrap_task(permit, move |permit| {
+        permit.prepare()?;
+        let askpass = Arc::new(start_ssh_askpass(&app, &state)?);
+        *permit
+            .owner
+            .askpass
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(askpass.clone());
+        let output =
+            run_ssh_capture_with_askpass(&conn_clone, MULTIPLEXER_PROBE_SCRIPT, &askpass, permit)?;
         Ok(parse_multiplexer_probe(&output))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -2256,132 +2427,210 @@ fn build_tunnel_ssh_args(
     Ok(args)
 }
 
-fn read_capped(mut stream: impl Read) -> Vec<u8> {
+fn read_capped(mut stream: impl Read, reject_overflow: bool) -> Result<Vec<u8>, String> {
     let mut result = Vec::new();
+    let mut overflow = false;
     let mut buffer = [0u8; 4096];
-    while let Ok(count) = stream.read(&mut buffer) {
+    loop {
+        let count = match stream.read(&mut buffer) {
+            Ok(count) => count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return Err("could not read SSH command output".to_string()),
+        };
         if count == 0 {
             break;
         }
         let remaining = 65_536usize.saturating_sub(result.len());
+        overflow |= count > remaining;
         result.extend_from_slice(&buffer[..count.min(remaining)]);
     }
-    result
+    if overflow && reject_overflow {
+        Err("SSH command output exceeded its size limit".to_string())
+    } else {
+        Ok(result)
+    }
 }
 
+#[cfg(test)]
 fn command_output_with_timeout(
     command: &mut Command,
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    capture_command_output(command, None, timeout)
+    let permit = reserve_global_bootstrap(&tests::connection())?;
+    let result = command_output_with_timeout_owned(command, timeout, &permit);
+    permit.finish(result)
 }
 
+fn command_output_with_timeout_owned(
+    command: &mut Command,
+    timeout: Duration,
+    permit: &BootstrapPermit,
+) -> Result<std::process::Output, String> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    capture_command_output(command, None, timeout, permit)
+}
+
+#[cfg(all(test, unix))]
 fn command_output_with_stdin_timeout(
     command: &mut Command,
     input: &[u8],
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
+    let permit = reserve_global_bootstrap(&tests::connection())?;
+    let result = command_output_with_stdin_timeout_owned(command, input, timeout, &permit);
+    permit.finish(result)
+}
+
+fn command_output_with_stdin_timeout_owned(
+    command: &mut Command,
+    input: &[u8],
+    timeout: Duration,
+    permit: &BootstrapPermit,
+) -> Result<std::process::Output, String> {
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    capture_command_output(command, Some(input), timeout)
+    capture_command_output(command, Some(input), timeout, permit)
 }
 
 fn capture_command_output(
     command: &mut Command,
     input: Option<&[u8]>,
     timeout: Duration,
+    permit: &BootstrapPermit,
 ) -> Result<std::process::Output, String> {
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("could not start SSH command: {e}"))?;
-    let stdout = child.stdout.take().ok_or("SSH stdout unavailable")?;
-    let stderr = child.stderr.take().ok_or("SSH stderr unavailable")?;
-    let stdout_reader = std::thread::spawn(move || read_capped(stdout));
-    let stderr_reader = std::thread::spawn(move || read_capped(stderr));
-    let input_writer = if let Some(input) = input {
-        let Some(mut stdin) = child.stdin.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("SSH stdin unavailable".to_string());
+    permit.spawn(command, "could not start SSH command")?;
+    let started = Instant::now();
+    let result = (|| {
+        let (stdout, stderr, stdin) = {
+            let mut child = permit
+                .owner
+                .child
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            let child = child.as_mut().ok_or(CLEANUP_PENDING)?;
+            let stdout = child.stdout.take().ok_or("SSH stdout unavailable")?;
+            let stderr = child.stderr.take().ok_or("SSH stderr unavailable")?;
+            let stdin = if input.is_some() {
+                Some(child.stdin.take().ok_or("SSH stdin unavailable")?)
+            } else {
+                None
+            };
+            (stdout, stderr, stdin)
         };
-        let input = input.to_vec();
-        Some(std::thread::spawn(move || {
-            stdin
-                .write_all(&input)
-                .map_err(|error| format!("could not write SSH input: {error}"))
-        }))
-    } else {
-        None
-    };
-    let start = std::time::Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) if start.elapsed() < timeout => std::thread::sleep(Duration::from_millis(50)),
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break Err(format!(
+        permit
+            .owner
+            .spawn_worker("voktty-ssh-stdout", 1, move || read_capped(stdout, true))?;
+        permit
+            .owner
+            .spawn_worker("voktty-ssh-stderr", 2, move || read_capped(stderr, false))?;
+        if let (Some(input), Some(mut stdin)) = (input, stdin) {
+            let input = input.to_vec();
+            permit.owner.spawn_worker("voktty-ssh-input", 0, move || {
+                stdin
+                    .write_all(&input)
+                    .map_err(|error| format!("could not write SSH input: {error}"))?;
+                Ok(Vec::new())
+            })?;
+        }
+        let status = loop {
+            permit.owner.ensure_active()?;
+            let status = permit
+                .owner
+                .child
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .as_mut()
+                .ok_or(CLEANUP_PENDING)?
+                .try_wait()
+                .map_err(|error| format!("could not wait for SSH command: {error}"))?;
+            if let Some(status) = status {
+                break status;
+            }
+            let remaining = timeout.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
                     "SSH command timed out after {} seconds",
                     timeout.as_secs()
                 ));
             }
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break Err(format!("could not wait for SSH command: {error}"));
+            std::thread::sleep(remaining.min(Duration::from_millis(20)));
+        };
+        let outputs = permit
+            .owner
+            .take_outputs(Instant::now() + REMOTE_PROCESS_STOP_TIMEOUT)?;
+        permit.owner.ensure_active()?;
+        permit
+            .owner
+            .child
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        for (stream, output) in outputs {
+            if stream == 1 {
+                stdout = output;
+            } else if stream == 2 {
+                stderr = output;
             }
         }
-    };
-    let stdout = stdout_reader.join().unwrap_or_default();
-    let stderr = stderr_reader.join().unwrap_or_default();
-    let input_result = input_writer.map(|writer| {
-        writer
-            .join()
-            .map_err(|_| "SSH input writer failed".to_string())?
-    });
-    let status = status?;
-    if let Some(input_result) = input_result {
-        input_result?;
+        Ok(std::process::Output {
+            status,
+            stdout,
+            stderr,
+        })
+    })();
+    if let Err(error) = &result {
+        let deadline = if error == CLEANUP_PENDING {
+            Instant::now()
+        } else {
+            Instant::now() + REMOTE_PROCESS_STOP_TIMEOUT
+        };
+        if permit.owner.rollback_stage(deadline).is_err() {
+            permit.owner.retire();
+            return Err(CLEANUP_PENDING.to_string());
+        }
     }
-    Ok(std::process::Output {
-        status,
-        stdout,
-        stderr,
-    })
+    result
 }
 
 pub fn run_ssh_capture(
     connection: &RemoteSshConnection,
     remote_command: &str,
 ) -> Result<String, String> {
-    let mut command = Command::new("ssh");
-    command
-        .arg("-o")
-        .arg("BatchMode=yes")
-        .args(ssh_args(connection))
-        .arg(remote_command);
-    crate::modules::proc::hide_console(&mut command);
-    let output = command_output_with_timeout(&mut command, Duration::from_secs(60))?;
-    if !output.status.success() {
-        return Err(command_error(&output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    let permit = reserve_global_bootstrap(connection)?;
+    let result = (|| {
+        let mut command = Command::new("ssh");
+        command
+            .arg("-o")
+            .arg("BatchMode=yes")
+            .args(ssh_args(connection))
+            .arg(remote_command);
+        crate::modules::proc::hide_console(&mut command);
+        let output =
+            command_output_with_timeout_owned(&mut command, Duration::from_secs(60), &permit)?;
+        if !output.status.success() {
+            return Err(command_error(&output.stderr));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    })();
+    permit.finish(result)
 }
 
 fn run_ssh_capture_with_askpass(
     connection: &RemoteSshConnection,
     remote_command: &str,
     askpass: &Askpass,
+    permit: &BootstrapPermit,
 ) -> Result<String, String> {
     run_ssh_capture_with_askpass_timeout(
         connection,
         remote_command,
         askpass,
         Duration::from_secs(180),
+        permit,
     )
 }
 
@@ -2390,12 +2639,13 @@ fn run_ssh_capture_with_askpass_timeout(
     remote_command: &str,
     askpass: &Askpass,
     timeout: Duration,
+    permit: &BootstrapPermit,
 ) -> Result<String, String> {
     let mut command = Command::new("ssh");
     command.args(ssh_args(connection)).arg(remote_command);
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let output = command_output_with_timeout(&mut command, timeout)?;
+    let output = command_output_with_timeout_owned(&mut command, timeout, permit)?;
     if !output.status.success() {
         return Err(command_error(&output.stderr));
     }
@@ -2416,12 +2666,14 @@ struct BundledHelper {
 fn probe_remote_helper(
     connection: &RemoteSshConnection,
     askpass: &Askpass,
+    permit: &BootstrapPermit,
 ) -> Result<HelperProbe, String> {
     parse_helper_probe(&run_ssh_capture_with_askpass_timeout(
         connection,
         &probe_command(),
         askpass,
         Duration::from_secs(30),
+        permit,
     )?)
 }
 
@@ -2547,6 +2799,7 @@ fn install_helper(
     helper: &BundledHelper,
     architecture: &str,
     askpass: &Askpass,
+    permit: &BootstrapPermit,
 ) -> Result<(), String> {
     let encoded = base64::engine::general_purpose::STANDARD.encode(&helper.bytes);
     let command_line = install_command(architecture, &helper.digest);
@@ -2555,10 +2808,11 @@ fn install_helper(
     command.args(ssh_args(connection)).arg(command_line);
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let output = command_output_with_stdin_timeout(
+    let output = command_output_with_stdin_timeout_owned(
         &mut command,
         encoded.as_bytes(),
         Duration::from_secs(45),
+        permit,
     )
     .map_err(|error| format!("could not upload remote helper: {error}"))?;
     if output.status.success() {
@@ -2610,6 +2864,7 @@ fn install_remote_shell_integration(
     connection: &RemoteSshConnection,
     digest: &str,
     askpass: &Askpass,
+    permit: &BootstrapPermit,
 ) -> Result<(), String> {
     let payload = format!(
         "{}\n",
@@ -2624,10 +2879,11 @@ fn install_remote_shell_integration(
     command.args(ssh_args(connection)).arg(command_line);
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let output = command_output_with_stdin_timeout(
+    let output = command_output_with_stdin_timeout_owned(
         &mut command,
         payload.as_bytes(),
         Duration::from_secs(20),
+        permit,
     )
     .map_err(|error| format!("could not upload remote shell integration: {error}"))?;
     if output.status.success() {
@@ -2637,33 +2893,48 @@ fn install_remote_shell_integration(
     }
 }
 
+fn shell_install_fallback(result: Result<(), String>, retired: bool) -> Result<bool, String> {
+    match result {
+        Ok(()) => Ok(false),
+        Err(error) if retired || error.ends_with(CLEANUP_PENDING) => {
+            Err(CLEANUP_PENDING.to_string())
+        }
+        Err(_) => Ok(true),
+    }
+}
+
 fn open_remote_session(
     app: AppHandle,
     state: RemoteState,
     connection: RemoteSshConnection,
     workspace_root: Option<String>,
     install_shell_integration: bool,
-) -> Result<(RemoteSession, RemoteSessionInfo), String> {
-    let askpass = start_ssh_askpass(&app, &state)?;
-    let probe = probe_remote_helper(&connection, &askpass)?;
+    permit: &BootstrapPermit,
+) -> Result<(Arc<RemoteSession>, RemoteSessionInfo), String> {
+    permit.prepare()?;
+    let askpass = Arc::new(start_ssh_askpass(&app, &state)?);
+    *permit
+        .owner
+        .askpass
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(askpass.clone());
+    let probe = probe_remote_helper(&connection, &askpass, permit)?;
     let helper = get_bundled_helper(&app, &probe.architecture)?;
     if probe.digest.as_deref() != Some(helper.digest.as_str()) {
-        install_helper(&connection, &helper, &probe.architecture, &askpass)?;
+        install_helper(&connection, &helper, &probe.architecture, &askpass, permit)?;
     }
     if install_shell_integration {
         let shell_digest = remote_shell_bundle_digest();
         if probe.shell_digest.as_deref() != Some(shell_digest.as_str()) {
-            if let Err(error) =
-                install_remote_shell_integration(&connection, &shell_digest, &askpass)
-            {
-                log::warn!(
-                    "Remote shell integration unavailable; using login shell fallback: {error}"
-                );
+            let install =
+                install_remote_shell_integration(&connection, &shell_digest, &askpass, permit);
+            if shell_install_fallback(install, permit.owner.retired.load(Ordering::Acquire))? {
+                log::warn!("Remote shell integration unavailable; using login shell fallback");
             }
         }
     }
 
-    let session = start_helper(&app, &connection, &probe.architecture, askpass)?;
+    let session = start_helper(&app, &connection, &probe.architecture, askpass, permit)?;
     let workspace_root = workspace_root
         .filter(|r| !r.trim().is_empty() && r != ".")
         .or_else(|| {
@@ -2679,6 +2950,7 @@ fn open_remote_session(
         method: METHOD_HANDSHAKE.to_string(),
         params: serde_json::json!({ "workspaceRoot": workspace_root }),
     };
+    permit.prepare()?;
     let response = session.request(&handshake)?;
     if !response.ok {
         return Err(response_error(response));
@@ -2691,8 +2963,9 @@ fn start_helper(
     app: &AppHandle,
     connection: &RemoteSshConnection,
     architecture: &str,
-    askpass: Askpass,
-) -> Result<RemoteSession, String> {
+    askpass: Arc<Askpass>,
+    permit: &BootstrapPermit,
+) -> Result<Arc<RemoteSession>, String> {
     let mut command = Command::new("ssh");
     command
         .args(ssh_args(connection))
@@ -2702,50 +2975,61 @@ fn start_helper(
         .stderr(Stdio::piped());
     askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("could not start remote helper: {e}"))?;
-    let Some(stdin) = child.stdin.take() else {
-        let _ = child.kill();
-        return Err("remote helper stdin is unavailable".to_string());
-    };
-    let Some(stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        return Err("remote helper stdout is unavailable".to_string());
-    };
-    let stderr = child.stderr.take();
-    let retired = Arc::new(AtomicBool::new(false));
+    permit.spawn(&mut command, "could not start remote helper")?;
+    let mut child = permit
+        .owner
+        .child
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let process = child.as_mut().ok_or(CLEANUP_PENDING)?;
+    let stdin = process
+        .stdin
+        .take()
+        .ok_or("remote helper stdin is unavailable")?;
+    let stdout = process
+        .stdout
+        .take()
+        .ok_or("remote helper stdout is unavailable")?;
+    let stderr = process
+        .stderr
+        .take()
+        .ok_or("remote helper stderr is unavailable")?;
+    let retired = Arc::new(AtomicBool::new(
+        permit.owner.retired.load(Ordering::Acquire),
+    ));
     let routing = Arc::new(RemoteRouting::new(app.clone(), retired.clone()));
     let reader_routing = routing.clone();
-    if let Err(error) = std::thread::Builder::new()
-        .name("voktty-remote-reader".to_string())
-        .spawn(move || remote_reader_loop(stdout, reader_routing))
-    {
-        let _ = child.kill();
-        return Err(format!("could not start remote helper reader: {error}"));
-    }
-    if let Some(mut stderr) = stderr {
-        let _ = std::thread::Builder::new()
-            .name("voktty-remote-stderr".to_string())
-            .spawn(move || {
-                let mut buffer = String::new();
-                if stderr.read_to_string(&mut buffer).is_ok() && !buffer.trim().is_empty() {
-                    log::debug!("remote helper stderr: {}", buffer.trim());
-                }
-            });
-    }
-    Ok(RemoteSession {
+    let session = Arc::new(RemoteSession {
         resources: RemoteResources {
-            child: Mutex::new(child),
+            child: Mutex::new(child.take().ok_or(CLEANUP_PENDING)?),
             tunnels: Mutex::new(HashMap::new()),
             retired,
             close_lock: Mutex::new(()),
         },
-        stdin: Mutex::new(BufWriter::new(stdin)),
+        stdin: Mutex::new(Some(BufWriter::new(stdin))),
         routing,
         connection: connection.clone(),
-        _askpass: askpass,
-    })
+        _askpass: Mutex::new(Some(askpass)),
+    });
+    *permit
+        .owner
+        .session
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(session.clone());
+    drop(child);
+    permit.owner.ensure_active()?;
+    permit
+        .owner
+        .spawn_worker("voktty-remote-reader", 3, move || {
+            remote_reader_loop(stdout, reader_routing);
+            Ok(Vec::new())
+        })?;
+    permit
+        .owner
+        .spawn_worker("voktty-remote-stderr", 4, move || {
+            read_capped(stderr, false).map(|_| Vec::new())
+        })?;
+    Ok(session)
 }
 
 fn remote_reader_loop(stdout: ChildStdout, routing: Arc<RemoteRouting>) {
@@ -3234,7 +3518,220 @@ mod tests {
         assert!(error.contains("timed out"));
     }
 
-    fn connection() -> RemoteSshConnection {
+    #[test]
+    fn capture_deadline_does_not_wait_for_inherited_output_pipes() {
+        let (sender, receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            #[cfg(windows)]
+            let mut command = {
+                let mut command = Command::new("cmd.exe");
+                command.args(["/C", "start /B ping -n 5 127.0.0.1"]);
+                command
+            };
+            #[cfg(not(windows))]
+            let mut command = {
+                let mut command = Command::new("sh");
+                command.args(["-c", "sleep 4 &"]);
+                command
+            };
+            crate::modules::proc::hide_console(&mut command);
+            let mut connection = connection();
+            connection.host = "held-output-fixture".to_string();
+            let permit = reserve_global_bootstrap(&connection).unwrap();
+            let owner = permit.owner.clone();
+            let registry = permit.registry.clone();
+            let result =
+                command_output_with_timeout_owned(&mut command, Duration::from_secs(1), &permit);
+            let result = permit.finish(result);
+            let _ = sender.send((result, owner, registry));
+        });
+        let result = receiver.recv_timeout(Duration::from_millis(2600));
+        worker.join().unwrap();
+        assert!(
+            result.is_ok(),
+            "capture must return before inherited pipes reach EOF"
+        );
+        let (result, owner, registry) = result.unwrap();
+        assert_eq!(result.unwrap_err(), CLEANUP_PENDING);
+        assert!(owner.child.lock().unwrap().is_some());
+        assert!(!owner.workers.lock().unwrap().is_empty());
+        owner
+            .cleanup(Instant::now() + Duration::from_secs(3))
+            .unwrap();
+        registry.remove(&owner);
+        assert!(!registry.owners.lock().unwrap().contains_key(&owner.id));
+    }
+
+    #[test]
+    fn stdout_limit_rejects_partial_directory_payloads() {
+        let exact = vec![b'x'; 65_536];
+        assert_eq!(read_capped(exact.as_slice(), true).unwrap().len(), 65_536);
+        let mut oversized = b"f|".to_vec();
+        oversized.resize(65_537, b'x');
+        assert_eq!(
+            read_capped(oversized.as_slice(), true).unwrap_err(),
+            "SSH command output exceeded its size limit"
+        );
+        assert_eq!(
+            read_capped(oversized.as_slice(), false).unwrap().len(),
+            65_536
+        );
+    }
+
+    #[test]
+    fn stdout_read_failure_never_returns_a_private_partial_prefix() {
+        struct BrokenReader(bool);
+        impl Read for BrokenReader {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                if !self.0 {
+                    self.0 = true;
+                    buffer[..3].copy_from_slice(b"f|x");
+                    Ok(3)
+                } else {
+                    Err(std::io::Error::other("private path detail"))
+                }
+            }
+        }
+        assert_eq!(
+            read_capped(BrokenReader(false), true).unwrap_err(),
+            "could not read SSH command output"
+        );
+    }
+
+    #[test]
+    fn uncertain_shell_install_never_enters_the_helper_stage() {
+        for (error, retired) in [
+            ("ordinary failure".to_string(), true),
+            (format!("upload failed: {CLEANUP_PENDING}"), false),
+        ] {
+            let mut starts = 0;
+            let result = shell_install_fallback(Err(error), retired).map(|_| {
+                starts += 1;
+            });
+            assert_eq!(result.unwrap_err(), CLEANUP_PENDING);
+            assert_eq!(starts, 0);
+        }
+        assert_eq!(
+            shell_install_fallback(Err("ordinary failure".into()), false),
+            Ok(true)
+        );
+        assert_eq!(shell_install_fallback(Ok(()), false), Ok(false));
+    }
+
+    #[test]
+    fn default_states_and_external_capture_share_global_native_reservations() {
+        let first = RemoteState::default();
+        let second = RemoteState::default();
+        assert!(Arc::ptr_eq(&first.bootstrap, &second.bootstrap));
+        assert!(Arc::ptr_eq(&first.next_id, &second.next_id));
+        let permit = reserve_global_bootstrap(&connection()).unwrap();
+        assert!(Arc::ptr_eq(&first.bootstrap, &permit.registry));
+        assert!(permit.finish(Ok(())).is_ok());
+    }
+
+    #[test]
+    fn cancelled_unpolled_task_keeps_reserved_owner_until_exact_cleanup() {
+        let registry = Arc::new(BootstrapRegistry::default());
+        let binding = AuthBinding::new(&connection()).unwrap();
+        let permit = registry.reserve(1, binding.clone()).unwrap();
+        let owner = permit.owner.clone();
+        let task = run_bootstrap_task(permit, |_| -> Result<(), String> {
+            panic!("unpolled task must not run");
+        });
+        assert_eq!(registry.owners.lock().unwrap().len(), 1);
+        drop(task);
+        assert!(owner.retired.load(Ordering::Acquire));
+        assert!(!owner.running.load(Ordering::Acquire));
+        registry.retry_binding(&binding, Instant::now()).unwrap();
+        assert!(registry.owners.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn partial_pipe_take_failures_confirm_owned_child_cleanup() {
+        for missing in 0..3 {
+            let registry = Arc::new(BootstrapRegistry::default());
+            let permit = registry
+                .reserve(1, AuthBinding::new(&connection()).unwrap())
+                .unwrap();
+            #[cfg(windows)]
+            let mut command = {
+                let mut command = Command::new("ping");
+                command.args(["-n", "31", "127.0.0.1"]);
+                command
+            };
+            #[cfg(not(windows))]
+            let mut command = {
+                let mut command = Command::new("sleep");
+                command.arg("30");
+                command
+            };
+            crate::modules::proc::hide_console(&mut command);
+            command.stdin(Stdio::null());
+            command.stdout(if missing == 0 {
+                Stdio::null()
+            } else {
+                Stdio::piped()
+            });
+            command.stderr(if missing == 1 {
+                Stdio::null()
+            } else {
+                Stdio::piped()
+            });
+            let input = (missing == 2).then_some(b"payload".as_slice());
+            let result =
+                capture_command_output(&mut command, input, Duration::from_secs(1), &permit);
+            assert!(result.is_err());
+            assert!(permit.owner.child.lock().unwrap().is_none());
+            assert!(permit.owner.workers.lock().unwrap().is_empty());
+            assert!(permit.finish(result).is_err());
+            assert!(registry.owners.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn malformed_handshake_metadata_uses_owned_rollback_and_preserves_error() {
+        let registry: Arc<BootstrapRegistry> = Arc::new(BootstrapRegistry::default());
+        let permit = registry
+            .reserve(1, AuthBinding::new(&connection()).unwrap())
+            .unwrap();
+        let response: RemoteResponse = serde_json::from_value(serde_json::json!({
+            "protocol": PROTOCOL_VERSION, "id": "handshake", "ok": true, "result": {}
+        }))
+        .unwrap();
+        let result = parse_session_info(
+            response,
+            "x86_64",
+            serde_json::json!({"workspaceRoot": "/project"}),
+        );
+        assert_eq!(
+            permit.finish(result).unwrap_err(),
+            "remote helper did not return its version"
+        );
+        assert!(registry.owners.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn successful_owned_capture_preserves_stdout_status_and_cleanup() {
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("cmd.exe");
+            command.args(["/C", "echo payload"]);
+            command
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut command = Command::new("printf");
+            command.arg("payload");
+            command
+        };
+        crate::modules::proc::hide_console(&mut command);
+        let output = command_output_with_timeout(&mut command, Duration::from_secs(2)).unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "payload");
+        assert!(output.stderr.is_empty());
+    }
+
+    pub(super) fn connection() -> RemoteSshConnection {
         RemoteSshConnection {
             host: "server.example".to_string(),
             user: Some("ubuntu".to_string()),
