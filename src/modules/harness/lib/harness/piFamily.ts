@@ -12,7 +12,11 @@ import type {
   NativeCommand,
   NativeCommandProvider,
 } from "./nativeCommands";
-import { PiRpc } from "./piClient";
+import {
+  createPiRpcCommandFailure,
+  isPiRpcCommandFailure,
+  PiRpc,
+} from "./piClient";
 import type { PiFlavor } from "./piFlavor";
 import { OMP_FLAVOR } from "./piFlavor";
 import {
@@ -95,6 +99,7 @@ type Live = {
   operationToken: object;
   isCurrent: () => boolean;
   exitError?: Error;
+  reuseError?: Error;
   rpc: PiRpc;
   cwd: string;
   providerSessionId: string;
@@ -485,7 +490,9 @@ export async function cancelTurn(
     }
   } finally {
     done?.();
-    await live.rpc.request({ type: "abort" }, 5_000).catch(() => undefined);
+    await live.rpc.request({ type: "abort" }, 5_000).catch((error: unknown) => {
+      blockNativeReuse(live, error);
+    });
   }
 }
 
@@ -675,6 +682,8 @@ function beginAdmission(
           resolveBinary,
         );
       } catch (error) {
+        if (isCurrentAdmission(owner) && owner.live?.reuseError)
+          throw owner.live.reuseError;
         if (
           providerId &&
           isCurrentAdmission(owner) &&
@@ -741,7 +750,9 @@ async function startLive(
     unwatch: () => undefined,
     operationToken: {},
     isCurrent: () =>
-      isCurrentAdmission(owner) && liveByThread.get(input.sessionId) === live,
+      !live.reuseError &&
+      isCurrentAdmission(owner) &&
+      liveByThread.get(input.sessionId) === live,
     rpc,
     cwd: input.cwd,
     providerSessionId: resume ?? "",
@@ -811,7 +822,9 @@ async function startLive(
   const operation = live.operationToken;
 
   try {
-    const stateFrame = await rpc.request(
+    const stateFrame = await operationRequest(
+      live,
+      operation,
       { type: "get_state" },
       INIT_TIMEOUT_MS,
     );
@@ -863,19 +876,25 @@ async function runTurn(
   settlePendingTurn(live);
 
   try {
-    const response = await Promise.race([
-      live.rpc.request(
-        {
-          ...buildPiPrompt({
-            text: input.text,
-            attachments: input.attachments,
-          }),
-          id: promptId,
-        },
-        flavor.id === "omp" ? COMPACT_TIMEOUT_MS : 15_000,
-      ),
-      turnPromise.then(() => null),
-    ]);
+    let response: Record<string, unknown> | null;
+    try {
+      response = await Promise.race([
+        live.rpc.request(
+          {
+            ...buildPiPrompt({
+              text: input.text,
+              attachments: input.attachments,
+            }),
+            id: promptId,
+          },
+          flavor.id === "omp" ? COMPACT_TIMEOUT_MS : 15_000,
+        ),
+        turnPromise.then(() => null),
+      ]);
+    } catch (error) {
+      if (!isPiRpcCommandFailure(error)) blockNativeReuse(live, error);
+      throw error;
+    }
     assertCurrentOperation(live, operation);
     input.onAccepted?.();
     assertCurrentOperation(live, operation);
@@ -1020,7 +1039,9 @@ function handleFrame(
       rec.success === false
     ) {
       live.turnFailed?.(
-        new Error(stringField(rec, "error") ?? "OMP command failed"),
+        createPiRpcCommandFailure(
+          stringField(rec, "error") ?? "OMP command failed",
+        ),
       );
       return;
     }
@@ -1303,9 +1324,34 @@ class RetiredPiOperationError extends Error {
   }
 }
 
+function blockNativeReuse(live: Live, error: unknown): void {
+  if (live.reuseError || !isCurrentAdmission(live.admission)) return;
+  const failure = error instanceof Error ? error : new Error(String(error));
+  live.reuseError = failure;
+  live.muteUpdates = true;
+  live.settleToken += 1;
+  const approvals = [...live.approvals.values()];
+  const questions = [...live.questions.values()];
+  const failed = live.turnFailed;
+  live.approvals.clear();
+  live.questions.clear();
+  live.activeTurn = false;
+  live.turnEndPending = false;
+  live.promptId = null;
+  live.turnDone = null;
+  live.turnFailed = null;
+  live.toolsById.clear();
+  live.toolsByIndex.clear();
+  live.rpc.close(failure);
+  for (const pending of approvals) pending.resolve("deny");
+  for (const question of questions) question.resolve({ kind: "skipped" });
+  failed?.(failure);
+}
+
 function assertCurrentOperation(live: Live, operation: object): void {
   if (live.operationToken !== operation) throw new RetiredPiOperationError();
-  if (!live.isCurrent()) throw live.exitError ?? new RetiredPiOperationError();
+  if (!live.isCurrent())
+    throw live.exitError ?? live.reuseError ?? new RetiredPiOperationError();
 }
 
 async function operationRequest(
@@ -1315,14 +1361,16 @@ async function operationRequest(
   timeoutMs?: number,
 ): Promise<Record<string, unknown>> {
   assertCurrentOperation(live, operation);
+  let result: Record<string, unknown>;
   try {
-    const result = await live.rpc.request(command, timeoutMs);
-    assertCurrentOperation(live, operation);
-    return result;
+    result = await live.rpc.request(command, timeoutMs);
   } catch (error) {
+    if (!isPiRpcCommandFailure(error)) blockNativeReuse(live, error);
     assertCurrentOperation(live, operation);
     throw error;
   }
+  assertCurrentOperation(live, operation);
+  return result;
 }
 
 async function applyModel(
@@ -1361,8 +1409,9 @@ async function applyModel(
         level: thinking,
       });
       assertCurrentOperation(live, operation);
-    } catch {
+    } catch (error) {
       assertCurrentOperation(live, operation);
+      if (!isPiRpcCommandFailure(error)) throw error;
     }
     live.thinking = thinking;
   }
@@ -1383,6 +1432,7 @@ async function applyModel(
         typeof data?.enabled === "boolean" ? data.enabled : enabled;
     } catch (error) {
       assertCurrentOperation(live, operation);
+      if (!isPiRpcCommandFailure(error)) throw error;
       if (enabled) {
         live.fastModeEnabled = false;
         onEvent({

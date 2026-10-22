@@ -1,6 +1,18 @@
 import { writeChild } from "./child";
 import { parseJsonLine, parseRpcResponse, stringField } from "./piProtocol";
 
+const commandFailures = new WeakSet<Error>();
+
+export function createPiRpcCommandFailure(message: string): Error {
+  const error = new Error(message);
+  commandFailures.add(error);
+  return error;
+}
+
+export function isPiRpcCommandFailure(error: unknown): error is Error {
+  return error instanceof Error && commandFailures.has(error);
+}
+
 type Pending = {
   resolve: (value: Record<string, unknown>) => void;
   reject: (error: Error) => void;
@@ -36,7 +48,7 @@ export class PiRpc {
       if (!pending) return;
       if (!response.success) {
         pending.reject(
-          new Error(
+          createPiRpcCommandFailure(
             response.error || `${this.label} ${response.command} failed`,
           ),
         );
@@ -79,6 +91,7 @@ export class PiRpc {
     });
     void pending.catch(() => undefined);
     const failed = (error: unknown) => {
+      if (error instanceof Error) commandFailures.delete(error);
       if (this.pending.get(id) !== captured) return;
       this.pending.delete(id);
       captured.reject(
@@ -94,6 +107,7 @@ export class PiRpc {
   }
 
   close(error?: Error) {
+    if (error) commandFailures.delete(error);
     if (this.closed) return;
     this.closed = true;
     const err = error ?? new Error(`${this.label} process exited`);
