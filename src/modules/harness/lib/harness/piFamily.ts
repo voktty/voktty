@@ -3,11 +3,9 @@ import { normalizeProjectPath } from "../recents";
 import { taskListFromToolInput } from "../taskList";
 import type { UserQuestionReply } from "../userQuestion";
 import {
-  killChild,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-  writeChild,
+  closeRetiredRawChildren,
+  type RawChildHandle,
+  reserveRawChild,
 } from "./child";
 import type {
   CommandContext,
@@ -79,7 +77,21 @@ type InFlightTool = {
   title: string;
 };
 
+type Admission = {
+  state: FlavorState;
+  sessionId: string;
+  cwd: string;
+  planning: boolean;
+  retired: boolean;
+  ready: boolean;
+  opening: Promise<Live>;
+  child?: RawChildHandle;
+  live?: Live;
+};
+
 type Live = {
+  admission: Admission;
+  unwatch: () => void;
   operationToken: object;
   isCurrent: () => boolean;
   exitError?: Error;
@@ -100,7 +112,6 @@ type Live = {
   >;
   availableCommands?: NativeCommand[];
   promptId: string | null;
-  nextApprovalUiId: number;
   toolsByIndex: Map<number, InFlightTool>;
   toolsById: Map<string, InFlightTool>;
   cancelled: boolean;
@@ -125,22 +136,27 @@ type Resume = {
   cwd: string;
 };
 
+let nextUiId = 1;
+
+function allocateUiId(): number {
+  if (!Number.isSafeInteger(nextUiId))
+    throw new Error("Pi UI request identity exhausted");
+  return nextUiId++;
+}
+
 const INIT_TIMEOUT_MS = 45_000;
 const STATS_TIMEOUT_MS = 4_000;
 const COMPACT_TIMEOUT_MS = 30 * 60_000;
 
 type FlavorState = {
   liveByThread: Map<string, Live>;
+  admissionByThread: Map<string, Admission>;
   resumeByThread: Map<string, Resume>;
   cancelledThreads: Set<string>;
   resolveBinary: () => Promise<{ path: string }>;
   commandListeners: Map<string, Set<(commands: NativeCommand[]) => void>>;
 };
 
-/**
- * Pi and omp each get their own child processes and resume tables, so a live
- * session on one never collides with the other.
- */
 const stateByFlavor = new Map<string, FlavorState>();
 
 function stateFor(flavor: PiFlavor): FlavorState {
@@ -148,6 +164,7 @@ function stateFor(flavor: PiFlavor): FlavorState {
   if (!state) {
     state = {
       liveByThread: new Map(),
+      admissionByThread: new Map(),
       resumeByThread: new Map(),
       cancelledThreads: new Set(),
       resolveBinary: flavor.resolveBinary,
@@ -273,13 +290,7 @@ export async function compactContext(
   input: CompactContextInput,
 ): Promise<void> {
   const state = stateFor(flavor);
-  let live = state.liveByThread.get(input.sessionId);
-  if (!live || live.cwd !== input.cwd) {
-    live = await ensureLive(flavor, input);
-  } else {
-    live.onEvent = input.onEvent;
-    await applyModel(flavor, live, input);
-  }
+  const live = await ensureLive(flavor, input);
   if (state.cancelledThreads.delete(input.sessionId)) return;
 
   live.onEvent = input.onEvent;
@@ -295,7 +306,7 @@ export async function compactContext(
       const data = asRecord(response.data);
       const used = data?.estimatedTokensAfter;
       if (typeof used === "number" && Number.isFinite(used) && used > 0) {
-        live.onEvent({
+        emit(live, {
           type: "context",
           used,
           ...(live.contextWindow ? { window: live.contextWindow } : {}),
@@ -309,14 +320,7 @@ export async function rewindLastTurn(
   flavor: PiFlavor,
   input: RewindLastTurnInput,
 ): Promise<{ submitted: boolean }> {
-  const state = stateFor(flavor);
-  let live = state.liveByThread.get(input.sessionId);
-  if (!live || live.cwd !== input.cwd) {
-    live = await ensureLive(flavor, input);
-  } else {
-    live.onEvent = input.onEvent;
-    await applyModel(flavor, live, input);
-  }
+  const live = await ensureLive(flavor, input);
   if (live.activeTurn) {
     throw new Error("Stop the current turn before editing the last message");
   }
@@ -336,7 +340,7 @@ export async function rewindLastTurn(
     throw new Error("Pi did not expose the forked session");
   }
   bindState(flavor, input.sessionId, live, forkState.data);
-  live.onEvent({ type: "session.providerBound", providerSessionId });
+  emit(live, { type: "session.providerBound", providerSessionId });
   return { submitted: false };
 }
 
@@ -388,9 +392,20 @@ export async function cancelTurn(
   flavor: PiFlavor,
   sessionId: string,
 ): Promise<void> {
-  const { liveByThread, cancelledThreads } = stateFor(flavor);
+  const state = stateFor(flavor);
+  const { liveByThread, cancelledThreads } = state;
   const live = liveByThread.get(sessionId);
+  if (live && !live.admission.ready) {
+    await stopSession(flavor, sessionId);
+    return;
+  }
   if (!live) {
+    const opening = state.admissionByThread.get(sessionId);
+    if (opening) {
+      detachAdmission(opening)();
+      await opening.child?.close().catch(() => undefined);
+      return;
+    }
     cancelledThreads.add(sessionId);
     return;
   }
@@ -410,39 +425,84 @@ export async function cancelTurn(
   for (const question of live.questions.values())
     question.resolve({ kind: "skipped" });
   live.questions.clear();
-  if (hadTurn) {
-    onEvent({ type: "message.completed" });
-    onEvent({ type: "reasoning.completed" });
+  try {
+    if (hadTurn) {
+      onEvent({ type: "message.completed" });
+      onEvent({ type: "reasoning.completed" });
+    }
+  } finally {
+    done?.();
+    await live.rpc.request({ type: "abort" }, 5_000).catch(() => undefined);
   }
-  done?.();
-  await live.rpc.request({ type: "abort" }, 5_000).catch(() => undefined);
 }
 
 export async function stopSession(
   flavor: PiFlavor,
   sessionId: string,
 ): Promise<void> {
-  const { liveByThread, cancelledThreads } = stateFor(flavor);
-  cancelledThreads.delete(sessionId);
-  const live = liveByThread.get(sessionId);
-  liveByThread.delete(sessionId);
-  if (live) {
-    live.operationToken = {};
-    live.muteUpdates = true;
-    live.settleToken += 1;
-    for (const [, pending] of live.approvals) pending.resolve("deny");
-    live.approvals.clear();
-    for (const question of live.questions.values())
-      question.resolve({ kind: "skipped" });
-    live.questions.clear();
-    live.activeTurn = false;
-    live.turnDone?.();
-    live.turnDone = null;
-    live.turnFailed = null;
-    live.rpc.close();
-  }
-  unwatchChild(sessionId);
-  await killChild(sessionId).catch(() => undefined);
+  const state = stateFor(flavor);
+  state.cancelledThreads.delete(sessionId);
+  const owners = new Set<Admission>();
+  const opening = state.admissionByThread.get(sessionId);
+  const live = state.liveByThread.get(sessionId);
+  if (opening) owners.add(opening);
+  if (live) owners.add(live.admission);
+  const cleanup = [...owners].map((owner) => detachAdmission(owner));
+  const retired = closeRetiredRawChildren(sessionId).catch(() => undefined);
+  for (const release of cleanup) release();
+  await Promise.all([
+    retired,
+    ...[...owners].map((owner) => owner.child?.close().catch(() => undefined)),
+  ]);
+}
+
+function isCurrentAdmission(owner: Admission): boolean {
+  return (
+    !owner.retired &&
+    !owner.child?.retired &&
+    owner.state.admissionByThread.get(owner.sessionId) === owner
+  );
+}
+
+function guardAdmission(owner: Admission): void {
+  if (!isCurrentAdmission(owner))
+    throw owner.live?.exitError ?? new RetiredPiOperationError();
+}
+
+function detachAdmission(owner: Admission, error?: Error): () => void {
+  owner.retired = true;
+  const state = owner.state;
+  if (state.admissionByThread.get(owner.sessionId) === owner)
+    state.admissionByThread.delete(owner.sessionId);
+  const live = owner.live;
+  if (state.liveByThread.get(owner.sessionId) === live)
+    state.liveByThread.delete(owner.sessionId);
+  if (!live) return () => undefined;
+  if (error) live.exitError = error;
+  else live.operationToken = {};
+  live.muteUpdates = true;
+  live.settleToken += 1;
+  const approvals = [...live.approvals.values()];
+  const questions = [...live.questions.values()];
+  const done = live.turnDone;
+  const failed = live.turnFailed;
+  live.approvals.clear();
+  live.questions.clear();
+  live.activeTurn = false;
+  live.turnEndPending = false;
+  live.promptId = null;
+  live.turnDone = null;
+  live.turnFailed = null;
+  live.toolsById.clear();
+  live.toolsByIndex.clear();
+  return () => {
+    live.unwatch();
+    live.rpc.close(error);
+    for (const pending of approvals) pending.resolve("deny");
+    for (const question of questions) question.resolve({ kind: "skipped" });
+    if (error) failed?.(error);
+    else done?.();
+  };
 }
 
 export async function forgetSession(
@@ -466,58 +526,148 @@ export function bindSession(
 
 async function ensureLive(
   flavor: PiFlavor,
-  input: HarnessSessionInput,
+  request: HarnessSessionInput,
   configureModel = true,
 ): Promise<Live> {
-  const { liveByThread, resumeByThread } = stateFor(flavor);
-  const existing = liveByThread.get(input.sessionId);
-  const wantPlanning = input.intent === "plan";
+  const input = snapshotInput({
+    sessionId: request.sessionId,
+    cwd: request.cwd,
+    model: request.model,
+    modelSettings: request.modelSettings,
+    providerAccountId: request.providerAccountId,
+    runtimeMode: request.runtimeMode,
+    intent: request.intent,
+    onEvent: request.onEvent,
+    networkAllowlist: request.networkAllowlist,
+  });
+  const state = stateFor(flavor);
+  let owner = state.admissionByThread.get(input.sessionId);
   if (
-    existing &&
-    existing.cwd === input.cwd &&
-    existing.planning === wantPlanning
+    !owner ||
+    !isCurrentAdmission(owner) ||
+    owner.cwd !== input.cwd ||
+    owner.planning !== (input.intent === "plan")
   ) {
-    if (configureModel) {
-      const operation = existing.operationToken;
-      existing.onEvent = input.onEvent;
-      await applyModel(flavor, existing, input, operation);
-      assertCurrentOperation(existing, operation);
-    }
-    return existing;
+    owner = beginAdmission(flavor, input, state);
   }
-  if (existing) {
-    if (existing.cwd !== input.cwd) resumeByThread.delete(input.sessionId);
-    await stopSession(flavor, input.sessionId);
+  const live = await owner.opening;
+  guardAdmission(live.admission);
+  if (configureModel) {
+    const operation = live.operationToken;
+    live.onEvent = input.onEvent;
+    await applyModel(flavor, live, input, operation);
+    assertCurrentOperation(live, operation);
   }
+  return live;
+}
 
-  const resume = resumeByThread.get(input.sessionId);
-  const canResume = resume != null && resume.cwd === input.cwd;
-  if (resume && resume.cwd !== input.cwd) {
-    resumeByThread.delete(input.sessionId);
-  }
-
+function beginAdmission(
+  flavor: PiFlavor,
+  input: HarnessSessionInput,
+  state: FlavorState,
+  allowResume = true,
+  resolveBinary = state.resolveBinary,
+): Admission {
+  const capturedFlavor = {
+    ...flavor,
+    isolateFlags: [...flavor.isolateFlags],
+    planTools: [...flavor.planTools],
+  };
+  const previous = state.admissionByThread.get(input.sessionId);
+  const siblings = [...stateByFlavor.values()]
+    .map((entry) => entry.admissionByThread.get(input.sessionId))
+    .filter((entry): entry is Admission => entry !== undefined);
+  const resume = state.resumeByThread.get(input.sessionId);
+  const providerId =
+    allowResume && resume?.cwd === input.cwd ? resume.sessionId : undefined;
+  let resolve!: (live: Live) => void;
+  let reject!: (error: unknown) => void;
+  const opening = new Promise<Live>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  void opening.catch(() => undefined);
+  const owner: Admission = {
+    state,
+    sessionId: input.sessionId,
+    cwd: input.cwd,
+    planning: input.intent === "plan",
+    retired: false,
+    ready: false,
+    opening,
+  };
+  state.admissionByThread.set(input.sessionId, owner);
   try {
-    return await startLive(
-      flavor,
-      input,
-      canResume ? resume?.sessionId : undefined,
-    );
+    const child = reserveRawChild(input.sessionId);
+    owner.child = child;
+    const cleanup = siblings
+      .filter((sibling) => sibling.child?.retired)
+      .map((sibling) => detachAdmission(sibling));
+    for (const release of cleanup) release();
+    guardAdmission(owner);
+    if (
+      resume &&
+      resume.cwd !== input.cwd &&
+      state.resumeByThread.get(input.sessionId) === resume
+    )
+      state.resumeByThread.delete(input.sessionId);
+    const start = async () => {
+      try {
+        return await startLive(
+          capturedFlavor,
+          input,
+          providerId,
+          owner,
+          child,
+          resolveBinary,
+        );
+      } catch (error) {
+        if (
+          providerId &&
+          isCurrentAdmission(owner) &&
+          !(error instanceof RetiredPiOperationError)
+        ) {
+          if (state.resumeByThread.get(input.sessionId) === resume)
+            state.resumeByThread.delete(input.sessionId);
+          return beginAdmission(
+            capturedFlavor,
+            input,
+            state,
+            false,
+            resolveBinary,
+          ).opening;
+        }
+        if (isCurrentAdmission(owner)) detachAdmission(owner)();
+        void child.close().catch(() => undefined);
+        throw error;
+      }
+    };
+    void start().then(resolve, reject);
   } catch (error) {
-    if (!canResume || error instanceof RetiredPiOperationError) throw error;
-    resumeByThread.delete(input.sessionId);
-    await stopSession(flavor, input.sessionId);
-    return startLive(flavor, input, undefined);
+    if (state.admissionByThread.get(input.sessionId) === owner) {
+      if (previous && !previous.retired && !previous.child?.retired)
+        state.admissionByThread.set(input.sessionId, previous);
+      else state.admissionByThread.delete(input.sessionId);
+    }
+    owner.retired = true;
+    void owner.child?.close().catch(() => undefined);
+    reject(error);
   }
+  return owner;
 }
 
 async function startLive(
   flavor: PiFlavor,
   input: HarnessSessionInput,
   resume: string | undefined,
+  owner: Admission,
+  child: RawChildHandle,
+  resolveBinary: () => Promise<{ path: string }>,
 ): Promise<Live> {
-  const state = stateFor(flavor);
-  const { liveByThread } = state;
-  const { path } = await state.resolveBinary();
+  const { liveByThread } = owner.state;
+  guardAdmission(owner);
+  const { path } = await resolveBinary();
+  guardAdmission(owner);
   const native = nativeModelId(input.model);
   const modelRef = parsePiModelRef(native);
   const liveRef: { current: Live | null } = { current: null };
@@ -526,15 +676,19 @@ async function startLive(
     input.sessionId,
     (rec) => {
       const current = liveRef.current;
-      if (!current) return;
+      if (!current?.isCurrent()) return;
       handleFrame(flavor, input.sessionId, current, rec);
     },
     flavor.label,
+    child.write,
   );
 
   const live: Live = {
+    admission: owner,
+    unwatch: () => undefined,
     operationToken: {},
-    isCurrent: () => liveByThread.get(input.sessionId) === live,
+    isCurrent: () =>
+      isCurrentAdmission(owner) && liveByThread.get(input.sessionId) === live,
     rpc,
     cwd: input.cwd,
     providerSessionId: resume ?? "",
@@ -547,7 +701,6 @@ async function startLive(
     approvals: new Map(),
     questions: new Map(),
     promptId: null,
-    nextApprovalUiId: 1,
     toolsByIndex: new Map(),
     toolsById: new Map(),
     cancelled: false,
@@ -566,35 +719,31 @@ async function startLive(
     turnError: null,
   };
   liveRef.current = live;
+  owner.live = live;
+  guardAdmission(owner);
+  liveByThread.set(input.sessionId, live);
 
-  watchChild(
-    input.sessionId,
+  live.unwatch = child.watch(
     (line) => rpc.pushLine(line),
     (code) => {
-      live.exitError = new Error(`${flavor.label} exited`);
-      rpc.close(live.exitError);
-      liveByThread.delete(input.sessionId);
-      input.onEvent({ type: "session.ended", code });
-      const current = liveRef.current;
-      if (current) {
-        for (const question of current.questions.values())
-          question.resolve({ kind: "skipped" });
-        for (const approval of current.approvals.values())
-          approval.resolve("deny");
-      }
-      current?.turnFailed?.(new Error(`${flavor.label} exited`));
-      if (current) {
-        current.turnDone = null;
-        current.turnFailed = null;
+      if (!isCurrentAdmission(owner)) return;
+      const error = new Error(`${flavor.label} exited`);
+      const onEvent = live.onEvent;
+      detachAdmission(owner, error)();
+      try {
+        onEvent({ type: "session.ended", code });
+      } finally {
+        void child.close().catch(() => undefined);
       }
     },
+
     (line) => {
       console.debug(`[${flavor.id}]`, line);
     },
   );
 
-  await spawnChild(
-    input.sessionId,
+  guardAdmission(owner);
+  await child.spawn(
     path,
     buildPiSpawnArgs(flavor, {
       resume,
@@ -605,7 +754,7 @@ async function startLive(
     input.networkAllowlist,
   );
 
-  liveByThread.set(input.sessionId, live);
+  guardAdmission(owner);
   const operation = live.operationToken;
 
   try {
@@ -613,19 +762,22 @@ async function startLive(
       { type: "get_state" },
       INIT_TIMEOUT_MS,
     );
+    assertCurrentOperation(live, operation);
     bindState(flavor, input.sessionId, live, stateFrame.data);
     await applyModel(flavor, live, input, operation);
     if (live.providerSessionId) {
-      live.onEvent({
+      emit(live, {
         type: "session.providerBound",
         providerSessionId: live.providerSessionId,
       });
     }
-    live.onEvent({ type: "session.started" });
+    emit(live, { type: "session.started" });
+    assertCurrentOperation(live, operation);
+    owner.ready = true;
     return live;
   } catch (error) {
-    if (!(error instanceof RetiredPiOperationError))
-      await stopSession(flavor, input.sessionId);
+    if (!isCurrentAdmission(owner))
+      throw live.exitError ?? new RetiredPiOperationError();
     throw error;
   }
 }
@@ -687,7 +839,7 @@ async function runTurn(
     await turnPromise;
   } catch (error) {
     if (live.cancelled || error instanceof RetiredPiOperationError) return;
-    live.onEvent({
+    emit(live, {
       type: "session.error",
       message: error instanceof Error ? error.message : String(error),
     });
@@ -733,7 +885,7 @@ function handleFrame(
   }
   const ui = parseExtensionUiRequest(rec);
   if (ui) {
-    void handleExtensionUi(flavor, sessionId, live, ui);
+    void handleExtensionUi(flavor, live, ui);
     return;
   }
   if (live.muteUpdates) return;
@@ -744,7 +896,7 @@ function handleFrame(
       const providerSessionId = stringField(rec, "sessionId");
       if (providerSessionId) {
         bindState(flavor, sessionId, live, { sessionId: providerSessionId });
-        live.onEvent({ type: "session.providerBound", providerSessionId });
+        emit(live, { type: "session.providerBound", providerSessionId });
       }
       return;
     }
@@ -765,7 +917,7 @@ function handleFrame(
         live.fastModeEnabled = fastModeEnabled;
         live.fastModeRequested = fastModeEnabled;
       }
-      live.onEvent({
+      emit(live, {
         type: "session.configChanged",
         ...(native ? { model: `${flavor.id}:${native}` } : {}),
         ...(isPiThinkingLevel(thinking) || fastModeEnabled != null
@@ -784,7 +936,7 @@ function handleFrame(
     if (type === "command_output") {
       const text = stringField(rec, "text");
       if (text)
-        live.onEvent({
+        emit(live, {
           type: "status",
           text: extensionUiTitle({
             id: "output",
@@ -827,22 +979,22 @@ function handleFrame(
   if (type === "auto_retry_end") live.retrying = false;
 
   const status = statusFromPiEvent(rec);
-  if (status) live.onEvent({ type: "status", text: status });
+  if (status) emit(live, { type: "status", text: status });
 
   const turnError = turnErrorFromEvent(rec);
   if (turnError !== null) live.turnError = turnError;
 
   const context = contextFromUsage(rec, live.contextWindow);
-  if (context) live.onEvent({ type: "context", ...context });
+  if (context) emit(live, { type: "context", ...context });
 
   const delta = assistantDeltaFromEvent(rec);
   if (delta) {
     if (delta.kind === "text") {
       live.emittedAssistant += delta.text;
-      live.onEvent({ type: "message.delta", text: delta.text });
+      emit(live, { type: "message.delta", text: delta.text });
     } else {
       live.emittedReasoning += delta.text;
-      live.onEvent({ type: "reasoning.delta", text: delta.text });
+      emit(live, { type: "reasoning.delta", text: delta.text });
     }
   }
 
@@ -871,7 +1023,7 @@ function handleFrame(
     upsertTool(live, execStart.id, execStart.name, execStart.input);
     const tool = live.toolsById.get(execStart.id);
     if (tool) {
-      live.onEvent({
+      emit(live, {
         type: "tool.updated",
         callId: tool.id,
         title: tool.title,
@@ -897,9 +1049,9 @@ function handleFrame(
         false,
       );
       if (subevents.length > 0) {
-        for (const event of subevents) live.onEvent(event);
+        for (const event of subevents) emit(live, event);
       } else {
-        live.onEvent({
+        emit(live, {
           type: "tool.updated",
           callId: tool.id,
           title: tool.title,
@@ -924,9 +1076,9 @@ function handleFrame(
         execEnd.isError,
       );
       if (subevents.length > 0) {
-        for (const event of subevents) live.onEvent(event);
+        for (const event of subevents) emit(live, event);
       } else {
-        live.onEvent({
+        emit(live, {
           type: "tool.updated",
           callId: tool.id,
           title: tool.title,
@@ -957,7 +1109,7 @@ function flushTurnError(flavor: PiFlavor, live: Live): void {
   const message = live.turnError;
   if (message === null) return;
   live.turnError = null;
-  live.onEvent({
+  emit(live, {
     type: "session.error",
     message: message || `${flavor.label} turn failed`,
   });
@@ -975,7 +1127,7 @@ async function settleTurn(live: Live): Promise<void> {
     );
     if (live.settleToken === token && !live.cancelled) {
       const context = contextFromSessionStats(stats.data);
-      if (context) live.onEvent({ type: "context", ...context });
+      if (context) emit(live, { type: "context", ...context });
     }
   } catch {
     // meter stays on the last streamed usage
@@ -991,23 +1143,21 @@ async function settleTurn(live: Live): Promise<void> {
 
 async function handleExtensionUi(
   flavor: PiFlavor,
-  sessionId: string,
   live: Live,
   request: PiExtensionUiRequest,
 ): Promise<void> {
   if (!needsExtensionUiReply(request)) {
     const text = request.title ? extensionUiTitle(request) : "";
     if (request.method === "setStatus" && request.statusKey)
-      live.onEvent({ type: "status", key: request.statusKey, text });
-    else if (text.trim()) live.onEvent({ type: "status", text });
+      emit(live, { type: "status", key: request.statusKey, text });
+    else if (text.trim()) emit(live, { type: "status", text });
     return;
   }
 
   if (live.cancelled || live.muteUpdates) {
-    await writeChild(
-      sessionId,
-      JSON.stringify(extensionUiResponse(request, "deny")),
-    ).catch(() => undefined);
+    await live.admission.child
+      ?.write(JSON.stringify(extensionUiResponse(request, "deny")))
+      .catch(() => undefined);
     return;
   }
 
@@ -1017,11 +1167,11 @@ async function handleExtensionUi(
       request.method === "input" ||
       request.method === "editor")
   ) {
-    const uiId = live.nextApprovalUiId++;
+    const uiId = allocateUiId();
     const replyPromise = new Promise<UserQuestionReply>((resolve) => {
       live.questions.set(uiId, { id: request.id, resolve });
     });
-    live.onEvent({
+    emit(live, {
       type: "question.asked",
       requestId: uiId,
       title: extensionUiTitle(request),
@@ -1046,6 +1196,7 @@ async function handleExtensionUi(
       ],
     });
     const reply = await replyPromise;
+    if (!live.isCurrent()) return;
     live.questions.delete(uiId);
     let value: string | undefined;
     if (reply.kind === "answered") {
@@ -1057,38 +1208,40 @@ async function handleExtensionUi(
         value = reply.custom?.[request.id];
       }
     }
-    live.onEvent({
+    emit(live, {
       type: "question.resolved",
       requestId: uiId,
       decision: value === undefined ? "skipped" : "answered",
     });
-    await writeChild(
-      sessionId,
-      JSON.stringify({
-        type: "extension_ui_response",
-        id: request.id,
-        ...(value === undefined ? { cancelled: true } : { value }),
-      }),
-    ).catch(() => undefined);
+    await live.admission.child
+      ?.write(
+        JSON.stringify({
+          type: "extension_ui_response",
+          id: request.id,
+          ...(value === undefined ? { cancelled: true } : { value }),
+        }),
+      )
+      .catch(() => undefined);
     return;
   }
 
-  const uiId = live.nextApprovalUiId++;
-  live.onEvent({
+  const uiId = allocateUiId();
+  const decisionPromise = new Promise<ApprovalDecision>((resolve) => {
+    live.approvals.set(uiId, { request, resolve });
+  });
+  emit(live, {
     type: "approval.requested",
     requestId: uiId,
     title: extensionUiTitle(request),
     kind: "other",
   });
-  const decision = await new Promise<ApprovalDecision>((resolve) => {
-    live.approvals.set(uiId, { request, resolve });
-  });
+  const decision = await decisionPromise;
+  if (!live.isCurrent()) return;
   live.approvals.delete(uiId);
-  live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
-  await writeChild(
-    sessionId,
-    JSON.stringify(extensionUiResponse(request, decision)),
-  ).catch(() => undefined);
+  emit(live, { type: "approval.resolved", requestId: uiId, decision });
+  await live.admission.child
+    ?.write(JSON.stringify(extensionUiResponse(request, decision)))
+    .catch(() => undefined);
 }
 
 class RetiredPiOperationError extends Error {
@@ -1191,12 +1344,17 @@ async function applyModel(
   assertCurrentOperation(live, operation);
 }
 
+function emit(live: Live, event: HarnessEvent): void {
+  if (live.isCurrent()) live.onEvent(event);
+}
+
 function bindState(
   flavor: PiFlavor,
   sessionId: string,
   live: Live,
   data: unknown,
 ): void {
+  guardAdmission(live.admission);
   const state = sessionFromState(data);
   const providerSessionId = providerSessionIdFromState(data);
   if (state.contextWindow) live.contextWindow = state.contextWindow;
@@ -1237,7 +1395,7 @@ function upsertTool(
       title: toolTitle(name, input),
     };
     live.toolsById.set(id, tool);
-    live.onEvent({
+    emit(live, {
       type: "tool.started",
       callId: id,
       title: tool.title,
@@ -1259,7 +1417,7 @@ function updateTool(
 ): void {
   tool.input = mergeToolInput(tool.input, input);
   tool.title = toolTitle(tool.name, tool.input);
-  live.onEvent({
+  emit(live, {
     type: "tool.updated",
     callId: tool.id,
     title: tool.title,
@@ -1273,14 +1431,14 @@ function updateTool(
 
 function emitTaskListIfNeeded(live: Live, tool: InFlightTool): void {
   const items = taskListFromToolInput(tool.name, tool.input);
-  if (items) live.onEvent({ type: "tasks.updated", items });
+  if (items) emit(live, { type: "tasks.updated", items });
 }
 
 function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
   if (!live.activeTurn && !live.turnDone) return;
   live.turnEndPending = false;
   live.activeTurn = false;
-  for (const event of extraEvents) live.onEvent(event);
+  for (const event of extraEvents) emit(live, event);
   const done = live.turnDone;
   const failed = live.turnFailed;
   live.turnDone = null;

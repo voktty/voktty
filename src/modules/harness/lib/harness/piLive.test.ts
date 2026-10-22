@@ -17,6 +17,16 @@ vi.mock("./child", () => ({
   unwatchChild: vi.fn(),
   watchChild: vi.fn(),
   writeChild: vi.fn(),
+  closeRetiredRawChildren: async () => undefined,
+  reserveRawChild: (id: string) => ({
+    nativeId: id,
+    logicalSessionId: id,
+    retired: false,
+    spawn: (...args: unknown[]) => mocks.spawnChild(id, ...args),
+    watch: () => () => undefined,
+    write: async () => undefined,
+    close: () => mocks.killChild(id),
+  }),
 }));
 
 vi.mock("./piClient", () => ({

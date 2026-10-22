@@ -7,9 +7,11 @@ const transport = vi.hoisted(() => ({
     command: Record<string, unknown>;
   }>,
   prompt: undefined as
-    ((sessionId: string, command: Record<string, unknown>) => void) | undefined,
+    | ((sessionId: string, command: Record<string, unknown>) => void)
+    | undefined,
   fast: undefined as
-    ((sessionId: string, command: Record<string, unknown>) => void) | undefined,
+    | ((sessionId: string, command: Record<string, unknown>) => void)
+    | undefined,
   writeChild: vi.fn(),
   spawnChild: vi.fn(),
 }));
@@ -24,20 +26,35 @@ vi.mock("./child", () => ({
   watchChild: (id: string, onLine: (line: string) => void) =>
     transport.watchers.set(id, onLine),
   writeChild: transport.writeChild,
+  closeRetiredRawChildren: async () => undefined,
+  reserveRawChild: (id: string) => ({
+    nativeId: id,
+    logicalSessionId: id,
+    retired: false,
+    spawn: (...args: unknown[]) => transport.spawnChild(id, ...args),
+    watch: (onLine: (line: string) => void) => {
+      transport.watchers.set(id, onLine);
+      return () => transport.watchers.delete(id);
+    },
+    write: (line: string) => transport.writeChild(id, line),
+    close: async () => {
+      transport.watchers.delete(id);
+    },
+  }),
 }));
 
+import { newSession } from "../session";
+import { applyHarnessEvent } from "./apply";
 import {
   cancelOmpTurn,
+  forgetOmpSession,
   sendOmpTurn,
   steerOmpTurn,
-  forgetOmpSession,
 } from "./omp";
-import { sendPiTurn, forgetPiSession } from "./pi";
+import { forgetPiSession, sendPiTurn } from "./pi";
 import { ompCommandProvider, respondQuestion } from "./piFamily";
 import { OMP_FLAVOR } from "./piFlavor";
 import type { HarnessEvent, SendTurnInput } from "./types";
-import { applyHarnessEvent } from "./apply";
-import { newSession } from "../session";
 
 function frame(sessionId: string, value: Record<string, unknown>) {
   transport.watchers.get(sessionId)?.(JSON.stringify(value));
