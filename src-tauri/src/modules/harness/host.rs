@@ -212,14 +212,37 @@ impl LiveChild {
 
 /// Terminates a batch of children, signalling local pids together.
 fn terminate_children(children: &[Arc<LiveChild>]) {
-    let mut local_pids = Vec::new();
-    for child in children {
-        match &child.remote {
-            Some(remote) => remote.kill(),
-            None => local_pids.push(child.pid),
+    let deadline = Instant::now() + KILL_ALL_GRACE + KILL_ALL_KILL_WAIT;
+    let summary = wait_captured_children(children, deadline, |children| {
+        let mut local_pids = Vec::new();
+        for child in children {
+            match &child.remote {
+                Some(remote) => remote.kill(),
+                None => local_pids.push(child.pid),
+            }
         }
+        terminate_all(&local_pids);
+    });
+    if summary.failed > 0 || summary.expired > 0 {
+        log::warn!(
+            "[harness] Local wait observations: {} failed, {} expired",
+            summary.failed,
+            summary.expired
+        );
     }
-    terminate_all(&local_pids);
+}
+
+fn wait_captured_children(
+    children: &[Arc<LiveChild>],
+    deadline: Instant,
+    signal: impl FnOnce(&[Arc<LiveChild>]),
+) -> local_wait::LocalWaitSummary {
+    let receipts: Vec<_> = children
+        .iter()
+        .filter_map(|child| child.local_wait.clone())
+        .collect();
+    signal(children);
+    local_wait::wait_cohort(&receipts, deadline)
 }
 
 struct LiveSse {

@@ -1,6 +1,7 @@
 use std::io;
 use std::process::Child;
-use std::sync::OnceLock;
+use std::sync::{Condvar, Mutex, OnceLock};
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum LocalWaitOutcome {
@@ -11,6 +12,8 @@ pub(super) enum LocalWaitOutcome {
 pub(super) struct LocalWaitReceipt {
     epoch: u64,
     outcome: OnceLock<LocalWaitOutcome>,
+    gate: Mutex<()>,
+    wake: Condvar,
 }
 
 impl LocalWaitReceipt {
@@ -18,11 +21,34 @@ impl LocalWaitReceipt {
         Self {
             epoch,
             outcome: OnceLock::new(),
+            gate: Mutex::new(()),
+            wake: Condvar::new(),
         }
     }
 
     pub(super) fn epoch(&self) -> u64 {
         self.epoch
+    }
+
+    pub(super) fn wait_until(&self, deadline: Instant) -> Option<LocalWaitOutcome> {
+        let mut gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        loop {
+            if let Some(outcome) = self.outcome.get().copied() {
+                return Some(outcome);
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return None;
+            }
+            let (next, _) = self
+                .wake
+                .wait_timeout(gate, deadline.saturating_duration_since(now))
+                .unwrap_or_else(|poison| poison.into_inner());
+            gate = next;
+        }
     }
 
     fn record(&self, result: io::Result<Option<i32>>) -> Option<i32> {
@@ -34,7 +60,15 @@ impl LocalWaitReceipt {
             LocalWaitOutcome::Reaped(code) => code,
             LocalWaitOutcome::WaitFailed => None,
         };
-        let _ = self.outcome.set(outcome);
+        let gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let published = self.outcome.set(outcome).is_ok();
+        drop(gate);
+        if published {
+            self.wake.notify_all();
+        }
         code
     }
 }
@@ -42,6 +76,32 @@ impl LocalWaitReceipt {
 pub(super) fn wait_child(child: &mut Child, receipt: &LocalWaitReceipt) -> Option<i32> {
     receipt.record(child.wait().map(|status| status.code()))
 }
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) struct LocalWaitSummary {
+    pub(super) reaped: usize,
+    pub(super) failed: usize,
+    pub(super) expired: usize,
+}
+
+pub(super) fn wait_cohort(
+    receipts: &[std::sync::Arc<LocalWaitReceipt>],
+    deadline: std::time::Instant,
+) -> LocalWaitSummary {
+    let mut summary = LocalWaitSummary::default();
+    for receipt in receipts {
+        match receipt.wait_until(deadline) {
+            Some(LocalWaitOutcome::Reaped(_)) => summary.reaped += 1,
+            Some(LocalWaitOutcome::WaitFailed) => summary.failed += 1,
+            None => summary.expired += 1,
+        }
+    }
+    summary
+}
+
+#[cfg(test)]
+#[path = "host_local_wait_cohort_tests.rs"]
+mod cohort_tests;
 
 #[cfg(test)]
 mod tests {
