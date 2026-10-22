@@ -618,16 +618,13 @@ let inFlightWrite: Promise<unknown> = Promise.resolve();
 export async function replaceInFlightSessions(
   refs: { sessionId: string; cwd: string }[],
 ): Promise<void> {
+  const sessions = refs.map((ref) => ({
+    sessionId: ref.sessionId,
+    cwd: normalizeProjectPath(ref.cwd),
+  }));
   const run = inFlightWrite
     .catch(() => undefined)
-    .then(() =>
-      invoke("session_set_in_flight", {
-        sessions: refs.map((ref) => ({
-          sessionId: ref.sessionId,
-          cwd: normalizeProjectPath(ref.cwd),
-        })),
-      }),
-    );
+    .then(() => invoke("session_set_in_flight", { sessions }));
   inFlightWrite = run;
   await run;
 }

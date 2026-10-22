@@ -326,13 +326,9 @@ export async function persistQuitState(
 ): Promise<void> {
   const refs = inFlightRefs(sessions, tabs);
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
-  await upsertSessions(
-    sessions.map((session) =>
-      interrupted.has(session.id) ? markTurnInterrupted(session) : session,
-    ),
-  ).catch(() => []);
-  await saveWorkspaceSnapshot(
-    collectWorkspaceSnapshot(
+  let snapshot: ReturnType<typeof collectWorkspaceSnapshot>;
+  try {
+    snapshot = collectWorkspaceSnapshot(
       tabs,
       sessions,
       activeTabId,
@@ -340,8 +336,15 @@ export async function persistQuitState(
       memory,
       projectTerminals,
       keepTab,
-    ),
-  ).catch(() => undefined);
+    );
+  } finally {
+    await upsertSessions(
+      sessions.map((session) =>
+        interrupted.has(session.id) ? markTurnInterrupted(session) : session,
+      ),
+    ).catch(() => []);
+  }
+  await saveWorkspaceSnapshot(snapshot).catch(() => undefined);
   // Vite/webview reload must not wipe a restored snapshot: those chats are idle
   // in this process until Continue runs.
   if (mode === "quit" || refs.length > 0) {
@@ -350,25 +353,25 @@ export async function persistQuitState(
 }
 
 async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> {
-  await upsertSessions(workspace.sessions).catch(() => []);
-  await saveWorkspaceSnapshot(
-    collectWorkspaceSnapshot(
+  let snapshot: ReturnType<typeof collectWorkspaceSnapshot>;
+  let refs: ReturnType<typeof inFlightRefs>;
+  try {
+    snapshot = collectWorkspaceSnapshot(
       workspace.tabs,
       workspace.sessions,
       workspace.activeTabId,
       workspace.projectCwd,
       workspace.projectReturnMemory ?? new Map(),
       workspace.projectTerminals ?? [],
-    ),
-  ).catch(() => undefined);
-  await replaceInFlightSessions(
-    workspace.sessions
+    );
+    refs = workspace.sessions
       .filter(wasTurnInterrupted)
-      .map((session) => ({
-        sessionId: session.id,
-        cwd: session.cwd,
-      })),
-  ).catch(() => undefined);
+      .map((session) => ({ sessionId: session.id, cwd: session.cwd }));
+  } finally {
+    await upsertSessions(workspace.sessions).catch(() => []);
+  }
+  await saveWorkspaceSnapshot(snapshot).catch(() => undefined);
+  await replaceInFlightSessions(refs).catch(() => undefined);
 }
 
 export type HarnessQuitCapture = {
