@@ -4,6 +4,8 @@ import { t } from "@/modules/i18n";
 import { isForegroundHarnessSession } from "@/modules/harness/lib/harnessFlush";
 import { ownHarnessWindowCloseSubscription } from "@/modules/harness/lib/harnessWindowCloseSubscription";
 import { ownHarnessUnloadSubscription } from "@/modules/harness/lib/harnessUnloadSubscription";
+import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
+import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -88,10 +90,8 @@ import {
 } from "../lib/appearance";
 import {
   bindResumedSessions,
-  closeCurrentWindow,
   confirmAndCloseWindow,
   confirmReload,
-  hasInFlightSessions,
   hideCurrentWindow,
   isAppQuitting,
   persistLiveTranscripts,
@@ -806,7 +806,22 @@ const sessionEngine = useHarnessSessionEngine({
 
 
 
+  const {
+    getOwner: getPersistenceOwner,
+    revision: persistenceRevision,
+  } = useWindowPersistenceAdmission(() => {
+    lastPersisted.current.clear();
+    observedSessions.current.clear();
+    pendingPersist.current.clear();
+    inFlightSyncKey.current = null;
+    workspaceSyncKey.current = null;
+  });
+
   useEffect(() => {
+    const persistenceOwner = getPersistenceOwner();
+    if (!persistenceOwner) return;
+    let unloadPermit: PersistencePermit | null = null;
+    let unloadDenied = false;
     markHarnessOpenPhase("ready");
     registerBuiltinHarnesses();
     if (resumed?.sessions.length) bindResumedSessions(resumed.sessions);
@@ -821,8 +836,19 @@ const sessionEngine = useHarnessSessionEngine({
       getProjectCwd: () => projectCwdRef.current,
       getProjectReturnMemory: readProjectReturnMemory,
       getProjectTerminals: () => projectTerminalsRef.current,
-      persist: (capture) =>
-        persistQuitState(
+      persist: async (capture) => {
+        const permit = persistenceOwner.capture();
+        unloadPermit = permit;
+        if (!permit) return;
+        const writer: PersistencePermit = {
+          ...permit,
+          run: async (write) => {
+            const admitted = await permit.run(write);
+            if (!admitted) unloadDenied = true;
+            return admitted;
+          },
+        };
+        await persistQuitState(
           capture.sessions,
           capture.tabs,
           capture.activeTabId,
@@ -830,20 +856,25 @@ const sessionEngine = useHarnessSessionEngine({
           capture.projectReturnMemory,
           "unload",
           capture.projectTerminals,
-        ),
-      reap: (capture) =>
-        reapWindowRuntime(
+          undefined,
+          { permit: writer, final: false },
+        );
+      },
+      reap: async (capture) => {
+        if (unloadDenied || !unloadPermit?.isCurrent()) return;
+        await reapWindowRuntime(
           capture.sessions,
           capture.tabs,
           capture.projectTerminals,
-        ),
+        );
+      },
     });
     return () => {
       unloadSubscription.release();
       stopBridge();
       cancelScheduledHarnessEvents();
     };
-  }, [resumed, readProjectReturnMemory, cancelScheduledHarnessEvents, flushHarnessEvents]);
+  }, [resumed, readProjectReturnMemory, cancelScheduledHarnessEvents, flushHarnessEvents, getPersistenceOwner]);
 
   useEffect(() => {
     // Only the harnesses already in this window. Probing every installed CLI
@@ -1173,6 +1204,8 @@ const sessionEngine = useHarnessSessionEngine({
   ]);
 
   useEffect(() => {
+    const persistenceOwner = getPersistenceOwner();
+    if (!persistenceOwner) return;
     let active = true;
     const releaseQuit = setQuitWorkspace(
       () => sessionsRef.current,
@@ -1183,6 +1216,7 @@ const sessionEngine = useHarnessSessionEngine({
       readProjectReturnMemory,
       flushHarnessEvents,
       keepWorkspaceTab,
+      persistenceOwner,
     );
     const closeSubscription = ownHarnessWindowCloseSubscription(
       (listener) => getCurrentWindow().onCloseRequested(listener),
@@ -1191,49 +1225,40 @@ const sessionEngine = useHarnessSessionEngine({
         // calls JS `window.destroy`, which Tauri denies without a permission.
         flushHarnessEvents();
         if (loadCloseToTray()) {
-          void persistLiveTranscripts(sessionsRef.current);
+          const permit = persistenceOwner.capture();
+          if (permit) {
+            void permit.run(() => persistLiveTranscripts(sessionsRef.current));
+          }
           void hideCurrentWindow();
           return;
         }
-        if (hasInFlightSessions(sessionsRef.current)) {
-          void confirmAndCloseWindow(
-            sessionsRef.current,
-            tabsRef.current,
-            activeTabIdRef.current,
-            projectCwdRef.current,
-            readProjectReturnMemory(),
-            projectTerminalsRef.current,
-            flushHarnessEvents,
-            keepWorkspaceTab,
-            () => {
-              if (!active) return null;
-              flushHarnessEvents();
-              if (!active) return null;
-              return {
-                sessions: sessionsRef.current,
-                tabs: tabsRef.current,
-                activeTabId: activeTabIdRef.current,
-                projectCwd: projectCwdRef.current,
-                projectReturnMemory: readProjectReturnMemory(),
-                projectTerminals: projectTerminalsRef.current,
-                keepTab: keepWorkspaceTab,
-              };
-            },
-          );
-          return;
-        }
-        void persistQuitState(
+        void confirmAndCloseWindow(
           sessionsRef.current,
           tabsRef.current,
           activeTabIdRef.current,
           projectCwdRef.current,
           readProjectReturnMemory(),
-          "unload",
           projectTerminalsRef.current,
+          flushHarnessEvents,
           keepWorkspaceTab,
-        ).finally(() => {
-          void closeCurrentWindow();
-        });
+          () => {
+            if (!active) return null;
+            flushHarnessEvents();
+            if (!active) return null;
+            const persistencePermit = persistenceOwner.capture();
+            if (!persistencePermit) return null;
+            return {
+              sessions: sessionsRef.current,
+              tabs: tabsRef.current,
+              activeTabId: activeTabIdRef.current,
+              projectCwd: projectCwdRef.current,
+              projectReturnMemory: readProjectReturnMemory(),
+              projectTerminals: projectTerminalsRef.current,
+              keepTab: keepWorkspaceTab,
+              persistencePermit,
+            };
+          },
+        );
       },
     );
     void closeSubscription.ready.catch(() => {
@@ -1244,7 +1269,7 @@ const sessionEngine = useHarnessSessionEngine({
       releaseQuit();
       closeSubscription.release();
     };
-  }, [flushHarnessEvents, keepWorkspaceTab, readProjectReturnMemory]);
+  }, [flushHarnessEvents, keepWorkspaceTab, readProjectReturnMemory, getPersistenceOwner]);
 
   const refreshHistory = useCallback(async (cwd: string) => {
     if (!cwd || cwd === "~") return;
@@ -1281,19 +1306,23 @@ const sessionEngine = useHarnessSessionEngine({
 
   const persistSession = useCallback((session: Session | undefined) => {
     if (!session || !shouldPersistSession(session)) return;
+    const permit = getPersistenceOwner()?.capture();
+    if (!permit) return;
     const fingerprint = persistFingerprint(session);
-    void upsertSession(session)
-      .then((summary: any) => {
-        if (!summary) return;
-        lastPersisted.current.set(session.id, fingerprint);
-        if (summary.cwd === sidebarCwdRef.current) {
-          setHistory((current) => mergeProjectHistorySummary(current, summary));
-        }
-      })
-      .catch(() => undefined);
-  }, []);
+    void permit.run(async () => {
+      const summary = await upsertSession(session);
+      if (!permit.isCurrent() || !summary) return;
+      lastPersisted.current.set(session.id, fingerprint);
+      if (summary.cwd === sidebarCwdRef.current) {
+        setHistory((current) => mergeProjectHistorySummary(current, summary));
+      }
+    }).catch(() => undefined);
+  }, [getPersistenceOwner]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
   useEffect(() => {
+    const permit = getPersistenceOwner()?.capture();
+    if (!permit) return;
     const liveIds = new Set(sessions.map((session: any) => session.id));
     const visibleIds = openSessionIds(tabsRef.current);
     for (const session of sessions) {
@@ -1335,38 +1364,41 @@ const sessionEngine = useHarnessSessionEngine({
     if (pendingPersist.current.size === 0) return;
 
     const timer = window.setTimeout(() => {
-      const dirty = [...pendingPersist.current.values()];
-      pendingPersist.current.clear();
-      const changed = dirty.filter(
-        (session) =>
-          lastPersisted.current.get(session.id) !== persistFingerprint(session),
-      );
-      if (changed.length === 0) return;
-      void upsertSessions(changed)
-        .then((summaries) => {
-          for (const summary of summaries) {
-            const session = changed.find((item) => item.id === summary.id);
-            if (session) {
-              lastPersisted.current.set(
-                session.id,
-                persistFingerprint(session),
-              );
-            }
-            if (summary.cwd === sidebarCwdRef.current) {
-              setHistory((current) =>
-                mergeProjectHistorySummary(current, summary),
-              );
-            }
+      void permit.run(async () => {
+        const dirty = [...pendingPersist.current.values()];
+        pendingPersist.current.clear();
+        const changed = dirty.filter(
+          (session) =>
+            lastPersisted.current.get(session.id) !== persistFingerprint(session),
+        );
+        if (changed.length === 0) return;
+        const summaries = await upsertSessions(changed);
+        if (!permit.isCurrent()) return;
+        for (const summary of summaries) {
+          const session = changed.find((item) => item.id === summary.id);
+          if (session) {
+            lastPersisted.current.set(
+              session.id,
+              persistFingerprint(session),
+            );
           }
-        })
-        .catch(() => undefined);
+          if (summary.cwd === sidebarCwdRef.current) {
+            setHistory((current) =>
+              mergeProjectHistorySummary(current, summary),
+            );
+          }
+        }
+      }).catch(() => undefined);
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [persistSession, sessions]);
+  }, [persistSession, sessions, persistenceRevision, getPersistenceOwner]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
   useEffect(() => {
     const refs = inFlightRefs(sessions, tabs);
     if (refs.length > 0) sawInFlight.current = true;
+    const permit = getPersistenceOwner()?.capture();
+    if (!permit) return;
     const key = inFlightSnapshotKey(refs);
     if (
       !shouldWriteInFlightSnapshot(
@@ -1378,12 +1410,17 @@ const sessionEngine = useHarnessSessionEngine({
     ) {
       return;
     }
-    inFlightSyncKey.current = key;
-    void replaceInFlightSessions(refs).catch(() => undefined);
-  }, [sessions, tabs]);
+    void permit.run(() => {
+      inFlightSyncKey.current = key;
+      return replaceInFlightSessions(refs);
+    }).catch(() => undefined);
+  }, [sessions, tabs, persistenceRevision, getPersistenceOwner]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
   useEffect(() => {
     if (windowTransfer) return;
+    const permit = getPersistenceOwner()?.capture();
+    if (!permit) return;
     const snapshot = collectWorkspaceSnapshot(
       tabs,
       sessions,
@@ -1399,9 +1436,11 @@ const sessionEngine = useHarnessSessionEngine({
     );
     const key = workspaceSnapshotKey(snapshot);
     if (workspaceSyncKey.current === key) return;
-    workspaceSyncKey.current = key;
     const timer = window.setTimeout(() => {
-      void saveWorkspaceSnapshot(snapshot).catch(() => undefined);
+      void permit.run(() => {
+        workspaceSyncKey.current = key;
+        return saveWorkspaceSnapshot(snapshot);
+      }).catch(() => undefined);
     }, 250);
     return () => window.clearTimeout(timer);
   }, [
@@ -1411,6 +1450,8 @@ const sessionEngine = useHarnessSessionEngine({
     projectCwd,
     projectTerminals,
     windowTransfer,
+    persistenceRevision,
+    getPersistenceOwner,
   ]);
 
   useEffect(() => {

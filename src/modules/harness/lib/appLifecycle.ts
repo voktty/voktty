@@ -40,6 +40,18 @@ import {
 import { loadWindowTransfer } from "./windowTransferBootstrap";
 import type { WindowTransferPayload } from "./windowTransfer";
 import type { ProjectReturnMemory } from "./projectReturn";
+import {
+  windowPersistenceAdmission,
+  type PersistenceFinal,
+  type PersistenceOwner,
+  type PersistencePermit,
+} from "@/modules/harness/lib/persistenceAdmission";
+
+export type PersistenceContext = {
+  permit: PersistencePermit;
+  final?: boolean;
+  onSeal?: (final: PersistenceFinal) => void;
+};
 
 export type { ResumedWorkspace };
 export { hasInFlightSessions };
@@ -52,6 +64,8 @@ export type BootWorkspace = {
 let resumedPromise: Promise<ResumedWorkspace | null> | null = null;
 let bootPromise: Promise<BootWorkspace> | null = null;
 let quitting = false;
+let quitPersistence: PersistenceFinal | null = null;
+let bootQuitOwner: PersistenceOwner | null = null;
 let quitDialogOpen = false;
 let bootingResumed: ResumedWorkspace | null = null;
 let liveWorkspace: {
@@ -63,6 +77,7 @@ let liveWorkspace: {
   projectReturnMemory: () => ProjectReturnMemory;
   keepTab?: (tab: WorkspaceTab) => boolean;
   flush: () => void;
+  persistenceOwner?: PersistenceOwner;
 } | null = null;
 
 export function isAppQuitting(): boolean {
@@ -78,6 +93,7 @@ export function setQuitWorkspace(
   projectReturnMemory: () => ProjectReturnMemory,
   flush: () => void,
   keepTab?: (tab: WorkspaceTab) => boolean,
+  persistenceOwner?: PersistenceOwner,
 ): () => void {
   liveWorkspace = {
     sessions,
@@ -88,6 +104,7 @@ export function setQuitWorkspace(
     projectReturnMemory,
     keepTab,
     flush,
+    persistenceOwner,
   };
   bootingResumed = null;
   return () => {
@@ -103,10 +120,7 @@ export type QuitConfirmPayload = {
 export async function reportQuitPoll(id: number): Promise<void> {
   if (liveWorkspace) {
     liveWorkspace.flush();
-    const refs = inFlightRefs(
-      liveWorkspace.sessions(),
-      liveWorkspace.tabs(),
-    );
+    const refs = inFlightRefs(liveWorkspace.sessions(), liveWorkspace.tabs());
     await invoke("quit_poll_reply", { id, inFlight: refs.length });
     return;
   }
@@ -150,25 +164,59 @@ export async function commitQuit(id: number): Promise<void> {
   let persisted = false;
   try {
     if (liveWorkspace) {
-      liveWorkspace.flush();
+      const workspace = liveWorkspace;
+      workspace.flush();
+      if (liveWorkspace !== workspace) return;
+      const capture: HarnessQuitCapture = {
+        sessions: workspace.sessions(),
+        tabs: workspace.tabs(),
+        activeTabId: workspace.activeTabId(),
+        projectCwd: workspace.projectCwd(),
+        projectReturnMemory: workspace.projectReturnMemory(),
+        projectTerminals: workspace.projectTerminals(),
+        keepTab: workspace.keepTab,
+      };
+      if (liveWorkspace !== workspace) return;
+      const permit = workspace.persistenceOwner?.capture();
+      if (workspace.persistenceOwner && !permit) return;
+      const state: { final: PersistenceFinal | null } = { final: null };
+      const persistence: PersistenceContext | undefined = permit
+        ? {
+            permit,
+            final: true,
+            onSeal: (final) => {
+              state.final = final;
+              quitPersistence = final;
+            },
+          }
+        : undefined;
       await persistQuitState(
-        liveWorkspace.sessions(),
-        liveWorkspace.tabs(),
-        liveWorkspace.activeTabId(),
-        liveWorkspace.projectCwd(),
-        liveWorkspace.projectReturnMemory(),
+        capture.sessions,
+        capture.tabs,
+        capture.activeTabId,
+        capture.projectCwd,
+        capture.projectReturnMemory,
         "quit",
-        liveWorkspace.projectTerminals(),
-        liveWorkspace.keepTab,
+        capture.projectTerminals,
+        capture.keepTab,
+        persistence,
       );
-      persisted = true;
+      persisted = !persistence || state.final?.isCurrent() === true;
     } else {
+      bootQuitOwner ??= windowPersistenceAdmission.createOwner();
+      const owner = bootQuitOwner;
+      const permit = owner.capture();
+      if (!permit) return;
       const { resumed } = await loadBootWorkspace();
+      if (bootQuitOwner !== owner || !permit.isCurrent() || liveWorkspace)
+        return;
       const pending = resumed ?? bootingResumed;
       if (pending) {
-        await persistBootingResume(pending);
+        const final = await persistBootingResume(pending, permit);
+        persisted = final?.isCurrent() === true;
+      } else {
+        persisted = true;
       }
-      persisted = true;
     }
   } catch {
     persisted = false;
@@ -179,6 +227,10 @@ export async function commitQuit(id: number): Promise<void> {
 
 export function abortQuit(): void {
   quitting = false;
+  quitPersistence?.cancel();
+  quitPersistence = null;
+  bootQuitOwner?.retire();
+  bootQuitOwner = null;
 }
 
 export async function handleQuitRequested(): Promise<void> {
@@ -189,15 +241,29 @@ export async function handleQuitRequested(): Promise<void> {
     await confirmQuitAndExit(workspace);
     return;
   }
+  bootQuitOwner ??= windowPersistenceAdmission.createOwner();
+  const owner = bootQuitOwner;
+  const permit = owner.capture();
+  if (!permit) return;
   const { resumed } = await loadBootWorkspace();
+  if (bootQuitOwner !== owner || !permit.isCurrent() || liveWorkspace) return;
   const pending = resumed ?? bootingResumed;
   if (pending) {
     quitting = true;
     try {
-      await persistBootingResume(pending);
-      await invoke("confirm_quit");
+      const final = await persistBootingResume(pending, permit);
+      if (final?.isCurrent()) await invoke("confirm_quit");
+      else if (bootQuitOwner === owner) {
+        quitting = false;
+        owner.retire();
+        bootQuitOwner = null;
+      }
     } catch {
-      quitting = false;
+      if (bootQuitOwner === owner) {
+        quitting = false;
+        owner.retire();
+        bootQuitOwner = null;
+      }
     }
     return;
   }
@@ -323,10 +389,16 @@ export async function persistQuitState(
   mode: "quit" | "unload" = "quit",
   projectTerminals: ProjectTerminalDock[] = [],
   keepTab?: (tab: WorkspaceTab) => boolean,
+  persistence?: PersistenceContext,
 ): Promise<void> {
+  let writer = persistence?.permit;
+  if (writer && !writer.isCurrent()) return;
+  const write = (effect: () => Promise<unknown>) =>
+    writer ? writer.run(effect) : effect();
   const refs = inFlightRefs(sessions, tabs);
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
   let snapshot: ReturnType<typeof collectWorkspaceSnapshot>;
+  let final: PersistenceFinal | null = null;
   try {
     snapshot = collectWorkspaceSnapshot(
       tabs,
@@ -338,21 +410,38 @@ export async function persistQuitState(
       keepTab,
     );
   } finally {
-    await upsertSessions(
-      sessions.map((session) =>
-        interrupted.has(session.id) ? markTurnInterrupted(session) : session,
+    if (persistence?.final) {
+      final = persistence.permit.seal();
+      if (final) {
+        writer = final;
+        persistence.onSeal?.(final);
+      }
+    }
+    if (final?.pending) await final.pending;
+    await write(() =>
+      upsertSessions(
+        sessions.map((session) =>
+          interrupted.has(session.id) ? markTurnInterrupted(session) : session,
+        ),
       ),
     ).catch(() => []);
   }
-  await saveWorkspaceSnapshot(snapshot).catch(() => undefined);
+  if (writer && !writer.isCurrent()) return;
+  await write(() => saveWorkspaceSnapshot(snapshot)).catch(() => undefined);
   // Vite/webview reload must not wipe a restored snapshot: those chats are idle
   // in this process until Continue runs.
   if (mode === "quit" || refs.length > 0) {
-    await replaceInFlightSessions(refs).catch(() => undefined);
+    await write(() => replaceInFlightSessions(refs)).catch(() => undefined);
   }
 }
 
-async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> {
+async function persistBootingResume(
+  workspace: ResumedWorkspace,
+  permit: PersistencePermit,
+): Promise<PersistenceFinal | null> {
+  if (!permit.isCurrent()) return null;
+  let writer: PersistencePermit = permit;
+  let final: PersistenceFinal | null = null;
   let snapshot: ReturnType<typeof collectWorkspaceSnapshot>;
   let refs: ReturnType<typeof inFlightRefs>;
   try {
@@ -368,10 +457,18 @@ async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> 
       .filter(wasTurnInterrupted)
       .map((session) => ({ sessionId: session.id, cwd: session.cwd }));
   } finally {
-    await upsertSessions(workspace.sessions).catch(() => []);
+    final = permit.seal();
+    if (final) {
+      writer = final;
+      quitPersistence = final;
+    }
+    if (final?.pending) await final.pending;
+    await writer.run(() => upsertSessions(workspace.sessions)).catch(() => []);
   }
-  await saveWorkspaceSnapshot(snapshot).catch(() => undefined);
-  await replaceInFlightSessions(refs).catch(() => undefined);
+  if (!final?.isCurrent()) return null;
+  await final.run(() => saveWorkspaceSnapshot(snapshot)).catch(() => undefined);
+  await final.run(() => replaceInFlightSessions(refs)).catch(() => undefined);
+  return final.isCurrent() ? final : null;
 }
 
 export type HarnessQuitCapture = {
@@ -382,6 +479,7 @@ export type HarnessQuitCapture = {
   projectReturnMemory: ProjectReturnMemory;
   projectTerminals: ProjectTerminalDock[];
   keepTab?: (tab: WorkspaceTab) => boolean;
+  persistencePermit?: PersistencePermit;
 };
 
 export async function confirmAndCloseWindow(
@@ -420,6 +518,16 @@ export async function confirmAndCloseWindow(
     };
   }
   if (!capture) return;
+  const state: { final: PersistenceFinal | null } = { final: null };
+  const persistence: PersistenceContext | undefined = capture.persistencePermit
+    ? {
+        permit: capture.persistencePermit,
+        final: true,
+        onSeal: (sealed) => {
+          state.final = sealed;
+        },
+      }
+    : undefined;
   try {
     await persistQuitState(
       capture.sessions,
@@ -430,9 +538,18 @@ export async function confirmAndCloseWindow(
       "unload",
       capture.projectTerminals,
       capture.keepTab,
+      persistence,
     );
   } finally {
-    await closeCurrentWindow();
+    const current = state.final
+      ? state.final.isCurrent()
+      : (capture.persistencePermit?.isCurrent() ?? true);
+    if (current) {
+      await closeCurrentWindow().catch((error: unknown) => {
+        state.final?.cancel();
+        throw error;
+      });
+    }
   }
 }
 
@@ -464,6 +581,26 @@ async function confirmQuitAndExit(
       keepTab: workspace.keepTab,
     };
     if (liveWorkspace !== workspace) return;
+    const permit = workspace.persistenceOwner?.capture();
+    if (workspace.persistenceOwner && !permit) return;
+    const state: { final: PersistenceFinal | null } = { final: null };
+    const persistence: PersistenceContext | undefined = permit
+      ? {
+          permit,
+          final: true,
+          onSeal: (final) => {
+            state.final = final;
+            quitPersistence = final;
+          },
+        }
+      : undefined;
+    const cancel = () => {
+      if (!persistence || quitPersistence === state.final) {
+        quitting = false;
+        state.final?.cancel();
+        quitPersistence = null;
+      }
+    };
     quitting = true;
     try {
       await persistQuitState(
@@ -475,10 +612,15 @@ async function confirmQuitAndExit(
         "quit",
         capture.projectTerminals,
         capture.keepTab,
+        persistence,
       );
+      if (persistence && !state.final?.isCurrent()) {
+        cancel();
+        return;
+      }
       await invoke("confirm_quit");
     } catch {
-      quitting = false;
+      cancel();
     }
   } finally {
     quitDialogOpen = false;
