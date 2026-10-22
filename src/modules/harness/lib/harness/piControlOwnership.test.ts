@@ -304,7 +304,7 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
       expect(spawns[1]?.args).toContain("captured-fork");
     });
 
-    it("rejects a held steer reply after cancellation and replacement activity on the same child", async () => {
+    it("holds fresh work until a cancelled same-child steer reply retires", async () => {
       await observed(sendTurn(flavor, input(flavor)));
       autoPrompt = false;
       const first = observed(sendTurn(flavor, input(flavor)));
@@ -317,9 +317,13 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
       await first;
       intercept = undefined;
       autoPrompt = true;
-      await observed(sendTurn(flavor, input(flavor, [], "fresh")));
+      const count = requests.length;
+      const fresh = observed(sendTurn(flavor, input(flavor, [], "fresh")));
+      await flush();
+      expect(requests).toHaveLength(count);
       reply(old);
       await expect(action).rejects.toThrow(/retired/i);
+      await fresh;
       expect(spawns).toHaveLength(1);
     });
 

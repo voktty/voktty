@@ -100,7 +100,10 @@ type PendingAbort = {
 };
 
 type PendingWriter = { operation: object; eligible: boolean };
-type WriterWake = { promise: Promise<void>; resolve: () => void };
+type PendingSteer = { operation: object };
+const MAX_PENDING_STEER_OUTCOMES = 256;
+let pendingSteerOutcomes = 0;
+type PendingWorkWake = { promise: Promise<void>; resolve: () => void };
 const MAX_PENDING_RPC_WRITERS = 256;
 let pendingRpcWriters = 0;
 
@@ -113,7 +116,8 @@ type Live = {
   reuseError?: Error;
   abortPending?: PendingAbort;
   pendingWriters?: Set<PendingWriter>;
-  writerWake?: WriterWake;
+  pendingSteers?: Set<PendingSteer>;
+  pendingWorkWake?: PendingWorkWake;
   rpc: PiRpc;
   cwd: string;
   providerSessionId: string;
@@ -296,8 +300,8 @@ export async function sendTurn(
           await abort.promise;
           assertCurrentOperation(live, operation);
         }
-        if (hasRetiredWriters(live, operation)) {
-          await waitForRetiredWriters(live, operation);
+        if (hasRetiredWork(live, operation)) {
+          await waitForRetiredWork(live, operation);
           assertCurrentOperation(live, operation);
         }
         guardForkBinding(live, operation);
@@ -353,8 +357,8 @@ function queueControl<T>(
         await abort.promise;
         assertCurrentOperation(live, operation);
       }
-      if (hasRetiredWriters(live, operation)) {
-        await waitForRetiredWriters(live, operation);
+      if (hasRetiredWork(live, operation)) {
+        await waitForRetiredWork(live, operation);
         assertCurrentOperation(live, operation);
       }
       guardForkBinding(live, operation);
@@ -457,8 +461,13 @@ export async function steerTurn(
     attachments: input.attachments,
   });
   if (!command.message && !Array.isArray(command.images)) return;
-  await operationRequest(live, operation, command);
-  assertCurrentOperation(live, operation);
+  const receipt = reserveSteer(live, operation);
+  try {
+    await operationRequest(live, operation, command);
+    assertCurrentOperation(live, operation);
+  } finally {
+    releaseSteer(live, receipt);
+  }
 }
 
 export function respondApproval(
@@ -509,7 +518,7 @@ export async function cancelTurn(
   const previousAbort = live.abortPending;
   const abort = previousAbort ?? reserveAbort(live);
   live.operationToken = {};
-  notifyWriterChange(live);
+  notifyPendingWork(live);
   const onEvent = live.onEvent;
   const done = live.turnDone;
   const hadTurn = live.activeTurn || done !== null;
@@ -585,7 +594,7 @@ function detachAdmission(owner: Admission, error?: Error): () => void {
   if (!live) return () => undefined;
   if (error) live.exitError = error;
   else live.operationToken = {};
-  notifyWriterChange(live);
+  notifyPendingWork(live);
   live.muteUpdates = true;
   live.settleToken += 1;
   const approvals = [...live.approvals.values()];
@@ -1419,7 +1428,7 @@ function blockNativeReuse(live: Live, error: unknown): void {
   if (live.reuseError || !isCurrentAdmission(live.admission)) return;
   const failure = error instanceof Error ? error : new Error(String(error));
   live.reuseError = failure;
-  notifyWriterChange(live);
+  notifyPendingWork(live);
   live.muteUpdates = true;
   live.settleToken += 1;
   const approvals = [...live.approvals.values()];
@@ -1447,9 +1456,9 @@ function assertCurrentOperation(live: Live, operation: object): void {
     throw live.exitError ?? live.reuseError ?? new RetiredPiOperationError();
 }
 
-function notifyWriterChange(live: Live): void {
-  const wake = live.writerWake;
-  live.writerWake = undefined;
+function notifyPendingWork(live: Live): void {
+  const wake = live.pendingWorkWake;
+  live.pendingWorkWake = undefined;
   wake?.resolve();
 }
 
@@ -1466,34 +1475,53 @@ function reserveWriter(live: Live): PendingWriter {
 function releaseWriter(live: Live, receipt: PendingWriter): void {
   if (!live.pendingWriters?.delete(receipt)) return;
   pendingRpcWriters -= 1;
-  notifyWriterChange(live);
+  notifyPendingWork(live);
 }
 
-function hasRetiredWriters(live: Live, operation: object): boolean {
+function reserveSteer(live: Live, operation: object): PendingSteer {
+  assertCurrentOperation(live, operation);
+  if (pendingSteerOutcomes >= MAX_PENDING_STEER_OUTCOMES)
+    throw new Error("Pi steer outcome capacity exceeded");
+  const receipt = { operation };
+  live.pendingSteers ??= new Set();
+  live.pendingSteers.add(receipt);
+  pendingSteerOutcomes += 1;
+  return receipt;
+}
+
+function releaseSteer(live: Live, receipt: PendingSteer): void {
+  if (!live.pendingSteers?.delete(receipt)) return;
+  pendingSteerOutcomes -= 1;
+  notifyPendingWork(live);
+}
+
+function hasRetiredWork(live: Live, operation: object): boolean {
   for (const receipt of live.pendingWriters ?? [])
     if (receipt.eligible && receipt.operation !== operation) return true;
+  for (const receipt of live.pendingSteers ?? [])
+    if (receipt.operation !== operation) return true;
   return false;
 }
 
-async function waitForRetiredWriters(
+async function waitForRetiredWork(
   live: Live,
   operation: object,
 ): Promise<void> {
-  while (hasRetiredWriters(live, operation)) {
+  while (hasRetiredWork(live, operation)) {
     assertCurrentOperation(live, operation);
-    let wake = live.writerWake;
+    let wake = live.pendingWorkWake;
     if (!wake) {
       let resolve!: () => void;
       const promise = new Promise<void>((done) => {
         resolve = done;
       });
       wake = { promise, resolve };
-      live.writerWake = wake;
+      live.pendingWorkWake = wake;
     }
     try {
       await wake.promise;
     } finally {
-      if (live.writerWake === wake) live.writerWake = undefined;
+      if (live.pendingWorkWake === wake) live.pendingWorkWake = undefined;
     }
     assertCurrentOperation(live, operation);
   }

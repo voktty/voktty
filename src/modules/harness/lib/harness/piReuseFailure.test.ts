@@ -323,7 +323,7 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
       await expectBlocked(flavor, original);
     });
 
-    it("blocks a new active generation when an old same-native steer write fails late", async () => {
+    it("blocks queued fresh work when an old same-native steer write fails late", async () => {
       await observed(sendTurn(flavor, input(flavor)));
       autoPrompt = false;
       const oldTurn = observed(sendTurn(flavor, input(flavor)));
@@ -336,8 +336,10 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
       await cancelTurn(flavor, "reuse-pi");
       await oldTurn;
       intercept = undefined;
+      const count = requests.length;
       const fresh = observed(sendTurn(flavor, input(flavor)));
       await flush();
+      expect(requests).toHaveLength(count);
       const original = new Error("old native write outcome unknown");
       held.reject(original);
       await expect(oldSteer).rejects.toThrow(/retired/i);
