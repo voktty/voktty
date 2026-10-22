@@ -770,7 +770,15 @@ async function startLive(
       handleFrame(flavor, input.sessionId, current, rec);
     },
     flavor.label,
-    child.write,
+    async (line) => {
+      try {
+        await child.write(line);
+      } catch (error) {
+        const current = liveRef.current;
+        if (current) blockNativeReuse(current, error);
+        throw error;
+      }
+    },
   );
 
   const live: Live = {
