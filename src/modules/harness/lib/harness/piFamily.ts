@@ -113,6 +113,8 @@ type Live = {
   contextWindow?: number;
   nativeModel: string;
   thinking: string;
+  thinkingNeedsSync?: boolean;
+  fastNeedsSync?: boolean;
   fastModeEnabled?: boolean;
   fastModeRequested?: boolean;
   planning: boolean;
@@ -1438,6 +1440,10 @@ async function operationRequest(
     assertCurrentOperation(live, operation);
     throw error;
   }
+  if (isCurrentAdmission(live.admission)) {
+    if (command.type === "set_thinking_level") live.thinkingNeedsSync = true;
+    if (command.type === "set_fast_mode") live.fastNeedsSync = true;
+  }
   assertCurrentOperation(live, operation);
   return result;
 }
@@ -1476,7 +1482,11 @@ async function applyModel(
   } else if (ref) {
     live.nativeModel = native;
   }
-  if (isPiThinkingLevel(thinking) && thinking !== live.thinking) {
+  if (
+    isPiThinkingLevel(thinking) &&
+    (thinking !== live.thinking || live.thinkingNeedsSync)
+  ) {
+    const restoring = live.thinkingNeedsSync;
     try {
       await operationRequest(live, operation, {
         type: "set_thinking_level",
@@ -1485,15 +1495,21 @@ async function applyModel(
       assertCurrentOperation(live, operation);
     } catch (error) {
       assertCurrentOperation(live, operation);
+      if (restoring) {
+        blockNativeReuse(live, error);
+        throw error;
+      }
       if (!isPiRpcCommandFailure(error)) throw error;
     }
     live.thinking = thinking;
+    live.thinkingNeedsSync = false;
   }
   if (
     flavor.id === "omp" &&
     (fast === "true" || fast === "false") &&
-    (fast === "true") !== live.fastModeRequested
+    ((fast === "true") !== live.fastModeRequested || live.fastNeedsSync)
   ) {
+    const restoring = live.fastNeedsSync;
     const enabled = fast === "true";
     try {
       const response = await operationRequest(live, operation, {
@@ -1506,6 +1522,10 @@ async function applyModel(
         typeof data?.enabled === "boolean" ? data.enabled : enabled;
     } catch (error) {
       assertCurrentOperation(live, operation);
+      if (restoring) {
+        blockNativeReuse(live, error);
+        throw error;
+      }
       if (!isPiRpcCommandFailure(error)) throw error;
       if (enabled) {
         live.fastModeEnabled = false;
@@ -1526,6 +1546,7 @@ async function applyModel(
     }
     assertCurrentOperation(live, operation);
     live.fastModeRequested = enabled;
+    live.fastNeedsSync = false;
   }
   assertCurrentOperation(live, operation);
 }
