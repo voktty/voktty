@@ -1304,9 +1304,11 @@ async function handleExtensionUi(
   }
 
   if (live.cancelled || live.muteUpdates) {
-    await live.admission.child
-      ?.write(JSON.stringify(extensionUiResponse(request, "deny")))
-      .catch(() => undefined);
+    await writeUiReply(
+      live,
+      live.admission.child,
+      JSON.stringify(extensionUiResponse(request, "deny")),
+    ).catch(() => undefined);
     return;
   }
 
@@ -1373,15 +1375,15 @@ async function handleExtensionUi(
     });
     if (!live.isCurrent()) return;
     if (!isCurrentRequest()) value = undefined;
-    await child
-      ?.write(
-        JSON.stringify({
-          type: "extension_ui_response",
-          id: request.id,
-          ...(value === undefined ? { cancelled: true } : { value }),
-        }),
-      )
-      .catch(() => undefined);
+    await writeUiReply(
+      live,
+      child,
+      JSON.stringify({
+        type: "extension_ui_response",
+        id: request.id,
+        ...(value === undefined ? { cancelled: true } : { value }),
+      }),
+    ).catch(() => undefined);
     return;
   }
 
@@ -1404,13 +1406,13 @@ async function handleExtensionUi(
     decision: isCurrentRequest() ? decision : "deny",
   });
   if (!live.isCurrent()) return;
-  await child
-    ?.write(
-      JSON.stringify(
-        extensionUiResponse(request, isCurrentRequest() ? decision : "deny"),
-      ),
-    )
-    .catch(() => undefined);
+  await writeUiReply(
+    live,
+    child,
+    JSON.stringify(
+      extensionUiResponse(request, isCurrentRequest() ? decision : "deny"),
+    ),
+  ).catch(() => undefined);
 }
 
 class RetiredPiOperationError extends Error {
@@ -1476,6 +1478,24 @@ function assertCurrentOperation(live: Live, operation: object): void {
   if (live.operationToken !== operation) throw new RetiredPiOperationError();
   if (!live.isCurrent())
     throw live.exitError ?? live.reuseError ?? new RetiredPiOperationError();
+}
+
+async function writeUiReply(
+  live: Live,
+  child: RawChildHandle | undefined,
+  line: string,
+): Promise<void> {
+  if (!child) return;
+  let receipt: PendingWriter | undefined;
+  try {
+    receipt = reserveWriter(live);
+    await child.write(line);
+  } catch (error) {
+    blockNativeReuse(live, error);
+    throw error;
+  } finally {
+    if (receipt) releaseWriter(live, receipt);
+  }
 }
 
 function notifyPendingWork(live: Live): void {
