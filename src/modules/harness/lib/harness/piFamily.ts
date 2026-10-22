@@ -1310,6 +1310,15 @@ async function handleExtensionUi(
     return;
   }
 
+  const child = live.admission.child;
+  const operation = live.operationToken;
+  const onEvent = live.onEvent;
+  const isCurrentRequest = () =>
+    live.isCurrent() &&
+    live.operationToken === operation &&
+    !live.cancelled &&
+    !live.muteUpdates;
+
   if (
     flavor.id === "omp" &&
     (request.method === "select" ||
@@ -1348,7 +1357,7 @@ async function handleExtensionUi(
     if (!live.isCurrent()) return;
     live.questions.delete(uiId);
     let value: string | undefined;
-    if (reply.kind === "answered") {
+    if (isCurrentRequest() && reply.kind === "answered") {
       if (request.method === "select") {
         const selected = reply.answers[request.id]?.[0];
         if (selected !== undefined && /^\d+$/.test(selected))
@@ -1357,12 +1366,14 @@ async function handleExtensionUi(
         value = reply.custom?.[request.id];
       }
     }
-    emit(live, {
+    onEvent({
       type: "question.resolved",
       requestId: uiId,
       decision: value === undefined ? "skipped" : "answered",
     });
-    await live.admission.child
+    if (!live.isCurrent()) return;
+    if (!isCurrentRequest()) value = undefined;
+    await child
       ?.write(
         JSON.stringify({
           type: "extension_ui_response",
@@ -1387,9 +1398,18 @@ async function handleExtensionUi(
   const decision = await decisionPromise;
   if (!live.isCurrent()) return;
   live.approvals.delete(uiId);
-  emit(live, { type: "approval.resolved", requestId: uiId, decision });
-  await live.admission.child
-    ?.write(JSON.stringify(extensionUiResponse(request, decision)))
+  onEvent({
+    type: "approval.resolved",
+    requestId: uiId,
+    decision: isCurrentRequest() ? decision : "deny",
+  });
+  if (!live.isCurrent()) return;
+  await child
+    ?.write(
+      JSON.stringify(
+        extensionUiResponse(request, isCurrentRequest() ? decision : "deny"),
+      ),
+    )
     .catch(() => undefined);
 }
 
