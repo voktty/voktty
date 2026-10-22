@@ -367,14 +367,20 @@ impl HarnessHost {
         terminate_children(&kids);
     }
 
+    #[cfg(test)]
     fn remove_if_pid(&self, session_id: &str, pid: u32) -> Option<Arc<LiveChild>> {
+        let epoch = self.lock_inner().epochs.get(session_id).copied()?;
+        self.remove_if_spawn(session_id, epoch, pid)
+    }
+
+    /// Numeric PID reuse cannot give an earlier spawn authority over its replacement.
+    fn remove_if_spawn(&self, session_id: &str, epoch: u64, pid: u32) -> Option<Arc<LiveChild>> {
         let mut inner = self.lock_inner();
-        if inner.children.get(session_id).map(|live| live.pid) != Some(pid) {
+        if inner.epochs.get(session_id) != Some(&epoch)
+            || inner.children.get(session_id).map(|live| live.pid) != Some(pid)
+        {
             return None;
         }
-        // Only torn down here because the pid check above proves this is the
-        // session's current child; a fresher respawn already replaced this
-        // entry (different pid) and owns its own proxy by then.
         inner.epochs.remove(session_id);
         inner.proxies.remove(session_id);
         inner.children.remove(session_id)
@@ -1051,7 +1057,7 @@ pub fn harness_spawn(
     thread::spawn(move || {
         let code = child.wait().ok().and_then(|status| status.code());
         if let Some(host) = wait_app.try_state::<HarnessHost>() {
-            if host.remove_if_pid(&wait_id, wait_pid).is_some() {
+            if host.remove_if_spawn(&wait_id, epoch, wait_pid).is_some() {
                 host.stop_sse(&wait_id);
             }
         }
@@ -1136,6 +1142,7 @@ struct HostAgentEvents {
     app: AppHandle,
     session_id: String,
     pid: u32,
+    epoch: u64,
 }
 
 impl super::remote_agent::AgentEvents for HostAgentEvents {
@@ -1177,7 +1184,10 @@ impl super::remote_agent::AgentEvents for HostAgentEvents {
             self.stderr(reason);
         }
         if let Some(host) = self.app.try_state::<HarnessHost>() {
-            if host.remove_if_pid(&self.session_id, self.pid).is_some() {
+            if host
+                .remove_if_spawn(&self.session_id, self.epoch, self.pid)
+                .is_some()
+            {
                 host.stop_sse(&self.session_id);
             }
         }
@@ -1242,6 +1252,7 @@ fn spawn_persistent_remote(
         app: app.clone(),
         session_id: session_id.to_string(),
         pid,
+        epoch: stamp.epoch,
     });
     let folder = target.relative_dir.as_deref().unwrap_or(&target.dir);
     let params = spawn_params(command, args, folder, None);
@@ -4297,3 +4308,7 @@ mod binary_resolution_tests {
         assert!(error.contains("Provider accounts"));
     }
 }
+
+#[cfg(test)]
+#[path = "host_exit_ownership_tests.rs"]
+mod exit_ownership_tests;
