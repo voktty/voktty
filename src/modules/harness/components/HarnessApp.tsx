@@ -1173,6 +1173,7 @@ const sessionEngine = useHarnessSessionEngine({
   ]);
 
   useEffect(() => {
+    let active = true;
     const releaseQuit = setQuitWorkspace(
       () => sessionsRef.current,
       () => tabsRef.current,
@@ -1204,6 +1205,20 @@ const sessionEngine = useHarnessSessionEngine({
             projectTerminalsRef.current,
             flushHarnessEvents,
             keepWorkspaceTab,
+            () => {
+              if (!active) return null;
+              flushHarnessEvents();
+              if (!active) return null;
+              return {
+                sessions: sessionsRef.current,
+                tabs: tabsRef.current,
+                activeTabId: activeTabIdRef.current,
+                projectCwd: projectCwdRef.current,
+                projectReturnMemory: readProjectReturnMemory(),
+                projectTerminals: projectTerminalsRef.current,
+                keepTab: keepWorkspaceTab,
+              };
+            },
           );
           return;
         }
@@ -1221,8 +1236,11 @@ const sessionEngine = useHarnessSessionEngine({
         });
       },
     );
-    void closeSubscription.ready.catch(() => undefined);
+    void closeSubscription.ready.catch(() => {
+      active = false;
+    });
     return () => {
+      active = false;
       releaseQuit();
       closeSubscription.release();
     };

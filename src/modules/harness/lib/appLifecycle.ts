@@ -183,16 +183,10 @@ export function abortQuit(): void {
 
 export async function handleQuitRequested(): Promise<void> {
   if (liveWorkspace) {
-    liveWorkspace.flush();
-    await confirmQuitAndExit(
-      liveWorkspace.sessions(),
-      liveWorkspace.tabs(),
-      liveWorkspace.activeTabId(),
-      liveWorkspace.projectCwd(),
-      liveWorkspace.projectReturnMemory(),
-      liveWorkspace.projectTerminals(),
-      liveWorkspace.keepTab,
-    );
+    const workspace = liveWorkspace;
+    workspace.flush();
+    if (liveWorkspace !== workspace) return;
+    await confirmQuitAndExit(workspace);
     return;
   }
   const { resumed } = await loadBootWorkspace();
@@ -377,6 +371,16 @@ async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> 
   ).catch(() => undefined);
 }
 
+export type HarnessQuitCapture = {
+  sessions: Session[];
+  tabs: WorkspaceTab[];
+  activeTabId: string;
+  projectCwd: string;
+  projectReturnMemory: ProjectReturnMemory;
+  projectTerminals: ProjectTerminalDock[];
+  keepTab?: (tab: WorkspaceTab) => boolean;
+};
+
 export async function confirmAndCloseWindow(
   sessions: Session[],
   tabs: WorkspaceTab[],
@@ -386,6 +390,7 @@ export async function confirmAndCloseWindow(
   projectTerminals: ProjectTerminalDock[] = [],
   flush?: () => void,
   keepTab?: (tab: WorkspaceTab) => boolean,
+  recapture?: () => HarnessQuitCapture | null,
 ): Promise<void> {
   const refs = inFlightRefs(sessions, tabs);
   if (refs.length > 0) {
@@ -396,17 +401,32 @@ export async function confirmAndCloseWindow(
     });
     if (!ok) return;
   }
-  flush?.();
-  try {
-    await persistQuitState(
+  let capture: HarnessQuitCapture | null;
+  if (recapture) {
+    capture = recapture();
+  } else {
+    flush?.();
+    capture = {
       sessions,
       tabs,
       activeTabId,
       projectCwd,
-      memory,
-      "unload",
+      projectReturnMemory: memory,
       projectTerminals,
       keepTab,
+    };
+  }
+  if (!capture) return;
+  try {
+    await persistQuitState(
+      capture.sessions,
+      capture.tabs,
+      capture.activeTabId,
+      capture.projectCwd,
+      capture.projectReturnMemory,
+      "unload",
+      capture.projectTerminals,
+      capture.keepTab,
     );
   } finally {
     await closeCurrentWindow();
@@ -414,18 +434,12 @@ export async function confirmAndCloseWindow(
 }
 
 async function confirmQuitAndExit(
-  sessions: Session[],
-  tabs: WorkspaceTab[],
-  activeTabId: string,
-  projectCwd: string,
-  memory: ProjectReturnMemory,
-  projectTerminals: ProjectTerminalDock[] = [],
-  keepTab?: (tab: WorkspaceTab) => boolean,
+  workspace: NonNullable<typeof liveWorkspace>,
 ): Promise<void> {
   if (quitDialogOpen) return;
   quitDialogOpen = true;
   try {
-    const refs = inFlightRefs(sessions, tabs);
+    const refs = inFlightRefs(workspace.sessions(), workspace.tabs());
     if (refs.length > 0) {
       const ok = await ask(quitWhileBusyMessage(refs.length), {
         title: "Voktty",
@@ -434,17 +448,30 @@ async function confirmQuitAndExit(
       });
       if (!ok) return;
     }
+    if (liveWorkspace !== workspace) return;
+    workspace.flush();
+    if (liveWorkspace !== workspace) return;
+    const capture: HarnessQuitCapture = {
+      sessions: workspace.sessions(),
+      tabs: workspace.tabs(),
+      activeTabId: workspace.activeTabId(),
+      projectCwd: workspace.projectCwd(),
+      projectReturnMemory: workspace.projectReturnMemory(),
+      projectTerminals: workspace.projectTerminals(),
+      keepTab: workspace.keepTab,
+    };
+    if (liveWorkspace !== workspace) return;
     quitting = true;
     try {
       await persistQuitState(
-        sessions,
-        tabs,
-        activeTabId,
-        projectCwd,
-        memory,
+        capture.sessions,
+        capture.tabs,
+        capture.activeTabId,
+        capture.projectCwd,
+        capture.projectReturnMemory,
         "quit",
-        projectTerminals,
-        keepTab,
+        capture.projectTerminals,
+        capture.keepTab,
       );
       await invoke("confirm_quit");
     } catch {
