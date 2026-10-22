@@ -127,7 +127,9 @@ type Live = {
   modelNeedsSync?: boolean;
   thinking: string;
   thinkingNeedsSync?: boolean;
+  thinkingModelChanged?: boolean;
   fastNeedsSync?: boolean;
+  fastModelChanged?: boolean;
   fastModeEnabled?: boolean;
   fastModeRequested?: boolean;
   planning: boolean;
@@ -1558,7 +1560,11 @@ async function operationRequest(
   if (isCurrentAdmission(live.admission)) {
     if (command.type === "fork" && asRecord(result.data)?.cancelled !== true)
       live.forkNeedsBind = true;
-    if (command.type === "set_model") live.modelNeedsSync = true;
+    if (command.type === "set_model") {
+      live.modelNeedsSync = true;
+      live.thinkingModelChanged = true;
+      live.fastModelChanged = true;
+    }
     if (command.type === "set_thinking_level") live.thinkingNeedsSync = true;
     if (command.type === "set_fast_mode") live.fastNeedsSync = true;
   }
@@ -1611,7 +1617,9 @@ async function applyModel(
   }
   if (
     isPiThinkingLevel(thinking) &&
-    (thinking !== live.thinking || live.thinkingNeedsSync)
+    (thinking !== live.thinking ||
+      live.thinkingNeedsSync ||
+      live.thinkingModelChanged)
   ) {
     const restoring = live.thinkingNeedsSync;
     try {
@@ -1630,11 +1638,14 @@ async function applyModel(
     }
     live.thinking = thinking;
     live.thinkingNeedsSync = false;
+    live.thinkingModelChanged = false;
   }
   if (
     flavor.id === "omp" &&
     (fast === "true" || fast === "false") &&
-    ((fast === "true") !== live.fastModeRequested || live.fastNeedsSync)
+    ((fast === "true") !== live.fastModeRequested ||
+      live.fastNeedsSync ||
+      live.fastModelChanged)
   ) {
     const restoring = live.fastNeedsSync;
     const enabled = fast === "true";
@@ -1674,6 +1685,7 @@ async function applyModel(
     assertCurrentOperation(live, operation);
     live.fastModeRequested = enabled;
     live.fastNeedsSync = false;
+    live.fastModelChanged = false;
   }
   assertCurrentOperation(live, operation);
 }
