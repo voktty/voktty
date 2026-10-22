@@ -8,6 +8,7 @@ fn inert_child(pid: u32) -> Arc<LiveChild> {
         account: None,
         _askpass: None,
         remote: None,
+        local_wait: None,
     })
 }
 

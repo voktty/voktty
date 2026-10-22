@@ -197,6 +197,7 @@ struct LiveChild {
     account: Option<HarnessAccount>,
     _askpass: Option<super::ssh_askpass::Askpass>,
     remote: Option<Arc<super::remote_agent::RemoteAgent>>,
+    local_wait: Option<Arc<local_wait::LocalWaitReceipt>>,
 }
 
 impl LiveChild {
@@ -1003,7 +1004,13 @@ pub fn harness_spawn(
         account,
         _askpass: _remote_askpass,
         remote: None,
+        local_wait: Some(Arc::new(local_wait::LocalWaitReceipt::new(epoch))),
     });
+    let wait_receipt = live
+        .local_wait
+        .as_ref()
+        .cloned()
+        .expect("Local child wait receipt");
     if let Some(rejected) = host.install_spawn(session_id.clone(), epoch, kill_all, live) {
         // A kill, or a newer spawn, won the race while this one was forking.
         // Returning `Ok` here would hand the caller a dead pid to store as the
@@ -1011,7 +1018,7 @@ pub fn harness_spawn(
         // stream that replaced it. Reap it without emitting anything.
         rejected.terminate();
         thread::spawn(move || {
-            let _ = child.wait();
+            let _ = local_wait::wait_child(&mut child, &wait_receipt);
         });
         return Err(SPAWN_CANCELLED.to_string());
     }
@@ -1055,9 +1062,12 @@ pub fn harness_spawn(
     let wait_id = session_id;
     let wait_pid = pid;
     thread::spawn(move || {
-        let code = child.wait().ok().and_then(|status| status.code());
+        let code = local_wait::wait_child(&mut child, &wait_receipt);
         if let Some(host) = wait_app.try_state::<HarnessHost>() {
-            if host.remove_if_spawn(&wait_id, epoch, wait_pid).is_some() {
+            if host
+                .remove_if_spawn(&wait_id, wait_receipt.epoch(), wait_pid)
+                .is_some()
+            {
                 host.stop_sse(&wait_id);
             }
         }
@@ -1282,6 +1292,7 @@ fn spawn_persistent_remote(
         account,
         _askpass: None,
         remote: Some(agent),
+        local_wait: None,
     });
     if let Some(rejected) =
         host.install_spawn(session_id.to_string(), stamp.epoch, stamp.kill_all, live)
@@ -3185,6 +3196,7 @@ mod tests {
                 account: None,
                 _askpass: None,
                 remote: None,
+                local_wait: None,
             }),
             child,
         )
@@ -3928,6 +3940,7 @@ mod epoch_lifecycle_tests {
             account,
             _askpass: None,
             remote: None,
+            local_wait: None,
         })
     }
 
@@ -4072,6 +4085,7 @@ mod proxy_lifecycle_tests {
                 account: None,
                 _askpass: None,
                 remote: None,
+                local_wait: None,
             }),
             child,
         )
@@ -4312,3 +4326,6 @@ mod binary_resolution_tests {
 #[cfg(test)]
 #[path = "host_exit_ownership_tests.rs"]
 mod exit_ownership_tests;
+
+#[path = "host_local_wait.rs"]
+mod local_wait;
