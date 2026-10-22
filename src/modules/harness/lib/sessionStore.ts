@@ -355,24 +355,23 @@ export async function upsertSessions(
   if (all.length === 0) return [];
   const remotePayloads = all.filter((payload) => isRemoteProjectPath(payload.cwd));
   const payloads = all.filter((payload) => !isRemoteProjectPath(payload.cwd));
-  const remoteSummaries = (
-    await Promise.all(
-      remotePayloads.map((payload) =>
-        enqueueSessionWrite(payload.id, async () =>
-          deletedSessionIds.has(payload.id) ? null : upsertRemoteSession(payload),
-        ).catch(() => null),
-      ),
-    )
-  ).filter((summary): summary is SessionSummary => summary != null);
-  if (payloads.length === 0) return remoteSummaries.map(normalizeSummary);
+  const remoteWrites = Promise.all(
+    remotePayloads.map((payload) =>
+      enqueueSessionWrite(payload.id, async () =>
+        deletedSessionIds.has(payload.id) ? null : upsertRemoteSession(payload),
+      ).catch(() => null),
+    ),
+  );
 
   const previous = payloads.map(
     (payload) => sessionWriteQueues.get(payload.id) ?? Promise.resolve(),
   );
   const batch = Promise.all(previous).then(() =>
-    invoke<SessionSummary[]>("session_upsert_batch", { sessions: payloads }),
+    payloads.length
+      ? invoke<SessionSummary[]>("session_upsert_batch", { sessions: payloads })
+      : [],
   );
-  const summaries = await Promise.all(
+  const localWrites = Promise.all(
     payloads.map((payload, index) =>
       enqueueSessionWrite(payload.id, async () => {
         const summary = (await batch)[index];
@@ -380,9 +379,19 @@ export async function upsertSessions(
       }),
     ),
   );
+  const [remoteResult, localResult] = await Promise.allSettled([
+    remoteWrites,
+    localWrites,
+  ]);
+  if (remoteResult.status === "rejected") throw remoteResult.reason;
+  if (localResult.status === "rejected") throw localResult.reason;
   return [
-    ...remoteSummaries.map(normalizeSummary),
-    ...summaries.filter((summary): summary is SessionSummary => summary != null),
+    ...remoteResult.value
+      .filter((summary): summary is SessionSummary => summary != null)
+      .map(normalizeSummary),
+    ...localResult.value.filter(
+      (summary): summary is SessionSummary => summary != null,
+    ),
   ];
 }
 
