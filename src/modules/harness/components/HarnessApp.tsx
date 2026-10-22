@@ -257,8 +257,6 @@ import {
   replaceInFlightSessions,
   type SessionSummary,
   saveWorkspaceSnapshot,
-  setSessionArchived,
-  setSessionPinned,
   shouldPersistSession,
   upsertSession,
   upsertSessions,
@@ -324,6 +322,11 @@ import {
 } from "../lib/workspaceSnapshot";
 import { runSessionRemoval, runSessionRemovalBatch } from "@/modules/harness/lib/sessionRemoval";
 import { persistSessionRemoval } from "@/modules/harness/lib/sessionRemovalPersistence";
+import {
+  renameHistorySession,
+  pinHistorySession,
+  unarchiveHistorySession,
+} from "@/modules/harness/lib/sessionHistoryPersistence";
 import {
   applyPlaceSessionOnPane,
   filterTabsForProject,
@@ -1271,30 +1274,39 @@ const sessionEngine = useHarnessSessionEngine({
     };
   }, [flushHarnessEvents, keepWorkspaceTab, readProjectReturnMemory, getPersistenceOwner]);
 
-  const refreshHistory = useCallback(async (cwd: string) => {
-    if (!cwd || cwd === "~") return;
-    // `history` holds every visited project's rows and the sidebar filters it
-    // by cwd, so a project loaded once paints from cache on the way back and
-    // revalidates quietly underneath the cards already on screen. Whether the
-    // first load is still pending is derived from `loadedProjects`, not
-    // tracked here, a status set from this effect lands a render too late to
-    // suppress the empty state.
-    const key = normalizeProjectPath(cwd);
-    setHistoryErrorCwd((prev: any) => (prev === key ? null : prev));
-    try {
-      const rows = await listSessionsByProject(cwd);
-      if (cwd !== sidebarCwdRef.current) return;
-      setHistory((current) => replaceProjectHistory(current, cwd, rows));
-      setLoadedProjects((prev: any) =>
-        prev.has(key) ? prev : new Set(prev).add(key),
+  const refreshHistory = useCallback(
+    async (cwd: string, isCurrent: () => boolean = () => true) => {
+      if (!isCurrent() || !cwd || cwd === "~") return;
+      // `history` holds every visited project's rows and the sidebar filters it
+      // by cwd, so a project loaded once paints from cache on the way back and
+      // revalidates quietly underneath the cards already on screen. Whether the
+      // first load is still pending is derived from `loadedProjects`, not
+      // tracked here, a status set from this effect lands a render too late to
+      // suppress the empty state.
+      const key = normalizeProjectPath(cwd);
+      setHistoryErrorCwd((prev: any) =>
+        isCurrent() && prev === key ? null : prev,
       );
-    } catch {
-      if (cwd !== sidebarCwdRef.current) return;
-      // A failed revalidate keeps the cached cards rather than replacing a
-      // good list with an error.
-      if (!loadedProjectsRef.current.has(key)) setHistoryErrorCwd(key);
-    }
-  }, []);
+      try {
+        const rows = await listSessionsByProject(cwd);
+        if (!isCurrent() || cwd !== sidebarCwdRef.current) return;
+        setHistory((current) =>
+          isCurrent() ? replaceProjectHistory(current, cwd, rows) : current,
+        );
+        setLoadedProjects((prev: any) =>
+          !isCurrent() || prev.has(key) ? prev : new Set(prev).add(key),
+        );
+      } catch {
+        if (!isCurrent() || cwd !== sidebarCwdRef.current) return;
+        // A failed revalidate keeps the cached cards rather than replacing a
+        // good list with an error.
+        if (!loadedProjectsRef.current.has(key)) {
+          setHistoryErrorCwd((previous) => (isCurrent() ? key : previous));
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     void refreshHistory(sidebarCwd);
@@ -3417,34 +3429,35 @@ const sessionEngine = useHarnessSessionEngine({
 
   const onRenameHistorySession = useCallback(
     async (sessionId: string, displayTitle: string) => {
-      const trimmed = displayTitle.trim();
-      if (!trimmed) return;
-
+      if (!displayTitle.trim()) return;
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) return;
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
-      if (open) {
-        const title = formatSessionTitle(open.harness, trimmed);
-        const updated = { ...open, title };
-        updateSessions([sessionId], (session: any) =>
-            session.id === sessionId ? updated : session);
-        persistSession(updated);
-      } else {
-        const restored = await getSession(sessionId).catch(() => null);
-        if (!restored) {
-          void refreshHistory(sidebarCwd);
-          return;
-        }
-        const updated = {
-          ...restored,
-          title: formatSessionTitle(restored.harness, trimmed),
-        };
-        await upsertSession(updated).catch(() => undefined);
-        lastPersisted.current.set(sessionId, persistFingerprint(updated));
-      }
-      void refreshHistory(sidebarCwd);
+      await renameHistorySession({
+        permit,
+        sessionId,
+        displayTitle,
+        open,
+        updateOpen: (updated) =>
+          updateSessions([sessionId], (session) =>
+            permit.isCurrent() ? { ...session, title: updated.title } : session,
+          ),
+        onPersisted: (updated, summary) => {
+          lastPersisted.current.set(sessionId, persistFingerprint(updated));
+          if (summary.cwd === sidebarCwdRef.current) {
+            setHistory((current) =>
+              permit.isCurrent()
+                ? mergeProjectHistorySummary(current, summary)
+                : current,
+            );
+          }
+        },
+      });
+      if (permit.isCurrent()) void refreshHistory(sidebarCwd, permit.isCurrent);
     },
-    [persistSession, refreshHistory, sidebarCwd, updateSessions],
+    [getPersistenceOwner, refreshHistory, sidebarCwd, updateSessions],
   );
 
   const onRemoveHistorySession = useCallback(
@@ -3599,18 +3612,38 @@ const sessionEngine = useHarnessSessionEngine({
   );
 
   const onArchiveHistorySession = useCallback(
-    async (sessionId: string, archived: boolean) => {
-      if (archived) return onRemoveHistorySession(sessionId, "archive");
-      if (removingSessionIds.current.has(sessionId)) return false;
-      try {
-        await setSessionArchived(sessionId, false);
-        setHistory((current) =>
-          current.map((entry) =>
-            entry.id === sessionId ? { ...entry, archived: false } : entry,
-          ),
+    async (
+      sessionId: string,
+      archived: boolean,
+      capturedPermit?: PersistencePermit,
+    ) => {
+      if (archived)
+        return onRemoveHistorySession(
+          sessionId,
+          "archive",
+          false,
+          capturedPermit,
         );
-        return true;
+      if (removingSessionIds.current.has(sessionId)) return false;
+      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
+      if (!permit) return false;
+      try {
+        return await unarchiveHistorySession({
+          permit,
+          sessionId,
+          commit: () =>
+            setHistory((current) =>
+              permit.isCurrent()
+                ? current.map((entry) =>
+                    entry.id === sessionId
+                      ? { ...entry, archived: false }
+                      : entry,
+                  )
+                : current,
+            ),
+        });
       } catch (error) {
+        if (!permit.isCurrent()) return false;
         void message(
           `Could not unarchive this conversation.\n\n${String(error)}`,
           {
@@ -3621,7 +3654,7 @@ const sessionEngine = useHarnessSessionEngine({
         return false;
       }
     },
-    [onRemoveHistorySession],
+    [onRemoveHistorySession, getPersistenceOwner],
   );
 
   const onArchiveFocusedSession = useCallback(
@@ -3651,27 +3684,37 @@ const sessionEngine = useHarnessSessionEngine({
   );
 
   const onPinHistorySession = useCallback(
-    async (sessionId: string, pinned: boolean) => {
+    async (
+      sessionId: string,
+      pinned: boolean,
+      capturedPermit?: PersistencePermit,
+    ) => {
+      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
+      if (!permit) return;
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
-      if (open && shouldPersistSession(open)) {
-        await upsertSession(open).catch(() => undefined);
-      }
-      await setSessionPinned(sessionId, pinned).catch(() => undefined);
-      setHistory((current) => {
-        const existing = current.find((entry: any) => entry.id === sessionId);
-        if (existing) {
-          return mergeProjectHistorySummary(current, { ...existing, pinned });
-        }
-        if (!open) return current;
-        return mergeProjectHistorySummary(current, {
-          ...summaryFromSession(open),
-          pinned,
-        });
+      await pinHistorySession({
+        permit,
+        sessionId,
+        pinned,
+        open,
+        commit: () =>
+          setHistory((current) => {
+            if (!permit.isCurrent()) return current;
+            const existing = current.find((entry: any) => entry.id === sessionId);
+            if (existing) {
+              return mergeProjectHistorySummary(current, { ...existing, pinned });
+            }
+            if (!open) return current;
+            return mergeProjectHistorySummary(current, {
+              ...summaryFromSession(open),
+              pinned,
+            });
+          }),
       });
     },
-    [],
+    [getPersistenceOwner],
   );
 
   const onArchiveHistorySessions = useCallback(
@@ -3682,12 +3725,15 @@ const sessionEngine = useHarnessSessionEngine({
         await runSessionRemovalBatch({
           sessionIds,
           persistencePermit,
-          remove: (id, permit) => onRemoveHistorySession(id, "archive", false, permit),
+          remove: (id, permit) =>
+            onRemoveHistorySession(id, "archive", false, permit),
         });
         return;
       }
-      for (const sessionId of sessionIds) {
-        if (!(await onArchiveHistorySession(sessionId, false))) break;
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) return;
+      for (const sessionId of [...sessionIds]) {
+        if (!(await onArchiveHistorySession(sessionId, false, permit))) break;
       }
     },
     [onArchiveHistorySession, onRemoveHistorySession, getPersistenceOwner],
@@ -3695,11 +3741,15 @@ const sessionEngine = useHarnessSessionEngine({
 
   const onPinHistorySessions = useCallback(
     async (sessionIds: readonly string[], pinned: boolean) => {
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) return;
       await Promise.all(
-        sessionIds.map((sessionId) => onPinHistorySession(sessionId, pinned)),
+        [...sessionIds].map((sessionId) =>
+          onPinHistorySession(sessionId, pinned, permit),
+        ),
       );
     },
-    [onPinHistorySession],
+    [onPinHistorySession, getPersistenceOwner],
   );
 
   const onDeleteHistorySession = useCallback(

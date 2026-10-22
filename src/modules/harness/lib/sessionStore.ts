@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import { deleteGeneratedImages } from "./fs";
 import { isWeakToolTitle } from "./harness/preview";
 import { codexCommandPresentation } from "./harness/codexProtocol";
@@ -492,7 +493,10 @@ export async function searchSessions(options: {
   };
 }
 
-export async function getSession(sessionId: string): Promise<Session | null> {
+export async function getSession(
+  sessionId: string,
+  persistencePermit?: PersistencePermit,
+): Promise<Session | null> {
   const cached = getCachedSession(sessionId);
   if (cached) return cached;
   const remoteHome = remoteSessionHomes.get(sessionId);
@@ -514,7 +518,9 @@ export async function getSession(sessionId: string): Promise<Session | null> {
       session.blocks = blocks;
       // A failed write must not cost the reader the session. The repair stays
       // in memory and the next load retries it.
-      await upsertSession(session).catch(() => undefined);
+      const repair = () => upsertSession(session).catch(() => undefined);
+      if (persistencePermit) await persistencePermit.run(repair);
+      else await repair();
     }
   }
   const recovered = await recoverCursorSubagents(session);
