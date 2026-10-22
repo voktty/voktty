@@ -285,63 +285,114 @@ export async function sendTurn(
   await live.turns;
 }
 
-export async function compactContext(
+async function admitControl<T extends HarnessSessionInput>(
   flavor: PiFlavor,
-  input: CompactContextInput,
-): Promise<void> {
+  request: T,
+) {
+  const input = snapshotInput(request);
   const state = stateFor(flavor);
-  const live = await ensureLive(flavor, input);
-  if (state.cancelledThreads.delete(input.sessionId)) return;
+  const admittedLive = state.liveByThread.get(input.sessionId);
+  const admittedOperation = admittedLive?.operationToken;
+  const live = await ensureLive(flavor, input, false);
+  const operation =
+    admittedLive === live && admittedOperation
+      ? admittedOperation
+      : live.operationToken;
+  assertCurrentOperation(live, operation);
+  if (state.cancelledThreads.delete(input.sessionId))
+    throw new RetiredPiOperationError();
+  return { input, live, operation };
+}
 
-  live.onEvent = input.onEvent;
-  live.turns = live.turns
+function queueControl<T>(
+  flavor: PiFlavor,
+  live: Live,
+  input: HarnessSessionInput,
+  operation: object,
+  run: () => Promise<T>,
+): Promise<T> {
+  const result = live.turns
     .catch(() => undefined)
     .then(async () => {
+      assertCurrentOperation(live, operation);
+      live.onEvent = input.onEvent;
       live.cancelled = false;
       live.muteUpdates = false;
-      const response = await live.rpc.request(
-        { type: "compact" },
-        COMPACT_TIMEOUT_MS,
-      );
-      const data = asRecord(response.data);
-      const used = data?.estimatedTokensAfter;
-      if (typeof used === "number" && Number.isFinite(used) && used > 0) {
-        emit(live, {
-          type: "context",
-          used,
-          ...(live.contextWindow ? { window: live.contextWindow } : {}),
-        });
-      }
+      await applyModel(flavor, live, input, operation);
+      assertCurrentOperation(live, operation);
+      return run();
     });
-  await live.turns;
+  live.turns = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+export async function compactContext(
+  flavor: PiFlavor,
+  request: CompactContextInput,
+): Promise<void> {
+  const { input, live, operation } = await admitControl(flavor, request);
+  await queueControl(flavor, live, input, operation, async () => {
+    const response = await operationRequest(
+      live,
+      operation,
+      { type: "compact" },
+      COMPACT_TIMEOUT_MS,
+    );
+    assertCurrentOperation(live, operation);
+    const data = asRecord(response.data);
+    const used = data?.estimatedTokensAfter;
+    if (typeof used === "number" && Number.isFinite(used) && used > 0) {
+      emit(live, {
+        type: "context",
+        used,
+        ...(live.contextWindow ? { window: live.contextWindow } : {}),
+      });
+      assertCurrentOperation(live, operation);
+    }
+  });
 }
 
 export async function rewindLastTurn(
   flavor: PiFlavor,
-  input: RewindLastTurnInput,
+  request: RewindLastTurnInput,
 ): Promise<{ submitted: boolean }> {
-  const live = await ensureLive(flavor, input);
+  const { input, live, operation } = await admitControl(flavor, request);
   if (live.activeTurn) {
     throw new Error("Stop the current turn before editing the last message");
   }
+  return queueControl(flavor, live, input, operation, async () => {
+    const forkMessages = await operationRequest(live, operation, {
+      type: "get_fork_messages",
+    });
+    assertCurrentOperation(live, operation);
+    const messages = forkMessagesFromRpcData(forkMessages.data);
+    const last = messages[messages.length - 1];
+    if (!last) throw new Error("No user message to edit");
 
-  const forkMessages = await live.rpc.request({ type: "get_fork_messages" });
-  const messages = forkMessagesFromRpcData(forkMessages.data);
-  const last = messages[messages.length - 1];
-  if (!last) throw new Error("No user message to edit");
-
-  const fork = await live.rpc.request({ type: "fork", entryId: last.entryId });
-  if (asRecord(fork.data)?.cancelled === true) {
-    throw new Error("Edit cancelled");
-  }
-  const forkState = await live.rpc.request({ type: "get_state" });
-  const providerSessionId = providerSessionIdFromState(forkState.data);
-  if (!providerSessionId) {
-    throw new Error("Pi did not expose the forked session");
-  }
-  bindState(flavor, input.sessionId, live, forkState.data);
-  emit(live, { type: "session.providerBound", providerSessionId });
-  return { submitted: false };
+    const fork = await operationRequest(live, operation, {
+      type: "fork",
+      entryId: last.entryId,
+    });
+    assertCurrentOperation(live, operation);
+    if (asRecord(fork.data)?.cancelled === true) {
+      throw new Error("Edit cancelled");
+    }
+    const forkState = await operationRequest(live, operation, {
+      type: "get_state",
+    });
+    assertCurrentOperation(live, operation);
+    const providerSessionId = providerSessionIdFromState(forkState.data);
+    if (!providerSessionId) {
+      throw new Error("Pi did not expose the forked session");
+    }
+    bindState(flavor, input.sessionId, live, forkState.data);
+    emit(live, { type: "session.providerBound", providerSessionId });
+    assertCurrentOperation(live, operation);
+    return { submitted: false };
+  });
 }
 
 export async function steerTurn(
@@ -350,6 +401,7 @@ export async function steerTurn(
 ): Promise<void> {
   const live = stateFor(flavor).liveByThread.get(input.sessionId);
   if (!live?.activeTurn) throw new Error("No active turn to steer");
+  const operation = live.operationToken;
   const message = input.text.trim();
   const buildCommand =
     flavor.id === "omp" && message.startsWith("/")
@@ -361,7 +413,8 @@ export async function steerTurn(
     attachments: input.attachments,
   });
   if (!command.message && !Array.isArray(command.images)) return;
-  await live.rpc.request(command);
+  await operationRequest(live, operation, command);
+  assertCurrentOperation(live, operation);
 }
 
 export function respondApproval(
@@ -1255,15 +1308,21 @@ function assertCurrentOperation(live: Live, operation: object): void {
   if (!live.isCurrent()) throw live.exitError ?? new RetiredPiOperationError();
 }
 
-async function modelRequest(
+async function operationRequest(
   live: Live,
   operation: object,
   command: Record<string, unknown>,
+  timeoutMs?: number,
 ): Promise<Record<string, unknown>> {
   assertCurrentOperation(live, operation);
-  const result = await live.rpc.request(command);
-  assertCurrentOperation(live, operation);
-  return result;
+  try {
+    const result = await live.rpc.request(command, timeoutMs);
+    assertCurrentOperation(live, operation);
+    return result;
+  } catch (error) {
+    assertCurrentOperation(live, operation);
+    throw error;
+  }
 }
 
 async function applyModel(
@@ -1279,11 +1338,12 @@ async function applyModel(
   const onEvent = input.onEvent;
   const ref = parsePiModelRef(native);
   if (ref && native !== live.nativeModel) {
-    const result = await modelRequest(live, operation, {
+    const result = await operationRequest(live, operation, {
       type: "set_model",
       provider: ref.provider,
       modelId: ref.modelId,
     });
+    assertCurrentOperation(live, operation);
     live.nativeModel = native;
     const model = asRecord(result.data);
     const window =
@@ -1296,10 +1356,11 @@ async function applyModel(
   }
   if (isPiThinkingLevel(thinking) && thinking !== live.thinking) {
     try {
-      await modelRequest(live, operation, {
+      await operationRequest(live, operation, {
         type: "set_thinking_level",
         level: thinking,
       });
+      assertCurrentOperation(live, operation);
     } catch {
       assertCurrentOperation(live, operation);
     }
@@ -1312,10 +1373,11 @@ async function applyModel(
   ) {
     const enabled = fast === "true";
     try {
-      const response = await modelRequest(live, operation, {
+      const response = await operationRequest(live, operation, {
         type: "set_fast_mode",
         enabled,
       });
+      assertCurrentOperation(live, operation);
       const data = asRecord(response.data);
       live.fastModeEnabled =
         typeof data?.enabled === "boolean" ? data.enabled : enabled;
