@@ -110,6 +110,7 @@ type Live = {
   rpc: PiRpc;
   cwd: string;
   providerSessionId: string;
+  forkNeedsBind?: boolean;
   contextWindow?: number;
   nativeModel: string;
   modelNeedsSync?: boolean;
@@ -288,6 +289,7 @@ export async function sendTurn(
           await abort.promise;
           assertCurrentOperation(live, operation);
         }
+        guardForkBinding(live, operation);
       } catch (error) {
         if (error instanceof RetiredPiOperationError) return;
         throw error;
@@ -340,6 +342,7 @@ function queueControl<T>(
         await abort.promise;
         assertCurrentOperation(live, operation);
       }
+      guardForkBinding(live, operation);
       live.onEvent = input.onEvent;
       live.cancelled = false;
       live.muteUpdates = false;
@@ -416,6 +419,7 @@ export async function rewindLastTurn(
     bindState(flavor, input.sessionId, live, forkState.data);
     emit(live, { type: "session.providerBound", providerSessionId });
     assertCurrentOperation(live, operation);
+    live.forkNeedsBind = false;
     return { submitted: false };
   });
 }
@@ -1421,6 +1425,15 @@ function assertCurrentOperation(live: Live, operation: object): void {
     throw live.exitError ?? live.reuseError ?? new RetiredPiOperationError();
 }
 
+function guardForkBinding(live: Live, operation: object): void {
+  if (!live.forkNeedsBind) return;
+  blockNativeReuse(
+    live,
+    new Error("Pi session identity was not confirmed after fork"),
+  );
+  assertCurrentOperation(live, operation);
+}
+
 async function operationRequest(
   live: Live,
   operation: object,
@@ -1442,6 +1455,8 @@ async function operationRequest(
     throw error;
   }
   if (isCurrentAdmission(live.admission)) {
+    if (command.type === "fork" && asRecord(result.data)?.cancelled !== true)
+      live.forkNeedsBind = true;
     if (command.type === "set_model") live.modelNeedsSync = true;
     if (command.type === "set_thinking_level") live.thinkingNeedsSync = true;
     if (command.type === "set_fast_mode") live.fastNeedsSync = true;
