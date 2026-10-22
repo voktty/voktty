@@ -112,6 +112,7 @@ type Live = {
   providerSessionId: string;
   contextWindow?: number;
   nativeModel: string;
+  modelNeedsSync?: boolean;
   thinking: string;
   thinkingNeedsSync?: boolean;
   fastNeedsSync?: boolean;
@@ -1441,6 +1442,7 @@ async function operationRequest(
     throw error;
   }
   if (isCurrentAdmission(live.admission)) {
+    if (command.type === "set_model") live.modelNeedsSync = true;
     if (command.type === "set_thinking_level") live.thinkingNeedsSync = true;
     if (command.type === "set_fast_mode") live.fastNeedsSync = true;
   }
@@ -1465,13 +1467,21 @@ async function applyModel(
   const fast = input.modelSettings?.fast;
   const onEvent = input.onEvent;
   const ref = parsePiModelRef(native);
-  if (ref && native !== live.nativeModel) {
-    const result = await operationRequest(live, operation, {
-      type: "set_model",
-      provider: ref.provider,
-      modelId: ref.modelId,
-    });
-    assertCurrentOperation(live, operation);
+  if (ref && (native !== live.nativeModel || live.modelNeedsSync)) {
+    const restoring = live.modelNeedsSync;
+    let result: Record<string, unknown>;
+    try {
+      result = await operationRequest(live, operation, {
+        type: "set_model",
+        provider: ref.provider,
+        modelId: ref.modelId,
+      });
+      assertCurrentOperation(live, operation);
+    } catch (error) {
+      assertCurrentOperation(live, operation);
+      if (restoring) blockNativeReuse(live, error);
+      throw error;
+    }
     live.nativeModel = native;
     const model = asRecord(result.data);
     const window =
@@ -1479,6 +1489,7 @@ async function applyModel(
         ? model.contextWindow
         : undefined;
     if (window && window > 0) live.contextWindow = window;
+    live.modelNeedsSync = false;
   } else if (ref) {
     live.nativeModel = native;
   }
