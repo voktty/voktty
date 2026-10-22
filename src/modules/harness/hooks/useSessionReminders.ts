@@ -3,6 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@/modules/i18n";
+import type {
+  PersistenceOwner,
+  PersistencePermit,
+} from "@/modules/harness/lib/persistenceAdmission";
 import {
   loadNotificationsEnabled,
   NOTIFICATIONS_CHANGE_EVENT,
@@ -18,100 +22,180 @@ import {
   type SessionReminder,
 } from "../lib/sessionReminders";
 
+type ReminderCallbacks = {
+  onOpenSession: (
+    sessionId: string,
+    permit?: PersistencePermit,
+  ) => Promise<void>;
+  ensureSaved: (sessionIds: readonly string[]) => Promise<void>;
+  getPersistenceOwner?: () => PersistenceOwner | null;
+};
+type ReminderAction = {
+  callbacks: ReminderCallbacks;
+  permit: PersistencePermit | undefined;
+  isCurrent: () => boolean;
+};
+
 export function useSessionReminders(
-  onOpenSession: (sessionId: string) => Promise<void>,
+  onOpenSession: ReminderCallbacks["onOpenSession"],
   ensureSaved: (sessionIds: readonly string[]) => Promise<void>,
   openSessionIds: readonly string[],
+  getPersistenceOwner?: () => PersistenceOwner | null,
 ) {
   const [reminders, setItems] = useState<SessionReminder[]>([]);
   const [now, setNow] = useState(Date.now);
   const [error, setError] = useState<string | null>(null);
   const revision = useRef(0);
-  const callbacks = useRef({ onOpenSession, ensureSaved });
-  callbacks.current = { onOpenSession, ensureSaved };
+  const callbacks = useRef<ReminderCallbacks>({
+    onOpenSession,
+    ensureSaved,
+    getPersistenceOwner,
+  });
+  callbacks.current = { onOpenSession, ensureSaved, getPersistenceOwner };
+  const lifetime = useRef<object | null>(null);
+  useEffect(() => {
+    const owner = {};
+    lifetime.current = owner;
+    return () => {
+      if (lifetime.current === owner) lifetime.current = null;
+      revision.current++;
+    };
+  }, []);
 
-  const refresh = useCallback(async () => {
+  const capture = useCallback((): ReminderAction | null => {
+    const owner = lifetime.current;
+    const current = callbacks.current;
+    const permit = current.getPersistenceOwner?.()?.capture();
+    if (!owner || (current.getPersistenceOwner && !permit)) return null;
+    return {
+      callbacks: current,
+      permit: permit ?? undefined,
+      isCurrent: () =>
+        lifetime.current === owner && (!permit || permit.isCurrent()),
+    };
+  }, []);
+
+  const refreshCurrent = useCallback(async (isCurrent: () => boolean) => {
+    if (!isCurrent()) return;
     const request = ++revision.current;
     try {
       const items = await listReminders();
-      if (request !== revision.current) return;
-      setItems(items);
-      setNow(Date.now());
-      setError(null);
+      if (request !== revision.current || !isCurrent()) return;
+      setItems((previous) => (isCurrent() ? items : previous));
+      setNow((previous) => (isCurrent() ? Date.now() : previous));
+      setError((previous) => (isCurrent() ? null : previous));
     } catch (error) {
-      if (request === revision.current) setError(String(error));
+      if (request === revision.current && isCurrent()) {
+        setError((previous) => (isCurrent() ? String(error) : previous));
+      }
     }
   }, []);
 
-  const report = (error: unknown) => {
+  const refresh = useCallback(async () => {
+    const action = capture();
+    if (action) await refreshCurrent(action.isCurrent);
+  }, [capture, refreshCurrent]);
+
+  const report = useCallback((error: unknown) => {
     void message(String(error), {
       title: t("harness.reminders.reminder"),
       kind: "error",
     });
-  };
+  }, []);
+
+  const execute = useCallback(
+    async (
+      operation: (action: ReminderAction) => Promise<void>,
+      onError: (error: unknown, isCurrent: () => boolean) => void = report,
+    ) => {
+      const action = capture();
+      if (!action) return;
+      const run = async () => {
+        if (action.isCurrent()) await operation(action);
+      };
+      try {
+        if (action.permit) await action.permit.run(run);
+        else await run();
+      } catch (error) {
+        if (action.isCurrent()) onError(error, action.isCurrent);
+      }
+    },
+    [capture, report],
+  );
 
   const schedule = useCallback(
     async (ids: readonly string[], dueAt: number) => {
-      try {
-        await callbacks.current.ensureSaved(ids);
-        await setReminders(ids, dueAt);
-        await refresh();
-      } catch (error) {
-        report(error);
-      }
+      const selection = [...ids];
+      await execute(async ({ callbacks: current, isCurrent }) => {
+        await current.ensureSaved(selection);
+        if (!isCurrent()) return;
+        await setReminders(selection, dueAt);
+        if (isCurrent()) await refreshCurrent(isCurrent);
+      });
     },
-    [refresh],
+    [execute, refreshCurrent],
   );
 
   const cancel = useCallback(
     async (ids: readonly string[], expectedDueAt?: number) => {
-      try {
-        await clearReminders(ids, expectedDueAt);
-        await refresh();
-      } catch (error) {
-        report(error);
-      }
+      const selection = [...ids];
+      await execute(async ({ isCurrent }) => {
+        await clearReminders(selection, expectedDueAt);
+        if (isCurrent()) await refreshCurrent(isCurrent);
+      });
     },
-    [refresh],
+    [execute, refreshCurrent],
   );
 
   const openHere = useCallback(
-    async (reminder: ReminderTarget) => {
-      try {
-        await callbacks.current.onOpenSession(reminder.sessionId);
-        // An old notification must never clear a newer reminder for this session.
-        await clearReminders([reminder.sessionId], reminder.dueAt);
-        await refresh();
-      } catch (error) {
-        report(error);
-      }
+    async (reminder: ReminderTarget, action: ReminderAction) => {
+      if (action.permit)
+        await action.callbacks.onOpenSession(reminder.sessionId, action.permit);
+      else await action.callbacks.onOpenSession(reminder.sessionId);
+      if (!action.isCurrent()) return;
+      // An old notification must never clear a newer reminder for this session.
+      await clearReminders([reminder.sessionId], reminder.dueAt);
+      if (action.isCurrent()) await refreshCurrent(action.isCurrent);
     },
-    [refresh],
+    [refreshCurrent],
   );
 
   useEffect(() => {
     let disposed = false;
+    const setup = capture();
     const subscriptions: Array<() => void> = [];
     const configure = () => {
-      void invoke("reminder_configure", {
-        preferences: {
-          notificationsEnabled: loadNotificationsEnabled(),
-          sound: loadSoundsEnabled(),
+      if (disposed) return;
+      void execute(
+        async () => {
+          await invoke("reminder_configure", {
+            preferences: {
+              notificationsEnabled: loadNotificationsEnabled(),
+              sound: loadSoundsEnabled(),
+            },
+          });
         },
-      }).catch((error) => {
-        if (!disposed) setError(String(error));
-      });
+        (error, isCurrent) => {
+          if (!disposed)
+            setError((previous) => (isCurrent() ? String(error) : previous));
+        },
+      );
     };
     const takeOpen = async () => {
       if (disposed) return;
-      try {
-        const request = await invoke<ReminderTarget | null>(
-          "reminder_take_pending_open",
-        );
-        if (request && !disposed) await openHere(request);
-      } catch (error) {
-        if (!disposed) setError(String(error));
-      }
+      await execute(
+        async (action) => {
+          const request = await invoke<ReminderTarget | null>(
+            "reminder_take_pending_open",
+          );
+          if (request && !disposed && action.isCurrent())
+            await openHere(request, action);
+        },
+        (error, isCurrent) => {
+          if (!disposed)
+            setError((previous) => (isCurrent() ? String(error) : previous));
+        },
+      );
     };
     const subscribe = async (event: string, handler: () => void) => {
       const unlisten = await listen(event, handler);
@@ -122,21 +206,27 @@ export function useSessionReminders(
       try {
         await Promise.all([
           subscribe(REMINDERS_CHANGED, () => {
-            void refresh();
+            if (!disposed) void refresh();
           }),
           subscribe(REMINDER_OPEN, () => {
             void takeOpen();
           }),
         ]);
-        if (disposed) return;
+        if (disposed || !setup?.isCurrent()) return;
         configure();
-        await refresh();
+        await refreshCurrent(setup.isCurrent);
+        if (!setup.isCurrent()) return;
         await takeOpen();
       } catch (error) {
-        if (!disposed) setError(String(error));
+        if (!disposed && setup?.isCurrent()) {
+          setError((previous) =>
+            setup.isCurrent() ? String(error) : previous,
+          );
+        }
       }
     })();
     const onFocus = () => {
+      if (disposed) return;
       configure();
       void refresh();
       void takeOpen();
@@ -147,7 +237,7 @@ export function useSessionReminders(
     // The backend owns firing. This refresh catches renamed/deleted sessions,
     // missed events, and a machine waking after its scheduled time.
     const timer = window.setInterval(() => {
-      void refresh();
+      if (!disposed) void refresh();
     }, 30_000);
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -156,7 +246,6 @@ export function useSessionReminders(
     window.addEventListener("storage", configure);
     return () => {
       disposed = true;
-      revision.current++;
       subscriptions.forEach((unlisten) => unlisten());
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
@@ -165,25 +254,33 @@ export function useSessionReminders(
       window.removeEventListener(SOUNDS_CHANGE_EVENT, configure);
       window.removeEventListener("storage", configure);
     };
-  }, [openHere, refresh]);
+  }, [openHere, refresh, refreshCurrent, execute, capture]);
 
   const sessionIdsKey = JSON.stringify(openSessionIds);
   useEffect(() => {
-    void invoke("reminder_register_window", {
-      sessionIds: JSON.parse(sessionIdsKey),
-    }).catch((error) => setError(String(error)));
-  }, [sessionIdsKey]);
+    void execute(
+      async () => {
+        await invoke("reminder_register_window", {
+          sessionIds: JSON.parse(sessionIdsKey),
+        });
+      },
+      (error, isCurrent) =>
+        setError((previous) => (isCurrent() ? String(error) : previous)),
+    );
+  }, [sessionIdsKey, execute]);
 
-  const open = useCallback(async (reminder: ReminderTarget) => {
-    try {
-      await invoke("reminder_open", {
-        sessionId: reminder.sessionId,
-        dueAt: reminder.dueAt,
+  const open = useCallback(
+    async (reminder: ReminderTarget) => {
+      const target = { sessionId: reminder.sessionId, dueAt: reminder.dueAt };
+      await execute(async () => {
+        await invoke("reminder_open", {
+          sessionId: target.sessionId,
+          dueAt: target.dueAt,
+        });
       });
-    } catch (error) {
-      report(error);
-    }
-  }, []);
+    },
+    [execute],
+  );
 
   return {
     reminders,

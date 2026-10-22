@@ -5,6 +5,7 @@ import { isForegroundHarnessSession } from "@/modules/harness/lib/harnessFlush";
 import { ownHarnessWindowCloseSubscription } from "@/modules/harness/lib/harnessWindowCloseSubscription";
 import { ownHarnessUnloadSubscription } from "@/modules/harness/lib/harnessUnloadSubscription";
 import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
+import { useInitialHarnessSession } from "@/modules/harness/hooks/useInitialHarnessSession";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -39,8 +40,8 @@ import {
   useWorktreeFocus,
   worktreeFocus,
 } from "../lib/worktreeFocus";
-import { listWorktrees, type Worktree } from "../lib/worktrees";
-import { sessionInWorktree } from "../lib/sessionWorktrees";
+import type { Worktree } from "@/modules/harness/lib/worktrees";
+import { moveSessionWorktree } from "@/modules/harness/lib/sessionWorktreePersistence";
 import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { registerSshProjectPath } from "@/modules/connections/model/remoteProjectRegistration";
@@ -1316,20 +1317,25 @@ const sessionEngine = useHarnessSessionEngine({
     prefetchProjectFiles(sidebarCwd);
   }, [sidebarCwd]);
 
-  const persistSession = useCallback((session: Session | undefined) => {
-    if (!session || !shouldPersistSession(session)) return;
-    const permit = getPersistenceOwner()?.capture();
-    if (!permit) return;
-    const fingerprint = persistFingerprint(session);
-    void permit.run(async () => {
-      const summary = await upsertSession(session);
-      if (!permit.isCurrent() || !summary) return;
-      lastPersisted.current.set(session.id, fingerprint);
-      if (summary.cwd === sidebarCwdRef.current) {
-        setHistory((current) => mergeProjectHistorySummary(current, summary));
-      }
-    }).catch(() => undefined);
-  }, [getPersistenceOwner]);
+  const persistSession = useCallback(
+    (session: Session | undefined, capturedPermit?: PersistencePermit) => {
+      if (!session || !shouldPersistSession(session)) return;
+      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
+      if (!permit) return;
+      const fingerprint = persistFingerprint(session);
+      void permit
+        .run(async () => {
+          const summary = await upsertSession(session);
+          if (!permit.isCurrent() || !summary) return;
+          lastPersisted.current.set(session.id, fingerprint);
+          if (summary.cwd === sidebarCwdRef.current) {
+            setHistory((current) => mergeProjectHistorySummary(current, summary));
+          }
+        })
+        .catch(() => undefined);
+    },
+    [getPersistenceOwner],
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
   useEffect(() => {
@@ -3307,19 +3313,26 @@ const sessionEngine = useHarnessSessionEngine({
   }, [applySessionDeltas]);
 
   const ensureOpenSession = useCallback(
-    async (sessionId: string): Promise<Session | null> => {
+    async (
+      sessionId: string,
+      capturedPermit?: PersistencePermit,
+    ): Promise<Session | null> => {
+      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
+      if (!permit?.isCurrent()) return null;
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
       if (open && open.blocks.length > 0) return open;
 
-      const loaded = await getSession(sessionId).catch(() => null);
+      const loaded = await getSession(sessionId, permit).catch(() => null);
+      if (!permit.isCurrent()) return null;
       if (!loaded) {
         if (open) return open;
-        void refreshHistory(sidebarCwd);
+        void refreshHistory(sidebarCwd, permit.isCurrent);
         return null;
       }
       const restored = await restoreSessionCheckout(loaded);
+      if (!permit.isCurrent()) return null;
       if (restored.providerSessionId && isLiveHarness(restored.harness)) {
         bindHarnessSession(
           restored.harness,
@@ -3330,20 +3343,33 @@ const sessionEngine = useHarnessSessionEngine({
           restored.blocks,
         );
       }
+      if (!permit.isCurrent()) return null;
       lastPersisted.current.set(restored.id, persistFingerprint(restored));
       if (sessionsRef.current.some((session) => session.id === restored.id)) {
-        updateSession(restored.id, () => restored, "immediate");
+        updateSession(
+          restored.id,
+          (previous) => (permit.isCurrent() ? restored : previous),
+          "immediate",
+        );
       } else admitSession(restored, "immediate");
       return restored;
     },
-    [refreshHistory, sidebarCwd, updateSession, admitSession],
+    [
+      refreshHistory,
+      sidebarCwd,
+      updateSession,
+      admitSession,
+      getPersistenceOwner,
+    ],
   );
 
   const onSelectHistorySession = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, capturedPermit?: PersistencePermit) => {
+      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
+      if (!permit?.isCurrent()) return;
       workspaceNavigation.cancel();
-      const session = await ensureOpenSession(sessionId);
-      if (!session) return;
+      const session = await ensureOpenSession(sessionId, permit);
+      if (!session || !permit.isCurrent()) return;
       if (looksLikeProject(session.cwd))
         setProjectCwd(normalizeProjectPath(session.cwd));
       if (focusOpenSession(sessionId)) return;
@@ -3362,12 +3388,15 @@ const sessionEngine = useHarnessSessionEngine({
       replaceBlankPaneWithSession,
       setActiveTabId,
       workspaceNavigation.cancel,
+      getPersistenceOwner,
     ],
   );
 
   const onPlaceSessionOnPane = useCallback(
     async (sessionId: string, targetId: string, edge: PaneEdge) => {
       if (sessionId === targetId) return;
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit?.isCurrent()) return;
       const targetTab = tabsRef.current.find((tab: any) =>
         leafIds(tab.layout).includes(targetId),
       );
@@ -3375,13 +3404,12 @@ const sessionEngine = useHarnessSessionEngine({
 
       const alreadyHere = leafIds(targetTab.layout).includes(sessionId);
       if (!alreadyHere) {
-        const session = await ensureOpenSession(sessionId);
-        if (!session) return;
+        const session = await ensureOpenSession(sessionId, permit);
+        if (!session || !permit.isCurrent()) return;
       }
+      if (!permit.isCurrent()) return;
 
-      const tab = tabsRef.current.find(
-        (entry: any) => entry.id === targetTab.id,
-      );
+      const tab = tabsRef.current.find((entry: any) => entry.id === targetTab.id);
       if (!tab || !leafIds(tab.layout).includes(targetId)) return;
 
       const replaceTarget =
@@ -3415,16 +3443,26 @@ const sessionEngine = useHarnessSessionEngine({
       });
       if (!result) return;
 
-      applySessionDeltas(harnessSessionDeltas(placementSessions, result.sessions, [
-        sessionId, targetId, ...result.sessions.filter((session) => !placementSessions.some((previous) => previous.id === session.id)).map((session) => session.id),
-      ]), "immediate");
+      applySessionDeltas(
+        harnessSessionDeltas(placementSessions, result.sessions, [
+          sessionId,
+          targetId,
+          ...result.sessions
+            .filter(
+              (session) =>
+                !placementSessions.some((previous) => previous.id === session.id),
+            )
+            .map((session) => session.id),
+        ]),
+        "immediate",
+      );
       tabsRef.current = result.tabs;
       setTabs(result.tabs);
       setActiveTabId(result.activeTabId);
       setProjectTerminalFocused(false);
       setComposerFocused(true);
     },
-    [ensureOpenSession, tabCloseScope, applySessionDeltas],
+    [ensureOpenSession, tabCloseScope, applySessionDeltas, getPersistenceOwner],
   );
 
   const onRenameHistorySession = useCallback(
@@ -3918,41 +3956,39 @@ const sessionEngine = useHarnessSessionEngine({
       fromComposer = false,
       isCurrent: () => boolean = () => true,
     ) => {
-      if (!isCurrent()) return;
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit || !isCurrent()) return false;
+      const active = () => permit.isCurrent() && isCurrent();
       const current = sessionsRef.current.find((s: any) => s.id === sessionId);
+      if (!current) return false;
       if (
-        !current ||
-        (!current.worktreeRemoved &&
-          pathKey(sessionWorkCwd(current)) === pathKey(tree.path))
+        !current.worktreeRemoved &&
+        pathKey(sessionWorkCwd(current)) === pathKey(tree.path)
       )
-        return;
-      const source = { ...current };
-      const listed = await listWorktrees(current.cwd);
-      if (!isCurrent()) return;
-      const target = listed.worktrees.find(
-        (entry) =>
-          pathKey(entry.path) === pathKey(tree.path) && !entry.missing,
-      );
-      if (!target) {
-        throw new Error("This worktree is no longer available.");
-      }
-      const next = sessionInWorktree(source, target);
-      if (fromComposer) {
-        workspacePins.current.set(
-          sessionId,
-          currentWorkspace(source.cwd),
-        );
-      } else {
-        workspacePins.current.delete(sessionId);
-      }
-      if (shouldPersistSession(next)) await upsertSession(next);
-      if (!isCurrent()) return;
-      updateSession(sessionId, () => next, "immediate");
-      notifyGitChanged();
-      notifyReviewChanged(sessionId);
-      void refreshHistory(next.cwd);
+        return active();
+      return moveSessionWorktree({
+        session: current,
+        targetPath: tree.path,
+        permit,
+        isCurrent,
+        commit: (next) => {
+          if (fromComposer)
+            workspacePins.current.set(sessionId, currentWorkspace(current.cwd));
+          else workspacePins.current.delete(sessionId);
+          updateSession(
+            sessionId,
+            (previous) => (active() ? next : previous),
+            "immediate",
+          );
+          if (!active()) return;
+          notifyGitChanged();
+          if (!active()) return;
+          notifyReviewChanged(sessionId);
+          if (active()) void refreshHistory(next.cwd, active);
+        },
+      });
     },
-    [refreshHistory, updateSession],
+    [refreshHistory, updateSession, getPersistenceOwner],
   );
 
   const onSelectWorkspace = useCallback(
@@ -3965,6 +4001,8 @@ const sessionEngine = useHarnessSessionEngine({
 
   const onSelectProject = useCallback(
     (path: string) => {
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) return;
       workspaceNavigation.cancel();
       setSearchViewOpen(false);
       setInboxViewOpen(false);
@@ -3988,8 +4026,9 @@ const sessionEngine = useHarnessSessionEngine({
         : undefined;
       // Leaving a conversation, whatever the two projects are, must not depend on
       // the next periodic save to keep it in its project's session list.
+      if (!permit.isCurrent()) return;
       if (current && shouldPersistSession(current)) {
-        void upsertSession(current).catch(() => undefined);
+        persistSession(current, permit);
       }
       const decision = planProjectReturn({
         memory: readProjectReturnMemory(),
@@ -4035,7 +4074,18 @@ const sessionEngine = useHarnessSessionEngine({
       setActiveTabId(tab.id);
       setComposerFocused(true);
     },
-    [activateTab, appendTab, onCwdChange, readProjectReturnMemory, setActiveTabId, workspaceNavigation.cancel, workspaceNavigation.selectProject, admitSession],
+    [
+      activateTab,
+      appendTab,
+      onCwdChange,
+      readProjectReturnMemory,
+      setActiveTabId,
+      workspaceNavigation.cancel,
+      workspaceNavigation.selectProject,
+      admitSession,
+      persistSession,
+      getPersistenceOwner,
+    ],
   );
 
   useEffect(() => {
@@ -4102,13 +4152,7 @@ const sessionEngine = useHarnessSessionEngine({
   }, [activeProjectCwd, sshConnections, harnessEnv]);
 
 
-  const initialSessionHandled = useRef(false);
-  useEffect(() => {
-    if (initialSessionId && !initialSessionHandled.current) {
-      initialSessionHandled.current = true;
-      void onSelectHistorySession(initialSessionId);
-    }
-  }, [initialSessionId, onSelectHistorySession]);
+  useInitialHarnessSession(initialSessionId, getPersistenceOwner, onSelectHistorySession, persistenceRevision);
 
   const prevInitialCwdRef = useRef(initialCwd);
   useEffect(() => {
@@ -5445,6 +5489,7 @@ const sessionEngine = useHarnessSessionEngine({
     onSelectHistorySession,
     ensureSaved,
     activeOpenSessionIds,
+    getPersistenceOwner,
   );
 
   return (

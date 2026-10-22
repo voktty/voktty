@@ -34,7 +34,7 @@ type Options = {
     id: string,
     tree: Worktree,
     isCurrent: () => boolean,
-  ) => Promise<void>;
+  ) => Promise<void> | Promise<boolean>;
   activateTab: (id: string) => void;
   createTab: (project: string, focus?: WorktreeFocus) => string;
 };
@@ -149,7 +149,7 @@ export function useWorkspaceNavigation(options: Options) {
             sameProjectPath(session.cwd, next.project)
           ) {
             moving.current.add(session.id);
-            await view.moveSession(
+            const moved = await view.moveSession(
               session.id,
               {
                 path,
@@ -165,7 +165,7 @@ export function useWorkspaceNavigation(options: Options) {
               },
               isCurrent,
             );
-            if (!isCurrent()) continue;
+            if (moved === false || !isCurrent()) continue;
             tabId = tab.id;
           } else if (next.kind === "project") {
             // Returning through the project rail keeps its landing
