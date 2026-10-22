@@ -524,7 +524,7 @@ export async function getSession(
     }
   }
   const recovered = await recoverCursorSubagents(session);
-  cacheSession(recovered);
+  if (!persistencePermit || persistencePermit.isCurrent()) cacheSession(recovered);
   return recovered;
 }
 

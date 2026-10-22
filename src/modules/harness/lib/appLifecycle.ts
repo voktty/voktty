@@ -66,6 +66,7 @@ let bootPromise: Promise<BootWorkspace> | null = null;
 let quitting = false;
 let quitPersistence: PersistenceFinal | null = null;
 let bootQuitOwner: PersistenceOwner | null = null;
+let bootLoadOwner: PersistenceOwner | null = null;
 let quitDialogOpen = false;
 let bootingResumed: ResumedWorkspace | null = null;
 let liveWorkspace: {
@@ -106,6 +107,8 @@ export function setQuitWorkspace(
     flush,
     persistenceOwner,
   };
+  bootLoadOwner?.retire();
+  bootLoadOwner = null;
   bootingResumed = null;
   return () => {
     if (liveWorkspace?.sessions === sessions) liveWorkspace = null;
@@ -288,10 +291,31 @@ export function loadBootWorkspace(): Promise<BootWorkspace> {
 }
 
 async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {
+  if (liveWorkspace) return null;
+  const owner = windowPersistenceAdmission.createOwner();
+  bootLoadOwner = owner;
+  try {
+    const permit = owner.capture();
+    if (!permit) return null;
+    return await readResumedWorkspace(
+      permit,
+      () => bootLoadOwner === owner && !liveWorkspace && permit.isCurrent(),
+    );
+  } finally {
+    owner.retire();
+    if (bootLoadOwner === owner) bootLoadOwner = null;
+  }
+}
+
+async function readResumedWorkspace(
+  permit: PersistencePermit,
+  isCurrent: () => boolean,
+): Promise<ResumedWorkspace | null> {
   const [snapshotRaw, refs] = await Promise.all([
     loadWorkspaceSnapshot().catch(() => null),
     listInFlightSessions().catch(() => []),
   ]);
+  if (!isCurrent()) return null;
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
   const snapshot = parseWorkspaceSnapshot(snapshotRaw);
 
@@ -307,10 +331,12 @@ async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {
   const loaded = new Map<string, Session>();
   await Promise.all(
     [...ids].map(async (id) => {
-      const record = await getSession(id).catch(() => null);
-      if (record) loaded.set(id, record);
+      if (!isCurrent()) return;
+      const record = await getSession(id, permit).catch(() => null);
+      if (isCurrent() && record) loaded.set(id, record);
     }),
   );
+  if (!isCurrent()) return null;
 
   let workspace = snapshot
     ? hydrateWorkspaceSnapshot(snapshot, loaded, interrupted)
@@ -334,10 +360,13 @@ async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {
     };
   }
 
-  bootingResumed = workspace;
+  if (!isCurrent()) return null;
   if (workspace) {
-    await upsertSessions(workspace.sessions).catch(() => []);
+    const sessions = workspace.sessions;
+    await permit.run(() => upsertSessions(sessions)).catch(() => undefined);
   }
+  if (!isCurrent()) return null;
+  bootingResumed = workspace;
   return workspace;
 }
 
