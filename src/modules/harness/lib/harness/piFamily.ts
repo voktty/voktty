@@ -300,8 +300,8 @@ export async function sendTurn(
           await abort.promise;
           assertCurrentOperation(live, operation);
         }
-        if (hasRetiredWork(live, operation)) {
-          await waitForRetiredWork(live, operation);
+        if (hasAdmissionWork(live, operation)) {
+          await waitForAdmissionWork(live, operation);
           assertCurrentOperation(live, operation);
         }
         guardForkBinding(live, operation);
@@ -357,8 +357,8 @@ function queueControl<T>(
         await abort.promise;
         assertCurrentOperation(live, operation);
       }
-      if (hasRetiredWork(live, operation)) {
-        await waitForRetiredWork(live, operation);
+      if (hasAdmissionWork(live, operation)) {
+        await waitForAdmissionWork(live, operation);
         assertCurrentOperation(live, operation);
       }
       guardForkBinding(live, operation);
@@ -1495,19 +1495,18 @@ function releaseSteer(live: Live, receipt: PendingSteer): void {
   notifyPendingWork(live);
 }
 
-function hasRetiredWork(live: Live, operation: object): boolean {
+function hasAdmissionWork(live: Live, operation: object): boolean {
   for (const receipt of live.pendingWriters ?? [])
     if (receipt.eligible && receipt.operation !== operation) return true;
-  for (const receipt of live.pendingSteers ?? [])
-    if (receipt.operation !== operation) return true;
+  if (live.pendingSteers?.size) return true;
   return false;
 }
 
-async function waitForRetiredWork(
+async function waitForAdmissionWork(
   live: Live,
   operation: object,
 ): Promise<void> {
-  while (hasRetiredWork(live, operation)) {
+  while (hasAdmissionWork(live, operation)) {
     assertCurrentOperation(live, operation);
     let wake = live.pendingWorkWake;
     if (!wake) {

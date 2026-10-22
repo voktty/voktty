@@ -372,6 +372,176 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
     );
   },
 );
+async function completedWithSteer(flavor: PiFlavor) {
+  const { turn } = await active(flavor);
+  holdSteer = true;
+  const steer = observed(steerTurn(flavor, input(flavor)));
+  await flush();
+  const request = held[held.length - 1];
+  if (!request) throw new Error("Expected completed-turn steer");
+  frame(request.nativeId, { type: "agent_settled" });
+  await turn;
+  autoPrompt = true;
+  return { steer, request };
+}
+
+describe.each([PI_FLAVOR, OMP_FLAVOR])(
+  "$id completed turn steer admission",
+  (flavor) => {
+    it.each(
+      kinds.flatMap((kind) =>
+        [true, false].map((success) => ({ kind, success })),
+      ),
+    )(
+      "waits for same-token steer before next $kind, success=$success",
+      async ({ kind, success }) => {
+        const { steer, request } = await completedWithSteer(flavor);
+        const count = requests.length;
+        const events: HarnessEvent[] = [];
+        let done = false;
+        const next = observed(
+          fresh(flavor, kind, events).then(() => {
+            done = true;
+          }),
+        );
+        await flush();
+        expect(done).toBe(false);
+        expect(requests).toHaveLength(count);
+        expect(events).toEqual([]);
+        reply(request, success);
+        if (success) await steer;
+        else await expect(steer).rejects.toThrow("steer rejected");
+        await next;
+        expect(spawns).toHaveLength(1);
+        expect(kills).toEqual([]);
+      },
+    );
+    it("does not admit next work after only one of two same-token ACKs", async () => {
+      const { turn } = await active(flavor);
+      holdSteer = true;
+      const first = observed(steerTurn(flavor, input(flavor)));
+      const second = observed(steerTurn(flavor, input(flavor)));
+      await flush();
+      const a = held[0];
+      const b = held[1];
+      if (!a || !b) throw new Error("Expected two same-token requests");
+      frame(a.nativeId, { type: "agent_settled" });
+      await turn;
+      autoPrompt = true;
+      const count = requests.length;
+      const next = observed(compactContext(flavor, input(flavor)));
+      await flush();
+      expect(requests).toHaveLength(count);
+      reply(a);
+      await first;
+      await flush();
+      expect(requests).toHaveLength(count);
+      reply(b);
+      await second;
+      await next;
+    });
+    it("blocks both old same-token steer and waiting work with the exact uncertain timeout", async () => {
+      const { turn } = await active(flavor);
+      vi.useFakeTimers();
+      holdSteer = true;
+      const steer = observed(steerTurn(flavor, input(flavor)));
+      await flush();
+      const request = held[0];
+      if (!request) throw new Error("Expected timeout request");
+      frame(request.nativeId, { type: "agent_settled" });
+      await turn;
+      autoPrompt = true;
+      const count = requests.length;
+      const next = observed(compactContext(flavor, input(flavor)));
+      await flush();
+      expect(requests).toHaveLength(count);
+      await vi.advanceTimersByTimeAsync(15000);
+      const original = await steer.then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(original).toMatchObject({
+        message: `${flavor.label} steer timed out`,
+      });
+      await expect(next).rejects.toBe(original);
+      for (const kind of kinds)
+        await expect(fresh(flavor, kind)).rejects.toBe(original);
+      expect(requests).toHaveLength(count);
+      expect(kills).toEqual([]);
+    });
+    it("cancels same-token FIFO waiters without freeing the unresolved result", async () => {
+      const { steer, request } = await completedWithSteer(flavor);
+      const first = observed(compactContext(flavor, input(flavor)));
+      await flush();
+      await cancelTurn(flavor, "outcome");
+      await expect(first).rejects.toThrow(/retired/i);
+      const count = requests.length;
+      const next = observed(sendTurn(flavor, input(flavor)));
+      await flush();
+      expect(requests).toHaveLength(count);
+      reply(request);
+      await expect(steer).rejects.toThrow(/retired/i);
+      await next;
+    });
+    it("stops same-token waiters and replaces the actor without requiring its old ACK", async () => {
+      const { steer, request } = await completedWithSteer(flavor);
+      const next = observed(compactContext(flavor, input(flavor)));
+      await flush();
+      await stopSession(flavor, "outcome");
+      await expect(next).rejects.toThrow(/retired/i);
+      await expect(steer).rejects.toThrow(/retired/i);
+      holdSteer = false;
+      await sendTurn(flavor, input(flavor));
+      reply(request, false);
+      await flush();
+      await sendTurn(flavor, input(flavor));
+      expect(spawns).toHaveLength(2);
+    });
+    it("does not configure model or accept the next turn before the preceding steer outcome", async () => {
+      const { steer, request } = await completedWithSteer(flavor);
+      const events: HarnessEvent[] = [];
+      let accepted = 0;
+      const count = requests.length;
+      const next = observed(
+        sendTurn(flavor, {
+          ...input(flavor, events),
+          model: `${flavor.id}:anthropic/new-model`,
+          modelSettings: { thinking: "high" },
+          onAccepted: () => {
+            accepted += 1;
+          },
+        }),
+      );
+      await flush();
+      expect(requests).toHaveLength(count);
+      expect(events).toEqual([]);
+      expect(accepted).toBe(0);
+      reply(request);
+      await steer;
+      await next;
+      expect(accepted).toBe(1);
+      expect(
+        requests.slice(count).some((row) => row.command.type === "set_model"),
+      ).toBe(true);
+    });
+    it("keeps an unrelated warmed actor available while same-token work waits", async () => {
+      autoPrompt = true;
+      await sendTurn(flavor, input(flavor, [], "sibling"));
+      const { steer, request } = await completedWithSteer(flavor);
+      const count = requests.length;
+      const next = observed(compactContext(flavor, input(flavor)));
+      await flush();
+      expect(requests).toHaveLength(count);
+      await sendTurn(flavor, input(flavor, [], "sibling"));
+      expect(spawns).toHaveLength(2);
+      reply(request);
+      await steer;
+      await next;
+      expect(kills).toEqual([]);
+    });
+  },
+);
+
 describe("omp streaming steer command", () => {
   it("tracks slash prompt routed through concurrent steering", async () => {
     const { turn } = await active(OMP_FLAVOR);
