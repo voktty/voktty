@@ -93,6 +93,12 @@ type Admission = {
   live?: Live;
 };
 
+type PendingAbort = {
+  promise: Promise<void>;
+  start: () => Promise<void>;
+  settle: () => void;
+};
+
 type Live = {
   admission: Admission;
   unwatch: () => void;
@@ -100,6 +106,7 @@ type Live = {
   isCurrent: () => boolean;
   exitError?: Error;
   reuseError?: Error;
+  abortPending?: PendingAbort;
   rpc: PiRpc;
   cwd: string;
   providerSessionId: string;
@@ -273,6 +280,11 @@ export async function sendTurn(
     .then(async () => {
       try {
         assertCurrentOperation(live, operation);
+        const abort = live.abortPending;
+        if (abort) {
+          await abort.promise;
+          assertCurrentOperation(live, operation);
+        }
       } catch (error) {
         if (error instanceof RetiredPiOperationError) return;
         throw error;
@@ -320,6 +332,11 @@ function queueControl<T>(
     .catch(() => undefined)
     .then(async () => {
       assertCurrentOperation(live, operation);
+      const abort = live.abortPending;
+      if (abort) {
+        await abort.promise;
+        assertCurrentOperation(live, operation);
+      }
       live.onEvent = input.onEvent;
       live.cancelled = false;
       live.muteUpdates = false;
@@ -467,6 +484,8 @@ export async function cancelTurn(
     cancelledThreads.add(sessionId);
     return;
   }
+  const previousAbort = live.abortPending;
+  const abort = previousAbort ?? reserveAbort(live);
   live.operationToken = {};
   const onEvent = live.onEvent;
   const done = live.turnDone;
@@ -478,21 +497,24 @@ export async function cancelTurn(
   live.cancelled = true;
   live.muteUpdates = true;
   live.settleToken += 1;
-  for (const [, pending] of live.approvals) pending.resolve("deny");
+  const approvals = [...live.approvals.values()];
+  const questions = [...live.questions.values()];
   live.approvals.clear();
-  for (const question of live.questions.values())
-    question.resolve({ kind: "skipped" });
   live.questions.clear();
   try {
+    for (const pending of approvals) pending.resolve("deny");
+    for (const question of questions) question.resolve({ kind: "skipped" });
     if (hadTurn) {
       onEvent({ type: "message.completed" });
       onEvent({ type: "reasoning.completed" });
     }
   } finally {
-    done?.();
-    await live.rpc.request({ type: "abort" }, 5_000).catch((error: unknown) => {
-      blockNativeReuse(live, error);
-    });
+    try {
+      done?.();
+    } finally {
+      if (!previousAbort) await abort.start();
+      else await abort.promise;
+    }
   }
 }
 
@@ -555,6 +577,7 @@ function detachAdmission(owner: Admission, error?: Error): () => void {
   live.turnFailed = null;
   live.toolsById.clear();
   live.toolsByIndex.clear();
+  live.abortPending?.settle();
   return () => {
     live.unwatch();
     live.rpc.close(error);
@@ -614,6 +637,11 @@ async function ensureLive(
   guardAdmission(live.admission);
   if (configureModel) {
     const operation = live.operationToken;
+    const abort = live.abortPending;
+    if (abort) {
+      await abort.promise;
+      assertCurrentOperation(live, operation);
+    }
     live.onEvent = input.onEvent;
     await applyModel(flavor, live, input, operation);
     assertCurrentOperation(live, operation);
@@ -1324,6 +1352,33 @@ class RetiredPiOperationError extends Error {
   }
 }
 
+function reserveAbort(live: Live): PendingAbort {
+  const rpc = live.rpc;
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  const pending: PendingAbort = {
+    promise,
+    settle: () => {
+      if (live.abortPending === pending) live.abortPending = undefined;
+      resolve();
+    },
+    start: async () => {
+      try {
+        if (isCurrentAdmission(live.admission) && !live.reuseError)
+          await rpc.request({ type: "abort" }, 5_000);
+      } catch (error) {
+        blockNativeReuse(live, error);
+      } finally {
+        pending.settle();
+      }
+    },
+  };
+  live.abortPending = pending;
+  return pending;
+}
+
 function blockNativeReuse(live: Live, error: unknown): void {
   if (live.reuseError || !isCurrentAdmission(live.admission)) return;
   const failure = error instanceof Error ? error : new Error(String(error));
@@ -1342,6 +1397,7 @@ function blockNativeReuse(live: Live, error: unknown): void {
   live.turnFailed = null;
   live.toolsById.clear();
   live.toolsByIndex.clear();
+  live.abortPending?.settle();
   live.rpc.close(failure);
   for (const pending of approvals) pending.resolve("deny");
   for (const question of questions) question.resolve({ kind: "skipped" });
@@ -1361,6 +1417,11 @@ async function operationRequest(
   timeoutMs?: number,
 ): Promise<Record<string, unknown>> {
   assertCurrentOperation(live, operation);
+  const abort = live.abortPending;
+  if (abort) {
+    await abort.promise;
+    assertCurrentOperation(live, operation);
+  }
   let result: Record<string, unknown>;
   try {
     result = await live.rpc.request(command, timeoutMs);
@@ -1380,6 +1441,11 @@ async function applyModel(
   operation = live.operationToken,
 ): Promise<void> {
   assertCurrentOperation(live, operation);
+  const abort = live.abortPending;
+  if (abort) {
+    await abort.promise;
+    assertCurrentOperation(live, operation);
+  }
   const native = nativeModelId(input.model);
   const thinking = input.modelSettings?.thinking;
   const fast = input.modelSettings?.fast;
