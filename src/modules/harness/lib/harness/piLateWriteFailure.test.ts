@@ -235,7 +235,7 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
       await expectBlocked(flavor, original);
     });
 
-    it("blocks newer same-native work after cancelled old steer writer failed", async () => {
+    it("blocks newer queued same-native work after cancelled old steer writer failed", async () => {
       await sendTurn(flavor, input(flavor));
       autoPrompt = false;
       const active = observed(sendTurn(flavor, input(flavor)));
@@ -250,9 +250,15 @@ describe.each([PI_FLAVOR, OMP_FLAVOR])(
       await cancelTurn(flavor, "late-writer");
       await active;
       autoPrompt = true;
-      await sendTurn(flavor, input(flavor));
-      const original = new Error("old steer writer failed after newer turn");
+      const count = requests.length;
+      const newer = observed(sendTurn(flavor, input(flavor)));
+      await flush();
+      expect(requests).toHaveLength(count);
+      const original = new Error(
+        "old steer writer failed with newer turn queued",
+      );
       held.reject(original);
+      await expect(newer).rejects.toBe(original);
       await flush();
       await expectBlocked(flavor, original);
       expect(spawns).toHaveLength(1);

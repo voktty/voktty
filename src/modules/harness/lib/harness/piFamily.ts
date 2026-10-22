@@ -99,6 +99,11 @@ type PendingAbort = {
   settle: () => void;
 };
 
+type PendingWriter = { operation: object; eligible: boolean };
+type WriterWake = { promise: Promise<void>; resolve: () => void };
+const MAX_PENDING_RPC_WRITERS = 256;
+let pendingRpcWriters = 0;
+
 type Live = {
   admission: Admission;
   unwatch: () => void;
@@ -107,6 +112,8 @@ type Live = {
   exitError?: Error;
   reuseError?: Error;
   abortPending?: PendingAbort;
+  pendingWriters?: Set<PendingWriter>;
+  writerWake?: WriterWake;
   rpc: PiRpc;
   cwd: string;
   providerSessionId: string;
@@ -289,6 +296,10 @@ export async function sendTurn(
           await abort.promise;
           assertCurrentOperation(live, operation);
         }
+        if (hasRetiredWriters(live, operation)) {
+          await waitForRetiredWriters(live, operation);
+          assertCurrentOperation(live, operation);
+        }
         guardForkBinding(live, operation);
       } catch (error) {
         if (error instanceof RetiredPiOperationError) return;
@@ -340,6 +351,10 @@ function queueControl<T>(
       const abort = live.abortPending;
       if (abort) {
         await abort.promise;
+        assertCurrentOperation(live, operation);
+      }
+      if (hasRetiredWriters(live, operation)) {
+        await waitForRetiredWriters(live, operation);
         assertCurrentOperation(live, operation);
       }
       guardForkBinding(live, operation);
@@ -494,6 +509,7 @@ export async function cancelTurn(
   const previousAbort = live.abortPending;
   const abort = previousAbort ?? reserveAbort(live);
   live.operationToken = {};
+  notifyWriterChange(live);
   const onEvent = live.onEvent;
   const done = live.turnDone;
   const hadTurn = live.activeTurn || done !== null;
@@ -569,6 +585,7 @@ function detachAdmission(owner: Admission, error?: Error): () => void {
   if (!live) return () => undefined;
   if (error) live.exitError = error;
   else live.operationToken = {};
+  notifyWriterChange(live);
   live.muteUpdates = true;
   live.settleToken += 1;
   const approvals = [...live.approvals.values()];
@@ -778,12 +795,16 @@ async function startLive(
     },
     flavor.label,
     async (line) => {
+      const current = liveRef.current;
+      let receipt: PendingWriter | undefined;
       try {
+        if (current) receipt = reserveWriter(current);
         await child.write(line);
       } catch (error) {
-        const current = liveRef.current;
         if (current) blockNativeReuse(current, error);
         throw error;
+      } finally {
+        if (current && receipt) releaseWriter(current, receipt);
       }
     },
   );
@@ -1398,6 +1419,7 @@ function blockNativeReuse(live: Live, error: unknown): void {
   if (live.reuseError || !isCurrentAdmission(live.admission)) return;
   const failure = error instanceof Error ? error : new Error(String(error));
   live.reuseError = failure;
+  notifyWriterChange(live);
   live.muteUpdates = true;
   live.settleToken += 1;
   const approvals = [...live.approvals.values()];
@@ -1423,6 +1445,58 @@ function assertCurrentOperation(live: Live, operation: object): void {
   if (live.operationToken !== operation) throw new RetiredPiOperationError();
   if (!live.isCurrent())
     throw live.exitError ?? live.reuseError ?? new RetiredPiOperationError();
+}
+
+function notifyWriterChange(live: Live): void {
+  const wake = live.writerWake;
+  live.writerWake = undefined;
+  wake?.resolve();
+}
+
+function reserveWriter(live: Live): PendingWriter {
+  if (pendingRpcWriters >= MAX_PENDING_RPC_WRITERS)
+    throw new Error("Pi RPC writer capacity exceeded");
+  const receipt = { operation: live.operationToken, eligible: !live.cancelled };
+  live.pendingWriters ??= new Set();
+  live.pendingWriters.add(receipt);
+  pendingRpcWriters += 1;
+  return receipt;
+}
+
+function releaseWriter(live: Live, receipt: PendingWriter): void {
+  if (!live.pendingWriters?.delete(receipt)) return;
+  pendingRpcWriters -= 1;
+  notifyWriterChange(live);
+}
+
+function hasRetiredWriters(live: Live, operation: object): boolean {
+  for (const receipt of live.pendingWriters ?? [])
+    if (receipt.eligible && receipt.operation !== operation) return true;
+  return false;
+}
+
+async function waitForRetiredWriters(
+  live: Live,
+  operation: object,
+): Promise<void> {
+  while (hasRetiredWriters(live, operation)) {
+    assertCurrentOperation(live, operation);
+    let wake = live.writerWake;
+    if (!wake) {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => {
+        resolve = done;
+      });
+      wake = { promise, resolve };
+      live.writerWake = wake;
+    }
+    try {
+      await wake.promise;
+    } finally {
+      if (live.writerWake === wake) live.writerWake = undefined;
+    }
+    assertCurrentOperation(live, operation);
+  }
 }
 
 function guardForkBinding(live: Live, operation: object): void {
