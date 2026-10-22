@@ -102,7 +102,7 @@ import {
 } from "../lib/appLifecycle";
 import { hiddenApprovalNotices } from "../lib/approvalToast";
 
-import { flushSessionCheckpoint, keepSessionChanges, notifyReviewChanged } from "../lib/checkpoint";
+import { keepSessionChanges, notifyReviewChanged } from "../lib/checkpoint";
 
 import { syncDockBadge } from "../lib/dockBadge";
 import {
@@ -250,7 +250,6 @@ import {
 } from "../lib/sessionHistory";
 import { piSkillContextForSession } from "../lib/sessionSkills";
 import {
-  deleteSession,
   getCachedSession,
   getSession,
   listSessionsByProject,
@@ -323,7 +322,8 @@ import {
   collectWorkspaceSnapshot,
   workspaceSnapshotKey,
 } from "../lib/workspaceSnapshot";
-import { runSessionRemoval } from "../lib/sessionRemoval";
+import { runSessionRemoval, runSessionRemovalBatch } from "@/modules/harness/lib/sessionRemoval";
+import { persistSessionRemoval } from "@/modules/harness/lib/sessionRemovalPersistence";
 import {
   applyPlaceSessionOnPane,
   filterTabsForProject,
@@ -3452,8 +3452,11 @@ const sessionEngine = useHarnessSessionEngine({
       sessionId: string,
       mode: "archive" | "delete",
       skipDeleteConfirm = false,
+      capturedPermit?: PersistencePermit,
     ): Promise<boolean> => {
       if (removingSessionIds.current.has(sessionId)) return false;
+      const persistencePermit = capturedPermit ?? getPersistenceOwner()?.capture();
+      if (!persistencePermit?.isCurrent()) return false;
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
@@ -3468,6 +3471,7 @@ const sessionEngine = useHarnessSessionEngine({
         !window.confirm(t("harness.chrome.deleteSessionNamed", { name: label }))
       )
         return false;
+      if (!persistencePermit.isCurrent()) return false;
 
       removingSessionIds.current.add(sessionId);
       pendingPersist.current.delete(sessionId);
@@ -3476,6 +3480,7 @@ const sessionEngine = useHarnessSessionEngine({
         return await runSessionRemoval({
           sessionId,
           scope: tabCloseScope,
+          persistencePermit,
           readWorkspace: () => ({
             tabs: tabsRef.current,
             sessions: sessionsRef.current,
@@ -3503,6 +3508,7 @@ const sessionEngine = useHarnessSessionEngine({
               ))
             )
               return false;
+            if (!persistencePermit.isCurrent()) return false;
             const terminals = files.filter((file) => file.terminal);
             return (
               terminals.length === 0 || (await confirmCloseTerminals(terminals))
@@ -3514,19 +3520,15 @@ const sessionEngine = useHarnessSessionEngine({
           updateSession: (stopped) => {
             updateSession(sessionId, () => stopped, "immediate");
           },
-          persist: async (latest) => {
-            if (latest) await flushSessionCheckpoint(sessionId);
-            if (mode === "delete") {
-              await deleteSession(sessionId);
-              return;
-            }
-            if (latest && shouldPersistSession(latest)) {
-              const saved = await upsertSession(latest);
-              if (!saved)
-                throw new Error("The conversation could not be saved.");
-              savedSummary = saved;
-            }
-            await setSessionArchived(sessionId, true);
+          persist: async (latest, isCurrent) => {
+            const result = await persistSessionRemoval({
+              sessionId,
+              mode,
+              session: latest,
+              isCurrent,
+            });
+            if (!result) return;
+            savedSummary = result.summary;
           },
           commit: (removal) => {
             const latest = sessionsRef.current.find(
@@ -3582,6 +3584,7 @@ const sessionEngine = useHarnessSessionEngine({
           },
         });
       } catch (error) {
+        if (!persistencePermit.isCurrent()) return false;
         const detail = error instanceof Error ? error.message : String(error);
         void message(`Could not ${mode} this conversation.\n\n${detail}`, {
           title: "MonoCode",
@@ -3592,7 +3595,7 @@ const sessionEngine = useHarnessSessionEngine({
         removingSessionIds.current.delete(sessionId);
       }
     },
-    [activateTab, history, refreshHistory, sidebarCwd, stopSessionForRemoval, tabCloseScope, updateSession, applySessionDeltas],
+    [activateTab, history, refreshHistory, sidebarCwd, stopSessionForRemoval, tabCloseScope, updateSession, applySessionDeltas, getPersistenceOwner],
   );
 
   const onArchiveHistorySession = useCallback(
@@ -3673,11 +3676,21 @@ const sessionEngine = useHarnessSessionEngine({
 
   const onArchiveHistorySessions = useCallback(
     async (sessionIds: readonly string[], archived: boolean) => {
+      if (archived) {
+        const persistencePermit = getPersistenceOwner()?.capture();
+        if (!persistencePermit) return;
+        await runSessionRemovalBatch({
+          sessionIds,
+          persistencePermit,
+          remove: (id, permit) => onRemoveHistorySession(id, "archive", false, permit),
+        });
+        return;
+      }
       for (const sessionId of sessionIds) {
-        if (!(await onArchiveHistorySession(sessionId, archived))) break;
+        if (!(await onArchiveHistorySession(sessionId, false))) break;
       }
     },
-    [onArchiveHistorySession],
+    [onArchiveHistorySession, onRemoveHistorySession, getPersistenceOwner],
   );
 
   const onPinHistorySessions = useCallback(
@@ -3697,6 +3710,8 @@ const sessionEngine = useHarnessSessionEngine({
   const onDeleteHistorySessions = useCallback(
     async (sessionIds: readonly string[]) => {
       if (sessionIds.length === 0) return;
+      const persistencePermit = getPersistenceOwner()?.capture();
+      if (!persistencePermit) return;
       if (
         !window.confirm(
           t("harness.chrome.deleteSelectedConversations", {
@@ -3705,11 +3720,13 @@ const sessionEngine = useHarnessSessionEngine({
         )
       )
         return;
-      for (const sessionId of sessionIds) {
-        if (!(await onRemoveHistorySession(sessionId, "delete", true))) break;
-      }
+      await runSessionRemovalBatch({
+        sessionIds,
+        persistencePermit,
+        remove: (id, permit) => onRemoveHistorySession(id, "delete", true, permit),
+      });
     },
-    [onRemoveHistorySession],
+    [onRemoveHistorySession, getPersistenceOwner],
   );
 
   const onFocusDir = useCallback(
