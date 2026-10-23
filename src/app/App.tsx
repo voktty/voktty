@@ -294,6 +294,7 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
 import { CloseDialogs } from "./components/CloseDialogs";
 import { EmptyWorkspace } from "./components/EmptyWorkspace";
+import { WorkspaceContent } from "@/app/components/WorkspaceContent";
 import { WorkspaceInputBar } from "./components/WorkspaceInputBar";
 import { useAppCloseGuard } from "./hooks/useAppCloseGuard";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
@@ -5385,73 +5386,77 @@ function DesktopApp() {
                             {t("feedback.tryAgain")}
                           </button>
                         </div>
-                      ) : spaceTabs.length === 0 && !activeViewSpace ? (
-                        <EmptyWorkspace
-                          projectName={activeSpace?.name}
-                          onOpenFile={pickAndOpenFile}
-                          onOpenFolder={pickAndOpenFolder}
-                          onNewFile={openNewEditor}
-                          onNewTerminal={openNewTab}
-                          onOpenHarness={pickAndOpenProjectInHarness}
-                          onDropPath={handleDroppedPath}
-                        />
                       ) : (
-                        <ErrorBoundary name="Workspace">
-                          <SpaceWorkspace
-                            tabs={tabs}
-                            activeId={effectiveActiveId}
-                            activeTab={activeTab}
-                            viewSpace={activeViewSpace}
-                            onFocusSlot={handleFocusViewSlot}
-                            onResizeSplit={handleResizeViewSplit}
-                            onNewTerminalInSlot={handleNewTerminalInSlot}
-                            onNewFileInSlot={handleNewFileInSlot}
-                            onSelectExistingTabInSlot={
-                              handleSelectExistingTabInSlot
-                            }
-                            onDropInSlot={handleDropInSlot}
-                            viewSpaces={viewSpaces}
-                            onExtractSlot={handleExtractTabFromSpace}
-                            onMoveSlotToViewSpace={handleMoveTabToViewSpace}
-                            onCloseSlot={handleClose}
-                            onWorkspaceDrop={handleWorkspaceDrop}
-                            registerTerminalHandle={registerTerminalHandle}
-                            onSearchReady={handleSearchReady}
-                            onCwd={handleTerminalCwd}
-                            onTitle={handleTerminalTitle}
-                            onExit={handleLeafExit}
-                            onFocusLeaf={handleFocusLeaf}
-                            registerEditorHandle={registerEditorHandle}
-                            registerEditorGroupHandle={
-                              registerEditorGroupHandle
-                            }
-                            onActivateEditorTab={setActiveId}
-                            onEditorDirtyChange={handleEditorDirty}
-                            onEditorCloseTab={disposeTab}
-                            registerPreviewHandle={registerPreviewHandle}
-                            onPreviewUrlChange={handlePreviewUrl}
-                            onAiDiffAccept={(id) => respondToApproval(id, true)}
-                            onAiDiffReject={(id) =>
-                              respondToApproval(id, false)
-                            }
-                            onOpenCommitFile={handleOpenCommitFileWithSplit}
-                            onOpenCommitDiff={handleOpenCommitDiffWithSplit}
-                            onGitHistorySearchHandle={setGitHistoryHandle}
-                            onOpenCommitHistory={openCommitHistoryTab}
-                            onOpenFile={(path) => handleOpenFile(path, true)}
-                            onSetMarkdownView={setMarkdownView}
-                            registerMarkdownHandle={registerMarkdownHandle}
-                            onOpenPreview={openPreviewTab}
-                            onWorkspaceEdit={handleWorkspaceEditRequest}
-                            canNavigateBack={navigationAvailability.canGoBack}
-                            canNavigateForward={
-                              navigationAvailability.canGoForward
-                            }
-                            onNavigateBack={navigateEditorBack}
-                            onNavigateForward={navigateEditorForward}
-                            gitReview={gitReviewConfig}
-                          />
-                        </ErrorBoundary>
+                        <WorkspaceContent
+                          overlay={spaceTabs.length === 0 && !activeViewSpace ? (
+                            <EmptyWorkspace
+                              projectName={activeSpace?.name}
+                              onOpenFile={pickAndOpenFile}
+                              onOpenFolder={pickAndOpenFolder}
+                              onNewFile={openNewEditor}
+                              onNewTerminal={openNewTab}
+                              onOpenHarness={pickAndOpenProjectInHarness}
+                              onDropPath={handleDroppedPath}
+                            />
+                          ) : null}
+                        >
+                          <ErrorBoundary name="Workspace">
+                            <SpaceWorkspace
+                              tabs={tabs}
+                              activeId={effectiveActiveId}
+                              activeTab={activeTab}
+                              viewSpace={activeViewSpace}
+                              onFocusSlot={handleFocusViewSlot}
+                              onResizeSplit={handleResizeViewSplit}
+                              onNewTerminalInSlot={handleNewTerminalInSlot}
+                              onNewFileInSlot={handleNewFileInSlot}
+                              onSelectExistingTabInSlot={
+                                handleSelectExistingTabInSlot
+                              }
+                              onDropInSlot={handleDropInSlot}
+                              viewSpaces={viewSpaces}
+                              onExtractSlot={handleExtractTabFromSpace}
+                              onMoveSlotToViewSpace={handleMoveTabToViewSpace}
+                              onCloseSlot={handleClose}
+                              onWorkspaceDrop={handleWorkspaceDrop}
+                              registerTerminalHandle={registerTerminalHandle}
+                              onSearchReady={handleSearchReady}
+                              onCwd={handleTerminalCwd}
+                              onTitle={handleTerminalTitle}
+                              onExit={handleLeafExit}
+                              onFocusLeaf={handleFocusLeaf}
+                              registerEditorHandle={registerEditorHandle}
+                              registerEditorGroupHandle={
+                                registerEditorGroupHandle
+                              }
+                              onActivateEditorTab={setActiveId}
+                              onEditorDirtyChange={handleEditorDirty}
+                              onEditorCloseTab={disposeTab}
+                              registerPreviewHandle={registerPreviewHandle}
+                              onPreviewUrlChange={handlePreviewUrl}
+                              onAiDiffAccept={(id) => respondToApproval(id, true)}
+                              onAiDiffReject={(id) =>
+                                respondToApproval(id, false)
+                              }
+                              onOpenCommitFile={handleOpenCommitFileWithSplit}
+                              onOpenCommitDiff={handleOpenCommitDiffWithSplit}
+                              onGitHistorySearchHandle={setGitHistoryHandle}
+                              onOpenCommitHistory={openCommitHistoryTab}
+                              onOpenFile={(path) => handleOpenFile(path, true)}
+                              onSetMarkdownView={setMarkdownView}
+                              registerMarkdownHandle={registerMarkdownHandle}
+                              onOpenPreview={openPreviewTab}
+                              onWorkspaceEdit={handleWorkspaceEditRequest}
+                              canNavigateBack={navigationAvailability.canGoBack}
+                              canNavigateForward={
+                                navigationAvailability.canGoForward
+                              }
+                              onNavigateBack={navigateEditorBack}
+                              onNavigateForward={navigateEditorForward}
+                              gitReview={gitReviewConfig}
+                            />
+                          </ErrorBoundary>
+                        </WorkspaceContent>
                       )}
                     </div>
 
