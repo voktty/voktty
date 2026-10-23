@@ -8,12 +8,41 @@ const pty = vi.hoisted(() => ({
   spawnPty: vi.fn(async (..._args: unknown[]) => {}),
   killPty: vi.fn(async () => {}),
   resizePty: vi.fn(async () => {}),
-  writePty: vi.fn(async () => {}),
-  subscribePty: vi.fn(() => () => {}),
-  getPtyStatus: vi.fn(async () => ({ foreground: null })),
+  writePty: vi.fn(async (_data: string) => {}),
+  subscribePty: vi.fn(
+    (
+      _id: string,
+      _data: (data: Uint8Array) => void,
+      _exit: (code: number | null) => void,
+    ) =>
+      () => {},
+  ),
+  getPtyStatus: vi.fn(
+    async (): Promise<{ foreground: string | null }> => ({ foreground: null }),
+  ),
 }));
 const pickerUi = vi.hoisted(() => ({ props: null as unknown }));
-vi.mock("../lib/pty", () => pty);
+const owned = vi.hoisted(() => ({ close: vi.fn(), write: vi.fn() }));
+const input = vi.hoisted(() => ({
+  handler: null as ((data: string) => void) | null,
+}));
+vi.mock("../lib/pty", () => ({
+  ...pty,
+  startOwnedPty: (...args: unknown[]) => ({
+    ready: pty.spawnPty(...args),
+    isCurrent: () => true,
+    status: pty.getPtyStatus,
+    write: (data: string) => {
+      owned.write(data);
+      return pty.writePty(data);
+    },
+    resize: pty.resizePty,
+    close: () => {
+      owned.close();
+      return pty.killPty();
+    },
+  }),
+}));
 vi.mock("@/modules/ssh/components/SshSessionPickerModal", () => ({
   SshSessionPickerModal: (props: unknown) => {
     pickerUi.props = props;
@@ -39,7 +68,8 @@ vi.mock("@xterm/xterm", () => ({
     focus() {}
     dispose() {}
     writeln() {}
-    onData() {
+    onData(handler: (data: string) => void) {
+      input.handler = handler;
       return { dispose() {} };
     }
     onRender() {
@@ -96,6 +126,102 @@ it("does not let StrictMode cleanup kill the replacement shell", async () => {
     host.remove();
   }
   expect(pty.killPty).toHaveBeenCalledTimes(1);
+});
+
+it("retires its captured owner on unmount rather than issuing a logical-id close directly", async () => {
+  const { host, root } = setup();
+  await act(async () => {
+    root.render(
+      createElement(TerminalView, {
+        id: "captured-owner",
+        cwd: "/tmp",
+        active: true,
+      }),
+    );
+  });
+  expect(owned.close).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
+  host.remove();
+  expect(owned.close).toHaveBeenCalledOnce();
+  expect(pty.killPty).toHaveBeenCalledOnce();
+});
+
+it("routes input through the captured PTY owner and suppresses it after unmount", async () => {
+  const { host, root } = setup();
+  await act(async () => {
+    root.render(
+      createElement(TerminalView, {
+        id: "owned-input",
+        cwd: "/tmp",
+        active: true,
+      }),
+    );
+  });
+  const send = input.handler;
+  await act(async () => send?.("current\r"));
+  expect(owned.write).toHaveBeenCalledExactlyOnceWith("current\r");
+  await act(async () => root.unmount());
+  host.remove();
+  await act(async () => send?.("retired\r"));
+  expect(owned.write).toHaveBeenCalledOnce();
+});
+
+it("discards an outstanding foreground result when its view unmounts", async () => {
+  const { host, root } = setup();
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  const onMetaChange = vi.fn();
+  let resolve!: (status: { foreground: string | null }) => void;
+  pty.getPtyStatus.mockReturnValueOnce(
+    new Promise((accept) => {
+      resolve = accept;
+    }),
+  );
+  try {
+    await act(async () => {
+      root.render(
+        createElement(TerminalView, {
+          id: "status-read",
+          cwd: "/tmp",
+          active: true,
+          onMetaChange,
+        }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(pty.getPtyStatus).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+    await act(async () => resolve({ foreground: "retired build" }));
+    expect(onMetaChange).not.toHaveBeenCalled();
+  } finally {
+    hidden.mockRestore();
+    host.remove();
+  }
+});
+
+it("clears foreground metadata on the captured exit without reading a successor", async () => {
+  const { host, root } = setup();
+  const onMetaChange = vi.fn();
+  await act(async () => {
+    root.render(
+      createElement(TerminalView, {
+        id: "exiting",
+        cwd: "/srv/app",
+        active: true,
+        onMetaChange,
+      }),
+    );
+  });
+  const exit = pty.subscribePty.mock.calls[0][2];
+  await act(async () => exit(0));
+  expect(onMetaChange).toHaveBeenCalledExactlyOnceWith({
+    foreground: null,
+    title: "app",
+  });
+  expect(pty.getPtyStatus).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
+  host.remove();
 });
 
 it("uses the existing SSH picker for an active terminal and passes its choice", async () => {

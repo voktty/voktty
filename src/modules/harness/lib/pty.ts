@@ -100,7 +100,55 @@ export async function spawnPty(
   rows: number,
   options?: PtyLaunchOptions,
 ): Promise<void> {
+  return startOwnedPty(id, cwd, cols, rows, options).ready;
+}
+
+export function startOwnedPty(
+  id: string,
+  cwd: string,
+  cols: number,
+  rows: number,
+  options?: PtyLaunchOptions,
+) {
   const attempt = {};
+  const ready = spawnPtyAttempt(id, attempt, cwd, cols, rows, options);
+  const owns = () => spawnAttempts.get(id) === attempt;
+  let retired = false;
+  const isCurrent = () => !retired && owns();
+  let closing: Promise<void> | undefined;
+  return Object.freeze({
+    ready,
+    isCurrent,
+    status: async () => {
+      if (!isCurrent()) return undefined;
+      const status = await getPtyStatus(id);
+      return isCurrent() ? status : undefined;
+    },
+    write: (data: string) =>
+      isCurrent() ? writePty(id, data) : Promise.resolve(),
+    resize: (cols: number, rows: number) =>
+      isCurrent() ? resizePty(id, cols, rows) : Promise.resolve(),
+    close: () => {
+      retired = true;
+      if (!closing)
+        closing = ready
+          .catch(() => undefined)
+          .then(() => {
+            if (owns()) return killPty(id);
+          });
+      return closing;
+    },
+  });
+}
+
+async function spawnPtyAttempt(
+  id: string,
+  attempt: object,
+  cwd: string,
+  cols: number,
+  rows: number,
+  options?: PtyLaunchOptions,
+): Promise<void> {
   spawnAttempts.set(id, attempt);
   const isCurrent = () => spawnAttempts.get(id) === attempt;
   const existing = activeSessions.get(id);

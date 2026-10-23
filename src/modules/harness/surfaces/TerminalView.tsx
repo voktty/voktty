@@ -1,12 +1,8 @@
 import { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getPtyStatus,
-  killPty,
-  resizePty,
-  spawnPty,
+  startOwnedPty,
   subscribePty,
-  writePty,
   type PtyLaunchOptions,
   type SshMultiplexerPicker,
 } from "../lib/pty";
@@ -81,6 +77,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const spawned = useRef(false);
+  const ownedPtyRef = useRef<ReturnType<typeof startOwnedPty> | null>(null);
   const applySizeRef = useRef<() => void>(() => {});
   const onMetaChangeRef = useRef(onMetaChange);
   onMetaChangeRef.current = onMetaChange;
@@ -129,7 +126,8 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     termRef.current = term;
     let closed = false;
     let resolvePendingPicker:
-      ((selection: SshMultiplexerSelection | null) => void) | null = null;
+      | ((selection: SshMultiplexerSelection | null) => void)
+      | null = null;
     const chooseMultiplexer: SshMultiplexerPicker = (connection, probe) =>
       new Promise((resolve) => {
         if (closed) {
@@ -190,7 +188,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     let oscBuffer = "";
 
     let unsubscribe = () => {};
-    let didStart = false;
+    let ownedPty: ReturnType<typeof startOwnedPty> | undefined;
     const start = () => {
       if (closed) return;
       unsubscribe = subscribePty(
@@ -216,15 +214,27 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
         },
         (code) => {
           if (closed) return;
+          runningProcessRef.current = null;
+          onMetaChangeRef.current?.({
+            foreground: null,
+            title: defaultTerminalTitle(cwdRef.current),
+          });
           const status = code == null ? "" : ` (${code})`;
           term.writeln(`\r\n[process exited${status}]`);
         },
       );
-      didStart = true;
       const launchOptions: PtyLaunchOptions | undefined = activeRef.current
         ? { multiplexerPicker: chooseMultiplexer }
         : undefined;
-      return spawnPty(id, cwdRef.current, term.cols, term.rows, launchOptions);
+      ownedPty = startOwnedPty(
+        id,
+        cwdRef.current,
+        term.cols,
+        term.rows,
+        launchOptions,
+      );
+      ownedPtyRef.current = ownedPty;
+      return ownedPty.ready;
     };
 
     const starting = (stoppingPtys.get(id) ?? Promise.resolve())
@@ -245,7 +255,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
 
     const dataSub = term.onData((data) => {
       void starting
-        .then(() => (closed ? undefined : writePty(id, data)))
+        .then(() => (closed ? undefined : ownedPty?.write(data)))
         .catch(() => undefined);
     });
 
@@ -253,7 +263,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       const reply = oscColorReply(code, hex);
       if (reply) {
         void starting
-          .then(() => (closed ? undefined : writePty(id, reply)))
+          .then(() => (closed ? undefined : ownedPty?.write(reply)))
           .catch(() => undefined);
       }
       return true;
@@ -306,7 +316,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       lastCols = cols;
       lastRows = rows;
       void starting
-        .then(() => (closed ? undefined : resizePty(id, cols, rows)))
+        .then(() => (closed ? undefined : ownedPty?.resize(cols, rows)))
         .catch(() => {
           lastCols = 0;
           lastRows = 0;
@@ -333,6 +343,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
 
     return () => {
       closed = true;
+      if (ownedPtyRef.current === ownedPty) ownedPtyRef.current = null;
       if (resolvePendingPicker) {
         if (pickerResolveRef.current === resolvePendingPicker) {
           pickerResolveRef.current = null;
@@ -358,7 +369,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
         .catch(() => undefined)
         .then(() => {
           unsubscribe();
-          return didStart ? killPty(id) : undefined;
+          return ownedPty?.close();
         })
         .finally(() => {
           if (stoppingPtys.get(id) === stopping) stoppingPtys.delete(id);
@@ -375,18 +386,30 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
   // every parent render.
   const wantsMeta = !!onMetaChange;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A new logical terminal resets foreground observations even when cwd and callback presence match.
   useEffect(() => {
     if (!wantsMeta) return;
+    let live = true;
     let lastForeground: string | null = null;
     let inFlight = false;
     const refresh = () => {
-      if (!spawned.current) return;
+      const resource = ownedPtyRef.current;
+      if (!spawned.current || !resource) return;
       // Each status read forks `ps`; an off-screen window has no title to paint.
       if (document.hidden) return;
       if (inFlight) return;
       inFlight = true;
-      void getPtyStatus(id)
-        .then(({ foreground }) => {
+      void resource
+        .status()
+        .then((status) => {
+          if (
+            !live ||
+            !status ||
+            ownedPtyRef.current !== resource ||
+            !resource.isCurrent()
+          )
+            return;
+          const { foreground } = status;
           const fg = foreground?.trim() || null;
           runningProcessRef.current = fg;
           if (fg === lastForeground) return;
@@ -406,6 +429,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     const interval = setInterval(refresh, 1000);
     document.addEventListener("visibilitychange", refresh);
     return () => {
+      live = false;
       clearInterval(interval);
       document.removeEventListener("visibilitychange", refresh);
     };
