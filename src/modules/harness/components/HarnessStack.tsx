@@ -5,6 +5,8 @@ import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 import { removeHarnessSurface } from "@/modules/surfaces";
 import { useHarnessViewActivation } from "@/modules/harness/hooks/useHarnessViewActivation";
+import { useHarnessViewCreation } from "@/modules/harness/hooks/useHarnessViewCreation";
+import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
 
@@ -43,6 +45,7 @@ function HarnessWorkbench({
   onActivate,
   projectRequest,
   onProjectRequestHandled,
+  onRegistered,
 }: {
   tab: HarnessTab;
   focused: boolean;
@@ -50,6 +53,7 @@ function HarnessWorkbench({
   onActivate: () => boolean;
   projectRequest?: { path: string };
   onProjectRequestHandled: (request: { path: string }) => void;
+  onRegistered: (view: HarnessNavigationView) => void;
 }) {
   const { t } = useTranslation();
   const [view, setView] = useState<"harness" | "native">("harness");
@@ -100,6 +104,7 @@ function HarnessWorkbench({
           onActivate={activate}
           projectRequest={projectRequest}
           onProjectRequestHandled={onProjectRequestHandled}
+          onRegistered={onRegistered}
         />
       </div>
       {view === "native" && (
@@ -120,6 +125,7 @@ type Props = {
   activeId: number;
   placements?: ReadonlyMap<number, WorkspacePlacement>;
   onActivateTab?: (id: number) => void;
+  onCreateTab?: () => number;
 };
 
 export function HarnessStack({
@@ -127,8 +133,10 @@ export function HarnessStack({
   activeId,
   placements,
   onActivateTab,
+  onCreateTab,
 }: Props) {
   const { t } = useTranslation();
+  const creation = useHarnessViewCreation(tabs, onCreateTab);
   const harnessTabs = tabs.filter(
     (t): t is HarnessTab => t.kind === "harness" && !t.cold,
   );
@@ -155,7 +163,7 @@ export function HarnessStack({
   return (
     <div className="relative h-full w-full">
       <Suspense fallback={null}>
-        <LazyHarnessRuntime>
+        <LazyHarnessRuntime createNavigationView={creation.create}>
           {harnessTabs.map((tab) => {
             const placement = placements?.get(tab.id);
             const visible = placements
@@ -192,6 +200,7 @@ export function HarnessStack({
                   }
                 >
                   <HarnessWorkbench
+                    onRegistered={creation.registered}
                     tab={tab}
                     focused={visible && tab.id === activeId}
                     visible={visible}

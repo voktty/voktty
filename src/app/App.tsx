@@ -5430,6 +5430,8 @@ function DesktopApp() {
                                 registerEditorGroupHandle
                               }
                               onActivateEditorTab={setActiveId}
+                              onCreateHarnessTab={newHarnessTab}
+                              onActivateHarnessTab={jumpToTab}
                               onEditorDirtyChange={handleEditorDirty}
                               onEditorCloseTab={disposeTab}
                               registerPreviewHandle={registerPreviewHandle}

@@ -153,9 +153,11 @@ describe("window Harness navigation", () => {
     const target = f.add(1, "one");
     target.view.update({ ...target.input, projectCwd: "/renamed" });
     expect(target.view.isCurrent()).toBe(true);
+    expect(target.binding.isCurrent()).toBe(true);
     expect(await f.router.openSession("one", f.request())).toBe(true);
     f.views.register(1, target.input);
     expect(target.view.isCurrent()).toBe(false);
+    expect(target.binding.isCurrent()).toBe(false);
     expect(f.router.hasTarget()).toBe(false);
   });
 
@@ -181,7 +183,7 @@ describe("window Harness navigation", () => {
       () => gate.promise,
     );
     const target = f.add(1, "one");
-    gate.resolve({ ownerId: 1, release: () => {} });
+    gate.resolve({ ownerId: 1, isCurrent: () => true, release: () => {} });
     expect(await pending).toBe(false);
     expect(target.open).not.toHaveBeenCalled();
   });

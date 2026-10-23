@@ -1,9 +1,22 @@
 // @vitest-environment happy-dom
-import { act, createElement, useEffect, type ReactNode } from "react";
+import {
+  act,
+  createElement,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  StrictMode,
+  type ReactNode,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HarnessTab } from "@/modules/tabs";
 import { HarnessStack } from "./HarnessStack";
+import { createPersistenceAdmission } from "@/modules/harness/lib/persistenceAdmission";
+import type {
+  CreateHarnessNavigationView,
+  HarnessNavigationView,
+} from "@/modules/harness/lib/harnessWindowNavigation";
 
 const mounts = vi.hoisted(() => ({
   harness: vi.fn(),
@@ -13,6 +26,8 @@ const mounts = vi.hoisted(() => ({
   runtime: vi.fn(),
   stopRuntime: vi.fn(),
   requests: vi.fn(),
+  create: undefined as CreateHarnessNavigationView | undefined,
+  registrations: vi.fn(),
 }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -21,7 +36,14 @@ vi.mock("@/modules/surfaces", () => ({
   removeHarnessSurface: mounts.removeSurface,
 }));
 vi.mock("./HarnessApp", () => ({
-  HarnessRuntimeRoot: ({ children }: { children: ReactNode }) => {
+  HarnessRuntimeRoot: ({
+    children,
+    createNavigationView,
+  }: {
+    children: ReactNode;
+    createNavigationView?: CreateHarnessNavigationView;
+  }) => {
+    mounts.create = createNavigationView;
     useEffect(() => {
       mounts.runtime();
       return mounts.stopRuntime;
@@ -33,12 +55,27 @@ vi.mock("./HarnessApp", () => ({
     focused,
     projectRequest,
     onProjectRequestHandled,
+    onRegistered,
   }: {
     surfaceOwnerId?: number;
     focused?: boolean;
     projectRequest?: { path: string };
     onProjectRequestHandled?: (request: { path: string }) => void;
+    onRegistered?: (view: HarnessNavigationView) => void;
   }) => {
+    useLayoutEffect(() => {
+      let current = true;
+      const receipt = {
+        ownerId: surfaceOwnerId ?? 1,
+        isCurrent: () => current,
+        release: () => {},
+      };
+      mounts.registrations(receipt);
+      onRegistered?.(receipt);
+      return () => {
+        current = false;
+      };
+    }, [surfaceOwnerId, onRegistered]);
     useEffect(() => {
       mounts.harness(surfaceOwnerId);
     }, [surfaceOwnerId]);
@@ -75,6 +112,7 @@ afterEach(async () => {
   });
   container.remove();
   vi.clearAllMocks();
+  mounts.create = undefined;
   vi.unstubAllGlobals();
 });
 it("keeps Harness sessions mounted and releases native chat when the tab loses focus", async () => {
@@ -174,4 +212,51 @@ it("delivers project requests only after the selected outer view commits without
     root.render(createElement(HarnessStack, { tabs: both, activeId: 1 })),
   );
   expect(mounts.requests).toHaveBeenCalledOnce();
+});
+
+it("creates a headless view and confirms its live registration under StrictMode", async () => {
+  let close = () => {};
+  const open = vi.fn(() => 7);
+  function Window() {
+    const [items, setItems] = useState(tabs);
+    close = () => setItems([]);
+    return (
+      <HarnessStack
+        tabs={items}
+        activeId={items[0]?.id ?? 0}
+        onCreateTab={() => {
+          const id = open();
+          setItems([{ ...tabs[0], id }]);
+          return id;
+        }}
+      />
+    );
+  }
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <Window />
+      </StrictMode>,
+    ),
+  );
+  await act(async () => close());
+  const create = mounts.create;
+  const permit = createPersistenceAdmission().createOwner().capture();
+  if (!create || !permit) throw new Error("Missing creator fixture");
+  let pending: ReturnType<CreateHarnessNavigationView> | undefined;
+  await act(async () => {
+    pending = create("session", permit);
+  });
+  const receipt = await pending;
+  expect(receipt?.ownerId).toBe(7);
+  expect(receipt?.isCurrent()).toBe(true);
+  expect(receipt).toBe(
+    mounts.registrations.mock.calls[
+      mounts.registrations.mock.calls.length - 1
+    ]?.[0],
+  );
+  expect(open).toHaveBeenCalledOnce();
+  await act(async () => root.render(null));
+  expect(receipt?.isCurrent()).toBe(false);
+  expect(await create("later", permit)).toBeNull();
 });

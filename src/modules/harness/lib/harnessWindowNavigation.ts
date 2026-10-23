@@ -6,6 +6,7 @@ import { restrictPersistencePermit } from "@/modules/harness/lib/scopedPersisten
 
 export type HarnessNavigationView = Readonly<{
   ownerId: number;
+  isCurrent: () => boolean;
   release: () => void;
 }>;
 
@@ -110,6 +111,14 @@ export function createHarnessWindowNavigation(
       const target = Object.freeze({ ...input });
       const handle: HarnessNavigationView = Object.freeze({
         ownerId,
+        isCurrent: () =>
+          entries.get(ownerId)?.handle === handle &&
+          target.isCurrent() &&
+          views
+            .getSnapshot()
+            .cohorts.some(
+              (cohort) => cohort.active && cohort.ownerId === ownerId,
+            ),
         release() {
           if (entries.get(ownerId)?.handle !== handle) return;
           entries.delete(ownerId);

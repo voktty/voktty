@@ -22,6 +22,8 @@ export type WorkspaceSurfaceProps = {
   tabs: Tab[];
   activeId: number;
   activeTab: Tab | undefined;
+  onCreateHarnessTab?: () => number;
+  onActivateHarnessTab?: (id: number) => void;
   registerTerminalHandle: TerminalStackProps["registerHandle"];
   onSearchReady: TerminalStackProps["onSearchReady"];
   onCwd: TerminalStackProps["onCwd"];
@@ -75,6 +77,8 @@ export function WorkspaceSurface({
   tabs,
   activeId,
   activeTab,
+  onCreateHarnessTab,
+  onActivateHarnessTab,
   registerTerminalHandle,
   onSearchReady,
   onCwd,
@@ -316,9 +320,10 @@ export function WorkspaceSurface({
         aria-hidden={!layerVisible("harness")}
       >
         <HarnessStack
+          onCreateTab={onCreateHarnessTab}
           tabs={tabs}
           activeId={activeId}
-          onActivateTab={onActivateEditorTab}
+          onActivateTab={onActivateHarnessTab ?? onActivateEditorTab}
           placements={placements ? placementByTabId : undefined}
         />
       </div>
