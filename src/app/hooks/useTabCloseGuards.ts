@@ -6,6 +6,7 @@ import {
   hasCloseManyHazards,
   hasNewCloseManyHazards,
   requiresTerminalCloseConfirmation,
+  planTerminalSubsetClose,
 } from "@/app/hooks/tabCloseGuards";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -62,44 +63,6 @@ export function useTabCloseGuards({
   const [closeManyConfirming, setCloseManyConfirming] = useState(false);
   const closeManyRequestRef = useRef(0);
 
-  const handleClose = useCallback(
-    async (id: number) => {
-      const t = tabs.find((x) => x.id === id);
-      if (t?.locked) {
-        const { toast } = await import("sonner");
-        const { t: translate } = await import("@/modules/i18n");
-        toast.warning(
-          translate("tabs.tabIsLockedWarning"),
-          { id: `tab-locked-${id}` },
-        );
-        return;
-      }
-      if (t?.kind === "editor" && t.dirty) {
-        setPendingCloseTab(id);
-        return;
-      }
-      if (t?.kind === "terminal") {
-        const leaves = leafIds(t.paneTree);
-        const confirmForeground = confirmRunningTerminal();
-        const checks = await Promise.all(
-          leaves.map((leafId) =>
-            requiresTerminalCloseConfirmation(
-              leafHasKnownActivity(leafId),
-              confirmForeground,
-              () => leafHasForegroundProcess(leafId),
-            ),
-          ),
-        );
-        if (checks.some(Boolean)) {
-          setPendingTerminalCloseTab(id);
-          return;
-        }
-      }
-      disposeTab(id);
-    },
-    [tabs, disposeTab],
-  );
-
   const captureCloseMany = useCallback((closeIds: number[]) => {
     const close = new Set(closeIds);
     const affected = tabsRef.current.filter((tab) => close.has(tab.id));
@@ -143,15 +106,23 @@ export function useTabCloseGuards({
 
   const withCurrentActive = useCallback(
     (plan: CloseTabsPlan): CloseTabsPlan => ({
-      closeIds: plan.closeIds,
+      closeIds: plan.closeIds.filter((id) =>
+        tabsRef.current.some((tab) => tab.id === id && !tab.locked),
+      ),
       nextActiveId: activeIdRef.current,
     }),
     [],
   );
 
   const handleCloseMany = useCallback(
-    async (kind: CloseManyKind, anchorId: number) => {
-      const plan = planCloseMany(kind, anchorId);
+    async (
+      kind: CloseManyKind,
+      anchorId: number,
+      terminalIds?: readonly number[],
+    ) => {
+      const plan = terminalIds
+        ? planTerminalSubsetClose(tabsRef.current, terminalIds, activeIdRef.current)
+        : planCloseMany(kind, anchorId);
       if (plan.closeIds.length === 0) return;
       const requestId = ++closeManyRequestRef.current;
       const hazards = await evaluateCloseMany(plan.closeIds);
@@ -163,6 +134,45 @@ export function useTabCloseGuards({
       disposeTabs(anchorId, withCurrentActive(plan));
     },
     [disposeTabs, evaluateCloseMany, planCloseMany, withCurrentActive],
+  );
+
+  const handleClose = useCallback(
+    async (id: number, terminalIds?: readonly number[]) => {
+      if (terminalIds) return handleCloseMany("other", id, terminalIds);
+      const t = tabs.find((x) => x.id === id);
+      if (t?.locked) {
+        const { toast } = await import("sonner");
+        const { t: translate } = await import("@/modules/i18n");
+        toast.warning(
+          translate("tabs.tabIsLockedWarning"),
+          { id: `tab-locked-${id}` },
+        );
+        return;
+      }
+      if (t?.kind === "editor" && t.dirty) {
+        setPendingCloseTab(id);
+        return;
+      }
+      if (t?.kind === "terminal") {
+        const leaves = leafIds(t.paneTree);
+        const confirmForeground = confirmRunningTerminal();
+        const checks = await Promise.all(
+          leaves.map((leafId) =>
+            requiresTerminalCloseConfirmation(
+              leafHasKnownActivity(leafId),
+              confirmForeground,
+              () => leafHasForegroundProcess(leafId),
+            ),
+          ),
+        );
+        if (checks.some(Boolean)) {
+          setPendingTerminalCloseTab(id);
+          return;
+        }
+      }
+      disposeTab(id);
+    },
+    [tabs, disposeTab, handleCloseMany],
   );
 
   const handleCloseTabsToRight = useCallback(
@@ -224,7 +234,12 @@ export function useTabCloseGuards({
   }, []);
 
   const confirmTerminalClose = useCallback(() => {
-    if (pendingTerminalCloseTab !== null) disposeTab(pendingTerminalCloseTab);
+    if (
+      pendingTerminalCloseTab !== null &&
+      tabsRef.current.some((tab) =>
+        tab.id === pendingTerminalCloseTab && tab.kind === "terminal" && !tab.locked,
+      )
+    ) disposeTab(pendingTerminalCloseTab);
     setPendingTerminalCloseTab(null);
   }, [pendingTerminalCloseTab, disposeTab]);
 

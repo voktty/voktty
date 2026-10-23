@@ -11,7 +11,7 @@ type RunningTerminal = {
 async function runningTerminals(files: FilePaneTab[]): Promise<RunningTerminal[]> {
   const running: RunningTerminal[] = [];
   for (const file of files) {
-    if (!file.terminal) continue;
+    if (!file.terminal || file.canonicalTerminal) continue;
     try {
       const { foreground } = await getPtyStatus(file.id);
       const process = foreground?.trim();

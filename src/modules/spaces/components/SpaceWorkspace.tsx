@@ -72,7 +72,10 @@ export type SpaceWorkspaceProps = SurfaceProps & {
   viewSpaces?: readonly ViewSpace[];
   onExtractSlot?: (tabId: number) => void;
   onMoveSlotToViewSpace?: (tabId: number, viewSpaceId: string) => void;
-  onCloseSlot?: (tabId: number) => void;
+  onCloseSlot?: (
+    tabId: number,
+    terminalIds?: readonly number[],
+  ) => void | Promise<void>;
   onSwapSlots?: (
     viewSpaceId: string,
     sourceSlotId: SlotId,
@@ -166,6 +169,7 @@ export function SpaceWorkspace({
     >
       <WorkspaceSurface
         {...surfaceProps}
+        onCloseTerminalTab={onCloseSlot}
         tabs={tabs}
         placements={isComposite ? (placements ?? []) : undefined}
       />

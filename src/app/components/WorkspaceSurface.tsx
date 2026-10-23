@@ -15,6 +15,7 @@ import {
   useTerminalSurfaces,
 } from "@/modules/terminal/TerminalSurface";
 import { selectTerminalSurfacePlacements } from "@/modules/terminal/lib/terminalSurfaceLayout";
+import { CanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 
 type TerminalStackProps = ComponentProps<typeof TerminalStack>;
 type EditorStackProps = ComponentProps<typeof EditorStack>;
@@ -29,6 +30,7 @@ export type WorkspaceSurfaceProps = {
   activeTab: Tab | undefined;
   onCreateHarnessTab?: () => number;
   onActivateHarnessTab?: (id: number) => void;
+  onCloseTerminalTab?: (id: number, terminalIds?: readonly number[]) => void | Promise<void>;
   registerTerminalHandle: TerminalStackProps["registerHandle"];
   onSearchReady: TerminalStackProps["onSearchReady"];
   onCwd: TerminalStackProps["onCwd"];
@@ -81,7 +83,12 @@ const LAYER = "absolute inset-0";
 export function WorkspaceSurface(props: WorkspaceSurfaceProps) {
   return (
     <TerminalSurfaceProvider>
-      <WorkspaceSurfaceLayers {...props} />
+      <CanonicalTerminalCatalog
+        tabs={props.tabs}
+        onClose={props.onCloseTerminalTab}
+      >
+        <WorkspaceSurfaceLayers {...props} />
+      </CanonicalTerminalCatalog>
     </TerminalSurfaceProvider>
   );
 }

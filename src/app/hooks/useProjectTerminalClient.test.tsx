@@ -15,6 +15,13 @@ import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import { openPty } from "@/modules/terminal/lib/pty-bridge";
 import { leafIds } from "@/modules/terminal/lib/panes";
 import type { ProjectTerminalTarget } from "@/modules/harness/lib/projectTerminalTarget";
+import { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
+import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
+import {
+  createPersistenceAdmission,
+  type PersistenceOwner,
+} from "@/modules/harness/lib/persistenceAdmission";
+import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTerminalRequest";
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -41,6 +48,25 @@ let tabs: ReturnType<typeof useTabs>;
 let source: HarnessTab;
 let target: ProjectTerminalTarget;
 const leaves = new Set<number>();
+let dockOwner: PersistenceOwner;
+let dockOpen: ReturnType<typeof useHarnessTerminalCreation>["open"];
+let dockReferences: ProjectTerminalReference[];
+function DockClient({
+  projectCwd,
+  focused,
+}: {
+  projectCwd: string;
+  focused: boolean;
+}) {
+  dockOpen = useHarnessTerminalCreation({
+    projectCwd,
+    focused,
+    capture: () => dockOwner.capture() ?? undefined,
+    projectAvailable: () => true,
+    onError: mocks.error,
+  }).open;
+  return null;
+}
 function NativeLeaf({ tab }: { tab: TerminalTab }) {
   useEffect(() => {
     leaves.add(tab.activeLeafId);
@@ -57,7 +83,13 @@ function NativeLeaf({ tab }: { tab: TerminalTab }) {
   }, [tab.activeLeafId, tab.cwd, tab.workspaceEnv]);
   return <div data-native-terminal={tab.tabKey} />;
 }
-function Desktop({ projectCwd = project }: { projectCwd?: string }) {
+function Desktop({
+  projectCwd = project,
+  withDock = false,
+}: {
+  projectCwd?: string;
+  withDock?: boolean;
+}) {
   const current = useTabs();
   tabs = current;
   const replaceTabs = current.replaceTabs;
@@ -74,10 +106,28 @@ function Desktop({ projectCwd = project }: { projectCwd?: string }) {
     cancelPicker: vi.fn(),
     onError: mocks.error,
   });
-  return current.tabs.map((tab) =>
-    tab.kind === "terminal" && !tab.cold ? (
-      <NativeLeaf key={tab.id} tab={tab} />
-    ) : null,
+  return (
+    <>
+      {current.tabs.map((tab) =>
+        tab.kind === "terminal" && !tab.cold ? (
+          <NativeLeaf key={tab.id} tab={tab} />
+        ) : null,
+      )}
+      {withDock && current.tabs.some((tab) => tab.id === source.id) ? (
+        <HarnessTerminalOwner
+          value={{
+            tabKey: source.tabKey,
+            visible: true,
+            onFocus: () => current.setActiveId(source.id),
+          }}
+        >
+          <DockClient
+            projectCwd={projectCwd}
+            focused={current.activeId === source.id}
+          />
+        </HarnessTerminalOwner>
+      ) : null}
+    </>
   );
 }
 function deferred<T>() {
@@ -91,6 +141,8 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   leaves.clear();
+  dockOwner = createPersistenceAdmission().createOwner();
+  dockReferences = [];
   source = {
     id: 1,
     ...createTabIdentity("main", () => "owner"),
@@ -135,7 +187,66 @@ afterEach(async () => {
   await Promise.all([...leaves].map((leaf) => ownedPtyTargets.close(leaf)));
   expect(ownedPtyTargets.size()).toBe(0);
   node.remove();
+  dockOwner.retire();
   vi.unstubAllGlobals();
+});
+
+it.each(["local", "ssh"])(
+  "creates a %s dock terminal through the real client and native ownership bridge",
+  async (kind) => {
+    const projectCwd = kind === "ssh" ? project : "C:/Work/App";
+    await act(async () =>
+      root.render(<Desktop projectCwd={projectCwd} withDock />),
+    );
+    await act(async () => {
+      expect(
+        dockOpen({
+          cwd: `${projectCwd}/src`,
+          onCreated: (reference) => {
+            dockReferences.push(reference);
+          },
+        }),
+      ).toBe(true);
+      await vi.waitFor(() => expect(dockReferences).toHaveLength(1));
+    });
+    expect(tabs.activeId).toBe(source.id);
+    expect(node.querySelectorAll("[data-native-terminal]")).toHaveLength(1);
+    const created = tabs
+      .getTabs()
+      .find((tab) => tab.tabKey === dockReferences[0].tabKey);
+    expect(created?.kind).toBe("terminal");
+    if (created?.kind !== "terminal") throw new Error("Missing dock terminal");
+    expect(created.projectCwd).toBe(projectCwd);
+    if (kind === "ssh")
+      expect(ownedPtyTargets.get(created.activeLeafId)?.isCurrent()).toBe(true);
+    expect(mocks.error).not.toHaveBeenCalled();
+    await act(async () => tabs.closeTab(source.id));
+    expect(node.querySelectorAll("[data-native-terminal]")).toHaveLength(1);
+  },
+);
+
+it("releases a late SSH lease when the dock client unmounts during acquisition", async () => {
+  const pending = deferred<ProjectTerminalTarget>();
+  mocks.resolve.mockReturnValueOnce(pending.promise);
+  await act(async () => root.render(<Desktop withDock />));
+  await act(async () => {
+    dockOpen({
+      cwd: project,
+      onCreated: (reference) => {
+        dockReferences.push(reference);
+      },
+    });
+  });
+  await act(async () => tabs.closeTab(source.id));
+  await act(async () => {
+    pending.resolve(target);
+  });
+  await vi.waitFor(() =>
+    expect(target.lease.releaseAndClose).toHaveBeenCalledOnce(),
+  );
+  expect(dockReferences).toEqual([]);
+  expect(tabs.getTabs().some((tab) => tab.kind === "terminal")).toBe(false);
+  expect(mocks.error).not.toHaveBeenCalled();
 });
 
 it("confirms the stable tabKey after lease registration and preserves Harness focus before the terminal mounts", async () => {

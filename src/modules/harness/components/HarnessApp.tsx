@@ -1,4 +1,7 @@
 import { useHarnessWindow } from "@/modules/harness/components/HarnessWindowHost";
+import { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
+import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import { useHarnessViewEngine } from "@/modules/harness/hooks/useHarnessViewEngine";
 import { useHarnessViewRegistration } from "@/modules/harness/hooks/useHarnessViewRegistration";
 import { useHarnessSummaryUpdates } from "@/modules/harness/hooks/useHarnessSummaryUpdates";
@@ -1675,28 +1678,92 @@ export function HarnessApp({
     setComposerFocused(false);
   }, []);
 
+  const canonicalTerminals = useCanonicalTerminalCatalog();
+  const { open: createCanonicalTerminal, cancelPending: cancelTerminalCreation } =
+    useHarnessTerminalCreation({
+      projectCwd,
+      focused,
+      capture: () => getPersistenceOwner()?.capture() ?? undefined,
+      projectAvailable: (project) => !windowRuntime.projects.has(project),
+      onError: (error) => {
+        void message(String(error), { title: "Voktty", kind: "error" });
+      },
+    });
+
+  const requestCanonicalTerminalClose = useCallback(
+    (file: FilePaneTab) => {
+      const reference = file.canonicalTerminal;
+      if (!reference) return false;
+      if (!canonicalTerminals || !getPersistenceOwner()?.capture()) return true;
+      if (!canonicalTerminals.get(reference)) return false;
+      void canonicalTerminals.requestClose(reference).catch((error: unknown) => {
+        void message(String(error), { title: "Voktty", kind: "error" });
+      });
+      return true;
+    },
+    [canonicalTerminals, getPersistenceOwner],
+  );
+
+  const requestCanonicalTerminalCloses = useCallback(
+    (files: FilePaneTab[]) => {
+      const owned = files.filter(
+        (file) =>
+          file.canonicalTerminal &&
+          (!canonicalTerminals || canonicalTerminals.get(file.canonicalTerminal)),
+      );
+      if (
+        canonicalTerminals &&
+        owned.length > 0 &&
+        getPersistenceOwner()?.capture()
+      )
+        void canonicalTerminals
+          .requestCloseMany(
+            owned.flatMap((file) =>
+              file.canonicalTerminal ? [file.canonicalTerminal] : [],
+            ),
+          )
+          .catch((error: unknown) => {
+            void message(String(error), { title: "Voktty", kind: "error" });
+          });
+      return new Set(owned.map((file) => file.id));
+    },
+    [canonicalTerminals, getPersistenceOwner],
+  );
+
   const openProjectTerminal = useCallback(
     (cwd: string) => {
       const workdir = cwd || projectCwdRef.current;
       const projectPath = projectCwdRef.current;
       if (!looksLikeProject(projectPath)) return false;
-      setProjectTerminals((prev: any) => {
-        const existing = findProjectTerminal(prev, projectPath);
-        const file = newTerminalFile(
-          workdir,
-          existing ? nextDockTerminalTitle(existing, workdir) : undefined,
-        );
-        if (!existing) {
-          return [...prev, createProjectTerminal(projectPath, file)];
-        }
-        return mapProjectTerminal(prev, projectPath, (dock: any) =>
-          addTerminalToDock(dock, file),
-        );
+      const association = terminalProjectMetadata(projectPath).projectCwd;
+      if (!association) return false;
+      return createCanonicalTerminal({
+        cwd: workdir,
+        onCreated: ({ tabKey }) => {
+          const existing = findProjectTerminal(
+            projectTerminalsRef.current,
+            projectPath,
+          );
+          const file = {
+            ...newTerminalFile(
+              workdir,
+              existing ? nextDockTerminalTitle(existing, workdir) : undefined,
+            ),
+            canonicalTerminal: { tabKey, projectCwd: association },
+          };
+          setProjectTerminals((previous) => {
+            const current = findProjectTerminal(previous, projectPath);
+            return current
+              ? mapProjectTerminal(previous, projectPath, (dock) =>
+                  addTerminalToDock(dock, file),
+                )
+              : [...previous, createProjectTerminal(projectPath, file)];
+          });
+          focusProjectTerminal();
+        },
       });
-      focusProjectTerminal();
-      return true;
     },
-    [focusProjectTerminal],
+    [createCanonicalTerminal, focusProjectTerminal],
   );
 
   const onOpenTerminal = useCallback(
@@ -1720,14 +1787,22 @@ export function HarnessApp({
       projectTerminalsRef.current,
       projectCwdRef.current,
     );
+    const reference = dock?.pane.files.find(
+      (file) => file.id === dock.pane.activeFileId,
+    )?.canonicalTerminal;
+    const terminal = reference ? canonicalTerminals?.get(reference) : undefined;
     return focusedDockTerminalId(dock, {
       layoutEnabled: deckLayoutRef.current,
       dockFocused: projectTerminalFocusedRef.current,
       activeElementInDock: Boolean(
-        document.activeElement?.closest("[data-project-terminal-dock]"),
+        document.activeElement?.closest("[data-project-terminal-dock]") ||
+          (terminal &&
+            document.activeElement?.closest(
+              `[data-terminal-tab="${terminal.id}"]`,
+            )),
       ),
     });
-  }, []);
+  }, [canonicalTerminals]);
 
   const onNewFocusedTarget = useCallback(() => {
     if (focusedProjectTerminalFileId()) {
@@ -1750,6 +1825,7 @@ export function HarnessApp({
     const dock = findProjectTerminal(projectTerminalsRef.current, projectPath);
     if (dock && dock.pane.files.length > 0) {
       const nextOpen = !dock.open;
+      if (!nextOpen) cancelTerminalCreation();
       setProjectTerminals((prev: any) =>
         mapProjectTerminal(prev, projectPath, (entry) =>
           withDockOpen(entry, nextOpen),
@@ -1767,6 +1843,7 @@ export function HarnessApp({
     onOpenTerminal,
     openProjectTerminal,
     terminalCwd,
+    cancelTerminalCreation,
   ]);
 
   const onNewTerminalInSession = useCallback(
@@ -1784,24 +1861,47 @@ export function HarnessApp({
 
   const onAddTerminalToPane = useCallback(
     (paneId: string) => {
-      const file = newTerminalFile(active?.cwd ?? projectCwd);
-      setTabs((prev) =>
-        prev.map((tab) => {
-          if (tab.id !== activeTabId) return tab;
-          const match = tab.editorPanes.some((p) => p.id === paneId);
-          if (!match) return tab;
-          return {
-            ...tab,
-            editorPanes: tab.editorPanes.map((p) =>
-              p.id === paneId
-                ? { ...p, files: [...p.files, file], activeFileId: file.id }
-                : p,
-            ),
+      const tabId = activeTabId;
+      const targetExists = () =>
+        tabsRef.current.some(
+          (tab) => tab.id === tabId && Boolean(findSurfacePane(tab, paneId)),
+        );
+      const association = terminalProjectMetadata(projectCwd).projectCwd;
+      if (!association || !targetExists()) return;
+      const cwd = active?.cwd ?? projectCwd;
+      createCanonicalTerminal({
+        cwd,
+        isCurrent: targetExists,
+        onCreated: ({ tabKey }) => {
+          const file = {
+            ...newTerminalFile(cwd),
+            canonicalTerminal: { tabKey, projectCwd: association },
           };
-        }),
-      );
+          setTabs((previous) =>
+            previous.map((tab) => {
+              if (tab.id !== tabId) return tab;
+              const target = findSurfacePane(tab, paneId);
+              if (!target) return tab;
+              if (target.kind === "editor")
+                return openEditorTab({ ...tab, focusedId: paneId }, file);
+              return {
+                ...tab,
+                terminalPanes: tab.terminalPanes.map((pane) =>
+                  pane.id !== paneId
+                    ? pane
+                    : {
+                        ...pane,
+                        files: [...pane.files, file],
+                        activeFileId: file.id,
+                      },
+                ),
+              };
+            }),
+          );
+        },
+      });
     },
-    [active?.cwd, activeTabId, projectCwd],
+    [active?.cwd, activeTabId, projectCwd, createCanonicalTerminal],
   );
 
   const onToggleProjectTerminal = useCallback(() => {
@@ -1812,6 +1912,7 @@ export function HarnessApp({
       return;
     }
     const nextOpen = !dock.open;
+    if (!nextOpen) cancelTerminalCreation();
     setProjectTerminals((prev: any) =>
       mapProjectTerminal(prev, projectCwd, (entry) =>
         withDockOpen(entry, nextOpen),
@@ -1825,16 +1926,18 @@ export function HarnessApp({
     focusProjectTerminal,
     openProjectTerminal,
     projectCwd,
+    cancelTerminalCreation,
   ]);
 
   const onHideProjectTerminal = useCallback(() => {
+    cancelTerminalCreation();
     setProjectTerminals((prev: any) =>
       mapProjectTerminal(prev, projectCwdRef.current, (dock: any) =>
         withDockOpen(dock, false),
       ),
     );
     setProjectTerminalFocused(false);
-  }, []);
+  }, [cancelTerminalCreation]);
 
   const onProjectTerminalSide = useCallback((side: DockSide) => {
     setProjectTerminals((prev: any) =>
@@ -1879,31 +1982,35 @@ export function HarnessApp({
   }, []);
 
   const onCloseProjectTerminal = useCallback((fileId: string) => {
+    const projectPath = projectCwdRef.current;
     const dock = findProjectTerminal(
       projectTerminalsRef.current,
-      projectCwdRef.current,
+      projectPath,
     );
     const file = dock?.pane.files.find((entry: any) => entry.id === fileId);
     if (!file) return;
+    if (requestCanonicalTerminalClose(file)) return;
     const finishClose = () => {
       setProjectTerminals((prev: any) =>
-        mapProjectTerminal(prev, projectCwdRef.current, (entry) =>
+        mapProjectTerminal(prev, projectPath, (entry) =>
           closeTerminalInDock(entry, fileId),
         ),
       );
     };
     void confirmCloseTerminal(file).then((ok: any) => ok && finishClose());
-  }, []);
+  }, [requestCanonicalTerminalClose]);
 
   const onCloseOtherProjectTerminals = useCallback((fileId: string) => {
     const projectPath = projectCwdRef.current;
     const dock = findProjectTerminal(projectTerminalsRef.current, projectPath);
     if (!dock?.pane.files.some((file: any) => file.id === fileId)) return;
     const closingFiles = dock.pane.files.filter(
-      (file: any) => file.id !== fileId,
+      (file) => file.id !== fileId,
     );
     if (closingFiles.length === 0) return;
-    const closingIds = new Set(closingFiles.map((file: any) => file.id));
+    const requested = requestCanonicalTerminalCloses(closingFiles);
+    const closingIds = new Set(closingFiles.filter((file) => !requested.has(file.id)).map((file) => file.id));
+    if (closingIds.size === 0) return;
 
     const finishClose = () => {
       setProjectTerminals((prev: any) =>
@@ -1925,7 +2032,7 @@ export function HarnessApp({
     void confirmCloseTerminals(closingFiles).then(
       (ok: any) => ok && finishClose(),
     );
-  }, []);
+  }, [requestCanonicalTerminalCloses]);
 
   const onTerminalMetaChange = useCallback(
     (fileId: string, patch: TerminalMetaPatch) => {
@@ -1946,6 +2053,7 @@ export function HarnessApp({
       );
       if (dock) {
         if (dock.open) {
+          cancelTerminalCreation();
           setProjectTerminals((prev: any) =>
             mapProjectTerminal(prev, dock.projectPath, (entry) =>
               withDockOpen(entry, false),
@@ -1995,7 +2103,7 @@ export function HarnessApp({
         }
       }
     },
-    [focusProjectTerminal],
+    [focusProjectTerminal, cancelTerminalCreation],
   );
 
   const onNewTerminalTab = useCallback(() => {
@@ -2292,6 +2400,7 @@ export function HarnessApp({
       const index = pane.files.findIndex((file) => file.id === fileId);
       if (index < 0) return;
       const file = pane.files[index];
+      if (requestCanonicalTerminalClose(file)) return;
       if (
         isFilesystemTab(file) &&
         dirtyFiles.has(fileId) &&
@@ -2411,7 +2520,7 @@ export function HarnessApp({
       }
       finishClose();
     },
-    [activeTabId, dirtyFiles, onCloseTab, projectCwd, tabCloseScope, admitSession],
+    [activeTabId, dirtyFiles, onCloseTab, projectCwd, tabCloseScope, admitSession, requestCanonicalTerminalClose],
   );
 
   const onCloseOtherFiles = useCallback(
@@ -2423,10 +2532,12 @@ export function HarnessApp({
       const found = findSurfacePane(tab, paneId);
       if (!found?.pane.files.some((file: any) => file.id === fileId)) return;
       const closingFiles = found.pane.files.filter(
-        (file: any) => file.id !== fileId,
+        (file) => file.id !== fileId,
       );
       if (closingFiles.length === 0) return;
-      const closingIds = new Set(closingFiles.map((file: any) => file.id));
+      const requested = requestCanonicalTerminalCloses(closingFiles);
+      const closingIds = new Set(closingFiles.filter((file) => !requested.has(file.id)).map((file) => file.id));
+      if (closingIds.size === 0) return;
       const unsaved = closingFiles.filter(
         (file: any) =>
           isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
@@ -2479,8 +2590,59 @@ export function HarnessApp({
         finishClose();
       })();
     },
-    [t],
+    [t, requestCanonicalTerminalCloses],
   );
+
+  const observedCanonicalFiles = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (!canonicalTerminals || !getPersistenceOwner()?.capture()) return;
+    const files = [
+      ...filesInWorkspaceTabs(tabs),
+      ...projectTerminals.flatMap((dock) => dock.pane.files),
+    ];
+    const present = new Set(files.map((file) => file.id));
+    const closed = new Set<string>();
+    for (const file of files) {
+      const reference = file.canonicalTerminal;
+      if (!reference) continue;
+      if (canonicalTerminals.get(reference))
+        observedCanonicalFiles.current.set(file.id, reference.tabKey);
+      else if (observedCanonicalFiles.current.get(file.id) === reference.tabKey)
+        closed.add(file.id);
+    }
+    for (const id of observedCanonicalFiles.current.keys())
+      if (!present.has(id)) observedCanonicalFiles.current.delete(id);
+    if (closed.size === 0) return;
+    setProjectTerminals((previous) => {
+      const updated = previous.flatMap((dock) => {
+        let next: ProjectTerminal | null = dock;
+        for (const file of dock.pane.files) {
+          if (next && closed.has(file.id))
+            next = closeTerminalInDock(next, file.id);
+        }
+        return next ? [next] : [];
+      });
+      return updated.length === previous.length &&
+        updated.every((dock, index) => dock === previous[index])
+        ? previous
+        : updated;
+    });
+    for (const tab of tabs) {
+      for (const pane of [...tab.editorPanes, ...tab.terminalPanes]) {
+        const file = pane.files.find((entry) => closed.has(entry.id));
+        if (file) {
+          onCloseFile(pane.id, file.id);
+          return;
+        }
+      }
+    }
+  }, [
+    canonicalTerminals,
+    tabs,
+    projectTerminals,
+    onCloseFile,
+    getPersistenceOwner,
+  ]);
 
   const onClearTabSession = useCallback(
     (id: string) => {

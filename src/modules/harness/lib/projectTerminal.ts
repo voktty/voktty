@@ -256,7 +256,7 @@ export function projectTerminalFileIds(
   const ids: string[] = [];
   for (const dock of docks) {
     for (const file of dock.pane.files) {
-      if (file.terminal) ids.push(file.id);
+      if (file.terminal && !file.canonicalTerminal) ids.push(file.id);
     }
   }
   return ids;

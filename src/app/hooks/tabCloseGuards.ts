@@ -1,4 +1,22 @@
-import type { CloseTabsPlan } from "@/modules/tabs";
+import type { CloseTabsPlan, Tab } from "@/modules/tabs";
+
+export function planTerminalSubsetClose(
+  tabs: readonly Tab[],
+  ids: readonly number[],
+  activeId: number,
+): CloseTabsPlan {
+  if (ids.length > 256) return { closeIds: [], nextActiveId: activeId };
+  const requested = new Set(ids.filter(Number.isSafeInteger));
+  return {
+    closeIds: tabs
+      .filter(
+        (tab) =>
+          tab.kind === "terminal" && !tab.locked && requested.has(tab.id),
+      )
+      .map((tab) => tab.id),
+    nextActiveId: activeId,
+  };
+}
 
 export type CloseManyKind = "right" | "other" | "all";
 

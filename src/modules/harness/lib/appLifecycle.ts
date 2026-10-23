@@ -685,7 +685,7 @@ function terminalFileIds(tabs: WorkspaceTab[]): string[] {
   for (const tab of tabs) {
     for (const pane of [...tab.editorPanes, ...(tab.terminalPanes ?? [])]) {
       for (const file of pane.files) {
-        if (file.terminal) ids.push(file.id);
+        if (file.terminal && !file.canonicalTerminal) ids.push(file.id);
       }
     }
   }
