@@ -15,6 +15,11 @@ import { useHarnessWindowInbox } from "@/modules/harness/hooks/useHarnessWindowI
 import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext";
 import { HarnessReminderWindowContext } from "@/modules/harness/hooks/harnessReminderWindowContext";
 import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
+import { useHarnessReminderService } from "@/modules/harness/hooks/useHarnessReminderService";
+import {
+  HarnessReminderServiceContext,
+  type ConfirmedReminderSessionOpener,
+} from "@/modules/harness/hooks/harnessReminderServiceContext";
 import { leafIds } from "@/modules/harness/lib/layout";
 import {
   createHarnessSummaryUpdates,
@@ -45,6 +50,7 @@ type WindowRuntime = {
   automations: ReturnType<typeof useHarnessAutomations>;
   summaries: HarnessSummarySource;
   reminderRegistrationError: string | null;
+  reminders: ReturnType<typeof useHarnessReminderService>;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -59,10 +65,12 @@ export function HarnessWindowHost({
   children,
   initialSessions = () => [],
   skipSnapshot = false,
+  onOpenReminder,
 }: {
   children: ReactNode;
   initialSessions?: () => Session[];
   skipSnapshot?: boolean;
+  onOpenReminder?: ConfirmedReminderSessionOpener;
 }) {
   const [views] = useState(createHarnessWindowViews);
   const [summaries] = useState(createHarnessSummaryUpdates);
@@ -85,6 +93,10 @@ export function HarnessWindowHost({
     flushForegroundHarnessEvents: engine.flushForegroundHarnessEvents,
   });
   const persistence = useWindowPersistenceAdmission(() => undefined);
+  const reminders = useHarnessReminderService(
+    onOpenReminder,
+    persistence.getOwner,
+  );
   const automations = useHarnessAutomations({
     engine,
     sessions: engine.sessions,
@@ -178,11 +190,14 @@ export function HarnessWindowHost({
         automations,
         summaries: summaries.source,
         reminderRegistrationError,
+        reminders,
       }}
     >
       <HarnessInboxContext.Provider value={inboxUnseen}>
         <HarnessReminderWindowContext.Provider value={true}>
-          {children}
+          <HarnessReminderServiceContext.Provider value={reminders}>
+            {children}
+          </HarnessReminderServiceContext.Provider>
         </HarnessReminderWindowContext.Provider>
       </HarnessInboxContext.Provider>
     </HarnessWindowContext.Provider>

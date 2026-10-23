@@ -2,6 +2,8 @@
 import { act, StrictMode, useLayoutEffect, type ReactNode } from "react";
 import { useInboxUnseen } from "@/modules/harness/hooks/useInboxUnseen";
 import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
+import { useSessionReminders } from "@/modules/harness/hooks/useSessionReminders";
+import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
 import { useHarnessSummaryUpdates } from "@/modules/harness/hooks/useHarnessSummaryUpdates";
 import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";
@@ -42,12 +44,17 @@ const native = vi.hoisted(() => ({
   claim: vi.fn(),
   pending: vi.fn(),
   inboxList: vi.fn(),
+  reminderList: vi.fn(),
+  takeReminder: vi.fn(),
+  listen: vi.fn(),
+  listeners: new Map<string, Set<() => void>>(),
 }));
 vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
   ...(await original<typeof import("@/modules/harness/lib/githubTasks")>()),
   listInboxItems: native.inboxList,
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: native.listen }));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     onCloseRequested: native.register,
@@ -99,6 +106,8 @@ vi.mock("@/modules/harness/lib/notifications", async (original) => ({
 vi.mock("@/modules/harness/lib/sounds", () => ({
   playCue: vi.fn(),
   noteInboxUnseen: vi.fn(),
+  loadSoundsEnabled: () => true,
+  SOUNDS_CHANGE_EVENT: "sounds",
 }));
 vi.mock("@/modules/harness/lib/fileWatch", () => ({
   nudgeWatchedFiles: vi.fn(),
@@ -200,6 +209,19 @@ function Observe() {
 }
 beforeEach(() => {
   localStorage.clear();
+  native.reminderList.mockReset().mockResolvedValue([]);
+  native.takeReminder.mockReset().mockResolvedValue(null);
+  native.listeners.clear();
+  native.listen
+    .mockReset()
+    .mockImplementation(async (event: string, handler: () => void) => {
+      const handlers = native.listeners.get(event) ?? new Set();
+      handlers.add(handler);
+      native.listeners.set(event, handlers);
+      return () => {
+        handlers.delete(handler);
+      };
+    });
   native.inboxList.mockReset().mockResolvedValue({ items: [], errors: {} });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers({
@@ -218,6 +240,9 @@ beforeEach(() => {
   native.invoke
     .mockReset()
     .mockImplementation(async (command: string, args) => {
+      if (command === "reminder_list") return native.reminderList();
+      if (command === "reminder_take_pending_open")
+        return native.takeReminder();
       if (command === "automation_runs_recover") return native.recover(args);
       if (command === "automation_runs_pending") return native.pending(args);
       if (command === "automations_list") return native.listAutomations();
@@ -282,9 +307,13 @@ async function render(
   views: ViewProps[],
   strict = false,
   extra?: ReactNode,
+  onOpenReminder?: Parameters<typeof HarnessWindowHost>[0]["onOpenReminder"],
 ) {
   const children = (
-    <HarnessWindowHost initialSessions={() => sessions}>
+    <HarnessWindowHost
+      initialSessions={() => sessions}
+      onOpenReminder={onOpenReminder}
+    >
       <Observe />
       {extra}
       {views.map((view) => (
@@ -298,6 +327,134 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("shares one reminder service with views and keeps polling after they leave", async () => {
+    const readers: ReturnType<typeof useSessionReminders>[] = [];
+    const open = vi.fn(async () => {});
+    const save = vi.fn(async () => {});
+    function Reader({ index }: { index: number }) {
+      readers[index] = useSessionReminders(open, save, []);
+      return null;
+    }
+    await render(
+      [],
+      [],
+      false,
+      <>
+        <Reader index={0} />
+        <Reader index={1} />
+      </>,
+    );
+    expect(native.reminderList).toHaveBeenCalledOnce();
+    expect(native.listeners.get("voktty:reminders-changed")?.size).toBe(1);
+    expect(native.listeners.get("voktty:reminder-open")?.size).toBe(1);
+    expect(native.takeReminder).not.toHaveBeenCalled();
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_configure",
+      ),
+    ).toHaveLength(1);
+    await act(async () => {
+      for (const handler of native.listeners.get("voktty:reminder-open") ?? [])
+        handler();
+    });
+    expect(native.takeReminder).not.toHaveBeenCalled();
+    expect(readers[0].reminders).toBe(readers[1].reminders);
+    await render([], []);
+    native.reminderList.mockResolvedValue([{ sessionId: "due", dueAt: 1 }]);
+    await act(async () => vi.advanceTimersByTimeAsync(30000));
+    expect(
+      required(runtime).reminders.due.map((reminder) => reminder.sessionId),
+    ).toEqual(["due"]);
+    expect(native.reminderList).toHaveBeenCalledTimes(2);
+    expect(open).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("opens reminders with zero views and clears only a confirmed navigation", async () => {
+    const gate = deferred<boolean>();
+    const open = vi
+      .fn<
+        NonNullable<Parameters<typeof HarnessWindowHost>[0]["onOpenReminder"]>
+      >()
+      .mockReturnValueOnce(gate.promise)
+      .mockResolvedValue(true);
+    await render([], [], false, undefined, open);
+    const request = { sessionId: "due", dueAt: 1 };
+    native.takeReminder.mockResolvedValueOnce(request);
+    const notify = () => {
+      for (const handler of native.listeners.get("voktty:reminder-open") ?? [])
+        handler();
+    };
+    const clears = () =>
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_clear",
+      );
+    await act(async () => notify());
+    expect(open).toHaveBeenCalledExactlyOnceWith(
+      "due",
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
+    );
+    expect(clears()).toEqual([]);
+    await act(async () => gate.resolve(false));
+    expect(clears()).toEqual([]);
+    native.takeReminder.mockResolvedValueOnce(request);
+    await act(async () => notify());
+    expect(clears()).toEqual([
+      ["reminder_clear", { sessionIds: ["due"], expectedDueAt: 1 }],
+    ]);
+  });
+
+  it("retires view scheduling while the shared reminder service remains alive", async () => {
+    const gate = deferred<void>();
+    let actions: ReturnType<typeof useSessionReminders> | undefined;
+    const open = async () => {};
+    const save = () => gate.promise;
+    function Reader() {
+      const owner = useWindowPersistenceAdmission(() => undefined);
+      actions = useSessionReminders(open, save, [], owner.getOwner);
+      return null;
+    }
+    await render([], [], false, <Reader />);
+    const pending = required(actions).schedule(["due"], 1);
+    await render([], []);
+    await act(async () => {
+      gate.resolve();
+      await pending;
+    });
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_set",
+      ),
+    ).toEqual([]);
+    expect(native.listeners.get("voktty:reminders-changed")?.size).toBe(1);
+    await act(async () => vi.advanceTimersByTimeAsync(30000));
+    expect(native.reminderList).toHaveBeenCalledTimes(2);
+  });
+
+  it("drains reminder navigation without clearing it after seal and cancellation", async () => {
+    const gate = deferred<boolean>();
+    const open = vi.fn(async () => gate.promise);
+    await render([], [], false, undefined, open);
+    native.takeReminder.mockResolvedValueOnce({ sessionId: "due", dueAt: 1 });
+    await act(async () => {
+      for (const handler of native.listeners.get("voktty:reminder-open") ?? [])
+        handler();
+    });
+    const owner = required(required(runtime).persistence.getOwner());
+    const final = required(required(owner.capture()).seal());
+    expect(final.pending).not.toBeNull();
+    await act(async () => final.cancel());
+    await act(async () => {
+      gate.resolve(true);
+      await final.pending;
+    });
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_clear",
+      ),
+    ).toEqual([]);
+  });
+
   it("registers the union of open sessions and keeps it through zero views", async () => {
     const one = fixture("one", "/work/one");
     const two = fixture("two", "remote://machine/srv/two");
