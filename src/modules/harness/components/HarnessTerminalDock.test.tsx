@@ -354,6 +354,7 @@ it.each(["dock", "pane"])(
     expect(accepted).toBe(true);
     expect(claims).toHaveLength(1);
     expect(claims[0].cwd).toBe(file.cwd);
+    expect(claims[0].title).toBe("Build");
     const recovered =
       kind === "dock"
         ? view().projectTerminals[0].pane.files[0]

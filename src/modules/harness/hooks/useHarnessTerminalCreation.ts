@@ -55,6 +55,7 @@ export function useHarnessTerminalCreation(props: {
   const open = useCallback(
     (options: {
       cwd: string;
+      title?: string;
       slotKey: string;
       isCurrent?: () => boolean;
       onCreated: (terminal: ProjectTerminalReference) => void;
@@ -102,6 +103,7 @@ export function useHarnessTerminalCreation(props: {
           ownerTabKey: source.tabKey,
           projectCwd: captured.projectCwd,
           cwd: options.cwd,
+          title: options.title,
           isCurrent: admitted,
           onCreated: (terminal) => {
             if (!reservation.bind(terminal.tabKey))

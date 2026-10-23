@@ -67,6 +67,7 @@ it("creates a canonical terminal with the resolved environment and transfers its
   expect(context.create).toHaveBeenCalledExactlyOnceWith(
     "/srv/app",
     target.workspace,
+    undefined,
   );
   expect(ownedPtyTargets.get(1)?.isCurrent()).toBe(true);
   expect(target.lease.releaseAndClose).not.toHaveBeenCalled();
@@ -78,9 +79,11 @@ it("creates a canonical terminal with the resolved environment and transfers its
 
 it("keeps local terminal requests synchronous and off the remote loader", async () => {
   const pending = service.open("C:/work/app");
-  expect(context.create).toHaveBeenCalledExactlyOnceWith("C:/work/app", {
-    kind: "local",
-  });
+  expect(context.create).toHaveBeenCalledExactlyOnceWith(
+    "C:/work/app",
+    { kind: "local" },
+    undefined,
+  );
   expect(resolve).not.toHaveBeenCalled();
   await pending;
 });
@@ -191,6 +194,20 @@ it("keeps pending requests counted across disposal and never exceeds the window 
   pending.resolve(undefined);
   await Promise.all(openings);
   expect(service.pendingCount()).toBe(0);
+});
+
+it.each([
+  { title: "", name: "blank" },
+  { title: "x".repeat(4097), name: "oversized" },
+  { title: "bad\0label", name: "NUL" },
+  { title: 42 as unknown as string, name: "non-string" },
+])("rejects a $name title before resolution or creation", async ({ title }) => {
+  await service.open(uri, { title });
+  expect(context.onError).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ message: "Invalid terminal title." }),
+  );
+  expect(resolve).not.toHaveBeenCalled();
+  expect(context.create).not.toHaveBeenCalled();
 });
 
 it.each([

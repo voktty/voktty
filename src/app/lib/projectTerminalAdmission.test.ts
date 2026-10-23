@@ -81,6 +81,7 @@ it("resolves the original project and opens the requested leaf folder under that
   expect(context.create).toHaveBeenCalledExactlyOnceWith(
     "/srv/app/src",
     target.workspace,
+    undefined,
   );
   const receipt = ownedPtyTargets.get(2);
   if (!receipt) throw new Error("Missing admitted target.");
@@ -152,18 +153,24 @@ it("captures the original caller callbacks and project before resolving", async 
   const replacement = vi.fn();
   const options = {
     projectCwd: project,
+    title: "Original build",
     onCreated: original,
     isCurrent: () => true,
   };
   const opening = service.open(`${project}/src`, options);
   options.projectCwd = "remote://voktty-ssh-other/another";
+  options.title = "Replacement build";
   options.onCreated = replacement;
   options.isCurrent = () => false;
   pending.resolve(target);
   await opening;
   expect(original).toHaveBeenCalledOnce();
   expect(replacement).not.toHaveBeenCalled();
-  expect(context.create).toHaveBeenCalledWith("/srv/app/src", target.workspace);
+  expect(context.create).toHaveBeenCalledWith(
+    "/srv/app/src",
+    target.workspace,
+    "Original build",
+  );
 });
 
 it("does not revoke an accepted terminal when its confirmation retires the source view", async () => {
@@ -199,9 +206,11 @@ it("confirms local creation before returning its promise and rolls it back if it
 
 it("defaults an omitted local working directory to the captured project", async () => {
   await service.open(undefined, { projectCwd: "C:/Work/App" });
-  expect(context.create).toHaveBeenCalledExactlyOnceWith("C:/Work/App", {
-    kind: "local",
-  });
+  expect(context.create).toHaveBeenCalledExactlyOnceWith(
+    "C:/Work/App",
+    { kind: "local" },
+    undefined,
+  );
   expect(resolve).not.toHaveBeenCalled();
 });
 

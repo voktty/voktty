@@ -10,6 +10,7 @@ import {
 } from "@/modules/terminal/lib/ownedPtyTargets";
 import { terminalRestoreCwd } from "@/modules/tabs/lib/terminalProjectRestore";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
+import { isTerminalTitle } from "@/modules/tabs/lib/terminalTitle";
 
 export type CreatedProjectTerminal = Readonly<{
   tabId: number;
@@ -17,6 +18,7 @@ export type CreatedProjectTerminal = Readonly<{
 }>;
 export type ProjectTerminalOpenOptions = {
   projectCwd?: string;
+  title?: string;
   isCurrent?: () => boolean;
   onCreated?: (created: CreatedProjectTerminal) => void;
   onError?: (error: unknown) => void;
@@ -37,6 +39,7 @@ export type ProjectTerminalRequestContext = {
   create: (
     cwd: string | undefined,
     workspace: WorkspaceEnv,
+    title?: string,
   ) => { tabId: number; leafId: number };
   rollback: (tabId: number) => void;
   pick: (
@@ -109,6 +112,10 @@ export function createProjectTerminalRequests(deps: {
         !options.signal?.aborted;
       const onError = options.onError ?? context.onError;
       if (!isCurrent()) return;
+      if (options.title !== undefined && !isTerminalTitle(options.title)) {
+        onError(new Error("Invalid terminal title."));
+        return;
+      }
       if (
         cwd !== undefined &&
         (typeof cwd !== "string" || cwd.length > 32768 || cwd.includes("\0"))
@@ -159,7 +166,7 @@ export function createProjectTerminalRequests(deps: {
         (typeof cwd !== "string" || !cwd.startsWith("remote://"))
       ) {
         const created = Object.freeze({
-          ...context.create(folder, { kind: "local" }),
+          ...context.create(folder, { kind: "local" }, options.title),
         });
         try {
           if (!isCurrent()) {
@@ -216,6 +223,7 @@ export function createProjectTerminalRequests(deps: {
             ...context.create(
               remoteProject ? folder : target.cwd,
               target.workspace,
+              options.title,
             ),
           });
           if (remoteProject) owned.cwd = folder ?? target.cwd;

@@ -25,6 +25,8 @@ import {
 } from "@/modules/harness/lib/persistenceAdmission";
 import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTerminalRequest";
 import { CanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
+import { labelFor } from "@/modules/tabs/lib/tabLabel";
+import { serializeTabs, hydrateTabs } from "@/modules/spaces/lib/serialize";
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -91,11 +93,13 @@ function Desktop({
   withDock = false,
   budgetTabs = [],
   placements,
+  renderNative = true,
 }: {
   projectCwd?: string;
   withDock?: boolean;
   budgetTabs?: readonly Tab[];
   placements?: readonly WorkspacePlacement[];
+  renderNative?: boolean;
 }) {
   const current = useTabs();
   tabs = current;
@@ -123,7 +127,7 @@ function Desktop({
       placements={placements}
     >
       {current.tabs.map((tab) =>
-        tab.kind === "terminal" && !tab.cold ? (
+        renderNative && tab.kind === "terminal" && !tab.cold ? (
           <NativeLeaf key={tab.id} tab={tab} />
         ) : null,
       )}
@@ -232,6 +236,104 @@ afterEach(async () => {
   node.remove();
   dockOwner.retire();
   vi.unstubAllGlobals();
+});
+
+it.each(["local", "ssh"])(
+  "retains a captured %s title in the canonical tab, after shell updates and restore",
+  async (kind) => {
+    const projectCwd = kind === "ssh" ? project : "C:/Work/App";
+    await act(async () =>
+      root.render(
+        <Desktop projectCwd={projectCwd} withDock renderNative={false} />,
+      ),
+    );
+    const title = "Build / producción";
+    await act(async () => {
+      expect(
+        dockOpen({
+          slotKey: "dock",
+          cwd: `${projectCwd}/src`,
+          title,
+          onCreated: (reference) => {
+            const created = tabs
+              .getTabs()
+              .find((tab) => tab.tabKey === reference.tabKey);
+            assert(created);
+            expect(labelFor(created)).toBe(title);
+            dockReferences.push(reference);
+          },
+        }),
+      ).toBe(true);
+      await vi.waitFor(() => expect(dockReferences).toHaveLength(1));
+    });
+    const created = tabs
+      .getTabs()
+      .find((tab) => tab.tabKey === dockReferences[0].tabKey);
+    assert(created?.kind === "terminal");
+    expect(created.cwd).toBe(
+      kind === "ssh" ? "/srv/app/src" : `${projectCwd}/src`,
+    );
+    expect(created.projectCwd).toBe(projectCwd);
+    expect(created.customTitle).toBe(title);
+    await act(async () =>
+      tabs.updateTab(created.id, { title: "shell update", cwd: "/another" }),
+    );
+    const updated = tabs.getTab(created.id);
+    assert(updated);
+    expect(labelFor(updated)).toBe(title);
+    const serialized = serializeTabs([updated]);
+    let nextId = 100;
+    const restored = hydrateTabs(serialized, "main", () => nextId++);
+    expect(restored).toHaveLength(1);
+    expect(labelFor(restored[0])).toBe(title);
+    expect(tabs.activeId).toBe(source.id);
+    expect(mocks.error).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["", "   ", "x".repeat(4097), "bad\nlabel", "bad\u001blabel"])(
+  "rejects an invalid request title before dispatch %#",
+  async (title) => {
+    await act(async () => root.render(<Desktop />));
+    const dispatched = vi.fn();
+    window.addEventListener(PROJECT_TERMINAL_REQUEST_EVENT, dispatched);
+    try {
+      expect(() =>
+        requestProjectTerminal({
+          ownerTabKey: source.tabKey,
+          projectCwd: project,
+          title,
+        }),
+      ).toThrow("Invalid");
+      expect(dispatched).not.toHaveBeenCalled();
+      expect(mocks.resolve).not.toHaveBeenCalled();
+      expect(tabs.getTabs()).toHaveLength(1);
+    } finally {
+      window.removeEventListener(PROJECT_TERMINAL_REQUEST_EVENT, dispatched);
+    }
+  },
+);
+
+it("captures the title before an SSH acquisition can mutate the caller options", async () => {
+  const pending = deferred<ProjectTerminalTarget>();
+  mocks.resolve.mockReturnValueOnce(pending.promise);
+  await act(async () => root.render(<Desktop />));
+  const options = {
+    ownerTabKey: source.tabKey,
+    projectCwd: project,
+    title: "Original build",
+    onCreated: () => tabs.setActiveId(source.id),
+  };
+  const request = requestProjectTerminal(options);
+  options.title = "Replacement label";
+  await act(async () => {
+    pending.resolve(target);
+    await request.result;
+  });
+  const reference = await request.result;
+  const created = tabs.getTabs().find((tab) => tab.tabKey === reference.tabKey);
+  assert(created);
+  expect(labelFor(created)).toBe("Original build");
 });
 
 it.each(["local", "ssh"])(

@@ -9,6 +9,7 @@ import {
 import type { FilePaneTab, WorkspaceTab } from "@/modules/harness/lib/layout";
 import type { ProjectTerminalDock } from "@/modules/harness/lib/projectTerminal";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
+import { terminalTabLabel } from "@/modules/harness/lib/terminalTab";
 import type { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
 import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 import {
@@ -86,6 +87,7 @@ export function useHarnessTerminalRecovery(
       !latest.current.catalog?.get(reference);
     return captured.open({
       cwd: file.cwd,
+      title: terminalTabLabel(file),
       slotKey,
       isCurrent: () =>
         submitted

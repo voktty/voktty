@@ -1,4 +1,5 @@
 import type { TabKey } from "@/modules/tabs/lib/tabIdentity";
+import { isTerminalTitle } from "@/modules/tabs/lib/terminalTitle";
 
 export const PROJECT_TERMINAL_REQUEST_EVENT = "voktty:request-project-terminal";
 export type ProjectTerminalReference = Readonly<{ tabKey: TabKey }>;
@@ -6,6 +7,7 @@ type RequestOptions = {
   ownerTabKey: TabKey;
   projectCwd: string;
   cwd?: string;
+  title?: string;
   isCurrent?: () => boolean;
   onCreated?: (terminal: ProjectTerminalReference) => void;
 };
@@ -13,6 +15,7 @@ type Ticket = {
   readonly ownerTabKey: TabKey;
   readonly projectCwd: string;
   readonly cwd: string | undefined;
+  readonly title: string | undefined;
   readonly signal: AbortSignal;
   claimed: boolean;
   isCurrent: () => boolean;
@@ -43,7 +46,8 @@ export function requestProjectTerminal(input: RequestOptions) {
     (options.cwd !== undefined &&
       (typeof options.cwd !== "string" ||
         options.cwd.length > 32768 ||
-        /[\x00-\x1f\x7f]/.test(options.cwd)))
+        /[\x00-\x1f\x7f]/.test(options.cwd))) ||
+    (options.title !== undefined && !isTerminalTitle(options.title))
   )
     throw new Error("Invalid project terminal request.");
   const key = {};
@@ -64,6 +68,7 @@ export function requestProjectTerminal(input: RequestOptions) {
     ownerTabKey: options.ownerTabKey,
     projectCwd: options.projectCwd,
     cwd: options.cwd,
+    title: options.title,
     signal: controller.signal,
     claimed: false,
     isCurrent,

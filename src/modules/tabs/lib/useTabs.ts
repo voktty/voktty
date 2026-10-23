@@ -947,6 +947,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       cwd?: string,
       workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE,
       projectCwd?: string,
+      title?: string,
     ) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
@@ -955,7 +956,8 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ...createTabIdentity(activeSpaceIdRef.current),
         kind: "terminal",
         spaceId: activeSpaceIdRef.current,
-        title: "shell",
+        title: title ?? "shell",
+        ...(title !== undefined && { customTitle: title }),
         cwd,
         ...terminalProjectMetadata(projectCwd, workspaceEnv),
         paneTree: { kind: "leaf", id: leafId, cwd },

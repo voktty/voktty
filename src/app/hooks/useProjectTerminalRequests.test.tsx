@@ -157,7 +157,12 @@ it("connects the real event receiver to one native remote terminal with the orig
   await act(async () => root.render(<View />));
   await request();
   await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
-  expect(create).toHaveBeenCalledWith("/srv/app", target.workspace, uri);
+  expect(create).toHaveBeenCalledWith(
+    "/srv/app",
+    target.workspace,
+    uri,
+    undefined,
+  );
   expect(setActiveSpaceForNewTabs).toHaveBeenCalledExactlyOnceWith("main");
   const session = await openPty(
     80,
@@ -248,6 +253,7 @@ it("preserves the local creation path without loading a remote destination", asy
   expect(create).toHaveBeenCalledExactlyOnceWith(
     "C:/work/app",
     { kind: "local" },
+    undefined,
     undefined,
   );
   expect(mocks.resolve).not.toHaveBeenCalled();
