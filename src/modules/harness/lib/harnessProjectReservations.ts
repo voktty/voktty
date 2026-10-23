@@ -5,6 +5,11 @@ import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmissi
 const CAPACITY = 256;
 const keyFor = (path: string) => projectKey(normalizeProjectPath(path));
 
+export type HarnessProjectRemovalScope = {
+  path: string;
+  owner: PersistencePermit;
+};
+
 export function createHarnessProjectReservations() {
   const entries = new Map<
     string,
@@ -12,6 +17,7 @@ export function createHarnessProjectReservations() {
       retired: boolean;
       activity: number;
       started: boolean;
+      receipt: PersistencePermit | null;
     }
   >();
   const listeners = new Set<() => void>();
@@ -32,6 +38,14 @@ export function createHarnessProjectReservations() {
   return {
     getSnapshot: () => snapshot,
     has: (path: string) => entries.has(keyFor(path)),
+    owns(path: string, receipt: PersistencePermit) {
+      const entry = entries.get(keyFor(path));
+      return (
+        entry?.receipt === receipt &&
+        receipt.isCurrent() &&
+        entries.get(keyFor(path)) === entry
+      );
+    },
     subscribe(listener: () => void) {
       if (!listeners.has(listener) && listeners.size >= CAPACITY)
         throw new RangeError("Harness project subscriber capacity exceeded");
@@ -51,7 +65,12 @@ export function createHarnessProjectReservations() {
         entries.size >= CAPACITY
       )
         return null;
-      const entry = { retired: false, activity: 0, started: false };
+      const entry = {
+        retired: false,
+        activity: 0,
+        started: false,
+        receipt: null as PersistencePermit | null,
+      };
       entries.set(key, entry);
       const current = () =>
         active &&
@@ -105,6 +124,7 @@ export function createHarnessProjectReservations() {
           finish();
         },
       };
+      entry.receipt = receipt;
       publish();
       if (!current()) {
         receipt.release();

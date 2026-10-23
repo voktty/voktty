@@ -103,12 +103,12 @@ export function HarnessWindowHost({
   createNavigationView?: CreateHarnessNavigationView;
 }) {
   const [holds] = useState(createHarnessWindowSessionHolds);
-  const [views] = useState(() => createHarnessWindowViews(holds));
+  const [projects] = useState(createHarnessProjectReservations);
+  const [views] = useState(() => createHarnessWindowViews(holds, projects));
   const [removals] = useState(() =>
-    createHarnessWindowViewRemoval(views, holds),
+    createHarnessWindowViewRemoval(views, holds, projects),
   );
   const [inboxOperations] = useState(createInboxSessionOperations);
-  const [projects] = useState(createHarnessProjectReservations);
   const removalLifetime = useRef<object | null>(null);
   useEffect(() => {
     const owner = {};

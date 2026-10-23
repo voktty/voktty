@@ -69,7 +69,7 @@ export function useHarnessViewRegistration(inputs: Inputs) {
         isCurrent: current,
         capture: () =>
           current() ? (latest.current.getOwner()?.capture() ?? null) : null,
-        async prepare(ids, permit) {
+        async prepare(ids, permit, projectPath) {
           const applyRemoval = latest.current.applyRemoval;
           if (!current() || !permit.isCurrent() || !applyRemoval) return null;
           const input = latest.current.read();
@@ -89,6 +89,7 @@ export function useHarnessViewRegistration(inputs: Inputs) {
               },
             },
             ids,
+            projectPath,
           );
           if (!next) return null;
           const unchanged = () =>

@@ -11,6 +11,7 @@ import {
   windowPersistenceAdmission,
   type PersistencePermit,
 } from "@/modules/harness/lib/persistenceAdmission";
+import { normalizeHarnessSessionViewReport } from "@/modules/harness/lib/harnessSessionViews";
 
 /** Saved chats filed under this project, so the confirm prompt can count them. */
 export async function projectSessionCount(path: string): Promise<number> {
@@ -22,11 +23,15 @@ export async function projectSessionCount(path: string): Promise<number> {
 export async function removeProjectData(
   path: string,
   permit?: PersistencePermit,
+  liveSessionIds: readonly string[] = [],
 ): Promise<boolean> {
   const owner = permit ? null : windowPersistenceAdmission.createOwner();
   const request = permit ?? owner?.capture();
   try {
     if (!request?.isCurrent()) return false;
+    const capturedIds = normalizeHarnessSessionViewReport({
+      referencedSessionIds: liveSessionIds,
+    }).referencedSessionIds;
     const normalized = normalizeProjectPath(path);
     const key = projectKey(normalized);
     // Remote conversations belong to the project's `.voktty` folder.
@@ -40,10 +45,16 @@ export async function removeProjectData(
       });
       return admitted && request.isCurrent();
     };
-    for (const session of sessions) {
-      if (
-        !(await write(() => deleteSession(session.id).catch(() => undefined)))
-      )
+    const ids = isRemoteProjectPath(normalized)
+      ? []
+      : [
+          ...new Set([
+            ...capturedIds,
+            ...sessions.map((session) => session.id),
+          ]),
+        ];
+    for (const id of ids) {
+      if (!(await write(() => deleteSession(id).catch(() => undefined))))
         return false;
     }
     if (!(await write(() => clearProjectLogo(key).catch(() => undefined))))

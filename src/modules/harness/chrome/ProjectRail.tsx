@@ -611,12 +611,6 @@ export function ProjectRail({
         });
     } else if (action === "archive") {
       const targetPath = normalizeProjectPath(path);
-      setRailOrder((prev) =>
-        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
-      );
-      setPinnedPaths((prev) =>
-        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
-      );
       onRemoveProject?.(targetPath, { purgeData: false });
     } else if (action === "delete") {
       setRemoving({
@@ -629,13 +623,6 @@ export function ProjectRail({
   const onConfirmDelete = () => {
     if (!removing) return;
     const targetPath = normalizeProjectPath(removing.path);
-    assignProjectGroup(targetPath, null);
-    setRailOrder((prev) =>
-      prev.filter((entry) => !sameProjectPath(entry, targetPath)),
-    );
-    setPinnedPaths((prev) =>
-      prev.filter((entry) => !sameProjectPath(entry, targetPath)),
-    );
     onRemoveProject?.(targetPath, { purgeData: true });
     setRemoving(null);
   };
@@ -643,13 +630,6 @@ export function ProjectRail({
   const onConfirmRemoveUnavailable = ({ purgeData }: { purgeData: boolean }) => {
     for (const path of removableUnavailable) {
       const targetPath = normalizeProjectPath(path);
-      assignProjectGroup(targetPath, null);
-      setRailOrder((prev) =>
-        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
-      );
-      setPinnedPaths((prev) =>
-        prev.filter((entry) => !sameProjectPath(entry, targetPath)),
-      );
       onRemoveProject?.(targetPath, { purgeData });
     }
     setRemovingUnavailable(false);

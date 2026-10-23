@@ -6,7 +6,14 @@ import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harn
 import { normalizeHarnessSessionViewReport } from "@/modules/harness/lib/harnessSessionViews";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import { restrictPersistencePermit } from "@/modules/harness/lib/scopedPersistencePermit";
-import { removeRetainedSessionReferences } from "@/modules/harness/lib/retainedSessionReferences";
+import {
+  removeRetainedSessionReferences,
+  sameRemovalProject,
+} from "@/modules/harness/lib/retainedSessionReferences";
+import type {
+  createHarnessProjectReservations,
+  HarnessProjectRemovalScope,
+} from "@/modules/harness/lib/harnessProjectReservations";
 
 export type PreparedHarnessViewRemoval = {
   isCurrent: () => boolean;
@@ -18,12 +25,17 @@ export type HarnessViewRemovalTarget = {
   prepare: (
     ids: readonly string[],
     permit: PersistencePermit,
+    projectPath?: string,
   ) => Promise<PreparedHarnessViewRemoval | null>;
 };
 
 export function createHarnessWindowViewRemoval(
   views: ReturnType<typeof createHarnessWindowViews>,
   holds: ReturnType<typeof createHarnessWindowSessionHolds>,
+  projects?: Pick<
+    ReturnType<typeof createHarnessProjectReservations>,
+    "has" | "owns"
+  >,
 ) {
   const targets = new Map<number, { target: HarnessViewRemovalTarget }>();
   const operations = new Set<() => void>();
@@ -52,7 +64,10 @@ export function createHarnessWindowViewRemoval(
       sessionIds: readonly string[],
       request: PersistencePermit,
       kind: "removing" | "transfer" = "removing",
+      projectInput?: HarnessProjectRemovalScope,
     ) {
+      const project = projectInput ? { ...projectInput } : undefined;
+      const projectPath = project?.path;
       if (
         sourceOwnerId !== null &&
         (!Number.isSafeInteger(sourceOwnerId) || sourceOwnerId < 1)
@@ -64,8 +79,25 @@ export function createHarnessWindowViewRemoval(
         referencedSessionIds: sessionIds,
       }).referencedSessionIds;
       if (!active || !request.isCurrent()) return null;
-      const hold = holds.acquire(kind, ids, request.isCurrent);
+      if (
+        project &&
+        (kind !== "removing" || !projects?.owns(project.path, project.owner))
+      )
+        return null;
+      const hold = ids.length
+        ? holds.acquire(kind, ids, request.isCurrent)
+        : project
+          ? {
+              isCurrent: () =>
+                projects?.owns(project.path, project.owner) === true,
+              release: () => {},
+            }
+          : null;
       if (!hold) return null;
+      if (operations.size >= 256) {
+        hold.release();
+        return null;
+      }
       let retired = false;
       let activity = 1;
       let committed = false;
@@ -90,6 +122,7 @@ export function createHarnessWindowViewRemoval(
         active &&
         !retired &&
         request.isCurrent() &&
+        (!project || projects?.owns(project.path, project.owner) === true) &&
         hold.isCurrent() &&
         active &&
         !retired;
@@ -98,7 +131,16 @@ export function createHarnessWindowViewRemoval(
       ) => {
         const refs = harnessViewSessionReferences(cohort.state);
         for (const [, id] of cohort.state.returnTargets) refs.add(id);
-        return ids.some((id) => refs.has(id));
+        return (
+          ids.some((id) => refs.has(id)) ||
+          !!(
+            projectPath &&
+            (sameRemovalProject(cohort.state.layout.projectCwd, projectPath) ||
+              cohort.state.returnTargets.some(([project]) =>
+                sameRemovalProject(project, projectPath),
+              ))
+          )
+        );
       };
       let admitted = false;
       try {
@@ -114,7 +156,8 @@ export function createHarnessWindowViewRemoval(
             views.getSnapshot().cohorts.includes(cohort),
           );
         for (const cohort of retained)
-          if (!removeRetainedSessionReferences(cohort.state, ids)) return null;
+          if (!removeRetainedSessionReferences(cohort.state, ids, projectPath))
+            return null;
         for (const cohort of captured.filter((cohort) => cohort.active)) {
           if (!current() || !retainedCurrent()) return null;
           const entry = targets.get(cohort.ownerId);
@@ -130,7 +173,7 @@ export function createHarnessWindowViewRemoval(
               entry.target.isCurrent(),
           );
           if (!permit.isCurrent()) return null;
-          const action = await entry.target.prepare(ids, permit);
+          const action = await entry.target.prepare(ids, permit, projectPath);
           if (!action) return null;
           const owned = Object.freeze({ ...action });
           if (!permit.isCurrent() || !owned.isCurrent()) return null;
@@ -199,7 +242,8 @@ export function createHarnessWindowViewRemoval(
                 }
                 if (!current() || !retainedCurrent()) return false;
                 for (const cohort of retained)
-                  if (!views.pruneRetained(cohort, ids, current)) return false;
+                  if (!views.pruneRetained(cohort, ids, current, project))
+                    return false;
                 if (
                   !current() ||
                   views

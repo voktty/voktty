@@ -51,6 +51,7 @@ const native = vi.hoisted(() => ({
   invoke: vi.fn(),
   register: vi.fn(),
   ask: vi.fn(),
+  error: vi.fn(),
   send: vi.fn(),
   cancel: vi.fn(),
   forget: vi.fn(),
@@ -152,7 +153,10 @@ vi.mock("@tauri-apps/api/window", () => ({
     onFocusChanged: native.focus,
   }),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: native.ask }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  ask: native.ask,
+  message: native.error,
+}));
 vi.mock("@/modules/harness/lib/settings", async (original) => ({
   ...(await original<typeof import("@/modules/harness/lib/settings")>()),
   loadCloseToTray: () => false,
@@ -182,7 +186,8 @@ vi.mock("@/modules/harness/lib/checkpoint", () => ({
   prepareSessionCheckpoint: vi.fn().mockResolvedValue(undefined),
   captureSessionCheckpoint: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@/modules/harness/lib/attachments", () => ({
+vi.mock("@/modules/harness/lib/attachments", async (original) => ({
+  ...(await original<typeof import("@/modules/harness/lib/attachments")>()),
   displayAttachments: (files: unknown) => files,
   prepareAttachments: async (files: unknown) => files,
 }));
@@ -220,7 +225,10 @@ vi.mock("@/modules/harness/lib/fileIndex", () => ({
 vi.mock("@/modules/harness/lib/fileTree", () => ({
   notifyDirsChanged: vi.fn(),
 }));
-vi.mock("@/modules/harness/lib/fs", () => ({ notifyGitChanged: vi.fn() }));
+vi.mock("@/modules/harness/lib/fs", () => ({
+  notifyGitChanged: vi.fn(),
+  basename: (path: string) => path.split(/[\\/]/).pop() ?? path,
+}));
 
 function required<T>(value: T | null | undefined): T {
   if (value == null) throw new Error("Missing host fixture");
@@ -471,6 +479,7 @@ beforeEach(() => {
       return undefined;
     });
   native.ask.mockReset().mockResolvedValue(true);
+  native.error.mockReset().mockResolvedValue(undefined);
   native.recover.mockReset().mockResolvedValue([]);
   native.pending.mockReset().mockResolvedValue({ runs: [], nextAfter: null });
   native.listAutomations.mockReset().mockResolvedValue([]);
@@ -548,6 +557,354 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  async function projectViews(id: string) {
+    const one = fixture(id, `/work/${id}`);
+    await render(
+      [one.session],
+      [],
+      true,
+      <>
+        <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />
+        <HarnessApp
+          surfaceOwnerId={2}
+          initialCwd={one.session.cwd}
+          focused={false}
+        />
+      </>,
+    );
+    return {
+      one,
+      host: required(runtime),
+      remove: required(required(native.sidebars[0]).onRemoveProject),
+    };
+  }
+
+  it.each([false, true])(
+    "removes a shared project with purge=%s after all views commit while preserving physical panes",
+    async (purgeData) => {
+      const f = await projectViews(`project-shared-${purgeData}`);
+      const physical = [
+        {
+          ...newTab("project-editor"),
+          editorPanes: [
+            {
+              id: "project-editor",
+              activeFileId: "file",
+              files: [
+                {
+                  id: "file",
+                  path: `${f.one.session.cwd}/file.txt`,
+                  cwd: f.one.session.cwd,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          ...newTab("project-terminal"),
+          terminalPanes: [
+            {
+              id: "project-terminal",
+              activeFileId: "pty",
+              files: [
+                {
+                  id: "pty",
+                  path: "terminal",
+                  cwd: f.one.session.cwd,
+                  terminal: true,
+                },
+              ],
+            },
+          ],
+        },
+      ];
+      f.host.views
+        .register(3, {
+          ...f.one.input,
+          tabs: [...f.one.input.tabs, ...physical],
+        })
+        .release();
+      f.host.views
+        .register(4, {
+          ...f.one.input,
+          tabs: [],
+          activeTabId: "",
+          report: {
+            referencedSessionIds: [],
+            foregroundSessionIds: [],
+            activeSessionId: null,
+          },
+        })
+        .release();
+      const forget = deferred<void>();
+      native.forget.mockImplementation(async () => {
+        expect(f.host.projects.has(f.one.session.cwd)).toBe(true);
+        expect(
+          f.host.views
+            .getSnapshot()
+            .cohorts.every(
+              (cohort) =>
+                !cohort.state.report.referencedSessionIds.includes(
+                  f.one.session.id,
+                ),
+            ),
+        ).toBe(true);
+        expect(
+          f.host.views
+            .getSnapshot()
+            .cohorts.every((cohort) => cohort.state.layout.projectCwd === "~"),
+        ).toBe(true);
+        await forget.promise;
+      });
+      let pending!: Promise<void>;
+      await act(async () => {
+        pending = Promise.resolve(f.remove(f.one.session.cwd, { purgeData }));
+      });
+      expect(native.forget).toHaveBeenCalledOnce();
+      expect(f.host.engine.readSession(f.one.session.id)).toBeDefined();
+      expect(() =>
+        f.host.engine.admitSession(
+          fixture("forbidden-new", f.one.session.cwd).session,
+          "immediate",
+        ),
+      ).toThrow("reserved");
+      expect(() => f.host.views.register(5, f.one.input)).toThrow("reserved");
+      await act(async () => {
+        forget.resolve();
+        await pending;
+      });
+      expect(f.host.engine.readSession(f.one.session.id)).toBeUndefined();
+      expect(f.host.projects.has(f.one.session.cwd)).toBe(false);
+      expect(f.host.holds.hasAny(f.one.session.id)).toBe(false);
+      const retained = required(
+        f.host.views
+          .getSnapshot()
+          .cohorts.find((cohort) => cohort.ownerId === 3),
+      );
+      expect(retained.state.layout.tabs).toEqual(physical);
+      expect(localStorage.getItem("monocode.recentProjects")).not.toContain(
+        f.one.session.cwd,
+      );
+      expect(native.error).not.toHaveBeenCalled();
+      if (purgeData)
+        expect(native.invoke).toHaveBeenCalledWith("session_delete", {
+          sessionId: f.one.session.id,
+        });
+    },
+  );
+
+  it("archives a busy shared project without stopping its background execution", async () => {
+    const f = await projectViews("project-busy-archive");
+    await act(async () =>
+      f.host.engine.onSubmit(f.one.session.id, "keep running"),
+    );
+    await act(async () => {
+      await f.remove(f.one.session.cwd, { purgeData: false });
+    });
+    expect(f.host.engine.readSession(f.one.session.id)?.busy).toBe(true);
+    expect(native.cancel).not.toHaveBeenCalled();
+    expect(native.forget).not.toHaveBeenCalled();
+    await act(async () => {
+      sends[0].sink({ type: "message.delta", text: "after project archive" });
+      f.host.engine.flushHarnessEvents();
+    });
+    expect(
+      f.host.engine
+        .readSession(f.one.session.id)
+        ?.blocks.some((block) => block.text === "after project archive"),
+    ).toBe(true);
+  });
+
+  it("preserves an active metadata-only view's dirty editor and terminal dock during project removal", async () => {
+    const errors = vi.spyOn(console, "error");
+    const one = fixture(
+      "project-active-physical",
+      "/work/project-active-physical",
+    );
+    await render(
+      [one.session],
+      [],
+      true,
+      <>
+        <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />
+      </>,
+    );
+    const file = {
+      id: "dirty-file",
+      path: `${one.session.cwd}/file.txt`,
+      cwd: one.session.cwd,
+    };
+    const tab = {
+      ...newTab("physical-editor"),
+      editorPanes: [
+        { id: "physical-editor", files: [file], activeFileId: file.id },
+      ],
+    };
+    const dock = {
+      projectPath: one.session.cwd,
+      open: true,
+      size: 200,
+      side: "bottom" as const,
+      pane: {
+        id: "physical-dock",
+        files: [
+          {
+            id: "dock-pty",
+            path: "terminal",
+            cwd: one.session.cwd,
+            terminal: true,
+          },
+        ],
+        activeFileId: "dock-pty",
+      },
+    };
+    await render(
+      [one.session],
+      [],
+      true,
+      <>
+        <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />
+        <HarnessApp
+          surfaceOwnerId={2}
+          initialCwd={one.session.cwd}
+          focused={false}
+          windowTransfer={{
+            tabs: [tab],
+            sessions: [],
+            activeTabId: tab.id,
+            projectCwd: one.session.cwd,
+            dirtyFileIds: [file.id],
+            projectTerminals: [dock],
+          }}
+        />
+      </>,
+    );
+    const host = required(runtime);
+    await act(async () => {
+      await required(required(native.sidebars[0]).onRemoveProject)(
+        one.session.cwd,
+        { purgeData: false },
+      );
+    });
+    const view = required(
+      host.views.getSnapshot().cohorts.find((cohort) => cohort.ownerId === 2),
+    );
+    expect(view.state.layout.tabs[0].editorPanes[0].files).toEqual([file]);
+    expect(view.state.layout.projectTerminals).toEqual([dock]);
+    expect(view.state.layout.projectCwd).toBe("~");
+    expect(host.engine.readSession(one.session.id)).toBeUndefined();
+    expect(native.error).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("retains project and session reservations until a pending purge stop settles after unmount", async () => {
+    const f = await projectViews("project-pending-stop");
+    await act(async () => f.host.engine.onSubmit(f.one.session.id, "running"));
+    const stop = deferred<void>();
+    native.cancel.mockReturnValue(stop.promise);
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = Promise.resolve(
+        f.remove(f.one.session.cwd, { purgeData: true }),
+      );
+    });
+    expect(native.cancel).toHaveBeenCalledOnce();
+    await act(async () => root.render(null));
+    expect(f.host.projects.has(f.one.session.cwd)).toBe(true);
+    expect(f.host.holds.has("removing", f.one.session.id)).toBe(true);
+    await act(async () => {
+      stop.resolve();
+      await pending;
+    });
+    expect(f.host.projects.has(f.one.session.cwd)).toBe(false);
+    expect(f.host.holds.hasAny(f.one.session.id)).toBe(false);
+    expect(
+      native.invoke.mock.calls.some(
+        ([command]) => command === "session_delete",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not delete a project after its original metadata read survives close cancellation", async () => {
+    const f = await projectViews("project-cancel-read");
+    const gate = deferred<unknown>();
+    const original = native.invoke.getMockImplementation();
+    native.invoke.mockImplementation((command, args) =>
+      command === "session_list_by_project"
+        ? gate.promise
+        : original?.(command, args),
+    );
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = Promise.resolve(
+        f.remove(f.one.session.cwd, { purgeData: true }),
+      );
+    });
+    expect(f.host.projects.has(f.one.session.cwd)).toBe(true);
+    const final = required(
+      required(required(f.host.persistence.getOwner()).capture()).seal(),
+    );
+    await act(async () => {
+      final.cancel();
+      gate.resolve([]);
+      await pending;
+    });
+    expect(f.host.engine.readSession(f.one.session.id)).toBeDefined();
+    expect(
+      native.invoke.mock.calls.some(
+        ([command]) => command === "session_delete",
+      ),
+    ).toBe(false);
+    expect(f.host.projects.has(f.one.session.cwd)).toBe(false);
+  });
+
+  it("keeps canonical data after provider cleanup failure and supports an explicit retry", async () => {
+    const f = await projectViews("project-cleanup-failure");
+    native.forget.mockRejectedValueOnce(new Error("Provider cleanup failed"));
+    await act(async () => {
+      await f.remove(f.one.session.cwd, { purgeData: true });
+    });
+    expect(f.host.engine.readSession(f.one.session.id)).toBeDefined();
+    expect(f.host.projects.has(f.one.session.cwd)).toBe(false);
+    expect(native.error).toHaveBeenCalledOnce();
+    expect(
+      native.invoke.mock.calls.some(
+        ([command]) => command === "session_delete",
+      ),
+    ).toBe(false);
+    await act(async () => {
+      await f.remove(f.one.session.cwd, { purgeData: true });
+    });
+    expect(f.host.engine.readSession(f.one.session.id)).toBeUndefined();
+  });
+
+  it("removes retained project navigation even when the project has no canonical sessions", async () => {
+    const f = await projectViews("project-origin-other");
+    f.host.views
+      .register(3, {
+        tabs: [],
+        activeTabId: "",
+        projectCwd: "/work/project-empty",
+        projectTerminals: [],
+        projectReturnMemory: new Map(),
+        report: {
+          referencedSessionIds: [],
+          foregroundSessionIds: [],
+          activeSessionId: null,
+        },
+      })
+      .release();
+    await act(async () => {
+      await f.remove("/work/project-empty", { purgeData: false });
+    });
+    expect(
+      f.host.views.getSnapshot().cohorts.find((cohort) => cohort.ownerId === 3)
+        ?.state.layout.projectCwd,
+    ).toBe("~");
+    expect(f.host.engine.readSession(f.one.session.id)).toBeDefined();
+    expect(f.host.projects.has("/work/project-empty")).toBe(false);
+  });
+
   async function inboxViews(strict = false) {
     const one = fixture("inbox-one", "/work/inbox-one");
     const two = fixture("inbox-two", "/work/inbox-two");

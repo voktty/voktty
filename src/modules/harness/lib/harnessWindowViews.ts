@@ -8,7 +8,14 @@ import { mergeHarnessWindowWorkspaces } from "@/modules/harness/lib/harnessWindo
 import type { Session } from "@/modules/harness/lib/session";
 import { leafIds } from "@/modules/harness/lib/layout";
 import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
-import { removeRetainedSessionReferences } from "@/modules/harness/lib/retainedSessionReferences";
+import {
+  removeRetainedSessionReferences,
+  sameRemovalProject,
+} from "@/modules/harness/lib/retainedSessionReferences";
+import type {
+  createHarnessProjectReservations,
+  HarnessProjectRemovalScope,
+} from "@/modules/harness/lib/harnessProjectReservations";
 import {
   collectWorkspaceSnapshot,
   type WorkspaceSnapshot,
@@ -202,6 +209,10 @@ export function harnessViewSessionReferences(state: ViewState): Set<string> {
 
 export function createHarnessWindowViews(
   holds?: Pick<ReturnType<typeof createHarnessWindowSessionHolds>, "has">,
+  projects?: Pick<
+    ReturnType<typeof createHarnessProjectReservations>,
+    "has" | "owns"
+  >,
 ) {
   const entries = new Map<
     number,
@@ -216,6 +227,23 @@ export function createHarnessWindowViews(
   });
 
   const admitReferences = (state: ViewState, previous?: ViewState) => {
+    if (
+      projects?.has(state.layout.projectCwd) &&
+      (!previous ||
+        !sameRemovalProject(
+          previous.layout.projectCwd,
+          state.layout.projectCwd,
+        ))
+    )
+      throw new Error("Harness project is reserved");
+    for (const [project] of state.returnTargets)
+      if (
+        projects?.has(project) &&
+        !previous?.returnTargets.some(([prior]) =>
+          sameRemovalProject(prior, project),
+        )
+      )
+        throw new Error("Harness project is reserved");
     if (!holds) return;
     const admitted = previous
       ? harnessViewSessionReferences(previous)
@@ -382,7 +410,10 @@ export function createHarnessWindowViews(
       cohort: HarnessWindowViewCohort,
       sessionIds: readonly string[],
       isCurrent: () => boolean,
+      projectInput?: HarnessProjectRemovalScope,
     ): HarnessWindowViewCohort | null {
+      const project = projectInput ? { ...projectInput } : undefined;
+      const projectPath = project?.path;
       const ids = normalizeHarnessSessionViewReport({
         referencedSessionIds: sessionIds,
       }).referencedSessionIds;
@@ -390,12 +421,18 @@ export function createHarnessWindowViews(
         isCurrent() &&
         !cohort.active &&
         entries.get(cohort.ownerId)?.cohort === cohort &&
-        ids.length > 0 &&
+        (project
+          ? projects?.owns(project.path, project.owner) === true
+          : ids.length > 0) &&
         ids.every(
           (id) => holds?.has("removing", id) || holds?.has("transfer", id),
         );
       if (!current()) return null;
-      const state = removeRetainedSessionReferences(cohort.state, ids);
+      const state = removeRetainedSessionReferences(
+        cohort.state,
+        ids,
+        projectPath,
+      );
       if (!state || !current()) return null;
       const key = JSON.stringify(state);
       if (key === entries.get(cohort.ownerId)?.key) return cohort;

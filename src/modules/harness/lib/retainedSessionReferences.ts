@@ -6,10 +6,20 @@ import {
   type WorkspaceTab,
 } from "@/modules/harness/lib/layout";
 import { removeSessionDocuments } from "@/modules/harness/lib/sessionWorkspaceLifecycle";
+import { projectKey } from "@/modules/harness/lib/paths";
+import { normalizeProjectPath } from "@/modules/harness/lib/recents";
+
+export function sameRemovalProject(path: string, project: string): boolean {
+  return (
+    projectKey(normalizeProjectPath(path)) ===
+    projectKey(normalizeProjectPath(project))
+  );
+}
 
 export function removeRetainedSessionReferences(
   state: HarnessWindowViewCohort["state"],
   sessionIds: readonly string[],
+  projectPath?: string,
 ): HarnessWindowViewCohort["state"] | null {
   const ids = new Set(
     normalizeHarnessSessionViewReport({ referencedSessionIds: sessionIds })
@@ -71,6 +81,10 @@ export function removeRetainedSessionReferences(
     ...state,
     layout: {
       ...state.layout,
+      projectCwd:
+        projectPath && sameRemovalProject(state.layout.projectCwd, projectPath)
+          ? "~"
+          : state.layout.projectCwd,
       tabs,
       sessions: state.layout.sessions.filter((session) => keep(session.id)),
       activeTabId: tabIds.has(state.layout.activeTabId)
@@ -79,11 +93,16 @@ export function removeRetainedSessionReferences(
       projectReturnTargets: state.layout.projectReturnTargets?.filter(
         (target) =>
           !ids.has(target.paneId ?? target.tabId ?? "") &&
+          (!projectPath ||
+            !sameRemovalProject(target.projectPath, projectPath)) &&
           !removedTargets.has(target.paneId ?? target.tabId ?? ""),
       ),
     },
     returnTargets: state.returnTargets.filter(
-      ([, id]) => keep(id) && !removedTargets.has(id),
+      ([project, id]) =>
+        keep(id) &&
+        !removedTargets.has(id) &&
+        (!projectPath || !sameRemovalProject(project, projectPath)),
     ),
     keptTabIds: state.keptTabIds.filter((id) => tabIds.has(id)),
     report: normalizeHarnessSessionViewReport({

@@ -188,3 +188,29 @@ it("retains its temporary window owner until a successful default call settles",
   expect(storage.remove.mock.calls).toEqual([["one"], ["two"]]);
   expect(storage.remote).toHaveBeenCalledWith("/work/app");
 });
+
+it("deletes captured live IDs even before their first save appears in metadata", async () => {
+  const f = fixture();
+  const ids = ["unsaved"];
+  const gate = deferred<Array<{ id: string }>>();
+  storage.list.mockReturnValue(gate.promise);
+  const pending = removeProjectData("/work/app", f.permit, ids);
+  ids[0] = "later-mutation";
+  gate.resolve([]);
+  expect(await pending).toBe(true);
+  expect(storage.remove.mock.calls).toEqual([["unsaved"]]);
+});
+
+it("never deletes remote live IDs and validates local raw capacity before metadata reads", async () => {
+  const f = fixture();
+  expect(
+    await removeProjectData("remote://host/work/app", f.permit, [
+      "remote-live",
+    ]),
+  ).toBe(true);
+  expect(storage.remove).not.toHaveBeenCalled();
+  await expect(
+    removeProjectData("/work/app", f.permit, Array(257).fill("duplicate")),
+  ).rejects.toThrow(TypeError);
+  expect(storage.list).not.toHaveBeenCalled();
+});
