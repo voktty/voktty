@@ -23,6 +23,9 @@ import {
   newEditorPane,
   newFileTab,
   newTab,
+  newTerminalFile,
+  newTerminalWorkspaceTab,
+  splitPane,
 } from "@/modules/harness/lib/layout";
 import type { ResumedWorkspace } from "@/modules/harness/lib/inFlight";
 type PaneProps = Parameters<
@@ -50,12 +53,20 @@ const state = vi.hoisted(() => ({
   error: vi.fn(),
   close: vi.fn(),
   focus: vi.fn(),
+  admit: vi.fn(),
+  stop: vi.fn(),
+  remove: vi.fn(),
 }));
 vi.mock("@/modules/harness/components/HarnessWindowHost", () => ({
   useHarnessWindow: () => state.runtime,
 }));
 vi.mock("@/modules/harness/hooks/useHarnessViewEngine", () => ({
-  useHarnessViewEngine: () => ({ updateSessions: vi.fn() }),
+  useHarnessViewEngine: () => ({
+    updateSessions: vi.fn(),
+    admitSession: state.admit,
+    onStop: state.stop,
+    removeSession: state.remove,
+  }),
 }));
 vi.mock("@/modules/harness/hooks/useWindowPersistenceAdmission", () => ({
   useWindowPersistenceAdmission: () => ({
@@ -340,6 +351,81 @@ it("requests the protected canonical close and keeps the reference through a vet
   await act(async () => root.render(<Host tabs={[]} />));
   expect(view().projectTerminals).toEqual([]);
 });
+it("prunes the last canonical pane after external close without replacing or stopping a conversation", async () => {
+  const file = {
+    ...newTerminalFile(project),
+    canonicalTerminal: { tabKey: terminal.tabKey, projectCwd: project },
+  };
+  const tab = newTerminalWorkspaceTab(file);
+  const resumed: ResumedWorkspace = {
+    tabs: [tab],
+    sessions: [],
+    activeTabId: tab.id,
+    projectCwd: project,
+    projectTerminals: [],
+  };
+  await act(async () => root.render(<Host resumed={resumed} />));
+  await act(async () => root.render(<Host resumed={resumed} tabs={[]} />));
+  expect(view().tabs).toEqual([]);
+  expect(view().activeTabId).toBe("");
+  expect(state.close).not.toHaveBeenCalled();
+  expect(state.error).not.toHaveBeenCalled();
+  expect(state.admit).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+  expect(state.remove).not.toHaveBeenCalled();
+});
+it("prunes closed canonical files from every pane while preserving physical editors and live conversations", async () => {
+  const editor = newEditorPane(newFileTab("/srv/app/file.txt", project));
+  const first = newTerminalWorkspaceTab({
+    ...newTerminalFile(project),
+    canonicalTerminal: { tabKey: terminal.tabKey, projectCwd: project },
+  });
+  const second = newTerminalWorkspaceTab({
+    ...newTerminalFile(project),
+    canonicalTerminal: { tabKey: secondTerminal.tabKey, projectCwd: project },
+  });
+  const mixed = {
+    ...first,
+    layout: splitPane(first.layout, first.focusedId, "right", editor.id),
+    editorPanes: [editor],
+  };
+  const conversation = newTab(
+    required(
+      (
+        state.runtime as {
+          engine: { sessions: ReturnType<typeof newSession>[] };
+        }
+      ).engine.sessions[0],
+    ).id,
+  );
+  const resumed: ResumedWorkspace = {
+    tabs: [mixed, second, conversation],
+    sessions: [],
+    activeTabId: second.id,
+    projectCwd: project,
+    projectTerminals: [],
+  };
+  const confirm = vi.fn();
+  vi.stubGlobal("confirm", confirm);
+  await act(async () =>
+    root.render(<Host resumed={resumed} tabs={[terminal, secondTerminal]} />),
+  );
+  await act(async () => root.render(<Host resumed={resumed} tabs={[]} />));
+  expect(view().tabs).toHaveLength(2);
+  expect(view().tabs[0]).toMatchObject({
+    layout: { type: "leaf", id: editor.id },
+    focusedId: editor.id,
+    editorPanes: [editor],
+    terminalPanes: [],
+  });
+  expect(view().tabs[1]).toBe(conversation);
+  expect(view().tabs.some((tab) => tab.id === view().activeTabId)).toBe(true);
+  expect(state.close).not.toHaveBeenCalled();
+  expect(confirm).not.toHaveBeenCalled();
+  expect(state.admit).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+  expect(state.remove).not.toHaveBeenCalled();
+});
 it("routes close-other through one exact batch and waits for canonical removal", async () => {
   const tabs = [terminal, secondTerminal, thirdTerminal];
   await act(async () => root.render(<Host tabs={tabs} />));
@@ -352,6 +438,32 @@ it("routes close-other through one exact batch and waits for canonical removal",
   expect(view().projectTerminals[0].pane.files).toHaveLength(3);
   await act(async () => root.render(<Host tabs={[terminal]} />));
   expect(view().projectTerminals[0].pane.files).toEqual([keep]);
+});
+it("retains an unseen reference and waits for fresh authority before pruning an observed disappearance", async () => {
+  const file = {
+    ...newTerminalFile(project),
+    canonicalTerminal: { tabKey: terminal.tabKey, projectCwd: project },
+  };
+  const tab = newTerminalWorkspaceTab(file);
+  const resumed: ResumedWorkspace = {
+    tabs: [tab],
+    sessions: [],
+    activeTabId: tab.id,
+    projectCwd: project,
+    projectTerminals: [],
+  };
+  await act(async () => root.render(<Host resumed={resumed} tabs={[]} />));
+  expect(view().tabs).toEqual([tab]);
+  await act(async () => root.render(<Host resumed={resumed} />));
+  const capture = state.capture;
+  state.capture = () => undefined;
+  await act(async () => root.render(<Host resumed={resumed} tabs={[]} />));
+  expect(view().tabs).toEqual([tab]);
+  state.capture = capture;
+  await act(async () => root.render(<Host resumed={resumed} tabs={[]} />));
+  expect(view().tabs).toEqual([]);
+  expect(state.close).not.toHaveBeenCalled();
+  expect(state.admit).not.toHaveBeenCalled();
 });
 it("routes the close shortcut from the canonical overlay to its dock terminal", async () => {
   await act(async () => root.render(<Host />));

@@ -298,6 +298,12 @@ import {
 import { runSessionRemoval, runSessionRemovalBatch } from "@/modules/harness/lib/sessionRemoval";
 import { persistSessionRemoval } from "@/modules/harness/lib/sessionRemovalPersistence";
 import {
+  canonicalPruneSelection,
+  pruneCanonicalTerminalTabs,
+  pruneCanonicalTerminalDocks,
+  type ClosedCanonicalFiles,
+} from "@/modules/harness/lib/canonicalTerminalReferences";
+import {
   renameHistorySession,
   pinHistorySession,
   unarchiveHistorySession,
@@ -2598,55 +2604,65 @@ export function HarnessApp({
     [t, requestCanonicalTerminalCloses],
   );
 
-  const observedCanonicalFiles = useRef(new Map<string, string>());
+  const observedCanonicalFiles = useRef(
+    new Map<string, NonNullable<FilePaneTab["canonicalTerminal"]>>(),
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission recovery must retry pruning with a fresh permit.
   useEffect(() => {
-    if (!canonicalTerminals || !getPersistenceOwner()?.capture()) return;
+    const permit = getPersistenceOwner()?.capture();
+    if (!canonicalTerminals || !permit) return;
     const files = [
       ...filesInWorkspaceTabs(tabs),
       ...projectTerminals.flatMap((dock) => dock.pane.files),
     ];
     const present = new Set(files.map((file) => file.id));
-    const closed = new Set<string>();
+    const closed = new Map<
+      string,
+      NonNullable<FilePaneTab["canonicalTerminal"]>
+    >();
     for (const file of files) {
       const reference = file.canonicalTerminal;
       if (!reference) continue;
       if (canonicalTerminals.get(reference))
-        observedCanonicalFiles.current.set(file.id, reference.tabKey);
-      else if (observedCanonicalFiles.current.get(file.id) === reference.tabKey)
-        closed.add(file.id);
+        observedCanonicalFiles.current.set(file.id, reference);
+      else {
+        const observed = observedCanonicalFiles.current.get(file.id);
+        if (
+          observed?.tabKey === reference.tabKey &&
+          observed.projectCwd === reference.projectCwd
+        )
+          closed.set(file.id, reference);
+      }
     }
     for (const id of observedCanonicalFiles.current.keys())
       if (!present.has(id)) observedCanonicalFiles.current.delete(id);
     if (closed.size === 0) return;
-    setProjectTerminals((previous) => {
-      const updated = previous.flatMap((dock) => {
-        let next: ProjectTerminal | null = dock;
-        for (const file of dock.pane.files) {
-          if (next && closed.has(file.id))
-            next = closeTerminalInDock(next, file.id);
-        }
-        return next ? [next] : [];
-      });
-      return updated.length === previous.length &&
-        updated.every((dock, index) => dock === previous[index])
-        ? previous
-        : updated;
-    });
-    for (const tab of tabs) {
-      for (const pane of [...tab.editorPanes, ...tab.terminalPanes]) {
-        const file = pane.files.find((entry) => closed.has(entry.id));
-        if (file) {
-          onCloseFile(pane.id, file.id);
-          return;
-        }
-      }
-    }
+    const removed: ClosedCanonicalFiles = closed;
+    const isCurrent = () =>
+      permit.isCurrent() &&
+      tabsRef.current === tabs &&
+      projectTerminalsRef.current === projectTerminals;
+    const nextTabs = pruneCanonicalTerminalTabs(tabs, removed);
+    setProjectTerminals((previous) =>
+      isCurrent() && previous === projectTerminals
+        ? pruneCanonicalTerminalDocks(previous, removed)
+        : previous,
+    );
+    setTabs((previous) =>
+      isCurrent() && previous === tabs ? nextTabs : previous,
+    );
+    setActiveTabIdState((previous) =>
+      isCurrent() && previous === activeTabId
+        ? canonicalPruneSelection(tabs, nextTabs, previous)
+        : previous,
+    );
   }, [
     canonicalTerminals,
     tabs,
     projectTerminals,
-    onCloseFile,
+    activeTabId,
     getPersistenceOwner,
+    persistenceRevision,
   ]);
 
   const onClearTabSession = useCallback(
