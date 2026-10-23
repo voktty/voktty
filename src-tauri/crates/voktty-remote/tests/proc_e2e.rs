@@ -3,6 +3,7 @@
 
 #![cfg(unix)]
 
+use std::collections::VecDeque;
 use std::fs;
 use std::io::BufWriter;
 use std::os::unix::fs::PermissionsExt;
@@ -20,6 +21,7 @@ struct Helper {
     child: Child,
     input: BufWriter<ChildStdin>,
     frames: Receiver<Frame>,
+    deferred: VecDeque<Frame>,
     sequence: u32,
 }
 
@@ -48,6 +50,7 @@ impl Helper {
             child,
             input,
             frames,
+            deferred: VecDeque::new(),
             sequence: 0,
         };
         let response = helper.request("handshake", json!({ "workspaceRoot": work }));
@@ -69,19 +72,60 @@ impl Helper {
         )
         .expect("request is written");
         std::io::Write::flush(&mut self.input).expect("flush");
-        loop {
-            match self.next_frame() {
-                Frame::Response(response) if response.id == id => return response,
-                _ => {}
-            }
-        }
+        receive_response(&self.frames, &mut self.deferred, &id)
     }
 
-    fn next_frame(&self) -> Frame {
-        self.frames
-            .recv_timeout(Duration::from_secs(15))
-            .expect("a frame arrives in time")
+    fn next_frame(&mut self) -> Frame {
+        self.deferred.pop_front().unwrap_or_else(|| {
+            self.frames
+                .recv_timeout(Duration::from_secs(15))
+                .expect("a frame arrives in time")
+        })
     }
+}
+
+fn receive_response(
+    frames: &Receiver<Frame>,
+    deferred: &mut VecDeque<Frame>,
+    id: &str,
+) -> RemoteResponse {
+    loop {
+        match frames
+            .recv_timeout(Duration::from_secs(15))
+            .expect("a response arrives in time")
+        {
+            Frame::Response(response) if response.id == id => return response,
+            frame => deferred.push_back(frame),
+        }
+    }
+}
+
+#[test]
+fn response_wait_preserves_earlier_process_frames_in_order() {
+    let (sender, frames) = mpsc::channel();
+    let mut deferred = VecDeque::new();
+    for data in [b"a\n", b"b\n"] {
+        sender
+            .send(Frame::ProcOutput {
+                attach_id: 1,
+                stream: 1,
+                next_offset: 0,
+                data: data.to_vec(),
+            })
+            .unwrap();
+    }
+    sender
+        .send(Frame::Response(RemoteResponse::success("r1", json!({}))))
+        .unwrap();
+    assert!(receive_response(&frames, &mut deferred, "r1").ok);
+    let output: Vec<_> = deferred
+        .into_iter()
+        .map(|frame| match frame {
+            Frame::ProcOutput { data, .. } => data,
+            _ => panic!("expected process output"),
+        })
+        .collect();
+    assert_eq!(output, [b"a\n".to_vec(), b"b\n".to_vec()]);
 }
 
 impl Drop for Helper {
