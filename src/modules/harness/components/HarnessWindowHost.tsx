@@ -55,12 +55,14 @@ import {
 import type { Session } from "@/modules/harness/lib/session";
 import { normalizeHarnessSessionViewReport } from "@/modules/harness/lib/harnessSessionViews";
 import { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
+import { createHarnessWindowViewRemoval } from "@/modules/harness/lib/harnessWindowViewRemoval";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 
 type WindowRuntime = {
   engine: ReturnType<typeof useHarnessSessionEngine>;
   views: ReturnType<typeof createHarnessWindowViews>;
   holds: ReturnType<typeof createHarnessWindowSessionHolds>;
+  removals: ReturnType<typeof createHarnessWindowViewRemoval>;
   persistence: ReturnType<typeof useWindowPersistenceAdmission>;
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
   automations: ReturnType<typeof useHarnessAutomations>;
@@ -98,6 +100,21 @@ export function HarnessWindowHost({
 }) {
   const [holds] = useState(createHarnessWindowSessionHolds);
   const [views] = useState(() => createHarnessWindowViews(holds));
+  const [removals] = useState(() =>
+    createHarnessWindowViewRemoval(views, holds),
+  );
+  const removalLifetime = useRef<object | null>(null);
+  useEffect(() => {
+    const owner = {};
+    removalLifetime.current = owner;
+    return () => {
+      if (removalLifetime.current === owner) removalLifetime.current = null;
+      // StrictMode replaces the effect owner before this final cleanup runs.
+      queueMicrotask(() => {
+        if (removalLifetime.current === null) removals.dispose();
+      });
+    };
+  }, [removals]);
   const held = useSyncExternalStore(holds.subscribe, holds.getSnapshot);
   const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
@@ -342,6 +359,7 @@ export function HarnessWindowHost({
         engine,
         views,
         holds,
+        removals,
         persistence,
         transcripts,
         automations,

@@ -3076,6 +3076,18 @@ export function HarnessApp({
     activate: () => activateSurface?.() ?? focusedRef.current,
     onRegistered,
     restore: retainedCohort,
+    applyRemoval: (state, ids) => {
+      workspaceNavigation.cancel();
+      for (const id of ids) ownedInboxSessions.current.delete(id);
+      setInboxAskPortal((portal) =>
+        portal && ids.includes(portal.sessionId) ? null : portal,
+      );
+      projectReturnRef.current = new Map(state.returnTargets);
+      tabsRef.current = state.layout.tabs;
+      activeTabIdRef.current = state.layout.activeTabId;
+      setTabs(state.layout.tabs);
+      setActiveTabIdState(state.layout.activeTabId);
+    },
     read: () => {
       const known = new Set(sessionsRef.current.map((session) => session.id));
       const referencedSessionIds = [...new Set([
@@ -3212,7 +3224,6 @@ export function HarnessApp({
       capturedPermit?: PersistencePermit,
     ): Promise<boolean> => {
       if (removingSessionIds.current.has(sessionId) || windowRuntime.holds.hasAny(sessionId)) return false;
-      if (windowRuntime.views.getSnapshot().cohorts.some((cohort) => cohort.ownerId !== surfaceOwnerId && cohort.state.report.referencedSessionIds.includes(sessionId))) return false;
       const persistencePermit = capturedPermit ?? getPersistenceOwner()?.capture();
       if (!persistencePermit?.isCurrent()) return false;
       const open = sessionsRef.current.find(
@@ -3231,16 +3242,24 @@ export function HarnessApp({
         return false;
       if (!persistencePermit.isCurrent()) return false;
 
-      const hold = windowRuntime.holds.acquire("removing", [sessionId], persistencePermit.isCurrent);
-      if (!hold) return false;
       removingSessionIds.current.add(sessionId);
-      transcripts.dropPending(sessionId);
+      let operation: Awaited<
+        ReturnType<typeof windowRuntime.removals.prepare>
+      > = null;
       let savedSummary: SessionSummary | undefined;
       try {
+        operation = await windowRuntime.removals.prepare(
+          surfaceOwnerId,
+          [sessionId],
+          persistencePermit,
+        );
+        if (!operation) return false;
+        const admitted = operation;
+        transcripts.dropPending(sessionId);
         return await runSessionRemoval({
           sessionId,
           scope: tabCloseScope,
-          persistencePermit,
+          persistencePermit: admitted,
           readWorkspace: () => ({
             tabs: tabsRef.current,
             sessions: sessionsRef.current,
@@ -3270,9 +3289,12 @@ export function HarnessApp({
               return false;
             if (!persistencePermit.isCurrent()) return false;
             const terminals = files.filter((file) => file.terminal);
-            return (
-              terminals.length === 0 || (await confirmCloseTerminals(terminals))
-            );
+            if (
+              terminals.length > 0 &&
+              !(await confirmCloseTerminals(terminals))
+            )
+              return false;
+            return admitted.commit();
           },
           stop: async () => {
             await stopSessionForRemoval(sessionId);
@@ -3353,7 +3375,7 @@ export function HarnessApp({
         return false;
       } finally {
         removingSessionIds.current.delete(sessionId);
-        hold.release();
+        operation?.release();
       }
     },
     [
@@ -3368,8 +3390,8 @@ export function HarnessApp({
     getPersistenceOwner,
     transcripts,
     windowRuntime.holds,
+    windowRuntime.removals,
     surfaceOwnerId,
-    windowRuntime.views,
   ],
   );
 

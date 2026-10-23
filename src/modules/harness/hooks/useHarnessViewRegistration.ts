@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
+import { flushSync } from "react-dom";
+import { removeRetainedSessionReferences } from "@/modules/harness/lib/retainedSessionReferences";
 import type { useHarnessWindow } from "@/modules/harness/components/HarnessWindowHost";
 import type { HarnessWindowViewInput } from "@/modules/harness/lib/harnessWindowViews";
 import type { HarnessWindowViewCohort } from "@/modules/harness/lib/harnessWindowViews";
@@ -20,6 +22,10 @@ type Inputs = {
   activate: () => boolean | Promise<boolean>;
   onRegistered?: (view: HarnessNavigationView) => void;
   restore?: HarnessWindowViewCohort;
+  applyRemoval?: (
+    state: HarnessWindowViewCohort["state"],
+    ids: readonly string[],
+  ) => void;
 };
 
 export function useHarnessViewRegistration(inputs: Inputs) {
@@ -29,6 +35,7 @@ export function useHarnessViewRegistration(inputs: Inputs) {
     views,
     navigation: { register },
     admitSeeds,
+    removals,
   } = inputs.runtime;
   const { ownerId, revision } = inputs;
   const handle = useRef<ReturnType<typeof views.register> | null>(null);
@@ -43,6 +50,7 @@ export function useHarnessViewRegistration(inputs: Inputs) {
     const current = () =>
       view.isCurrent() && latest.current.ownerId === ownerId;
     let binding: HarnessNavigationView | null = null;
+    let removal: ReturnType<typeof removals.register> = null;
     try {
       binding = register(ownerId, {
         isCurrent: current,
@@ -57,9 +65,60 @@ export function useHarnessViewRegistration(inputs: Inputs) {
       });
       if (!binding || !admitSeeds(original.seeds, current))
         throw new Error("Harness view registration was not admitted");
+      removal = removals.register(ownerId, {
+        isCurrent: current,
+        capture: () =>
+          current() ? (latest.current.getOwner()?.capture() ?? null) : null,
+        async prepare(ids, permit) {
+          const applyRemoval = latest.current.applyRemoval;
+          if (!current() || !permit.isCurrent() || !applyRemoval) return null;
+          const input = latest.current.read();
+          view.update(input);
+          const captured = views
+            .getSnapshot()
+            .cohorts.find((entry) => entry.ownerId === ownerId);
+          if (!captured) return null;
+          const next = removeRetainedSessionReferences(
+            {
+              ...captured.state,
+              layout: {
+                ...captured.state.layout,
+                // Active panes keep their live objects instead of sanitized snapshots.
+                tabs: input.tabs,
+                projectTerminals: input.projectTerminals,
+              },
+            },
+            ids,
+          );
+          if (!next) return null;
+          const unchanged = () =>
+            current() &&
+            permit.isCurrent() &&
+            views.getSnapshot().cohorts.includes(captured) &&
+            latest.current.read().tabs === input.tabs;
+          return {
+            isCurrent: unchanged,
+            async commit() {
+              if (!unchanged()) return false;
+              let applied = false;
+              flushSync(() => {
+                if (!unchanged()) return;
+                applyRemoval(next, ids);
+                applied = true;
+              });
+              if (!applied || !current() || !permit.isCurrent()) return false;
+              view.update(latest.current.read());
+              return current() && permit.isCurrent();
+            },
+          };
+        },
+      });
+      if (!removal)
+        throw new Error("Harness removal registration was not admitted");
       handle.current = view;
       original.onRegistered?.(binding);
     } catch (error) {
+      removal?.release();
       binding?.release();
       view.release();
       const failed = views
@@ -71,11 +130,12 @@ export function useHarnessViewRegistration(inputs: Inputs) {
       throw error;
     }
     return () => {
+      removal?.release();
       binding?.release();
       view.release();
       if (handle.current === view) handle.current = null;
     };
-  }, [views, register, admitSeeds, ownerId]);
+  }, [views, register, admitSeeds, removals, ownerId]);
   useLayoutEffect(() => {
     const view = handle.current;
     const original = latest.current;

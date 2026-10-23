@@ -60,6 +60,9 @@ const native = vi.hoisted(() => ({
     string,
     Parameters<typeof import("@/modules/harness/surfaces/PaneTree").PaneTree>[0]
   >(),
+  sidebars: [] as Parameters<
+    typeof import("@/modules/harness/chrome/Sidebar").Sidebar
+  >[0][],
   approval: vi.fn(),
   bridge: vi.fn(),
   stopBridge: vi.fn(),
@@ -81,7 +84,16 @@ vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
   ...(await original<typeof import("@/modules/harness/lib/githubTasks")>()),
   listInboxItems: native.inboxList,
 }));
-vi.mock("@/modules/harness/chrome/Sidebar", () => ({ Sidebar: () => null }));
+vi.mock("@/modules/harness/chrome/Sidebar", () => ({
+  Sidebar: (
+    props: Parameters<
+      typeof import("@/modules/harness/chrome/Sidebar").Sidebar
+    >[0],
+  ) => {
+    native.sidebars.push(props);
+    return null;
+  },
+}));
 vi.mock("@/modules/harness/chrome/TitleBar", () => ({ TitleBar: () => null }));
 vi.mock("@/modules/harness/chrome/UsageFooter", () => ({
   UsageFooter: () => null,
@@ -146,6 +158,7 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
 vi.mock("@/modules/harness/lib/checkpoint", () => ({
   beginSessionTurn: vi.fn().mockResolvedValue(undefined),
   syncSessionCheckpoint: vi.fn().mockResolvedValue(undefined),
+  flushSessionCheckpoint: vi.fn().mockResolvedValue(undefined),
   notifyReviewChanged: vi.fn(),
   prepareSessionCheckpoint: vi.fn().mockResolvedValue(undefined),
   captureSessionCheckpoint: vi.fn().mockResolvedValue(undefined),
@@ -454,6 +467,7 @@ beforeEach(() => {
   native.bind.mockReset();
   native.builtins.mockReset();
   native.panes.clear();
+  native.sidebars.length = 0;
   native.probe.mockReset().mockResolvedValue(undefined);
   native.catalogs.mockReset().mockResolvedValue(undefined);
   native.focus.mockReset().mockResolvedValue(() => undefined);
@@ -512,6 +526,118 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it.each(["archive", "delete"] as const)(
+    "%s through the real App detaches sibling and retained views under StrictMode",
+    async (mode) => {
+      vi.stubGlobal(
+        "confirm",
+        vi.fn(() => true),
+      );
+      const one = fixture("shared", "/work/shared");
+      await render(
+        [one.session],
+        [],
+        true,
+        <>
+          <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />
+          <HarnessApp
+            surfaceOwnerId={2}
+            initialCwd={one.session.cwd}
+            focused={false}
+          />
+        </>,
+      );
+      const host = required(runtime);
+      const retained = host.views.register(3, one.input);
+      retained.release();
+      const originalInvoke = native.invoke.getMockImplementation();
+      native.invoke.mockImplementation(async (command, args) => {
+        if (
+          command === "session_set_archived" ||
+          command === "session_delete"
+        ) {
+          expect(
+            host.views
+              .getSnapshot()
+              .cohorts.filter((entry) => entry.ownerId !== 1)
+              .every(
+                (entry) =>
+                  !entry.state.report.referencedSessionIds.includes("shared"),
+              ),
+          ).toBe(true);
+          expect(host.holds.has("removing", "shared")).toBe(true);
+        }
+        return originalInvoke?.(command, args);
+      });
+      await act(async () => {
+        const sidebar = required(native.sidebars[0]);
+        if (mode === "archive")
+          await required(sidebar.onArchiveSession)("shared", true);
+        else await required(sidebar.onDeleteSession)("shared");
+      });
+      expect(native.invoke).toHaveBeenCalledWith(
+        mode === "archive" ? "session_set_archived" : "session_delete",
+        {
+          sessionId: "shared",
+          ...(mode === "archive" ? { archived: true } : {}),
+        },
+      );
+      expect(host.engine.readSession("shared")).toBeUndefined();
+      expect(
+        host.views.getSnapshot().cohorts.find((entry) => entry.ownerId === 2)
+          ?.state.layout.tabs,
+      ).toEqual([]);
+      expect(host.holds.hasAny("shared")).toBe(false);
+    },
+  );
+
+  it("keeps sibling references when the origin declines deletion", async () => {
+    const one = fixture("declined", "/work/declined");
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirm);
+    await render(
+      [one.session],
+      [],
+      false,
+      <>
+        <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />
+        <HarnessApp
+          surfaceOwnerId={2}
+          initialCwd={one.session.cwd}
+          focused={false}
+        />
+      </>,
+    );
+    const host = required(runtime);
+    const before = host.views.getSnapshot();
+    await act(async () => {
+      await required(required(native.sidebars[0]).onDeleteSession)("declined");
+    });
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(host.views.getSnapshot()).toBe(before);
+    expect(host.engine.readSession("declined")).toBe(one.session);
+    expect(host.holds.hasAny("declined")).toBe(false);
+    expect(
+      native.invoke.mock.calls.some(
+        ([command]) => command === "session_delete",
+      ),
+    ).toBe(false);
+  });
+
+  it("disposes the removal coordinator after final Host unmount", async () => {
+    await render([], [], true);
+    const host = required(runtime);
+    const permit = required(required(host.persistence.getOwner()).capture());
+    const operation = await act(async () =>
+      host.removals.prepare(null, ["absent"], permit),
+    );
+    expect(required(operation).isCurrent()).toBe(true);
+    await act(async () => root.render(null));
+    expect(required(operation).isCurrent()).toBe(false);
+    expect(host.holds.hasAny("absent")).toBe(false);
+    expect(await host.removals.prepare(null, ["absent"], permit)).toBeNull();
+  });
+
   it("rejects retired navigation while waiting for physical activation confirmation", async () => {
     const one = fixture("one", "/work/one");
     const gate = deferred<boolean>();
