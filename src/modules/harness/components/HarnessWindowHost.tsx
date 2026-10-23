@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
+import { useHarnessWindowAttention } from "@/modules/harness/hooks/useHarnessWindowAttention";
 import { useHarnessTranscriptPersistence } from "@/modules/harness/hooks/useHarnessTranscriptPersistence";
 import { useHarnessWindowPersistence } from "@/modules/harness/hooks/useHarnessWindowPersistence";
 import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
@@ -60,6 +61,13 @@ export function HarnessWindowHost({
     isForeground: views.isForeground,
     isRemoving: views.isRemoving,
     isSwitching: views.isSwitching,
+  });
+  useHarnessWindowAttention({
+    sessions: engine.sessions,
+    sessionsRef: engine.sessionsRef,
+    isForeground: views.isForeground,
+    flushHarnessEvents: engine.flushHarnessEvents,
+    flushForegroundHarnessEvents: engine.flushForegroundHarnessEvents,
   });
   const persistence = useWindowPersistenceAdmission(() => undefined);
   const surface = useActiveSurfaceStore((state) => state.surface);

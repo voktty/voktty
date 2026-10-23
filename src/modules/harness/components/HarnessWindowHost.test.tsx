@@ -24,10 +24,16 @@ const native = vi.hoisted(() => ({
   approval: vi.fn(),
   bridge: vi.fn(),
   stopBridge: vi.fn(),
+  focus: vi.fn(),
+  badge: vi.fn(),
+  notify: vi.fn().mockResolvedValue(false),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ onCloseRequested: native.register }),
+  getCurrentWindow: () => ({
+    onCloseRequested: native.register,
+    onFocusChanged: native.focus,
+  }),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: native.ask }));
 vi.mock("@/modules/harness/lib/settings", async (original) => ({
@@ -64,7 +70,13 @@ vi.mock("@/modules/harness/lib/promptPreparation", () => ({
 vi.mock("@/modules/harness/lib/providerAccounts", () => ({
   supportsProviderAccounts: () => false,
 }));
-vi.mock("@/modules/harness/lib/dockBadge", () => ({ syncDockBadge: vi.fn() }));
+vi.mock("@/modules/harness/lib/dockBadge", () => ({
+  syncDockBadge: native.badge,
+}));
+vi.mock("@/modules/harness/lib/notifications", async (original) => ({
+  ...(await original<typeof import("@/modules/harness/lib/notifications")>()),
+  notifySession: native.notify,
+}));
 vi.mock("@/modules/harness/lib/sounds", () => ({ playCue: vi.fn() }));
 vi.mock("@/modules/harness/lib/fileWatch", () => ({
   nudgeWatchedFiles: vi.fn(),
@@ -167,6 +179,9 @@ beforeEach(() => {
     return Promise.resolve(() => undefined);
   });
   native.approval.mockReset();
+  native.focus.mockReset().mockResolvedValue(() => undefined);
+  native.badge.mockClear();
+  native.notify.mockClear();
   native.stopBridge.mockReset();
   native.bridge.mockReset().mockReturnValue(native.stopBridge);
   native.send.mockReset().mockImplementation(
@@ -207,6 +222,48 @@ async function render(sessions: Session[], views: ViewProps[], strict = false) {
 }
 
 describe("window-owned Harness execution host", () => {
+  it("flushes foreground output on focus and all output before visibility suspension", async () => {
+    const one = fixture("one", "/work/one");
+    const two = fixture("two", "remote://machine/srv/two");
+    two.input.report = {
+      referencedSessionIds: ["two"],
+      foregroundSessionIds: [],
+      activeSessionId: null,
+    };
+    let focus: ((event: { payload: boolean }) => void) | undefined;
+    native.focus.mockImplementation((callback) => {
+      focus = callback;
+      return Promise.resolve(() => undefined);
+    });
+    await render(
+      [one.session, two.session],
+      [
+        { ownerId: 1, input: one.input },
+        { ownerId: 2, input: two.input },
+      ],
+    );
+    await act(async () => {
+      required(runtime).engine.onSubmit("one", "first");
+      required(runtime).engine.onSubmit("two", "second");
+    });
+    const hasOutput = (id: string) =>
+      required(runtime)
+        .engine.readSession(id)
+        ?.blocks.some((block) => block.text === "buffered");
+    act(() => {
+      sends[0].sink({ type: "message.delta", text: "buffered" });
+      sends[1].sink({ type: "message.delta", text: "buffered" });
+    });
+    expect(hasOutput("one")).toBe(false);
+    expect(hasOutput("two")).toBe(false);
+    act(() => required(focus)({ payload: true }));
+    expect(hasOutput("one")).toBe(true);
+    expect(hasOutput("two")).toBe(false);
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(hasOutput("two")).toBe(true);
+    expect(native.focus).toHaveBeenCalledOnce();
+  });
+
   it("continues events, queued turns and approvals with zero views and reclaims the live cohort", async () => {
     const one = fixture("one", "/work/one");
     const two = fixture("two", "remote://machine/srv/two");
@@ -245,6 +302,15 @@ describe("window-owned Harness execution host", () => {
         .engine.readSession("one")
         ?.blocks.some((block) => block.text === "headless output"),
     ).toBe(true);
+    expect(native.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "two" }),
+      { kind: "approval", requestId: 9 },
+      false,
+    );
+    expect(native.badge).toHaveBeenLastCalledWith(
+      required(runtime).engine.sessions,
+    );
+    expect(native.focus).toHaveBeenCalledOnce();
     act(() => required(runtime).engine.onApproval("two", 9, "allow"));
     expect(native.approval).toHaveBeenCalledWith("claude", "two", 9, "allow");
     await act(async () => vi.advanceTimersByTimeAsync(650));

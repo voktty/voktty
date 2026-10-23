@@ -5,6 +5,7 @@ import type { Session } from "../lib/session";
 export function useInputNotifications(
   sessions: Session[],
   activeSessionId: string | undefined,
+  isForeground?: (id: string) => boolean,
 ) {
   const inputNotifications = useMemo(
     () => pendingInputNotifications(sessions),
@@ -26,8 +27,8 @@ export function useInputNotifications(
       void notifySession(
         session,
         event,
-        session.id === activeSessionId,
+        isForeground?.(session.id) ?? session.id === activeSessionId,
       );
     }
-  }, [activeSessionId, inputNotifications]);
+  }, [activeSessionId, inputNotifications, isForeground]);
 }
