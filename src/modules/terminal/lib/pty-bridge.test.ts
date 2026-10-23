@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openPty } from "./pty-bridge";
+import type { WorkspaceEnv } from "@/modules/workspace";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -99,6 +100,69 @@ describe("PTY bridge", () => {
     expect(invokeMock).not.toHaveBeenCalledWith(
       "remote_pty_open",
       expect.anything(),
+    );
+  });
+
+  it.each<WorkspaceEnv | undefined>([
+    undefined,
+    { kind: "local" },
+    { kind: "wsl", distro: "Ubuntu" },
+    {
+      kind: "ssh",
+      root: "/srv/app",
+      sessionId: 7,
+      connection: { id: "server-1", name: "Server", host: "server.example" },
+    },
+    {
+      kind: "docker",
+      connection: {
+        containerId: "container-1",
+        containerName: "api",
+        image: "node:22",
+      },
+    },
+    { kind: "serial", portName: "COM3", baudRate: 9600 },
+  ])(
+    "rejects an unresolved remote project URI before native resources open (%j)",
+    async (workspace) => {
+      await expect(
+        openPty(
+          80,
+          24,
+          { onData: vi.fn() },
+          "remote://voktty-ssh-server-1/srv/app",
+          false,
+          undefined,
+          undefined,
+          workspace,
+        ),
+      ).rejects.toThrow(
+        "Resolve the remote project connection before starting a terminal.",
+      );
+      expect(invokeMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "C:/work/app",
+    "C:\\work\\app",
+    "//server/share/app",
+    "\\\\server\\share\\app",
+    "/srv/app",
+  ])("preserves native directory paths (%s)", async (cwd) => {
+    await openPty(
+      80,
+      24,
+      { onData: vi.fn() },
+      cwd,
+      false,
+      undefined,
+      undefined,
+      { kind: "local" },
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      "pty_open",
+      expect.objectContaining({ cwd, workspace: { kind: "local" } }),
     );
   });
 

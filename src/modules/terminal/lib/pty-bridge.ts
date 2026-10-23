@@ -40,6 +40,11 @@ export async function openPty(
   if (paneId !== undefined && isCollabGuestLeaf(paneId)) {
     return openCollabGuestPty(paneId, handlers);
   }
+  if (cwd?.startsWith("remote://")) {
+    throw new Error(
+      "Resolve the remote project connection before starting a terminal.",
+    );
+  }
   const activeWorkspace =
     workspace ??
     (cwd ? workspaceForDocumentPath(currentWorkspaceEnv(), cwd) : currentWorkspaceEnv());
