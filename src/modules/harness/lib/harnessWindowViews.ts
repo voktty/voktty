@@ -185,7 +185,7 @@ export function captureHarnessWindowSnapshot(
   return captureCohorts(snapshot.cohorts, snapshot.selectedOwnerId, sessions);
 }
 
-function references(state: ViewState): Set<string> {
+export function harnessViewSessionReferences(state: ViewState): Set<string> {
   return new Set([
     ...state.report.referencedSessionIds,
     ...state.layout.tabs.flatMap((tab) => [
@@ -217,8 +217,10 @@ export function createHarnessWindowViews(
 
   const admitReferences = (state: ViewState, previous?: ViewState) => {
     if (!holds) return;
-    const admitted = previous ? references(previous) : new Set<string>();
-    for (const id of references(state))
+    const admitted = previous
+      ? harnessViewSessionReferences(previous)
+      : new Set<string>();
+    for (const id of harnessViewSessionReferences(state))
       if (
         !admitted.has(id) &&
         (holds.has("removing", id) || holds.has("transfer", id))
