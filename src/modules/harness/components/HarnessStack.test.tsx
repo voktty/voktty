@@ -28,9 +28,11 @@ const mounts = vi.hoisted(() => ({
   requests: vi.fn(),
   create: undefined as CreateHarnessNavigationView | undefined,
   registrations: vi.fn(),
+  failedOwnerId: null as number | null,
 }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  t: (key: string) => key,
 }));
 vi.mock("@/modules/surfaces", () => ({
   removeHarnessSurface: mounts.removeSurface,
@@ -64,6 +66,8 @@ vi.mock("./HarnessApp", () => ({
     onRegistered?: (view: HarnessNavigationView) => void;
   }) => {
     useLayoutEffect(() => {
+      if (mounts.failedOwnerId === surfaceOwnerId)
+        throw new Error("Harness reference is reserved");
       let current = true;
       const receipt = {
         ownerId: surfaceOwnerId ?? 1,
@@ -113,6 +117,7 @@ afterEach(async () => {
   container.remove();
   vi.clearAllMocks();
   mounts.create = undefined;
+  mounts.failedOwnerId = null;
   vi.unstubAllGlobals();
 });
 it("keeps Harness sessions mounted and releases native chat when the tab loses focus", async () => {
@@ -259,4 +264,39 @@ it("creates a headless view and confirms its live registration under StrictMode"
   await act(async () => root.render(null));
   expect(receipt?.isCurrent()).toBe(false);
   expect(await create("later", permit)).toBeNull();
+});
+
+it("isolates a rejected view registration without stopping the host or its sibling", async () => {
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await act(async () =>
+      root.render(<HarnessStack tabs={tabs} activeId={1} />),
+    );
+    mounts.failedOwnerId = 2;
+    await act(async () =>
+      root.render(
+        <HarnessStack tabs={[...tabs, { ...tabs[0], id: 2 }]} activeId={2} />,
+      ),
+    );
+    expect(mounts.runtime).toHaveBeenCalledOnce();
+    expect(mounts.stopRuntime).not.toHaveBeenCalled();
+    expect(container.querySelectorAll("[data-harness]")).toHaveLength(1);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain(
+      "feedback.tryAgain",
+    );
+    expect(container.textContent).not.toContain(
+      "Harness reference is reserved",
+    );
+    mounts.failedOwnerId = null;
+    const retry = container.querySelector<HTMLButtonElement>(
+      "[role=alert] button",
+    );
+    if (!retry) throw new Error("Missing view retry");
+    await act(async () => retry.click());
+    expect(container.querySelectorAll("[data-harness]")).toHaveLength(2);
+    expect(mounts.runtime).toHaveBeenCalledOnce();
+    expect(mounts.stopRuntime).not.toHaveBeenCalled();
+  } finally {
+    errors.mockRestore();
+  }
 });

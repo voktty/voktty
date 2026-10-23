@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useTranslation } from "@/modules/i18n";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
@@ -192,36 +193,55 @@ export function HarnessStack({
                 }
                 aria-hidden={!visible}
               >
-                <Suspense
-                  fallback={
-                    <div className="h-full w-full bg-background flex items-center justify-center text-muted-foreground font-mono text-xs">
-                      {t("harness.chrome.loadingAgentHarness")}
+                <ErrorBoundary
+                  name="Harness"
+                  fallback={(_error, reset) => (
+                    <div
+                      className="flex h-full flex-col items-center justify-center gap-3"
+                      role="alert"
+                    >
+                      <p>{t("feedback.somethingWentWrong")}</p>
+                      <button
+                        type="button"
+                        className="rounded border px-3 py-1"
+                        onClick={reset}
+                      >
+                        {t("feedback.tryAgain")}
+                      </button>
                     </div>
-                  }
+                  )}
                 >
-                  <HarnessWorkbench
-                    onRegistered={creation.registered}
-                    tab={tab}
-                    focused={visible && tab.id === activeId}
-                    visible={visible}
-                    onActivate={() => {
-                      if (!tabs.some((current) => current.id === tab.id))
-                        return false;
-                      if (onActivateTab) onActivateTab(tab.id);
-                      return !!onActivateTab || tab.id === activeId;
-                    }}
-                    projectRequest={
-                      visible && tab.id === activeId
-                        ? (projectRequest ?? undefined)
-                        : undefined
+                  <Suspense
+                    fallback={
+                      <div className="h-full w-full bg-background flex items-center justify-center text-muted-foreground font-mono text-xs">
+                        {t("harness.chrome.loadingAgentHarness")}
+                      </div>
                     }
-                    onProjectRequestHandled={(request) =>
-                      setProjectRequest((pending) =>
-                        pending === request ? null : pending,
-                      )
-                    }
-                  />
-                </Suspense>
+                  >
+                    <HarnessWorkbench
+                      onRegistered={creation.registered}
+                      tab={tab}
+                      focused={visible && tab.id === activeId}
+                      visible={visible}
+                      onActivate={() => {
+                        if (!tabs.some((current) => current.id === tab.id))
+                          return false;
+                        if (onActivateTab) onActivateTab(tab.id);
+                        return !!onActivateTab || tab.id === activeId;
+                      }}
+                      projectRequest={
+                        visible && tab.id === activeId
+                          ? (projectRequest ?? undefined)
+                          : undefined
+                      }
+                      onProjectRequestHandled={(request) =>
+                        setProjectRequest((pending) =>
+                          pending === request ? null : pending,
+                        )
+                      }
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             );
           })}

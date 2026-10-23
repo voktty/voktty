@@ -6,6 +6,8 @@ import {
 } from "@/modules/harness/lib/harnessSessionViews";
 import { mergeHarnessWindowWorkspaces } from "@/modules/harness/lib/harnessWindowWorkspace";
 import type { Session } from "@/modules/harness/lib/session";
+import { leafIds } from "@/modules/harness/lib/layout";
+import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import {
   collectWorkspaceSnapshot,
   type WorkspaceSnapshot,
@@ -182,7 +184,24 @@ export function captureHarnessWindowSnapshot(
   return captureCohorts(snapshot.cohorts, snapshot.selectedOwnerId, sessions);
 }
 
-export function createHarnessWindowViews() {
+function references(state: ViewState): Set<string> {
+  return new Set([
+    ...state.report.referencedSessionIds,
+    ...state.layout.tabs.flatMap((tab) => [
+      ...leafIds(tab.layout),
+      ...tab.editorPanes.flatMap((pane) =>
+        pane.files.flatMap((file) => [
+          ...(file.plan ? [file.plan.sessionId] : []),
+          ...(file.sessionChanges ? [file.sessionChanges.sessionId] : []),
+        ]),
+      ),
+    ]),
+  ]);
+}
+
+export function createHarnessWindowViews(
+  holds?: Pick<ReturnType<typeof createHarnessWindowSessionHolds>, "has">,
+) {
   const entries = new Map<
     number,
     { token: object; cohort: HarnessWindowViewCohort; key: string }
@@ -194,6 +213,24 @@ export function createHarnessWindowViews() {
     cohorts: Object.freeze([]),
     selectedOwnerId,
   });
+
+  const admitReferences = (state: ViewState, previous?: ViewState) => {
+    if (!holds) return;
+    const admitted = previous ? references(previous) : new Set<string>();
+    for (const id of references(state))
+      if (
+        !admitted.has(id) &&
+        (holds.has("removing", id) || holds.has("transfer", id))
+      )
+        throw new Error("Harness reference is reserved");
+    for (const [, id] of previous?.returnTargets ?? []) admitted.add(id);
+    for (const [, id] of state.returnTargets)
+      if (
+        !admitted.has(id) &&
+        (holds.has("removing", id) || holds.has("transfer", id))
+      )
+        throw new Error("Harness reference is reserved");
+  };
 
   const nextSequence = () => {
     if (sequence === Number.MAX_SAFE_INTEGER)
@@ -238,6 +275,8 @@ export function createHarnessWindowViews() {
       const entry = entries.get(ownerId);
       if (entry?.token !== token || !entry.cohort.active) return;
       const state = ownState(input);
+      if (entries.get(ownerId) !== entry) return;
+      admitReferences(state, entry.cohort.state);
       const key = JSON.stringify(state);
       if (key === entry.key) return;
       const cohort = Object.freeze({
@@ -280,6 +319,7 @@ export function createHarnessWindowViews() {
     register(ownerId: number, input: HarnessWindowViewInput) {
       validOwner(ownerId);
       const state = ownState(input);
+      admitReferences(state);
       const cohort = Object.freeze({
         ownerId,
         state,
@@ -311,6 +351,7 @@ export function createHarnessWindowViews() {
         (ownerId !== cohort.ownerId && entries.has(ownerId))
       )
         return null;
+      admitReferences(cohort.state);
       const restored = Object.freeze({
         ...cohort,
         ownerId,

@@ -96,8 +96,8 @@ export function HarnessWindowHost({
   onOpenReminder?: ConfirmedReminderSessionOpener;
   createNavigationView?: CreateHarnessNavigationView;
 }) {
-  const [views] = useState(createHarnessWindowViews);
   const [holds] = useState(createHarnessWindowSessionHolds);
+  const [views] = useState(() => createHarnessWindowViews(holds));
   const held = useSyncExternalStore(holds.subscribe, holds.getSnapshot);
   const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
