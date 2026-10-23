@@ -47,7 +47,9 @@ function uniqueCwds(tabs: Tab[]): string[] {
     }
     for (const c of n.children) walk(c);
   };
-  for (const t of tabs) if (t.kind === "terminal") walk(t.paneTree);
+  for (const t of tabs)
+    if (t.kind === "terminal" && t.workspaceEnv?.kind !== "ssh")
+      walk(t.paneTree);
   return [...set];
 }
 

@@ -53,6 +53,7 @@ import {
 import type { TabIconId } from "./tabIcon";
 import { updateTerminalCwd } from "./updateTerminalCwd";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
+import { isTerminalRestoreResolution } from "@/modules/tabs/lib/terminalProjectRestore";
 
 export { MAX_PANES_PER_TAB } from "@/modules/terminal/lib/paneLimits";
 
@@ -1837,9 +1838,21 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             ...(patch.workspaceEnv !== undefined && {
               workspaceEnv: patch.workspaceEnv,
               ...(x.projectCwd !== undefined &&
+              !isTerminalRestoreResolution(
+                x.workspaceEnv,
+                patch.workspaceEnv,
+                x.projectCwd,
+              ) &&
               workspaceScopeKey(patch.workspaceEnv) !==
                 workspaceScopeKey(x.workspaceEnv ?? LOCAL_WORKSPACE)
-                ? { projectCwd: undefined }
+                ? {
+                    projectCwd: undefined,
+                    workspaceEnv:
+                      patch.workspaceEnv.kind === "ssh" &&
+                      patch.workspaceEnv.restoredProjectCwd !== undefined
+                        ? { ...patch.workspaceEnv, restoredProjectCwd: undefined }
+                        : patch.workspaceEnv,
+                  }
                 : {}),
             }),
           };

@@ -40,7 +40,7 @@ async function connectRemoteEnv(
 ): Promise<Extract<WorkspaceEnv, { kind: "ssh" }>> {
   const initial = env.connection.initialDirectory?.trim();
   const rootCandidate =
-    env.root && env.root !== "." ? env.root : (initial || ".");
+    env.root && env.root !== "." ? env.root : initial || ".";
   const session = await openHeldRemoteSession(
     "workspace",
     env.connection.id,
@@ -175,6 +175,12 @@ export function useWorkspaceSwitcher({
 
   const switchWorkspace = useCallback(
     async (env: WorkspaceEnv): Promise<WorkspaceEnv | null> => {
+      if (
+        env.kind === "ssh" &&
+        env.restoredProjectCwd !== undefined &&
+        env.sessionId === undefined
+      )
+        return null;
       activationGenerationRef.current += 1;
       const isConnectedRemote =
         env.kind === "ssh" &&
@@ -239,6 +245,12 @@ export function useWorkspaceSwitcher({
 
   const adoptWorkspaceEnv = useCallback(
     async (env: WorkspaceEnv): Promise<WorkspaceEnv | null> => {
+      if (
+        env.kind === "ssh" &&
+        env.restoredProjectCwd !== undefined &&
+        env.sessionId === undefined
+      )
+        return null;
       activationGenerationRef.current += 1;
       let prepared = env;
       const target = workspaceTarget(env);
@@ -275,6 +287,12 @@ export function useWorkspaceSwitcher({
 
   const activateWorkspaceEnv = useCallback(
     async (env: WorkspaceEnv): Promise<WorkspaceEnv | null> => {
+      if (
+        env.kind === "ssh" &&
+        env.restoredProjectCwd !== undefined &&
+        env.sessionId === undefined
+      )
+        return null;
       const reusable = reusableWorkspaceEnv(env, workspaceEnv);
       if (reusable) {
         useWorkspaceEnvStore.getState().clearConnection(env);

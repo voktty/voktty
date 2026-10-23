@@ -41,6 +41,10 @@ vi.mock("@/modules/connections/model/remoteSshProfiles", () => ({
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import {
+  terminalRestoreWorkspace,
+  terminalRestorePath,
+} from "@/modules/tabs/lib/terminalProjectRestore";
+import {
   breadcrumbRemoteReadRoot,
   readBreadcrumbDirectories,
 } from "./breadcrumbDirectories";
@@ -159,6 +163,36 @@ it("keeps the view's actual SSH configuration after a saved same-ID host changes
     { host: "one.test", port: 22 },
     "/repo",
   );
+});
+
+it.each([uri("/repo"), "/repo", "C:/Work", "//server/share/app"])(
+  "resolves a restored descriptor for breadcrumb path %s without local fallback",
+  async (path) => {
+    const pending = terminalRestoreWorkspace(uri("/repo"));
+    await readBreadcrumbDirectories(path, pending, false);
+    expect(mocks.open).toHaveBeenCalledWith(
+      { host: "one.test", port: 22 },
+      expect.any(String),
+    );
+    expect(mocks.readDir).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 5 }),
+      terminalRestorePath(uri("/repo"), path),
+    );
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  },
+);
+
+it("reports an unavailable restored breadcrumb profile without using native directories", async () => {
+  mocks.profiles = [];
+  await expect(
+    readBreadcrumbDirectories(
+      "/repo",
+      terminalRestoreWorkspace(uri("/repo")),
+      false,
+    ),
+  ).rejects.toThrow("missing");
+  expect(mocks.invoke).not.toHaveBeenCalled();
+  expect(mocks.open).not.toHaveBeenCalled();
 });
 
 it("does not borrow a selected unrelated project or ownerless environment", async () => {

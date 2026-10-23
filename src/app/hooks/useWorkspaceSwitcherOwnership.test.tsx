@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useWorkspaceSwitcher } from "@/app/hooks/useWorkspaceSwitcher";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import type { Tab } from "@/modules/tabs";
+import { terminalRestoreWorkspace } from "@/modules/tabs/lib/terminalProjectRestore";
 
 const mocks = vi.hoisted(() => ({
   open: vi.fn(),
@@ -88,6 +89,19 @@ async function activate(current: WorkspaceEnv, requested: WorkspaceEnv) {
   });
   return result;
 }
+
+it("leaves pending project resolution to its terminal owner across activation paths", async () => {
+  const pending = terminalRestoreWorkspace("remote://voktty-ssh-build/srv/app");
+  await act(async () => root.render(<View current={ssh("/srv/other", 42)} />));
+  mocks.authorize.mockClear();
+  mocks.publish.mockClear();
+  await expect(controls.activateWorkspaceEnv(pending)).resolves.toBeNull();
+  await expect(controls.adoptWorkspaceEnv(pending)).resolves.toBeNull();
+  await expect(controls.switchWorkspace(pending)).resolves.toBeNull();
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.publish).not.toHaveBeenCalled();
+  expect(mocks.authorize).not.toHaveBeenCalled();
+});
 
 it.each(["/srv/app", "/srv/other"])(
   "preserves the requested native session for %s",

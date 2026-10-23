@@ -17,6 +17,7 @@ import {
 import {
   isSerializableTab,
   isSerializedHarnessTab,
+  remoteTerminalSnapshot,
   type SerializedNode,
   type SerializedTab,
   serializeTabs,
@@ -178,6 +179,11 @@ export function selectRestorableSession(
 }
 
 function safeTerminalTab(value: Extract<SerializedTab, { kind: "terminal" }>) {
+  if (value.remoteProject !== undefined) {
+    const remote = remoteTerminalSnapshot(value);
+    if (!remote) throw new Error("Invalid remote terminal snapshot.");
+    return remote;
+  }
   const { projectCwd, ...tab } = value;
   return {
     ...tab,
@@ -261,7 +267,14 @@ function validSerializedTab(value: unknown): value is SerializedTab {
   if (!value || typeof value !== "object") return false;
   const tab = value as Record<string, unknown>;
   if (tab.kind === "harness") return isSerializedHarnessTab(tab);
-  if (tab.kind === "terminal") return validSerializedNode(tab.tree);
+  if (tab.kind === "terminal")
+    return (
+      validSerializedNode(tab.tree) &&
+      (tab.remoteProject === undefined ||
+        remoteTerminalSnapshot(
+          tab as Extract<SerializedTab, { kind: "terminal" }>,
+        ) !== null)
+    );
   if (tab.kind === "editor" || tab.kind === "markdown") {
     return typeof tab.path === "string" && tab.path.length > 0;
   }

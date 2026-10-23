@@ -5,6 +5,7 @@ import {
 } from "@/modules/collab/lib/guestRuntime";
 import { consumeSnapshotBarrier } from "@/modules/terminal/lib/snapshotBarrier";
 import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
+import { reserveRestoredProjectTarget } from "@/modules/terminal/lib/restoreProjectTarget";
 import {
   currentWorkspaceEnv,
   type WorkspaceEnv,
@@ -42,10 +43,18 @@ export async function openPty(
   const owned =
     paneId === undefined
       ? undefined
-      : ownedPtyTargets.get(paneId) ??
+      : (ownedPtyTargets.get(paneId) ??
         (workspace && !isCollabGuestLeaf(paneId)
-          ? ownedPtyTargets.claimSibling(paneId, workspace, cwd)
-          : undefined);
+          ? (ownedPtyTargets.claimSibling(paneId, workspace, cwd) ??
+            (workspace.kind === "ssh" &&
+            workspace.restoredProjectCwd !== undefined
+              ? reserveRestoredProjectTarget(
+                  paneId,
+                  workspace.restoredProjectCwd,
+                  cwd,
+                )
+              : undefined))
+          : undefined));
   if (owned && paneId !== undefined) {
     if (isCollabGuestLeaf(paneId))
       throw new Error("Terminal resource has conflicting owners.");
@@ -99,7 +108,9 @@ async function openNativePty(
   }
   const activeWorkspace =
     workspace ??
-    (cwd ? workspaceForDocumentPath(currentWorkspaceEnv(), cwd) : currentWorkspaceEnv());
+    (cwd
+      ? workspaceForDocumentPath(currentWorkspaceEnv(), cwd)
+      : currentWorkspaceEnv());
   if (activeWorkspace.kind === "serial") {
     const onData = new Channel<ArrayBuffer>();
     const onExit = new Channel<number>();

@@ -53,6 +53,7 @@ export type WorkspaceEnv =
       connection: SshWorkspaceConnection;
       root: string;
       sessionId?: number;
+      restoredProjectCwd?: string;
     }
   | ({
       kind: "serial";
@@ -252,6 +253,10 @@ export function currentWorkspaceEnv(): WorkspaceEnv {
 export function workspaceEnvForNativePty(
   env: WorkspaceEnv,
 ): NativePtyWorkspaceEnv {
+  if (env.kind === "ssh" && env.restoredProjectCwd !== undefined)
+    throw new Error(
+      "Resolve the remote project before using a native workspace.",
+    );
   if (env.kind !== "docker") return env;
   return { kind: "docker", ...env.connection };
 }
@@ -282,6 +287,10 @@ export async function getWslHome(distro: string): Promise<string> {
 
 export function persistentWorkspaceEnv(env: WorkspaceEnv): WorkspaceEnv {
   if (env.kind !== "ssh") return env;
-  const { sessionId: _sessionId, ...persisted } = env;
+  const {
+    sessionId: _sessionId,
+    restoredProjectCwd: _restoredProjectCwd,
+    ...persisted
+  } = env;
   return persisted;
 }

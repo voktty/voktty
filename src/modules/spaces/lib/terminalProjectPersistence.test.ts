@@ -97,9 +97,9 @@ it("leaves legacy standalone terminals unassociated instead of inferring a proje
   expect(restored).not.toHaveProperty("projectCwd");
 });
 
-it("keeps SSH and private terminals excluded while project-aware restore is not connected", () => {
+it("keeps unassociated SSH and private terminals excluded", () => {
   const ssh: TerminalTab = {
-    ...terminal("remote://voktty-ssh-build/srv/app"),
+    ...terminal(),
     workspaceEnv: {
       kind: "ssh",
       root: "/srv/app",

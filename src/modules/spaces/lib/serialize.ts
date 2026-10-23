@@ -2,6 +2,11 @@ import { t } from "@/modules/i18n";
 import { isTabIconId, type TabIconId } from "@/modules/tabs/lib/tabIcon";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import {
+  terminalRestorePath,
+  terminalRestoreProject,
+  terminalRestoreWorkspace,
+} from "@/modules/tabs/lib/terminalProjectRestore";
+import {
   asWorkspaceScopeId,
   createTabIdentity,
   createTabKey,
@@ -36,6 +41,7 @@ export type SerializedTab = (
   | {
       kind: "terminal";
       projectCwd?: string;
+      remoteProject?: string;
       tree: SerializedNode;
       blocks?: boolean;
       customTitle?: string;
@@ -97,7 +103,24 @@ function serializeNode(node: PaneNode, activeLeafId: number): SerializedNode {
 }
 
 export function isSerializableTab(tab: Tab): boolean {
-  if ("workspaceEnv" in tab && tab.workspaceEnv?.kind === "ssh") return false;
+  if ("workspaceEnv" in tab && tab.workspaceEnv?.kind === "ssh") {
+    if (tab.kind !== "terminal") return false;
+    const project = terminalRestoreProject(tab.projectCwd);
+    if (
+      !project ||
+      (project.environmentId.startsWith("voktty-ssh-") &&
+        project.profileId !== tab.workspaceEnv.connection.id)
+    )
+      return false;
+    if (
+      !remoteTerminalSnapshot({
+        kind: "terminal",
+        remoteProject: project.projectCwd,
+        tree: serializeNode(tab.paneTree, tab.activeLeafId),
+      })
+    )
+      return false;
+  }
   switch (tab.kind) {
     case "terminal":
       return !tab.private && !tab.collaboration;
@@ -108,6 +131,64 @@ export function isSerializableTab(tab: Tab): boolean {
       return true;
     default:
       return false;
+  }
+}
+
+export function remoteTerminalSnapshot(
+  value: Extract<SerializedTab, { kind: "terminal" }>,
+):
+  | (Extract<SerializedTab, { kind: "terminal" }> & { remoteProject: string })
+  | null {
+  const project = terminalRestoreProject(value.remoteProject);
+  if (!project) return null;
+  let leaves = 0;
+  const objects = new Set<object>();
+  const copyTree = (node: SerializedNode, depth = 0): SerializedNode => {
+    if (!node || typeof node !== "object" || depth > 64 || objects.has(node))
+      throw new Error("Invalid terminal layout.");
+    objects.add(node);
+    if (node.kind === "leaf") {
+      if (++leaves > 8) throw new Error("Terminal pane limit reached.");
+      return {
+        kind: "leaf",
+        cwd: terminalRestorePath(project.projectCwd, node.cwd),
+        ...(node.active === true && { active: true }),
+      };
+    }
+    if (
+      node.kind !== "split" ||
+      (node.dir !== "row" && node.dir !== "col") ||
+      !Array.isArray(node.children) ||
+      node.children.length === 0 ||
+      node.children.length > 8
+    )
+      throw new Error("Invalid terminal layout.");
+    return {
+      kind: "split",
+      dir: node.dir,
+      children: node.children.map((child) => copyTree(child, depth + 1)),
+    };
+  };
+  try {
+    return {
+      kind: "terminal",
+      remoteProject: project.projectCwd,
+      projectCwd: project.projectCwd,
+      tree: copyTree(value.tree),
+      ...(value.blocks === true && { blocks: true }),
+      ...(typeof value.customTitle === "string" &&
+        value.customTitle.length <= 4096 && { customTitle: value.customTitle }),
+      ...(typeof value.tabKey === "string" && { tabKey: value.tabKey }),
+      ...(typeof value.workspaceScopeId === "string" && {
+        workspaceScopeId: value.workspaceScopeId,
+      }),
+      ...(typeof value.color === "string" &&
+        value.color && { color: value.color }),
+      ...(isTabIconId(value.icon) && { icon: value.icon }),
+      ...(value.locked === true && { locked: true }),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -129,6 +210,15 @@ function serializeTab(tab: Tab): SerializedTab | null {
         ...(tab.sessionId !== undefined && { sessionId: tab.sessionId }),
       };
     case "terminal":
+      if (tab.workspaceEnv?.kind === "ssh")
+        return remoteTerminalSnapshot({
+          kind: "terminal",
+          ...baseProps,
+          remoteProject: tab.projectCwd,
+          tree: serializeNode(tab.paneTree, tab.activeLeafId),
+          blocks: tab.blocks,
+          customTitle: tab.customTitle,
+        });
       return {
         kind: "terminal",
         ...terminalProjectMetadata(
@@ -257,7 +347,17 @@ function hydrateTab(
         ...(s.locked === true ? { locked: true } : {}),
       };
     case "terminal": {
-      const { tree, activeLeafId, firstLeafCwd } = hydrateTree(s.tree, allocId);
+      const remote =
+        s.remoteProject !== undefined ? remoteTerminalSnapshot(s) : null;
+      if (s.remoteProject !== undefined && !remote) return null;
+      const workspace = remote
+        ? terminalRestoreWorkspace(remote.remoteProject)
+        : s.workspaceEnv;
+      if (remote) s = remote;
+      const { tree, activeLeafId, firstLeafCwd } = hydrateTree(
+        remote?.tree ?? s.tree,
+        allocId,
+      );
       const title =
         s.customTitle ??
         (firstLeafCwd ? basename(firstLeafCwd) : s.blocks ? "blocks" : "shell");
@@ -266,8 +366,8 @@ function hydrateTab(
         ...hydrateIdentity(s, spaceId),
         kind: "terminal",
         ...terminalProjectMetadata(
-          s.projectCwd,
-          s.workspaceEnv ?? fallbackWorkspaceEnv,
+          remote?.projectCwd ?? s.projectCwd,
+          workspace ?? fallbackWorkspaceEnv,
         ),
         spaceId,
         cold: true,
@@ -277,7 +377,7 @@ function hydrateTab(
         activeLeafId,
         ...(s.blocks && { blocks: true }),
         ...(s.customTitle !== undefined && { customTitle: s.customTitle }),
-        ...(s.workspaceEnv && { workspaceEnv: s.workspaceEnv }),
+        ...(workspace && { workspaceEnv: workspace }),
         ...(s.color ? { color: s.color } : {}),
         ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
         ...(s.locked ? { locked: true } : {}),

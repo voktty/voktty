@@ -16,6 +16,7 @@ import {
   useHarnessProjectEnvStore,
 } from "@/modules/harness/lib/harnessEnvStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { terminalRestorePath } from "@/modules/tabs/lib/terminalProjectRestore";
 import {
   type WorkspaceEnv,
   workspaceEnvForNativePty,
@@ -95,6 +96,14 @@ export async function readBreadcrumbDirectories(
   workspace: WorkspaceEnv | undefined,
   showHidden: boolean,
 ): Promise<string[]> {
+  if (
+    workspace?.kind === "ssh" &&
+    workspace.restoredProjectCwd !== undefined &&
+    workspace.sessionId === undefined
+  ) {
+    path = terminalRestorePath(workspace.restoredProjectCwd, path);
+    workspace = undefined;
+  }
   const ssh = sshWorkspaceForRead(path, workspace);
   if (ssh) {
     const hostPath = parseRemotePath(path)?.hostPath ?? path;
