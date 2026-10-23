@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
-import { act, createElement, StrictMode } from "react";
+import { act, createElement, StrictMode, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import type { Session } from "@/modules/harness/lib/session";
 import type { HarnessEvent } from "@/modules/harness/lib/harness";
+import { createHarnessProjectReservations } from "@/modules/harness/lib/harnessProjectReservations";
+import { createPersistenceAdmission } from "@/modules/harness/lib/persistenceAdmission";
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
@@ -82,18 +84,27 @@ function chat(id: string, patch: Partial<Session> = {}): Session {
 }
 let roots: Root[] = [];
 let containers: HTMLElement[] = [];
-function mount(sessions: Session[]) {
+function mount(
+  sessions: Session[],
+  projects = createHarnessProjectReservations(),
+) {
   let engine!: ReturnType<typeof useHarnessSessionEngine>;
   const container = document.createElement("div");
   containers.push(container);
   const root = createRoot(container);
   roots.push(root);
   function Harness() {
+    const reservationRevision = useSyncExternalStore(
+      projects.subscribe,
+      projects.getSnapshot,
+    );
     engine = useHarnessSessionEngine({
       initialSessions: () => sessions,
       isForeground: () => true,
       isRemoving: () => false,
       isSwitching: () => false,
+      isProjectReserved: projects.has,
+      reservationRevision,
     });
     return null;
   }
@@ -135,6 +146,126 @@ afterEach(() => {
 });
 
 describe("instance-local Harness session execution", () => {
+  function projectFixture() {
+    const projects = createHarnessProjectReservations();
+    const owner = createPersistenceAdmission().createOwner();
+    const permit = owner.capture();
+    if (!permit) throw new Error("Missing project permit");
+    return { projects, permit };
+  }
+
+  it("rejects reserved project admissions and relocation while allowing unrelated execution", async () => {
+    const f = projectFixture();
+    const engine = mount(
+      [chat("held"), chat("other", { cwd: "/other" })],
+      f.projects,
+    );
+    act(() => {
+      f.projects.reserve("/repo", f.permit);
+    });
+    act(() => {
+      expect(() => engine().admitSession(chat("new"), "immediate")).toThrow(
+        "reserved",
+      );
+      expect(() =>
+        engine().updateSession(
+          "other",
+          (session) => ({ ...session, cwd: "/repo" }),
+          "immediate",
+        ),
+      ).toThrow("reserved");
+      engine().onSubmit("held", "blocked");
+      expect(engine().onCompactContext("held")).toBe(false);
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.compact).not.toHaveBeenCalled();
+    expect(engine().readSession("new")).toBeUndefined();
+    expect(engine().readSession("other")?.cwd).toBe("/other");
+    await act(async () => {
+      engine().onSubmit("other", "allowed");
+    });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send.mock.calls[0][0].sessionId).toBe("other");
+  });
+
+  it("preserves running delivery and stop while its project is reserved", async () => {
+    const f = projectFixture();
+    let sink!: (event: HarnessEvent) => void;
+    mocks.send.mockImplementation((input) => {
+      sink = input.onEvent;
+      return new Promise(() => {});
+    });
+    const engine = mount([chat("held")], f.projects);
+    await act(async () => {
+      engine().onSubmit("held", "start");
+    });
+    act(() => {
+      f.projects.reserve("/repo", f.permit);
+      sink({ type: "status", text: "still running" });
+      engine().flushHarnessEvents();
+    });
+    expect(
+      engine().sessions[0].blocks.some(
+        (block) => block.text === "still running",
+      ),
+    ).toBe(true);
+    act(() => engine().onStop("held"));
+    expect(mocks.cancel).toHaveBeenCalledOnce();
+    expect(engine().sessions[0].busy).toBe(false);
+  });
+
+  it("rearms queued work once after reservation release without dropping its head", async () => {
+    const f = projectFixture();
+    const receipt = f.projects.reserve("/repo", f.permit);
+    if (!receipt) throw new Error("Missing project reservation");
+    const engine = mount(
+      [
+        chat("queued", {
+          queuedMessages: [{ id: "head", text: "next", attachments: [] }],
+        }),
+      ],
+      f.projects,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(engine().sessions[0].queuedMessages?.[0].id).toBe("head");
+    act(() => receipt.release());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(engine().sessions[0].queuedMessages).toBeUndefined();
+  });
+
+  it("vetoes queued relocation at application without retiring the engine", () => {
+    const f = projectFixture();
+    const original = chat("one");
+    const engine = mount([original], f.projects);
+    act(() => {
+      engine().updateSession("one", (session) => ({
+        ...session,
+        title: "queued before reservation",
+      }));
+      engine().updateSession("one", (session) => ({
+        ...session,
+        cwd: "/other",
+      }));
+      f.projects.reserve("/other", f.permit);
+    });
+    expect(engine().sessions[0].cwd).toBe(original.cwd);
+    expect(engine().sessions[0].title).toBe("queued before reservation");
+    act(() =>
+      engine().updateSession(
+        "one",
+        (session) => ({ ...session, title: "still usable" }),
+        "immediate",
+      ),
+    );
+    expect(engine().sessions[0].title).toBe("still usable");
+  });
+
   it("preserves queued React edits and admission when an immediate event batch is a no-op", async () => {
     let sink!: (event: HarnessEvent) => void;
     mocks.send.mockImplementation((input) => {

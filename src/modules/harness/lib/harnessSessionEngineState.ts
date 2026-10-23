@@ -1,5 +1,11 @@
 import type { Session } from "@/modules/harness/lib/session";
 
+export class HarnessProjectReservedError extends Error {
+  constructor() {
+    super("Harness project is reserved");
+  }
+}
+
 export type HarnessSessionDelta =
   | { kind: "admit"; session: Session }
   | {
@@ -18,11 +24,14 @@ export type HarnessSessionDelta =
 export function applyHarnessSessionDeltas(
   sessions: Session[],
   deltas: readonly HarnessSessionDelta[],
+  isProjectReserved: (path: string) => boolean = () => false,
 ): Session[] {
   let result = sessions;
   for (const delta of deltas) {
     if (delta.kind === "admit") {
       if (!result.some((session) => session.id === delta.session.id)) {
+        if (isProjectReserved(delta.session.cwd))
+          throw new HarnessProjectReservedError();
         result = [...result, delta.session];
       }
       continue;
@@ -42,6 +51,11 @@ export function applyHarnessSessionDeltas(
         "Harness session identity cannot change during an update.",
       );
     if (next === current) continue;
+    if (
+      next.cwd !== current.cwd &&
+      (isProjectReserved(current.cwd) || isProjectReserved(next.cwd))
+    )
+      throw new HarnessProjectReservedError();
     result = result.slice();
     result[index] = next;
   }

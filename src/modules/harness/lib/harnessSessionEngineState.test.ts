@@ -19,6 +19,87 @@ function session(id: string): Session {
 }
 
 describe("Harness engine affected-ID mutations", () => {
+  it("rejects new admissions to a reserved project without mutating the source", () => {
+    const existing = session("existing");
+    const source = [existing];
+    expect(() =>
+      applyHarnessSessionDeltas(
+        source,
+        [
+          { kind: "remove", id: "existing" },
+          { kind: "admit", session: session("new") },
+        ],
+        () => true,
+      ),
+    ).toThrow("reserved");
+    expect(source).toEqual([existing]);
+  });
+
+  it("rejects relocation into or out of a reserved project after the reducer", () => {
+    const existing = session("existing");
+    for (const reserved of ["/repo", "/other"]) {
+      expect(() =>
+        applyHarnessSessionDeltas(
+          [existing],
+          [
+            {
+              kind: "update",
+              id: existing.id,
+              update: (current) => ({ ...current, cwd: "/other" }),
+            },
+          ],
+          (path) => path === reserved,
+        ),
+      ).toThrow("reserved");
+    }
+    expect(existing.cwd).toBe("/repo");
+  });
+
+  it("allows current transcript updates, duplicate admission and removal in a reserved project", () => {
+    const existing = session("existing");
+    expect(
+      applyHarnessSessionDeltas(
+        [existing],
+        [
+          { kind: "admit", session: session("existing") },
+          {
+            kind: "update",
+            id: existing.id,
+            update: (current) => ({ ...current, title: "streaming" }),
+          },
+        ],
+        () => true,
+      )[0].title,
+    ).toBe("streaming");
+    expect(
+      applyHarnessSessionDeltas(
+        [existing],
+        [{ kind: "remove", id: existing.id }],
+        () => true,
+      ),
+    ).toEqual([]);
+  });
+
+  it("checks the current reservation after a reentrant reducer", () => {
+    let reserved = false;
+    expect(() =>
+      applyHarnessSessionDeltas(
+        [session("one")],
+        [
+          {
+            kind: "update",
+            id: "one",
+            update: (current) => {
+              reserved = true;
+              return { ...current, cwd: "/other" };
+            },
+          },
+        ],
+        () => reserved,
+      ),
+    ).toThrow("reserved");
+  });
+
   it("never replaces unrelated concurrent sessions with a captured workspace", () => {
     const a = session("a");
     const b = session("b");

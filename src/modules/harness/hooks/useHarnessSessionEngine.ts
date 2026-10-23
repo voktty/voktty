@@ -126,6 +126,7 @@ import { HarnessEventQueue } from "@/modules/harness/lib/harnessFlush";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyHarnessSessionDeltas,
+  HarnessProjectReservedError,
   type HarnessSessionDelta,
 } from "@/modules/harness/lib/harnessSessionEngineState";
 
@@ -135,6 +136,8 @@ export type HarnessSessionEngineInputs = {
   isForeground: (id: string) => boolean;
   isRemoving: (id: string) => boolean;
   isSwitching: (id: string) => boolean;
+  isProjectReserved?: (path: string) => boolean;
+  reservationRevision?: object;
 };
 
 export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
@@ -167,11 +170,24 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       deltas: readonly HarnessSessionDelta[],
       scheduling: HarnessSessionScheduling = "scheduled",
     ) => {
+      for (const delta of deltas)
+        if (
+          delta.kind === "admit" &&
+          !sessionsRef.current.some(
+            (session) => session.id === delta.session.id,
+          ) &&
+          inputsRef.current.isProjectReserved?.(delta.session.cwd)
+        )
+          throw new HarnessProjectReservedError();
       const apply = (previous: typeof state) => {
         let nextSessions = previous.sessions;
         let nextOwners = previous.owners;
         for (const delta of deltas) {
-          const next = applyHarnessSessionDeltas(nextSessions, [delta]);
+          const next = applyHarnessSessionDeltas(
+            nextSessions,
+            [delta],
+            inputsRef.current.isProjectReserved,
+          );
           if (next === nextSessions) continue;
           if (delta.kind === "remove" || delta.kind === "admit") {
             nextOwners = new Map(nextOwners);
@@ -191,7 +207,15 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         sessionsRef.current = next.sessions;
         owners.current = next.owners;
         setState(next);
-      } else setState(apply);
+      } else
+        setState((previous) => {
+          try {
+            return apply(previous);
+          } catch (error) {
+            if (error instanceof HarnessProjectReservedError) return previous;
+            throw error;
+          }
+        });
     },
     [],
   );
@@ -407,6 +431,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       flushHarnessEvents();
       const storedCurrent = sessionsRef.current.find((s) => s.id === sessionId);
       if (!storedCurrent) return;
+      if (inputsRef.current.isProjectReserved?.(storedCurrent.cwd)) return;
       const current = options?.buildTarget
         ? withPlanBuildTarget(storedCurrent, options.buildTarget)
         : storedCurrent;
@@ -1055,6 +1080,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     )
     .map((session) => session.id)
     .join("\n");
+  const reservationRevision = inputs.reservationRevision;
 
   useEffect(() => {
     if (!autoContinueKey) return;
@@ -1062,6 +1088,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     // Delay past React StrictMode's dev remount so Continue is not claimed
     // against a discarded tree (sessionStorage also survives Vite reloads).
     const timer = window.setTimeout(() => {
+      if (inputsRef.current.reservationRevision !== reservationRevision) return;
       for (const id of ids) {
         const session = sessionsRef.current.find((entry) => entry.id === id);
         if (
@@ -1075,7 +1102,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [autoContinueKey, onSubmit]);
+  }, [autoContinueKey, onSubmit, reservationRevision]);
 
   useEffect(() => {
     const timers: number[] = [];
@@ -1104,6 +1131,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       timers.push(
         window.setTimeout(() => {
           queueDispatchingRef.current.delete(session.id);
+          if (inputsRef.current.reservationRevision !== reservationRevision)
+            return;
           const latest = sessionsRef.current.find(
             (entry) => entry.id === session.id,
           );
@@ -1129,7 +1158,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       for (const timer of timers) window.clearTimeout(timer);
       for (const id of scheduled) queueDispatchingRef.current.delete(id);
     };
-  }, [onSubmit, sessions, updateSessions]);
+  }, [onSubmit, sessions, updateSessions, reservationRevision]);
 
   const onDeleteQueuedMessage = useCallback(
     (sessionId: string, messageId: string) => {
@@ -1212,7 +1241,12 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       const current = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
-      if (!current || current.busy) return false;
+      if (
+        !current ||
+        current.busy ||
+        inputsRef.current.isProjectReserved?.(current.cwd)
+      )
+        return false;
       if (!canCompactHarnessContext(current.harness)) {
         updateSession(
           sessionId,

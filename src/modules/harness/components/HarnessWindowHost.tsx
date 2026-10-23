@@ -57,6 +57,7 @@ import { normalizeHarnessSessionViewReport } from "@/modules/harness/lib/harness
 import { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import { createHarnessWindowViewRemoval } from "@/modules/harness/lib/harnessWindowViewRemoval";
 import { createInboxSessionOperations } from "@/modules/harness/lib/inboxSessionOperations";
+import { createHarnessProjectReservations } from "@/modules/harness/lib/harnessProjectReservations";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 
 type WindowRuntime = {
@@ -65,6 +66,7 @@ type WindowRuntime = {
   holds: ReturnType<typeof createHarnessWindowSessionHolds>;
   removals: ReturnType<typeof createHarnessWindowViewRemoval>;
   inboxOperations: ReturnType<typeof createInboxSessionOperations>;
+  projects: ReturnType<typeof createHarnessProjectReservations>;
   persistence: ReturnType<typeof useWindowPersistenceAdmission>;
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
   automations: ReturnType<typeof useHarnessAutomations>;
@@ -106,6 +108,7 @@ export function HarnessWindowHost({
     createHarnessWindowViewRemoval(views, holds),
   );
   const [inboxOperations] = useState(createInboxSessionOperations);
+  const [projects] = useState(createHarnessProjectReservations);
   const removalLifetime = useRef<object | null>(null);
   useEffect(() => {
     const owner = {};
@@ -117,10 +120,15 @@ export function HarnessWindowHost({
         if (removalLifetime.current === null) {
           removals.dispose();
           inboxOperations.dispose();
+          projects.dispose();
         }
       });
     };
-  }, [removals, inboxOperations]);
+  }, [removals, inboxOperations, projects]);
+  const projectReservations = useSyncExternalStore(
+    projects.subscribe,
+    projects.getSnapshot,
+  );
   const held = useSyncExternalStore(holds.subscribe, holds.getSnapshot);
   const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
@@ -131,6 +139,8 @@ export function HarnessWindowHost({
   const engine = useHarnessSessionEngine({
     initialSessions: () => imported,
     isForeground: views.isForeground,
+    isProjectReserved: projects.has,
+    reservationRevision: projectReservations,
     isRemoving: (id) => holds.has("removing", id) || views.isRemoving(id),
     isSwitching: (id) =>
       holds.has("opening", id) ||
@@ -154,6 +164,15 @@ export function HarnessWindowHost({
       ]);
       if (ids.size > 256)
         throw new RangeError("Harness session capacity exceeded");
+      if (
+        seeds.some(
+          (session) =>
+            !canonicalSessions.current.some(
+              (existing) => existing.id === session.id,
+            ) && projects.has(session.cwd),
+        )
+      )
+        return false;
       registerBuiltinHarnesses();
       for (const session of seeds) {
         if (!isCurrent()) return false;
@@ -169,7 +188,7 @@ export function HarnessWindowHost({
       }
       return isCurrent();
     },
-    [admitSession, canonicalSessions],
+    [admitSession, canonicalSessions, projects],
   );
   const busyIds = useMemo(
     () =>
@@ -298,6 +317,10 @@ export function HarnessWindowHost({
   const skipForgetSessionIds = useRef(new Set<string>());
   const loadedSessionCache = useRef(new Map<string, Session>());
   const { applySessionDeltas } = engine;
+  const retentionRevision = useMemo(
+    () => ({ held, projectReservations }),
+    [held, projectReservations],
+  );
   const mutateIdleSessions = useCallback(
     (update: SetStateAction<Session[]>) => {
       const before = sessionsRef.current;
@@ -336,12 +359,13 @@ export function HarnessWindowHost({
     isRetained: (id) =>
       !workspaceReady.current ||
       holds.hasAny(id) ||
+      projects.has(engine.readSession(id)?.cwd ?? "") ||
       views
         .getSnapshot()
         .cohorts.some((cohort) =>
           cohort.state.report.referencedSessionIds.includes(id),
         ),
-    retentionRevision: held,
+    retentionRevision,
   });
   useHarnessWindowPersistence({
     getOwner: persistence.getOwner,
@@ -371,6 +395,7 @@ export function HarnessWindowHost({
         holds,
         removals,
         inboxOperations,
+        projects,
         persistence,
         transcripts,
         automations,
