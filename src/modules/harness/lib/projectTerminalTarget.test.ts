@@ -71,6 +71,26 @@ beforeEach(() => {
 });
 
 describe("project terminal target", () => {
+  it("does not enter connection work for a retired request", async () => {
+    expect(
+      await openProjectTerminalTarget(cwd, undefined, () => false),
+    ).toBeUndefined();
+    expect(mocks.acquire).not.toHaveBeenCalled();
+    expect(mocks.probe).not.toHaveBeenCalled();
+  });
+
+  it("does not acquire a helper after retirement during an unavailable probe", async () => {
+    let current = true;
+    const pending = deferred<typeof probe>();
+    mocks.probe.mockReturnValueOnce(pending.promise);
+    const picker = vi.fn();
+    const opening = openProjectTerminalTarget(cwd, picker, () => current);
+    current = false;
+    pending.resolve({ supported: false, sessions: [] });
+    expect(await opening).toBeUndefined();
+    expect(picker).not.toHaveBeenCalled();
+    expect(mocks.acquire).not.toHaveBeenCalled();
+  });
   it("returns its own lease and resolved host path without releasing ownership", async () => {
     const target = await openProjectTerminalTarget(cwd);
     expect(target).toEqual({

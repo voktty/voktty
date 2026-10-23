@@ -40,7 +40,9 @@ export type ProjectTerminalTarget = {
 export async function openProjectTerminalTarget(
   cwd: string,
   multiplexerPicker?: SshMultiplexerPicker,
+  isCurrent: () => boolean = () => true,
 ): Promise<ProjectTerminalTarget | undefined> {
+  if (!isCurrent()) return undefined;
   const remotePath = parseRemotePath(cwd);
   if (!remotePath) {
     if (cwd.startsWith("remote://")) {
@@ -87,8 +89,10 @@ export async function openProjectTerminalTarget(
     const probe = await probeSshMultiplexer({ ...capturedProfile }).catch(
       () => undefined,
     );
+    if (!isCurrent()) return undefined;
     if (probe && shouldPickSshMultiplexer(capturedProfile, probe)) {
       const selection = await multiplexerPicker({ ...capturedProfile }, probe);
+      if (!isCurrent()) return undefined;
       if (!selection) throw new Error("SSH terminal connection was canceled.");
       selectedProfile = {
         ...capturedProfile,
@@ -97,6 +101,7 @@ export async function openProjectTerminalTarget(
     }
   }
 
+  if (!isCurrent()) return undefined;
   const lease = await remoteSessions.acquire(
     { profileId: capturedProfile.id, root },
     connection,

@@ -300,6 +300,8 @@ import { useAppCloseGuard } from "./hooks/useAppCloseGuard";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
 import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
+import { useProjectTerminalRequests } from "@/app/hooks/useProjectTerminalRequests";
+import type { SshMultiplexerSelection } from "@/modules/ssh/multiplexerSelection";
 
 const RIGHT_PANEL_DEFAULT_WIDTH = 280;
 const RIGHT_PANEL_MIN_WIDTH = 180;
@@ -1692,6 +1694,29 @@ function DesktopApp() {
     useState<SshConnection | null>(null);
   const [sessionPickerProbe, setSessionPickerProbe] =
     useState<RemoteMultiplexerProbe | null>(null);
+  const projectPickerRef = useRef<{
+    owner: object;
+    resolve: (selection: SshMultiplexerSelection | null) => void;
+  } | null>(null);
+  const cancelProjectPicker = useCallback((owner?: object) => {
+    const pending = projectPickerRef.current;
+    if (!pending || (owner !== undefined && pending.owner !== owner)) return;
+    projectPickerRef.current = null;
+    setSessionPickerOpen(false);
+    pending.resolve(null);
+  }, []);
+  const pickProjectMultiplexer = useCallback(
+    (owner: object, connection: SshConnection, probe: RemoteMultiplexerProbe) => {
+      cancelProjectPicker();
+      return new Promise<SshMultiplexerSelection | null>((resolve) => {
+        projectPickerRef.current = { owner, resolve };
+        setSessionPickerConn(connection);
+        setSessionPickerProbe(probe);
+        setSessionPickerOpen(true);
+      });
+    },
+    [cancelProjectPicker],
+  );
   const [serialDialogOpen, setSerialDialogOpen] = useState(false);
   const [guestConnectOpen, setGuestConnectOpen] = useState(false);
   const [hostShareOpen, setHostShareOpen] = useState(false);
@@ -1786,6 +1811,7 @@ function DesktopApp() {
               hasMultiple ||
               hasAttached
             ) {
+              cancelProjectPicker();
               setSessionPickerConn(conn);
               setSessionPickerProbe(probe);
               setSessionPickerOpen(true);
@@ -1798,8 +1824,21 @@ function DesktopApp() {
       }
       await startSshConnection(conn, openTab);
     },
-    [startSshConnection],
+    [cancelProjectPicker, startSshConnection],
   );
+
+  useProjectTerminalRequests({
+    source: activeTab,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    projectCwd: activeTab?.kind === "harness" ? activeHarnessCwd : undefined,
+    newTab,
+    getTab,
+    closeTab,
+    pick: pickProjectMultiplexer,
+    setActiveSpaceForNewTabs,
+    cancelPicker: cancelProjectPicker,
+    onError: () => toast.error(t("feedback.remoteSessionFailed")),
+  });
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -2272,11 +2311,6 @@ function DesktopApp() {
         void handleDroppedPath(custom.detail);
       }
     };
-    const terminalHandler = (e: Event) => {
-      const custom = e as CustomEvent<{ cwd?: string }>;
-      const cwd = custom.detail?.cwd;
-      newTab(cwd);
-    };
     const gitGraphHandler = (e: Event) => {
       const custom = e as CustomEvent<{
         repoRoot?: string;
@@ -2293,21 +2327,15 @@ function DesktopApp() {
       }
     };
     window.addEventListener("voktty:open-dropped-path", handler);
-    window.addEventListener("voktty:open-new-terminal-tab", terminalHandler);
     window.addEventListener("voktty:open-git-graph", gitGraphHandler);
     return () => {
       window.removeEventListener("voktty:open-dropped-path", handler);
-      window.removeEventListener(
-        "voktty:open-new-terminal-tab",
-        terminalHandler,
-      );
       window.removeEventListener("voktty:open-git-graph", gitGraphHandler);
     };
   }, [
     explorerRoot,
     handleDroppedPath,
     launchCwd,
-    newTab,
     openCommitHistoryTab,
   ]);
 
@@ -5100,6 +5128,7 @@ function DesktopApp() {
     [sourceControl, workspaceSearchDirtyPaths, openGitDiffTab],
   );
 
+  const renderedProjectPicker = projectPickerRef.current;
   const shell = (
     <ThemeProvider>
       <TooltipProvider>
@@ -5817,7 +5846,17 @@ function DesktopApp() {
             onOpenChange={setSessionPickerOpen}
             connection={sessionPickerConn}
             probe={sessionPickerProbe}
+            onCancel={() => {
+              if (renderedProjectPicker)
+                cancelProjectPicker(renderedProjectPicker.owner);
+            }}
             onSelect={(action, sessionName) => {
+              if (projectPickerRef.current !== renderedProjectPicker) return;
+              if (renderedProjectPicker) {
+                projectPickerRef.current = null;
+                renderedProjectPicker.resolve({ action, sessionName });
+                return;
+              }
               if (!sessionPickerConn) return;
               const modifiedConn: SshConnection = {
                 ...sessionPickerConn,

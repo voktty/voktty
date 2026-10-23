@@ -4,6 +4,7 @@ import {
   openCollabGuestPty,
 } from "@/modules/collab/lib/guestRuntime";
 import { consumeSnapshotBarrier } from "@/modules/terminal/lib/snapshotBarrier";
+import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import {
   currentWorkspaceEnv,
   type WorkspaceEnv,
@@ -28,6 +29,50 @@ export type PtySession = {
 };
 
 export async function openPty(
+  cols: number,
+  rows: number,
+  handlers: PtyHandlers,
+  cwd?: string,
+  blocks?: boolean,
+  shell?: string,
+  paneId?: number,
+  workspace?: WorkspaceEnv,
+): Promise<PtySession> {
+  const owned = paneId === undefined ? undefined : ownedPtyTargets.get(paneId);
+  if (owned && paneId !== undefined) {
+    if (isCollabGuestLeaf(paneId))
+      throw new Error("Terminal resource has conflicting owners.");
+    return owned.open(
+      (target, capturedHandlers) =>
+        openNativePty(
+          cols,
+          rows,
+          capturedHandlers,
+          target.cwd,
+          blocks,
+          shell,
+          paneId,
+          target.workspace,
+        ),
+      handlers,
+    );
+  }
+  if (workspace && ownedPtyTargets.requiresOwnership(workspace)) {
+    throw new Error("This terminal requires its own project connection.");
+  }
+  return openNativePty(
+    cols,
+    rows,
+    handlers,
+    cwd,
+    blocks,
+    shell,
+    paneId,
+    workspace,
+  );
+}
+
+async function openNativePty(
   cols: number,
   rows: number,
   handlers: PtyHandlers,
@@ -164,6 +209,7 @@ export async function openPty(
         });
 
   let closed = false;
+  let closing: Promise<void> | undefined;
   const headers: Record<string, string> =
     remoteSessionId === undefined
       ? { "x-pty-id": String(id) }
@@ -190,26 +236,32 @@ export async function openPty(
             cols: c,
             rows: r,
           }),
-    close: async () => {
-      if (closed) return;
-      closed = true;
-      try {
-        if (remoteSessionId === undefined) {
-          await invoke("pty_close", { id });
-        } else {
-          await invoke("remote_pty_close", {
-            sessionId: remoteSessionId,
-            ptyId: id,
-          });
+    close: () => {
+      if (closed) return Promise.resolve();
+      if (closing) return closing;
+      closing = Promise.resolve().then(async () => {
+        try {
+          if (remoteSessionId === undefined) {
+            await invoke("pty_close", { id });
+          } else {
+            await invoke("remote_pty_close", {
+              sessionId: remoteSessionId,
+              ptyId: id,
+            });
+          }
+          closed = true;
+        } finally {
+          releaseHandlers();
+          closing = undefined;
         }
-      } finally {
-        releaseHandlers();
-      }
+      });
+      return closing;
     },
   };
 }
 
 export function disposePtyTarget(paneId: number): void {
+  void ownedPtyTargets.close(paneId).catch(() => undefined);
   forgetGuestTerminal(paneId);
 }
 
