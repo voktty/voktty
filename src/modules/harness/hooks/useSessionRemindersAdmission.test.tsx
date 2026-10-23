@@ -6,6 +6,7 @@ import { useSessionReminders } from "@/modules/harness/hooks/useSessionReminders
 import {
   createPersistenceAdmission,
   type PersistenceOwner,
+  type PersistencePermit,
 } from "@/modules/harness/lib/persistenceAdmission";
 
 const native = vi.hoisted(() => ({
@@ -52,7 +53,9 @@ function deferred() {
 let root: Root;
 let host: HTMLDivElement;
 let current: ReturnType<typeof useSessionReminders>;
-const open = vi.fn(async () => {});
+const open = vi.fn<(id: string, permit?: PersistencePermit) => Promise<void>>(
+  async () => {},
+);
 
 async function mount(
   owner: PersistenceOwner | undefined,
@@ -108,6 +111,80 @@ afterEach(async () => {
 });
 
 describe("reminder action admission", () => {
+  it("coalesces notification consumption until session opening settles", async () => {
+    const f = authority();
+    await mount(f.owner, async () => {});
+    const read = deferred();
+    const opening = deferred();
+    open.mockImplementationOnce(() => opening.promise);
+    native.invoke.mockClear();
+    let consumed = 0;
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "reminder_take_pending_open") {
+        await read.promise;
+        return {
+          sessionId: consumed++ === 0 ? "original" : "next",
+          dueAt: 100,
+        };
+      }
+      if (command === "reminder_list") return [];
+    });
+    const notify = required(native.listeners.get("voktty:reminder-open"));
+    await act(async () => {
+      notify();
+      notify();
+      window.dispatchEvent(new Event("focus"));
+    });
+    const reads = () =>
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_take_pending_open",
+      );
+    expect(reads()).toHaveLength(1);
+    await act(async () => read.resolve());
+    expect(open).toHaveBeenCalledOnce();
+    await act(async () => notify());
+    expect(reads()).toHaveLength(1);
+    await act(async () => opening.resolve());
+    expect(reads()).toHaveLength(2);
+    expect(open.mock.calls.map((args) => args[0])).toEqual([
+      "original",
+      "next",
+    ]);
+  });
+
+  it.each(["cancel close", "unmount"] as const)(
+    "retires a queued notification after %s without borrowing new admission",
+    async (retirement) => {
+      const f = authority();
+      await mount(f.owner, async () => {});
+      const opening = deferred();
+      open.mockImplementationOnce(() => opening.promise);
+      native.invoke.mockClear();
+      native.invoke.mockImplementation(async (command: string) => {
+        if (command === "reminder_take_pending_open")
+          return { sessionId: "original", dueAt: 100 };
+        if (command === "reminder_list") return [];
+      });
+      const notify = required(native.listeners.get("voktty:reminder-open"));
+      await act(async () => notify());
+      await act(async () => notify());
+      if (retirement === "cancel close") f.seal().cancel();
+      else await act(async () => root.unmount());
+      await act(async () => opening.resolve());
+      expect(
+        native.invoke.mock.calls.filter(
+          ([command]) => command === "reminder_take_pending_open",
+        ),
+      ).toHaveLength(1);
+      expect(open).toHaveBeenCalledOnce();
+      expect(
+        native.invoke.mock.calls.filter(
+          ([command]) => command === "reminder_clear",
+        ),
+      ).toEqual([]);
+    },
+  );
+
   it("does not schedule after close cancellation during transcript saving", async () => {
     const f = authority();
     const gate = deferred();

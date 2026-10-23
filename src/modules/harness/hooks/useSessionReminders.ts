@@ -107,8 +107,9 @@ export function useSessionReminders(
     async (
       operation: (action: ReminderAction) => Promise<void>,
       onError: (error: unknown, isCurrent: () => boolean) => void = report,
+      captured: ReminderAction | null = capture(),
     ) => {
-      const action = capture();
+      const action = captured;
       if (!action) return;
       const run = async () => {
         if (action.isCurrent()) await operation(action);
@@ -162,6 +163,8 @@ export function useSessionReminders(
 
   useEffect(() => {
     let disposed = false;
+    let takingOpen = false;
+    let pendingOpen: ReminderAction | null = null;
     const setup = capture();
     const subscriptions: Array<() => void> = [];
     const configure = () => {
@@ -183,19 +186,33 @@ export function useSessionReminders(
     };
     const takeOpen = async () => {
       if (disposed) return;
-      await execute(
-        async (action) => {
-          const request = await invoke<ReminderTarget | null>(
-            "reminder_take_pending_open",
+      pendingOpen = capture();
+      if (takingOpen || !pendingOpen) return;
+      takingOpen = true;
+      try {
+        while (pendingOpen && !disposed) {
+          const captured = pendingOpen;
+          pendingOpen = null;
+          await execute(
+            async (action) => {
+              const request = await invoke<ReminderTarget | null>(
+                "reminder_take_pending_open",
+              );
+              if (request && !disposed && action.isCurrent())
+                await openHere(request, action);
+            },
+            (error, isCurrent) => {
+              if (!disposed)
+                setError((previous) =>
+                  isCurrent() ? String(error) : previous,
+                );
+            },
+            captured,
           );
-          if (request && !disposed && action.isCurrent())
-            await openHere(request, action);
-        },
-        (error, isCurrent) => {
-          if (!disposed)
-            setError((previous) => (isCurrent() ? String(error) : previous));
-        },
-      );
+        }
+      } finally {
+        takingOpen = false;
+      }
     };
     const subscribe = async (event: string, handler: () => void) => {
       const unlisten = await listen(event, handler);
@@ -246,6 +263,7 @@ export function useSessionReminders(
     window.addEventListener("storage", configure);
     return () => {
       disposed = true;
+      pendingOpen = null;
       subscriptions.forEach((unlisten) => unlisten());
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
