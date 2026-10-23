@@ -1,38 +1,16 @@
 import { openPty, type PtySession } from "@/modules/terminal/lib/pty-bridge";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
-import {
-  parseRemotePath,
-  relativeWithinProject,
-  remoteProjectForPath,
-  remoteProjectKey,
-} from "@/modules/connections/model/remoteProjects";
-import {
-  findSshProfile,
-  remoteSshConnectionForProfile,
-} from "@/modules/connections/model/remoteSshProfiles";
-import {
-  shouldPickSshMultiplexer,
-  sshMultiplexerSettingsForSelection,
-  type SshMultiplexerSelection,
-} from "@/modules/ssh/multiplexerSelection";
-import {
-  probeSshMultiplexer,
-  type RemoteMultiplexerProbe,
-  type SshConnection,
-} from "@/modules/ssh/types";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  harnessProjectEnvironmentFor,
-  useHarnessProjectEnvStore,
-} from "./harnessEnvStore";
+  openProjectTerminalTarget,
+  type SshMultiplexerPicker,
+} from "@/modules/harness/lib/projectTerminalTarget";
+
+export type { SshMultiplexerPicker } from "@/modules/harness/lib/projectTerminalTarget";
 
 type DataHandler = (data: Uint8Array) => void;
 type ExitHandler = (code: number | null) => void;
-export type SshMultiplexerPicker = (
-  connection: SshConnection,
-  probe: RemoteMultiplexerProbe,
-) => Promise<SshMultiplexerSelection | null>;
 export type PtyLaunchOptions = { multiplexerPicker?: SshMultiplexerPicker };
 
 const activeSessions = new Map<string, PtySession>();
@@ -115,81 +93,6 @@ function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
   return close;
 }
 
-async function openRemoteTerminalTarget(
-  id: string,
-  cwd: string,
-  multiplexerPicker?: SshMultiplexerPicker,
-) {
-  const remotePath = parseRemotePath(cwd);
-  if (!remotePath) {
-    if (cwd.startsWith("remote://")) {
-      throw new Error("Remote terminal path is invalid.");
-    }
-    return undefined;
-  }
-
-  const project = remoteProjectForPath(cwd);
-  if (project && project.environmentId !== remotePath.environmentId) {
-    throw new Error("Remote terminal path is outside a saved project.");
-  }
-
-  let root = project?.cwd ?? remotePath.hostPath;
-  let profile = findSshProfile(remotePath.environmentId, undefined, {
-    kind: "local",
-  });
-  if (!profile) {
-    const projectId = remoteProjectKey(remotePath.environmentId, root);
-    const scoped = harnessProjectEnvironmentFor(
-      projectId,
-      useHarnessProjectEnvStore.getState().projects,
-    ).env;
-    if (
-      scoped.kind === "ssh" &&
-      scoped.sessionId !== undefined &&
-      remoteProjectKey(remotePath.environmentId, scoped.root) === projectId &&
-      relativeWithinProject(scoped.root, remotePath.hostPath) !== undefined
-    ) {
-      profile = findSshProfile(remotePath.environmentId, [scoped.connection], {
-        kind: "local",
-      });
-      if (profile) root = scoped.root;
-    }
-  }
-  if (!profile) {
-    throw new Error("The saved SSH connection for this project is missing.");
-  }
-
-  let selectedProfile = profile;
-  if (multiplexerPicker && profile.multiplexerMode !== "none") {
-    const probe = await probeSshMultiplexer(profile).catch(() => undefined);
-    if (probe && shouldPickSshMultiplexer(profile, probe)) {
-      const selection = await multiplexerPicker(profile, probe);
-      if (!selection) throw new Error("SSH terminal connection was canceled.");
-      selectedProfile = {
-        ...profile,
-        ...sshMultiplexerSettingsForSelection(profile, selection),
-      };
-    }
-  }
-
-  const lease = await remoteSessions.acquire(
-    { profileId: profile.id, root },
-    remoteSshConnectionForProfile(profile),
-  );
-  const remoteSession = lease.info;
-
-  return {
-    cwd: remotePath.hostPath,
-    workspace: {
-      kind: "ssh" as const,
-      connection: selectedProfile,
-      root: remoteSession.workspace_root,
-      sessionId: remoteSession.session_id,
-    },
-    close: releaseRemoteLeaseOnce(id, lease),
-  };
-}
-
 export async function spawnPty(
   id: string,
   cwd: string,
@@ -217,13 +120,14 @@ export async function spawnPty(
 
   try {
     const remoteTarget = effectiveCwd
-      ? await openRemoteTerminalTarget(
-          id,
+      ? await openProjectTerminalTarget(
           effectiveCwd,
           options?.multiplexerPicker,
         )
       : undefined;
-    closeRemote = remoteTarget?.close;
+    closeRemote = remoteTarget
+      ? releaseRemoteLeaseOnce(id, remoteTarget.lease)
+      : undefined;
     if (!isCurrent()) {
       await closeRemote?.();
       return;
