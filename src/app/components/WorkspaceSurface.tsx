@@ -31,6 +31,10 @@ export type WorkspaceSurfaceProps = {
   onCreateHarnessTab?: () => number;
   onActivateHarnessTab?: (id: number) => void;
   onCloseTerminalTab?: (id: number, terminalIds?: readonly number[]) => void | Promise<void>;
+  onWarmTerminalTabs?: (
+    ids: number[],
+    admit: (tabs: readonly Tab[]) => boolean,
+  ) => void;
   registerTerminalHandle: TerminalStackProps["registerHandle"];
   onSearchReady: TerminalStackProps["onSearchReady"];
   onCwd: TerminalStackProps["onCwd"];
@@ -88,6 +92,7 @@ export function WorkspaceSurface(props: WorkspaceSurfaceProps) {
         activeId={props.activeId}
         placements={props.placements}
         onClose={props.onCloseTerminalTab}
+        onWarm={props.onWarmTerminalTabs}
       >
         <WorkspaceSurfaceLayers {...props} />
       </CanonicalTerminalCatalog>

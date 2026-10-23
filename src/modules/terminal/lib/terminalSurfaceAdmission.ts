@@ -57,6 +57,7 @@ function members(
 
 export function createTerminalSurfaceAdmission(
   read: () => TerminalAdmissionState,
+  onCollected?: () => void,
 ) {
   type Hold = TerminalSurfaceIntent & {
     retired: boolean;
@@ -101,6 +102,7 @@ export function createTerminalSurfaceAdmission(
   const collect = () => {
     const state = read();
     const visible = members(state);
+    let collected = false;
     for (const hold of holds) {
       if (
         hold.settled &&
@@ -113,10 +115,51 @@ export function createTerminalSurfaceAdmission(
         hold.retired = true;
         holds.delete(hold);
         hold.finish();
+        collected = true;
       }
     }
+    if (collected) onCollected?.();
   };
   return {
+    activationTargets: (tabs?: readonly Tab[]) => {
+      if (!live) return [];
+      const state = { ...read(), ...(tabs ? { tabs } : {}) };
+      const references = terminalSurfaceReferences(
+        state.tabs,
+        state.activeId,
+        state.placements,
+        state.entries,
+      );
+      const occupied = new Set<TabKey>();
+      for (const tab of state.tabs)
+        if (
+          state.placements
+            ? state.placements.has(tab.id)
+            : tab.id === state.activeId
+        )
+          occupied.add(tab.tabKey);
+      for (const { terminal } of references)
+        if (!terminal.cold) occupied.add(terminal.tabKey);
+      let leaves = state.tabs.reduce(
+        (count, tab) =>
+          count + (occupied.has(tab.tabKey) ? terminalLeafCount(tab) : 0),
+        0,
+      );
+      const referenced = members(state);
+      for (const hold of holds)
+        if (!hold.bound || !referenced.has(hold.bound)) leaves++;
+      const output = [];
+      for (const candidate of references) {
+        const { terminal } = candidate;
+        if (!terminal.cold || occupied.has(terminal.tabKey)) continue;
+        const added = terminalLeafCount(terminal);
+        if (leaves + added > MAX_VISIBLE_TERMINAL_LEAVES) continue;
+        leaves += added;
+        occupied.add(terminal.tabKey);
+        output.push(candidate);
+      }
+      return output;
+    },
     reserve: (input: TerminalSurfaceIntent) => {
       collect();
       const intent = { ...input };

@@ -5469,6 +5469,7 @@ function DesktopApp() {
                               onExtractSlot={handleExtractTabFromSpace}
                               onMoveSlotToViewSpace={handleMoveTabToViewSpace}
                               onCloseSlot={handleClose}
+                              onWarmTerminalTabs={booted ? warmTabs : undefined}
                               onWorkspaceDrop={handleWorkspaceDrop}
                               registerTerminalHandle={registerTerminalHandle}
                               onSearchReady={handleSearchReady}

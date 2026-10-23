@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -11,7 +12,10 @@ import {
 import type { Tab, TerminalTab } from "@/modules/tabs";
 import type { TabKey } from "@/modules/tabs/lib/tabIdentity";
 import type { WorkspacePlacement } from "@/modules/spaces/lib/spaceGeometry";
-import { useTerminalSurfaceController } from "@/modules/terminal/TerminalSurface";
+import {
+  useTerminalSurfaceController,
+  useTerminalSurfaces,
+} from "@/modules/terminal/TerminalSurface";
 import {
   createTerminalSurfaceAdmission,
   type TerminalSurfaceIntent,
@@ -44,6 +48,7 @@ function matching(tabs: readonly Tab[], reference: CanonicalTerminalReference) {
 export function CanonicalTerminalCatalog({
   tabs,
   onClose,
+  onWarm,
   children,
   activeId = -1,
   placements,
@@ -55,9 +60,11 @@ export function CanonicalTerminalCatalog({
     id: number,
     terminalIds?: readonly number[],
   ) => void | Promise<void>;
+  onWarm?: (ids: number[], admit: (tabs: readonly Tab[]) => boolean) => void;
   children: ReactNode;
 }) {
   const surfaces = useTerminalSurfaceController();
+  const snapshot = useTerminalSurfaces();
   const byId = useMemo(
     () =>
       placements
@@ -72,13 +79,16 @@ export function CanonicalTerminalCatalog({
     placements: byId,
     surfaces,
   });
-  const [admission] = useState(() =>
-    createTerminalSurfaceAdmission(() => ({
-      ...latest.current,
-      entries: latest.current.surfaces?.getSnapshot().entries ?? [],
-    })),
-  );
   const [revision, setRevision] = useState(0);
+  const [admission] = useState(() =>
+    createTerminalSurfaceAdmission(
+      () => ({
+        ...latest.current,
+        entries: latest.current.surfaces?.getSnapshot().entries ?? [],
+      }),
+      () => setRevision((value) => value + 1),
+    ),
+  );
   const live = useRef(false);
   useLayoutEffect(() => {
     live.current = true;
@@ -99,6 +109,37 @@ export function CanonicalTerminalCatalog({
       }),
     [surfaces, admission],
   );
+  // Layout and capacity changes retire queued activations before their tab update commits.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission reads the committed layout and physical reservations through its captured reader.
+  useEffect(() => {
+    if (!onWarm) return;
+    const targets = admission.activationTargets();
+    if (targets.length === 0) return;
+    let current = true;
+    onWarm(
+      targets.map(({ terminal }) => terminal.id),
+      (tabs) => {
+        if (
+          !current ||
+          !live.current ||
+          targets.some(({ entry }) => !entry.isCurrent())
+        )
+          return false;
+        const eligible = admission.activationTargets(tabs);
+        return targets.every(({ terminal, entry, owner }) =>
+          eligible.some(
+            (candidate) =>
+              candidate.terminal === terminal &&
+              candidate.entry === entry &&
+              candidate.owner === owner,
+          ),
+        );
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [tabs, activeId, byId, onWarm, snapshot, revision, admission]);
   const requestClose = useCallback(
     async (reference: CanonicalTerminalReference) => {
       const current = latest.current;

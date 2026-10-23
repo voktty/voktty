@@ -9,6 +9,7 @@ import {
 } from "@/modules/terminal/TerminalSurface";
 import { createTabIdentity } from "@/modules/tabs/lib/tabIdentity";
 import type { Tab, TerminalTab, HarnessTab } from "@/modules/tabs";
+import { useTabs } from "@/modules/tabs/lib/useTabs";
 import {
   WorkspaceSurface,
   type WorkspaceSurfaceProps,
@@ -23,6 +24,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/modules/spaces", () => ({
   useSpaces: (selector: (state: { spaces: [] }) => unknown) =>
     selector({ spaces: [] }),
+}));
+vi.mock("@/modules/terminal/lib/useTerminalSession", () => ({
+  disposeSession: vi.fn(),
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 vi.mock("@/modules/editor", () => ({
   AiDiffStack: () => null,
@@ -263,11 +270,14 @@ it("does not mount or warm a cold terminal from a presentation request", async (
   expect(mocks.mounts).not.toHaveBeenCalled();
 });
 
-it("keeps the terminal layer visible and pointer-passive while Harness owns the active surface", async () => {
-  const props: WorkspaceSurfaceProps = {
-    tabs: [owner, terminal],
-    activeId: 1,
-    activeTab: owner,
+function workspaceProps(
+  tabs: Tab[] = [owner, terminal],
+  activeId = 1,
+): WorkspaceSurfaceProps {
+  return {
+    tabs,
+    activeId,
+    activeTab: tabs.find((tab) => tab.id === activeId),
     registerTerminalHandle: vi.fn(),
     onSearchReady: vi.fn(),
     onCwd: vi.fn(),
@@ -292,6 +302,10 @@ it("keeps the terminal layer visible and pointer-passive while Harness owns the 
     onNavigateBack: vi.fn(),
     onNavigateForward: vi.fn(),
   };
+}
+
+it("keeps the terminal layer visible and pointer-passive while Harness owns the active surface", async () => {
+  const props = workspaceProps();
   await act(async () => root.render(<WorkspaceSurface {...props} />));
   const layer = pane()?.parentElement?.parentElement;
   expect(pane()?.dataset.terminalDocked).toBe("true");
@@ -300,6 +314,46 @@ it("keeps the terminal layer visible and pointer-passive while Harness owns the 
   expect(layer?.classList.contains("pointer-events-none")).toBe(true);
   expect(layer?.classList.contains("z-10")).toBe(true);
   expect(mocks.mounts).toHaveBeenCalledExactlyOnceWith(20);
+});
+
+it("activates a restored canonical dock through the real tab owner after boot without changing focus", async () => {
+  let runtime!: ReturnType<typeof useTabs>;
+  function RestoredWorkspace() {
+    runtime = useTabs();
+    return (
+      <WorkspaceSurface
+        {...workspaceProps(runtime.tabs, runtime.activeId)}
+        onWarmTerminalTabs={runtime.booted ? runtime.warmTabs : undefined}
+      />
+    );
+  }
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <RestoredWorkspace />
+      </StrictMode>,
+    ),
+  );
+  const restored: TerminalTab = {
+    ...terminal,
+    cold: true,
+    workspaceEnv: { kind: "wsl", distro: "Ubuntu" },
+  };
+  await act(async () => runtime.replaceTabs([owner, restored], 1));
+  expect(runtime.getTab(2)?.cold).toBe(true);
+  expect(pane()).toBeNull();
+  await act(async () => runtime.markBooted());
+  expect(runtime.activeId).toBe(1);
+  expect(runtime.tabs).toHaveLength(2);
+  expect(runtime.getTab(2)).toMatchObject({
+    cold: false,
+    workspaceEnv: restored.workspaceEnv,
+  });
+  expect(pane()?.dataset.terminalDocked).toBe("true");
+  const mounted = pane();
+  await act(async () => runtime.setActiveId(2));
+  expect(pane()).toBe(mounted);
+  expect(pane()?.dataset.terminalDocked).toBeUndefined();
 });
 
 it("replays StrictMode registrations without leaving a retired placement or observer", async () => {

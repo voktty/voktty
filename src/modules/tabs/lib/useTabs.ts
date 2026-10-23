@@ -790,17 +790,21 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     });
   }, [activeId, booted]);
 
-  const warmTabs = useCallback((ids: number[]) => {
-    if (ids.length === 0) return;
-    const targetSet = new Set(ids);
-    setTabs((curr) => {
-      const hasCold = curr.some((x) => targetSet.has(x.id) && x.cold);
-      if (!hasCold) return curr;
-      return curr.map((x) =>
-        targetSet.has(x.id) && x.cold ? { ...x, cold: false } : x,
-      );
-    });
-  }, []);
+  const warmTabs = useCallback(
+    (ids: number[], admit?: (tabs: readonly Tab[]) => boolean) => {
+      if (ids.length === 0) return;
+      const targetSet = new Set(ids);
+      setTabs((curr) => {
+        if (admit && !admit(curr)) return curr;
+        const hasCold = curr.some((x) => targetSet.has(x.id) && x.cold);
+        if (!hasCold) return curr;
+        return curr.map((x) =>
+          targetSet.has(x.id) && x.cold ? { ...x, cold: false } : x,
+        );
+      });
+    },
+    [],
+  );
 
   const allocId = useCallback(() => nextIdRef.current++, []);
 
