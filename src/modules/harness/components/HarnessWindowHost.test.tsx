@@ -36,6 +36,7 @@ const native = vi.hoisted(() => ({
   listAutomations: vi.fn(),
   updateRun: vi.fn(),
   claim: vi.fn(),
+  pending: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
 vi.mock("@tauri-apps/api/window", () => ({
@@ -204,8 +205,11 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(async (command: string, args) => {
       if (command === "automation_runs_recover") return native.recover(args);
+      if (command === "automation_runs_pending") return native.pending(args);
       if (command === "automations_list") return native.listAutomations();
       if (command === "automation_run_update") return native.updateRun(args);
+      if (command === "automation_run_start")
+        return native.updateRun({ ...args, status: "running" });
       if (command === "automations_claim_due") return native.claim(args);
       if (command === "session_upsert_batch")
         return args.sessions.map((session: Session) => ({
@@ -219,6 +223,7 @@ beforeEach(() => {
     });
   native.ask.mockReset().mockResolvedValue(true);
   native.recover.mockReset().mockResolvedValue([]);
+  native.pending.mockReset().mockResolvedValue({ runs: [], nextAfter: null });
   native.listAutomations.mockReset().mockResolvedValue([]);
   native.claim.mockReset().mockResolvedValue(null);
   native.updateRun.mockReset().mockImplementation(async (args) => ({
@@ -276,7 +281,7 @@ describe("window-owned Harness execution host", () => {
   it("runs recovered local and remote automations with zero views and records their results", async () => {
     const one = automationFixture("run-one");
     const two = automationFixture("run-two", "remote://machine/srv/two");
-    native.recover.mockResolvedValueOnce([one, two]);
+    native.pending.mockResolvedValueOnce({ runs: [one, two], nextAfter: null });
     await render([], []);
     expect(sends.map((send) => send.id)).toEqual(["run-one", "run-two"]);
     expect(native.recover).toHaveBeenCalledOnce();
@@ -335,6 +340,23 @@ describe("window-owned Harness execution host", () => {
       );
     });
     expect(result).toBeUndefined();
+    expect(sends).toHaveLength(0);
+    expect(required(runtime).engine.sessions).toHaveLength(0);
+  });
+
+  it("does not submit when native admission has already consumed the pending run", async () => {
+    await render([], []);
+    native.updateRun.mockResolvedValueOnce(null);
+    const claim = automationFixture("run-one");
+    await act(async () => {
+      expect(
+        await required(runtime).automations.launch(claim.automation, claim.run),
+      ).toBeUndefined();
+    });
+    expect(native.invoke).toHaveBeenCalledWith(
+      "automation_run_start",
+      expect.objectContaining({ runId: "run-one", sessionId: "run-one" }),
+    );
     expect(sends).toHaveLength(0);
     expect(required(runtime).engine.sessions).toHaveLength(0);
   });
@@ -433,20 +455,152 @@ describe("window-owned Harness execution host", () => {
     );
   });
 
-  it("StrictMode retires the first recovery and recovers under the replacement owner", async () => {
+  it("StrictMode retires the first recovery without repeating its destructive native call", async () => {
     const first = deferred<unknown>();
     native.recover.mockReturnValueOnce(first.promise);
     const claim = automationFixture("run-one");
-    native.recover.mockResolvedValue([claim]);
+    native.pending.mockResolvedValue({ runs: [claim], nextAfter: null });
     await render([], [], true);
     expect(native.recover).toHaveBeenCalledOnce();
     await act(async () => {
       first.resolve([]);
     });
-    expect(native.recover).toHaveBeenCalledTimes(2);
-    expect(native.recover.mock.calls[0][0].startedBefore).toBe(
-      native.recover.mock.calls[1][0].startedBefore,
+    expect(native.recover).toHaveBeenCalledOnce();
+    expect(native.recover).toHaveBeenCalledWith(
+      expect.objectContaining({ includePending: false }),
     );
+    expect(sends).toHaveLength(1);
+  });
+
+  it("reconciles a durable pending run after engine capacity becomes available", async () => {
+    const sessions = Array.from(
+      { length: 256 },
+      (_, index) => fixture(`imported-${index}`, "/work/one").session,
+    );
+    const claim = automationFixture("waiting-run");
+    native.pending.mockResolvedValue({ runs: [claim], nextAfter: null });
+    await render(sessions, []);
+    expect(sends).toHaveLength(0);
+    expect(native.updateRun).not.toHaveBeenCalled();
+    act(() =>
+      required(runtime).engine.applySessionDeltas(
+        [{ kind: "remove", id: "imported-0" }],
+        "immediate",
+      ),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(sends.map((send) => send.id)).toEqual(["waiting-run"]);
+    expect(native.recover).toHaveBeenCalledOnce();
+    expect(required(runtime).engine.sessions).toHaveLength(256);
+  });
+
+  it("reserves capacity for starts whose native acknowledgement has not settled", async () => {
+    const sessions = Array.from(
+      { length: 255 },
+      (_, index) => fixture(`imported-${index}`, "/work/one").session,
+    );
+    await render(sessions, []);
+    const ack = deferred<unknown>();
+    native.updateRun.mockReturnValueOnce(ack.promise);
+    const one = automationFixture("reserved-one");
+    const two = automationFixture("reserved-two");
+    let first: ReturnType<Runtime["automations"]["launch"]> | undefined;
+    await act(async () => {
+      first = required(runtime).automations.launch(one.automation, one.run);
+      expect(
+        await required(runtime).automations.launch(two.automation, two.run),
+      ).toBeUndefined();
+    });
+    expect(native.updateRun).toHaveBeenCalledOnce();
+    await act(async () => {
+      ack.resolve({ id: one.run.id, status: "running" });
+      await first;
+    });
+    expect(sends).toHaveLength(1);
+    expect(required(runtime).engine.sessions).toHaveLength(256);
+  });
+
+  it("reconciles pending work after a recovery failure without retrying destructive recovery", async () => {
+    native.recover.mockRejectedValueOnce(new Error("Recovery response failed"));
+    const claim = automationFixture("pending-run");
+    native.pending.mockResolvedValue({ runs: [claim], nextAfter: null });
+    await render([], []);
+    expect(sends).toHaveLength(0);
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(sends.map((send) => send.id)).toEqual([claim.run.id]);
+    expect(native.recover).toHaveBeenCalledOnce();
+  });
+
+  it("advances empty pages, preserves the event prompt and wraps its cursor", async () => {
+    const claim = automationFixture("event-run");
+    claim.run.trigger = "event";
+    claim.run.prompt = "Original Inbox event prompt";
+    native.pending
+      .mockResolvedValueOnce({ runs: [], nextAfter: "history-016" })
+      .mockResolvedValueOnce({ runs: [claim], nextAfter: null });
+    await render([], []);
+    expect(native.pending).toHaveBeenLastCalledWith({ after: null });
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(native.pending).toHaveBeenLastCalledWith({ after: "history-016" });
+    expect(native.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: "Original Inbox event prompt" }),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(native.pending).toHaveBeenLastCalledWith({ after: null });
+    expect(sends).toHaveLength(1);
+    expect(native.recover).toHaveBeenCalledOnce();
+  });
+
+  it("retires a pending-page response across seal and cancellation without advancing its cursor", async () => {
+    const page = deferred<unknown>();
+    native.pending.mockReturnValueOnce(page.promise);
+    await render([], []);
+    const owner = required(required(runtime).persistence.getOwner());
+    const final = required(required(owner.capture()).seal());
+    expect(final.pending).toBeNull();
+    await act(async () => final.cancel());
+    const claim = automationFixture("pending-run");
+    await act(async () =>
+      page.resolve({ runs: [claim], nextAfter: "run-next" }),
+    );
+    expect(sends).toHaveLength(0);
+    native.pending.mockResolvedValue({ runs: [claim], nextAfter: null });
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(native.pending).toHaveBeenLastCalledWith({ after: null });
+    expect(sends).toHaveLength(1);
+    expect(native.recover).toHaveBeenCalledOnce();
+  });
+
+  it("does not re-run destructive recovery after cancellation during the recovered batch", async () => {
+    const one = automationFixture("pending-one");
+    const two = automationFixture("pending-two");
+    native.pending.mockResolvedValueOnce({ runs: [one, two], nextAfter: null });
+    const ack = deferred<unknown>();
+    native.updateRun.mockReturnValueOnce(ack.promise);
+    await render([], []);
+    const owner = required(required(runtime).persistence.getOwner());
+    const final = required(required(owner.capture()).seal());
+    await act(async () => final.cancel());
+    await act(async () => ack.resolve({ id: one.run.id, status: "running" }));
+    expect(sends).toHaveLength(0);
+    native.pending.mockResolvedValue({ runs: [two], nextAfter: null });
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(sends.map((send) => send.id)).toEqual([two.run.id]);
+    expect(native.recover).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a pending run eligible after a failed running write and refuses an event without its prompt", async () => {
+    const claim = automationFixture("pending-run");
+    native.pending.mockResolvedValue({ runs: [claim], nextAfter: null });
+    native.updateRun.mockRejectedValueOnce(new Error("Write failed"));
+    await render([], []);
+    expect(sends).toHaveLength(0);
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(sends).toHaveLength(1);
+    const missing = automationFixture("missing-event");
+    missing.run.trigger = "event";
+    native.pending.mockResolvedValue({ runs: [missing], nextAfter: null });
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
     expect(sends).toHaveLength(1);
   });
 

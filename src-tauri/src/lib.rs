@@ -707,6 +707,8 @@ pub fn run() {
             harness::automations::automations_upsert,
             harness::automations::automations_delete,
             harness::automations::automation_runs_list,
+            harness::automations::automation_runs_pending,
+            harness::automations::automation_run_start,
             harness::automations::automation_runs_recover,
             harness::automations::automation_run_now,
             harness::automations::automations_claim_due,

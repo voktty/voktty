@@ -3,7 +3,9 @@ import type { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarness
 import {
   automationWrite,
   claimDueAutomations,
+  listPendingAutomationRuns,
   recoverAutomationRuns,
+  startAutomationRun,
   updateAutomationRun,
   type Automation,
   type AutomationRun,
@@ -56,6 +58,7 @@ type ActiveRun = {
   sessionCurrent?: () => boolean;
   launch: Promise<LaunchResult | undefined>;
   started: boolean;
+  needsSession: boolean;
   finishing?: boolean;
 };
 
@@ -88,6 +91,7 @@ export function useHarnessAutomations(inputs: Inputs) {
   });
   const polling = useRef<Promise<void> | null>(null);
   const inbox = useRef<Promise<void> | null>(null);
+  const pendingAfter = useRef<string | undefined>(undefined);
 
   const capture = useCallback(() => {
     const owner = lifetime.current;
@@ -105,6 +109,8 @@ export function useHarnessAutomations(inputs: Inputs) {
       options?: LaunchOptions,
     ): Promise<LaunchResult | undefined> => {
       if (!permit.isCurrent()) return Promise.resolve(undefined);
+      if (run.trigger === "event" && !(options?.prompt || run.prompt)?.trim())
+        return Promise.resolve(undefined);
       automation = {
         ...automation,
         modelSettings: automation.modelSettings
@@ -142,8 +148,13 @@ export function useHarnessAutomations(inputs: Inputs) {
       }
       if (active.current.size >= 256) return Promise.resolve(undefined);
       const previous = latest.current.engine.readSession(id);
-      if (!previous && latest.current.engine.sessionsRef.current.length >= 256)
-        return Promise.resolve(undefined);
+      if (!previous) {
+        const reserved = [...active.current.values()].filter(
+          (entry) => !entry.started && entry.needsSession,
+        ).length;
+        if (latest.current.engine.sessionsRef.current.length + reserved >= 256)
+          return Promise.resolve(undefined);
+      }
       if (
         previous &&
         (previous.automationId !== automation.id ||
@@ -160,12 +171,13 @@ export function useHarnessAutomations(inputs: Inputs) {
         current: () => owner !== null && lifetime.current === owner,
         launch: Promise.resolve(undefined),
         started: false,
+        needsSession: !previous,
       };
       active.current.set(id, entry);
       entry.launch = (async () => {
         try {
           const running = await automationWrite(permit, () =>
-            updateAutomationRun(run.id, "running", { sessionId: id }),
+            startAutomationRun(run.id, id),
           );
           if (!running || !permit.isCurrent()) return undefined;
           const engine = latest.current.engine;
@@ -197,10 +209,19 @@ export function useHarnessAutomations(inputs: Inputs) {
             saveSessionFolders(session.cwd, folders.folders);
           }
           if (!permit.isCurrent() || !previousCurrent()) return undefined;
+          if (
+            engine.readSession(id)?.busy ||
+            (!previous && engine.sessionsRef.current.length >= 256)
+          )
+            return undefined;
           engine.admitSession(session, "immediate");
           entry.sessionCurrent = engine.captureSessionLifetime(id);
           entry.started = true;
-          const prompt = options?.prompt || run.prompt || automation.prompt;
+          const prompt =
+            options?.prompt ||
+            running.prompt ||
+            run.prompt ||
+            automation.prompt;
           engine.onSubmit(id, prompt);
           const sessionCurrent = entry.sessionCurrent;
           const isCurrent = () => permit.isCurrent() && sessionCurrent();
@@ -307,15 +328,10 @@ export function useHarnessAutomations(inputs: Inputs) {
         if (!permit.isCurrent()) return;
         if (!recovery.current.done) {
           const recovering = (async () => {
-            const claims = await automationWrite(permit, () =>
-              recoverAutomationRuns(cutoff),
-            );
-            if (!claims || !permit.isCurrent()) return;
-            recovery.current.done = true;
-            for (const claim of claims) {
-              if (!permit.isCurrent()) return;
-              await start(claim.automation, claim.run, permit);
-            }
+            await automationWrite(permit, () => {
+              recovery.current.done = true;
+              return recoverAutomationRuns(cutoff, Date.now(), false);
+            });
           })();
           recovery.current.pending = recovering;
           try {
@@ -325,8 +341,16 @@ export function useHarnessAutomations(inputs: Inputs) {
               recovery.current.pending = undefined;
           }
         }
-        if (!recovery.current.done || !permit.isCurrent() || document.hidden)
-          return;
+        if (!recovery.current.done || !permit.isCurrent()) return;
+        const page = await listPendingAutomationRuns(pendingAfter.current);
+        if (!permit.isCurrent()) return;
+        for (const claim of page.runs) {
+          if (!permit.isCurrent()) return;
+          await start(claim.automation, claim.run, permit);
+        }
+        if (!permit.isCurrent()) return;
+        pendingAfter.current = page.nextAfter ?? undefined;
+        if (document.hidden) return;
         const claims = await claimDueAutomations(Date.now(), permit);
         for (const claim of claims) {
           if (!permit.isCurrent()) return;

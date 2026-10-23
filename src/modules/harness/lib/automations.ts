@@ -117,6 +117,24 @@ export type DueAutomationRun = {
   run: AutomationRun;
 };
 
+export type PendingAutomationPage = {
+  runs: DueAutomationRun[];
+  nextAfter: string | null;
+};
+
+export function listPendingAutomationRuns(
+  after?: string,
+): Promise<PendingAutomationPage> {
+  return invoke("automation_runs_pending", { after: after ?? null });
+}
+
+export function startAutomationRun(
+  runId: string,
+  sessionId: string,
+): Promise<AutomationRun | null> {
+  return invoke("automation_run_start", { runId, sessionId });
+}
+
 export function formatAutomationRunAt(at: number): string {
   if (!Number.isFinite(at) || at <= 0) return "—";
   const date = new Date(at);
@@ -511,8 +529,13 @@ export function listAutomationRuns(
 export function recoverAutomationRuns(
   startedBefore: number,
   now = Date.now(),
+  includePending?: boolean,
 ): Promise<DueAutomationRun[]> {
-  return invoke("automation_runs_recover", { startedBefore, now });
+  return invoke("automation_runs_recover", {
+    startedBefore,
+    now,
+    ...(includePending === undefined ? {} : { includePending }),
+  });
 }
 
 export async function createManualAutomationRun(

@@ -6,6 +6,10 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::session_store::{now_millis, validate_id, SessionStore};
 
+#[path = "automations_pending.rs"]
+mod pending;
+pub use pending::PendingAutomationPage;
+
 fn uuid_v4() -> String {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes).unwrap_or_default();
@@ -226,6 +230,11 @@ pub(crate) fn ensure_tables(conn: &Connection) -> rusqlite::Result<()> {
            PRIMARY KEY (automation_id, event_key)
          );",
     )?;
+
+    conn.execute_batch(&format!(
+        "CREATE INDEX IF NOT EXISTS automation_runs_pending_idx ON automation_runs ({}, id);",
+        pending::STATUS_SQL
+    ))?;
 
     // Backfill claims from pre-ledger run history. Invalid legacy rows should not
     // prevent the session store from opening.
@@ -748,11 +757,39 @@ pub fn automation_runs_list(
 }
 
 #[tauri::command(async)]
+pub fn automation_runs_pending(
+    store: State<'_, SessionStore>,
+    after: Option<String>,
+) -> Result<PendingAutomationPage, String> {
+    pending::validate_cursor(after.as_deref())?;
+    let conn = store.lock_conn()?;
+    pending::page(&conn, after.as_deref())
+}
+
+#[tauri::command(async)]
+pub fn automation_run_start(
+    app: AppHandle,
+    store: State<'_, SessionStore>,
+    run_id: String,
+    session_id: String,
+) -> Result<Option<AutomationRun>, String> {
+    pending::validate_start(&run_id, &session_id)?;
+    let mut conn = store.lock_conn()?;
+    let started = pending::start(&mut conn, &run_id, &session_id, now_millis())?;
+    drop(conn);
+    if started.is_some() {
+        let _ = app.emit(CHANGED, ());
+    }
+    Ok(started)
+}
+
+#[tauri::command(async)]
 pub fn automation_runs_recover(
     app: AppHandle,
     store: State<'_, SessionStore>,
     started_before: i64,
     now: i64,
+    include_pending: Option<bool>,
 ) -> Result<Vec<DueAutomationRun>, String> {
     let mut conn = store.lock_conn()?;
     let tx = conn.transaction().map_err(|error| error.to_string())?;
@@ -809,7 +846,9 @@ pub fn automation_runs_recover(
             changed = true;
             continue;
         }
-        due.push(DueAutomationRun { automation, run });
+        if include_pending.unwrap_or(true) {
+            due.push(DueAutomationRun { automation, run });
+        }
     }
     changed_automation_ids.sort();
     changed_automation_ids.dedup();
