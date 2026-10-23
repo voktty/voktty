@@ -44,6 +44,45 @@ const handlers = () => ({
 });
 
 describe("owned PTY target lifetime", () => {
+  it.each(["remote folder", "missing session", "invalid session"])(
+    "rejects a deferred %s on every open and retains its exact cleanup",
+    async (invalid) => {
+      const registry = createOwnedPtyTargets(2);
+      const resolved = target();
+      if (invalid === "remote folder") resolved.cwd = "remote://build/srv/app";
+      if (invalid === "missing session") delete resolved.workspace.sessionId;
+      if (invalid === "invalid session") resolved.workspace.sessionId = -1;
+      const acquire = vi.fn().mockResolvedValue(resolved);
+      const source = target();
+      source.acquireSibling = acquire;
+      registry.register(1, source);
+      const sibling = registry.claimSibling(2, source.workspace, "/srv/app");
+      expect(sibling).toBeDefined();
+      if (!sibling) throw new Error("Missing sibling receipt.");
+      const start = vi.fn().mockResolvedValue(pty());
+      await expect(sibling.open(start, handlers())).rejects.toThrow(
+        "Terminal resource requires",
+      );
+      await expect(sibling.open(start, handlers())).rejects.toThrow(
+        "Terminal resource requires",
+      );
+      expect(start).not.toHaveBeenCalled();
+      expect(acquire).toHaveBeenCalledOnce();
+      expect(resolved.release).not.toHaveBeenCalled();
+      vi.mocked(resolved.release).mockRejectedValueOnce(
+        new Error("release failed"),
+      );
+      await expect(registry.close(2)).rejects.toThrow("release failed");
+      expect(registry.size()).toBe(2);
+      expect(() => registry.register(3, target())).toThrow("limit");
+      await registry.close(2);
+      expect(resolved.release).toHaveBeenCalledTimes(2);
+      expect(source.release).not.toHaveBeenCalled();
+      await registry.close(1);
+      expect(registry.size()).toBe(0);
+    },
+  );
+
   it("retries disposed cleanup on demand while coalescing a still-pending retry", async () => {
     const registry = createOwnedPtyTargets();
     const source = target();

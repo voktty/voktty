@@ -25,6 +25,24 @@ export type OwnedPtyTargetReceipt = {
   retryCleanup: () => void;
 };
 
+function validateTarget(target: OwnedPtyTarget) {
+  if (
+    !target.cwd ||
+    target.cwd.length > 32768 ||
+    target.cwd.includes("\0") ||
+    target.cwd.startsWith("remote://")
+  )
+    throw new Error("Terminal resource requires a resolved folder.");
+  const sessionId = target.workspace.sessionId;
+  if (
+    target.workspace.kind !== "ssh" ||
+    sessionId === undefined ||
+    !Number.isSafeInteger(sessionId) ||
+    sessionId < 0
+  )
+    throw new Error("Terminal resource requires a connected workspace.");
+}
+
 export function createOwnedPtyTargets(limit = 256) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 256)
     throw new Error("Invalid terminal resource limit.");
@@ -51,20 +69,7 @@ export function createOwnedPtyTargets(limit = 256) {
       throw new Error("Terminal resource is already owned.");
     if (entries.size >= limit)
       throw new Error("Terminal resource limit reached.");
-    if (
-      !input.cwd ||
-      input.cwd.length > 32768 ||
-      input.cwd.includes("\0") ||
-      input.cwd.startsWith("remote://")
-    )
-      throw new Error("Terminal resource requires a resolved folder.");
-    const sessionId = input.workspace.sessionId;
-    if (
-      sessionId === undefined ||
-      !Number.isSafeInteger(sessionId) ||
-      sessionId < 0
-    )
-      throw new Error("Terminal resource requires a connected workspace.");
+    validateTarget(input);
     let target: OwnedPtyTarget = {
       cwd: input.cwd,
       workspace: {
@@ -141,10 +146,12 @@ export function createOwnedPtyTargets(limit = 256) {
                 },
               };
               acquired = true;
+              validateTarget(target);
               markWorkspace(target.workspace, target.acquireSibling);
               if (!isCurrent())
                 throw new Error("Terminal resource was retired.");
             }
+            validateTarget(target);
             return start(
               {
                 cwd: target.cwd,
