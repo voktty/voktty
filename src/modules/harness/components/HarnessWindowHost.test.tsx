@@ -379,6 +379,34 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it.each(["opening", "removing", "switching", "transfer"] as const)(
+    "blocks submission synchronously during %s without stopping a sibling",
+    async (kind) => {
+      const one = fixture("one", "/work/one");
+      const two = fixture("two", "remote://machine/srv/two");
+      await render([one.session, two.session], []);
+      const host = required(runtime);
+      const receipt = required(host.holds.acquire(kind, ["one"], () => true));
+      await act(async () => {
+        host.engine.onSubmit("one", "must wait");
+        host.engine.onSubmit("two", "sibling continues");
+      });
+      expect(sends.map((send) => send.id)).toEqual(["two"]);
+      expect(host.engine.readSession("one")).toBe(one.session);
+      await render([one.session, two.session], []);
+      expect(required(runtime).holds).toBe(host.holds);
+      if (kind === "opening") {
+        host.holds.invalidateOpening("one");
+        expect(receipt.isCurrent()).toBe(false);
+        await act(async () => host.engine.onSubmit("one", "still reserved"));
+        expect(sends.map((send) => send.id)).toEqual(["two"]);
+      }
+      receipt.release();
+      await act(async () => host.engine.onSubmit("one", "now admitted"));
+      expect(sends.map((send) => send.id)).toEqual(["two", "one"]);
+    },
+  );
+
   it("routes a reminder into its registered view and retires that view's permission before confirmation", async () => {
     const one = fixture("one", "/work/one");
     const gate = deferred<boolean>();

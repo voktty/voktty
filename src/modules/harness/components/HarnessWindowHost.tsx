@@ -42,11 +42,13 @@ import {
   createHarnessWindowViews,
 } from "@/modules/harness/lib/harnessWindowViews";
 import type { Session } from "@/modules/harness/lib/session";
+import { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 
 type WindowRuntime = {
   engine: ReturnType<typeof useHarnessSessionEngine>;
   views: ReturnType<typeof createHarnessWindowViews>;
+  holds: ReturnType<typeof createHarnessWindowSessionHolds>;
   persistence: ReturnType<typeof useWindowPersistenceAdmission>;
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
   automations: ReturnType<typeof useHarnessAutomations>;
@@ -78,6 +80,7 @@ export function HarnessWindowHost({
   createNavigationView?: CreateHarnessNavigationView;
 }) {
   const [views] = useState(createHarnessWindowViews);
+  const [holds] = useState(createHarnessWindowSessionHolds);
   const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
   const cohortSnapshot = useSyncExternalStore(
@@ -87,8 +90,12 @@ export function HarnessWindowHost({
   const engine = useHarnessSessionEngine({
     initialSessions: () => imported,
     isForeground: views.isForeground,
-    isRemoving: views.isRemoving,
-    isSwitching: views.isSwitching,
+    isRemoving: (id) => holds.has("removing", id) || views.isRemoving(id),
+    isSwitching: (id) =>
+      holds.has("opening", id) ||
+      holds.has("switching", id) ||
+      holds.has("transfer", id) ||
+      views.isSwitching(id),
   });
   useHarnessWindowAttention({
     sessions: engine.sessions,
@@ -196,6 +203,7 @@ export function HarnessWindowHost({
       value={{
         engine,
         views,
+        holds,
         persistence,
         transcripts,
         automations,
