@@ -13,6 +13,9 @@ import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessi
 import { useHarnessAutomations } from "@/modules/harness/hooks/useHarnessAutomations";
 import { useHarnessWindowInbox } from "@/modules/harness/hooks/useHarnessWindowInbox";
 import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext";
+import { HarnessReminderWindowContext } from "@/modules/harness/hooks/harnessReminderWindowContext";
+import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
+import { leafIds } from "@/modules/harness/lib/layout";
 import {
   createHarnessSummaryUpdates,
   type HarnessSummarySource,
@@ -41,6 +44,7 @@ type WindowRuntime = {
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
   automations: ReturnType<typeof useHarnessAutomations>;
   summaries: HarnessSummarySource;
+  reminderRegistrationError: string | null;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -131,6 +135,11 @@ export function HarnessWindowHost({
         .flatMap((cohort) => cohort.state.layout.tabs),
     [cohortSnapshot],
   );
+  const reminderRegistrationError = useHarnessReminderWindow(
+    [...new Set(workspace.tabs.flatMap((tab) => leafIds(tab.layout)))],
+    persistence.getOwner,
+    persistence.revision,
+  );
   const tabsRef = useRef(activeTabs);
   tabsRef.current = activeTabs;
   const transcripts = useHarnessTranscriptPersistence({
@@ -168,10 +177,13 @@ export function HarnessWindowHost({
         transcripts,
         automations,
         summaries: summaries.source,
+        reminderRegistrationError,
       }}
     >
       <HarnessInboxContext.Provider value={inboxUnseen}>
-        {children}
+        <HarnessReminderWindowContext.Provider value={true}>
+          {children}
+        </HarnessReminderWindowContext.Provider>
       </HarnessInboxContext.Provider>
     </HarnessWindowContext.Provider>
   );

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@/modules/i18n";
+import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
 import type {
   PersistenceOwner,
   PersistencePermit,
@@ -45,6 +46,10 @@ export function useSessionReminders(
   const [reminders, setItems] = useState<SessionReminder[]>([]);
   const [now, setNow] = useState(Date.now);
   const [error, setError] = useState<string | null>(null);
+  const registrationError = useHarnessReminderWindow(
+    openSessionIds,
+    getPersistenceOwner,
+  );
   const revision = useRef(0);
   const callbacks = useRef<ReminderCallbacks>({
     onOpenSession,
@@ -274,19 +279,6 @@ export function useSessionReminders(
     };
   }, [openHere, refresh, refreshCurrent, execute, capture]);
 
-  const sessionIdsKey = JSON.stringify(openSessionIds);
-  useEffect(() => {
-    void execute(
-      async () => {
-        await invoke("reminder_register_window", {
-          sessionIds: JSON.parse(sessionIdsKey),
-        });
-      },
-      (error, isCurrent) =>
-        setError((previous) => (isCurrent() ? String(error) : previous)),
-    );
-  }, [sessionIdsKey, execute]);
-
   const open = useCallback(
     async (reminder: ReminderTarget) => {
       const target = { sessionId: reminder.sessionId, dueAt: reminder.dueAt };
@@ -303,7 +295,7 @@ export function useSessionReminders(
   return {
     reminders,
     due: reminders.filter((reminder) => reminder.dueAt <= now),
-    error,
+    error: error ?? registrationError,
     refresh,
     schedule,
     cancel,

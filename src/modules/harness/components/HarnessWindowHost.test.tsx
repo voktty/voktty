@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, StrictMode, useLayoutEffect, type ReactNode } from "react";
 import { useInboxUnseen } from "@/modules/harness/hooks/useInboxUnseen";
+import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
 import { useHarnessSummaryUpdates } from "@/modules/harness/hooks/useHarnessSummaryUpdates";
 import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";
@@ -297,6 +298,58 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("registers the union of open sessions and keeps it through zero views", async () => {
+    const one = fixture("one", "/work/one");
+    const two = fixture("two", "remote://machine/srv/two");
+    function Reader() {
+      useHarnessReminderWindow(["view-must-not-overwrite"]);
+      return null;
+    }
+    const registrations = () =>
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_register_window",
+      );
+    await render(
+      [one.session, two.session],
+      [
+        { ownerId: 1, input: one.input },
+        { ownerId: 2, input: two.input },
+      ],
+      false,
+      <Reader />,
+    );
+    expect(registrations()[registrations().length - 1]?.[1]).toEqual({
+      sessionIds: ["one", "two"],
+    });
+    expect(
+      registrations().some(([, args]) =>
+        args.sessionIds.includes("view-must-not-overwrite"),
+      ),
+    ).toBe(false);
+    const count = registrations().length;
+    await render([one.session, two.session], [], false, <Reader />);
+    act(() =>
+      required(runtime).engine.updateSession(
+        "one",
+        (session) => ({ ...session, title: "Renamed" }),
+        "immediate",
+      ),
+    );
+    expect(registrations()).toHaveLength(count);
+    const retired = required(
+      required(runtime)
+        .views.getSnapshot()
+        .cohorts.find((cohort) => cohort.ownerId === 1),
+    );
+    act(() => {
+      expect(required(runtime).views.retire(retired)).toBe(true);
+    });
+    await act(async () => {});
+    expect(registrations()[registrations().length - 1]?.[1]).toEqual({
+      sessionIds: ["two"],
+    });
+  });
+
   it("keeps one Inbox source through view release and transcript changes", async () => {
     const one = fixture("one", "/work/one");
     const consumerAppeared = vi.fn();
