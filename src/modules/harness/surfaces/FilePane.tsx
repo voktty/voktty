@@ -135,6 +135,7 @@ function FilePaneComponent({
             ) : isTerminalTab(file) ? (
               <HarnessTerminalView
                 file={file}
+                slotKey={`pane:${pane.id}`}
                 visible={visible && file.id === pane.activeFileId}
                 active={focused && file.id === pane.activeFileId}
                 layoutKey={layoutKey}

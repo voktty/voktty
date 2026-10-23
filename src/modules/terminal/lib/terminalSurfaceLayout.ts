@@ -20,6 +20,7 @@ export type TerminalSurfaceRequest = {
   rect: TerminalSurfaceRect | null;
   onFocus?: () => void;
   layoutKey?: string | number;
+  slotKey?: string;
 };
 export type TerminalSurfaceEntry = Readonly<TerminalSurfaceRequest> & {
   readonly identity: object;
@@ -67,7 +68,12 @@ function checked(input: TerminalSurfaceRequest): TerminalSurfaceRequest {
         value.length <= 32768 &&
         !/[\x00-\x1f\x7f]/.test(value),
     ) ||
-    (input.rect && !validRect(input.rect))
+    (input.rect && !validRect(input.rect)) ||
+    (input.slotKey !== undefined &&
+      (typeof input.slotKey !== "string" ||
+        !input.slotKey ||
+        input.slotKey.length > 32768 ||
+        /[\x00-\x1f\x7f]/.test(input.slotKey)))
   )
     throw new Error("Invalid terminal surface.");
   return {
@@ -78,6 +84,7 @@ function checked(input: TerminalSurfaceRequest): TerminalSurfaceRequest {
     rect: input.rect ? Object.freeze({ ...input.rect }) : null,
     onFocus: input.onFocus,
     layoutKey: input.layoutKey,
+    slotKey: input.slotKey,
   };
 }
 
@@ -137,6 +144,7 @@ export function createTerminalSurfaces(limit = 256) {
             old.focused === value.focused &&
             old.onFocus === value.onFocus &&
             old.layoutKey === value.layoutKey &&
+            old.slotKey === value.slotKey &&
             sameRect(old.rect, value.rect)
           )
             return true;
@@ -165,23 +173,17 @@ function intersect(
     : null;
 }
 
-export function selectTerminalSurfacePlacements(
+export function terminalSurfaceCandidates(
   tabs: readonly Tab[],
   activeId: number,
   placements: ReadonlyMap<number, WorkspacePlacement> | undefined,
-  snapshot: TerminalSurfaceSnapshot,
-): ReadonlyMap<TabKey, TerminalSurfacePlacement> {
-  const output = new Map<TabKey, TerminalSurfacePlacement>();
-  const root = snapshot.root;
-  if (!root || root.width <= 0 || root.height <= 0) return output;
+  entries: readonly TerminalSurfaceEntry[],
+) {
+  const candidates = [];
   const byKey = new Map(tabs.map((tab) => [tab.tabKey, tab]));
   const visible = (tab: Tab) =>
     !tab.cold && (placements ? placements.has(tab.id) : tab.id === activeId);
-  let leaves = tabs.reduce(
-    (count, tab) => count + (visible(tab) ? terminalLeafCount(tab) : 0),
-    0,
-  );
-  for (const entry of snapshot.entries) {
+  for (const entry of entries) {
     const terminal = byKey.get(entry.tabKey);
     const owner = byKey.get(entry.ownerTabKey);
     if (
@@ -192,13 +194,41 @@ export function selectTerminalSurfacePlacements(
       terminal.collaboration ||
       terminal.private ||
       visible(terminal) ||
-      output.has(terminal.tabKey) ||
       owner?.kind !== "harness" ||
       !visible(owner) ||
       terminal.projectCwd !== entry.projectCwd ||
       owner.cwd !== entry.projectCwd
     )
       continue;
+    candidates.push({ entry, terminal, owner });
+  }
+  return candidates;
+}
+
+export function selectTerminalSurfacePlacements(
+  tabs: readonly Tab[],
+  activeId: number,
+  placements: ReadonlyMap<number, WorkspacePlacement> | undefined,
+  snapshot: TerminalSurfaceSnapshot,
+): ReadonlyMap<TabKey, TerminalSurfacePlacement> {
+  const output = new Map<TabKey, TerminalSurfacePlacement>();
+  const root = snapshot.root;
+  if (!root || root.width <= 0 || root.height <= 0) return output;
+  let leaves = tabs.reduce(
+    (count, tab) =>
+      count +
+      (!tab.cold && (placements ? placements.has(tab.id) : tab.id === activeId)
+        ? terminalLeafCount(tab)
+        : 0),
+    0,
+  );
+  for (const { entry, terminal, owner } of terminalSurfaceCandidates(
+    tabs,
+    activeId,
+    placements,
+    snapshot.entries,
+  )) {
+    if (!entry.rect || output.has(terminal.tabKey)) continue;
     const ownerPlacement = placements?.get(owner.id);
     const ownerRect = ownerPlacement
       ? {

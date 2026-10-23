@@ -85,6 +85,8 @@ export function WorkspaceSurface(props: WorkspaceSurfaceProps) {
     <TerminalSurfaceProvider>
       <CanonicalTerminalCatalog
         tabs={props.tabs}
+        activeId={props.activeId}
+        placements={props.placements}
         onClose={props.onCloseTerminalTab}
       >
         <WorkspaceSurfaceLayers {...props} />

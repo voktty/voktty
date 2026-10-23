@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, useEffect, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, assert, expect, it, vi } from "vitest";
 import { useProjectTerminalRequests } from "@/app/hooks/useProjectTerminalRequests";
 import {
   requestProjectTerminal,
@@ -10,7 +10,9 @@ import {
 } from "@/modules/terminal/lib/projectTerminalRequest";
 import { useTabs } from "@/modules/tabs/lib/useTabs";
 import { createTabIdentity } from "@/modules/tabs/lib/tabIdentity";
-import type { HarnessTab, TerminalTab } from "@/modules/tabs";
+import type { HarnessTab, TerminalTab, Tab } from "@/modules/tabs";
+import type { WorkspacePlacement } from "@/modules/spaces/lib/spaceGeometry";
+import type { PaneNode } from "@/modules/terminal/lib/panes";
 import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import { openPty } from "@/modules/terminal/lib/pty-bridge";
 import { leafIds } from "@/modules/terminal/lib/panes";
@@ -22,6 +24,7 @@ import {
   type PersistenceOwner,
 } from "@/modules/harness/lib/persistenceAdmission";
 import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTerminalRequest";
+import { CanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -86,14 +89,21 @@ function NativeLeaf({ tab }: { tab: TerminalTab }) {
 function Desktop({
   projectCwd = project,
   withDock = false,
+  budgetTabs = [],
+  placements,
 }: {
   projectCwd?: string;
   withDock?: boolean;
+  budgetTabs?: readonly Tab[];
+  placements?: readonly WorkspacePlacement[];
 }) {
   const current = useTabs();
   tabs = current;
   const replaceTabs = current.replaceTabs;
-  useLayoutEffect(() => replaceTabs([source], source.id), [replaceTabs]);
+  useLayoutEffect(
+    () => replaceTabs([{ ...source, cwd: projectCwd }], source.id),
+    [replaceTabs, projectCwd],
+  );
   useProjectTerminalRequests({
     source: current.tabs.find((tab) => tab.id === current.activeId),
     projectCwd,
@@ -107,7 +117,11 @@ function Desktop({
     onError: mocks.error,
   });
   return (
-    <>
+    <CanonicalTerminalCatalog
+      tabs={[...current.tabs, ...budgetTabs]}
+      activeId={current.activeId}
+      placements={placements}
+    >
       {current.tabs.map((tab) =>
         tab.kind === "terminal" && !tab.cold ? (
           <NativeLeaf key={tab.id} tab={tab} />
@@ -127,7 +141,7 @@ function Desktop({
           />
         </HarnessTerminalOwner>
       ) : null}
-    </>
+    </CanonicalTerminalCatalog>
   );
 }
 function deferred<T>() {
@@ -136,6 +150,35 @@ function deferred<T>() {
     resolve = done;
   });
   return { promise, resolve };
+}
+function occupiedComposite(count: number) {
+  const paneTree: PaneNode = {
+    kind: "split",
+    id: 500,
+    dir: "row",
+    children: Array.from({ length: count }, (_, index) => ({
+      kind: "leaf",
+      id: 501 + index,
+    })),
+  };
+  const terminal: TerminalTab = {
+    ...createTabIdentity("main", () => "budget"),
+    id: 500,
+    spaceId: "main",
+    kind: "terminal",
+    title: "busy",
+    paneTree,
+    activeLeafId: 501,
+  };
+  const placements: WorkspacePlacement[] = [source.id, terminal.id].map(
+    (tabId) => ({
+      tabId,
+      slotId: "slot" as WorkspacePlacement["slotId"],
+      rect: { x: 0, y: 0, width: 1, height: 1 },
+      focused: tabId === source.id,
+    }),
+  );
+  return { budgetTabs: [terminal], placements };
 }
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -201,6 +244,7 @@ it.each(["local", "ssh"])(
     await act(async () => {
       expect(
         dockOpen({
+          slotKey: "dock",
           cwd: `${projectCwd}/src`,
           onCreated: (reference) => {
             dockReferences.push(reference);
@@ -225,12 +269,120 @@ it.each(["local", "ssh"])(
   },
 );
 
+it.each(["local", "ssh"])(
+  "refuses a %s dock request before native acquisition when the composite is full",
+  async (kind) => {
+    const projectCwd = kind === "ssh" ? project : "C:/Work/App";
+    await act(async () =>
+      root.render(
+        <Desktop projectCwd={projectCwd} withDock {...occupiedComposite(8)} />,
+      ),
+    );
+    mocks.invoke.mockClear();
+    await act(async () => {
+      expect(
+        dockOpen({
+          slotKey: "dock",
+          cwd: projectCwd,
+          onCreated: (reference) => {
+            dockReferences.push(reference);
+          },
+        }),
+      ).toBe(false);
+    });
+    expect(dockReferences).toEqual([]);
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(tabs.getTabs()).toHaveLength(1);
+    expect(mocks.error).toHaveBeenCalledOnce();
+  },
+);
+
+it("retains settled capacity across delayed presentation and focus changes, then releases it on view retirement", async () => {
+  const projectCwd = "C:/Work/App";
+  const budget = occupiedComposite(7);
+  await act(async () =>
+    root.render(<Desktop projectCwd={projectCwd} withDock {...budget} />),
+  );
+  const onCreated = (reference: ProjectTerminalReference) => {
+    dockReferences.push(reference);
+  };
+  await act(async () => {
+    expect(dockOpen({ slotKey: "dock", cwd: projectCwd, onCreated })).toBe(
+      true,
+    );
+    await vi.waitFor(() => expect(dockReferences).toHaveLength(1));
+  });
+  const created = tabs
+    .getTabs()
+    .find((tab) => tab.tabKey === dockReferences[0].tabKey);
+  assert(created);
+  await act(async () => tabs.setActiveId(created.id));
+  await act(async () => tabs.setActiveId(source.id));
+  await act(async () => {
+    expect(dockOpen({ slotKey: "other", cwd: projectCwd, onCreated })).toBe(
+      false,
+    );
+  });
+  expect(dockReferences).toHaveLength(1);
+  await act(async () =>
+    root.render(<Desktop projectCwd={projectCwd} {...budget} />),
+  );
+  await act(async () =>
+    root.render(<Desktop projectCwd={projectCwd} withDock {...budget} />),
+  );
+  await act(async () => {
+    expect(dockOpen({ slotKey: "other", cwd: projectCwd, onCreated })).toBe(
+      true,
+    );
+    await vi.waitFor(() => expect(dockReferences).toHaveLength(2));
+  });
+});
+
+it("retires an SSH admission when the composite fills and does not revive it after capacity returns", async () => {
+  const pending = deferred<ProjectTerminalTarget>();
+  mocks.resolve.mockReturnValueOnce(pending.promise);
+  await act(async () =>
+    root.render(<Desktop withDock {...occupiedComposite(7)} />),
+  );
+  await act(async () => {
+    expect(
+      dockOpen({
+        slotKey: "dock",
+        cwd: project,
+        onCreated: (reference) => {
+          dockReferences.push(reference);
+        },
+      }),
+    ).toBe(true);
+    await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledOnce());
+  });
+  await act(async () =>
+    root.render(<Desktop withDock {...occupiedComposite(8)} />),
+  );
+  expect(mocks.resolve.mock.calls[0][2]()).toBe(false);
+  await act(async () =>
+    root.render(<Desktop withDock {...occupiedComposite(7)} />),
+  );
+  expect(mocks.resolve.mock.calls[0][2]()).toBe(false);
+  await act(async () => {
+    pending.resolve(target);
+  });
+  await vi.waitFor(() =>
+    expect(target.lease.releaseAndClose).toHaveBeenCalledOnce(),
+  );
+  expect(dockReferences).toEqual([]);
+  expect(tabs.getTabs().some((tab) => tab.kind === "terminal")).toBe(false);
+  expect(mocks.error).not.toHaveBeenCalled();
+});
+
 it("releases a late SSH lease when the dock client unmounts during acquisition", async () => {
   const pending = deferred<ProjectTerminalTarget>();
   mocks.resolve.mockReturnValueOnce(pending.promise);
   await act(async () => root.render(<Desktop withDock />));
   await act(async () => {
     dockOpen({
+      slotKey: "dock",
       cwd: project,
       onCreated: (reference) => {
         dockReferences.push(reference);

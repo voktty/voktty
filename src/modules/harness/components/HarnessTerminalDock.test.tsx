@@ -1,5 +1,10 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
+import {
+  TerminalSurfaceProvider,
+  useTerminalSurfaceController,
+} from "@/modules/terminal/TerminalSurface";
+import { normalizeProjectPath } from "@/modules/harness/lib/recents";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, assert, expect, it, vi } from "vitest";
 import { HarnessApp } from "@/modules/harness/components/HarnessApp";
@@ -12,7 +17,7 @@ import {
 import { createPersistenceAdmission } from "@/modules/harness/lib/persistenceAdmission";
 import { createTabIdentity } from "@/modules/tabs/lib/tabIdentity";
 import { newSession } from "@/modules/harness/lib/session";
-import type { Tab, TerminalTab } from "@/modules/tabs";
+import type { Tab, TerminalTab, HarnessTab } from "@/modules/tabs";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import {
   newEditorPane,
@@ -112,6 +117,23 @@ vi.mock("@/modules/harness/surfaces/PaneTree", () => ({
 vi.mock("@/modules/harness/surfaces/ProjectTerminalDock", () => ({
   ProjectTerminalDock: (props: DockProps) => {
     state.dock = props;
+    const surfaces = useTerminalSurfaceController();
+    const reference = props.dock.open
+      ? props.dock.pane.files.find(
+          (file) => file.id === props.dock.pane.activeFileId,
+        )?.canonicalTerminal
+      : undefined;
+    useLayoutEffect(() => {
+      if (!reference || !surfaces) return;
+      const receipt = surfaces.register({
+        ...reference,
+        ownerTabKey: ownerKey,
+        slotKey: `dock:${normalizeProjectPath(props.dock.projectPath)}`,
+        focused: true,
+        rect: { left: 0, top: 0, width: 0, height: 0 },
+      });
+      return receipt.release;
+    }, [surfaces, reference, props.dock.projectPath]);
     return null;
   },
 }));
@@ -201,18 +223,35 @@ function Host({
   resumed?: ResumedWorkspace;
 }) {
   return (
-    <CanonicalTerminalCatalog tabs={tabs} onClose={state.close}>
-      <HarnessTerminalOwner
-        value={{ tabKey: ownerKey, visible: true, onFocus: state.focus }}
+    <TerminalSurfaceProvider>
+      <CanonicalTerminalCatalog
+        tabs={[
+          {
+            ...createTabIdentity("main", () => "owner"),
+            tabKey: ownerKey,
+            id: 1,
+            kind: "harness",
+            title: "Harness",
+            spaceId: "main",
+            cwd: currentProject,
+          } satisfies HarnessTab,
+          ...tabs,
+        ]}
+        activeId={1}
+        onClose={state.close}
       >
-        <HarnessApp
-          surfaceOwnerId={1}
-          initialCwd={currentProject}
-          focused={focused}
-          resumed={resumed}
-        />
-      </HarnessTerminalOwner>
-    </CanonicalTerminalCatalog>
+        <HarnessTerminalOwner
+          value={{ tabKey: ownerKey, visible: true, onFocus: state.focus }}
+        >
+          <HarnessApp
+            surfaceOwnerId={1}
+            initialCwd={currentProject}
+            focused={focused}
+            resumed={resumed}
+          />
+        </HarnessTerminalOwner>
+      </CanonicalTerminalCatalog>
+    </TerminalSurfaceProvider>
   );
 }
 beforeEach(() => {

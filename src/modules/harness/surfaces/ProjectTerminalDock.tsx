@@ -29,6 +29,7 @@ import {
 import { MOD } from "../lib/platform";
 import type { TerminalMetaPatch } from "../lib/terminalTab";
 import { HarnessTerminalView } from "@/modules/harness/surfaces/HarnessTerminalView";
+import { normalizeProjectPath } from "@/modules/harness/lib/recents";
 
 type Props = {
   dock: ProjectTerminalDockModel;
@@ -263,6 +264,7 @@ export function ProjectTerminalDock({
           >
             <HarnessTerminalView
               file={file}
+              slotKey={`dock:${normalizeProjectPath(dock.projectPath)}`}
               visible={dock.open && file.id === dock.pane.activeFileId}
               active={focused && file.id === dock.pane.activeFileId}
               layoutKey={`${dock.side}:${dock.size}`}

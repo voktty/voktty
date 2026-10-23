@@ -10,6 +10,7 @@ export function HarnessTerminalView({
   visible,
   active,
   layoutKey,
+  slotKey,
   onFocus,
   onMetaChange,
 }: {
@@ -17,6 +18,7 @@ export function HarnessTerminalView({
   visible: boolean;
   active: boolean;
   layoutKey?: string | number;
+  slotKey?: string;
   onFocus?: () => void;
   onMetaChange?: (patch: TerminalMetaPatch) => void;
 }) {
@@ -36,6 +38,7 @@ export function HarnessTerminalView({
           onFocus?.();
         }}
         layoutKey={`${owner.layoutKey ?? ""}:${layoutKey ?? ""}`}
+        slotKey={slotKey}
       />
     );
   }

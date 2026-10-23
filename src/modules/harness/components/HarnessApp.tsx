@@ -1739,6 +1739,7 @@ export function HarnessApp({
       if (!association) return false;
       return createCanonicalTerminal({
         cwd: workdir,
+        slotKey: `dock:${normalizeProjectPath(projectPath)}`,
         onCreated: ({ tabKey }) => {
           const existing = findProjectTerminal(
             projectTerminalsRef.current,
@@ -1869,8 +1870,12 @@ export function HarnessApp({
       const association = terminalProjectMetadata(projectCwd).projectCwd;
       if (!association || !targetExists()) return;
       const cwd = active?.cwd ?? projectCwd;
+      const sourceTab = tabsRef.current.find((tab) => tab.id === tabId);
+      const target = sourceTab && findSurfacePane(sourceTab, paneId);
+      const destination = target?.kind === "terminal" ? target.pane : sourceTab?.terminalPanes[0];
       createCanonicalTerminal({
         cwd,
+        slotKey: `${destination ? "pane" : "editor"}:${destination?.id ?? paneId}`,
         isCurrent: targetExists,
         onCreated: ({ tabKey }) => {
           const file = {

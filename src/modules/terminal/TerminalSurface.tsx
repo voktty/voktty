@@ -26,6 +26,10 @@ const EMPTY: TerminalSurfaceSnapshot = Object.freeze({
 const noopSubscribe = () => () => {};
 const getEmpty = () => EMPTY;
 
+export function useTerminalSurfaceController() {
+  return useContext(SurfaceContext);
+}
+
 export function TerminalSurfaceProvider({ children }: { children: ReactNode }) {
   const [controller] = useState(createTerminalSurfaces);
   return (
@@ -102,6 +106,7 @@ export function TerminalSurface({
   focused,
   onFocus,
   layoutKey,
+  slotKey,
   children,
 }: {
   tabKey: TabKey;
@@ -111,6 +116,7 @@ export function TerminalSurface({
   focused: boolean;
   onFocus?: () => void;
   layoutKey?: string | number;
+  slotKey?: string;
   children?: ReactNode;
 }) {
   const controller = useContext(SurfaceContext);
@@ -127,6 +133,7 @@ export function TerminalSurface({
     focused,
     onFocus: focus,
     layoutKey,
+    slotKey,
   });
   const receipt = useRef<ReturnType<
     ReturnType<typeof createTerminalSurfaces>["register"]
@@ -139,13 +146,14 @@ export function TerminalSurface({
       focused,
       onFocus: focus,
       layoutKey,
+      slotKey,
     };
     if (node.current)
       receipt.current?.update({
         ...latest.current,
         rect: bounds(node.current),
       });
-  }, [tabKey, ownerTabKey, projectCwd, focused, focus, layoutKey]);
+  }, [tabKey, ownerTabKey, projectCwd, focused, focus, layoutKey, slotKey]);
   useLayoutEffect(() => {
     if (!controller || !visible || !node.current) return;
     const current = controller.register({
