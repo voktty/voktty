@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "@/modules/i18n";
 import { PanelLeft, RotateCcw } from "../chrome/icons";
 import { IconButton } from "../chrome/TitleBar";
@@ -25,6 +25,11 @@ export function InboxDiscussionPanel({
 }) {
   const { t } = useTranslation();
   const host = useRef<HTMLDivElement>(null);
+  const discussion = useRef<{
+    key: string;
+    isCurrent: () => boolean;
+    pending: boolean;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const resize = useDragResize({
@@ -38,22 +43,30 @@ export function InboxDiscussionPanel({
     },
   });
   const key = inboxAskKey(item);
-  useEffect(() => {
+  useLayoutEffect(() => {
     let active = true;
+    const owner = { key, isCurrent: () => active, pending: true };
+    discussion.current = owner;
     setError(null);
     setLoading(true);
-    void onOpen(item)
+    void Promise.resolve()
+      .then(() => (active ? onOpen(item) : undefined))
       .then((sessionId) => {
-        if (active && host.current) onMount({ sessionId, host: host.current });
+        if (active && sessionId && host.current)
+          onMount({ sessionId, host: host.current });
       })
       .catch((reason) => {
         if (active) setError(String(reason));
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          owner.pending = false;
+          setLoading(false);
+        }
       });
     return () => {
       active = false;
+      if (discussion.current === owner) discussion.current = null;
       onMount(null);
     };
     // Metadata refreshes for the same item must not remount its composer.
@@ -82,14 +95,33 @@ export function InboxDiscussionPanel({
           label={t("harness.chrome.restartConversation")}
           disabled={loading}
           onClick={() => {
+            const owner = discussion.current;
+            if (
+              !owner ||
+              owner.key !== key ||
+              !owner.isCurrent() ||
+              owner.pending
+            )
+              return;
+            owner.pending = true;
             setLoading(true);
             setError(null);
-            void onRestart(item)
-              .then(sessionId => {
-                if (host.current) onMount({ sessionId, host: host.current });
+            const captured = { ...item };
+            void Promise.resolve()
+              .then(() => (owner.isCurrent() ? onRestart(captured) : undefined))
+              .then((sessionId) => {
+                if (owner.isCurrent() && sessionId && host.current)
+                  onMount({ sessionId, host: host.current });
               })
-              .catch(reason => setError(String(reason)))
-              .finally(() => setLoading(false));
+              .catch((reason) => {
+                if (owner.isCurrent()) setError(String(reason));
+              })
+              .finally(() => {
+                if (owner.isCurrent()) {
+                  owner.pending = false;
+                  setLoading(false);
+                }
+              });
           }}
         >
           <RotateCcw className="size-3.5" />
