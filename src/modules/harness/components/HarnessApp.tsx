@@ -1,3 +1,4 @@
+import { useHarnessAutomations } from "@/modules/harness/hooks/useHarnessAutomations";
 import { useHarnessTranscriptPersistence } from "@/modules/harness/hooks/useHarnessTranscriptPersistence";
 import { useHarnessWindowPersistence } from "@/modules/harness/hooks/useHarnessWindowPersistence";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
@@ -61,23 +62,12 @@ import {
   publishHarnessProject,
 } from "@/modules/surfaces";
 import {
-  claimDueAutomations,
   listAutomations,
-  recoverAutomationRuns,
-  updateAutomationRun,
   type Automation,
   type AutomationRun,
 } from "../lib/automations";
 import { lazySurface } from "../lib/lazySurface";
 import { preloadNavigationWhenIdle } from "../lib/preloadNavigation";
-import {
-  claimInboxAutomationRuns,
-} from "../lib/automationEvents";
-import {
-  loadSessionFolders,
-  placeSessionInFolder,
-  saveSessionFolders,
-} from "../lib/sessionFolders";
 import {
   LAYOUT_CHANGE_EVENT,
   loadProjectRailOpen,
@@ -231,7 +221,7 @@ import {
   turnReport,
   turnUserRequest,
 } from "../lib/secondOpinion";
-import { type Block, formatSessionTitle, HARNESS_LABEL, type HarnessId, hasPendingApproval, type LinkedWorkItem, type ModelTarget, newDefaultSession, newSession, type Session, sessionDisplayTitle, sessionWorkCwd } from "../lib/session";
+import { type Block, formatSessionTitle, type HarnessId, hasPendingApproval, type LinkedWorkItem, type ModelTarget, newDefaultSession, newSession, type Session, sessionDisplayTitle, sessionWorkCwd } from "../lib/session";
 
 import {
   historyWithLiveSessions,
@@ -717,9 +707,6 @@ const sessionEngine = useHarnessSessionEngine({
     canForward: false,
   });
 
-  const automationRecoveryRef = useRef<Promise<void> | null>(null);
-  const automationRecoveryCutoffRef = useRef<string | null>(null);
-  const automationActiveRuns = useRef(new Map<string, string>());
   const dirtyFilesRef = useRef(dirtyFiles);
   dirtyFilesRef.current = dirtyFiles;
   const removingSessionIds = useRef(new Set<string>());
@@ -1052,21 +1039,6 @@ const sessionEngine = useHarnessSessionEngine({
   const approvalSessionIds = approvalSessionIdsRef.current;
 
   const activeSessionId = active?.id;
-  const busyForDoneRef = useRef(busySessionIds);
-  if (busyForDoneRef.current !== busySessionIds) {
-    for (const prevId of busyForDoneRef.current) {
-      if (!busySessionIds.has(prevId)) {
-        const runId = automationActiveRuns.current.get(prevId);
-        if (runId) {
-          const finishedSession = sessions.find((s) => s.id === prevId);
-          const hasError = finishedSession?.blocks.some((b) => b.notice === "error");
-          void updateAutomationRun(runId, hasError ? "failed" : "succeeded");
-          automationActiveRuns.current.delete(prevId);
-        }
-      }
-    }
-    busyForDoneRef.current = busySessionIds;
-  }
   const unseenFinishedIds = useUnseenFinishedSessions(
     sessions,
     busySessionIds,
@@ -4287,19 +4259,18 @@ const sessionEngine = useHarnessSessionEngine({
     [openSessionBeside],
   );
 
-  const assignAutomationFolder = useCallback(
-    (folderId: string | undefined, sessionId: string, cwd: string) => {
-      if (!folderId || !looksLikeProject(cwd)) return;
-      const current = loadSessionFolders(cwd);
-      const updated = placeSessionInFolder(
-        current,
-        { kind: "existing", folderId },
-        sessionId,
+  const automations = useHarnessAutomations({
+    engine: sessionEngine,
+    sessions,
+    getOwner: getPersistenceOwner,
+    revision: persistenceRevision,
+    onCreated: (session, isCurrent) => {
+      const summary = summaryFromSession(session);
+      setHistory((current) =>
+        isCurrent() ? mergeProjectHistorySummary(current, summary) : current,
       );
-      saveSessionFolders(cwd, updated.folders);
     },
-    [],
-  );
+  });
 
   const launchAutomation = useCallback(
     async (
@@ -4312,128 +4283,38 @@ const sessionEngine = useHarnessSessionEngine({
         openBeside?: boolean;
       },
     ) => {
-      const sessionId = run.sessionId || run.id;
-      const cwd = automation.cwd;
-      const model = resolveModel(automation.harness, automation.model).id;
-      const prompt = options?.prompt || run.prompt || automation.prompt;
-      const session: Session = {
-        ...newSession(
-          automation.harness,
-          cwd,
-          model,
-          automation.runtimeMode,
-          automation.modelSettings,
-        ),
-        id: sessionId,
-        automationId: automation.id,
-        linkedWorkItem: options?.linkedWorkItem,
-        title: formatSessionTitle(
-          automation.harness,
-          automation.name || HARNESS_LABEL[automation.harness],
-        ),
-      };
-
-      assignAutomationFolder(
-        automation.sessionFolderId,
-        sessionId,
-        cwd,
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) return;
+      const sourceTab = tabsRef.current.find(
+        (tab) => tab.id === activeTabIdRef.current,
       );
-
-      if (options?.focus) {
-        setAutomationsViewOpen(false);
-        admitSession(session, "immediate");
-        if (options.openBeside && active?.id) {
-          openSessionBeside(active.id, session, cwd);
-        } else if (!focusOpenSession(sessionId)) {
-          const tab = newTab(sessionId);
-          appendTab(tab, cwd);
-          setActiveTabId(tab.id);
-          activeTabIdRef.current = tab.id;
-          setProjectTerminalFocused(false);
-          setComposerFocused(true);
-        }
-      } else {
-        admitSession(session, "immediate");
-      }
-
-      const summary = summaryFromSession(session);
-      setHistory((current: any) => mergeHistorySummary(current, summary));
-
-      automationActiveRuns.current.set(sessionId, run.id);
-      void updateAutomationRun(run.id, "running", { sessionId });
-
-      if (prompt) {
-        onSubmit(sessionId, prompt);
+      const sourceProject = projectCwdRef.current;
+      const launched = await automations.launch(automation, run, options);
+      if (!launched?.isCurrent() || !permit.isCurrent() || !options?.focus) return;
+      if (
+        projectCwdRef.current !== sourceProject ||
+        tabsRef.current.find((tab) => tab.id === activeTabIdRef.current) !== sourceTab
+      ) return;
+      const { session } = launched;
+      const sessionId = session.id;
+      const cwd = session.cwd;
+      setAutomationsViewOpen(false);
+      if (options.openBeside && active?.id) {
+        openSessionBeside(active.id, session, cwd);
+      } else if (!focusOpenSession(sessionId)) {
+        const tab = newTab(sessionId);
+        appendTab(tab, cwd);
+        setActiveTabId(tab.id);
+        activeTabIdRef.current = tab.id;
+        setProjectTerminalFocused(false);
+        setComposerFocused(true);
       }
     },
-    [active?.id, appendTab, assignAutomationFolder, focusOpenSession, onSubmit, openSessionBeside, admitSession],
-  );
-
-  const ensureAutomationRecovery = useCallback(async () => {
-    if (automationRecoveryRef.current) {
-      return automationRecoveryRef.current;
-    }
-    const cutoff = Date.now();
-    automationRecoveryCutoffRef.current = String(cutoff);
-    const task = (async () => {
-      try {
-        await recoverAutomationRuns(cutoff);
-      } catch (error) {
-        console.error("Failed to recover automation runs:", error);
-      } finally {
-        automationRecoveryRef.current = null;
-      }
-    })();
-    automationRecoveryRef.current = task;
-    return task;
-  }, []);
-
-  useEffect(() => {
-    void ensureAutomationRecovery();
-    let unmounted = false;
-    const poll = async () => {
-      if (document.hidden) return;
-      try {
-        const claims = await claimDueAutomations();
-        if (unmounted) return;
-        for (const claim of claims) {
-          void launchAutomation(claim.automation, claim.run, { focus: false });
-        }
-      } catch (error) {
-        console.error("Automation claim failed:", error);
-      }
-    };
-    const interval = window.setInterval(() => {
-      void poll();
-    }, 15000);
-    void poll();
-    return () => {
-      unmounted = true;
-      window.clearInterval(interval);
-    };
-  }, [ensureAutomationRecovery, launchAutomation]);
-
-  const onInboxAppeared = useCallback(
-    async (items: InboxItem[]) => {
-      if (items.length === 0) return;
-      try {
-        const claims = await claimInboxAutomationRuns(items);
-        for (const claim of claims) {
-          void launchAutomation(claim.automation, claim.run, {
-            prompt: claim.prompt,
-            linkedWorkItem: claim.linkedWorkItem,
-            focus: false,
-          });
-        }
-      } catch (error) {
-        console.error("Inbox automation trigger failed:", error);
-      }
-    },
-    [launchAutomation],
+    [active?.id, appendTab, automations, focusOpenSession, getPersistenceOwner, openSessionBeside],
   );
 
   useInboxUnseen(recents, sidebarCwd, {
-    onAppeared: onInboxAppeared,
+    onAppeared: automations.onInboxAppeared,
   });
 
 

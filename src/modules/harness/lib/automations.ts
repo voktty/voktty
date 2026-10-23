@@ -1,6 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { HarnessId, RuntimeMode } from "./session";
+import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
+
+export async function automationWrite<T>(
+  permit: PersistencePermit | undefined,
+  write: () => Promise<T>,
+): Promise<T | undefined> {
+  if (!permit) return write();
+  let result: T | undefined;
+  await permit.run(async () => {
+    result = await write();
+  });
+  return result;
+}
 
 export const AUTOMATIONS_CHANGED = "voktty:automations-changed";
 const LOCAL_CHANGED = "voktty:automations-local-changed";
@@ -515,8 +528,11 @@ export async function createManualAutomationRun(
 
 export async function claimDueAutomations(
   now = Date.now(),
+  permit?: PersistencePermit,
 ): Promise<DueAutomationRun[]> {
+  if (permit && !permit.isCurrent()) return [];
   const automations = await listAutomations();
+  if (permit && !permit.isCurrent()) return [];
   const due = automations.filter(
     (automation) =>
       automation.enabled &&
@@ -535,15 +551,16 @@ export async function claimDueAutomations(
     )) {
       let result: DueAutomationRun | null;
       try {
-        result = await invoke<DueAutomationRun | null>(
-          "automations_claim_due",
-          {
+        const accepted = await automationWrite(permit, () =>
+          invoke<DueAutomationRun | null>("automations_claim_due", {
             automationId: automation.id,
             expectedNextRunAt: occurrence.scheduledFor,
             nextRunAt: occurrence.nextRunAt,
             now,
-          },
+          }),
         );
+        if (accepted === undefined) return claimed;
+        result = accepted;
       } catch {
         // Keep earlier successful claims launchable. This occurrence remains
         // due because the backend transaction did not accept it.

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   automationTriggers,
+  automationWrite,
   listAutomations,
   notifyAutomationsChanged,
   type Automation,
@@ -12,6 +13,7 @@ import { inboxStartDraft, type InboxItem } from "./githubTasks";
 import { sameProjectPath } from "./recents";
 import type { LinkedWorkItem } from "./session";
 import { linkedWorkItemFromInboxItem } from "./sessionWorkItem";
+import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 
 export type InboxAutomationMatch = {
   automation: Automation;
@@ -147,7 +149,9 @@ export function matchInboxAutomations(
 export async function claimInboxAutomationRuns(
   appeared: readonly InboxItem[],
   now = Date.now(),
+  permit?: PersistencePermit,
 ): Promise<ClaimedInboxAutomationRun[]> {
+  if (permit && !permit.isCurrent()) return [];
   const pending = pendingRetryItems();
   for (const item of appeared) {
     const key = automationEventKey(item);
@@ -162,15 +166,15 @@ export async function claimInboxAutomationRuns(
   if (pending.size === 0) return [];
 
   const automations = await listAutomations();
+  if (permit && !permit.isCurrent()) return [];
   const candidates = [...pending.values()];
   const matches = matchInboxAutomations(automations, candidates);
   const claimed: ClaimedInboxAutomationRun[] = [];
   const failed = new Set<string>();
   for (const match of matches) {
     try {
-      const result = await invoke<DueAutomationRun | null>(
-        "automations_claim_event",
-        {
+      const result = await automationWrite(permit, () =>
+        invoke<DueAutomationRun | null>("automations_claim_event", {
           automationId: match.automation.id,
           claim: {
             eventKey: match.eventKey,
@@ -180,8 +184,9 @@ export async function claimInboxAutomationRuns(
             prompt: match.prompt,
           },
           now,
-        },
+        }),
       );
+      if (result === undefined) return claimed;
       if (result) {
         const linkedWorkItem = linkedWorkItemFromInboxItem(match.item);
         claimed.push({
@@ -194,6 +199,7 @@ export async function claimInboxAutomationRuns(
       failed.add(match.eventKey);
     }
   }
+  if (permit && !permit.isCurrent()) return claimed;
   for (const item of candidates) {
     const key = automationEventKey(item);
     if (!failed.has(key)) pending.delete(key);

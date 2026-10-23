@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
+import { useHarnessAutomations } from "@/modules/harness/hooks/useHarnessAutomations";
 import { useHarnessWindowAttention } from "@/modules/harness/hooks/useHarnessWindowAttention";
 import { useHarnessTranscriptPersistence } from "@/modules/harness/hooks/useHarnessTranscriptPersistence";
 import { useHarnessWindowPersistence } from "@/modules/harness/hooks/useHarnessWindowPersistence";
@@ -31,6 +32,7 @@ type WindowRuntime = {
   views: ReturnType<typeof createHarnessWindowViews>;
   persistence: ReturnType<typeof useWindowPersistenceAdmission>;
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
+  automations: ReturnType<typeof useHarnessAutomations>;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -70,6 +72,12 @@ export function HarnessWindowHost({
     flushForegroundHarnessEvents: engine.flushForegroundHarnessEvents,
   });
   const persistence = useWindowPersistenceAdmission(() => undefined);
+  const automations = useHarnessAutomations({
+    engine,
+    sessions: engine.sessions,
+    getOwner: persistence.getOwner,
+    revision: persistence.revision,
+  });
   const surface = useActiveSurfaceStore((state) => state.surface);
   const selectedOwnerId = surface.kind === "harness" ? surface.ownerId : null;
   useEffect(() => {
@@ -128,7 +136,7 @@ export function HarnessWindowHost({
 
   return (
     <HarnessWindowContext.Provider
-      value={{ engine, views, persistence, transcripts }}
+      value={{ engine, views, persistence, transcripts, automations }}
     >
       {children}
     </HarnessWindowContext.Provider>

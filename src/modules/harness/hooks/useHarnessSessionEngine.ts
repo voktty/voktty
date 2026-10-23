@@ -1369,9 +1369,20 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     [],
   );
 
+  const captureSessionLifetime = useCallback((id: string) => {
+    const owner = owners.current.get(id);
+    const lifetime = executionLifetime.current;
+    return () =>
+      lifetime !== null &&
+      executionLifetime.current === lifetime &&
+      owner !== undefined &&
+      owners.current.get(id) === owner;
+  }, []);
+
   return {
     sessions,
     sessionsRef: sessionsRef as Readonly<{ current: Session[] }>,
+    captureSessionLifetime,
     readSession: (id: string) =>
       sessionsRef.current.find((session) => session.id === id),
     applySessionDeltas,
