@@ -1,3 +1,4 @@
+import { useHarnessTranscriptPersistence } from "@/modules/harness/hooks/useHarnessTranscriptPersistence";
 import { useHarnessWindowPersistence } from "@/modules/harness/hooks/useHarnessWindowPersistence";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import { harnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
@@ -244,10 +245,8 @@ import {
   getCachedSession,
   getSession,
   listSessionsByProject,
-  persistFingerprint,
   type SessionSummary,
   shouldPersistSession,
-  upsertSession,
   upsertSessions,
 } from "../lib/sessionStore";
 import {
@@ -724,11 +723,6 @@ const sessionEngine = useHarnessSessionEngine({
   const dirtyFilesRef = useRef(dirtyFiles);
   dirtyFilesRef.current = dirtyFiles;
   const removingSessionIds = useRef(new Set<string>());
-  const lastPersisted = useRef(new Map<string, string>());
-  const lastBoundProvider = useRef(new Map<string, string>());
-  const lastPersistedUserBlock = useRef(new Map<string, string>());
-  const observedSessions = useRef(new Map<string, Session>());
-  const pendingPersist = useRef(new Map<string, Session>());
   const foregroundSurfaceRef = useRef<{
     workspaceVisible: boolean;
     inboxSessionId?: string;
@@ -745,7 +739,6 @@ const sessionEngine = useHarnessSessionEngine({
   };
 
   const skipForgetSessionIds = useRef(new Set<string>());
-  const importedSessionsApplied = useRef(false);
 
   useEffect(() => {
     let unmounted = false;
@@ -773,32 +766,10 @@ const sessionEngine = useHarnessSessionEngine({
     };
   }, []);
 
-  useEffect(() => {
-    if (importedSessionsApplied.current) return;
-    const imported = windowTransfer?.sessions ?? resumed?.sessions;
-    if (!imported?.length) return;
-    importedSessionsApplied.current = true;
-    for (const session of imported) {
-      observedSessions.current.set(session.id, session);
-      lastPersisted.current.set(session.id, persistFingerprint(session));
-      const userId = lastUserBlockId(session);
-      if (userId) lastPersistedUserBlock.current.set(session.id, userId);
-      if (session.providerSessionId) {
-        lastBoundProvider.current.set(session.id, session.providerSessionId);
-      }
-    }
-  }, [windowTransfer, resumed]);
-
-
-
   const {
     getOwner: getPersistenceOwner,
     revision: persistenceRevision,
-  } = useWindowPersistenceAdmission(() => {
-    lastPersisted.current.clear();
-    observedSessions.current.clear();
-    pendingPersist.current.clear();
-  });
+  } = useWindowPersistenceAdmission(() => undefined);
 
   useEffect(() => {
     const persistenceOwner = getPersistenceOwner();
@@ -1216,99 +1187,20 @@ const sessionEngine = useHarnessSessionEngine({
     prefetchProjectFiles(sidebarCwd);
   }, [sidebarCwd]);
 
-  const persistSession = useCallback(
-    (session: Session | undefined, capturedPermit?: PersistencePermit) => {
-      if (!session || !shouldPersistSession(session)) return;
-      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
-      if (!permit) return;
-      const fingerprint = persistFingerprint(session);
-      void permit
-        .run(async () => {
-          const summary = await upsertSession(session);
-          if (!permit.isCurrent() || !summary) return;
-          lastPersisted.current.set(session.id, fingerprint);
-          if (summary.cwd === sidebarCwdRef.current) {
-            setHistory((current) => mergeProjectHistorySummary(current, summary));
-          }
-        })
-        .catch(() => undefined);
+  const transcripts = useHarnessTranscriptPersistence({
+    sessions,
+    tabsRef,
+    getOwner: getPersistenceOwner,
+    revision: persistenceRevision,
+    imported: windowTransfer?.sessions ?? resumed?.sessions,
+    onSaved: (summary, isCurrent) => {
+      if (summary.cwd !== sidebarCwdRef.current) return;
+      setHistory((current) =>
+        isCurrent() ? mergeProjectHistorySummary(current, summary) : current,
+      );
     },
-    [getPersistenceOwner],
-  );
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
-  useEffect(() => {
-    const permit = getPersistenceOwner()?.capture();
-    if (!permit) return;
-    const liveIds = new Set(sessions.map((session: any) => session.id));
-    const visibleIds = openSessionIds(tabsRef.current);
-    for (const session of sessions) {
-      if (observedSessions.current.get(session.id) === session) continue;
-      observedSessions.current.set(session.id, session);
-      const parked = !visibleIds.has(session.id);
-      const newlyBound =
-        !!session.providerSessionId &&
-        lastBoundProvider.current.get(session.id) !== session.providerSessionId;
-      const lastUserId = lastUserBlockId(session);
-      const newUserTurn =
-        !!lastUserId &&
-        lastPersistedUserBlock.current.get(session.id) !== lastUserId;
-      if (newlyBound && session.providerSessionId) {
-        lastBoundProvider.current.set(session.id, session.providerSessionId);
-      }
-      if (newUserTurn && lastUserId) {
-        lastPersistedUserBlock.current.set(session.id, lastUserId);
-      }
-      if ((newlyBound || newUserTurn) && shouldPersistSession(session)) {
-        persistSession(session);
-      }
-      if (
-        shouldPersistSession(session) &&
-        (!session.busy ||
-          parked ||
-          newlyBound ||
-          newUserTurn ||
-          !lastPersisted.current.has(session.id))
-      ) {
-        pendingPersist.current.set(session.id, session);
-      }
-    }
-    for (const sessionId of observedSessions.current.keys()) {
-      if (liveIds.has(sessionId)) continue;
-      observedSessions.current.delete(sessionId);
-      pendingPersist.current.delete(sessionId);
-    }
-    if (pendingPersist.current.size === 0) return;
-
-    const timer = window.setTimeout(() => {
-      void permit.run(async () => {
-        const dirty = [...pendingPersist.current.values()];
-        pendingPersist.current.clear();
-        const changed = dirty.filter(
-          (session) =>
-            lastPersisted.current.get(session.id) !== persistFingerprint(session),
-        );
-        if (changed.length === 0) return;
-        const summaries = await upsertSessions(changed);
-        if (!permit.isCurrent()) return;
-        for (const summary of summaries) {
-          const session = changed.find((item) => item.id === summary.id);
-          if (session) {
-            lastPersisted.current.set(
-              session.id,
-              persistFingerprint(session),
-            );
-          }
-          if (summary.cwd === sidebarCwdRef.current) {
-            setHistory((current) =>
-              mergeProjectHistorySummary(current, summary),
-            );
-          }
-        }
-      }).catch(() => undefined);
-    }, 650);
-    return () => window.clearTimeout(timer);
-  }, [persistSession, sessions, persistenceRevision, getPersistenceOwner]);
+  });
+  const { persistSession } = transcripts;
 
   useEffect(() => {
     if (lastProjectPath()) return;
@@ -3123,7 +3015,7 @@ const sessionEngine = useHarnessSessionEngine({
         );
     if (!paneId || paneId === session.id) return false;
 
-    lastPersisted.current.delete(paneId);
+    transcripts.forgetFingerprint(paneId);
     {
       const blank = sessionsRef.current.find(
         (entry: any) => entry.id === paneId,
@@ -3148,7 +3040,7 @@ const sessionEngine = useHarnessSessionEngine({
     setProjectTerminalFocused(false);
     setComposerFocused(true);
     return true;
-  }, [applySessionDeltas]);
+  }, [applySessionDeltas, transcripts]);
 
   const ensureOpenSession = useCallback(
     async (
@@ -3182,7 +3074,7 @@ const sessionEngine = useHarnessSessionEngine({
         );
       }
       if (!permit.isCurrent()) return null;
-      lastPersisted.current.set(restored.id, persistFingerprint(restored));
+      transcripts.markPersisted(restored);
       if (sessionsRef.current.some((session) => session.id === restored.id)) {
         updateSession(
           restored.id,
@@ -3198,6 +3090,7 @@ const sessionEngine = useHarnessSessionEngine({
       updateSession,
       admitSession,
       getPersistenceOwner,
+      transcripts,
     ],
   );
 
@@ -3257,7 +3150,7 @@ const sessionEngine = useHarnessSessionEngine({
         );
 
       if (replaceTarget) {
-        lastPersisted.current.delete(targetId);
+        transcripts.forgetFingerprint(targetId);
         const blank = sessionsRef.current.find(
           (entry: any) => entry.id === targetId,
         );
@@ -3300,7 +3193,7 @@ const sessionEngine = useHarnessSessionEngine({
       setProjectTerminalFocused(false);
       setComposerFocused(true);
     },
-    [ensureOpenSession, tabCloseScope, applySessionDeltas, getPersistenceOwner],
+    [ensureOpenSession, tabCloseScope, applySessionDeltas, getPersistenceOwner, transcripts],
   );
 
   const onRenameHistorySession = useCallback(
@@ -3321,7 +3214,7 @@ const sessionEngine = useHarnessSessionEngine({
             permit.isCurrent() ? { ...session, title: updated.title } : session,
           ),
         onPersisted: (updated, summary) => {
-          lastPersisted.current.set(sessionId, persistFingerprint(updated));
+          transcripts.markPersisted(updated);
           if (summary.cwd === sidebarCwdRef.current) {
             setHistory((current) =>
               permit.isCurrent()
@@ -3333,7 +3226,7 @@ const sessionEngine = useHarnessSessionEngine({
       });
       if (permit.isCurrent()) void refreshHistory(sidebarCwd, permit.isCurrent);
     },
-    [getPersistenceOwner, refreshHistory, sidebarCwd, updateSessions],
+    [getPersistenceOwner, refreshHistory, sidebarCwd, updateSessions, transcripts],
   );
 
   const onRemoveHistorySession = useCallback(
@@ -3363,7 +3256,7 @@ const sessionEngine = useHarnessSessionEngine({
       if (!persistencePermit.isCurrent()) return false;
 
       removingSessionIds.current.add(sessionId);
-      pendingPersist.current.delete(sessionId);
+      transcripts.dropPending(sessionId);
       let savedSummary: SessionSummary | undefined;
       try {
         return await runSessionRemoval({
@@ -3429,8 +3322,8 @@ const sessionEngine = useHarnessSessionEngine({
             for (const harness of harnesses) {
               void forgetHarnessSession(harness, sessionId);
             }
-            lastPersisted.current.delete(sessionId);
-            pendingPersist.current.delete(sessionId);
+            transcripts.forgetFingerprint(sessionId);
+            transcripts.dropPending(sessionId);
             const closingFiles = filesInWorkspaceTabs(removal.closedTabs);
             setDirtyFiles((current) => {
               const next = new Set(current);
@@ -3484,7 +3377,7 @@ const sessionEngine = useHarnessSessionEngine({
         removingSessionIds.current.delete(sessionId);
       }
     },
-    [activateTab, history, refreshHistory, sidebarCwd, stopSessionForRemoval, tabCloseScope, updateSession, applySessionDeltas, getPersistenceOwner],
+    [activateTab, history, refreshHistory, sidebarCwd, stopSessionForRemoval, tabCloseScope, updateSession, applySessionDeltas, getPersistenceOwner, transcripts],
   );
 
   const onArchiveHistorySession = useCallback(
@@ -4047,7 +3940,7 @@ const sessionEngine = useHarnessSessionEngine({
 
       if (options.purgeData) {
         for (const session of projectSessions) {
-          pendingPersist.current.delete(session.id);
+          transcripts.dropPending(session.id);
           if (session.busy) {
             invalidateSessionTurn(session.id);
             for (const id of sessionChildHarnesses(session)) {
@@ -4057,14 +3950,14 @@ const sessionEngine = useHarnessSessionEngine({
           for (const id of sessionChildHarnesses(session)) {
             void forgetHarnessSession(id, session.id);
           }
-          lastPersisted.current.delete(session.id);
+          transcripts.forgetFingerprint(session.id);
         }
         void removeProjectData(normalized);
       } else {
         for (const session of projectSessions) {
           if (session.busy) continue;
           persistSession(session);
-          pendingPersist.current.delete(session.id);
+          transcripts.dropPending(session.id);
           for (const id of sessionChildHarnesses(session)) {
             void forgetHarnessSession(id, session.id);
           }
@@ -4127,7 +4020,7 @@ const sessionEngine = useHarnessSessionEngine({
         }
       }
     },
-    [activeTabId, onSelectProject, persistSession, applySessionDeltas, invalidateSessionTurn],
+    [activeTabId, onSelectProject, persistSession, applySessionDeltas, invalidateSessionTurn, transcripts],
   );
 
   const onRestoreProject = useCallback(
@@ -5873,12 +5766,6 @@ function conversationTitle(session: Session): string {
   return title === "New session" ? "" : title;
 }
 
-function lastUserBlockId(session: Session): string | undefined {
-  for (let i = session.blocks.length - 1; i >= 0; i--) {
-    if (session.blocks[i]?.role === "user") return session.blocks[i]?.id;
-  }
-  return undefined;
-}
 
 function selectedChangePath(
   tab: WorkspaceTab,
