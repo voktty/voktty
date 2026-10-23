@@ -60,8 +60,10 @@ export function createOwnedPtyTargets(limit = 256) {
 
   function register(
     leafId: number,
-    input: OwnedPtyTarget,
+    input: OwnedPtyTarget | undefined,
     acquire?: () => Promise<OwnedPtyTarget>,
+    reacquire?: (cwd?: string) => Promise<OwnedPtyTarget>,
+    unresolved = false,
   ): OwnedPtyTargetReceipt {
     if (!Number.isSafeInteger(leafId) || leafId < 0)
       throw new Error("Invalid terminal leaf.");
@@ -69,8 +71,10 @@ export function createOwnedPtyTargets(limit = 256) {
       throw new Error("Terminal resource is already owned.");
     if (entries.size >= limit)
       throw new Error("Terminal resource limit reached.");
-    validateTarget(input);
-    let target: OwnedPtyTarget = {
+    if (input) validateTarget(input);
+    if (!input && !acquire)
+      throw new Error("Terminal resource requires a target.");
+    let target: OwnedPtyTarget | undefined = input && {
       cwd: input.cwd,
       workspace: {
         ...input.workspace,
@@ -98,7 +102,7 @@ export function createOwnedPtyTargets(limit = 256) {
           await native.close();
           native = undefined;
         }
-        if (!released) {
+        if (target && !released) {
           await target.release();
           released = true;
         }
@@ -151,6 +155,8 @@ export function createOwnedPtyTargets(limit = 256) {
               if (!isCurrent())
                 throw new Error("Terminal resource was retired.");
             }
+            if (!target)
+              throw new Error("Terminal resource requires a target.");
             validateTarget(target);
             return start(
               {
@@ -192,7 +198,7 @@ export function createOwnedPtyTargets(limit = 256) {
         }
         return {
           id: session.id,
-          workspace: target.workspace,
+          workspace: target?.workspace,
           write: (data) =>
             isCurrent() ? session.write(data) : Promise.resolve(),
           resize: (cols, rows) =>
@@ -202,23 +208,27 @@ export function createOwnedPtyTargets(limit = 256) {
       },
     };
     entries.set(leafId, receipt);
-    markWorkspace(input.workspace, input.acquireSibling);
-    markWorkspace(target.workspace, target.acquireSibling);
-    const factory = input.acquireSibling;
-    if (factory) {
-      const reconnectWorkspace = {
-        ...target.workspace,
-        connection: { ...target.workspace.connection },
-      };
+    if (input) markWorkspace(input.workspace, input.acquireSibling);
+    if (target) markWorkspace(target.workspace, target.acquireSibling);
+    if (input?.acquireSibling || reacquire) {
       reconnectors.set(receipt, async (cwd, isCallerCurrent) => {
-        const folder = cwd ?? target.cwd;
+        const folder = cwd ?? target?.cwd;
         if (
-          !folder ||
-          folder.length > 32768 ||
-          folder.includes("\0") ||
-          folder.startsWith("remote://")
+          (!folder && !unresolved) ||
+          (folder &&
+            (folder.length > 32768 ||
+              folder.includes("\0") ||
+              (!unresolved && folder.startsWith("remote://"))))
         )
           throw new Error("Terminal resource requires a resolved folder.");
+        const factory = input?.acquireSibling;
+        const renew =
+          reacquire ??
+          ((next?: string) => {
+            if (!factory || !next)
+              throw new Error("Terminal resource requires a target.");
+            return factory(next);
+          });
         if (reconnecting >= limit)
           throw new Error("Terminal reconnect limit reached.");
         reconnecting++;
@@ -229,16 +239,7 @@ export function createOwnedPtyTargets(limit = 256) {
           if (!isCallerCurrent() || disposed || entries.get(leafId) !== receipt)
             throw new Error("Terminal reconnect was retired.");
           entries.delete(leafId);
-          register(
-            leafId,
-            {
-              cwd: folder,
-              workspace: reconnectWorkspace,
-              release: async () => {},
-              acquireSibling: factory,
-            },
-            () => factory(folder),
-          );
+          register(leafId, undefined, () => renew(folder), renew, unresolved);
         } finally {
           reconnecting--;
         }
@@ -267,7 +268,12 @@ export function createOwnedPtyTargets(limit = 256) {
   }
 
   return {
-    register,
+    register: (leafId: number, input: OwnedPtyTarget) =>
+      register(leafId, input),
+    reserve: (
+      leafId: number,
+      acquire: (cwd?: string) => Promise<OwnedPtyTarget>,
+    ) => register(leafId, undefined, () => acquire(), acquire, true),
     claimSibling: (leafId: number, workspace: WorkspaceEnv, cwd?: string) => {
       const factory = siblingFactories.get(workspace);
       if (!factory || workspace.kind !== "ssh") return undefined;
