@@ -16,6 +16,7 @@ import type {
   PersistenceOwner,
   PersistencePermit,
 } from "@/modules/harness/lib/persistenceAdmission";
+import { restrictPersistencePermit } from "@/modules/harness/lib/scopedPersistencePermit";
 import {
   loadNotificationsEnabled,
   NOTIFICATIONS_CHANGE_EVENT,
@@ -155,7 +156,13 @@ export function useHarnessReminderService(
             );
             if (!request || disposed || !captured.isCurrent()) return;
             const opened = captured.permit
-              ? await captured.open(request.sessionId, captured.permit)
+              ? await captured.open(
+                  request.sessionId,
+                  restrictPersistencePermit(
+                    captured.permit,
+                    captured.isCurrent,
+                  ),
+                )
               : await captured.open(request.sessionId);
             if (opened === false || disposed || !captured.isCurrent()) return;
             await clearReminders([request.sessionId], request.dueAt);

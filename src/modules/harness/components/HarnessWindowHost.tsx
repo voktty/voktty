@@ -16,6 +16,8 @@ import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext
 import { HarnessReminderWindowContext } from "@/modules/harness/hooks/harnessReminderWindowContext";
 import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
 import { useHarnessReminderService } from "@/modules/harness/hooks/useHarnessReminderService";
+import { useHarnessWindowNavigation } from "@/modules/harness/hooks/useHarnessWindowNavigation";
+import type { CreateHarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 import {
   HarnessReminderServiceContext,
   type ConfirmedReminderSessionOpener,
@@ -51,6 +53,7 @@ type WindowRuntime = {
   summaries: HarnessSummarySource;
   reminderRegistrationError: string | null;
   reminders: ReturnType<typeof useHarnessReminderService>;
+  navigation: ReturnType<typeof useHarnessWindowNavigation>;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -66,11 +69,13 @@ export function HarnessWindowHost({
   initialSessions = () => [],
   skipSnapshot = false,
   onOpenReminder,
+  createNavigationView,
 }: {
   children: ReactNode;
   initialSessions?: () => Session[];
   skipSnapshot?: boolean;
   onOpenReminder?: ConfirmedReminderSessionOpener;
+  createNavigationView?: CreateHarnessNavigationView;
 }) {
   const [views] = useState(createHarnessWindowViews);
   const [summaries] = useState(createHarnessSummaryUpdates);
@@ -93,8 +98,14 @@ export function HarnessWindowHost({
     flushForegroundHarnessEvents: engine.flushForegroundHarnessEvents,
   });
   const persistence = useWindowPersistenceAdmission(() => undefined);
+  const navigation = useHarnessWindowNavigation(
+    views,
+    persistence.getOwner,
+    createNavigationView,
+  );
   const reminders = useHarnessReminderService(
-    onOpenReminder,
+    onOpenReminder ??
+      (navigation.available ? navigation.openSession : undefined),
     persistence.getOwner,
   );
   const automations = useHarnessAutomations({
@@ -191,6 +202,7 @@ export function HarnessWindowHost({
         summaries: summaries.source,
         reminderRegistrationError,
         reminders,
+        navigation,
       }}
     >
       <HarnessInboxContext.Provider value={inboxUnseen}>

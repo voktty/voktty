@@ -18,6 +18,11 @@ import type {
   HarnessWindowViewCohort,
   HarnessWindowViewInput,
 } from "@/modules/harness/lib/harnessWindowViews";
+import type {
+  CreateHarnessNavigationView,
+  HarnessNavigationTarget,
+  HarnessNavigationView,
+} from "@/modules/harness/lib/harnessWindowNavigation";
 import { newTab } from "@/modules/harness/lib/layout";
 import { newSession, type Session } from "@/modules/harness/lib/session";
 import { publishActiveSurface } from "@/modules/surfaces";
@@ -207,6 +212,51 @@ function Observe() {
   runtime = useHarnessWindow();
   return null;
 }
+function NavigationView({
+  ownerId,
+  input,
+  openSession,
+  activate,
+  onBound,
+}: {
+  ownerId: number;
+  input: HarnessWindowViewInput;
+  openSession: HarnessNavigationTarget["openSession"];
+  activate: HarnessNavigationTarget["activate"];
+  onBound?: (view: HarnessNavigationView) => void;
+}) {
+  const {
+    views,
+    navigation: { register },
+  } = useHarnessWindow();
+  const { getOwner } = useWindowPersistenceAdmission(() => undefined);
+  useLayoutEffect(() => {
+    const view = views.register(ownerId, input);
+    const binding = required(
+      register(ownerId, {
+        isCurrent: view.isCurrent,
+        capture: () => getOwner()?.capture() ?? null,
+        openSession,
+        activate,
+      }),
+    );
+    onBound?.(binding);
+    return () => {
+      binding.release();
+      view.release();
+    };
+  }, [
+    views,
+    register,
+    ownerId,
+    input,
+    getOwner,
+    openSession,
+    activate,
+    onBound,
+  ]);
+  return null;
+}
 beforeEach(() => {
   localStorage.clear();
   native.reminderList.mockReset().mockResolvedValue([]);
@@ -308,11 +358,13 @@ async function render(
   strict = false,
   extra?: ReactNode,
   onOpenReminder?: Parameters<typeof HarnessWindowHost>[0]["onOpenReminder"],
+  createNavigationView?: CreateHarnessNavigationView,
 ) {
   const children = (
     <HarnessWindowHost
       initialSessions={() => sessions}
       onOpenReminder={onOpenReminder}
+      createNavigationView={createNavigationView}
     >
       <Observe />
       {extra}
@@ -327,6 +379,89 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("routes a reminder into its registered view and retires that view's permission before confirmation", async () => {
+    const one = fixture("one", "/work/one");
+    const gate = deferred<boolean>();
+    const open = vi
+      .fn<HarnessNavigationTarget["openSession"]>()
+      .mockReturnValue(gate.promise);
+    const activate = vi.fn(() => true);
+    await render(
+      [one.session],
+      [],
+      false,
+      <NavigationView
+        ownerId={1}
+        input={one.input}
+        openSession={open}
+        activate={activate}
+      />,
+    );
+    native.takeReminder.mockResolvedValueOnce({ sessionId: "one", dueAt: 1 });
+    await act(async () => {
+      for (const handler of native.listeners.get("voktty:reminder-open") ?? [])
+        handler();
+    });
+    expect(open).toHaveBeenCalledOnce();
+    const permit = required(open.mock.calls[0])[1];
+    expect(permit.isCurrent()).toBe(true);
+    await render([one.session], []);
+    expect(permit.isCurrent()).toBe(false);
+    await act(async () => gate.resolve(true));
+    expect(activate).not.toHaveBeenCalled();
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_clear",
+      ),
+    ).toEqual([]);
+  });
+
+  it("waits for a new view's registration before opening and confirming a headless reminder", async () => {
+    const one = fixture("one", "remote://machine/srv/one");
+    const gate = deferred<HarnessNavigationView | null>();
+    const create = vi
+      .fn<CreateHarnessNavigationView>()
+      .mockReturnValue(gate.promise);
+    const open = vi
+      .fn<HarnessNavigationTarget["openSession"]>()
+      .mockResolvedValue(true);
+    const activate = vi.fn(() => true);
+    let binding: HarnessNavigationView | undefined;
+    const onBound = (view: HarnessNavigationView) => {
+      binding = view;
+    };
+    await render([one.session], [], false, undefined, undefined, create);
+    native.takeReminder.mockResolvedValueOnce({ sessionId: "one", dueAt: 1 });
+    await act(async () => {
+      for (const handler of native.listeners.get("voktty:reminder-open") ?? [])
+        handler();
+    });
+    expect(create).toHaveBeenCalledOnce();
+    expect(open).not.toHaveBeenCalled();
+    await render(
+      [one.session],
+      [],
+      false,
+      <NavigationView
+        ownerId={1}
+        input={one.input}
+        openSession={open}
+        activate={activate}
+        onBound={onBound}
+      />,
+      undefined,
+      create,
+    );
+    expect(open).not.toHaveBeenCalled();
+    await act(async () => gate.resolve(required(binding)));
+    expect(open).toHaveBeenCalledOnce();
+    expect(activate).toHaveBeenCalledOnce();
+    expect(native.invoke).toHaveBeenCalledWith("reminder_clear", {
+      sessionIds: ["one"],
+      expectedDueAt: 1,
+    });
+  });
+
   it("shares one reminder service with views and keeps polling after they leave", async () => {
     const readers: ReturnType<typeof useSessionReminders>[] = [];
     const open = vi.fn(async () => {});

@@ -231,6 +231,9 @@ export function createHarnessWindowViews() {
     }
   };
   const handle = (ownerId: number, token: object) => ({
+    isCurrent: () =>
+      entries.get(ownerId)?.token === token &&
+      entries.get(ownerId)?.cohort.active === true,
     update(input: HarnessWindowViewInput) {
       const entry = entries.get(ownerId);
       if (entry?.token !== token || !entry.cohort.active) return;
