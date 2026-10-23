@@ -5,6 +5,10 @@ import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessRemi
 import { useSessionReminders } from "@/modules/harness/hooks/useSessionReminders";
 import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
 import { useHarnessSummaryUpdates } from "@/modules/harness/hooks/useHarnessSummaryUpdates";
+import {
+  useHarnessViewEngine,
+  type HarnessViewEngine,
+} from "@/modules/harness/hooks/useHarnessViewEngine";
 import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -196,6 +200,7 @@ type ViewProps = {
   restore?: HarnessWindowViewCohort;
 };
 let runtime: Runtime | null;
+let viewEngines: HarnessViewEngine[];
 let root: Root;
 let container: HTMLDivElement;
 let closeListeners: ((event: { preventDefault: () => void }) => void)[];
@@ -217,6 +222,12 @@ function View({ ownerId, input, restore }: ViewProps) {
 }
 function Observe() {
   runtime = useHarnessWindow();
+  return null;
+}
+function EngineReader({ index = 0 }: { index?: number }) {
+  const host = useHarnessWindow();
+  const { getOwner } = useWindowPersistenceAdmission(() => undefined);
+  viewEngines[index] = useHarnessViewEngine(host.engine, getOwner, host.holds);
   return null;
 }
 function NavigationView({
@@ -292,6 +303,7 @@ beforeEach(() => {
     ],
   });
   runtime = null;
+  viewEngines = [];
   closeListeners = [];
   sends = [];
   native.invoke
@@ -387,6 +399,167 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("does not expose global cancellation and denies every departed view action", async () => {
+    const one = fixture("one", "/work/one");
+    await render([one.session], [], false, <EngineReader />);
+    const view = required(viewEngines[0]);
+    expect("cancelScheduledHarnessEvents" in view).toBe(false);
+    const host = required(runtime);
+    const spies = Object.entries(host.engine).flatMap(([name, value]) =>
+      typeof value === "function"
+        ? [
+            vi.spyOn(
+              host.engine,
+              name as Exclude<
+                keyof typeof host.engine,
+                "sessions" | "sessionsRef"
+              >,
+            ),
+          ]
+        : [],
+    );
+    await render([one.session], []);
+    for (const spy of spies) spy.mockClear();
+    for (const [name, action] of Object.entries(view)) {
+      if (
+        typeof action !== "function" ||
+        ["readSession", "captureSessionLifetime"].includes(name)
+      )
+        continue;
+      await Reflect.apply(action, undefined, []);
+    }
+    expect(spies.every((spy) => spy.mock.calls.length === 0)).toBe(true);
+    expect(view.onCompactContext("one")).toBe(false);
+    expect(await view.stopSessionForRemoval("one")).toBeUndefined();
+    expect(required(runtime).engine.sessions).toEqual([one.session]);
+  });
+
+  it("keeps accepted work alive when a view retires while denying its cached actions", async () => {
+    const one = fixture("one", "/work/one");
+    await render([one.session], [], false, <EngineReader />);
+    const view = required(viewEngines[0]);
+    const viewCurrent = view.captureSessionLifetime("one");
+    const hostCurrent = required(runtime).engine.captureSessionLifetime("one");
+    await act(async () => view.onSubmit("one", "continue in background"));
+    expect(sends).toHaveLength(1);
+    await render([one.session], []);
+    expect(viewCurrent()).toBe(false);
+    expect(hostCurrent()).toBe(true);
+    await act(async () => {
+      view.onStop("one");
+      view.onSubmit("one", "must not queue");
+      sends[0].sink({ type: "message.delta", text: "still running" });
+      sends[0].finish();
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(sends).toHaveLength(1);
+    expect(
+      required(runtime)
+        .engine.readSession("one")
+        ?.blocks.some((block) => block.text === "still running"),
+    ).toBe(true);
+  });
+
+  it("keeps a captured view lifetime retired after close cancellation while accepting fresh actions", async () => {
+    const one = fixture("one", "/work/one");
+    await render([one.session], [], false, <EngineReader />);
+    const view = required(viewEngines[0]);
+    const current = view.captureSessionLifetime("one");
+    expect(current()).toBe(true);
+    const owner = required(required(runtime).persistence.getOwner());
+    const final = required(required(owner.capture()).seal());
+    await act(async () => view.onSubmit("one", "sealed"));
+    expect(sends).toHaveLength(0);
+    expect(current()).toBe(false);
+    await act(async () => final.cancel());
+    expect(current()).toBe(false);
+    await act(async () => view.onSubmit("one", "fresh action"));
+    expect(sends).toHaveLength(1);
+  });
+
+  it.each(["removeSession", "applySessionDeltas"] as const)(
+    "%s invalidates a matching opening without freeing physical reservation or its sibling",
+    async (method) => {
+      const one = fixture("one", "/work/one");
+      const two = fixture("two", "remote://machine/srv/two");
+      await render([one.session, two.session], [], false, <EngineReader />);
+      const host = required(runtime);
+      const opening = required(
+        host.holds.acquire("opening", ["one"], () => true),
+      );
+      const sibling = required(
+        host.holds.acquire("opening", ["two"], () => true),
+      );
+      await act(async () => {
+        if (method === "removeSession")
+          viewEngines[0].removeSession("one", "immediate");
+        else
+          viewEngines[0].applySessionDeltas(
+            [{ kind: "remove", id: "one" }],
+            "immediate",
+          );
+      });
+      expect(opening.isCurrent()).toBe(false);
+      expect(host.holds.has("opening", "one")).toBe(true);
+      expect(sibling.isCurrent()).toBe(true);
+      expect(required(runtime).engine.sessions).toEqual([two.session]);
+      opening.release();
+      sibling.release();
+    },
+  );
+
+  it("does not retire openings when conditional removal is rejected", async () => {
+    const one = fixture("one", "/work/one");
+    await render([one.session], [], false, <EngineReader />);
+    const host = required(runtime);
+    const opening = required(
+      host.holds.acquire("opening", ["one"], () => true),
+    );
+    await act(async () => {
+      viewEngines[0].applySessionDeltas(
+        [
+          { kind: "remove", id: "one", expected: { ...one.session } },
+          { kind: "remove", id: "one", shouldRemove: () => false },
+        ],
+        "immediate",
+      );
+    });
+    expect(opening.isCurrent()).toBe(true);
+    expect(host.engine.readSession("one")).toBe(one.session);
+    opening.release();
+  });
+
+  it("retires only the departed view while its sibling keeps submitting", async () => {
+    const one = fixture("one", "/work/one");
+    await render(
+      [one.session],
+      [],
+      false,
+      <>
+        <EngineReader key="one" index={0} />
+        <EngineReader key="two" index={1} />
+      </>,
+    );
+    const departed = viewEngines[0];
+    const sibling = viewEngines[1];
+    await render(
+      [one.session],
+      [],
+      false,
+      <>
+        <EngineReader key="two" index={1} />
+      </>,
+    );
+    await act(async () => {
+      departed.onSubmit("one", "departed");
+      sibling.onSubmit("one", "current sibling");
+    });
+    expect(sends).toHaveLength(1);
+    expect(native.send).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "current sibling" }),
+    );
+  });
+
   it("preserves boot imports and retained cohorts through zero views, then detaches retired references", async () => {
     const one = fixture("one", "/work/one");
     const two = fixture("two", "remote://machine/srv/two");
