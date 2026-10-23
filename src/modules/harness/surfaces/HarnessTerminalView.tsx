@@ -1,4 +1,10 @@
-import { useContext, useLayoutEffect, useRef, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { TerminalSurface } from "@/modules/terminal/TerminalSurface";
 import type { FilePaneTab } from "@/modules/harness/lib/layout";
 import type { TerminalMetaPatch } from "@/modules/harness/lib/terminalTab";
@@ -7,6 +13,7 @@ import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalCon
 import { HarnessTerminalRecovery } from "@/modules/harness/hooks/useHarnessTerminalRecovery";
 import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 import { useTranslation } from "@/modules/i18n";
+import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
 
 export function HarnessTerminalView({
   file,
@@ -27,6 +34,7 @@ export function HarnessTerminalView({
 }) {
   const owner = useContext(HarnessTerminalOwner);
   const recover = useContext(HarnessTerminalRecovery);
+  const migrations = useContext(HarnessTerminalMigrationContext);
   const catalog = useCanonicalTerminalCatalog();
   const { t } = useTranslation();
   const lifetime = useRef<object | null>(null);
@@ -46,6 +54,41 @@ export function HarnessTerminalView({
     };
   }, [file, slotKey, visible, owner?.tabKey, owner?.visible]);
   const reference = file.canonicalTerminal;
+  const attempted = useRef<object | null>(null);
+  const migrate = () => {
+    const original = lifetime.current;
+    if (!original || pending.current || !recover || !slotKey) return false;
+    const operation = {};
+    pending.current = operation;
+    const finish = () => {
+      if (pending.current !== operation) return;
+      pending.current = null;
+      if (lifetime.current) setRecovering(false);
+    };
+    const accepted = recover(
+      file,
+      slotKey,
+      () => lifetime.current === original,
+      finish,
+    );
+    if (!accepted) finish();
+    else if (pending.current === operation) setRecovering(true);
+    return accepted;
+  };
+  useEffect(() => {
+    if (
+      reference ||
+      !migrations ||
+      !recover ||
+      !visible ||
+      !owner?.visible ||
+      !slotKey ||
+      pending.current ||
+      attempted.current === lifetime.current
+    )
+      return;
+    if (migrate()) attempted.current = lifetime.current;
+  });
   if (reference) {
     if (!owner) return null;
     return (
@@ -105,6 +148,33 @@ export function HarnessTerminalView({
       </TerminalSurface>
     );
   }
+  if (migrations)
+    return (
+      <div
+        className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground"
+        role="status"
+        aria-busy={recovering}
+      >
+        <p>
+          {t(
+            recovering
+              ? "terminal.connection.connecting"
+              : "terminal.connection.failed",
+            { name: file.path },
+          )}
+        </p>
+        <button
+          type="button"
+          className="rounded border border-border px-3 py-1.5 text-foreground hover:bg-accent disabled:opacity-50"
+          disabled={
+            recovering || !recover || !slotKey || !visible || !owner?.visible
+          }
+          onClick={migrate}
+        >
+          {t("terminal.connection.retry")}
+        </button>
+      </div>
+    );
   return (
     <TerminalView
       id={file.id}

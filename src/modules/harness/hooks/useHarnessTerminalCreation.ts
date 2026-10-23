@@ -59,6 +59,8 @@ export function useHarnessTerminalCreation(props: {
       slotKey: string;
       isCurrent?: () => boolean;
       onCreated: (terminal: ProjectTerminalReference) => void;
+      onConfirmed?: (terminal: ProjectTerminalReference) => boolean | undefined;
+      onFailed?: (error: unknown) => void;
       onSettled?: () => void;
     }) => {
       options = { ...options };
@@ -124,7 +126,11 @@ export function useHarnessTerminalCreation(props: {
         };
         if (!admitted()) operation.cancel();
         void request.result
+          .then((terminal) => {
+            if (options.onConfirmed?.(terminal) === false) reservation.retire();
+          })
           .catch((error: unknown) => {
+            options.onFailed?.(error);
             if (
               isCurrent() &&
               !(error instanceof Error && error.name === "AbortError")

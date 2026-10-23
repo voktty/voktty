@@ -59,6 +59,10 @@ import { createHarnessWindowViewRemoval } from "@/modules/harness/lib/harnessWin
 import { createInboxSessionOperations } from "@/modules/harness/lib/inboxSessionOperations";
 import { createHarnessProjectReservations } from "@/modules/harness/lib/harnessProjectReservations";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
+import { createLegacyTerminalMigrations } from "@/modules/harness/lib/legacyTerminalMigrations";
+import { captureLegacyPtyMigration } from "@/modules/harness/lib/pty";
+import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
+import { confirmCloseTerminal } from "@/modules/harness/lib/terminalClose";
 
 type WindowRuntime = {
   engine: ReturnType<typeof useHarnessSessionEngine>;
@@ -105,6 +109,13 @@ export function HarnessWindowHost({
   const [holds] = useState(createHarnessWindowSessionHolds);
   const [projects] = useState(createHarnessProjectReservations);
   const [views] = useState(() => createHarnessWindowViews(holds, projects));
+  const [terminalMigrations] = useState(() =>
+    createLegacyTerminalMigrations(
+      views,
+      captureLegacyPtyMigration,
+      confirmCloseTerminal,
+    ),
+  );
   const [removals] = useState(() =>
     createHarnessWindowViewRemoval(views, holds, projects),
   );
@@ -121,10 +132,11 @@ export function HarnessWindowHost({
           removals.dispose();
           inboxOperations.dispose();
           projects.dispose();
+          terminalMigrations.dispose();
         }
       });
     };
-  }, [removals, inboxOperations, projects]);
+  }, [removals, inboxOperations, projects, terminalMigrations]);
   const projectReservations = useSyncExternalStore(
     projects.subscribe,
     projects.getSnapshot,
@@ -410,7 +422,9 @@ export function HarnessWindowHost({
       <HarnessInboxContext.Provider value={inboxUnseen}>
         <HarnessReminderWindowContext.Provider value={true}>
           <HarnessReminderServiceContext.Provider value={reminders}>
-            {children}
+            <HarnessTerminalMigrationContext value={terminalMigrations}>
+              {children}
+            </HarnessTerminalMigrationContext>
           </HarnessReminderServiceContext.Provider>
         </HarnessReminderWindowContext.Provider>
       </HarnessInboxContext.Provider>

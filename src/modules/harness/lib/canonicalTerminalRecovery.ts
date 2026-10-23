@@ -20,6 +20,7 @@ export function terminalRecoveryTarget(
   state: TerminalRecoveryState,
   fileId: string,
   slotKey: string,
+  legacy = false,
 ): TerminalRecoveryTarget | undefined {
   for (const dock of state.docks) {
     if (
@@ -33,7 +34,9 @@ export function terminalRecoveryTarget(
     const file = dock.pane.files.find((file) => file.id === fileId);
     if (
       file?.terminal &&
-      file.canonicalTerminal?.projectCwd === state.projectCwd
+      (legacy
+        ? !file.canonicalTerminal
+        : file.canonicalTerminal?.projectCwd === state.projectCwd)
     )
       return {
         slotKey,
@@ -51,7 +54,9 @@ export function terminalRecoveryTarget(
     const file = pane.files.find((file) => file.id === fileId);
     if (
       file?.terminal &&
-      file.canonicalTerminal?.projectCwd === state.projectCwd
+      (legacy
+        ? !file.canonicalTerminal
+        : file.canonicalTerminal?.projectCwd === state.projectCwd)
     )
       return { slotKey, file, paneId: pane.id, tabId: tab?.id };
   }

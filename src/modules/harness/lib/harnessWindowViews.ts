@@ -6,6 +6,14 @@ import {
 } from "@/modules/harness/lib/harnessSessionViews";
 import { mergeHarnessWindowWorkspaces } from "@/modules/harness/lib/harnessWindowWorkspace";
 import type { Session } from "@/modules/harness/lib/session";
+import type { FilePaneTab } from "@/modules/harness/lib/layout";
+import { isTabKey } from "@/modules/tabs/lib/tabIdentity";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
+import {
+  mapLegacyTerminalLayout,
+  sameLegacyTerminal,
+  type LegacyTerminalMapping,
+} from "@/modules/harness/lib/legacyTerminalMapping";
 import { leafIds } from "@/modules/harness/lib/layout";
 import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import {
@@ -214,6 +222,19 @@ export function createHarnessWindowViews(
     "has" | "owns"
   >,
 ) {
+  let terminalMappings = new Map<string, LegacyTerminalMapping>();
+  const normalizeTerminals = (
+    tabs: HarnessWindowViewInput["tabs"],
+    docks: HarnessWindowViewInput["projectTerminals"],
+  ) => mapLegacyTerminalLayout(tabs, docks, terminalMappings);
+  const ownNormalizedState = (input: HarnessWindowViewInput) => {
+    const normalized = normalizeTerminals(input.tabs, input.projectTerminals);
+    return ownState({
+      ...input,
+      tabs: normalized.tabs,
+      projectTerminals: normalized.docks,
+    });
+  };
   const entries = new Map<
     number,
     { token: object; cohort: HarnessWindowViewCohort; key: string }
@@ -305,7 +326,7 @@ export function createHarnessWindowViews(
     update(input: HarnessWindowViewInput) {
       const entry = entries.get(ownerId);
       if (entry?.token !== token || !entry.cohort.active) return;
-      const state = ownState(input);
+      const state = ownNormalizedState(input);
       if (entries.get(ownerId) !== entry) return;
       admitReferences(state, entry.cohort.state);
       const key = JSON.stringify(state);
@@ -340,6 +361,110 @@ export function createHarnessWindowViews(
     },
   });
   return {
+    normalizeTerminals,
+    validateTerminalMigration(file: FilePaneTab, projectCwd?: string) {
+      if (projectCwd && projects?.has(projectCwd))
+        throw new Error("Harness project is reserved");
+      if (!sameLegacyTerminal(file, file))
+        throw new Error("Invalid legacy terminal.");
+      for (const entry of entries.values()) {
+        const layout = entry.cohort.state.layout;
+        const files = [
+          ...layout.tabs.flatMap((tab) =>
+            [...tab.editorPanes, ...tab.terminalPanes].flatMap(
+              (pane) => pane.files,
+            ),
+          ),
+          ...layout.projectTerminals.flatMap((dock) => dock.pane.files),
+        ];
+        for (const candidate of files)
+          if (candidate.id === file.id && !sameLegacyTerminal(candidate, file))
+            throw new Error("Conflicting legacy terminal definition.");
+      }
+    },
+    migrateTerminal(
+      file: FilePaneTab,
+      reference: NonNullable<FilePaneTab["canonicalTerminal"]>,
+      isCurrent: () => boolean,
+    ) {
+      const original = snapshot;
+      const originalMappings = terminalMappings;
+      const current = () =>
+        isCurrent() &&
+        !projects?.has(reference.projectCwd) &&
+        snapshot === original &&
+        terminalMappings === originalMappings;
+      if (!current()) return false;
+      file = {
+        ...file,
+        ...(file.canonicalTerminal
+          ? { canonicalTerminal: { ...file.canonicalTerminal } }
+          : {}),
+      };
+      reference = { ...reference };
+      if (
+        !isTabKey(reference.tabKey) ||
+        reference.tabKey.length > 256 ||
+        /[\x00-\x1f\x7f]/.test(reference.tabKey) ||
+        !terminalProjectMetadata(reference.projectCwd).projectCwd ||
+        !sameLegacyTerminal(file, file)
+      )
+        throw new Error("Invalid terminal migration.");
+      const previous = terminalMappings.get(file.id);
+      if (!previous && terminalMappings.size >= MAX_REFERENCES)
+        throw new RangeError("Harness terminal migration capacity exceeded");
+      if (previous && !sameLegacyTerminal(previous.source, file))
+        throw new Error("Conflicting legacy terminal definition.");
+      if (
+        previous &&
+        reference.tabKey !== previous.reference.tabKey &&
+        (file.canonicalTerminal?.tabKey !== previous.reference.tabKey ||
+          file.canonicalTerminal.projectCwd !== previous.reference.projectCwd)
+      )
+        throw new Error("Terminal migration reference was superseded.");
+      const mappings = new Map(terminalMappings);
+      mappings.set(
+        file.id,
+        Object.freeze({
+          source: Object.freeze({ ...file }),
+          reference: Object.freeze({ ...reference }),
+        }),
+      );
+      const prospective = [...entries.values()].map((entry) => {
+        const layout = entry.cohort.state.layout;
+        const next = mapLegacyTerminalLayout(
+          layout.tabs,
+          layout.projectTerminals,
+          mappings,
+        );
+        if (next.tabs === layout.tabs && next.docks === layout.projectTerminals)
+          return entry;
+        const state = {
+          ...entry.cohort.state,
+          layout: { ...layout, tabs: next.tabs, projectTerminals: next.docks },
+        };
+        freezeOwned(state);
+        return {
+          ...entry,
+          cohort: Object.freeze({
+            ...entry.cohort,
+            state,
+            sequence: nextSequence(),
+          }),
+          key: JSON.stringify(state),
+        };
+      });
+      captureCohorts(
+        prospective.map((entry) => entry.cohort),
+        selectedOwnerId,
+        [],
+      );
+      if (!current()) return false;
+      terminalMappings = mappings;
+      for (const entry of prospective) entries.set(entry.cohort.ownerId, entry);
+      publish();
+      return true;
+    },
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -349,7 +474,7 @@ export function createHarnessWindowViews(
     },
     register(ownerId: number, input: HarnessWindowViewInput) {
       validOwner(ownerId);
-      const state = ownState(input);
+      const state = ownNormalizedState(input);
       admitReferences(state);
       const cohort = Object.freeze({
         ownerId,

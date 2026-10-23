@@ -19,6 +19,7 @@ type PtyResource = {
   id: string;
   attempt: object;
   opening: boolean;
+  settled: Promise<void>;
   session?: PtySession;
   closeRemote?: () => Promise<void>;
   nativeClosed: boolean;
@@ -26,6 +27,7 @@ type PtyResource = {
 };
 const resources = new Set<PtyResource>();
 const MAX_RESOURCES = 256;
+const migrations = new Map<string, object>();
 const dataHandlers = new Map<string, DataHandler>();
 const exitHandlers = new Map<string, ExitHandler>();
 const dataBuffer = new Map<string, Uint8Array[]>();
@@ -152,13 +154,19 @@ export function startOwnedPty(
   rows: number,
   options?: PtyLaunchOptions,
 ) {
+  if (migrations.has(id))
+    throw new Error("This legacy terminal is being migrated.");
   if (resources.size >= MAX_RESOURCES)
     throw new Error("Harness terminal resource limit reached.");
   const attempt = {};
+  let settled!: () => void;
   const resource: PtyResource = {
     id,
     attempt,
     opening: true,
+    settled: new Promise<void>((resolve) => {
+      settled = resolve;
+    }),
     nativeClosed: false,
   };
   const predecessors = [...resources].filter((entry) => entry.id === id);
@@ -173,15 +181,17 @@ export function startOwnedPty(
     cols,
     rows,
     launchOptions,
-  ).then(
-    async () => {
-      if (!owns()) await closeResource(resource);
-    },
-    async (error: unknown) => {
-      await closeResource(resource);
-      throw error;
-    },
-  );
+  )
+    .finally(settled)
+    .then(
+      async () => {
+        if (!owns()) await closeResource(resource);
+      },
+      async (error: unknown) => {
+        await closeResource(resource);
+        throw error;
+      },
+    );
   let retired = false;
   const isCurrent = () => !retired && owns();
   let closing: Promise<void> | undefined;
@@ -197,7 +207,7 @@ export function startOwnedPty(
       isCurrent() ? writePty(id, data) : Promise.resolve(),
     resize: (cols: number, rows: number) =>
       isCurrent() ? resizePty(id, cols, rows) : Promise.resolve(),
-    close: () => {
+    close: (): Promise<void> => {
       retired = true;
       retireResource(resource);
       if (!closing)
@@ -209,6 +219,30 @@ export function startOwnedPty(
             throw error;
           });
       return closing;
+    },
+  });
+}
+
+export function captureLegacyPtyMigration(id: string) {
+  if (migrations.has(id) || migrations.size >= MAX_RESOURCES)
+    throw new Error(
+      "Legacy terminal migration is already reserved or at capacity.",
+    );
+  const token = {};
+  const captured = [...resources].filter((resource) => resource.id === id);
+  migrations.set(id, token);
+  return Object.freeze({
+    close: (): Promise<void> => {
+      for (const resource of captured) retireResource(resource);
+      return Promise.all(
+        captured.map(async (resource) => {
+          await resource.settled;
+          await closeResource(resource);
+        }),
+      ).then(() => undefined);
+    },
+    release: () => {
+      if (migrations.get(id) === token) migrations.delete(id);
     },
   });
 }
