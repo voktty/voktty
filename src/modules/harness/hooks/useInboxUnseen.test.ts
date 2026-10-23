@@ -4,13 +4,15 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useInboxUnseen } from "./useInboxUnseen";
+import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext";
+import { createPersistenceAdmission } from "@/modules/harness/lib/persistenceAdmission";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 const itemCalls = () =>
-  vi.mocked(invoke).mock.calls.filter(
-    ([command]) => command === "git_github_work_items",
-  );
+  vi
+    .mocked(invoke)
+    .mock.calls.filter(([command]) => command === "git_github_work_items");
 
 function Harness() {
   useInboxUnseen([{ path: "/tmp/web", openedAt: 1 }], "/tmp/web");
@@ -87,4 +89,58 @@ it("does not overlap a background refresh while the previous one is pending", as
   await act(async () => root.render(createElement(Harness)));
   await act(async () => vi.advanceTimersByTimeAsync(10 * 60_000));
   expect(itemCalls()).toHaveLength(2);
+});
+
+it("reads the host badge without starting another poller or dispatching consumer callbacks", async () => {
+  const onAppeared = vi.fn();
+  let observed: boolean | undefined;
+  function Reader() {
+    observed = useInboxUnseen(
+      [{ path: "/tmp/shared", openedAt: 1 }],
+      "/tmp/shared",
+      { onAppeared },
+    );
+    return null;
+  }
+  await act(async () =>
+    root.render(
+      createElement(
+        HarnessInboxContext.Provider,
+        { value: true },
+        createElement(Reader),
+      ),
+    ),
+  );
+  expect(observed).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(600_000));
+  expect(itemCalls()).toHaveLength(0);
+  expect(onAppeared).not.toHaveBeenCalled();
+});
+
+it("does not borrow recovered admission for an Inbox read started before seal and cancellation", async () => {
+  let resolve!: (items: unknown[]) => void;
+  const pending = new Promise<unknown[]>((done) => {
+    resolve = done;
+  });
+  vi.mocked(invoke).mockImplementation(async (command) => {
+    if (command === "git_github_repo") return "acme/guard";
+    if (command === "git_github_work_items") return pending;
+    if (command === "linear_status") return { connected: false };
+    throw new Error(`Unexpected command: ${command}`);
+  });
+  const owner = createPersistenceAdmission().createOwner();
+  const onAppeared = vi.fn();
+  function Guarded() {
+    useInboxUnseen([{ path: "/tmp/guard", openedAt: 1 }], "/tmp/guard", {
+      getOwner: () => owner,
+      onAppeared,
+    });
+    return null;
+  }
+  await act(async () => root.render(createElement(Guarded)));
+  const final = owner.capture()?.seal();
+  expect(final?.pending).toBeNull();
+  final?.cancel();
+  await act(async () => resolve([]));
+  expect(onAppeared).not.toHaveBeenCalled();
 });

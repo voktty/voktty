@@ -11,6 +11,13 @@ import {
 } from "react";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import { useHarnessAutomations } from "@/modules/harness/hooks/useHarnessAutomations";
+import { useHarnessWindowInbox } from "@/modules/harness/hooks/useHarnessWindowInbox";
+import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext";
+import {
+  createHarnessSummaryUpdates,
+  type HarnessSummarySource,
+} from "@/modules/harness/lib/harnessSummaryUpdates";
+import { summaryFromSession } from "@/modules/harness/lib/sessionHistory";
 import { useHarnessWindowAttention } from "@/modules/harness/hooks/useHarnessWindowAttention";
 import { useHarnessTranscriptPersistence } from "@/modules/harness/hooks/useHarnessTranscriptPersistence";
 import { useHarnessWindowPersistence } from "@/modules/harness/hooks/useHarnessWindowPersistence";
@@ -33,6 +40,7 @@ type WindowRuntime = {
   persistence: ReturnType<typeof useWindowPersistenceAdmission>;
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
   automations: ReturnType<typeof useHarnessAutomations>;
+  summaries: HarnessSummarySource;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -53,6 +61,7 @@ export function HarnessWindowHost({
   skipSnapshot?: boolean;
 }) {
   const [views] = useState(createHarnessWindowViews);
+  const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
   const cohortSnapshot = useSyncExternalStore(
     views.subscribe,
@@ -77,7 +86,23 @@ export function HarnessWindowHost({
     sessions: engine.sessions,
     getOwner: persistence.getOwner,
     revision: persistence.revision,
+    onCreated: (session, isCurrent) =>
+      summaries.publish(summaryFromSession(session), isCurrent),
   });
+  const inboxUnseen = useHarnessWindowInbox(
+    [
+      ...engine.sessions.map((session) => session.cwd),
+      ...cohortSnapshot.cohorts.flatMap((cohort) => [
+        cohort.state.layout.projectCwd,
+        ...cohort.state.layout.projectTerminals.map((dock) => dock.projectPath),
+      ]),
+    ],
+    {
+      getOwner: persistence.getOwner,
+      revision: persistence.revision,
+      onAppeared: automations.onInboxAppeared,
+    },
+  );
   const surface = useActiveSurfaceStore((state) => state.surface);
   const selectedOwnerId = surface.kind === "harness" ? surface.ownerId : null;
   useEffect(() => {
@@ -114,7 +139,7 @@ export function HarnessWindowHost({
     getOwner: persistence.getOwner,
     revision: persistence.revision,
     imported,
-    onSaved: () => undefined,
+    onSaved: summaries.publish,
   });
   const workspaceReady = useRef(false);
   if (cohortSnapshot.cohorts.length > 0) workspaceReady.current = true;
@@ -136,9 +161,18 @@ export function HarnessWindowHost({
 
   return (
     <HarnessWindowContext.Provider
-      value={{ engine, views, persistence, transcripts, automations }}
+      value={{
+        engine,
+        views,
+        persistence,
+        transcripts,
+        automations,
+        summaries: summaries.source,
+      }}
     >
-      {children}
+      <HarnessInboxContext.Provider value={inboxUnseen}>
+        {children}
+      </HarnessInboxContext.Provider>
     </HarnessWindowContext.Provider>
   );
 }

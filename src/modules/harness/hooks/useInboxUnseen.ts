@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext";
+import type { PersistenceOwner } from "@/modules/harness/lib/persistenceAdmission";
 import {
   inboxItemKey,
   inboxProjectsForRail,
@@ -36,13 +38,20 @@ function seenEntries(items: readonly InboxItem[]): InboxSeenEntry[] {
 export function useInboxUnseen(
   recents: RecentProject[],
   cwd: string,
-  options?: { onAppeared?: (items: InboxItem[]) => void },
+  options?: {
+    onAppeared?: (items: InboxItem[]) => void;
+    getOwner?: () => PersistenceOwner | null;
+    revision?: number;
+  },
 ): boolean {
+  const shared = useContext(HarnessInboxContext);
+  const owned = shared === null;
   const [unseen, setUnseen] = useState(false);
   const entriesRef = useRef<InboxSeenEntry[]>([]);
-  const onAppearedRef = useRef(options?.onAppeared);
+  const optionsRef = useRef(options);
   const lastPulledAt = useRef<number | null>(null);
-  onAppearedRef.current = options?.onAppeared;
+  optionsRef.current = options;
+  const revision = options?.revision;
 
   const applyUnseen = useCallback((next: boolean) => {
     noteInboxUnseen(next);
@@ -50,12 +59,14 @@ export function useInboxUnseen(
   }, []);
 
   useEffect(() => {
+    if (!owned) return;
     return subscribeInboxSeen(() => {
       applyUnseen(inboxHasUnseenItems(entriesRef.current));
     });
-  }, [applyUnseen]);
+  }, [applyUnseen, owned]);
 
   useEffect(() => {
+    if (!owned) return;
     const projects = inboxProjectsForRail(recents, cwd);
     if (projects.length === 0) {
       entriesRef.current = [];
@@ -68,6 +79,13 @@ export function useInboxUnseen(
 
     const pull = (force: boolean) => {
       if (pulling) return;
+      const request = optionsRef.current;
+      const permit = request?.getOwner?.()?.capture();
+      if (request?.getOwner && !permit) return;
+      const isCurrent = () =>
+        !cancelled &&
+        optionsRef.current?.revision === revision &&
+        (!permit || permit.isCurrent());
       pulling = true;
       lastPulledAt.current = Date.now();
       const projectPaths = projects.map((project) => project.path);
@@ -80,12 +98,14 @@ export function useInboxUnseen(
       };
       void listInboxItems(projects, query, { force })
         .then((listed) => {
-          if (cancelled) return;
+          if (!isCurrent()) return;
           const visible = applyInboxFilters(listed.items, filters, "");
-          onAppearedRef.current?.(listed.items);
+          request?.onAppeared?.(listed.items);
+          if (!isCurrent()) return;
           const entries = seenEntries(visible);
           entriesRef.current = entries;
           seedInboxSeenIfNeeded(entries);
+          if (!isCurrent()) return;
           applyUnseen(inboxHasUnseenItems(entries));
         })
         .catch(() => {
@@ -120,7 +140,7 @@ export function useInboxUnseen(
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [applyUnseen, cwd, recents]);
+  }, [applyUnseen, cwd, recents, owned, revision]);
 
-  return unseen;
+  return shared ?? unseen;
 }

@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { act, StrictMode, useLayoutEffect } from "react";
+import { act, StrictMode, useLayoutEffect, type ReactNode } from "react";
+import { useInboxUnseen } from "@/modules/harness/hooks/useInboxUnseen";
+import { useHarnessSummaryUpdates } from "@/modules/harness/hooks/useHarnessSummaryUpdates";
+import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -37,6 +40,11 @@ const native = vi.hoisted(() => ({
   updateRun: vi.fn(),
   claim: vi.fn(),
   pending: vi.fn(),
+  inboxList: vi.fn(),
+}));
+vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
+  ...(await original<typeof import("@/modules/harness/lib/githubTasks")>()),
+  listInboxItems: native.inboxList,
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
 vi.mock("@tauri-apps/api/window", () => ({
@@ -87,7 +95,10 @@ vi.mock("@/modules/harness/lib/notifications", async (original) => ({
   ...(await original<typeof import("@/modules/harness/lib/notifications")>()),
   notifySession: native.notify,
 }));
-vi.mock("@/modules/harness/lib/sounds", () => ({ playCue: vi.fn() }));
+vi.mock("@/modules/harness/lib/sounds", () => ({
+  playCue: vi.fn(),
+  noteInboxUnseen: vi.fn(),
+}));
 vi.mock("@/modules/harness/lib/fileWatch", () => ({
   nudgeWatchedFiles: vi.fn(),
 }));
@@ -187,6 +198,8 @@ function Observe() {
   return null;
 }
 beforeEach(() => {
+  localStorage.clear();
+  native.inboxList.mockReset().mockResolvedValue({ items: [], errors: {} });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers({
     toFake: [
@@ -263,10 +276,16 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(sessions: Session[], views: ViewProps[], strict = false) {
+async function render(
+  sessions: Session[],
+  views: ViewProps[],
+  strict = false,
+  extra?: ReactNode,
+) {
   const children = (
     <HarnessWindowHost initialSessions={() => sessions}>
       <Observe />
+      {extra}
       {views.map((view) => (
         <View key={view.ownerId} {...view} />
       ))}
@@ -278,6 +297,65 @@ async function render(sessions: Session[], views: ViewProps[], strict = false) {
 }
 
 describe("window-owned Harness execution host", () => {
+  it("keeps one Inbox source through view release and transcript changes", async () => {
+    const one = fixture("one", "/work/one");
+    const consumerAppeared = vi.fn();
+    function Reader() {
+      useInboxUnseen([], "/work/reader", { onAppeared: consumerAppeared });
+      return null;
+    }
+    await render(
+      [one.session],
+      [{ ownerId: 1, input: one.input }],
+      false,
+      <Reader />,
+    );
+    expect(native.inboxList).toHaveBeenCalledOnce();
+    expect(
+      native.inboxList.mock.calls[0][0].map(
+        (project: { path: string }) => project.path,
+      ),
+    ).toEqual(["/work/one"]);
+    await render([one.session], [], false, <Reader />);
+    await act(async () =>
+      required(runtime).engine.updateSession(
+        "one",
+        (session) => ({ ...session, title: "Changed" }),
+        "immediate",
+      ),
+    );
+    expect(native.inboxList).toHaveBeenCalledOnce();
+    expect(consumerAppeared).not.toHaveBeenCalled();
+  });
+
+  it("publishes transcript metadata to live summary readers and retires their deferred guards", async () => {
+    const one = fixture("one", "/work/one");
+    const received: string[] = [];
+    let guard = () => false;
+    const listener: Parameters<HarnessSummarySource["subscribe"]>[0] = (
+      summary,
+      isCurrent,
+    ) => {
+      received.push(summary.id);
+      guard = isCurrent;
+    };
+    function Reader() {
+      useHarnessSummaryUpdates(useHarnessWindow().summaries, listener);
+      return null;
+    }
+    await render([one.session], [], false, <Reader />);
+    await act(async () =>
+      required(runtime).transcripts.persistSession(one.session),
+    );
+    expect(received).toEqual(["one"]);
+    expect(guard()).toBe(true);
+    await render([one.session], []);
+    expect(guard()).toBe(false);
+    await act(async () =>
+      required(runtime).transcripts.persistSession(one.session),
+    );
+    expect(received).toEqual(["one"]);
+  });
   it("runs recovered local and remote automations with zero views and records their results", async () => {
     const one = automationFixture("run-one");
     const two = automationFixture("run-two", "remote://machine/srv/two");

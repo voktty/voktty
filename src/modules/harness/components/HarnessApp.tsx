@@ -4315,6 +4315,8 @@ const sessionEngine = useHarnessSessionEngine({
 
   useInboxUnseen(recents, sidebarCwd, {
     onAppeared: automations.onInboxAppeared,
+    getOwner: getPersistenceOwner,
+    revision: persistenceRevision,
   });
 
 
