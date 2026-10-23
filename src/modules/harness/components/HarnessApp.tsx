@@ -1,9 +1,8 @@
+import { useHarnessWindowPersistence } from "@/modules/harness/hooks/useHarnessWindowPersistence";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import { harnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
 import { t } from "@/modules/i18n";
 import { isForegroundHarnessSession } from "@/modules/harness/lib/harnessFlush";
-import { ownHarnessWindowCloseSubscription } from "@/modules/harness/lib/harnessWindowCloseSubscription";
-import { ownHarnessUnloadSubscription } from "@/modules/harness/lib/harnessUnloadSubscription";
 import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
 import { useInitialHarnessSession } from "@/modules/harness/hooks/useInitialHarnessSession";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
@@ -91,15 +90,8 @@ import {
 } from "../lib/appearance";
 import {
   bindResumedSessions,
-  confirmAndCloseWindow,
   confirmReload,
-  hideCurrentWindow,
-  isAppQuitting,
-  persistLiveTranscripts,
-  persistQuitState,
   type ResumedWorkspace,
-  reapWindowRuntime,
-  setQuitWorkspace,
 } from "../lib/appLifecycle";
 import { hiddenApprovalNotices } from "../lib/approvalToast";
 
@@ -133,7 +125,6 @@ import { bindHarnessSession, cancelHarnessTurn, forgetHarnessSession, isLiveHarn
 import { latestTurnNeedsHarnessLogin } from "../lib/harness/auth";
 
 import type { UsageFooterSession } from "../chrome/UsageFooter";
-import { inFlightRefs, inFlightSnapshotKey, shouldWriteInFlightSnapshot } from "../lib/inFlight";
 import {
   closeLeaf,
   type EditorPane,
@@ -174,7 +165,6 @@ import { linearIssueDetails, peekLinearIssueDetails } from "../lib/linear";
 import { liveAgentsFromSessions } from "../lib/liveAgents";
 
 import { mergeModelSettings, resolveModel } from "../lib/models";
-import { loadCloseToTray } from "../lib/settings";
 import { ADD_NOTE_TO_CHAT_EVENT, loadNotes, type NoteComposerCard } from "../lib/notes";
 import { displayPath, isEqualOrInside, pathKey, projectName, rebasePath } from "../lib/paths";
 import { planTitle } from "../lib/plan";
@@ -255,9 +245,7 @@ import {
   getSession,
   listSessionsByProject,
   persistFingerprint,
-  replaceInFlightSessions,
   type SessionSummary,
-  saveWorkspaceSnapshot,
   shouldPersistSession,
   upsertSession,
   upsertSessions,
@@ -317,10 +305,6 @@ import {
   collectWindowTransfer,
   type WindowTransferPayload,
 } from "../lib/windowTransfer";
-import {
-  collectWorkspaceSnapshot,
-  workspaceSnapshotKey,
-} from "../lib/workspaceSnapshot";
 import { runSessionRemoval, runSessionRemovalBatch } from "@/modules/harness/lib/sessionRemoval";
 import { persistSessionRemoval } from "@/modules/harness/lib/sessionRemovalPersistence";
 import {
@@ -743,9 +727,6 @@ const sessionEngine = useHarnessSessionEngine({
   const lastPersisted = useRef(new Map<string, string>());
   const lastBoundProvider = useRef(new Map<string, string>());
   const lastPersistedUserBlock = useRef(new Map<string, string>());
-  const inFlightSyncKey = useRef<string | null>(null);
-  const sawInFlight = useRef(false);
-  const workspaceSyncKey = useRef<string | null>(null);
   const observedSessions = useRef(new Map<string, Session>());
   const pendingPersist = useRef(new Map<string, Session>());
   const foregroundSurfaceRef = useRef<{
@@ -817,68 +798,20 @@ const sessionEngine = useHarnessSessionEngine({
     lastPersisted.current.clear();
     observedSessions.current.clear();
     pendingPersist.current.clear();
-    inFlightSyncKey.current = null;
-    workspaceSyncKey.current = null;
   });
 
   useEffect(() => {
     const persistenceOwner = getPersistenceOwner();
     if (!persistenceOwner) return;
-    let unloadPermit: PersistencePermit | null = null;
-    let unloadDenied = false;
     markHarnessOpenPhase("ready");
     registerBuiltinHarnesses();
     if (resumed?.sessions.length) bindResumedSessions(resumed.sessions);
     const stopBridge = startHarnessBridge();
-    const unloadSubscription = ownHarnessUnloadSubscription({
-      target: window,
-      isAppQuitting,
-      flush: flushHarnessEvents,
-      getSessions: () => sessionsRef.current,
-      getTabs: () => tabsRef.current,
-      getActiveTabId: () => activeTabIdRef.current,
-      getProjectCwd: () => projectCwdRef.current,
-      getProjectReturnMemory: readProjectReturnMemory,
-      getProjectTerminals: () => projectTerminalsRef.current,
-      persist: async (capture) => {
-        const permit = persistenceOwner.capture();
-        unloadPermit = permit;
-        if (!permit) return;
-        const writer: PersistencePermit = {
-          ...permit,
-          run: async (write) => {
-            const admitted = await permit.run(write);
-            if (!admitted) unloadDenied = true;
-            return admitted;
-          },
-        };
-        await persistQuitState(
-          capture.sessions,
-          capture.tabs,
-          capture.activeTabId,
-          capture.projectCwd,
-          capture.projectReturnMemory,
-          "unload",
-          capture.projectTerminals,
-          undefined,
-          { permit: writer, final: false },
-        );
-      },
-      reap: async (capture) => {
-        if (unloadDenied || !unloadPermit?.isCurrent()) return;
-        await reapWindowRuntime(
-          capture.sessions,
-          capture.tabs,
-          capture.projectTerminals,
-        );
-      },
-    });
     return () => {
-      unloadSubscription.release();
       stopBridge();
       cancelScheduledHarnessEvents();
     };
-  }, [resumed, readProjectReturnMemory, cancelScheduledHarnessEvents, flushHarnessEvents, getPersistenceOwner]);
+  }, [resumed, cancelScheduledHarnessEvents, getPersistenceOwner]);
 
   useEffect(() => {
     // Only the harnesses already in this window. Probing every installed CLI
@@ -1009,6 +942,40 @@ const sessionEngine = useHarnessSessionEngine({
     },
     [tabWorkspace],
   );
+
+  const windowWorkspace = useMemo(
+    () => ({
+      sessions,
+      tabs,
+      activeTabId,
+      projectCwd,
+      projectTerminals,
+      projectReturnMemory: reconcileProjectReturn({
+        memory: projectReturnRef.current,
+        tabs,
+        sessions,
+        activeTabId,
+      }),
+    }),
+    [sessions, tabs, activeTabId, projectCwd, projectTerminals],
+  );
+
+  useHarnessWindowPersistence({
+    getOwner: getPersistenceOwner,
+    workspace: windowWorkspace,
+    revision: persistenceRevision,
+    flush: flushHarnessEvents,
+    skipSnapshot: !!windowTransfer,
+    read: () => ({
+      sessions: sessionsRef.current,
+      tabs: tabsRef.current,
+      activeTabId: activeTabIdRef.current,
+      projectCwd: projectCwdRef.current,
+      projectTerminals: projectTerminalsRef.current,
+      projectReturnMemory: readProjectReturnMemory(),
+      keepTab: keepWorkspaceTab,
+    }),
+  });
 
   const workspaceNavigation = useWorkspaceNavigation({
     project: projectCwd,
@@ -1207,74 +1174,6 @@ const sessionEngine = useHarnessSessionEngine({
     flushForegroundHarnessEvents,
   ]);
 
-  useEffect(() => {
-    const persistenceOwner = getPersistenceOwner();
-    if (!persistenceOwner) return;
-    let active = true;
-    const releaseQuit = setQuitWorkspace(
-      () => sessionsRef.current,
-      () => tabsRef.current,
-      () => activeTabIdRef.current,
-      () => projectCwdRef.current,
-      () => projectTerminalsRef.current,
-      readProjectReturnMemory,
-      flushHarnessEvents,
-      keepWorkspaceTab,
-      persistenceOwner,
-    );
-    const closeSubscription = ownHarnessWindowCloseSubscription(
-      (listener) => getCurrentWindow().onCloseRequested(listener),
-      () => {
-        // Listening here makes close our job. Letting the default path run
-        // calls JS `window.destroy`, which Tauri denies without a permission.
-        flushHarnessEvents();
-        if (loadCloseToTray()) {
-          const permit = persistenceOwner.capture();
-          if (permit) {
-            void permit.run(() => persistLiveTranscripts(sessionsRef.current));
-          }
-          void hideCurrentWindow();
-          return;
-        }
-        void confirmAndCloseWindow(
-          sessionsRef.current,
-          tabsRef.current,
-          activeTabIdRef.current,
-          projectCwdRef.current,
-          readProjectReturnMemory(),
-          projectTerminalsRef.current,
-          flushHarnessEvents,
-          keepWorkspaceTab,
-          () => {
-            if (!active) return null;
-            flushHarnessEvents();
-            if (!active) return null;
-            const persistencePermit = persistenceOwner.capture();
-            if (!persistencePermit) return null;
-            return {
-              sessions: sessionsRef.current,
-              tabs: tabsRef.current,
-              activeTabId: activeTabIdRef.current,
-              projectCwd: projectCwdRef.current,
-              projectReturnMemory: readProjectReturnMemory(),
-              projectTerminals: projectTerminalsRef.current,
-              keepTab: keepWorkspaceTab,
-              persistencePermit,
-            };
-          },
-        );
-      },
-    );
-    void closeSubscription.ready.catch(() => {
-      active = false;
-    });
-    return () => {
-      active = false;
-      releaseQuit();
-      closeSubscription.release();
-    };
-  }, [flushHarnessEvents, keepWorkspaceTab, readProjectReturnMemory, getPersistenceOwner]);
-
   const refreshHistory = useCallback(
     async (cwd: string, isCurrent: () => boolean = () => true) => {
       if (!isCurrent() || !cwd || cwd === "~") return;
@@ -1410,67 +1309,6 @@ const sessionEngine = useHarnessSessionEngine({
     }, 650);
     return () => window.clearTimeout(timer);
   }, [persistSession, sessions, persistenceRevision, getPersistenceOwner]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
-  useEffect(() => {
-    const refs = inFlightRefs(sessions, tabs);
-    if (refs.length > 0) sawInFlight.current = true;
-    const permit = getPersistenceOwner()?.capture();
-    if (!permit) return;
-    const key = inFlightSnapshotKey(refs);
-    if (
-      !shouldWriteInFlightSnapshot(
-        key,
-        refs,
-        inFlightSyncKey.current,
-        sawInFlight.current,
-      )
-    ) {
-      return;
-    }
-    void permit.run(() => {
-      inFlightSyncKey.current = key;
-      return replaceInFlightSessions(refs);
-    }).catch(() => undefined);
-  }, [sessions, tabs, persistenceRevision, getPersistenceOwner]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Admission revision retries unchanged state after cancellation or quota denial.
-  useEffect(() => {
-    if (windowTransfer) return;
-    const permit = getPersistenceOwner()?.capture();
-    if (!permit) return;
-    const snapshot = collectWorkspaceSnapshot(
-      tabs,
-      sessions,
-      activeTabId,
-      projectCwd,
-      reconcileProjectReturn({
-        memory: projectReturnRef.current,
-        tabs,
-        sessions,
-        activeTabId,
-      }),
-      projectTerminals,
-    );
-    const key = workspaceSnapshotKey(snapshot);
-    if (workspaceSyncKey.current === key) return;
-    const timer = window.setTimeout(() => {
-      void permit.run(() => {
-        workspaceSyncKey.current = key;
-        return saveWorkspaceSnapshot(snapshot);
-      }).catch(() => undefined);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [
-    tabs,
-    sessions,
-    activeTabId,
-    projectCwd,
-    projectTerminals,
-    windowTransfer,
-    persistenceRevision,
-    getPersistenceOwner,
-  ]);
 
   useEffect(() => {
     if (lastProjectPath()) return;
