@@ -1,5 +1,6 @@
 import { t } from "@/modules/i18n";
 import { isTabIconId, type TabIconId } from "@/modules/tabs/lib/tabIcon";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import {
   asWorkspaceScopeId,
   createTabIdentity,
@@ -34,6 +35,7 @@ export type SerializedNode =
 export type SerializedTab = (
   | {
       kind: "terminal";
+      projectCwd?: string;
       tree: SerializedNode;
       blocks?: boolean;
       customTitle?: string;
@@ -129,6 +131,10 @@ function serializeTab(tab: Tab): SerializedTab | null {
     case "terminal":
       return {
         kind: "terminal",
+        ...terminalProjectMetadata(
+          tab.projectCwd,
+          tab.workspaceEnv ?? LOCAL_WORKSPACE,
+        ),
         tree: serializeNode(tab.paneTree, tab.activeLeafId),
         ...(tab.blocks && { blocks: true }),
         ...(tab.customTitle !== undefined && { customTitle: tab.customTitle }),
@@ -259,6 +265,10 @@ function hydrateTab(
         id: allocId(),
         ...hydrateIdentity(s, spaceId),
         kind: "terminal",
+        ...terminalProjectMetadata(
+          s.projectCwd,
+          s.workspaceEnv ?? fallbackWorkspaceEnv,
+        ),
         spaceId,
         cold: true,
         title,

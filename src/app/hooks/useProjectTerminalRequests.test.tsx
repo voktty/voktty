@@ -12,6 +12,7 @@ import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import { disposePtyTarget, openPty } from "@/modules/terminal/lib/pty-bridge";
 import type { PtySession } from "@/modules/terminal/lib/pty-bridge";
 import { leafIds } from "@/modules/terminal/lib/panes";
+import { hydrateTabs, serializeTabs } from "@/modules/spaces/lib/serialize";
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -43,7 +44,9 @@ let target: ProjectTerminalTarget;
 let mountedLeafId: number | undefined;
 const siblingLeaves = new Set<number>();
 let create: ReturnType<
-  typeof vi.fn<(cwd?: string, workspace?: WorkspaceEnv) => number>
+  typeof vi.fn<
+    (cwd?: string, workspace?: WorkspaceEnv, projectCwd?: string) => number
+  >
 >;
 let rollback: ReturnType<typeof vi.fn<(id: number) => void>>;
 let error: ReturnType<typeof vi.fn<(error: unknown) => void>>;
@@ -109,13 +112,14 @@ beforeEach(() => {
     },
   };
   mocks.resolve.mockResolvedValue(target);
-  create = vi.fn().mockImplementation((cwd, workspaceEnv) => {
+  create = vi.fn().mockImplementation((cwd, workspaceEnv, projectCwd) => {
     created = {
       id: 11,
       kind: "terminal",
       title: "shell",
       cwd,
       workspaceEnv,
+      projectCwd,
       paneTree: { kind: "leaf", id: 2, cwd },
       activeLeafId: 2,
       spaceId: "main",
@@ -153,7 +157,7 @@ it("connects the real event receiver to one native remote terminal with the orig
   await act(async () => root.render(<View />));
   await request();
   await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
-  expect(create).toHaveBeenCalledWith("/srv/app", target.workspace);
+  expect(create).toHaveBeenCalledWith("/srv/app", target.workspace, uri);
   expect(setActiveSpaceForNewTabs).toHaveBeenCalledExactlyOnceWith("main");
   const session = await openPty(
     80,
@@ -241,9 +245,11 @@ it("does not duplicate event subscriptions under StrictMode", async () => {
 it("preserves the local creation path without loading a remote destination", async () => {
   await act(async () => root.render(<View />));
   await request("C:/work/app");
-  expect(create).toHaveBeenCalledExactlyOnceWith("C:/work/app", {
-    kind: "local",
-  });
+  expect(create).toHaveBeenCalledExactlyOnceWith(
+    "C:/work/app",
+    { kind: "local" },
+    undefined,
+  );
   expect(mocks.resolve).not.toHaveBeenCalled();
 });
 
@@ -310,6 +316,7 @@ it("registers before the canonical tab mounts and releases only when that tab cl
         kind: "terminal",
         spaceId: "main",
         cwd: "/srv/app",
+        projectCwd: uri,
         workspaceEnv: expect.objectContaining({ kind: "ssh", sessionId: 7 }),
       }),
     ]),
@@ -413,6 +420,7 @@ it("duplicates and splits canonical project terminals with independent leases an
   const duplicate = api.getTab(duplicateId);
   if (!duplicate) throw new Error("Expected a duplicate terminal");
   expect(duplicate.kind).toBe("terminal");
+  expect(duplicate).toMatchObject({ projectCwd: uri });
   await act(async () => {
     api.splitActivePane(original.id, "row");
   });
@@ -445,5 +453,92 @@ it("duplicates and splits canonical project terminals with independent leases an
   await vi.waitFor(() =>
     expect(leases[0].lease.releaseAndClose).toHaveBeenCalledOnce(),
   );
+  expect(error).not.toHaveBeenCalled();
+});
+
+it("keeps the originating local project through cd, clone, split, move and session hydration", async () => {
+  if (source.kind !== "harness") throw new Error("Expected the Harness source");
+  source = { ...source, cwd: "/srv/app" };
+  let api!: ReturnType<typeof useTabs>;
+  function Desktop() {
+    const tabs = useTabs();
+    api = tabs;
+    useLayoutEffect(
+      () => tabs.replaceTabs([source], source.id),
+      [tabs.replaceTabs],
+    );
+    useProjectTerminalRequests({
+      source,
+      projectCwd: "/srv/app",
+      spaceId: "main",
+      newTab: tabs.newTab,
+      getTab: tabs.getTab,
+      closeTab: tabs.closeTab,
+      setActiveSpaceForNewTabs: tabs.setActiveSpaceForNewTabs,
+      pick: vi.fn().mockResolvedValue(null),
+      cancelPicker,
+      onError: error,
+    });
+    return null;
+  }
+  await act(async () => root.render(<Desktop />));
+  await request("/srv/app/src");
+  const original = api.getTabs().find((tab) => tab.kind === "terminal");
+  if (original?.kind !== "terminal")
+    throw new Error("Expected project terminal");
+  expect(original).toMatchObject({
+    projectCwd: "/srv/app",
+    cwd: "/srv/app/src",
+  });
+  await act(async () => api.setLeafCwd(original.activeLeafId, "/tmp/else"));
+  let copyId = -1;
+  await act(async () => {
+    const id = api.duplicateTab(original.id);
+    if (id === null) throw new Error("Expected a duplicate");
+    copyId = id;
+  });
+  expect(api.getTab(copyId)).toMatchObject({
+    projectCwd: "/srv/app",
+    cwd: "/tmp/else",
+  });
+  await act(async () => {
+    api.splitActivePane(original.id, "row");
+    api.moveTabToSpace(copyId, "other");
+  });
+  expect(api.getTab(copyId)).toMatchObject({
+    projectCwd: "/srv/app",
+    spaceId: "other",
+  });
+  const split = api.getTab(original.id);
+  if (split?.kind !== "terminal") throw new Error("Expected a split terminal");
+  expect(leafIds(split.paneTree)).toHaveLength(2);
+  let id = 100;
+  const restored = hydrateTabs(
+    serializeTabs(api.getTabs()),
+    "restored",
+    () => id++,
+  );
+  expect(restored.filter((tab) => tab.kind === "terminal")).toHaveLength(2);
+  for (const tab of restored.filter((tab) => tab.kind === "terminal"))
+    expect(tab.projectCwd).toBe("/srv/app");
+  let standaloneId = -1;
+  let differentEnvId: number | null = null;
+  await act(async () => {
+    standaloneId = api.newTab("/srv/app/src");
+    differentEnvId = api.duplicateTab(copyId, {
+      kind: "wsl",
+      distro: "Ubuntu",
+    });
+  });
+  expect(api.getTab(standaloneId)).not.toHaveProperty("projectCwd");
+  if (differentEnvId === null) throw new Error("Expected a copied terminal");
+  expect(api.getTab(differentEnvId)).not.toHaveProperty("projectCwd");
+  await act(async () =>
+    api.updateTab(original.id, {
+      workspaceEnv: { kind: "wsl", distro: "Ubuntu" },
+    }),
+  );
+  expect(api.getTab(original.id)).toMatchObject({ projectCwd: undefined });
+  expect(api.getTab(copyId)).toMatchObject({ projectCwd: "/srv/app" });
   expect(error).not.toHaveBeenCalled();
 });

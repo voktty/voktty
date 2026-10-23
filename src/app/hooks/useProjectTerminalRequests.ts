@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { Tab } from "@/modules/tabs";
 import type { WorkspaceEnv } from "@/modules/workspace";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import type { SshMultiplexerPicker } from "@/modules/harness/lib/projectTerminalTarget";
 import { createProjectTerminalRequests } from "@/app/lib/projectTerminalRequests";
 
@@ -8,7 +9,11 @@ type Props = {
   source: Tab | undefined;
   spaceId: string;
   projectCwd: string | null | undefined;
-  newTab: (cwd?: string, workspace?: WorkspaceEnv) => number;
+  newTab: (
+    cwd?: string,
+    workspace?: WorkspaceEnv,
+    projectCwd?: string,
+  ) => number;
   getTab: (id: number) => Tab | undefined;
   closeTab: (id: number) => void;
   setActiveSpaceForNewTabs: (spaceId: string) => void;
@@ -52,7 +57,11 @@ export function useProjectTerminalRequests(props: Props) {
           isCurrent: () => origin.current === selected,
           create: (cwd, workspace) => {
             captured.setActiveSpaceForNewTabs(captured.spaceId);
-            const tabId = captured.newTab(cwd, workspace);
+            const project = terminalProjectMetadata(
+              captured.projectCwd,
+              workspace,
+            );
+            const tabId = captured.newTab(cwd, workspace, project.projectCwd);
             const tab = captured.getTab(tabId);
             if (tab?.kind !== "terminal" || tab.spaceId !== captured.spaceId) {
               captured.closeTab(tabId);

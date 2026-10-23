@@ -8,6 +8,7 @@ import {
 } from "@/modules/tabs/lib/tabIdentity";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
 import { isTabIconId } from "@/modules/tabs/lib/tabIcon";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import {
   LOCAL_WORKSPACE,
   persistentWorkspaceEnv,
@@ -176,6 +177,17 @@ export function selectRestorableSession(
   return repairSessionEnvelope(lastCleanSession, true);
 }
 
+function safeTerminalTab(value: Extract<SerializedTab, { kind: "terminal" }>) {
+  const { projectCwd, ...tab } = value;
+  return {
+    ...tab,
+    ...terminalProjectMetadata(projectCwd, tab.workspaceEnv ?? LOCAL_WORKSPACE),
+    ...(tab.workspaceEnv && {
+      workspaceEnv: safeWorkspaceEnv(tab.workspaceEnv),
+    }),
+  };
+}
+
 function uniqueTabIdentity(
   tab: SerializedTab,
   contextId: string,
@@ -199,8 +211,8 @@ function uniqueTabIdentity(
           ...(isTabIconId(tab.icon) ? { icon: tab.icon } : {}),
           ...(tab.locked === true ? { locked: true } : {}),
         }
-      : tab.kind === "terminal" && tab.workspaceEnv
-        ? { ...tab, workspaceEnv: safeWorkspaceEnv(tab.workspaceEnv) }
+      : tab.kind === "terminal"
+        ? safeTerminalTab(tab)
         : tab;
   return {
     ...persistedTab,

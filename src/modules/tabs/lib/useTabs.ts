@@ -30,6 +30,7 @@ import {
   type SerialConnectionConfig,
   type WorkspaceEnv,
   workspaceForDocumentPath,
+  workspaceScopeKey,
 } from "@/modules/workspace";
 import {
   useCallback,
@@ -51,6 +52,7 @@ import {
 } from "./tabIdentity";
 import type { TabIconId } from "./tabIcon";
 import { updateTerminalCwd } from "./updateTerminalCwd";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 
 export { MAX_PANES_PER_TAB } from "@/modules/terminal/lib/paneLimits";
 
@@ -75,6 +77,7 @@ export type TerminalTab = TabBase & {
   kind: "terminal";
   title: string;
   cwd?: string;
+  projectCwd?: string;
   paneTree: PaneNode;
   activeLeafId: number;
   blocks?: boolean;
@@ -935,7 +938,11 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   );
 
   const newTab = useCallback(
-    (cwd?: string, workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE) => {
+    (
+      cwd?: string,
+      workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE,
+      projectCwd?: string,
+    ) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
       const nextTab: Tab = {
@@ -945,6 +952,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         spaceId: activeSpaceIdRef.current,
         title: "shell",
         cwd,
+        ...terminalProjectMetadata(projectCwd, workspaceEnv),
         paneTree: { kind: "leaf", id: leafId, cwd },
         activeLeafId: leafId,
         workspaceEnv,
@@ -1235,6 +1243,10 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         activeLeafId: leafId,
         blocks: source.blocks,
         workspaceEnv: env,
+        ...(workspaceScopeKey(env) ===
+        workspaceScopeKey(source.workspaceEnv ?? LOCAL_WORKSPACE)
+          ? terminalProjectMetadata(source.projectCwd, env)
+          : {}),
       };
       tabsRef.current = [...tabsRef.current, newTab];
       setTabs(tabsRef.current);
@@ -1824,6 +1836,11 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             }),
             ...(patch.workspaceEnv !== undefined && {
               workspaceEnv: patch.workspaceEnv,
+              ...(x.projectCwd !== undefined &&
+              workspaceScopeKey(patch.workspaceEnv) !==
+                workspaceScopeKey(x.workspaceEnv ?? LOCAL_WORKSPACE)
+                ? { projectCwd: undefined }
+                : {}),
             }),
           };
         } else if (x.kind === "preview") {
