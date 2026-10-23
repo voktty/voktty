@@ -4,6 +4,10 @@ import type { WorkspaceEnv } from "@/modules/workspace";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import type { SshMultiplexerPicker } from "@/modules/harness/lib/projectTerminalTarget";
 import { createProjectTerminalRequests } from "@/app/lib/projectTerminalRequests";
+import {
+  claimProjectTerminalRequest,
+  PROJECT_TERMINAL_REQUEST_EVENT,
+} from "@/modules/terminal/lib/projectTerminalRequest";
 
 type Props = {
   source: Tab | undefined;
@@ -92,8 +96,43 @@ export function useProjectTerminalRequests(props: Props) {
       void current.open(cwd).catch(() => undefined);
     };
     window.addEventListener("voktty:open-new-terminal-tab", handler);
+    const requested = (event: Event) => {
+      const captured = latest.current;
+      const ticket = claimProjectTerminalRequest(
+        event,
+        captured.source?.kind === "harness"
+          ? captured.source.tabKey
+          : undefined,
+        captured.projectCwd,
+      );
+      if (!ticket) return;
+      void current
+        .open(ticket.cwd, {
+          projectCwd: ticket.projectCwd,
+          isCurrent: ticket.isCurrent,
+          signal: ticket.signal,
+          onCreated: ({ tabId }) => {
+            const terminal = captured.getTab(tabId);
+            if (
+              terminal?.kind !== "terminal" ||
+              terminal.projectCwd !==
+                terminalProjectMetadata(
+                  ticket.projectCwd,
+                  terminal.workspaceEnv,
+                ).projectCwd
+            )
+              throw new Error("Terminal creation did not retain its project.");
+            ticket.created({ tabKey: terminal.tabKey });
+          },
+          onError: ticket.fail,
+        })
+        .catch(ticket.fail)
+        .finally(ticket.finish);
+    };
+    window.addEventListener(PROJECT_TERMINAL_REQUEST_EVENT, requested);
     return () => {
       window.removeEventListener("voktty:open-new-terminal-tab", handler);
+      window.removeEventListener(PROJECT_TERMINAL_REQUEST_EVENT, requested);
       current.dispose();
       if (service.current === current) service.current = null;
     };

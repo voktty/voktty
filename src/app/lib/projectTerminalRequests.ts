@@ -8,6 +8,20 @@ import {
   type OwnedPtyTarget,
   type OwnedPtyTargetReceipt,
 } from "@/modules/terminal/lib/ownedPtyTargets";
+import { terminalRestoreCwd } from "@/modules/tabs/lib/terminalProjectRestore";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
+
+export type CreatedProjectTerminal = Readonly<{
+  tabId: number;
+  leafId: number;
+}>;
+export type ProjectTerminalOpenOptions = {
+  projectCwd?: string;
+  isCurrent?: () => boolean;
+  onCreated?: (created: CreatedProjectTerminal) => void;
+  onError?: (error: unknown) => void;
+  signal?: AbortSignal;
+};
 
 type Request = {
   owner: object;
@@ -82,24 +96,89 @@ export function createProjectTerminalRequests(deps: {
     }
   };
   return {
-    open: async (cwd: unknown) => {
+    open: async (
+      cwd: unknown,
+      input: ProjectTerminalOpenOptions = {},
+    ): Promise<CreatedProjectTerminal | undefined> => {
+      const options = { ...input };
       const context = { ...deps.capture() };
-      const isCurrent = () => live && context.isCurrent();
+      const isCurrent = () =>
+        live &&
+        context.isCurrent() &&
+        (options.isCurrent?.() ?? true) &&
+        !options.signal?.aborted;
+      const onError = options.onError ?? context.onError;
       if (!isCurrent()) return;
       if (
         cwd !== undefined &&
         (typeof cwd !== "string" || cwd.length > 32768 || cwd.includes("\0"))
       ) {
-        context.onError(new Error("Invalid terminal folder."));
+        onError(new Error("Invalid terminal folder."));
         return;
       }
-      if (typeof cwd !== "string" || !cwd.startsWith("remote://")) {
-        context.create(cwd, { kind: "local" });
+      const project = options.projectCwd;
+      if (
+        project !== undefined &&
+        !terminalProjectMetadata(project).projectCwd
+      ) {
+        onError(new Error("Invalid terminal project."));
         return;
       }
+      const remoteProject = project?.startsWith("remote://")
+        ? project
+        : undefined;
+      if (
+        project !== undefined &&
+        !remoteProject &&
+        cwd !== undefined &&
+        !terminalProjectMetadata(cwd).projectCwd
+      ) {
+        onError(new Error("Invalid terminal folder."));
+        return;
+      }
+      if (
+        project !== undefined &&
+        !remoteProject &&
+        typeof cwd === "string" &&
+        cwd.startsWith("remote://")
+      ) {
+        onError(new Error("Terminal folder belongs to another connection."));
+        return;
+      }
+      let folder: string | undefined;
+      try {
+        folder = remoteProject
+          ? terminalRestoreCwd(remoteProject, cwd)
+          : (cwd ?? project);
+      } catch (error) {
+        if (isCurrent()) onError(error);
+        return;
+      }
+      if (
+        !remoteProject &&
+        (typeof cwd !== "string" || !cwd.startsWith("remote://"))
+      ) {
+        const created = Object.freeze({
+          ...context.create(folder, { kind: "local" }),
+        });
+        try {
+          if (!isCurrent()) {
+            context.rollback(created.tabId);
+            return;
+          }
+          options.onCreated?.(created);
+          return created;
+        } catch (error) {
+          context.rollback(created.tabId);
+          if (isCurrent()) onError(error);
+          return;
+        }
+      }
+      const destination = remoteProject ?? cwd;
+      if (typeof destination !== "string") return;
       retryCleanup();
       if (requests.size + ownedPtyTargets.size() >= 256) {
-        context.onError(new Error("Terminal request limit reached."));
+        onError(new Error("Terminal request limit reached."));
         return;
       }
       const request: Request = {
@@ -107,12 +186,16 @@ export function createProjectTerminalRequests(deps: {
         cancelPicker: () => context.cancelPicker(request),
       };
       requests.add(request);
+      options.signal?.addEventListener("abort", request.cancelPicker, {
+        once: true,
+      });
       let cancelled = false;
       let error: unknown;
       let failed = false;
+      let accepted: CreatedProjectTerminal | undefined;
       try {
         const target = await deps.resolve(
-          cwd,
+          destination,
           async (...args) => {
             if (!isCurrent()) {
               cancelled = true;
@@ -129,7 +212,13 @@ export function createProjectTerminalRequests(deps: {
         const owned = ownedTarget(target);
         request.release = owned.release;
         if (isCurrent()) {
-          const created = context.create(target.cwd, target.workspace);
+          const created = Object.freeze({
+            ...context.create(
+              remoteProject ? folder : target.cwd,
+              target.workspace,
+            ),
+          });
+          if (remoteProject) owned.cwd = folder ?? target.cwd;
           let receipt: OwnedPtyTargetReceipt | undefined;
           try {
             if (!isCurrent()) throw new Error("Terminal request was retired.");
@@ -139,6 +228,8 @@ export function createProjectTerminalRequests(deps: {
             );
             request.release = undefined;
             if (!isCurrent()) throw new Error("Terminal request was retired.");
+            options.onCreated?.(created);
+            accepted = created;
           } catch (reason) {
             if (receipt) request.release = receipt.dispose;
             context.rollback(created.tabId);
@@ -158,7 +249,9 @@ export function createProjectTerminalRequests(deps: {
         if (!failed) error = reason;
         failed = true;
       }
-      if (failed && !cancelled && isCurrent()) context.onError(error);
+      options.signal?.removeEventListener("abort", request.cancelPicker);
+      if (failed && !cancelled && isCurrent()) onError(error);
+      return accepted;
     },
     retireSelection: () => {
       for (const request of requests)
