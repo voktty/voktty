@@ -590,7 +590,6 @@ export function HarnessApp({
   const [inboxViewOpen, setInboxViewOpen] = useState(false);
   const [inboxAskPortal, setInboxAskPortal] =
     useState<InboxSessionPortal | null>(null);
-  const openingInboxSessions = useRef(new Map<string, Promise<string>>());
   const ownedInboxSessions = useRef(new Set<string>());
   const [notesViewOpen, setNotesViewOpen] = useState(false);
   const [automationsViewOpen, setAutomationsViewOpen] = useState(false);
@@ -1300,121 +1299,185 @@ export function HarnessApp({
   ],
   );
 
-  const onAskInboxItem = useCallback(
-    async (item: InboxItem): Promise<string> => {
-      const permit = getPersistenceOwner()?.capture();
-      if (!permit) throw new Error("Harness view is unavailable");
+  const ensureInboxAsk = useCallback(
+    async (item: InboxItem, permit: PersistencePermit): Promise<string> => {
+      if (!permit.isCurrent()) throw new Error("Harness view is unavailable");
       const key = inboxAskKey(item);
-      const existing = sessionsRef.current.find(
-        (session) => session.inboxAsk?.key === key,
-      );
-      if (existing) { ownedInboxSessions.current.add(existing.id); return existing.id; }
-      const inFlight = openingInboxSessions.current.get(key);
-      if (inFlight) return inFlight;
-
-      const run = (async () => {
-        let description: string | undefined;
-        if (item.provider === "linear") {
-          if (item.id) {
-            const cached = peekLinearIssueDetails(item.id);
-            description = cached
-              ? cached.body
-              : (await linearIssueDetails(item.id).catch(() => undefined))
-                  ?.body;
-          }
-        } else {
-          const kind =
-            item.kind === "issue" || item.kind === "pr" ? item.kind : null;
-          if (kind) {
-            const cached = peekGithubWorkItemDetails(
-              item.projectPath,
-              kind,
-              item.number,
-            );
-            description = cached
-              ? cached.body
-              : (
-                  await githubWorkItemDetails(
-                    item.projectPath,
-                    kind,
-                    item.number,
-                  ).catch(() => undefined)
-                )?.body;
-          }
-        }
-
-        if (!permit.isCurrent()) throw new Error("Harness view is unavailable");
-        const cwd =
-          (item.projectPath && looksLikeProject(item.projectPath)
-            ? item.projectPath
-            : undefined) ||
-          active?.cwd ||
-          sessionDefaults?.cwd ||
-          projectCwd;
-
-        const ref =
-          item.provider === "linear"
-            ? item.identifier?.trim() || `#${item.number}`
-            : `#${item.number}`;
-
-        const askContext: InboxAskContext = {
-          key,
-          title: `${ref} ${item.title}`,
-          url: item.url,
-          provider: item.provider,
-          ...(description?.trim() ? { description: description.trim() } : {}),
-        };
-
-        const session: Session = {
-          ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
-          title: `Ask · ${ref}`,
-          inboxAsk: askContext,
-        };
-
-        admitSession(session);
-        ownedInboxSessions.current.add(session.id);
-        return session.id;
-      })().finally(() => {
-        openingInboxSessions.current.delete(key);
-      });
-
-      openingInboxSessions.current.set(key, run);
-      return run;
-    },
-    [
-    active?.cwd,
-    projectCwd,
-    sessionDefaults?.cwd,
-    sessionDefaults?.runtimeMode,
-    admitSession,
-    getPersistenceOwner,
-  ],
-  );
-
-  const onRestartInboxAsk = useCallback(
-    async (item: InboxItem): Promise<string> => {
-      if (!getPersistenceOwner()?.capture()) throw new Error("Harness view is unavailable");
-      const key = inboxAskKey(item);
-      openingInboxSessions.current.delete(key);
       const existing = sessionsRef.current.find(
         (session) => session.inboxAsk?.key === key,
       );
       if (existing) {
-        if (windowRuntime.views.getSnapshot().cohorts.some((cohort) => cohort.ownerId !== surfaceOwnerId && cohort.state.report.referencedSessionIds.includes(existing.id))) throw new Error("This conversation is open in another Harness view");
-        for (const harness of sessionChildHarnesses(existing)) {
-          void forgetHarnessSession(harness, existing.id);
-        }
-        removeSession(existing.id);
+        if (
+          windowRuntime.holds.has("removing", existing.id) ||
+          windowRuntime.holds.has("transfer", existing.id)
+        )
+          throw new Error("Inbox conversation is unavailable");
+        return existing.id;
       }
-      return onAskInboxItem(item);
+      let description: string | undefined;
+      if (item.provider === "linear") {
+        if (item.id) {
+          const cached = peekLinearIssueDetails(item.id);
+          description = cached
+            ? cached.body
+            : (await linearIssueDetails(item.id).catch(() => undefined))?.body;
+        }
+      } else {
+        const kind =
+          item.kind === "issue" || item.kind === "pr" ? item.kind : null;
+        if (kind) {
+          const cached = peekGithubWorkItemDetails(
+            item.projectPath,
+            kind,
+            item.number,
+          );
+          description = cached
+            ? cached.body
+            : (
+                await githubWorkItemDetails(
+                  item.projectPath,
+                  kind,
+                  item.number,
+                ).catch(() => undefined)
+              )?.body;
+        }
+      }
+
+      if (!permit.isCurrent()) throw new Error("Harness view is unavailable");
+      const cwd =
+        (item.projectPath && looksLikeProject(item.projectPath)
+          ? item.projectPath
+          : undefined) ||
+        active?.cwd ||
+        sessionDefaults?.cwd ||
+        projectCwd;
+
+      const ref =
+        item.provider === "linear"
+          ? item.identifier?.trim() || `#${item.number}`
+          : `#${item.number}`;
+
+      const askContext: InboxAskContext = {
+        key,
+        title: `${ref} ${item.title}`,
+        url: item.url,
+        provider: item.provider,
+        ...(description?.trim() ? { description: description.trim() } : {}),
+      };
+
+      const session: Session = {
+        ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
+        title: `Ask · ${ref}`,
+        inboxAsk: askContext,
+      };
+
+      admitSession(session);
+      return session.id;
     },
     [
-    onAskInboxItem,
-    removeSession,
-    getPersistenceOwner,
-    surfaceOwnerId,
-    windowRuntime.views,
-  ],
+      active?.cwd,
+      projectCwd,
+      sessionDefaults?.cwd,
+      sessionDefaults?.runtimeMode,
+      admitSession,
+      windowRuntime.holds,
+      sessionsRef,
+    ],
+  );
+
+  const onAskInboxItem = useCallback(
+    async (item: InboxItem): Promise<string> => {
+      item = { ...item };
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) throw new Error("Harness view is unavailable");
+      const id = await windowRuntime.inboxOperations.run(
+        inboxAskKey(item),
+        "open",
+        permit,
+        (request) => ensureInboxAsk(item, request),
+      );
+      if (
+        !permit.isCurrent() ||
+        !sessionsRef.current.some((session) => session.id === id) ||
+        windowRuntime.holds.has("removing", id) ||
+        windowRuntime.holds.has("transfer", id)
+      )
+        throw new Error("Inbox conversation is unavailable");
+      ownedInboxSessions.current.add(id);
+      return id;
+    },
+    [
+      ensureInboxAsk,
+      getPersistenceOwner,
+      windowRuntime.inboxOperations,
+      windowRuntime.holds,
+      sessionsRef,
+    ],
+  );
+
+  const onRestartInboxAsk = useCallback(
+    async (item: InboxItem): Promise<string> => {
+      item = { ...item };
+      const permit = getPersistenceOwner()?.capture();
+      if (!permit) throw new Error("Harness view is unavailable");
+      const id = await windowRuntime.inboxOperations.run(
+        inboxAskKey(item),
+        "restart",
+        permit,
+        async (request) => {
+          const existing = sessionsRef.current.find(
+            (session) => session.inboxAsk?.key === inboxAskKey(item),
+          );
+          if (existing) {
+            const lifetime = sessionEngine.captureSessionLifetime(existing.id);
+            const operation = await windowRuntime.removals.prepare(
+              null,
+              [existing.id],
+              request,
+            );
+            if (!operation) throw new Error("Inbox conversation is unavailable");
+            try {
+              const removed = await operation.perform(async () => {
+                if (!(await operation.commit())) return false;
+                const stopped = await stopSessionForRemoval(existing.id);
+                if (!operation.isCurrent() || !lifetime()) return false;
+                const outcomes = await Promise.allSettled(
+                  sessionChildHarnesses(stopped ?? existing).map((harness) =>
+                    operation.isCurrent()
+                      ? forgetHarnessSession(harness, existing.id)
+                      : Promise.resolve(),
+                  ),
+                );
+                const failure = outcomes.find(
+                  (outcome) => outcome.status === "rejected",
+                );
+                if (failure) throw failure.reason;
+                if (!operation.isCurrent() || !lifetime()) return false;
+                removeSession(existing.id, "immediate");
+                return true;
+              });
+              if (!removed) throw new Error("Inbox conversation is unavailable");
+            } finally {
+              operation.release();
+            }
+          }
+          return ensureInboxAsk(item, request);
+        },
+      );
+      if (!permit.isCurrent()) throw new Error("Harness view is unavailable");
+      ownedInboxSessions.current.add(id);
+      return id;
+    },
+    [
+      ensureInboxAsk,
+      removeSession,
+      getPersistenceOwner,
+      sessionEngine.captureSessionLifetime,
+      stopSessionForRemoval,
+      windowRuntime.removals,
+      windowRuntime.inboxOperations,
+      sessionsRef,
+    ],
   );
 
   const onAddNoteToChat = useCallback(

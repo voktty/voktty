@@ -56,6 +56,7 @@ import type { Session } from "@/modules/harness/lib/session";
 import { normalizeHarnessSessionViewReport } from "@/modules/harness/lib/harnessSessionViews";
 import { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import { createHarnessWindowViewRemoval } from "@/modules/harness/lib/harnessWindowViewRemoval";
+import { createInboxSessionOperations } from "@/modules/harness/lib/inboxSessionOperations";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 
 type WindowRuntime = {
@@ -63,6 +64,7 @@ type WindowRuntime = {
   views: ReturnType<typeof createHarnessWindowViews>;
   holds: ReturnType<typeof createHarnessWindowSessionHolds>;
   removals: ReturnType<typeof createHarnessWindowViewRemoval>;
+  inboxOperations: ReturnType<typeof createInboxSessionOperations>;
   persistence: ReturnType<typeof useWindowPersistenceAdmission>;
   transcripts: ReturnType<typeof useHarnessTranscriptPersistence>;
   automations: ReturnType<typeof useHarnessAutomations>;
@@ -103,6 +105,7 @@ export function HarnessWindowHost({
   const [removals] = useState(() =>
     createHarnessWindowViewRemoval(views, holds),
   );
+  const [inboxOperations] = useState(createInboxSessionOperations);
   const removalLifetime = useRef<object | null>(null);
   useEffect(() => {
     const owner = {};
@@ -111,10 +114,13 @@ export function HarnessWindowHost({
       if (removalLifetime.current === owner) removalLifetime.current = null;
       // StrictMode replaces the effect owner before this final cleanup runs.
       queueMicrotask(() => {
-        if (removalLifetime.current === null) removals.dispose();
+        if (removalLifetime.current === null) {
+          removals.dispose();
+          inboxOperations.dispose();
+        }
       });
     };
-  }, [removals]);
+  }, [removals, inboxOperations]);
   const held = useSyncExternalStore(holds.subscribe, holds.getSnapshot);
   const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
@@ -197,7 +203,11 @@ export function HarnessWindowHost({
     flushForegroundHarnessEvents: engine.flushForegroundHarnessEvents,
   });
   const persistence = useWindowPersistenceAdmission(() => undefined);
-  useHarnessCatalogBootstrap(engine, persistence.getOwner, persistence.revision);
+  useHarnessCatalogBootstrap(
+    engine,
+    persistence.getOwner,
+    persistence.revision,
+  );
   useRemoteSessionAlerts();
   const navigation = useHarnessWindowNavigation(
     views,
@@ -360,6 +370,7 @@ export function HarnessWindowHost({
         views,
         holds,
         removals,
+        inboxOperations,
         persistence,
         transcripts,
         automations,

@@ -39,6 +39,7 @@ import type {
 } from "@/modules/harness/lib/harnessWindowNavigation";
 import { leafIds, newTab } from "@/modules/harness/lib/layout";
 import { newSession, type Session } from "@/modules/harness/lib/session";
+import type { InboxItem } from "@/modules/harness/lib/githubTasks";
 import { publishActiveSurface } from "@/modules/surfaces";
 import {
   newAutomationDraft,
@@ -76,6 +77,10 @@ const native = vi.hoisted(() => ({
   claim: vi.fn(),
   pending: vi.fn(),
   inboxList: vi.fn(),
+  details: vi.fn(),
+  inboxes: [] as Parameters<
+    typeof import("@/modules/harness/surfaces/InboxView").InboxView
+  >[0][],
   reminderList: vi.fn(),
   takeReminder: vi.fn(),
   listen: vi.fn(),
@@ -84,6 +89,19 @@ const native = vi.hoisted(() => ({
 vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
   ...(await original<typeof import("@/modules/harness/lib/githubTasks")>()),
   listInboxItems: native.inboxList,
+  githubWorkItemDetails: native.details,
+  peekGithubWorkItemDetails: () => undefined,
+}));
+vi.mock("@/modules/harness/surfaces/InboxView", () => ({
+  InboxDetailPane: () => null,
+  InboxView: (
+    props: Parameters<
+      typeof import("@/modules/harness/surfaces/InboxView").InboxView
+    >[0],
+  ) => {
+    native.inboxes.push(props);
+    return null;
+  },
 }));
 vi.mock("@/modules/harness/chrome/Sidebar", () => ({
   Sidebar: (
@@ -147,7 +165,7 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
   sendHarnessTurn: native.send,
   cancelHarnessTurn: native.cancel,
   generateHarnessTitle: vi.fn().mockResolvedValue(undefined),
-  forgetHarnessSession: vi.fn().mockResolvedValue(undefined),
+  forgetHarnessSession: native.forget,
   canRewindHarnessLastTurn: () => false,
   respondHarnessApproval: native.approval,
   bindHarnessSession: native.bind,
@@ -412,6 +430,8 @@ beforeEach(() => {
       };
     });
   native.inboxList.mockReset().mockResolvedValue({ items: [], errors: {} });
+  native.details.mockReset().mockResolvedValue({ body: "Inbox details" });
+  native.inboxes.length = 0;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers({
     toFake: [
@@ -528,6 +548,236 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  async function inboxViews(strict = false) {
+    const one = fixture("inbox-one", "/work/inbox-one");
+    const two = fixture("inbox-two", "/work/inbox-two");
+    await render(
+      [one.session, two.session],
+      [],
+      strict,
+      <>
+        <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />
+        <HarnessApp
+          surfaceOwnerId={2}
+          initialCwd={two.session.cwd}
+          focused={false}
+        />
+      </>,
+    );
+    const sidebars = [...native.sidebars];
+    await act(async () => {
+      for (const sidebar of sidebars) sidebar.onOpenInbox?.();
+    });
+    const first = required(
+      native.inboxes.find((props) => props.cwd === one.session.cwd),
+    );
+    const second = required(
+      native.inboxes.find((props) => props.cwd === two.session.cwd),
+    );
+    const item: InboxItem = {
+      provider: "github",
+      kind: "issue",
+      number: 42,
+      title: "Shared Inbox item",
+      url: "https://github.com/acme/app/issues/42",
+      projectPath: one.session.cwd,
+      state: "OPEN",
+      updatedAt: "2026-10-23",
+      labels: [],
+      assignees: [],
+      draft: false,
+      repo: "acme/app",
+    };
+    return { first, second, item, host: required(runtime) };
+  }
+
+  it("coalesces Inbox creation across real App views and rejects restart while metadata is pending", async () => {
+    const f = await inboxViews(true);
+    const gate = deferred<{ body: string }>();
+    native.details.mockReturnValue(gate.promise);
+    const pending: Promise<string>[] = [];
+    await act(async () => {
+      pending.push(
+        required(f.first.onAsk)(f.item),
+        required(f.second.onAsk)(f.item),
+      );
+    });
+    expect(native.details).toHaveBeenCalledOnce();
+    await expect(required(f.first.onAskRestart)(f.item)).rejects.toThrow(
+      "unavailable",
+    );
+    let ids: string[] = [];
+    await act(async () => {
+      gate.resolve({ body: "Ready" });
+      ids = await Promise.all(pending);
+    });
+    expect(ids[0]).toBe(ids[1]);
+    expect(
+      f.host.engine.sessionsRef.current.filter((session) => session.inboxAsk),
+    ).toHaveLength(1);
+  });
+
+  it("restarts a shared Inbox conversation only after every view detaches and native cleanup settles", async () => {
+    const f = await inboxViews(true);
+    const id = await act(async () => required(f.first.onAsk)(f.item));
+    await act(async () => {
+      expect(await required(f.second.onAsk)(f.item)).toBe(id);
+      const portal = document.createElement("div");
+      required(f.first.onAskMount)({ sessionId: id, host: portal });
+      required(f.second.onAskMount)({
+        sessionId: id,
+        host: document.createElement("div"),
+      });
+    });
+    const cleanup = deferred<void>();
+    const physical = [
+      {
+        ...newTab("inbox-editor"),
+        editorPanes: [
+          {
+            id: "inbox-editor",
+            activeFileId: "file",
+            files: [{ id: "file", path: "/work/file", cwd: "/work" }],
+          },
+        ],
+      },
+      {
+        ...newTab("inbox-terminal"),
+        terminalPanes: [
+          {
+            id: "inbox-terminal",
+            activeFileId: "pty",
+            files: [
+              { id: "pty", path: "terminal", cwd: "/work", terminal: true },
+            ],
+          },
+        ],
+      },
+    ];
+    const retained = f.host.views.register(3, {
+      tabs: [newTab(id), ...physical],
+      activeTabId: physical[0].id,
+      projectCwd: "/work",
+      projectTerminals: [],
+      projectReturnMemory: new Map(),
+      report: {
+        referencedSessionIds: [id],
+        foregroundSessionIds: [],
+        activeSessionId: null,
+      },
+    });
+    retained.release();
+    native.forget.mockImplementation(async () => {
+      expect(
+        f.host.views
+          .getSnapshot()
+          .cohorts.every(
+            (entry) => !entry.state.report.referencedSessionIds.includes(id),
+          ),
+      ).toBe(true);
+      expect(f.host.holds.has("removing", id)).toBe(true);
+      await cleanup.promise;
+    });
+    let pending!: Promise<string>;
+    await act(async () => {
+      pending = required(f.first.onAskRestart)(f.item);
+    });
+    expect(native.forget).toHaveBeenCalledOnce();
+    expect(f.host.engine.readSession(id)).toBeDefined();
+    await expect(required(f.second.onAsk)(f.item)).rejects.toThrow(
+      "unavailable",
+    );
+    await expect(required(f.second.onAskRestart)(f.item)).rejects.toThrow(
+      "unavailable",
+    );
+    const next = await act(async () => {
+      cleanup.resolve();
+      return pending;
+    });
+    expect(next).not.toBe(id);
+    expect(f.host.engine.readSession(id)).toBeUndefined();
+    expect(f.host.engine.readSession(next)?.inboxAsk).toBeDefined();
+    expect(
+      f.host.engine.sessionsRef.current.filter((session) => session.inboxAsk),
+    ).toHaveLength(1);
+    expect(f.host.holds.hasAny(id)).toBe(false);
+    const saved = required(
+      f.host.views.getSnapshot().cohorts.find((entry) => entry.ownerId === 3),
+    );
+    expect(saved.state.layout.tabs.map((tab) => tab.id)).toEqual(
+      physical.map((tab) => tab.id),
+    );
+    expect(saved.state.layout.tabs[0].editorPanes[0].files[0].id).toBe("file");
+    expect(saved.state.layout.tabs[1].terminalPanes[0].files[0].id).toBe("pty");
+  });
+
+  it("keeps the old Inbox session and original error when cleanup fails, then allows an explicit retry", async () => {
+    const f = await inboxViews();
+    const id = await act(async () => required(f.first.onAsk)(f.item));
+    const error = new Error("Cleanup failed");
+    native.forget.mockRejectedValueOnce(error);
+    await act(async () => {
+      await expect(required(f.first.onAskRestart)(f.item)).rejects.toBe(error);
+    });
+    expect(f.host.engine.readSession(id)).toBeDefined();
+    expect(
+      f.host.engine.sessionsRef.current.filter((session) => session.inboxAsk),
+    ).toHaveLength(1);
+    expect(f.host.holds.hasAny(id)).toBe(false);
+    const next = await act(async () => required(f.first.onAskRestart)(f.item));
+    expect(next).not.toBe(id);
+    expect(f.host.engine.readSession(id)).toBeUndefined();
+  });
+
+  it("does not admit a late Inbox metadata result after close cancellation", async () => {
+    const f = await inboxViews();
+    const gate = deferred<{ body: string }>();
+    native.details.mockReturnValue(gate.promise);
+    let pending!: Promise<string>;
+    await act(async () => {
+      pending = required(f.first.onAsk)(f.item);
+    });
+    const rejected = expect(pending).rejects.toThrow("unavailable");
+    const final = required(
+      required(required(f.host.persistence.getOwner()).capture()).seal(),
+    );
+    await act(async () => {
+      final.cancel();
+      gate.resolve({ body: "Late" });
+      await rejected;
+    });
+    expect(
+      f.host.engine.sessionsRef.current.some((session) => session.inboxAsk),
+    ).toBe(false);
+  });
+
+  it("does not create the replacement Inbox conversation after close cancellation during cleanup", async () => {
+    const f = await inboxViews();
+    const id = await act(async () => required(f.first.onAsk)(f.item));
+    const cleanup = deferred<void>();
+    native.forget.mockReturnValue(cleanup.promise);
+    let pending!: Promise<string>;
+    await act(async () => {
+      pending = required(f.first.onAskRestart)(f.item);
+    });
+    const rejected = expect(pending).rejects.toThrow("unavailable");
+    expect(native.forget).toHaveBeenCalledOnce();
+    const owner = required(f.host.persistence.getOwner());
+    const final = required(required(owner.capture()).seal());
+    await act(async () => final.cancel());
+    expect(f.host.holds.hasAny(id)).toBe(true);
+    await act(async () => {
+      cleanup.resolve();
+      await rejected;
+    });
+    expect(f.host.holds.hasAny(id)).toBe(false);
+    expect(f.host.engine.readSession(id)).toBeDefined();
+    expect(
+      f.host.engine.sessionsRef.current.filter((session) => session.inboxAsk),
+    ).toHaveLength(1);
+    expect(native.details).toHaveBeenCalledOnce();
+  });
+
   it("keeps the removal reservation until a pending stop settles after Host unmount", async () => {
     const one = fixture("pending-stop", "/work/pending-stop");
     await render(
