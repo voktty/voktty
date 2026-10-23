@@ -272,6 +272,15 @@ export function disposePtyTarget(paneId: number): void {
   forgetGuestTerminal(paneId);
 }
 
+export function capturePtyReconnect(paneId: number) {
+  return ownedPtyTargets.captureReconnect(paneId);
+}
+
+export function cancelPtyConnection(paneId: number): void {
+  const receipt = ownedPtyTargets.get(paneId);
+  if (receipt) void receipt.close().catch(() => undefined);
+}
+
 export function isGuestPtyTarget(paneId: number): boolean {
   return isCollabGuestLeaf(paneId);
 }

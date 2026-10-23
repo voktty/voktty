@@ -47,6 +47,8 @@ import {
   registerPromptTracker,
 } from "./osc-handlers";
 import {
+  cancelPtyConnection,
+  capturePtyReconnect,
   disposePtyTarget,
   getRemotePtyCwd,
   isGuestPtyTarget,
@@ -1268,6 +1270,7 @@ export async function respawnSession(
 ): Promise<void> {
   const s = sessions.get(leafId);
   if (!s || s.disposed) return;
+  const reconnectPty = capturePtyReconnect(leafId);
   const previousPty = s.pty;
   s.pty = null;
   s.snapshot = null;
@@ -1292,10 +1295,19 @@ export async function respawnSession(
     discardRetainedSlot(leafId);
   }
   const attempt = beginLeafConnection(leafId, s, "reconnecting");
-  void previousPty?.close();
   s.ptyOpening = true;
   let pty: PtySession;
   try {
+    const isCurrent = () =>
+      !s.disposed &&
+      s.connectionState.attempt === attempt &&
+      s.connectionState.phase !== "cancelling";
+    if (reconnectPty) {
+      await reconnectPty(cwd ?? s.initialCwd, isCurrent);
+      if (!isCurrent()) throw new Error("Terminal reconnect was retired.");
+    } else {
+      void previousPty?.close();
+    }
     pty = await openPtyWithRetry(leafId, s, cwd ?? s.initialCwd, attempt);
   } catch (e) {
     if (s.connectionState.attempt !== attempt) return;
@@ -1334,6 +1346,7 @@ export async function respawnSession(
 export function cancelSessionConnection(leafId: number): void {
   const s = sessions.get(leafId);
   if (!s || s.disposed || !s.ptyOpening) return;
+  cancelPtyConnection(leafId);
   setLeafConnectionState(
     leafId,
     s,
@@ -1825,8 +1838,17 @@ export async function getLiveLeafCwd(leafId: number): Promise<string | null> {
     s.workspaceEnv.sessionId !== undefined &&
     s.pty
   ) {
+    const pty = s.pty;
+    const attempt = s.connectionState.attempt;
     try {
-      const cwd = await getRemotePtyCwd(s.workspaceEnv.sessionId, s.pty.id);
+      const cwd = await getRemotePtyCwd(s.workspaceEnv.sessionId, pty.id);
+      if (
+        s.disposed ||
+        sessions.get(leafId) !== s ||
+        s.pty !== pty ||
+        s.connectionState.attempt !== attempt
+      )
+        return s.lastCwd;
       if (cwd) {
         if (s.lastCwd !== cwd) {
           s.lastCwd = cwd;

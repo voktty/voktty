@@ -30,6 +30,11 @@ export function createOwnedPtyTargets(limit = 256) {
     throw new Error("Invalid terminal resource limit.");
   const entries = new Map<number, OwnedPtyTargetReceipt>();
   const workspaces = new WeakSet<WorkspaceEnv>();
+  const reconnectors = new WeakMap<
+    OwnedPtyTargetReceipt,
+    (cwd: string | undefined, isCurrent: () => boolean) => Promise<void>
+  >();
+  let reconnecting = 0;
   const siblingFactories = new WeakMap<
     WorkspaceEnv,
     NonNullable<OwnedPtyTarget["acquireSibling"]>
@@ -192,6 +197,46 @@ export function createOwnedPtyTargets(limit = 256) {
     entries.set(leafId, receipt);
     markWorkspace(input.workspace, input.acquireSibling);
     markWorkspace(target.workspace, target.acquireSibling);
+    const factory = input.acquireSibling;
+    if (factory) {
+      const reconnectWorkspace = {
+        ...target.workspace,
+        connection: { ...target.workspace.connection },
+      };
+      reconnectors.set(receipt, async (cwd, isCallerCurrent) => {
+        const folder = cwd ?? target.cwd;
+        if (
+          !folder ||
+          folder.length > 32768 ||
+          folder.includes("\0") ||
+          folder.startsWith("remote://")
+        )
+          throw new Error("Terminal resource requires a resolved folder.");
+        if (reconnecting >= limit)
+          throw new Error("Terminal reconnect limit reached.");
+        reconnecting++;
+        try {
+          if (disposed || entries.get(leafId) !== receipt || !isCallerCurrent())
+            throw new Error("Terminal reconnect was retired.");
+          await close();
+          if (!isCallerCurrent() || disposed || entries.get(leafId) !== receipt)
+            throw new Error("Terminal reconnect was retired.");
+          entries.delete(leafId);
+          register(
+            leafId,
+            {
+              cwd: folder,
+              workspace: reconnectWorkspace,
+              release: async () => {},
+              acquireSibling: factory,
+            },
+            () => factory(folder),
+          );
+        } finally {
+          reconnecting--;
+        }
+      });
+    }
     return receipt;
   }
 
@@ -201,6 +246,17 @@ export function createOwnedPtyTargets(limit = 256) {
   ) {
     workspaces.add(workspace);
     if (acquireSibling) siblingFactories.set(workspace, acquireSibling);
+  }
+
+  function captureReconnect(leafId: number) {
+    const receipt = entries.get(leafId);
+    if (!receipt) return undefined;
+    return (
+      reconnectors.get(receipt) ??
+      (async () => {
+        throw new Error("This terminal requires its own project connection.");
+      })
+    );
   }
 
   return {
@@ -221,6 +277,14 @@ export function createOwnedPtyTargets(limit = 256) {
       );
     },
     get: (leafId: number) => entries.get(leafId),
+    captureReconnect,
+    prepareReconnect: (
+      leafId: number,
+      cwd: string | undefined,
+      isCurrent: () => boolean,
+    ): Promise<void> | undefined => {
+      return captureReconnect(leafId)?.(cwd, isCurrent);
+    },
     close: (leafId: number) =>
       entries.get(leafId)?.dispose() ?? Promise.resolve(),
     size: () => entries.size,

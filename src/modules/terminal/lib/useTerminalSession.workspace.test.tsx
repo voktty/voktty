@@ -31,6 +31,8 @@ vi.mock("@/modules/terminal/lib/pty-bridge", () => ({
   openPty: mocks.open,
   getRemotePtyCwd: mocks.cwd,
   disposePtyTarget: vi.fn(),
+  capturePtyReconnect: vi.fn(),
+  cancelPtyConnection: vi.fn(),
   isGuestPtyTarget: () => false,
 }));
 const workspace: WorkspaceEnv = {
