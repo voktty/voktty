@@ -23,8 +23,8 @@ import {
 } from "react";
 import {
   releasableSessionId,
+  reusableRemoteSessionId,
   reusableWorkspaceEnv,
-  sameRemoteHost,
   sameWorkspace,
 } from "./workspaceActivation";
 
@@ -298,16 +298,9 @@ export function useWorkspaceSwitcher({
         useWorkspaceEnvStore.getState().beginConnection(env, target);
       }
       try {
-        if (
-          env.kind === "ssh" &&
-          workspaceEnv.kind === "ssh" &&
-          sameRemoteHost(env.connection, workspaceEnv.connection) &&
-          workspaceEnv.sessionId !== undefined
-        ) {
-          prepared = {
-            ...env,
-            sessionId: workspaceEnv.sessionId,
-          };
+        const reusableSessionId = reusableRemoteSessionId(env, workspaceEnv);
+        if (env.kind === "ssh" && reusableSessionId !== undefined) {
+          prepared = { ...env, sessionId: reusableSessionId };
         } else if (env.kind === "ssh" && env.sessionId === undefined) {
           prepared = await connectRemoteEnv(env);
           openedSessionId = prepared.sessionId;

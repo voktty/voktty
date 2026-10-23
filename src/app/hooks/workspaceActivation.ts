@@ -1,4 +1,5 @@
 import type { WorkspaceEnv } from "@/modules/workspace";
+import { sameRemoteSessionConnection } from "@/modules/remote/sessionConnectionIdentity";
 
 export function sameWorkspace(a: WorkspaceEnv, b: WorkspaceEnv): boolean {
   if (a.kind !== b.kind) return false;
@@ -7,6 +8,7 @@ export function sameWorkspace(a: WorkspaceEnv, b: WorkspaceEnv): boolean {
   if (a.kind === "ssh" && b.kind === "ssh") {
     return (
       a.connection.id === b.connection.id &&
+      sameRemoteSessionConnection(a.connection, b.connection) &&
       a.root === b.root &&
       a.connection.activeMultiplexerSession ===
         b.connection.activeMultiplexerSession &&
@@ -17,27 +19,23 @@ export function sameWorkspace(a: WorkspaceEnv, b: WorkspaceEnv): boolean {
   return false;
 }
 
-export function sameRemoteHost(
-  a: Extract<WorkspaceEnv, { kind: "ssh" }>["connection"],
-  b: Extract<WorkspaceEnv, { kind: "ssh" }>["connection"],
-): boolean {
-  return (
-    a.id === b.id ||
-    (a.host === b.host &&
-      (a.port ?? 22) === (b.port ?? 22) &&
-      (a.user ?? "") === (b.user ?? "") &&
-      (a.identityFile ?? "") === (b.identityFile ?? ""))
-  );
+export function reusableRemoteSessionId(
+  requested: WorkspaceEnv,
+  current: WorkspaceEnv,
+): number | undefined {
+  if (
+    requested.kind !== "ssh" ||
+    current.kind !== "ssh" ||
+    requested.sessionId !== undefined ||
+    requested.connection.id !== current.connection.id ||
+    requested.root !== current.root ||
+    !sameRemoteSessionConnection(requested.connection, current.connection)
+  )
+    return undefined;
+  return current.sessionId;
 }
 
-/** Which remote session, if any, an activation is allowed to close on its
- * failure paths. Only the one it opened itself.
- *
- * Tabs on the same host share a single Rust session: `activateWorkspaceEnv`
- * borrows the active env's `sessionId` instead of dialing again. The borrowed
- * env is still a fresh object, so deciding ownership by object identity closed
- * the session every other tab was using, and those tabs then failed with
- * `remote session not found` until something reconnected them. */
+/** Failure cleanup can release only the session opened by that activation. */
 export function releasableSessionId(
   prepared: WorkspaceEnv,
   openedSessionId: number | undefined,
@@ -52,6 +50,13 @@ export function reusableWorkspaceEnv(
   current: WorkspaceEnv,
 ): WorkspaceEnv | null {
   if (!sameWorkspace(requested, current)) return null;
+  if (
+    requested.kind === "ssh" &&
+    current.kind === "ssh" &&
+    requested.sessionId !== undefined &&
+    requested.sessionId !== current.sessionId
+  )
+    return null;
   if (current.kind === "ssh" && current.sessionId === undefined) return null;
   return current;
 }
