@@ -34,6 +34,7 @@ export {
   getAnyLiveTerminalLeafId,
   getLeafTerminalStats,
   getLiveLeafCwd,
+  useLeafWorkspaceEnv,
   leafCwd,
   leafHasForegroundProcess,
   leafHasKnownActivity,

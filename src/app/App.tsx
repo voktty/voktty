@@ -225,6 +225,7 @@ import {
   getActiveTerminalLeafId,
   getLeafTerminalStats,
   getLiveLeafCwd,
+  useLeafWorkspaceEnv,
   hasLeaf,
   leafIds,
   navigateFocusedBlocks,
@@ -953,10 +954,15 @@ function DesktopApp() {
   }).folder;
   useEffect(() => installLegacyHarnessSurfaceEvents(), []);
 
+  const activeLeafWorkspaceEnv = useLeafWorkspaceEnv(
+    activeTab?.kind === "terminal" ? activeTab.activeLeafId : null,
+  );
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
     if (activeTab?.kind === "terminal") {
-      return activeTab.workspaceEnv ?? LOCAL_WORKSPACE;
+      return (
+        activeLeafWorkspaceEnv ?? activeTab.workspaceEnv ?? LOCAL_WORKSPACE
+      );
     }
     if (
       activeTab &&
@@ -976,7 +982,13 @@ function DesktopApp() {
       return activeSpace?.env ?? LOCAL_WORKSPACE;
     }
     return activeSpace?.env ?? LOCAL_WORKSPACE;
-  }, [activeSpaceTabCount, activeTab, activeSpace?.env, activeHarnessCwd]);
+  }, [
+    activeSpaceTabCount,
+    activeTab,
+    activeSpace?.env,
+    activeHarnessCwd,
+    activeLeafWorkspaceEnv,
+  ]);
 
   useEffect(() => {
     if (harnessSurfaceOwnerId === undefined) return;
@@ -1020,6 +1032,11 @@ function DesktopApp() {
     explorerTerminalId === null
       ? undefined
       : tabs.find((tab) => tab.id === explorerTerminalId);
+  const explorerLeafWorkspaceEnv = useLeafWorkspaceEnv(
+    explorerTerminal?.kind === "terminal"
+      ? explorerTerminal.activeLeafId
+      : null,
+  );
   const activeExplorerWorkspaceEnv =
     activeSpaceTabCount === 0
       ? LOCAL_WORKSPACE
@@ -1027,7 +1044,9 @@ function DesktopApp() {
           ? explorerWorkspaceEnvsRef.current.get(explorerTerminalId)
           : undefined) ??
         (explorerTerminal?.kind === "terminal"
-          ? (explorerTerminal.workspaceEnv ?? LOCAL_WORKSPACE)
+          ? (explorerLeafWorkspaceEnv ??
+            explorerTerminal.workspaceEnv ??
+            LOCAL_WORKSPACE)
           : (activeSpace?.env ?? LOCAL_WORKSPACE)));
   const activeWorkspaceSessionId =
     activeTab &&
@@ -3655,7 +3674,10 @@ function DesktopApp() {
       if (tab?.kind !== "terminal") return false;
       const previousExplorerEnv = explorerWorkspaceEnvsRef.current.get(tab.id);
       const currentEnv =
-        previousExplorerEnv ?? tab.workspaceEnv ?? workspaceEnv;
+        previousExplorerEnv ??
+        explorerLeafWorkspaceEnv ??
+        tab.workspaceEnv ??
+        workspaceEnv;
       const prepared = await prepareRemoteExplorerEnv(
         currentEnv,
         rootPath,
@@ -3703,7 +3725,7 @@ function DesktopApp() {
       }
       return true;
     },
-    [explorerTerminalId, workspaceEnv],
+    [explorerTerminalId, explorerLeafWorkspaceEnv, workspaceEnv],
   );
 
   const handleFocusLeaf = useCallback(

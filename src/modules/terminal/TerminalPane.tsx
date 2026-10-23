@@ -31,6 +31,7 @@ import { useTerminalCopilotStore } from "./copilot/terminalCopilotStore";
 import {
   focusLeafInput,
   leafCwd,
+  useLeafWorkspaceEnv,
   submitToLeaf,
   useTerminalSession,
 } from "./lib/useTerminalSession";
@@ -241,6 +242,7 @@ export const TerminalPane = memo(
       },
       onTitle: (t) => onTitle?.(leafId, t),
     });
+    const resolvedWorkspaceEnv = useLeafWorkspaceEnv(leafId) ?? workspaceEnv;
 
     useEffect(() => {
       // Defer one frame so CSS-variable token resolution sees the new class.
@@ -353,7 +355,7 @@ export const TerminalPane = memo(
                   leafId={leafId}
                   active={copilotOpen}
                   cwd={currentCwd ?? leafCwd(leafId) ?? initialCwd}
-                  workspaceEnv={workspaceEnv}
+                  workspaceEnv={resolvedWorkspaceEnv}
                   initialPrompt={initialPrompt}
                   onInsert={(cmd) => {
                     session.write(cmd);
@@ -378,7 +380,7 @@ export const TerminalPane = memo(
             <HostSessionBadge leafId={leafId} />
             <GuestSessionBadge leafId={leafId} onReconnect={session.respawn} />
             <ConnectionStatusBadge
-              workspaceEnv={workspaceEnv}
+              workspaceEnv={resolvedWorkspaceEnv}
               status={session.connectionState}
               onReconnect={session.respawn}
               onCancel={session.cancelConnection}
@@ -445,7 +447,7 @@ export const TerminalPane = memo(
                 leafId={leafId}
                 active={copilotOpen}
                 cwd={leafCwd(leafId)}
-                workspaceEnv={workspaceEnv}
+                workspaceEnv={resolvedWorkspaceEnv}
                 initialPrompt={initialPrompt}
                 onInsert={(cmd) => {
                   session.write(cmd);
@@ -467,7 +469,7 @@ export const TerminalPane = memo(
           <HostSessionBadge leafId={leafId} />
           <GuestSessionBadge leafId={leafId} onReconnect={session.respawn} />
           <ConnectionStatusBadge
-            workspaceEnv={workspaceEnv}
+            workspaceEnv={resolvedWorkspaceEnv}
             status={session.connectionState}
             onReconnect={session.respawn}
             onCancel={session.cancelConnection}

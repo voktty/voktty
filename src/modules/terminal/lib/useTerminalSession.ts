@@ -25,6 +25,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   BlockDecorations,
@@ -165,6 +166,34 @@ const leafStatusListeners = new Map<
   number,
   Set<(status: ResourceConnectionState) => void>
 >();
+
+export function useLeafWorkspaceEnv(
+  leafId: number | null,
+): WorkspaceEnv | undefined {
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      if (leafId === null) return () => {};
+      let listeners = leafStatusListeners.get(leafId);
+      if (!listeners) {
+        listeners = new Set();
+        leafStatusListeners.set(leafId, listeners);
+      }
+      const listener = () => notify();
+      listeners.add(listener);
+      return () => {
+        const current = leafStatusListeners.get(leafId);
+        current?.delete(listener);
+        if (current?.size === 0) leafStatusListeners.delete(leafId);
+      };
+    },
+    [leafId],
+  );
+  const getSnapshot = useCallback(() => {
+    const session = leafId === null ? undefined : sessions.get(leafId);
+    return session && !session.disposed ? session.workspaceEnv : undefined;
+  }, [leafId]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => undefined);
+}
 
 function notifyLeafFailure(leafId: number, code: number | null): void {
   const set = leafFailureListeners.get(leafId);
