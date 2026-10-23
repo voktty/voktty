@@ -69,6 +69,7 @@ export function createHarnessWindowViewRemoval(
       let retired = false;
       let activity = 1;
       let committed = false;
+      let started = false;
       let commitPromise: Promise<boolean> | undefined;
       const prepared: Array<{
         action: PreparedHarnessViewRemoval;
@@ -147,6 +148,20 @@ export function createHarnessWindowViewRemoval(
         return {
           isCurrent: current,
           seal: () => null,
+          async perform(action: () => Promise<boolean>): Promise<boolean> {
+            if (started || !current()) return false;
+            started = true;
+            activity++;
+            let accepted = false;
+            try {
+              accepted = (await action()) && current();
+              return accepted;
+            } finally {
+              if (!accepted) retired = true;
+              activity--;
+              finish();
+            }
+          },
           async run(write: () => Promise<unknown>): Promise<boolean> {
             if (!committed || !current()) return false;
             activity++;

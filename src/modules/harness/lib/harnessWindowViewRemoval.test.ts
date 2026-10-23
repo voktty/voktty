@@ -327,3 +327,61 @@ it("includes an admitted global write in the original window close drain", async
   expect(await pending).toBe(false);
   expect(f.holds.hasAny("one")).toBe(false);
 });
+
+it.each(["release", "dispose"] as const)(
+  "retains the whole caller action through %s without putting its stop in the write drain",
+  async (retirement) => {
+    const f = fixture();
+    f.add(2);
+    const operation = required(
+      await f.removal.prepare(1, ["one"], f.request()),
+    );
+    const gate = deferred<void>();
+    const stop = vi.fn(async () => {
+      await gate.promise;
+      return true;
+    });
+    const pending = operation.perform(stop);
+    expect(stop).toHaveBeenCalledOnce();
+    const duplicate = vi.fn(async () => true);
+    expect(await operation.perform(duplicate)).toBe(false);
+    expect(duplicate).not.toHaveBeenCalled();
+    if (retirement === "release") operation.release();
+    else f.removal.dispose();
+    expect(f.holds.hasAny("one")).toBe(true);
+    expect(await f.removal.prepare(1, ["one"], f.request())).toBeNull();
+    const final = required(
+      required(f.admission.createOwner().capture()).seal(),
+    );
+    expect(final.pending).toBeNull();
+    gate.resolve();
+    expect(await pending).toBe(false);
+    expect(f.holds.hasAny("one")).toBe(false);
+    final.cancel();
+  },
+);
+
+it("keeps a successful caller action reserved until explicit release", async () => {
+  const f = fixture();
+  const operation = required(await f.removal.prepare(1, ["one"], f.request()));
+  expect(await operation.perform(async () => operation.commit())).toBe(true);
+  expect(f.holds.hasAny("one")).toBe(true);
+  expect(await operation.perform(async () => true)).toBe(false);
+  operation.release();
+  expect(f.holds.hasAny("one")).toBe(false);
+});
+
+it("releases failed caller actions after settlement while preserving their original error", async () => {
+  const f = fixture();
+  const operation = required(await f.removal.prepare(1, ["one"], f.request()));
+  const error = new Error("Stop failed");
+  await expect(
+    operation.perform(async () => {
+      throw error;
+    }),
+  ).rejects.toBe(error);
+  expect(f.holds.hasAny("one")).toBe(false);
+  const denied = vi.fn(async () => true);
+  expect(await operation.perform(denied)).toBe(false);
+  expect(denied).not.toHaveBeenCalled();
+});

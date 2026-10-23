@@ -51,6 +51,7 @@ const native = vi.hoisted(() => ({
   register: vi.fn(),
   ask: vi.fn(),
   send: vi.fn(),
+  cancel: vi.fn(),
   forget: vi.fn(),
   bind: vi.fn(),
   builtins: vi.fn(),
@@ -144,7 +145,7 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
   canSteerHarness: () => true,
   pickTextHarness: () => "claude",
   sendHarnessTurn: native.send,
-  cancelHarnessTurn: vi.fn().mockResolvedValue(undefined),
+  cancelHarnessTurn: native.cancel,
   generateHarnessTitle: vi.fn().mockResolvedValue(undefined),
   forgetHarnessSession: vi.fn().mockResolvedValue(undefined),
   canRewindHarnessLastTurn: () => false,
@@ -463,6 +464,7 @@ beforeEach(() => {
     return Promise.resolve(() => undefined);
   });
   native.approval.mockReset();
+  native.cancel.mockReset().mockResolvedValue(undefined);
   native.forget.mockReset().mockResolvedValue(undefined);
   native.bind.mockReset();
   native.builtins.mockReset();
@@ -526,6 +528,46 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("keeps the removal reservation until a pending stop settles after Host unmount", async () => {
+    const one = fixture("pending-stop", "/work/pending-stop");
+    await render(
+      [one.session],
+      [],
+      false,
+      <HarnessApp surfaceOwnerId={1} initialCwd={one.session.cwd} focused />,
+    );
+    const host = required(runtime);
+    await act(async () => host.engine.onSubmit(one.session.id, "running work"));
+    const stop = deferred<void>();
+    native.cancel.mockReturnValue(stop.promise);
+    const sidebar = required(native.sidebars[0]);
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = Promise.resolve(
+        required(sidebar.onArchiveSession)(one.session.id, true),
+      );
+    });
+    expect(native.cancel).toHaveBeenCalledOnce();
+    expect(host.holds.has("removing", one.session.id)).toBe(true);
+    await act(async () => root.render(null));
+    expect(host.holds.has("removing", one.session.id)).toBe(true);
+    expect(
+      native.invoke.mock.calls.some(
+        ([command]) => command === "session_set_archived",
+      ),
+    ).toBe(false);
+    await act(async () => {
+      stop.resolve();
+      await pending;
+    });
+    expect(host.holds.hasAny(one.session.id)).toBe(false);
+    expect(
+      native.invoke.mock.calls.some(
+        ([command]) => command === "session_set_archived",
+      ),
+    ).toBe(false);
+  });
+
   it.each(["archive", "delete"] as const)(
     "%s through the real App detaches sibling and retained views under StrictMode",
     async (mode) => {

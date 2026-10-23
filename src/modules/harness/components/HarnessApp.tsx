@@ -3256,7 +3256,7 @@ export function HarnessApp({
         if (!operation) return false;
         const admitted = operation;
         transcripts.dropPending(sessionId);
-        return await runSessionRemoval({
+        const remove = () => runSessionRemoval({
           sessionId,
           scope: tabCloseScope,
           persistencePermit: admitted,
@@ -3365,6 +3365,7 @@ export function HarnessApp({
             }
           },
         });
+        return await admitted.perform(remove);
       } catch (error) {
         if (!persistencePermit.isCurrent()) return false;
         const detail = error instanceof Error ? error.message : String(error);
