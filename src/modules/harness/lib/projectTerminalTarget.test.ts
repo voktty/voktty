@@ -71,6 +71,48 @@ beforeEach(() => {
 });
 
 describe("project terminal target", () => {
+  it("acquires siblings with the original binding and multiplexer after the source releases", async () => {
+    const picker = vi
+      .fn()
+      .mockResolvedValue({ action: "attach_force", sessionName: "work" });
+    const original = await openProjectTerminalTarget(cwd, picker);
+    expect(original?.acquireSibling).toBeTypeOf("function");
+    if (!original?.acquireSibling)
+      throw new Error("Expected a sibling factory");
+    original.lease.release();
+    original.workspace.connection.host = "mutated.example";
+    original.workspace.connection.activeMultiplexerSession = "other";
+    profile.id = "replacement";
+    profile.host = "replacement.example";
+    mocks.project.cwd = "/srv/other";
+    const siblingLease: RemoteSessionLease = {
+      ...lease,
+      info: { ...lease.info, session_id: 72 },
+      release: vi.fn(),
+    };
+    mocks.acquire.mockResolvedValueOnce(siblingLease);
+    const sibling = await original.acquireSibling("/srv/app/lib");
+    expect(mocks.acquire).toHaveBeenLastCalledWith(
+      { profileId: "build", root: "/srv/app" },
+      expect.objectContaining({ host: "build.example", port: 2222 }),
+    );
+    expect(sibling).toMatchObject({
+      cwd: "/srv/app/lib",
+      workspace: {
+        sessionId: 72,
+        root: "/srv/app",
+        connection: {
+          host: "build.example",
+          multiplexerAction: "attach_force",
+          activeMultiplexerSession: "work",
+        },
+      },
+      lease: siblingLease,
+    });
+    expect(picker).toHaveBeenCalledOnce();
+    expect(mocks.probe).toHaveBeenCalledOnce();
+    expect(siblingLease.release).not.toHaveBeenCalled();
+  });
   it("does not enter connection work for a retired request", async () => {
     expect(
       await openProjectTerminalTarget(cwd, undefined, () => false),
@@ -102,6 +144,7 @@ describe("project terminal target", () => {
         sessionId: 71,
       },
       lease,
+      acquireSibling: expect.any(Function),
     });
     expect(mocks.acquire).toHaveBeenCalledWith(
       { profileId: "build", root: "/srv/app" },

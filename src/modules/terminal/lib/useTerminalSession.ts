@@ -988,6 +988,7 @@ function startPtyOpening(
       }
       session.ptyOpening = false;
       session.pty = pty;
+      session.workspaceEnv = pty.workspace ?? session.workspaceEnv;
       settleLeafConnection(leafId, session, attempt, "ready");
       if (session.pendingInput) {
         void pty.write(session.pendingInput);
@@ -1321,6 +1322,7 @@ export async function respawnSession(
   }
   s.ptyOpening = false;
   s.pty = pty;
+  s.workspaceEnv = pty.workspace ?? s.workspaceEnv;
   settleLeafConnection(leafId, s, attempt, "ready");
   if (s.pendingInput) {
     void pty.write(s.pendingInput);

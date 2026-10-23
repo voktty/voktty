@@ -35,6 +35,7 @@ export type ProjectTerminalTarget = {
   cwd: string;
   workspace: Extract<WorkspaceEnv, { kind: "ssh" }>;
   lease: RemoteSessionLease;
+  acquireSibling?: (cwd: string) => Promise<ProjectTerminalTarget>;
 };
 
 export async function openProjectTerminalTarget(
@@ -106,16 +107,28 @@ export async function openProjectTerminalTarget(
     { profileId: capturedProfile.id, root },
     connection,
   );
-  const remoteSession = lease.info;
-
-  return {
-    cwd: remotePath.hostPath,
+  const capturedRoot = root;
+  const terminalProfile = { ...selectedProfile };
+  const materialize = (
+    folder: string,
+    ownedLease: RemoteSessionLease,
+  ): ProjectTerminalTarget => ({
+    cwd: folder,
     workspace: {
-      kind: "ssh" as const,
-      connection: selectedProfile,
-      root: remoteSession.workspace_root,
-      sessionId: remoteSession.session_id,
+      kind: "ssh",
+      connection: { ...terminalProfile },
+      root: ownedLease.info.workspace_root,
+      sessionId: ownedLease.info.session_id,
     },
-    lease,
-  };
+    lease: ownedLease,
+    acquireSibling: async (folder) =>
+      materialize(
+        folder,
+        await remoteSessions.acquire(
+          { profileId: capturedProfile.id, root: capturedRoot },
+          { ...connection },
+        ),
+      ),
+  });
+  return materialize(remotePath.hostPath, lease);
 }

@@ -8,6 +8,7 @@ export type OwnedPtyTarget = {
   cwd: string;
   workspace: Extract<WorkspaceEnv, { kind: "ssh" }>;
   release: () => Promise<void>;
+  acquireSibling?: (cwd: string) => Promise<OwnedPtyTarget>;
 };
 
 export type OwnedPtyTargetReceipt = {
@@ -29,10 +30,15 @@ export function createOwnedPtyTargets(limit = 256) {
     throw new Error("Invalid terminal resource limit.");
   const entries = new Map<number, OwnedPtyTargetReceipt>();
   const workspaces = new WeakSet<WorkspaceEnv>();
+  const siblingFactories = new WeakMap<
+    WorkspaceEnv,
+    NonNullable<OwnedPtyTarget["acquireSibling"]>
+  >();
 
   function register(
     leafId: number,
     input: OwnedPtyTarget,
+    acquire?: () => Promise<OwnedPtyTarget>,
   ): OwnedPtyTargetReceipt {
     if (!Number.isSafeInteger(leafId) || leafId < 0)
       throw new Error("Invalid terminal leaf.");
@@ -54,14 +60,16 @@ export function createOwnedPtyTargets(limit = 256) {
       sessionId < 0
     )
       throw new Error("Terminal resource requires a connected workspace.");
-    const target: OwnedPtyTarget = {
+    let target: OwnedPtyTarget = {
       cwd: input.cwd,
       workspace: {
         ...input.workspace,
         connection: { ...input.workspace.connection },
       },
       release: input.release,
+      acquireSibling: input.acquireSibling,
     };
+    let acquired = !acquire;
     let retired = false;
     let native: PtySession | undefined;
     let opening: Promise<PtySession> | undefined;
@@ -116,8 +124,22 @@ export function createOwnedPtyTargets(limit = 256) {
         if (opening || native)
           throw new Error("Terminal resource is already opening.");
         const pending = Promise.resolve()
-          .then(() => {
+          .then(async () => {
             if (!isCurrent()) throw new Error("Terminal resource was retired.");
+            if (!acquired && acquire) {
+              const resolved = await acquire();
+              target = {
+                ...resolved,
+                workspace: {
+                  ...resolved.workspace,
+                  connection: { ...resolved.workspace.connection },
+                },
+              };
+              acquired = true;
+              markWorkspace(target.workspace, target.acquireSibling);
+              if (!isCurrent())
+                throw new Error("Terminal resource was retired.");
+            }
             return start(
               {
                 cwd: target.cwd,
@@ -158,6 +180,7 @@ export function createOwnedPtyTargets(limit = 256) {
         }
         return {
           id: session.id,
+          workspace: target.workspace,
           write: (data) =>
             isCurrent() ? session.write(data) : Promise.resolve(),
           resize: (cols, rows) =>
@@ -167,12 +190,36 @@ export function createOwnedPtyTargets(limit = 256) {
       },
     };
     entries.set(leafId, receipt);
-    workspaces.add(input.workspace);
+    markWorkspace(input.workspace, input.acquireSibling);
+    markWorkspace(target.workspace, target.acquireSibling);
     return receipt;
+  }
+
+  function markWorkspace(
+    workspace: WorkspaceEnv,
+    acquireSibling: OwnedPtyTarget["acquireSibling"],
+  ) {
+    workspaces.add(workspace);
+    if (acquireSibling) siblingFactories.set(workspace, acquireSibling);
   }
 
   return {
     register,
+    claimSibling: (leafId: number, workspace: WorkspaceEnv, cwd?: string) => {
+      const factory = siblingFactories.get(workspace);
+      if (!factory || workspace.kind !== "ssh") return undefined;
+      const folder = cwd ?? workspace.root;
+      return register(
+        leafId,
+        {
+          cwd: folder,
+          workspace,
+          release: async () => {},
+          acquireSibling: factory,
+        },
+        () => factory(folder),
+      );
+    },
     get: (leafId: number) => entries.get(leafId),
     close: (leafId: number) =>
       entries.get(leafId)?.dispose() ?? Promise.resolve(),

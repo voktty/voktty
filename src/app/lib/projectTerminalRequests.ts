@@ -46,6 +46,23 @@ function clean(request: Request): Promise<void> {
   return pending;
 }
 
+function ownedTarget(target: ProjectTerminalTarget): OwnedPtyTarget {
+  const lease = target.lease;
+  const acquire = target.acquireSibling;
+  return {
+    cwd: target.cwd,
+    workspace: target.workspace,
+    release: () => {
+      if (lease.releaseAndClose) return lease.releaseAndClose();
+      lease.release();
+      return Promise.resolve();
+    },
+    acquireSibling: acquire
+      ? async (cwd) => ownedTarget(await acquire(cwd))
+      : undefined,
+  };
+}
+
 export function createProjectTerminalRequests(deps: {
   capture: () => ProjectTerminalRequestContext;
   resolve: (
@@ -109,12 +126,8 @@ export function createProjectTerminalRequests(deps: {
         );
         if (!target)
           throw new Error("Remote terminal destination is unavailable.");
-        const lease = target.lease;
-        request.release = () => {
-          if (lease.releaseAndClose) return lease.releaseAndClose();
-          lease.release();
-          return Promise.resolve();
-        };
+        const owned = ownedTarget(target);
+        request.release = owned.release;
         if (isCurrent()) {
           const created = context.create(target.cwd, target.workspace);
           let receipt: OwnedPtyTargetReceipt | undefined;
@@ -122,11 +135,7 @@ export function createProjectTerminalRequests(deps: {
             if (!isCurrent()) throw new Error("Terminal request was retired.");
             receipt = (deps.register ?? ownedPtyTargets.register)(
               created.leafId,
-              {
-                cwd: target.cwd,
-                workspace: target.workspace,
-                release: request.release,
-              },
+              owned,
             );
             request.release = undefined;
             if (!isCurrent()) throw new Error("Terminal request was retired.");

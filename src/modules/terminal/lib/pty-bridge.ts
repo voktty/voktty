@@ -23,6 +23,7 @@ export type PtyHandlers = {
 
 export type PtySession = {
   id: number;
+  workspace?: WorkspaceEnv;
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
   close: () => Promise<void>;
@@ -38,7 +39,13 @@ export async function openPty(
   paneId?: number,
   workspace?: WorkspaceEnv,
 ): Promise<PtySession> {
-  const owned = paneId === undefined ? undefined : ownedPtyTargets.get(paneId);
+  const owned =
+    paneId === undefined
+      ? undefined
+      : ownedPtyTargets.get(paneId) ??
+        (workspace && !isCollabGuestLeaf(paneId)
+          ? ownedPtyTargets.claimSibling(paneId, workspace, cwd)
+          : undefined);
   if (owned && paneId !== undefined) {
     if (isCollabGuestLeaf(paneId))
       throw new Error("Terminal resource has conflicting owners.");

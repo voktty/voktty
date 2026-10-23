@@ -10,6 +10,8 @@ import type { WorkspaceEnv } from "@/modules/workspace";
 import type { ProjectTerminalTarget } from "@/modules/harness/lib/projectTerminalTarget";
 import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import { disposePtyTarget, openPty } from "@/modules/terminal/lib/pty-bridge";
+import type { PtySession } from "@/modules/terminal/lib/pty-bridge";
+import { leafIds } from "@/modules/terminal/lib/panes";
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -39,6 +41,7 @@ let source: Tab;
 let created: Tab | undefined;
 let target: ProjectTerminalTarget;
 let mountedLeafId: number | undefined;
+const siblingLeaves = new Set<number>();
 let create: ReturnType<
   typeof vi.fn<(cwd?: string, workspace?: WorkspaceEnv) => number>
 >;
@@ -132,6 +135,8 @@ afterEach(async () => {
   await ownedPtyTargets.close(2);
   await ownedPtyTargets.close(4);
   if (mountedLeafId !== undefined) await ownedPtyTargets.close(mountedLeafId);
+  await Promise.all([...siblingLeaves].map((id) => ownedPtyTargets.close(id)));
+  siblingLeaves.clear();
   expect(ownedPtyTargets.size()).toBe(0);
   container.remove();
   vi.unstubAllGlobals();
@@ -322,5 +327,123 @@ it("registers before the canonical tab mounts and releases only when that tab cl
     sessionId: 7,
     ptyId: 91,
   });
+  expect(error).not.toHaveBeenCalled();
+});
+
+it("duplicates and splits canonical project terminals with independent leases and closes only their own leaves", async () => {
+  let api!: ReturnType<typeof useTabs>;
+  const opened = new Map<number, PtySession>();
+  const leases: ProjectTerminalTarget[] = [];
+  let helperId = 7;
+  target.acquireSibling = vi.fn(async (cwd) => {
+    const sessionId = ++helperId;
+    const sibling: ProjectTerminalTarget = {
+      cwd,
+      workspace: { ...target.workspace, sessionId },
+      lease: {
+        ...target.lease,
+        info: { ...target.lease.info, session_id: sessionId },
+        releaseAndClose: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    leases.push(sibling);
+    return sibling;
+  });
+  function Leaf({
+    id,
+    tab,
+  }: {
+    id: number;
+    tab: Extract<Tab, { kind: "terminal" }>;
+  }) {
+    useEffect(() => {
+      siblingLeaves.add(id);
+      void openPty(
+        80,
+        24,
+        { onData: vi.fn() },
+        tab.cwd,
+        false,
+        undefined,
+        id,
+        tab.workspaceEnv,
+      )
+        .then((session) => opened.set(id, session))
+        .catch(error);
+    }, [id, tab.cwd, tab.workspaceEnv]);
+    return <div data-leaf={id} />;
+  }
+  function Desktop() {
+    const tabs = useTabs();
+    api = tabs;
+    useLayoutEffect(
+      () => tabs.replaceTabs([source], source.id),
+      [tabs.replaceTabs],
+    );
+    useProjectTerminalRequests({
+      source: api.tabs.find((tab) => tab.kind === "harness"),
+      projectCwd: uri,
+      spaceId: "main",
+      newTab: api.newTab,
+      getTab: api.getTab,
+      closeTab: api.closeTab,
+      setActiveSpaceForNewTabs: api.setActiveSpaceForNewTabs,
+      pick: vi.fn().mockResolvedValue(null),
+      cancelPicker,
+      onError: error,
+    });
+    return api.tabs.flatMap((tab) =>
+      tab.kind === "terminal" && !tab.cold
+        ? leafIds(tab.paneTree).map((id) => <Leaf key={id} id={id} tab={tab} />)
+        : [],
+    );
+  }
+  await act(async () => root.render(<Desktop />));
+  await request();
+  await vi.waitFor(() => expect(opened.size).toBe(1));
+  const original = api.getTabs().find((tab) => tab.kind === "terminal");
+  if (!original) throw new Error("Expected the original terminal");
+  let duplicateId = -1;
+  await act(async () => {
+    const id = api.duplicateTab(original.id);
+    if (id === null) throw new Error("Expected a duplicate terminal");
+    duplicateId = id;
+  });
+  await vi.waitFor(() => expect(opened.size).toBe(2));
+  const duplicate = api.getTab(duplicateId);
+  if (!duplicate) throw new Error("Expected a duplicate terminal");
+  expect(duplicate.kind).toBe("terminal");
+  await act(async () => {
+    api.splitActivePane(original.id, "row");
+  });
+  await vi.waitFor(() => expect(opened.size).toBe(3));
+  expect(target.acquireSibling).toHaveBeenCalledTimes(2);
+  expect(
+    mocks.invoke.mock.calls
+      .filter(([command]) => command === "remote_pty_open")
+      .map(([, args]) => args.sessionId),
+  ).toEqual([7, 8, 9]);
+  await act(async () => api.closeTab(source.id));
+  expect(target.lease.releaseAndClose).not.toHaveBeenCalled();
+  await act(async () => api.closeTab(original.id));
+  await vi.waitFor(() =>
+    expect(target.lease.releaseAndClose).toHaveBeenCalledOnce(),
+  );
+  expect(leases[0].lease.releaseAndClose).not.toHaveBeenCalled();
+  expect(leases[1].lease.releaseAndClose).toHaveBeenCalledOnce();
+  if (duplicate.kind !== "terminal") throw new Error("Expected a terminal");
+  const live = opened.get(duplicate.activeLeafId);
+  if (!live) throw new Error("Expected the duplicate PTY");
+  expect(live.workspace).toMatchObject({ kind: "ssh", sessionId: 8 });
+  await live.write("still running\r");
+  expect(mocks.invoke).toHaveBeenCalledWith(
+    "remote_pty_write",
+    expect.any(Uint8Array),
+    { headers: { "x-pty-id": "91", "x-remote-session-id": "8" } },
+  );
+  await act(async () => api.closeTab(duplicate.id));
+  await vi.waitFor(() =>
+    expect(leases[0].lease.releaseAndClose).toHaveBeenCalledOnce(),
+  );
   expect(error).not.toHaveBeenCalled();
 });
