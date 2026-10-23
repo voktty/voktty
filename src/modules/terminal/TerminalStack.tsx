@@ -8,6 +8,11 @@ import { selectLiveTerminals } from "./lib/liveTerminals";
 import { leafIds } from "./lib/panes";
 import { PaneTreeView } from "./PaneTreeView";
 import type { TerminalPaneHandle } from "./TerminalPane";
+import {
+  useTerminalSurfaceRoot,
+  useTerminalSurfaces,
+} from "@/modules/terminal/TerminalSurface";
+import { selectTerminalSurfacePlacements } from "@/modules/terminal/lib/terminalSurfaceLayout";
 
 type Props = {
   tabs: Tab[];
@@ -41,6 +46,23 @@ export function TerminalStack({
   onFocusLeaf,
   placements,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const surfaceSnapshot = useTerminalSurfaces();
+  useTerminalSurfaceRoot(containerRef, surfaceSnapshot.entries.length > 0);
+  const surfacePlacements = useMemo(
+    () =>
+      selectTerminalSurfacePlacements(
+        tabs,
+        activeId,
+        placements,
+        surfaceSnapshot,
+      ),
+    [tabs, activeId, placements, surfaceSnapshot],
+  );
+  const surfacePlacementsRef = useRef(surfacePlacements);
+  useEffect(() => {
+    surfacePlacementsRef.current = surfacePlacements;
+  }, [surfacePlacements]);
   const terminals = useMemo(() => selectLiveTerminals(tabs), [tabs]);
   const spaces = useSpaces((s) => s.spaces);
   const spaceEnvs = useMemo(
@@ -98,11 +120,20 @@ export function TerminalStack({
   const getFocusLeaf = useCallback((tabId: number) => {
     let handler = focusHandlers.current.get(tabId);
     if (!handler) {
-      handler = (leafId: number) => focusLeafRef.current(tabId, leafId);
+      handler = (leafId: number) => {
+        const tab = terminalsRef.current.find((tab) => tab.id === tabId);
+        if (tab) surfacePlacementsRef.current.get(tab.tabKey)?.focus();
+        focusLeafRef.current(tabId, leafId);
+      };
       focusHandlers.current.set(tabId, handler);
     }
     return handler;
   }, []);
+
+  const terminalsRef = useRef(terminals);
+  useEffect(() => {
+    terminalsRef.current = terminals;
+  }, [terminals]);
 
   useEffect(() => {
     const live = new Set<number>();
@@ -118,27 +149,32 @@ export function TerminalStack({
   }, [terminals]);
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={containerRef} className="relative h-full w-full">
       {terminals.map((t) => {
         const placement = placements?.get(t.id);
-        const tabVisible = placements
-          ? placement !== undefined
-          : t.id === activeId;
-        const isTabFocused = placements
-          ? Boolean(placement?.focused)
-          : t.id === activeId;
+        const surface = surfacePlacements.get(t.tabKey);
+        const rect = surface?.rect ?? placement?.rect;
+        const tabVisible =
+          surface !== undefined ||
+          (placements ? placement !== undefined : t.id === activeId);
+        const isTabFocused = surface
+          ? surface.focused
+          : placements
+            ? Boolean(placement?.focused)
+            : t.id === activeId;
         return (
           <div
             key={t.id}
             data-terminal-tab={t.id}
             data-space-slot={placement?.slotId}
             data-space-tab={t.id}
+            data-terminal-docked={surface ? "true" : undefined}
             className="absolute bg-background"
             style={{
-              left: placement ? `${placement.rect.x * 100}%` : 0,
-              top: placement ? `${placement.rect.y * 100}%` : 0,
-              width: placement ? `${placement.rect.width * 100}%` : "100%",
-              height: placement ? `${placement.rect.height * 100}%` : "100%",
+              left: rect ? `${rect.x * 100}%` : 0,
+              top: rect ? `${rect.y * 100}%` : 0,
+              width: rect ? `${rect.width * 100}%` : "100%",
+              height: rect ? `${rect.height * 100}%` : "100%",
               visibility: tabVisible ? "visible" : "hidden",
               pointerEvents: tabVisible ? "auto" : "none",
               contain: "strict",

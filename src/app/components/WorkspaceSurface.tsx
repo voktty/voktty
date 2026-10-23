@@ -10,6 +10,11 @@ import type { WorkspacePlacement } from "@/modules/spaces";
 import type { Tab } from "@/modules/tabs";
 import { TerminalStack } from "@/modules/terminal";
 import { type ComponentProps, useMemo } from "react";
+import {
+  TerminalSurfaceProvider,
+  useTerminalSurfaces,
+} from "@/modules/terminal/TerminalSurface";
+import { selectTerminalSurfacePlacements } from "@/modules/terminal/lib/terminalSurfaceLayout";
 
 type TerminalStackProps = ComponentProps<typeof TerminalStack>;
 type EditorStackProps = ComponentProps<typeof EditorStack>;
@@ -73,7 +78,15 @@ const LAYER = "absolute inset-0";
  * Layers sit flush inside the workspace pane; only the terminal layer is inset,
  * because xterm draws glyphs right up to its container edge.
  */
-export function WorkspaceSurface({
+export function WorkspaceSurface(props: WorkspaceSurfaceProps) {
+  return (
+    <TerminalSurfaceProvider>
+      <WorkspaceSurfaceLayers {...props} />
+    </TerminalSurfaceProvider>
+  );
+}
+
+function WorkspaceSurfaceLayers({
   tabs,
   activeId,
   activeTab,
@@ -137,16 +150,30 @@ export function WorkspaceSurface({
     Array.isArray(tabKinds)
       ? tabKinds.some((k) => visibleKinds.has(k))
       : visibleKinds.has(tabKinds);
+  const surfaces = useTerminalSurfaces();
+  const dockPlacements = useMemo(
+    () =>
+      selectTerminalSurfacePlacements(
+        tabs,
+        activeId,
+        placements ? placementByTabId : undefined,
+        surfaces,
+      ),
+    [tabs, activeId, placements, placementByTabId, surfaces],
+  );
+  const terminalLayerVisible =
+    layerVisible("terminal") || dockPlacements.size > 0;
 
   return (
     <div className="relative h-full min-h-0">
       <div
         className={cn(
           LAYER,
-          visualLayout && "pointer-events-none",
-          !layerVisible("terminal") && "invisible pointer-events-none",
+          "pointer-events-none",
+          dockPlacements.size > 0 && "z-10",
+          !terminalLayerVisible && "invisible",
         )}
-        aria-hidden={!layerVisible("terminal")}
+        aria-hidden={!terminalLayerVisible}
       >
         <TerminalStack
           tabs={tabs}
