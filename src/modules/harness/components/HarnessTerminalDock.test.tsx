@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
-import { act, useLayoutEffect } from "react";
+import { act, useContext, useLayoutEffect } from "react";
+import { HarnessTerminalRecovery } from "@/modules/harness/hooks/useHarnessTerminalRecovery";
+import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import {
   TerminalSurfaceProvider,
   useTerminalSurfaceController,
@@ -48,6 +50,7 @@ const state = vi.hoisted(() => ({
   dock: null as DockProps | null,
   view: null as ViewState | null,
   pane: null as PaneProps | null,
+  recover: null as React.ContextType<typeof HarnessTerminalRecovery>,
   capture: (): PersistencePermit | null | undefined => undefined,
   runtime: null as unknown,
   error: vi.fn(),
@@ -122,12 +125,14 @@ vi.mock("@/modules/harness/chrome/HarnessUpdateNotice", () => ({
 vi.mock("@/modules/harness/surfaces/PaneTree", () => ({
   PaneTree: (props: PaneProps) => {
     state.pane = props;
+    state.recover = useContext(HarnessTerminalRecovery);
     return null;
   },
 }));
 vi.mock("@/modules/harness/surfaces/ProjectTerminalDock", () => ({
   ProjectTerminalDock: (props: DockProps) => {
     state.dock = props;
+    state.recover = useContext(HarnessTerminalRecovery);
     const surfaces = useTerminalSurfaceController();
     const reference = props.dock.open
       ? props.dock.pane.files.find(
@@ -318,6 +323,142 @@ it("creates a dock reference through the production App action before displaying
     terminal.tabKey,
   );
 });
+it.each(["dock", "pane"])(
+  "explicitly recovers a missing %s reference through the real App creator",
+  async (kind) => {
+    const file = {
+      ...newTerminalFile("/srv/app/src", "Build"),
+      foreground: "old process",
+      canonicalTerminal: { tabKey: asTabKey("missing"), projectCwd: project },
+    };
+    const tab = newTerminalWorkspaceTab(file);
+    const { createProjectTerminal } = await import(
+      "@/modules/harness/lib/projectTerminal"
+    );
+    const originalDock = createProjectTerminal(project, file);
+    const resumed: ResumedWorkspace = {
+      tabs: kind === "pane" ? [tab] : [],
+      sessions: [],
+      activeTabId: kind === "pane" ? tab.id : "",
+      projectCwd: project,
+      projectTerminals: kind === "dock" ? [originalDock] : [],
+    };
+    await act(async () => root.render(<Host resumed={resumed} />));
+    expect(claims).toEqual([]);
+    const slotKey =
+      kind === "dock" ? `dock:${project}` : `pane:${tab.terminalPanes[0].id}`;
+    let accepted = false;
+    await act(async () => {
+      accepted = required(state.recover)(file, slotKey, () => true, vi.fn());
+    });
+    expect(accepted).toBe(true);
+    expect(claims).toHaveLength(1);
+    expect(claims[0].cwd).toBe(file.cwd);
+    const recovered =
+      kind === "dock"
+        ? view().projectTerminals[0].pane.files[0]
+        : view().tabs[0].terminalPanes[0].files[0];
+    expect(recovered).toEqual({
+      ...file,
+      foreground: undefined,
+      canonicalTerminal: { tabKey: terminal.tabKey, projectCwd: project },
+    });
+    expect(state.admit).not.toHaveBeenCalled();
+    expect(state.close).not.toHaveBeenCalled();
+    expect(state.error).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["selection", "permit", "focus", "resolved"])(
+  "rejects recovery after %s changes before creation confirms",
+  async (reason) => {
+    autoConfirm = false;
+    const file = {
+      ...newTerminalFile(project),
+      canonicalTerminal: { tabKey: asTabKey("missing"), projectCwd: project },
+    };
+    const { createProjectTerminal } = await import(
+      "@/modules/harness/lib/projectTerminal"
+    );
+    const originalDock = createProjectTerminal(project, file);
+    const resumed: ResumedWorkspace = {
+      tabs: [],
+      sessions: [],
+      activeTabId: "",
+      projectCwd: project,
+      projectTerminals: [originalDock],
+    };
+    const other = newTerminalFile(project);
+    originalDock.pane.files.push(other);
+    await act(async () => root.render(<Host resumed={resumed} />));
+    await act(async () => {
+      required(state.recover)(file, `dock:${project}`, () => true, vi.fn());
+    });
+    expect(claims).toHaveLength(1);
+    if (reason === "selection")
+      await act(async () => dock().onSelectTerminal(other.id));
+    if (reason === "permit") admission.createOwner().capture()?.seal();
+    if (reason === "focus")
+      await act(async () =>
+        root.render(<Host resumed={resumed} focused={false} />),
+      );
+    if (reason === "resolved")
+      await act(async () =>
+        root.render(
+          <Host
+            resumed={resumed}
+            tabs={[
+              terminal,
+              { ...secondTerminal, tabKey: asTabKey("missing") },
+            ]}
+          />,
+        ),
+      );
+    expect(claims[0].isCurrent()).toBe(false);
+    expect(() => claims[0].created({ tabKey: terminal.tabKey })).toThrow();
+    expect(state.close).not.toHaveBeenCalled();
+  },
+);
+it("keeps a failed recovery retryable without dropping its original reference", async () => {
+  autoConfirm = false;
+  const file = {
+    ...newTerminalFile(project),
+    canonicalTerminal: { tabKey: asTabKey("missing"), projectCwd: project },
+  };
+  const { createProjectTerminal } = await import(
+    "@/modules/harness/lib/projectTerminal"
+  );
+  const resumed: ResumedWorkspace = {
+    tabs: [],
+    sessions: [],
+    activeTabId: "",
+    projectCwd: project,
+    projectTerminals: [createProjectTerminal(project, file)],
+  };
+  await act(async () =>
+    root.render(<Host resumed={resumed} tabs={[terminal, secondTerminal]} />),
+  );
+  const settled = vi.fn();
+  await act(async () => {
+    required(state.recover)(file, `dock:${project}`, () => true, settled);
+  });
+  await act(async () => {
+    claims[0].fail(new Error("Unavailable transport"));
+    claims[0].finish();
+  });
+  expect(view().projectTerminals[0].pane.files).toEqual([file]);
+  expect(settled).toHaveBeenCalledOnce();
+  autoConfirm = true;
+  await act(async () => {
+    required(state.recover)(file, `dock:${project}`, () => true, vi.fn());
+  });
+  expect(claims).toHaveLength(2);
+  expect(
+    view().projectTerminals[0].pane.files[0].canonicalTerminal?.tabKey,
+  ).toBe(secondTerminal.tabKey);
+  expect(state.close).not.toHaveBeenCalled();
+});
+
 it("creates a canonical terminal beside an editor without mixing its file strip", async () => {
   const file = newFileTab("/srv/app/file.txt", project);
   const pane = newEditorPane(file);

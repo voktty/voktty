@@ -58,6 +58,7 @@ export function useHarnessTerminalCreation(props: {
       slotKey: string;
       isCurrent?: () => boolean;
       onCreated: (terminal: ProjectTerminalReference) => void;
+      onSettled?: () => void;
     }) => {
       options = { ...options };
       let active = true;
@@ -132,11 +133,13 @@ export function useHarnessTerminalCreation(props: {
             reservation.release();
             await reservation.done;
             pending.current.delete(operation);
+            options.onSettled?.();
           });
         return true;
       } catch (error) {
         pending.current.delete(operation);
         reservation.release();
+        options.onSettled?.();
         if (isCurrent()) captured.onError(error);
         return false;
       }

@@ -1,5 +1,9 @@
 import { useHarnessWindow } from "@/modules/harness/components/HarnessWindowHost";
 import { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
+import {
+  HarnessTerminalRecovery,
+  useHarnessTerminalRecovery,
+} from "@/modules/harness/hooks/useHarnessTerminalRecovery";
 import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import { useHarnessViewEngine } from "@/modules/harness/hooks/useHarnessViewEngine";
@@ -1695,6 +1699,18 @@ export function HarnessApp({
         void message(String(error), { title: "Voktty", kind: "error" });
       },
     });
+
+  const recoverCanonicalTerminal = useHarnessTerminalRecovery({
+    projectCwd,
+    activeTabId,
+    tabs,
+    docks: projectTerminals,
+    enabled: focused && visible && foregroundSurfaceRef.current.workspaceVisible,
+    capture: () => getPersistenceOwner()?.capture() ?? undefined,
+    open: createCanonicalTerminal,
+    setTabs,
+    setDocks: setProjectTerminals,
+  });
 
   const requestCanonicalTerminalClose = useCallback(
     (file: FilePaneTab) => {
@@ -5353,6 +5369,7 @@ export function HarnessApp({
   );
 
   return (
+    <HarnessTerminalRecovery value={recoverCanonicalTerminal}>
     <div className="voktty-harness-root flex h-full bg-background text-foreground">
       <Sidebar
         cwd={sidebarCwd}
@@ -5887,6 +5904,7 @@ export function HarnessApp({
       </div>
       <TranscriptPoolOutlet pool={transcriptPool} />
     </div>
+    </HarnessTerminalRecovery>
   );
 }
 

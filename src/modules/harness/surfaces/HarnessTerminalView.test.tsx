@@ -6,6 +6,8 @@ import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { newTerminalFile } from "@/modules/harness/lib/layout";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
 import { HarnessTerminalView } from "@/modules/harness/surfaces/HarnessTerminalView";
+import { HarnessTerminalRecovery } from "@/modules/harness/hooks/useHarnessTerminalRecovery";
+import { CanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 import {
   TerminalSurfaceProvider,
   useTerminalSurfaces,
@@ -182,4 +184,56 @@ it("preserves the existing legacy renderer for unmigrated terminal files", async
     cwd: file.cwd,
     active: true,
   });
+});
+
+it("offers explicit recovery for an absent reference without creating on mount or double click", async () => {
+  let current: () => boolean = () => false;
+  let finish = () => {};
+  const recover = vi.fn(
+    (_file, _slot, isCurrent: () => boolean, settled: () => void) => {
+      current = isCurrent;
+      finish = settled;
+      return true;
+    },
+  );
+  const render = (visible = true) => (
+    <TerminalSurfaceProvider>
+      <CanonicalTerminalCatalog tabs={[]}>
+        <HarnessTerminalOwner
+          value={{ tabKey: asTabKey("tab-owner"), visible: true }}
+        >
+          <HarnessTerminalRecovery value={recover}>
+            <HarnessTerminalView
+              file={file}
+              visible={visible}
+              active
+              slotKey="pane:p"
+            />
+          </HarnessTerminalRecovery>
+        </HarnessTerminalOwner>
+      </CanonicalTerminalCatalog>
+    </TerminalSurfaceProvider>
+  );
+  await act(async () => root.render(render()));
+  expect(recover).not.toHaveBeenCalled();
+  expect(legacy).not.toHaveBeenCalled();
+  const button = container.querySelector("button");
+  expect(button).not.toBeNull();
+  await act(async () => {
+    button?.click();
+    button?.click();
+  });
+  expect(recover).toHaveBeenCalledOnce();
+  expect(current()).toBe(true);
+  expect(button?.disabled).toBe(true);
+  await act(async () => finish());
+  expect(button?.disabled).toBe(false);
+  await act(async () => button?.click());
+  expect(recover).toHaveBeenCalledTimes(2);
+  await act(async () => root.render(render(false)));
+  expect(current()).toBe(false);
+  await act(async () => finish());
+  await act(async () => root.render(render()));
+  expect(container.querySelector("button")?.disabled).toBe(false);
+  expect(current()).toBe(false);
 });
