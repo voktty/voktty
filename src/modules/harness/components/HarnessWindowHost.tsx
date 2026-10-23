@@ -51,6 +51,7 @@ import {
   createHarnessWindowViews,
 } from "@/modules/harness/lib/harnessWindowViews";
 import type { Session } from "@/modules/harness/lib/session";
+import { normalizeHarnessSessionViewReport } from "@/modules/harness/lib/harnessSessionViews";
 import { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 
@@ -66,6 +67,10 @@ type WindowRuntime = {
   reminders: ReturnType<typeof useHarnessReminderService>;
   navigation: ReturnType<typeof useHarnessWindowNavigation>;
   unseenFinishedIds: Set<string>;
+  admitSeeds: (
+    sessions: readonly Session[],
+    isCurrent: () => boolean,
+  ) => boolean;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -108,6 +113,39 @@ export function HarnessWindowHost({
       holds.has("transfer", id) ||
       views.isSwitching(id),
   });
+  const boundSeeds = useRef(new WeakSet<Session>());
+  const { admitSession, sessionsRef: canonicalSessions } = engine;
+  const admitSeeds = useCallback(
+    (seeds: readonly Session[], isCurrent: () => boolean) => {
+      if (seeds.length > 256)
+        throw new RangeError("Harness seed capacity exceeded");
+      normalizeHarnessSessionViewReport({
+        referencedSessionIds: seeds.map((session) => session.id),
+      });
+      if (!isCurrent()) return false;
+      const ids = new Set([
+        ...canonicalSessions.current.map((session) => session.id),
+        ...seeds.map((session) => session.id),
+      ]);
+      if (ids.size > 256)
+        throw new RangeError("Harness session capacity exceeded");
+      registerBuiltinHarnesses();
+      for (const session of seeds) {
+        if (!isCurrent()) return false;
+        if (
+          canonicalSessions.current.some(
+            (existing) => existing.id === session.id,
+          )
+        )
+          continue;
+        admitSession(session, "immediate");
+        bindResumedSessions([session]);
+        boundSeeds.current.add(session);
+      }
+      return isCurrent();
+    },
+    [admitSession, canonicalSessions],
+  );
   const busyIds = useMemo(
     () =>
       new Set(
@@ -285,7 +323,11 @@ export function HarnessWindowHost({
 
   useEffect(() => {
     registerBuiltinHarnesses();
-    bindResumedSessions(sessionsRef.current);
+    const unbound = sessionsRef.current.filter(
+      (session) => !boundSeeds.current.has(session),
+    );
+    bindResumedSessions(unbound);
+    for (const session of unbound) boundSeeds.current.add(session);
     const stop = startHarnessBridge();
     return () => stop();
   }, [sessionsRef]);
@@ -304,6 +346,7 @@ export function HarnessWindowHost({
         reminders,
         navigation,
         unseenFinishedIds,
+        admitSeeds,
       }}
     >
       <HarnessInboxContext.Provider value={inboxUnseen}>

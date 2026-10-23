@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
-import { act, StrictMode, useLayoutEffect, type ReactNode } from "react";
+import {
+  act,
+  Component,
+  StrictMode,
+  useLayoutEffect,
+  type ReactNode,
+} from "react";
 import { useInboxUnseen } from "@/modules/harness/hooks/useInboxUnseen";
 import { useHarnessReminderWindow } from "@/modules/harness/hooks/useHarnessReminderWindow";
 import { useSessionReminders } from "@/modules/harness/hooks/useSessionReminders";
@@ -9,6 +15,7 @@ import {
   useHarnessViewEngine,
   type HarnessViewEngine,
 } from "@/modules/harness/hooks/useHarnessViewEngine";
+import { useHarnessViewRegistration } from "@/modules/harness/hooks/useHarnessViewRegistration";
 import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,6 +49,8 @@ const native = vi.hoisted(() => ({
   ask: vi.fn(),
   send: vi.fn(),
   forget: vi.fn(),
+  bind: vi.fn(),
+  builtins: vi.fn(),
   approval: vi.fn(),
   bridge: vi.fn(),
   stopBridge: vi.fn(),
@@ -69,6 +78,8 @@ vi.mock("@/modules/harness/lib/harness/registry", async (original) => ({
     typeof import("@/modules/harness/lib/harness/registry")
   >()),
   forgetHarnessSession: native.forget,
+  bindHarnessSession: native.bind,
+  isLiveHarness: () => true,
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: native.listen }));
 vi.mock("@tauri-apps/api/window", () => ({
@@ -92,7 +103,8 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
   forgetHarnessSession: vi.fn().mockResolvedValue(undefined),
   canRewindHarnessLastTurn: () => false,
   respondHarnessApproval: native.approval,
-  registerBuiltinHarnesses: vi.fn(),
+  bindHarnessSession: native.bind,
+  registerBuiltinHarnesses: native.builtins,
   startHarnessBridge: native.bridge,
 }));
 vi.mock("@/modules/harness/lib/checkpoint", () => ({
@@ -230,6 +242,59 @@ function EngineReader({ index = 0 }: { index?: number }) {
   viewEngines[index] = useHarnessViewEngine(host.engine, getOwner, host.holds);
   return null;
 }
+function RegisteredView({
+  ownerId = 1,
+  input,
+  seeds = [],
+  openSession = async () => true,
+  activate = () => true,
+  onRegistered,
+  rejectRegistration = false,
+}: {
+  ownerId?: number;
+  input: HarnessWindowViewInput;
+  seeds?: Session[];
+  openSession?: HarnessNavigationTarget["openSession"];
+  activate?: HarnessNavigationTarget["activate"];
+  onRegistered?: (view: HarnessNavigationView) => void;
+  rejectRegistration?: boolean;
+}) {
+  const runtime = useHarnessWindow();
+  const { getOwner } = useWindowPersistenceAdmission(() => undefined);
+  useHarnessViewRegistration({
+    runtime: rejectRegistration
+      ? {
+          ...runtime,
+          navigation: {
+            ...runtime.navigation,
+            register: rejectViewRegistration,
+          },
+        }
+      : runtime,
+    ownerId,
+    seeds,
+    revision: input,
+    read: () => input,
+    getOwner,
+    openSession,
+    activate,
+    onRegistered,
+  });
+  return null;
+}
+const rejectViewRegistration = () => null;
+class RegistrationBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 function NavigationView({
   ownerId,
   input,
@@ -344,6 +409,8 @@ beforeEach(() => {
   });
   native.approval.mockReset();
   native.forget.mockReset().mockResolvedValue(undefined);
+  native.bind.mockReset();
+  native.builtins.mockReset();
   native.focus.mockReset().mockResolvedValue(() => undefined);
   native.badge.mockClear();
   native.notify.mockClear();
@@ -399,6 +466,201 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("cleans failed navigation registration before admitting any seed", async () => {
+    const one = fixture("one", "/work/one");
+    one.session.providerSessionId = "must-not-bind";
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await render(
+        [],
+        [],
+        false,
+        <RegistrationBoundary>
+          <RegisteredView
+            input={one.input}
+            seeds={[one.session]}
+            rejectRegistration
+          />
+        </RegistrationBoundary>,
+      );
+      expect(required(runtime).views.getSnapshot().cohorts).toEqual([]);
+      expect(required(runtime).engine.sessions).toEqual([]);
+      expect(native.bind).not.toHaveBeenCalled();
+      expect(required(runtime).navigation.available).toBe(false);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("admits and binds a registered seed once across StrictMode while preserving canonical data", async () => {
+    const one = fixture("one", "/work/one");
+    one.session.providerSessionId = "original-thread";
+    const onRegistered = vi.fn();
+    await render(
+      [],
+      [],
+      true,
+      <RegisteredView
+        input={one.input}
+        seeds={[one.session]}
+        onRegistered={onRegistered}
+      />,
+    );
+    expect(required(runtime).engine.sessions).toEqual([one.session]);
+    expect(native.bind).toHaveBeenCalledExactlyOnceWith(
+      "claude",
+      "one",
+      "original-thread",
+      "/work/one",
+      undefined,
+      one.session.blocks,
+    );
+    expect(native.builtins.mock.invocationCallOrder[0]).toBeLessThan(
+      native.bind.mock.invocationCallOrder[0],
+    );
+    expect(onRegistered).toHaveBeenCalledTimes(2);
+    expect(required(runtime).views.getSnapshot().cohorts).toHaveLength(1);
+    const stale = {
+      ...one.session,
+      title: "stale",
+      providerSessionId: "stale-thread",
+    };
+    act(() =>
+      expect(required(runtime).admitSeeds([stale], () => true)).toBe(true),
+    );
+    expect(required(runtime).engine.readSession("one")).toBe(one.session);
+    expect(native.bind).toHaveBeenCalledOnce();
+  });
+
+  it("validates seed capacity before any admission and rejects retired requests", async () => {
+    await render([], []);
+    const host = required(runtime);
+    const seeds = Array.from(
+      { length: 257 },
+      (_, i) => fixture(`seed-${i}`, "/work").session,
+    );
+    expect(() => host.admitSeeds(seeds, () => true)).toThrow();
+    expect(host.admitSeeds([seeds[0]], () => false)).toBe(false);
+    expect(host.engine.sessions).toEqual([]);
+    expect(native.bind).not.toHaveBeenCalled();
+    const full = Array.from(
+      { length: 256 },
+      (_, i) => fixture(`existing-${i}`, "/work").session,
+    );
+    act(() => expect(host.admitSeeds(full, () => true)).toBe(true));
+    expect(() => host.admitSeeds([seeds[0]], () => true)).toThrow(RangeError);
+    expect(required(runtime).engine.sessions).toEqual(full);
+  });
+
+  it("retires pending navigation when its registered view departs", async () => {
+    const one = fixture("one", "/work/one");
+    const gate = deferred<boolean>();
+    const open = vi
+      .fn<HarnessNavigationTarget["openSession"]>()
+      .mockReturnValue(gate.promise);
+    const activate = vi.fn(() => true);
+    await render(
+      [one.session],
+      [],
+      false,
+      <RegisteredView
+        input={one.input}
+        openSession={open}
+        activate={activate}
+      />,
+    );
+    let pending!: Promise<boolean>;
+    await act(async () => {
+      pending = required(runtime).navigation.openSession("one");
+    });
+    expect(open).toHaveBeenCalledOnce();
+    await render([one.session], []);
+    await act(async () => gate.resolve(true));
+    expect(await pending).toBe(false);
+    expect(activate).not.toHaveBeenCalled();
+    expect(required(runtime).views.getSnapshot().cohorts[0].active).toBe(false);
+    expect(required(runtime).engine.sessions).toEqual([one.session]);
+  });
+
+  it("updates registered view callbacks and layout without replacing its navigation receipt", async () => {
+    const one = fixture("one", "/work/one");
+    const oldOpen = vi.fn(async () => true);
+    const newOpen = vi.fn(async () => true);
+    const onRegistered = vi.fn();
+    await render(
+      [one.session],
+      [],
+      false,
+      <RegisteredView
+        input={one.input}
+        openSession={oldOpen}
+        onRegistered={onRegistered}
+      />,
+    );
+    const changed = { ...one.input, projectCwd: "/work/changed" };
+    await render(
+      [one.session],
+      [],
+      false,
+      <RegisteredView
+        input={changed}
+        openSession={newOpen}
+        onRegistered={onRegistered}
+      />,
+    );
+    expect(onRegistered).toHaveBeenCalledOnce();
+    expect(
+      required(runtime).views.getSnapshot().cohorts[0].state.layout.projectCwd,
+    ).toBe("/work/changed");
+    await act(async () =>
+      expect(await required(runtime).navigation.openSession("one")).toBe(true),
+    );
+    expect(oldOpen).not.toHaveBeenCalled();
+    expect(newOpen).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a replacement registration when the previous view with the same owner unmounts", async () => {
+    const one = fixture("one", "/work/one");
+    const open = vi.fn(async () => true);
+    const readers = (old: boolean) => [
+      old && <RegisteredView key="old" input={one.input} />,
+      <RegisteredView key="replacement" input={one.input} openSession={open} />,
+    ];
+    await render([one.session], [], false, readers(true));
+    await render([one.session], [], false, readers(false));
+    expect(required(runtime).views.getSnapshot().cohorts[0].active).toBe(true);
+    await act(async () =>
+      expect(await required(runtime).navigation.openSession("one")).toBe(true),
+    );
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it("replaces registration when a mounted component changes its owner ID", async () => {
+    const one = fixture("one", "/work/one");
+    const bound = vi.fn();
+    await render(
+      [one.session],
+      [],
+      false,
+      <RegisteredView ownerId={1} input={one.input} onRegistered={bound} />,
+    );
+    await render(
+      [one.session],
+      [],
+      false,
+      <RegisteredView ownerId={2} input={one.input} onRegistered={bound} />,
+    );
+    expect(bound.mock.calls.map(([view]) => view.ownerId)).toEqual([1, 2]);
+    expect(
+      required(runtime)
+        .views.getSnapshot()
+        .cohorts.map((cohort) => [cohort.ownerId, cohort.active]),
+    ).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
   it("does not expose global cancellation and denies every departed view action", async () => {
     const one = fixture("one", "/work/one");
     await render([one.session], [], false, <EngineReader />);
