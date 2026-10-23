@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement, useEffect } from "react";
+import { act, createElement, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HarnessTab } from "@/modules/tabs";
@@ -10,6 +10,9 @@ const mounts = vi.hoisted(() => ({
   native: vi.fn(),
   release: vi.fn(),
   removeSurface: vi.fn(),
+  runtime: vi.fn(),
+  stopRuntime: vi.fn(),
+  requests: vi.fn(),
 }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -18,10 +21,33 @@ vi.mock("@/modules/surfaces", () => ({
   removeHarnessSurface: mounts.removeSurface,
 }));
 vi.mock("./HarnessApp", () => ({
-  HarnessApp: ({ surfaceOwnerId }: { surfaceOwnerId?: number }) => {
+  HarnessRuntimeRoot: ({ children }: { children: ReactNode }) => {
+    useEffect(() => {
+      mounts.runtime();
+      return mounts.stopRuntime;
+    }, []);
+    return children;
+  },
+  HarnessApp: ({
+    surfaceOwnerId,
+    focused,
+    projectRequest,
+    onProjectRequestHandled,
+  }: {
+    surfaceOwnerId?: number;
+    focused?: boolean;
+    projectRequest?: { path: string };
+    onProjectRequestHandled?: (request: { path: string }) => void;
+  }) => {
     useEffect(() => {
       mounts.harness(surfaceOwnerId);
     }, [surfaceOwnerId]);
+    useEffect(() => {
+      if (focused && projectRequest) {
+        mounts.requests(surfaceOwnerId, projectRequest.path);
+        onProjectRequestHandled?.(projectRequest);
+      }
+    }, [focused, projectRequest, onProjectRequestHandled, surfaceOwnerId]);
     return createElement("div", { "data-harness": true }, "Harness");
   },
 }));
@@ -96,4 +122,56 @@ it("keeps owner reports when hidden and removes only the unmounted owner", async
   });
   expect(mounts.removeSurface).toHaveBeenCalledTimes(1);
   expect(mounts.removeSurface).toHaveBeenCalledWith(1);
+});
+
+it("keeps one runtime alive after its final view closes and reopens", async () => {
+  await act(async () =>
+    root.render(createElement(HarnessStack, { tabs, activeId: 1 })),
+  );
+  expect(mounts.runtime).toHaveBeenCalledOnce();
+  await act(async () =>
+    root.render(createElement(HarnessStack, { tabs: [], activeId: 0 })),
+  );
+  expect(mounts.stopRuntime).not.toHaveBeenCalled();
+  await act(async () =>
+    root.render(createElement(HarnessStack, { tabs, activeId: 1 })),
+  );
+  expect(mounts.runtime).toHaveBeenCalledOnce();
+  expect(mounts.harness).toHaveBeenCalledTimes(2);
+});
+
+it("does not start the runtime for empty or cold-only tabs", async () => {
+  await act(async () =>
+    root.render(createElement(HarnessStack, { tabs: [], activeId: 0 })),
+  );
+  await act(async () =>
+    root.render(
+      createElement(HarnessStack, {
+        tabs: [{ ...tabs[0], cold: true }],
+        activeId: 1,
+      }),
+    ),
+  );
+  expect(mounts.runtime).not.toHaveBeenCalled();
+  expect(mounts.harness).not.toHaveBeenCalled();
+});
+
+it("delivers project requests only after the selected outer view commits without replay", async () => {
+  const both = [...tabs, { ...tabs[0], id: 2, cwd: "/other" }];
+  await act(async () =>
+    root.render(createElement(HarnessStack, { tabs: both, activeId: 1 })),
+  );
+  await act(async () => {
+    root.render(createElement(HarnessStack, { tabs: both, activeId: 2 }));
+    window.dispatchEvent(
+      new CustomEvent("voktty:harness-select-project", {
+        detail: { path: "/target" },
+      }),
+    );
+  });
+  expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "/target");
+  await act(async () =>
+    root.render(createElement(HarnessStack, { tabs: both, activeId: 1 })),
+  );
+  expect(mounts.requests).toHaveBeenCalledOnce();
 });

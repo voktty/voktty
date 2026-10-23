@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { useHarnessWindow } from "@/modules/harness/components/HarnessWindowHost";
 import type { HarnessWindowViewInput } from "@/modules/harness/lib/harnessWindowViews";
+import type { HarnessWindowViewCohort } from "@/modules/harness/lib/harnessWindowViews";
 import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 import type {
   PersistenceOwner,
@@ -16,8 +17,9 @@ type Inputs = {
   read: () => HarnessWindowViewInput;
   getOwner: () => PersistenceOwner | null;
   openSession: (id: string, permit: PersistencePermit) => Promise<boolean>;
-  activate: () => boolean;
+  activate: () => boolean | Promise<boolean>;
   onRegistered?: (view: HarnessNavigationView) => void;
+  restore?: HarnessWindowViewCohort;
 };
 
 export function useHarnessViewRegistration(inputs: Inputs) {
@@ -32,7 +34,9 @@ export function useHarnessViewRegistration(inputs: Inputs) {
   const handle = useRef<ReturnType<typeof views.register> | null>(null);
   useLayoutEffect(() => {
     const original = latest.current;
-    const view = views.register(ownerId, original.read());
+    const view =
+      (original.restore && views.restore(ownerId, original.restore)) ||
+      views.register(ownerId, original.read());
     const cohort = views
       .getSnapshot()
       .cohorts.find((entry) => entry.ownerId === ownerId);

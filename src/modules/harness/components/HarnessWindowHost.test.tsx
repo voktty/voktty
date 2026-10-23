@@ -16,6 +16,9 @@ import {
   type HarnessViewEngine,
 } from "@/modules/harness/hooks/useHarnessViewEngine";
 import { useHarnessViewRegistration } from "@/modules/harness/hooks/useHarnessViewRegistration";
+import { HarnessApp } from "@/modules/harness/components/HarnessApp";
+import { HarnessStack } from "@/modules/harness/components/HarnessStack";
+import type { HarnessTab } from "@/modules/tabs";
 import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +37,7 @@ import type {
   HarnessNavigationTarget,
   HarnessNavigationView,
 } from "@/modules/harness/lib/harnessWindowNavigation";
-import { newTab } from "@/modules/harness/lib/layout";
+import { leafIds, newTab } from "@/modules/harness/lib/layout";
 import { newSession, type Session } from "@/modules/harness/lib/session";
 import { publishActiveSurface } from "@/modules/surfaces";
 import {
@@ -51,6 +54,12 @@ const native = vi.hoisted(() => ({
   forget: vi.fn(),
   bind: vi.fn(),
   builtins: vi.fn(),
+  probe: vi.fn().mockResolvedValue(undefined),
+  catalogs: vi.fn().mockResolvedValue(undefined),
+  panes: new Map<
+    string,
+    Parameters<typeof import("@/modules/harness/surfaces/PaneTree").PaneTree>[0]
+  >(),
   approval: vi.fn(),
   bridge: vi.fn(),
   stopBridge: vi.fn(),
@@ -72,6 +81,29 @@ vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
   ...(await original<typeof import("@/modules/harness/lib/githubTasks")>()),
   listInboxItems: native.inboxList,
 }));
+vi.mock("@/modules/harness/chrome/Sidebar", () => ({ Sidebar: () => null }));
+vi.mock("@/modules/harness/chrome/TitleBar", () => ({ TitleBar: () => null }));
+vi.mock("@/modules/harness/chrome/UsageFooter", () => ({
+  UsageFooter: () => null,
+}));
+vi.mock("@/modules/harness/chrome/HarnessUpdateNotice", () => ({
+  HarnessUpdateNotice: () => null,
+}));
+vi.mock("@/modules/harness/hooks/useProjectBranches", () => ({
+  useProjectBranches: () => undefined,
+}));
+vi.mock("@/modules/harness/surfaces/PaneTree", () => ({
+  PaneTree: (
+    props: Parameters<
+      typeof import("@/modules/harness/surfaces/PaneTree").PaneTree
+    >[0],
+  ) => {
+    const ids = new Set(leafIds(props.layout));
+    for (const session of props.sessions)
+      if (ids.has(session.id)) native.panes.set(session.id, props);
+    return null;
+  },
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
 vi.mock("@/modules/harness/lib/harness/registry", async (original) => ({
   ...(await original<
@@ -80,6 +112,7 @@ vi.mock("@/modules/harness/lib/harness/registry", async (original) => ({
   forgetHarnessSession: native.forget,
   bindHarnessSession: native.bind,
   isLiveHarness: () => true,
+  pickTextHarness: () => "claude",
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: native.listen }));
 vi.mock("@tauri-apps/api/window", () => ({
@@ -97,6 +130,7 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
   ...(await import("@/modules/harness/lib/harness/apply")),
   isLiveHarness: () => true,
   canSteerHarness: () => true,
+  pickTextHarness: () => "claude",
   sendHarnessTurn: native.send,
   cancelHarnessTurn: vi.fn().mockResolvedValue(undefined),
   generateHarnessTitle: vi.fn().mockResolvedValue(undefined),
@@ -105,6 +139,8 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
   respondHarnessApproval: native.approval,
   bindHarnessSession: native.bind,
   registerBuiltinHarnesses: native.builtins,
+  probeHarnessAvailability: native.probe,
+  refreshHarnessCatalogs: native.catalogs,
   startHarnessBridge: native.bridge,
 }));
 vi.mock("@/modules/harness/lib/checkpoint", () => ({
@@ -121,7 +157,10 @@ vi.mock("@/modules/harness/lib/attachments", () => ({
 vi.mock("@/modules/harness/lib/promptPreparation", () => ({
   preparePrompt: async (text: string) => text,
 }));
-vi.mock("@/modules/harness/lib/providerAccounts", () => ({
+vi.mock("@/modules/harness/lib/providerAccounts", async (original) => ({
+  ...(await original<
+    typeof import("@/modules/harness/lib/providerAccounts")
+  >()),
   supportsProviderAccounts: () => false,
 }));
 vi.mock("@/modules/harness/lib/dockBadge", () => ({
@@ -142,6 +181,9 @@ vi.mock("@/modules/harness/lib/fileWatch", () => ({
 }));
 vi.mock("@/modules/harness/lib/fileIndex", () => ({
   invalidateProjectFiles: vi.fn(),
+  prefetchProjectFiles: vi.fn(),
+  rememberOpenedFile: vi.fn(),
+  resolveFileOpenRequest: async (_cwd: string, path: string) => path,
 }));
 vi.mock("@/modules/harness/lib/fileTree", () => ({
   notifyDirsChanged: vi.fn(),
@@ -411,6 +453,9 @@ beforeEach(() => {
   native.forget.mockReset().mockResolvedValue(undefined);
   native.bind.mockReset();
   native.builtins.mockReset();
+  native.panes.clear();
+  native.probe.mockReset().mockResolvedValue(undefined);
+  native.catalogs.mockReset().mockResolvedValue(undefined);
   native.focus.mockReset().mockResolvedValue(() => undefined);
   native.badge.mockClear();
   native.notify.mockClear();
@@ -436,6 +481,7 @@ afterEach(async () => {
   publishActiveSurface(null);
   vi.clearAllTimers();
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -466,6 +512,259 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("rejects retired navigation while waiting for physical activation confirmation", async () => {
+    const one = fixture("one", "/work/one");
+    const gate = deferred<boolean>();
+    const activate = vi.fn(() => gate.promise);
+    await render(
+      [one.session],
+      [],
+      false,
+      <NavigationView
+        ownerId={1}
+        input={one.input}
+        openSession={async () => true}
+        activate={activate}
+      />,
+    );
+    let pending!: Promise<boolean>;
+    await act(async () => {
+      pending = required(runtime).navigation.openSession("one");
+    });
+    expect(activate).toHaveBeenCalledOnce();
+    await render([one.session], []);
+    await act(async () => gate.resolve(true));
+    expect(await pending).toBe(false);
+  });
+
+  it("reserves view admissions synchronously and rejects overflow without corrupting the window", async () => {
+    const sessions = Array.from(
+      { length: 255 },
+      (_, i) => fixture(`capacity-${i}`, "/work").session,
+    );
+    await render(sessions, [], false, <EngineReader />);
+    const added = fixture("last-slot", "/work").session;
+    const overflow = fixture("overflow", "/work").session;
+    await act(async () => {
+      viewEngines[0].admitSession(added);
+      expect(() => viewEngines[0].admitSession(overflow)).toThrow(RangeError);
+    });
+    expect(required(runtime).engine.sessions).toHaveLength(256);
+    await act(async () => {
+      expect(() =>
+        viewEngines[0].applySessionDeltas([
+          { kind: "admit", session: overflow },
+        ]),
+      ).toThrow(RangeError);
+      viewEngines[0].applySessionDeltas([
+        { kind: "remove", id: added.id, expected: added },
+        { kind: "admit", session: overflow },
+      ]);
+    });
+    expect(required(runtime).engine.sessions).toHaveLength(256);
+    expect(required(runtime).engine.readSession(added.id)).toBeUndefined();
+    expect(required(runtime).engine.readSession(overflow.id)).toBe(overflow);
+  });
+
+  it("activates the real Stack and App with one Host, survives zero views and closes from their union", async () => {
+    const tabs = [
+      { id: 1, kind: "harness", cwd: "/work/one" },
+      { id: 2, kind: "harness", cwd: "remote://machine/srv/two" },
+    ] as HarnessTab[];
+    await act(async () =>
+      root.render(<HarnessStack tabs={tabs} activeId={1} />),
+    );
+    expect(native.bridge).toHaveBeenCalledOnce();
+    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.panes.size).toBe(2);
+    const ids = [...native.panes.keys()];
+    await act(async () => {
+      for (const id of ids)
+        required(native.panes.get(id)).onSubmit(id, "background work", []);
+    });
+    expect(sends).toHaveLength(2);
+    await act(async () => root.render(<HarnessStack tabs={[]} activeId={0} />));
+    expect(native.stopBridge).not.toHaveBeenCalled();
+    await act(async () => {
+      for (const send of sends)
+        send.sink({ type: "message.delta", text: "live after last view" });
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    native.panes.clear();
+    await act(async () =>
+      root.render(<HarnessStack tabs={[{ ...tabs[0], id: 3 }]} activeId={3} />),
+    );
+    expect(native.panes.size).toBe(1);
+    const reopened = required(native.panes.values().next().value);
+    expect(
+      reopened.sessions
+        .filter((session) => session.busy)
+        .map((session) => session.id)
+        .sort(),
+    ).toEqual([...ids].sort());
+    expect(
+      reopened.sessions.every((session) =>
+        session.blocks.some((block) => block.text === "live after last view"),
+      ),
+    ).toBe(true);
+    expect(sends).toHaveLength(2);
+    expect(native.bridge).toHaveBeenCalledOnce();
+    expect(native.register).toHaveBeenCalledOnce();
+    await act(async () => closeListeners[0]({ preventDefault: vi.fn() }));
+    const snapshots = native.invoke.mock.calls.filter(
+      ([command]) => command === "workspace_set_snapshot",
+    );
+    expect(
+      snapshots[snapshots.length - 1][1].snapshot.sessions
+        .map((session: Session) => session.id)
+        .sort(),
+    ).toEqual([...ids].sort());
+    expect(native.invoke).toHaveBeenCalledWith("destroy_window");
+  });
+
+  it("routes keyboard and native actions only to the focused real App and retires cached listeners", async () => {
+    const now = vi.spyOn(performance, "now").mockReturnValue(1000);
+    const one = fixture("one", "/work/one");
+    const two = fixture("two", "/work/two");
+    await render(
+      [one.session, two.session],
+      [],
+      false,
+      <>
+        <HarnessApp
+          key="one"
+          surfaceOwnerId={1}
+          initialCwd={one.session.cwd}
+          focused={false}
+        />
+        <HarnessApp
+          key="two"
+          surfaceOwnerId={2}
+          initialCwd={two.session.cwd}
+          focused
+        />
+      </>,
+    );
+    await act(async () =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "t",
+          ctrlKey: true,
+          bubbles: true,
+        }),
+      ),
+    );
+    expect(required(runtime).engine.sessions).toHaveLength(3);
+    expect(required(runtime).engine.sessions[2].cwd).toBe("/work/two");
+    const listeners = [...(native.listeners.get("new_tab") ?? [])];
+    expect(listeners).toHaveLength(2);
+    now.mockReturnValue(1200);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+      for (const listener of listeners) listener();
+    });
+    expect(required(runtime).engine.sessions).toHaveLength(4);
+    expect(required(runtime).engine.sessions[3].cwd).toBe("/work/two");
+    await render([], []);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+      for (const listener of listeners) listener();
+    });
+    expect(required(runtime).engine.sessions).toHaveLength(4);
+    expect(sends).toHaveLength(0);
+  });
+
+  it("does not publish catalog completion after its original window permit retires", async () => {
+    const one = fixture("one", "/work/one");
+    one.session.model = "no-longer-catalogued";
+    const gate = deferred<void>();
+    native.catalogs.mockReturnValueOnce(gate.promise);
+    await render([one.session], []);
+    const owner = required(required(runtime).persistence.getOwner());
+    const final = required(required(owner.capture()).seal());
+    await act(async () => final.cancel());
+    const current = required(runtime).engine.readSession("one");
+    await act(async () => gate.resolve());
+    expect(required(runtime).engine.readSession("one")).toBe(current);
+    expect(
+      native.probe.mock.calls.every(([options]) =>
+        options.ids.every((id: string) => id === "claude"),
+      ),
+    ).toBe(true);
+  });
+
+  it("runs two real App views on one Host and preserves their busy sessions through zero views and reopening", async () => {
+    const one = fixture("one", "/work/one");
+    const two = fixture("two", "remote://machine/srv/two");
+    const sessions = [one.session, two.session];
+    await render(
+      sessions,
+      [],
+      false,
+      <>
+        <HarnessApp
+          key="one"
+          surfaceOwnerId={1}
+          initialCwd={one.session.cwd}
+          focused
+        />
+        <HarnessApp
+          key="two"
+          surfaceOwnerId={2}
+          initialCwd={two.session.cwd}
+          focused={false}
+        />
+      </>,
+    );
+    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.bridge).toHaveBeenCalledOnce();
+    await act(async () => {
+      required(native.panes.get("one")).onSubmit("one", "local work", []);
+      required(native.panes.get("two")).onSubmit("two", "remote work", []);
+    });
+    expect(sends.map((send) => send.id)).toEqual(["one", "two"]);
+    await render(
+      sessions,
+      [],
+      false,
+      <HarnessApp
+        key="two"
+        surfaceOwnerId={2}
+        initialCwd={two.session.cwd}
+        focused
+      />,
+    );
+    expect(
+      required(runtime).engine.sessions.every((session) => session.busy),
+    ).toBe(true);
+    await render(sessions, []);
+    expect(native.stopBridge).not.toHaveBeenCalled();
+    await act(async () => {
+      sends[0].sink({ type: "message.delta", text: "headless local" });
+      sends[1].sink({ type: "message.delta", text: "headless remote" });
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(
+      required(runtime).engine.sessions.every((session) =>
+        session.blocks.some((block) => block.text?.startsWith("headless")),
+      ),
+    ).toBe(true);
+    await render(
+      sessions,
+      [],
+      false,
+      <HarnessApp surfaceOwnerId={3} initialCwd={one.session.cwd} focused />,
+    );
+    expect(
+      required(native.panes.get("one")).sessions.find(
+        (session) => session.id === "one",
+      )?.busy,
+    ).toBe(true);
+    expect(native.bridge).toHaveBeenCalledOnce();
+    expect(native.register).toHaveBeenCalledOnce();
+    expect(sends).toHaveLength(2);
+  });
+
   it("cleans failed navigation registration before admitting any seed", async () => {
     const one = fixture("one", "/work/one");
     one.session.providerSessionId = "must-not-bind";

@@ -11,6 +11,8 @@ import {
   type SetStateAction,
 } from "react";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
+import { useHarnessCatalogBootstrap } from "@/modules/harness/hooks/useHarnessCatalogBootstrap";
+import { useRemoteSessionAlerts } from "@/modules/harness/hooks/useRemoteSessionAlerts";
 import { useIdleSessionDetach } from "@/modules/harness/hooks/useIdleSessionDetach";
 import { useUnseenFinishedSessions } from "@/modules/harness/hooks/useUnseenFinishedSessions";
 import { harnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
@@ -178,6 +180,8 @@ export function HarnessWindowHost({
     flushForegroundHarnessEvents: engine.flushForegroundHarnessEvents,
   });
   const persistence = useWindowPersistenceAdmission(() => undefined);
+  useHarnessCatalogBootstrap(engine, persistence.getOwner, persistence.revision);
+  useRemoteSessionAlerts();
   const navigation = useHarnessWindowNavigation(
     views,
     persistence.getOwner,

@@ -13,7 +13,7 @@ export type HarnessNavigationTarget = Readonly<{
   isCurrent: () => boolean;
   capture: () => PersistencePermit | null;
   openSession: (id: string, permit: PersistencePermit) => Promise<boolean>;
-  activate: () => boolean;
+  activate: () => boolean | Promise<boolean>;
 }>;
 
 export type CreateHarnessNavigationView = (
@@ -164,7 +164,8 @@ export function createHarnessWindowNavigation(
         if (!permit.isCurrent()) return false;
         const opened = await captured.target.openSession(sessionId, permit);
         if (!opened || !permit.isCurrent()) return false;
-        return captured.target.activate() && permit.isCurrent();
+        const activated = await captured.target.activate();
+        return activated && permit.isCurrent();
       } finally {
         pending.delete(sessionId);
       }

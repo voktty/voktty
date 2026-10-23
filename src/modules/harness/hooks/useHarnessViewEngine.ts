@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import type { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import type { PersistenceOwner } from "@/modules/harness/lib/persistenceAdmission";
 import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
+import { applyHarnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
 
 type Engine = ReturnType<typeof useHarnessSessionEngine>;
 export type HarnessViewEngine = Omit<Engine, "cancelScheduledHarnessEvents">;
@@ -40,7 +41,21 @@ export function useHarnessViewEngine(
       ),
       updateSession: guard((current) => current.updateSession, undefined),
       updateSessions: guard((current) => current.updateSessions, undefined),
-      admitSession: guard((current) => current.admitSession, undefined),
+      admitSession: guard(
+        (current) =>
+          (
+            session: Parameters<Engine["admitSession"]>[0],
+            _scheduling?: Parameters<Engine["admitSession"]>[1],
+          ) => {
+            if (
+              !current.readSession(session.id) &&
+              current.sessionsRef.current.length >= 256
+            )
+              throw new RangeError("Harness session capacity exceeded");
+            current.admitSession(session, "immediate");
+          },
+        undefined,
+      ),
       removeSession: guard(
         (current) =>
           (...args: Parameters<Engine["removeSession"]>) => {
@@ -52,6 +67,15 @@ export function useHarnessViewEngine(
       applySessionDeltas: guard(
         (current) =>
           (...args: Parameters<Engine["applySessionDeltas"]>) => {
+            const admits = args[0].some((delta) => delta.kind === "admit");
+            if (
+              admits &&
+              applyHarnessSessionDeltas(
+                current.sessionsRef.current,
+                args[0].filter((delta) => delta.kind !== "update"),
+              ).length > 256
+            )
+              throw new RangeError("Harness session capacity exceeded");
             for (const delta of args[0])
               if (delta.kind === "remove") {
                 const session = current.readSession(delta.id);
@@ -63,7 +87,7 @@ export function useHarnessViewEngine(
                   continue;
                 holds.invalidateOpening(delta.id);
               }
-            current.applySessionDeltas(...args);
+            current.applySessionDeltas(args[0], admits ? "immediate" : args[1]);
           },
         undefined,
       ),

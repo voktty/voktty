@@ -318,6 +318,7 @@ export function WorkspaceSurface({
         <HarnessStack
           tabs={tabs}
           activeId={activeId}
+          onActivateTab={onActivateEditorTab}
           placements={placements ? placementByTabId : undefined}
         />
       </div>
