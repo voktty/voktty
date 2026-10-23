@@ -112,6 +112,9 @@ type WorkspaceState = {
   busySessionIds: ReadonlySet<string>;
   activeSessionId: string;
   liveAgentsEnabled: boolean;
+  isRetained?: (id: string) => boolean;
+  retentionRevision?: object;
+  beforeDetachCommit?: () => void;
 };
 
 function mountWorkspace(initial: Partial<WorkspaceState> = {}) {
@@ -166,7 +169,15 @@ function mountWorkspace(initial: Partial<WorkspaceState> = {}) {
       loadedSessionCache,
       skipForgetSessionIds,
       persistSession,
-      setSessions,
+      setSessions: state.beforeDetachCommit
+        ? (update) =>
+            setSessions((before) => {
+              const after =
+                typeof update === "function" ? update(before) : update;
+              if (after.length < before.length) state.beforeDetachCommit?.();
+              return after;
+            })
+        : setSessions,
     });
     snapshot = { sessions, unseenFinishedIds, setSessions };
     return null;
@@ -210,6 +221,100 @@ async function advance(ms = 250) {
 }
 
 describe("useIdleSessionDetach", () => {
+  it("forgets unseen bookkeeping when the canonical session is removed", () => {
+    const workspace = mountWorkspace({
+      sessions: [chat("removed", { busy: true })],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(["removed"]),
+      activeSessionId: "other",
+    });
+    workspace.finish();
+    expect(workspace.snapshot().unseenFinishedIds).toEqual(
+      new Set(["removed"]),
+    );
+    workspace.update({ sessions: [] });
+    expect(workspace.snapshot().unseenFinishedIds).toEqual(new Set());
+  });
+
+  it("retains external references and reevaluates when their revision changes", async () => {
+    const session = chat("held");
+    let held = true;
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+      isRetained: () => held,
+    });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([session]);
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+    held = false;
+    workspace.update({ retentionRevision: {} });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([]);
+    expect(mocks.forgetHarnessSession).toHaveBeenCalledExactlyOnceWith(
+      "claude",
+      "held",
+    );
+  });
+
+  it("rechecks external reservations acquired during persistence", async () => {
+    const session = chat("held");
+    let held = false;
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+      isRetained: () => held,
+    });
+    workspace.persistSession.mockImplementation(() => {
+      held = true;
+    });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([session]);
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+  });
+
+  it("restores an external reservation acquired after removal computes but before commit", async () => {
+    const session = chat("held");
+    let held = false;
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+      isRetained: () => held,
+      beforeDetachCommit: () => {
+        held = true;
+      },
+    });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([session]);
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+    expect(workspace.cache.has("held")).toBe(false);
+  });
+
+  it("retains idle workers whose lead is referenced by another view", async () => {
+    const session = chat("worker", { orchestrationLeadId: "lead" });
+    const workspace = mountWorkspace({
+      sessions: [session],
+      tabs: [],
+      orchestrationRuns: [],
+      busySessionIds: new Set(),
+      liveAgentsEnabled: false,
+      isRetained: (id) => id === "lead",
+    });
+    await advance();
+    expect(workspace.snapshot().sessions).toEqual([session]);
+    expect(mocks.forgetHarnessSession).not.toHaveBeenCalled();
+  });
+
   it.each(["active", "paused"] as const)(
     "retains an unreferenced idle lead while orchestration is %s",
     async (status) => {

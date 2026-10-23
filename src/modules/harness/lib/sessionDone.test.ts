@@ -2,6 +2,30 @@ import { describe, expect, it } from "vitest";
 import { nextUnseenFinishedSessions } from "./sessionDone";
 
 describe("nextUnseenFinishedSessions", () => {
+  it("clears every foreground session while preserving a headless completion", () => {
+    expect(
+      nextUnseenFinishedSessions({
+        previousBusyIds: new Set(["one", "two", "headless"]),
+        busyIds: new Set(),
+        previousUnseenIds: new Set(["already-visible", "unseen"]),
+        focusedSessionIds: new Set(["one", "two", "already-visible"]),
+      }),
+    ).toEqual(new Set(["unseen", "headless"]));
+  });
+
+  it("combines the legacy focus and foreground set without marking workers", () => {
+    expect(
+      nextUnseenFinishedSessions({
+        previousBusyIds: new Set(["one", "two", "worker"]),
+        busyIds: new Set(),
+        previousUnseenIds: new Set(),
+        focusedSessionId: "one",
+        focusedSessionIds: new Set(["two"]),
+        untrackedIds: new Set(["worker"]),
+      }),
+    ).toEqual(new Set());
+  });
+
   it("marks a session done when it finishes while unfocused", () => {
     expect(
       nextUnseenFinishedSessions({

@@ -8,8 +8,17 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
+import { useIdleSessionDetach } from "@/modules/harness/hooks/useIdleSessionDetach";
+import { useUnseenFinishedSessions } from "@/modules/harness/hooks/useUnseenFinishedSessions";
+import { harnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
+import {
+  loadLiveAgentsEnabled,
+  subscribeLiveAgentsEnabled,
+} from "@/modules/harness/lib/settings";
+import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
 import { useHarnessAutomations } from "@/modules/harness/hooks/useHarnessAutomations";
 import { useHarnessWindowInbox } from "@/modules/harness/hooks/useHarnessWindowInbox";
 import { HarnessInboxContext } from "@/modules/harness/hooks/harnessInboxContext";
@@ -56,6 +65,7 @@ type WindowRuntime = {
   reminderRegistrationError: string | null;
   reminders: ReturnType<typeof useHarnessReminderService>;
   navigation: ReturnType<typeof useHarnessWindowNavigation>;
+  unseenFinishedIds: Set<string>;
 };
 
 export const HarnessWindowContext = createContext<WindowRuntime | null>(null);
@@ -81,6 +91,7 @@ export function HarnessWindowHost({
 }) {
   const [views] = useState(createHarnessWindowViews);
   const [holds] = useState(createHarnessWindowSessionHolds);
+  const held = useSyncExternalStore(holds.subscribe, holds.getSnapshot);
   const [summaries] = useState(createHarnessSummaryUpdates);
   const [imported] = useState(initialSessions);
   const cohortSnapshot = useSyncExternalStore(
@@ -97,6 +108,30 @@ export function HarnessWindowHost({
       holds.has("transfer", id) ||
       views.isSwitching(id),
   });
+  const busyIds = useMemo(
+    () =>
+      new Set(
+        engine.sessions
+          .filter((session) => session.busy)
+          .map((session) => session.id),
+      ),
+    [engine.sessions],
+  );
+  const foregroundIds = useMemo(
+    () =>
+      new Set(
+        cohortSnapshot.cohorts
+          .filter((cohort) => cohort.active)
+          .flatMap((cohort) => [...cohort.state.report.foregroundSessionIds]),
+      ),
+    [cohortSnapshot],
+  );
+  const unseenFinishedIds = useUnseenFinishedSessions(
+    engine.sessions,
+    busyIds,
+    undefined,
+    foregroundIds,
+  );
   useHarnessWindowAttention({
     sessions: engine.sessions,
     sessionsRef: engine.sessionsRef,
@@ -182,6 +217,63 @@ export function HarnessWindowHost({
   });
   const workspaceReady = useRef(false);
   if (cohortSnapshot.cohorts.length > 0) workspaceReady.current = true;
+  const retainedTabsRef = useRef(workspace.tabs);
+  retainedTabsRef.current = workspace.tabs;
+  const [orchestrationRuns] = useState<OrchestrationRun[]>([]);
+  const liveAgentsEnabled = useSyncExternalStore(
+    subscribeLiveAgentsEnabled,
+    loadLiveAgentsEnabled,
+    () => true,
+  );
+  const openingSessionIds = useRef(new Set<string>());
+  const skipForgetSessionIds = useRef(new Set<string>());
+  const loadedSessionCache = useRef(new Map<string, Session>());
+  const { applySessionDeltas } = engine;
+  const mutateIdleSessions = useCallback(
+    (update: SetStateAction<Session[]>) => {
+      const before = sessionsRef.current;
+      const after = typeof update === "function" ? update(before) : update;
+      const deltas = harnessSessionDeltas(before, after, [
+        ...before.map((session) => session.id),
+        ...after.map((session) => session.id),
+      ]);
+      applySessionDeltas(
+        deltas.map((delta) =>
+          delta.kind === "remove" && typeof update === "function"
+            ? {
+                ...delta,
+                shouldRemove: (session: Session) =>
+                  !update([session]).includes(session),
+              }
+            : delta,
+        ),
+      );
+    },
+    [applySessionDeltas, sessionsRef],
+  );
+  useIdleSessionDetach({
+    sessions: engine.sessions,
+    sessionsRef,
+    tabs: workspace.tabs,
+    tabsRef: retainedTabsRef,
+    orchestrationRuns,
+    liveAgentsEnabled,
+    unseenFinishedIds,
+    openingSessionIds,
+    skipForgetSessionIds,
+    loadedSessionCache,
+    persistSession: transcripts.persistSession,
+    setSessions: mutateIdleSessions,
+    isRetained: (id) =>
+      !workspaceReady.current ||
+      holds.hasAny(id) ||
+      views
+        .getSnapshot()
+        .cohorts.some((cohort) =>
+          cohort.state.report.referencedSessionIds.includes(id),
+        ),
+    retentionRevision: held,
+  });
   useHarnessWindowPersistence({
     getOwner: persistence.getOwner,
     revision: persistence.revision,
@@ -211,6 +303,7 @@ export function HarnessWindowHost({
         reminderRegistrationError,
         reminders,
         navigation,
+        unseenFinishedIds,
       }}
     >
       <HarnessInboxContext.Provider value={inboxUnseen}>

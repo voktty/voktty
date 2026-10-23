@@ -37,6 +37,7 @@ const native = vi.hoisted(() => ({
   register: vi.fn(),
   ask: vi.fn(),
   send: vi.fn(),
+  forget: vi.fn(),
   approval: vi.fn(),
   bridge: vi.fn(),
   stopBridge: vi.fn(),
@@ -59,6 +60,12 @@ vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
   listInboxItems: native.inboxList,
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
+vi.mock("@/modules/harness/lib/harness/registry", async (original) => ({
+  ...(await original<
+    typeof import("@/modules/harness/lib/harness/registry")
+  >()),
+  forgetHarnessSession: native.forget,
+}));
 vi.mock("@tauri-apps/api/event", () => ({ listen: native.listen }));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
@@ -324,6 +331,7 @@ beforeEach(() => {
     return Promise.resolve(() => undefined);
   });
   native.approval.mockReset();
+  native.forget.mockReset().mockResolvedValue(undefined);
   native.focus.mockReset().mockResolvedValue(() => undefined);
   native.badge.mockClear();
   native.notify.mockClear();
@@ -379,6 +387,97 @@ async function render(
 }
 
 describe("window-owned Harness execution host", () => {
+  it("preserves boot imports and retained cohorts through zero views, then detaches retired references", async () => {
+    const one = fixture("one", "/work/one");
+    const two = fixture("two", "remote://machine/srv/two");
+    const sessions = [one.session, two.session];
+    await render(sessions, []);
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    expect(required(runtime).engine.sessions).toEqual(sessions);
+    expect(native.forget).not.toHaveBeenCalled();
+    await render(sessions, [
+      { ownerId: 1, input: one.input },
+      { ownerId: 2, input: two.input },
+    ]);
+    await render(sessions, []);
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    expect(required(runtime).engine.sessions).toEqual(sessions);
+    expect(native.forget).not.toHaveBeenCalled();
+    act(() => {
+      const cohort = required(
+        required(runtime)
+          .views.getSnapshot()
+          .cohorts.find((entry) => entry.ownerId === 1),
+      );
+      expect(required(runtime).views.retire(cohort)).toBe(true);
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(required(runtime).engine.sessions).toEqual([two.session]);
+    expect(native.forget).toHaveBeenCalledExactlyOnceWith("claude", "one");
+  });
+
+  it.each(["opening", "removing", "switching", "transfer"] as const)(
+    "retains a physically pending %s operation after its last cohort retires",
+    async (kind) => {
+      const one = fixture("one", "/work/one");
+      await render([one.session], [{ ownerId: 1, input: one.input }]);
+      const host = required(runtime);
+      let active = true;
+      const hold = required(host.holds.acquire(kind, ["one"], () => active));
+      await render([one.session], []);
+      act(() => {
+        expect(host.views.retire(host.views.getSnapshot().cohorts[0])).toBe(
+          true,
+        );
+      });
+      active = false;
+      host.holds.invalidateOpening("one");
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      expect(hold.isCurrent()).toBe(false);
+      expect(required(runtime).engine.sessions).toEqual([one.session]);
+      expect(native.forget).not.toHaveBeenCalled();
+      act(() => hold.release());
+      await act(async () => vi.advanceTimersByTimeAsync(250));
+      expect(required(runtime).engine.sessions).toEqual([]);
+      expect(native.forget).toHaveBeenCalledExactlyOnceWith("claude", "one");
+    },
+  );
+
+  it("tracks every foreground completion and preserves an unseen headless result", async () => {
+    const one = fixture("one", "/work/one");
+    const two = fixture("two", "remote://machine/srv/two");
+    await render(
+      [one.session, two.session],
+      [
+        { ownerId: 1, input: one.input },
+        { ownerId: 2, input: two.input },
+      ],
+    );
+    await act(async () => {
+      required(runtime).engine.onSubmit("one", "first");
+      required(runtime).engine.onSubmit("two", "second");
+    });
+    await act(async () => {
+      for (const send of sends) send.finish();
+    });
+    expect(required(runtime).unseenFinishedIds).toEqual(new Set());
+    await act(async () => required(runtime).engine.onSubmit("one", "headless"));
+    await render([], []);
+    act(() => {
+      for (const cohort of required(runtime).views.getSnapshot().cohorts)
+        expect(required(runtime).views.retire(cohort)).toBe(true);
+    });
+    await act(async () => sends[sends.length - 1].finish());
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(required(runtime).unseenFinishedIds).toEqual(new Set(["one"]));
+    expect(
+      required(runtime).engine.sessions.map((session) => session.id),
+    ).toEqual(["one"]);
+    expect(native.forget).toHaveBeenCalledExactlyOnceWith("claude", "two");
+    await render([], [{ ownerId: 3, input: one.input }]);
+    expect(required(runtime).unseenFinishedIds).toEqual(new Set());
+  });
+
   it.each(["opening", "removing", "switching", "transfer"] as const)(
     "blocks submission synchronously during %s without stopping a sibling",
     async (kind) => {

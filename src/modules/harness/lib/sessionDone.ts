@@ -5,12 +5,14 @@ export function nextUnseenFinishedSessions({
   busyIds,
   previousUnseenIds,
   focusedSessionId,
+  focusedSessionIds,
   untrackedIds,
 }: {
   previousBusyIds: ReadonlySet<string>;
   busyIds: ReadonlySet<string>;
   previousUnseenIds: ReadonlySet<string>;
   focusedSessionId?: string;
+  focusedSessionIds?: ReadonlySet<string>;
   /** Sessions the user cannot focus or see as done, such as orchestration
    * workers and inbox discussions. An unseen session stays loaded until it
    * is looked at, so marking one of these would keep it in memory for good. */
@@ -22,6 +24,7 @@ export function nextUnseenFinishedSessions({
   }
   for (const id of busyIds) next.delete(id);
   if (focusedSessionId) next.delete(focusedSessionId);
+  if (focusedSessionIds) for (const id of focusedSessionIds) next.delete(id);
   if (untrackedIds) for (const id of untrackedIds) next.delete(id);
   return next;
 }

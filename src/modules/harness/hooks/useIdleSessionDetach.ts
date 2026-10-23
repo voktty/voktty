@@ -30,6 +30,8 @@ export function useIdleSessionDetach({
   skipForgetSessionIds,
   persistSession,
   setSessions,
+  isRetained: retainExternally,
+  retentionRevision,
 }: {
   sessions: Session[];
   sessionsRef: RefObject<Session[]>;
@@ -43,7 +45,20 @@ export function useIdleSessionDetach({
   skipForgetSessionIds: RefObject<Set<string>>;
   persistSession: (session: Session | undefined) => void;
   setSessions: Dispatch<SetStateAction<Session[]>>;
+  isRetained?: (id: string) => boolean;
+  retentionRevision?: object;
 }) {
+  const externalRetention = useRef(retainExternally);
+  externalRetention.current = retainExternally;
+  const externallyRetained = useCallback(
+    (session: Session) =>
+      !!externalRetention.current?.(session.id) ||
+      !!(
+        session.orchestrationLeadId &&
+        externalRetention.current?.(session.orchestrationLeadId)
+      ),
+    [],
+  );
   // Dropping a session re-renders the whole app, so it waits until a switch
   // has painted, and a burst of switches pays for it once.
   const detachInputs = useRef({ orchestrationRuns, liveAgentsEnabled });
@@ -96,6 +111,9 @@ export function useIdleSessionDetach({
       );
       if (
         referenced ||
+        externallyRetained(session) ||
+        hasSessionDetachHold(session) ||
+        session.inboxAsk ||
         running ||
         openingSessionIds.current.has(session.id) ||
         skipForgetSessionIds.current.has(session.id) ||
@@ -133,6 +151,7 @@ export function useIdleSessionDetach({
     skipForgetSessionIds,
     loadedSessionCache,
     setSessions,
+    externallyRetained,
   ]);
   const detachIdleSessions = useCallback(() => {
     detachTimer.current = null;
@@ -170,6 +189,7 @@ export function useIdleSessionDetach({
     const keepUnseen = liveAgentsEnabled;
     const isRetained = (session: Session) =>
       visibleIds.has(session.id) ||
+      externallyRetained(session) ||
       hasSessionDetachHold(session) ||
       failedDetach.current.has(session) ||
       openingSessionIds.current.has(session.id) ||
@@ -212,6 +232,7 @@ export function useIdleSessionDetach({
     skipForgetSessionIds,
     persistSession,
     setSessions,
+    externallyRetained,
   ]);
 
   useEffect(() => {
@@ -227,5 +248,6 @@ export function useIdleSessionDetach({
     liveAgentsEnabled,
     orchestrationRuns,
     detachIdleSessions,
+    retentionRevision,
   ]);
 }
