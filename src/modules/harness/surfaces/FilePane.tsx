@@ -29,11 +29,13 @@ import { BinaryFileView } from "./BinaryFileView";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
 import { SessionChangesDiff } from "./SessionChangesDiff";
-import { TerminalView } from "./TerminalView";
+import { HarnessTerminalView } from "@/modules/harness/surfaces/HarnessTerminalView";
 
 type Props = {
   pane: EditorPane;
   focused: boolean;
+  visible?: boolean;
+  layoutKey?: string;
   dirtyFileIds: Set<string>;
   fileErrorCounts: Map<string, number>;
   sessions: Session[];
@@ -60,6 +62,8 @@ type Props = {
 function FilePaneComponent({
   pane,
   focused,
+  visible = true,
+  layoutKey,
   dirtyFileIds,
   fileErrorCounts,
   sessions,
@@ -129,10 +133,12 @@ function FilePaneComponent({
             ) : isReleaseNotesTab(file) ? (
               <ReleaseNotesSurface source={file.releaseNotes} />
             ) : isTerminalTab(file) ? (
-              <TerminalView
-                id={file.id}
-                cwd={file.cwd}
+              <HarnessTerminalView
+                file={file}
+                visible={visible && file.id === pane.activeFileId}
                 active={focused && file.id === pane.activeFileId}
+                layoutKey={layoutKey}
+                onFocus={() => onFocus(pane.id)}
                 onMetaChange={(patch) => onTerminalMetaChange?.(file.id, patch)}
               />
             ) : isSessionChangesTab(file) ? (
@@ -190,6 +196,8 @@ export const FilePane = memo(FilePaneComponent, (previous, next) => {
   if (
     previous.pane !== next.pane ||
     previous.focused !== next.focused ||
+    previous.visible !== next.visible ||
+    previous.layoutKey !== next.layoutKey ||
     previous.dirtyFileIds !== next.dirtyFileIds ||
     previous.fileErrorCounts !== next.fileErrorCounts ||
     previous.onFocus !== next.onFocus ||

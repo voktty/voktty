@@ -384,6 +384,12 @@ function PaneTreeComponent({
                 >
                   <LazyFilePane
                     pane={editorPane}
+                    visible={visible}
+                    layoutKey={
+                      editorPane.files.some((file) => file.canonicalTerminal)
+                        ? `${leaf.rect.x}:${leaf.rect.y}:${leaf.rect.w}:${leaf.rect.h}:${enteringPanes.current.has(leaf.id)}`
+                        : undefined
+                    }
                     focused={focusedId === editorPane.id}
                     dirtyFileIds={dirtyFileIds}
                     fileErrorCounts={fileErrorCounts}

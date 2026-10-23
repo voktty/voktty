@@ -28,7 +28,7 @@ import {
 } from "../lib/projectTerminal";
 import { MOD } from "../lib/platform";
 import type { TerminalMetaPatch } from "../lib/terminalTab";
-import { TerminalView } from "./TerminalView";
+import { HarnessTerminalView } from "@/modules/harness/surfaces/HarnessTerminalView";
 
 type Props = {
   dock: ProjectTerminalDockModel;
@@ -261,10 +261,12 @@ export function ProjectTerminalDock({
                 : "hidden"
             }
           >
-            <TerminalView
-              id={file.id}
-              cwd={file.cwd}
+            <HarnessTerminalView
+              file={file}
+              visible={dock.open && file.id === dock.pane.activeFileId}
               active={focused && file.id === dock.pane.activeFileId}
+              layoutKey={`${dock.side}:${dock.size}`}
+              onFocus={onFocus}
               onMetaChange={(patch) => onTerminalMetaChange?.(file.id, patch)}
             />
           </div>

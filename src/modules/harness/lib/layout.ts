@@ -1,4 +1,5 @@
 import type { ReleaseNotesTabSource } from "./releaseNotes";
+import type { TabKey } from "@/modules/tabs/lib/tabIdentity";
 import type { GitFileDiffKind } from "./workingTreeDiff";
 import {
   applyTerminalMeta,
@@ -56,6 +57,7 @@ export type FilePaneTab = {
   /** Read-only diff built from one session's captured before/after snapshots. */
   sessionChanges?: SessionChangesSource;
   terminal?: boolean;
+  canonicalTerminal?: { tabKey: TabKey; projectCwd: string };
   /** Foreground command when it isn't the shell. Live only — not persisted. */
   foreground?: string;
 };

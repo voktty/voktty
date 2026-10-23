@@ -1,4 +1,6 @@
 import { markTurnInterrupted, type ResumedWorkspace } from "./inFlight";
+import { isTabKey } from "@/modules/tabs/lib/tabIdentity";
+import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import {
   closeLeaf,
   isTerminalTab,
@@ -484,6 +486,18 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
   const releaseNotes = sanitizeReleaseNotes(value.releaseNotes);
   const hasSessionChanges = "sessionChanges" in value;
   const sessionChanges = sanitizeSessionChanges(value.sessionChanges);
+  const canonicalTerminal = sanitizeCanonicalTerminal(value.canonicalTerminal);
+  if (
+    "canonicalTerminal" in value &&
+    (!canonicalTerminal ||
+      value.terminal !== true ||
+      value.plan != null ||
+      hasReleaseNotes ||
+      hasSessionChanges ||
+      value.review === true ||
+      value.changes === true)
+  )
+    return null;
   if (hasReleaseNotes && !releaseNotes) return null;
   if (hasSessionChanges && !sessionChanges) return null;
   if (
@@ -507,7 +521,23 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
     ...(sessionChanges || value.review === true ? { review: true } : {}),
     ...(sessionChanges ? { sessionChanges } : {}),
     ...(value.terminal === true ? { terminal: true } : {}),
+    ...(canonicalTerminal ? { canonicalTerminal } : {}),
   };
+}
+
+function sanitizeCanonicalTerminal(
+  raw: unknown,
+): FilePaneTab["canonicalTerminal"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (
+    !isTabKey(value.tabKey) ||
+    value.tabKey.length > 256 ||
+    /[\x00-\x1f\x7f]/.test(value.tabKey)
+  )
+    return undefined;
+  const { projectCwd } = terminalProjectMetadata(value.projectCwd);
+  return projectCwd ? { tabKey: value.tabKey, projectCwd } : undefined;
 }
 
 function sanitizeSessionChanges(

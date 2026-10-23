@@ -8,6 +8,7 @@ import { removeHarnessSurface } from "@/modules/surfaces";
 import { useHarnessViewActivation } from "@/modules/harness/hooks/useHarnessViewActivation";
 import { useHarnessViewCreation } from "@/modules/harness/hooks/useHarnessViewCreation";
 import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
+import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
 
@@ -47,6 +48,7 @@ function HarnessWorkbench({
   projectRequest,
   onProjectRequestHandled,
   onRegistered,
+  layoutKey,
 }: {
   tab: HarnessTab;
   focused: boolean;
@@ -55,6 +57,7 @@ function HarnessWorkbench({
   projectRequest?: { path: string };
   onProjectRequestHandled: (request: { path: string }) => void;
   onRegistered: (view: HarnessNavigationView) => void;
+  layoutKey?: string;
 }) {
   const { t } = useTranslation();
   const [view, setView] = useState<"harness" | "native">("harness");
@@ -96,17 +99,29 @@ function HarnessWorkbench({
         ))}
       </div>
       <div className="min-h-0 flex-1" hidden={view !== "harness"}>
-        <LazyHarnessApp
-          initialCwd={tab.cwd}
-          initialSessionId={tab.sessionId}
-          surfaceOwnerId={tab.id}
-          visible={visible && view === "harness"}
-          focused={focused && view === "harness"}
-          onActivate={activate}
-          projectRequest={projectRequest}
-          onProjectRequestHandled={onProjectRequestHandled}
-          onRegistered={onRegistered}
-        />
+        <HarnessTerminalOwner
+          value={{
+            tabKey: tab.tabKey,
+            visible: visible && view === "harness",
+            layoutKey,
+            onFocus: () => {
+              setView("harness");
+              onActivate();
+            },
+          }}
+        >
+          <LazyHarnessApp
+            initialCwd={tab.cwd}
+            initialSessionId={tab.sessionId}
+            surfaceOwnerId={tab.id}
+            visible={visible && view === "harness"}
+            focused={focused && view === "harness"}
+            onActivate={activate}
+            projectRequest={projectRequest}
+            onProjectRequestHandled={onProjectRequestHandled}
+            onRegistered={onRegistered}
+          />
+        </HarnessTerminalOwner>
       </div>
       {view === "native" && (
         <div className="min-h-0 flex-1">
@@ -219,6 +234,11 @@ export function HarnessStack({
                     }
                   >
                     <HarnessWorkbench
+                      layoutKey={
+                        placement
+                          ? `${placement.rect.x}:${placement.rect.y}:${placement.rect.width}:${placement.rect.height}`
+                          : "standalone"
+                      }
                       onRegistered={creation.registered}
                       tab={tab}
                       focused={visible && tab.id === activeId}
