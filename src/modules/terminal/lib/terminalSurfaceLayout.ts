@@ -173,7 +173,7 @@ function intersect(
     : null;
 }
 
-export function terminalSurfaceCandidates(
+export function terminalSurfaceReferences(
   tabs: readonly Tab[],
   activeId: number,
   placements: ReadonlyMap<number, WorkspacePlacement> | undefined,
@@ -188,9 +188,7 @@ export function terminalSurfaceCandidates(
     const owner = byKey.get(entry.ownerTabKey);
     if (
       !entry.isCurrent() ||
-      !entry.rect ||
       terminal?.kind !== "terminal" ||
-      terminal.cold ||
       terminal.collaboration ||
       terminal.private ||
       visible(terminal) ||
@@ -203,6 +201,17 @@ export function terminalSurfaceCandidates(
     candidates.push({ entry, terminal, owner });
   }
   return candidates;
+}
+
+export function terminalSurfaceCandidates(
+  tabs: readonly Tab[],
+  activeId: number,
+  placements: ReadonlyMap<number, WorkspacePlacement> | undefined,
+  entries: readonly TerminalSurfaceEntry[],
+) {
+  return terminalSurfaceReferences(tabs, activeId, placements, entries).filter(
+    ({ entry, terminal }) => !terminal.cold && entry.rect !== null,
+  );
 }
 
 export function selectTerminalSurfacePlacements(

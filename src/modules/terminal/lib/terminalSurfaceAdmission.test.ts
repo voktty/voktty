@@ -233,3 +233,89 @@ it("keeps retired holds across a provider replay without reviving their authorit
   hold.release();
   expect(f.admission.reserve(f.intent)).toBeDefined();
 });
+
+it("counts every leaf of a cold dock reference before admitting another terminal", () => {
+  const f = fixture(5);
+  const cold = terminal(3, 3);
+  cold.cold = true;
+  f.register(cold);
+  expect(
+    f.admission.reserve({ ...f.intent, slotKey: "other" }),
+  ).toBeUndefined();
+  expect(f.admission.reserve(f.intent)).toBeDefined();
+});
+
+it("does not lend replacement credit for a cold reference shared by another slot", () => {
+  const f = fixture(5);
+  const cold = terminal(3, 3);
+  cold.cold = true;
+  f.register(cold);
+  f.surfaces.register({
+    ...f.intent,
+    slotKey: "other",
+    tabKey: cold.tabKey,
+    focused: false,
+    rect: null,
+  });
+  expect(f.admission.reserve(f.intent)).toBeUndefined();
+});
+
+it("counts logical dock references before geometry is available", () => {
+  const f = fixture(7);
+  const cold = terminal(3);
+  cold.cold = true;
+  f.tabs.push(cold);
+  f.surfaces.register({
+    ...f.intent,
+    tabKey: cold.tabKey,
+    focused: false,
+    rect: null,
+  });
+  expect(
+    f.admission.reserve({ ...f.intent, slotKey: "other" }),
+  ).toBeUndefined();
+});
+
+it("counts duplicate cold references once and ignores hidden or wrong-project owners", () => {
+  const f = fixture(4);
+  const cold = terminal(3, 3);
+  cold.cold = true;
+  f.register(cold);
+  const duplicate = f.surfaces.register({
+    ...f.intent,
+    slotKey: "duplicate",
+    tabKey: cold.tabKey,
+    focused: false,
+    rect: null,
+  });
+  const hold = f.admission.reserve({ ...f.intent, slotKey: "new" });
+  assert(hold);
+  hold.retire();
+  hold.release();
+  duplicate.release();
+  cold.projectCwd = "/srv/other";
+  expect(f.admission.reserve({ ...f.intent, slotKey: "new" })).toBeDefined();
+  const g = fixture(7);
+  const hidden = owner(9);
+  g.tabs.push(hidden);
+  const hiddenCold = terminal(10, 8);
+  hiddenCold.cold = true;
+  g.register(hiddenCold, "hidden", hidden);
+  expect(g.admission.reserve(g.intent)).toBeDefined();
+});
+
+it("retires an admitted creation when a restored cold reference consumes its capacity", () => {
+  const f = fixture(7);
+  const hold = f.admission.reserve({ ...f.intent, slotKey: "new" });
+  assert(hold);
+  const cold = terminal(3);
+  cold.cold = true;
+  const reference = f.register(cold);
+  expect(f.admission.revalidate()).toBe(true);
+  expect(hold.isCurrent()).toBe(false);
+  reference.release();
+  expect(hold.isCurrent()).toBe(false);
+  expect(f.admission.reserve(f.intent)).toBeUndefined();
+  hold.release();
+  expect(f.admission.reserve(f.intent)).toBeDefined();
+});

@@ -6,7 +6,7 @@ import {
   MAX_VISIBLE_TERMINAL_LEAVES,
 } from "@/modules/spaces/lib/spacePaneBudget";
 import {
-  terminalSurfaceCandidates,
+  terminalSurfaceReferences,
   type TerminalSurfaceEntry,
 } from "@/modules/terminal/lib/terminalSurfaceLayout";
 
@@ -37,7 +37,7 @@ function members(
         : tab.id === state.activeId)
     )
       keys.add(tab.tabKey);
-  for (const { entry, terminal } of terminalSurfaceCandidates(
+  for (const { entry, terminal } of terminalSurfaceReferences(
     state.tabs,
     state.activeId,
     state.placements,
