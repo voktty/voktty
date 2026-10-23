@@ -1,5 +1,12 @@
 // @vitest-environment happy-dom
-import { act, useEffect, useLayoutEffect } from "react";
+import {
+  act,
+  StrictMode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, assert, expect, it, vi } from "vitest";
 import { useProjectTerminalRequests } from "@/app/hooks/useProjectTerminalRequests";
@@ -27,6 +34,19 @@ import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTer
 import { CanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 import { labelFor } from "@/modules/tabs/lib/tabLabel";
 import { serializeTabs, hydrateTabs } from "@/modules/spaces/lib/serialize";
+import { useHarnessTerminalRecovery } from "@/modules/harness/hooks/useHarnessTerminalRecovery";
+import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
+import { createHarnessWindowViews } from "@/modules/harness/lib/harnessWindowViews";
+import { createLegacyTerminalMigrations } from "@/modules/harness/lib/legacyTerminalMigrations";
+import {
+  captureLegacyPtyMigration,
+  hasLegacyPty,
+} from "@/modules/harness/lib/pty";
+import {
+  newTerminalFile,
+  newTerminalWorkspaceTab,
+} from "@/modules/harness/lib/layout";
+import type { ProjectTerminalDock } from "@/modules/harness/lib/projectTerminal";
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -56,6 +76,84 @@ const leaves = new Set<number>();
 let dockOwner: PersistenceOwner;
 let dockOpen: ReturnType<typeof useHarnessTerminalCreation>["open"];
 let dockReferences: ProjectTerminalReference[];
+let migrationViews: ReturnType<typeof createHarnessWindowViews>;
+let migrationService: ReturnType<typeof createLegacyTerminalMigrations>;
+let migrationConfirm: ReturnType<
+  typeof vi.fn<(file: unknown) => Promise<boolean>>
+>;
+function ColdMigrationClient({ projectCwd }: { projectCwd: string }) {
+  const [modelTabs, setModelTabs] = useState(() => {
+    const one = newTerminalWorkspaceTab(
+      newTerminalFile(`${projectCwd}/src`, "Hidden build"),
+    );
+    one.terminalPanes[0].files.unshift({
+      id: "editor",
+      cwd: projectCwd,
+      path: `${projectCwd}/notes.txt`,
+    });
+    one.terminalPanes[0].activeFileId = "editor";
+    return [
+      one,
+      newTerminalWorkspaceTab(
+        newTerminalFile(`${projectCwd}/other`, "Inactive build"),
+      ),
+    ];
+  });
+  const [docks, setDocks] = useState<ProjectTerminalDock[]>(() => {
+    const file = newTerminalFile(`${projectCwd}/dock`, "Closed dock");
+    return [
+      {
+        projectPath: projectCwd,
+        side: "bottom",
+        size: 240,
+        open: false,
+        pane: { id: "cold-dock", files: [file], activeFileId: file.id },
+      },
+    ];
+  });
+  const creation = useHarnessTerminalCreation({
+    projectCwd,
+    focused: true,
+    capture: () => dockOwner.capture() ?? undefined,
+    projectAvailable: () => true,
+    onError: mocks.error,
+  });
+  useHarnessTerminalRecovery({
+    projectCwd,
+    activeTabId: modelTabs[0].id,
+    tabs: modelTabs,
+    docks,
+    enabled: true,
+    capture: () => dockOwner.capture() ?? undefined,
+    open: creation.open,
+    setTabs: setModelTabs,
+    setDocks,
+  });
+  const read = () => ({
+    tabs: modelTabs,
+    projectTerminals: docks,
+    activeTabId: modelTabs[0].id,
+    projectCwd,
+    projectReturnMemory: new Map<string, string>(),
+    report: {
+      referencedSessionIds: [],
+      foregroundSessionIds: [],
+      activeSessionId: null,
+    },
+  });
+  const initial = useRef(read());
+  const handle = useRef<ReturnType<typeof migrationViews.register> | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    handle.current = migrationViews.register(1, initial.current);
+    return () => handle.current?.release();
+  }, []);
+  useLayoutEffect(() => {
+    handle.current?.update(read());
+  });
+  return null;
+}
 function DockClient({
   projectCwd,
   focused,
@@ -94,12 +192,14 @@ function Desktop({
   budgetTabs = [],
   placements,
   renderNative = true,
+  migrate = false,
 }: {
   projectCwd?: string;
   withDock?: boolean;
   budgetTabs?: readonly Tab[];
   placements?: readonly WorkspacePlacement[];
   renderNative?: boolean;
+  migrate?: boolean;
 }) {
   const current = useTabs();
   tabs = current;
@@ -144,6 +244,18 @@ function Desktop({
             focused={current.activeId === source.id}
           />
         </HarnessTerminalOwner>
+      ) : null}
+      {migrate &&
+      current.tabs.some(
+        (tab) => tab.id === source.id && tab.kind === "harness",
+      ) ? (
+        <HarnessTerminalMigrationContext value={migrationService}>
+          <HarnessTerminalOwner
+            value={{ tabKey: source.tabKey, visible: true }}
+          >
+            <ColdMigrationClient projectCwd={projectCwd} />
+          </HarnessTerminalOwner>
+        </HarnessTerminalMigrationContext>
       ) : null}
     </CanonicalTerminalCatalog>
   );
@@ -190,6 +302,16 @@ beforeEach(() => {
   leaves.clear();
   dockOwner = createPersistenceAdmission().createOwner();
   dockReferences = [];
+  migrationViews = createHarnessWindowViews();
+  migrationConfirm = vi
+    .fn<(file: unknown) => Promise<boolean>>()
+    .mockResolvedValue(true);
+  migrationService = createLegacyTerminalMigrations(
+    migrationViews,
+    captureLegacyPtyMigration,
+    migrationConfirm,
+    hasLegacyPty,
+  );
   source = {
     id: 1,
     ...createTabIdentity("main", () => "owner"),
@@ -235,6 +357,7 @@ afterEach(async () => {
   expect(ownedPtyTargets.size()).toBe(0);
   node.remove();
   dockOwner.retire();
+  migrationService.dispose();
   vi.unstubAllGlobals();
 });
 
@@ -686,4 +809,237 @@ it("keeps retired client requests counted until claimed work actually settles", 
   });
   next.cancel();
   await expect(next.result).rejects.toMatchObject({ name: "AbortError" });
+});
+
+it.each(["C:/Work/App", "//files/share/app", project])(
+  "creates cold metadata for %s without selecting a tab, opening a PTY or resolving SSH",
+  async (projectCwd) => {
+    await act(async () => root.render(<Desktop projectCwd={projectCwd} />));
+    let reference!: ProjectTerminalReference;
+    await act(async () => {
+      reference = await requestProjectTerminal({
+        ownerTabKey: source.tabKey,
+        projectCwd,
+        cwd: `${projectCwd}/src`,
+        title: "Hidden build",
+        cold: true,
+      }).result;
+    });
+    const created = tabs
+      .getTabs()
+      .find((tab) => tab.tabKey === reference.tabKey);
+    assert(created?.kind === "terminal");
+    expect(created).toMatchObject({
+      cold: true,
+      cwd: `${projectCwd}/src`,
+      projectCwd,
+      title: "Hidden build",
+      customTitle: "Hidden build",
+    });
+    expect(tabs.activeId).toBe(source.id);
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(ownedPtyTargets.size()).toBe(0);
+    expect(node.querySelectorAll("[data-native-terminal]")).toHaveLength(0);
+    if (projectCwd === project) {
+      expect(created.workspaceEnv).toMatchObject({
+        kind: "ssh",
+        restoredProjectCwd: project,
+        root: "/srv/app",
+        connection: { id: "build", host: "" },
+      });
+      expect(created.workspaceEnv).not.toHaveProperty("sessionId");
+    }
+  },
+);
+
+it("restores a cold SSH terminal and acquires its independent helper only when warmed", async () => {
+  await act(async () => root.render(<Desktop />));
+  let reference!: ProjectTerminalReference;
+  await act(async () => {
+    reference = await requestProjectTerminal({
+      ownerTabKey: source.tabKey,
+      projectCwd: project,
+      cwd: `${project}/src`,
+      title: "Hidden build",
+      cold: true,
+    }).result;
+  });
+  const created = tabs.getTabs().find((tab) => tab.tabKey === reference.tabKey);
+  assert(created?.kind === "terminal");
+  const serialized = serializeTabs([created]);
+  let id = 700;
+  const restored = hydrateTabs(serialized, "main", () => id++);
+  expect(restored[0]).toMatchObject({
+    cold: true,
+    customTitle: "Hidden build",
+    projectCwd: project,
+  });
+  await act(async () => tabs.replaceTabs([source, ...restored], source.id));
+  expect(mocks.resolve).not.toHaveBeenCalled();
+  expect(mocks.invoke).not.toHaveBeenCalled();
+  await act(async () => tabs.warmTabs([restored[0].id]));
+  await vi.waitFor(() =>
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "remote_pty_open",
+      expect.objectContaining({ sessionId: 7, cwd: "/srv/app/src" }),
+    ),
+  );
+  expect(mocks.resolve).toHaveBeenCalledOnce();
+  assert(restored[0]?.kind === "terminal");
+  expect(ownedPtyTargets.get(restored[0].activeLeafId)?.isCurrent()).toBe(true);
+  expect(mocks.error).not.toHaveBeenCalled();
+});
+
+it.each(["yes", 1, null])(
+  "rejects invalid cold mode %# before dispatch or allocation",
+  async (cold) => {
+    await act(async () => root.render(<Desktop />));
+    const input = {
+      ownerTabKey: source.tabKey,
+      projectCwd: project,
+      cold: true,
+    };
+    Object.assign(input, { cold });
+    expect(() => requestProjectTerminal(input)).toThrow("Invalid");
+    expect(tabs.getTabs()).toHaveLength(1);
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  },
+);
+
+it("rolls back a cold descriptor when its original permission retires during confirmation", async () => {
+  await act(async () => root.render(<Desktop />));
+  let current = true;
+  await act(async () => {
+    const request = requestProjectTerminal({
+      ownerTabKey: source.tabKey,
+      projectCwd: project,
+      cold: true,
+      isCurrent: () => current,
+      onCreated: () => {
+        current = false;
+      },
+    });
+    await expect(request.result).rejects.toThrow("retired");
+  });
+  expect(tabs.getTabs()).toHaveLength(1);
+  expect(mocks.resolve).not.toHaveBeenCalled();
+  expect(mocks.invoke).not.toHaveBeenCalled();
+});
+
+it("does not spend visible renderer capacity for a cold hidden descriptor", async () => {
+  await act(async () =>
+    root.render(<Desktop withDock {...occupiedComposite(8)} />),
+  );
+  await act(async () => {
+    expect(
+      dockOpen({
+        slotKey: "hidden-migration",
+        cwd: `${project}/src`,
+        cold: true,
+        onCreated: (reference) => {
+          dockReferences.push(reference);
+        },
+      }),
+    ).toBe(true);
+  });
+  expect(dockReferences).toHaveLength(1);
+  const created = tabs
+    .getTabs()
+    .find((tab) => tab.tabKey === dockReferences[0].tabKey);
+  expect(created).toMatchObject({ cold: true, projectCwd: project });
+  expect(tabs.activeId).toBe(source.id);
+  expect(mocks.resolve).not.toHaveBeenCalled();
+  expect(mocks.error).not.toHaveBeenCalled();
+});
+
+it.each(["C:/Work/App", project])(
+  "migrates hidden panes, inactive tabs and closed docks for %s through the real desktop client without connecting",
+  async (projectCwd) => {
+    await act(async () =>
+      root.render(<Desktop projectCwd={projectCwd} migrate />),
+    );
+    const terminals = tabs.getTabs().filter((tab) => tab.kind === "terminal");
+    expect(terminals).toHaveLength(3);
+    expect(
+      terminals.every((tab) => tab.cold && tab.projectCwd === projectCwd),
+    ).toBe(true);
+    expect(terminals.map((tab) => tab.customTitle)).toEqual([
+      "Hidden build",
+      "Inactive build",
+      "Closed dock",
+    ]);
+    expect(tabs.activeId).toBe(source.id);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(migrationConfirm).not.toHaveBeenCalled();
+    const capture = migrationViews.capture([]);
+    const files = [
+      ...capture.tabs.flatMap((tab) =>
+        tab.terminalPanes.flatMap((pane) => pane.files),
+      ),
+      ...capture.projectTerminals.flatMap((dock) => dock.pane.files),
+    ].filter((file) => file.terminal);
+    expect(files).toHaveLength(3);
+    expect(
+      files.every((file) => file.canonicalTerminal?.projectCwd === projectCwd),
+    ).toBe(true);
+    expect(capture.projectTerminals[0]).toMatchObject({
+      open: false,
+      side: "bottom",
+      size: 240,
+    });
+    expect(mocks.error).not.toHaveBeenCalled();
+  },
+);
+
+it("does not duplicate hidden metadata during StrictMode replay", async () => {
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <Desktop migrate />
+      </StrictMode>,
+    ),
+  );
+  expect(tabs.getTabs().filter((tab) => tab.kind === "terminal")).toHaveLength(
+    3,
+  );
+  expect(
+    migrationViews.capture([]).projectTerminals[0].pane.files[0]
+      .canonicalTerminal,
+  ).toBeDefined();
+  expect(mocks.resolve).not.toHaveBeenCalled();
+  expect(mocks.invoke).not.toHaveBeenCalled();
+  expect(mocks.error).not.toHaveBeenCalled();
+});
+
+it("retires a claimed cold batch when its originating Harness view closes", async () => {
+  const claimed: Array<
+    NonNullable<ReturnType<typeof claimProjectTerminalRequest>>
+  > = [];
+  const listener = (event: Event) => {
+    const ticket = claimProjectTerminalRequest(event, source.tabKey, project);
+    if (ticket) claimed.push(ticket);
+  };
+  window.addEventListener(PROJECT_TERMINAL_REQUEST_EVENT, listener);
+  try {
+    await act(async () => root.render(<Desktop migrate />));
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0].cold).toBe(true);
+    await act(async () => tabs.closeTab(source.id));
+    expect(claimed[0].signal.aborted).toBe(true);
+    await act(async () => claimed[0].finish());
+    expect(tabs.getTabs()).toEqual([]);
+    expect(
+      migrationViews.capture([]).projectTerminals[0].pane.files[0]
+        .canonicalTerminal,
+    ).toBeUndefined();
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.error).not.toHaveBeenCalled();
+  } finally {
+    for (const ticket of claimed) ticket.finish();
+    window.removeEventListener(PROJECT_TERMINAL_REQUEST_EVENT, listener);
+  }
 });

@@ -18,6 +18,7 @@ type Props = {
     workspace?: WorkspaceEnv,
     projectCwd?: string,
     title?: string,
+    cold?: boolean,
   ) => number;
   getTab: (id: number) => Tab | undefined;
   closeTab: (id: number) => void;
@@ -60,20 +61,22 @@ export function useProjectTerminalRequests(props: Props) {
         const selected = origin.current;
         return {
           isCurrent: () => origin.current === selected,
-          create: (cwd, workspace, title) => {
+          create: (cwd, workspace, title, cold) => {
             captured.setActiveSpaceForNewTabs(captured.spaceId);
             const project = terminalProjectMetadata(
               captured.projectCwd,
               workspace,
             );
-            const tabId = captured.newTab(
-              cwd,
-              workspace,
-              project.projectCwd,
-              title,
-            );
+            const args = [cwd, workspace, project.projectCwd, title] as const;
+            const tabId = cold
+              ? captured.newTab(...args, true)
+              : captured.newTab(...args);
             const tab = captured.getTab(tabId);
-            if (tab?.kind !== "terminal" || tab.spaceId !== captured.spaceId) {
+            if (
+              tab?.kind !== "terminal" ||
+              tab.spaceId !== captured.spaceId ||
+              (cold && tab.cold !== true)
+            ) {
               captured.closeTab(tabId);
               throw new Error("Terminal creation did not return a terminal.");
             }
@@ -116,6 +119,7 @@ export function useProjectTerminalRequests(props: Props) {
         .open(ticket.cwd, {
           projectCwd: ticket.projectCwd,
           title: ticket.title,
+          cold: ticket.cold,
           isCurrent: ticket.isCurrent,
           signal: ticket.signal,
           onCreated: ({ tabId }) => {

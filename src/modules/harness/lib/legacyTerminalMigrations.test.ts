@@ -369,3 +369,100 @@ it("bounds unsettled and accepted mappings without creating a 257th terminal", a
     service.run(files[0], "/srv/app", () => true, create),
   ).rejects.toThrow("retired");
 });
+
+it("creates cold metadata only from an empty capture without querying foreground processes", async () => {
+  const views = createHarnessWindowViews();
+  const { file, input } = fixture();
+  views.register(1, input);
+  const capture = vi.fn(() => ({
+    close: vi.fn().mockResolvedValue(undefined),
+    release: vi.fn(),
+  }));
+  const confirm = vi.fn().mockResolvedValue(true);
+  let liveResource = false;
+  const service = createLegacyTerminalMigrations(
+    views,
+    capture,
+    confirm,
+    () => liveResource,
+  );
+  expect(
+    service.coldCandidates(input.projectCwd).map((file) => file.id),
+  ).toEqual([file.id]);
+  liveResource = true;
+  expect(service.coldCandidates(input.projectCwd)).toEqual([]);
+  expect(service.canMigrateCold(file, input.projectCwd)).toBe(false);
+  const create = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
+  await expect(
+    service.run(file, input.projectCwd, () => true, create, true),
+  ).rejects.toThrow("foreground");
+  expect(capture).not.toHaveBeenCalled();
+  liveResource = false;
+  await service.run(file, input.projectCwd, () => true, create, true);
+  expect(capture).toHaveBeenCalledExactlyOnceWith(file.id, true);
+  expect(create).toHaveBeenCalledOnce();
+  expect(confirm).not.toHaveBeenCalled();
+});
+
+it("lets a current caller replace a retired cold admission after its exact cleanup settles", async () => {
+  const views = createHarnessWindowViews();
+  const { file, input } = fixture();
+  views.register(1, input);
+  const pending = deferred<void>();
+  const close = vi
+    .fn()
+    .mockReturnValueOnce(pending.promise)
+    .mockResolvedValue(undefined);
+  const capture = vi.fn(() => ({ close, release: vi.fn() }));
+  const confirm = vi.fn().mockResolvedValue(true);
+  const service = createLegacyTerminalMigrations(
+    views,
+    capture,
+    confirm,
+    () => false,
+  );
+  let original = true;
+  const oldCreate = vi.fn();
+  const old = service.run(
+    file,
+    input.projectCwd,
+    () => original,
+    oldCreate,
+    true,
+  );
+  const rejected = expect(old).rejects.toThrow("retired");
+  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+  original = false;
+  const nextCreate = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
+  const next = service.run(file, input.projectCwd, () => true, nextCreate);
+  expect(nextCreate).not.toHaveBeenCalled();
+  pending.resolve();
+  await rejected;
+  await expect(next).resolves.toEqual({ tabKey: reference.tabKey });
+  expect(oldCreate).not.toHaveBeenCalled();
+  expect(nextCreate).toHaveBeenCalledOnce();
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(capture).toHaveBeenCalledTimes(2);
+});
+
+it("does not retry an actual cold cleanup failure through a joined caller", async () => {
+  const views = createHarnessWindowViews();
+  const { file, input } = fixture();
+  views.register(1, input);
+  const failure = new Error("native cleanup failed");
+  const close = vi.fn().mockRejectedValue(failure);
+  const capture = vi.fn(() => ({ close, release: vi.fn() }));
+  const service = createLegacyTerminalMigrations(
+    views,
+    capture,
+    async () => true,
+    () => false,
+  );
+  const create = vi.fn();
+  const old = service.run(file, input.projectCwd, () => true, create, true);
+  const joined = service.run(file, input.projectCwd, () => true, create);
+  await expect(old).rejects.toBe(failure);
+  await expect(joined).rejects.toBe(failure);
+  expect(capture).toHaveBeenCalledOnce();
+  expect(create).not.toHaveBeenCalled();
+});

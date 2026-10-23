@@ -948,6 +948,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE,
       projectCwd?: string,
       title?: string,
+      cold = false,
     ) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
@@ -957,6 +958,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         kind: "terminal",
         spaceId: activeSpaceIdRef.current,
         title: title ?? "shell",
+        ...(cold && { cold: true }),
         ...(title !== undefined && { customTitle: title }),
         cwd,
         ...terminalProjectMetadata(projectCwd, workspaceEnv),
@@ -966,7 +968,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       };
       tabsRef.current = [...tabsRef.current, nextTab];
       setTabs(tabsRef.current);
-      setActiveId(tabId);
+      if (!cold) setActiveId(tabId);
       return tabId;
     },
     [],

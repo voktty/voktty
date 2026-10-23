@@ -10,6 +10,7 @@ import {
   killAllPtys,
   spawnPty,
   startOwnedPty,
+  hasLegacyPty,
 } from "@/modules/harness/lib/pty";
 function session(id: number) {
   return {
@@ -96,4 +97,28 @@ it("retries only its captured failed resource after releasing the fence and crea
   } finally {
     replacement.release();
   }
+});
+
+it("refuses an empty-only fence atomically while a live or failed native receipt remains", async () => {
+  const pty = session(1);
+  mocks.open.mockResolvedValueOnce(pty);
+  const owner = startOwnedPty("cold-guard", "/srv/app", 80, 24);
+  await owner.ready;
+  expect(hasLegacyPty("cold-guard")).toBe(true);
+  expect(() => captureLegacyPtyMigration("cold-guard", true)).toThrow(
+    "foreground",
+  );
+  expect(owner.isCurrent()).toBe(true);
+  expect(pty.close).not.toHaveBeenCalled();
+  pty.close.mockRejectedValueOnce(new Error("native cleanup pending"));
+  await expect(owner.close()).rejects.toThrow("native cleanup pending");
+  expect(hasLegacyPty("cold-guard")).toBe(true);
+  expect(() => captureLegacyPtyMigration("cold-guard", true)).toThrow(
+    "foreground",
+  );
+  await owner.close();
+  expect(hasLegacyPty("cold-guard")).toBe(false);
+  const empty = captureLegacyPtyMigration("cold-guard", true);
+  await empty.close();
+  empty.release();
 });

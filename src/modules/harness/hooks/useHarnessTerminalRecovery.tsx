@@ -15,6 +15,7 @@ import { terminalTabLabel } from "@/modules/harness/lib/terminalTab";
 import type { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
 import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
+import { useHarnessColdTerminalMigration } from "@/modules/harness/hooks/useHarnessColdTerminalMigration";
 import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTerminalRequest";
 import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
 import {
@@ -43,6 +44,7 @@ export function useHarnessTerminalRecovery(
     setDocks: Dispatch<SetStateAction<ProjectTerminalDock[]>>;
   },
 ) {
+  useHarnessColdTerminalMigration(props);
   const migrations = useContext(HarnessTerminalMigrationContext);
   const owner = useContext(HarnessTerminalOwner);
   const revision = useSyncExternalStore(

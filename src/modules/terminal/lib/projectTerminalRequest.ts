@@ -8,6 +8,7 @@ type RequestOptions = {
   projectCwd: string;
   cwd?: string;
   title?: string;
+  cold?: boolean;
   isCurrent?: () => boolean;
   onCreated?: (terminal: ProjectTerminalReference) => void;
 };
@@ -16,6 +17,7 @@ type Ticket = {
   readonly projectCwd: string;
   readonly cwd: string | undefined;
   readonly title: string | undefined;
+  readonly cold: boolean | undefined;
   readonly signal: AbortSignal;
   claimed: boolean;
   isCurrent: () => boolean;
@@ -47,7 +49,8 @@ export function requestProjectTerminal(input: RequestOptions) {
       (typeof options.cwd !== "string" ||
         options.cwd.length > 32768 ||
         /[\x00-\x1f\x7f]/.test(options.cwd))) ||
-    (options.title !== undefined && !isTerminalTitle(options.title))
+    (options.title !== undefined && !isTerminalTitle(options.title)) ||
+    (options.cold !== undefined && typeof options.cold !== "boolean")
   )
     throw new Error("Invalid project terminal request.");
   const key = {};
@@ -69,6 +72,7 @@ export function requestProjectTerminal(input: RequestOptions) {
     projectCwd: options.projectCwd,
     cwd: options.cwd,
     title: options.title,
+    cold: options.cold,
     signal: controller.signal,
     claimed: false,
     isCurrent,

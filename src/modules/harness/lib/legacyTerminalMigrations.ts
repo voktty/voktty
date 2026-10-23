@@ -3,11 +3,19 @@ import { sameLegacyTerminal } from "@/modules/harness/lib/legacyTerminalMapping"
 import type { createHarnessWindowViews } from "@/modules/harness/lib/harnessWindowViews";
 import type { captureLegacyPtyMigration } from "@/modules/harness/lib/pty";
 import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTerminalRequest";
+import { hiddenLegacyTerminals } from "@/modules/harness/lib/legacyTerminalCandidates";
+
+class RetiredTerminalMigration extends Error {
+  constructor() {
+    super("Terminal migration was retired.");
+  }
+}
 
 export function createLegacyTerminalMigrations(
   views: ReturnType<typeof createHarnessWindowViews>,
   capture: typeof captureLegacyPtyMigration,
   confirm: (file: FilePaneTab) => Promise<boolean>,
+  hasResource: (id: string) => boolean = () => true,
 ) {
   let live = true;
   const entries = new Map<
@@ -15,17 +23,38 @@ export function createLegacyTerminalMigrations(
     {
       source: FilePaneTab;
       projectCwd: string;
+      cold: boolean;
       result: Promise<ProjectTerminalReference>;
     }
   >();
   return {
     views,
-    run(
+    coldCandidates(projectCwd: string) {
+      if (!live) return [];
+      return hiddenLegacyTerminals(
+        views.getSnapshot(),
+        projectCwd,
+        true,
+      ).filter((file) => !hasResource(file.id));
+    },
+    canMigrateCold(file: FilePaneTab, projectCwd: string) {
+      if (!live || hasResource(file.id)) return false;
+      try {
+        views.validateTerminalMigration(file, projectCwd);
+      } catch {
+        return false;
+      }
+      return hiddenLegacyTerminals(views.getSnapshot(), projectCwd, true).some(
+        (candidate) => sameLegacyTerminal(candidate, file),
+      );
+    },
+    run: function run(
       file: FilePaneTab,
       projectCwd: string,
       isCurrent: () => boolean,
       create: () => Promise<ProjectTerminalReference>,
-    ) {
+      cold = false,
+    ): Promise<ProjectTerminalReference> {
       if (!live)
         return Promise.reject(new Error("Terminal migration was retired."));
       views.validateTerminalMigration(file, projectCwd);
@@ -38,7 +67,17 @@ export function createLegacyTerminalMigrations(
           return Promise.reject(
             new Error("Conflicting legacy terminal migration."),
           );
-        return previous.result;
+        return previous.cold
+          ? previous.result.catch((error: unknown) => {
+              if (
+                !(error instanceof RetiredTerminalMigration) ||
+                !live ||
+                !isCurrent()
+              )
+                throw error;
+              return run(file, projectCwd, isCurrent, create, cold);
+            })
+          : previous.result;
       }
       if (!live || entries.size >= 256)
         return Promise.reject(
@@ -46,23 +85,32 @@ export function createLegacyTerminalMigrations(
         );
       const source = Object.freeze({ ...file });
       const result = Promise.resolve().then(async () => {
-        if (!live || !isCurrent())
-          throw new Error("Terminal migration was retired.");
+        if (!live || !isCurrent()) throw new RetiredTerminalMigration();
         views.validateTerminalMigration(source, projectCwd);
-        const captured = capture(source.id);
+        if (cold && hasResource(source.id))
+          throw new Error(
+            "A live legacy terminal requires foreground migration.",
+          );
+        const captured = cold ? capture(source.id, true) : capture(source.id);
         try {
-          if (!(await confirm(source)) || !live || !isCurrent())
-            throw new Error("Terminal migration was declined or retired.");
+          if (!cold && !(await confirm(source)))
+            throw new Error("Terminal migration was declined.");
+          if (!live || !isCurrent()) throw new RetiredTerminalMigration();
           views.validateTerminalMigration(source, projectCwd);
           await captured.close();
-          if (!live || !isCurrent())
-            throw new Error("Terminal migration was retired.");
-          return await create();
+          if (!live || !isCurrent()) throw new RetiredTerminalMigration();
+          views.validateTerminalMigration(source, projectCwd);
+          try {
+            return await create();
+          } catch (error) {
+            if (!live || !isCurrent()) throw new RetiredTerminalMigration();
+            throw error;
+          }
         } finally {
           captured.release();
         }
       });
-      const entry = { source, projectCwd, result };
+      const entry = { source, projectCwd, result, cold };
       entries.set(file.id, entry);
       void result.catch(() => {
         if (entries.get(file.id) === entry) entries.delete(file.id);

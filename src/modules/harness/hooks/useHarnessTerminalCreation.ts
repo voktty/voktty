@@ -56,6 +56,7 @@ export function useHarnessTerminalCreation(props: {
     (options: {
       cwd: string;
       title?: string;
+      cold?: boolean;
       slotKey: string;
       isCurrent?: () => boolean;
       onCreated: (terminal: ProjectTerminalReference) => void;
@@ -81,16 +82,20 @@ export function useHarnessTerminalCreation(props: {
             (options.isCurrent?.() ?? true),
         );
       if (!source || !isCurrent()) return false;
-      const reservation = captured.catalog?.reserve({
-        ownerTabKey: source.tabKey,
-        projectCwd: captured.projectCwd,
-        slotKey: options.slotKey,
-      });
-      if (!reservation) {
+      const reservation = options.cold
+        ? undefined
+        : captured.catalog?.reserve({
+            ownerTabKey: source.tabKey,
+            projectCwd: captured.projectCwd,
+            slotKey: options.slotKey,
+          });
+      if (!options.cold && !reservation) {
         captured.onError(new Error(t("spaces.rendererCapacity")));
         return false;
       }
-      const admitted = () => isCurrent() && reservation?.isCurrent() === true;
+      const admitted = () =>
+        isCurrent() &&
+        (options.cold === true || reservation?.isCurrent() === true);
       const operation: {
         cancel?: () => void;
         isCurrent: () => boolean;
@@ -106,11 +111,12 @@ export function useHarnessTerminalCreation(props: {
           projectCwd: captured.projectCwd,
           cwd: options.cwd,
           title: options.title,
+          cold: options.cold,
           isCurrent: admitted,
           onCreated: (terminal) => {
-            if (!reservation.bind(terminal.tabKey))
+            if (!options.cold && !reservation?.bind(terminal.tabKey))
               throw new Error(t("spaces.rendererCapacity"));
-            source.onFocus?.();
+            if (!options.cold) source.onFocus?.();
             flushSync(() => {
               if (!admitted()) throw new Error("Terminal view was retired.");
               options.onCreated(terminal);
@@ -127,7 +133,8 @@ export function useHarnessTerminalCreation(props: {
         if (!admitted()) operation.cancel();
         void request.result
           .then((terminal) => {
-            if (options.onConfirmed?.(terminal) === false) reservation.retire();
+            if (options.onConfirmed?.(terminal) === false)
+              reservation?.retire();
           })
           .catch((error: unknown) => {
             options.onFailed?.(error);
@@ -138,15 +145,15 @@ export function useHarnessTerminalCreation(props: {
               captured.onError(error);
           })
           .finally(async () => {
-            reservation.release();
-            await reservation.done;
+            reservation?.release();
+            await reservation?.done;
             pending.current.delete(operation);
             options.onSettled?.();
           });
         return true;
       } catch (error) {
         pending.current.delete(operation);
-        reservation.release();
+        reservation?.release();
         options.onSettled?.();
         if (isCurrent()) captured.onError(error);
         return false;

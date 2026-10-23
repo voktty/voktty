@@ -223,13 +223,19 @@ export function startOwnedPty(
   });
 }
 
-export function captureLegacyPtyMigration(id: string) {
+export function hasLegacyPty(id: string): boolean {
+  return [...resources].some((resource) => resource.id === id);
+}
+
+export function captureLegacyPtyMigration(id: string, requireEmpty = false) {
   if (migrations.has(id) || migrations.size >= MAX_RESOURCES)
     throw new Error(
       "Legacy terminal migration is already reserved or at capacity.",
     );
   const token = {};
   const captured = [...resources].filter((resource) => resource.id === id);
+  if (requireEmpty && captured.length > 0)
+    throw new Error("A live legacy terminal requires foreground migration.");
   migrations.set(id, token);
   return Object.freeze({
     close: (): Promise<void> => {

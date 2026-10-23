@@ -60,7 +60,10 @@ import { createInboxSessionOperations } from "@/modules/harness/lib/inboxSession
 import { createHarnessProjectReservations } from "@/modules/harness/lib/harnessProjectReservations";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 import { createLegacyTerminalMigrations } from "@/modules/harness/lib/legacyTerminalMigrations";
-import { captureLegacyPtyMigration } from "@/modules/harness/lib/pty";
+import {
+  captureLegacyPtyMigration,
+  hasLegacyPty,
+} from "@/modules/harness/lib/pty";
 import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
 import { confirmCloseTerminal } from "@/modules/harness/lib/terminalClose";
 
@@ -114,6 +117,7 @@ export function HarnessWindowHost({
       views,
       captureLegacyPtyMigration,
       confirmCloseTerminal,
+      hasLegacyPty,
     ),
   );
   const [removals] = useState(() =>

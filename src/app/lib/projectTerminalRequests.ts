@@ -8,7 +8,11 @@ import {
   type OwnedPtyTarget,
   type OwnedPtyTargetReceipt,
 } from "@/modules/terminal/lib/ownedPtyTargets";
-import { terminalRestoreCwd } from "@/modules/tabs/lib/terminalProjectRestore";
+import {
+  terminalRestoreCwd,
+  terminalRestorePath,
+  terminalRestoreWorkspace,
+} from "@/modules/tabs/lib/terminalProjectRestore";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import { isTerminalTitle } from "@/modules/tabs/lib/terminalTitle";
 
@@ -19,6 +23,7 @@ export type CreatedProjectTerminal = Readonly<{
 export type ProjectTerminalOpenOptions = {
   projectCwd?: string;
   title?: string;
+  cold?: boolean;
   isCurrent?: () => boolean;
   onCreated?: (created: CreatedProjectTerminal) => void;
   onError?: (error: unknown) => void;
@@ -40,6 +45,7 @@ export type ProjectTerminalRequestContext = {
     cwd: string | undefined,
     workspace: WorkspaceEnv,
     title?: string,
+    cold?: boolean,
   ) => { tabId: number; leafId: number };
   rollback: (tabId: number) => void;
   pick: (
@@ -112,6 +118,10 @@ export function createProjectTerminalRequests(deps: {
         !options.signal?.aborted;
       const onError = options.onError ?? context.onError;
       if (!isCurrent()) return;
+      if (options.cold !== undefined && typeof options.cold !== "boolean") {
+        onError(new Error("Invalid cold terminal request."));
+        return;
+      }
       if (options.title !== undefined && !isTerminalTitle(options.title)) {
         onError(new Error("Invalid terminal title."));
         return;
@@ -124,6 +134,10 @@ export function createProjectTerminalRequests(deps: {
         return;
       }
       const project = options.projectCwd;
+      if (options.cold && project === undefined) {
+        onError(new Error("A cold project terminal requires its project."));
+        return;
+      }
       if (
         project !== undefined &&
         !terminalProjectMetadata(project).projectCwd
@@ -162,11 +176,22 @@ export function createProjectTerminalRequests(deps: {
         return;
       }
       if (
-        !remoteProject &&
-        (typeof cwd !== "string" || !cwd.startsWith("remote://"))
+        options.cold ||
+        (!remoteProject &&
+          (typeof cwd !== "string" || !cwd.startsWith("remote://")))
       ) {
+        const workspace: WorkspaceEnv =
+          options.cold && remoteProject
+            ? terminalRestoreWorkspace(remoteProject)
+            : { kind: "local" };
+        const launchFolder =
+          options.cold && remoteProject
+            ? terminalRestorePath(remoteProject, cwd)
+            : folder;
         const created = Object.freeze({
-          ...context.create(folder, { kind: "local" }, options.title),
+          ...(options.cold
+            ? context.create(launchFolder, workspace, options.title, true)
+            : context.create(folder, workspace, options.title)),
         });
         try {
           if (!isCurrent()) {
@@ -174,6 +199,8 @@ export function createProjectTerminalRequests(deps: {
             return;
           }
           options.onCreated?.(created);
+          if (options.cold && !isCurrent())
+            throw new Error("Cold terminal request was retired.");
           return created;
         } catch (error) {
           context.rollback(created.tabId);
