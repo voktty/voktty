@@ -8,6 +8,7 @@ import { mergeHarnessWindowWorkspaces } from "@/modules/harness/lib/harnessWindo
 import type { Session } from "@/modules/harness/lib/session";
 import { leafIds } from "@/modules/harness/lib/layout";
 import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
+import { removeRetainedSessionReferences } from "@/modules/harness/lib/retainedSessionReferences";
 import {
   collectWorkspaceSnapshot,
   type WorkspaceSnapshot,
@@ -374,6 +375,41 @@ export function createHarnessWindowViews(
       entries.delete(cohort.ownerId);
       publish();
       return true;
+    },
+    pruneRetained(
+      cohort: HarnessWindowViewCohort,
+      sessionIds: readonly string[],
+      isCurrent: () => boolean,
+    ): HarnessWindowViewCohort | null {
+      const ids = normalizeHarnessSessionViewReport({
+        referencedSessionIds: sessionIds,
+      }).referencedSessionIds;
+      const current = () =>
+        isCurrent() &&
+        !cohort.active &&
+        entries.get(cohort.ownerId)?.cohort === cohort &&
+        ids.length > 0 &&
+        ids.every(
+          (id) => holds?.has("removing", id) || holds?.has("transfer", id),
+        );
+      if (!current()) return null;
+      const state = removeRetainedSessionReferences(cohort.state, ids);
+      if (!state || !current()) return null;
+      const key = JSON.stringify(state);
+      if (key === entries.get(cohort.ownerId)?.key) return cohort;
+      freezeOwned(state);
+      const next = Object.freeze({
+        ...cohort,
+        state,
+        sequence: nextSequence(),
+      });
+      validate(cohort.ownerId, next);
+      if (!current()) return null;
+      const entry = entries.get(cohort.ownerId);
+      if (!entry || entry.cohort !== cohort) return null;
+      entries.set(cohort.ownerId, { ...entry, cohort: next, key });
+      publish();
+      return next;
     },
     capture: (sessions: Session[]) =>
       captureHarnessWindowSnapshot(snapshot, sessions),

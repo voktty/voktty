@@ -105,7 +105,7 @@ export function removeSessionFromWorkspace({
   };
 }
 
-function removeSessionDocuments(
+export function removeSessionDocuments(
   tab: WorkspaceTab,
   sessionId: string,
 ): WorkspaceTab | null {
