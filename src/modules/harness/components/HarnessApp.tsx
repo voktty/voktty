@@ -8,6 +8,7 @@ import { isForegroundHarnessSession } from "@/modules/harness/lib/harnessFlush";
 import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
 import { useInitialHarnessSession } from "@/modules/harness/hooks/useInitialHarnessSession";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
+import { openSessionNavigation } from "@/modules/harness/lib/sessionNavigation";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -958,9 +959,10 @@ const sessionEngine = useHarnessSessionEngine({
   // Every ordinary tab activation supersedes an unfinished workspace request,
   // including opening a session in the same tab or selecting a project.
   const setActiveTabId = useCallback(
-    (id: string) => {
+    (id: string, isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return;
       workspaceNavigation.cancel();
-      setActiveTabIdState(id);
+      setActiveTabIdState((previous) => (isCurrent() ? id : previous));
     },
     [workspaceNavigation.cancel],
   );
@@ -1304,15 +1306,17 @@ const sessionEngine = useHarnessSessionEngine({
 
   /** `cwd` scopes group inheritance: a tab from another project starts alone. */
   const appendTab = useCallback(
-    (tab: WorkspaceTab, cwd?: string) => {
+    (tab: WorkspaceTab, cwd?: string, isCurrent: () => boolean = () => true) => {
       setTabs((prev: any) =>
-        insertTabBesideActive(prev, tab, activeTabIdRef.current, (id) =>
-          id === tab.id
-            ? cwd
-              ? projectName(cwd)
-              : undefined
-            : projectOfTab(id),
-        ),
+        !isCurrent()
+          ? prev
+          : insertTabBesideActive(prev, tab, activeTabIdRef.current, (id) =>
+              id === tab.id
+                ? cwd
+                  ? projectName(cwd)
+                  : undefined
+                : projectOfTab(id),
+            ),
       );
     },
     [projectOfTab],
@@ -2950,69 +2954,88 @@ const sessionEngine = useHarnessSessionEngine({
     [],
   );
 
-  const focusOpenSession = useCallback((sessionId: string) => {
-    const tab = tabsRef.current.find((entry: any) =>
-      leafIds(entry.layout).includes(sessionId),
-    );
-    if (!tab) return false;
-    setActiveTabId(tab.id);
-    activeTabIdRef.current = tab.id;
-    setTabs((prev: any) =>
-      prev.map((entry: any) =>
-        entry.id === tab.id
-          ? { ...entry, focusedId: sessionId, diffFocused: false }
-          : entry,
-      ),
-    );
-    setProjectTerminalFocused(false);
-    setComposerFocused(true);
-    return true;
-  }, []);
-
-  const replaceBlankPaneWithSession = useCallback((session: Session) => {
-    const tab =
-      tabsRef.current.find(
-        (entry: any) => entry.id === activeTabIdRef.current,
-      ) ?? tabsRef.current[0];
-    if (!tab) return false;
-
-    const paneId = isBlankSession(
-      sessionsRef.current.find((entry: any) => entry.id === tab.focusedId),
-    )
-      ? tab.focusedId
-      : leafIds(tab.layout).find((id) =>
-          isBlankSession(
-            sessionsRef.current.find((entry: any) => entry.id === id),
-          ),
-        );
-    if (!paneId || paneId === session.id) return false;
-
-    transcripts.forgetFingerprint(paneId);
-    {
-      const blank = sessionsRef.current.find(
-        (entry: any) => entry.id === paneId,
+  const focusOpenSession = useCallback(
+    (sessionId: string, isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return false;
+      const tab = tabsRef.current.find((entry: any) =>
+        leafIds(entry.layout).includes(sessionId),
       );
-      if (blank) void forgetHarnessSession(blank.harness, paneId);
-    }
-    applySessionDeltas([{ kind: "remove", id: paneId }, { kind: "admit", session }]);
-    setTabs((prev: any) =>
-      prev.map((entry: any) =>
-        entry.id === tab.id
-          ? {
-              ...entry,
-              layout: replaceLeafId(entry.layout, paneId, session.id),
-              focusedId: session.id,
-              diffFocused: false,
-            }
-          : entry,
-      ),
-    );
-    setActiveTabId(tab.id);
-    activeTabIdRef.current = tab.id;
-    setProjectTerminalFocused(false);
-    setComposerFocused(true);
-    return true;
-  }, [applySessionDeltas, transcripts]);
+      if (!tab) return false;
+      setActiveTabId(tab.id, isCurrent);
+      if (!isCurrent()) return false;
+      activeTabIdRef.current = tab.id;
+      setTabs((prev: any) =>
+        !isCurrent()
+          ? prev
+          : prev.map((entry: any) =>
+              entry.id === tab.id
+                ? { ...entry, focusedId: sessionId, diffFocused: false }
+                : entry,
+            ),
+      );
+      setProjectTerminalFocused((previous) => (isCurrent() ? false : previous));
+      setComposerFocused((previous) => (isCurrent() ? true : previous));
+      return isCurrent();
+    },
+    [],
+  );
+
+  const replaceBlankPaneWithSession = useCallback(
+    (session: Session, isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return false;
+      const tab =
+        tabsRef.current.find(
+          (entry: any) => entry.id === activeTabIdRef.current,
+        ) ?? tabsRef.current[0];
+      if (!tab) return false;
+
+      const paneId = isBlankSession(
+        sessionsRef.current.find((entry: any) => entry.id === tab.focusedId),
+      )
+        ? tab.focusedId
+        : leafIds(tab.layout).find((id) =>
+            isBlankSession(
+              sessionsRef.current.find((entry: any) => entry.id === id),
+            ),
+          );
+      if (!paneId || paneId === session.id) return false;
+
+      transcripts.forgetFingerprint(paneId);
+      {
+        const blank = sessionsRef.current.find(
+          (entry: any) => entry.id === paneId,
+        );
+        if (blank) void forgetHarnessSession(blank.harness, paneId);
+      }
+      if (!isCurrent()) return false;
+      applySessionDeltas([
+        { kind: "remove", id: paneId },
+        { kind: "admit", session },
+      ]);
+      if (!isCurrent()) return false;
+      setTabs((prev: any) =>
+        !isCurrent()
+          ? prev
+          : prev.map((entry: any) =>
+              entry.id === tab.id
+                ? {
+                    ...entry,
+                    layout: replaceLeafId(entry.layout, paneId, session.id),
+                    focusedId: session.id,
+                    diffFocused: false,
+                  }
+                : entry,
+            ),
+      );
+      setActiveTabId(tab.id, isCurrent);
+      if (!isCurrent()) return false;
+      activeTabIdRef.current = tab.id;
+      setProjectTerminalFocused((previous) => (isCurrent() ? false : previous));
+      setComposerFocused((previous) => (isCurrent() ? true : previous));
+      return isCurrent();
+    },
+    [applySessionDeltas, transcripts],
+  );
 
   const ensureOpenSession = useCallback(
     async (
@@ -3028,13 +3051,14 @@ const sessionEngine = useHarnessSessionEngine({
 
       const loaded = await getSession(sessionId, permit).catch(() => null);
       if (!permit.isCurrent()) return null;
+      if (loaded && loaded.id !== sessionId) return null;
       if (!loaded) {
         if (open) return open;
         void refreshHistory(sidebarCwd, permit.isCurrent);
         return null;
       }
       const restored = await restoreSessionCheckout(loaded);
-      if (!permit.isCurrent()) return null;
+      if (!permit.isCurrent() || restored.id !== sessionId) return null;
       if (restored.providerSessionId && isLiveHarness(restored.harness)) {
         bindHarnessSession(
           restored.harness,
@@ -3067,23 +3091,35 @@ const sessionEngine = useHarnessSessionEngine({
   );
 
   const onSelectHistorySession = useCallback(
-    async (sessionId: string, capturedPermit?: PersistencePermit) => {
-      const permit = capturedPermit ?? getPersistenceOwner()?.capture();
-      if (!permit?.isCurrent()) return;
-      workspaceNavigation.cancel();
-      const session = await ensureOpenSession(sessionId, permit);
-      if (!session || !permit.isCurrent()) return;
-      if (looksLikeProject(session.cwd))
-        setProjectCwd(normalizeProjectPath(session.cwd));
-      if (focusOpenSession(sessionId)) return;
-      if (replaceBlankPaneWithSession(session)) return;
-      const tab = newTab(session.id);
-      appendTab(tab, session.cwd);
-      setActiveTabId(tab.id);
-      activeTabIdRef.current = tab.id;
-      setProjectTerminalFocused(false);
-      setComposerFocused(true);
-    },
+    (sessionId: string, capturedPermit?: PersistencePermit) =>
+      openSessionNavigation({
+        sessionId,
+        owner: getPersistenceOwner(),
+        request: capturedPermit,
+        begin: workspaceNavigation.cancel,
+        load: ensureOpenSession,
+        commit: (session, permit) => {
+          const isCurrent = permit.isCurrent;
+          if (looksLikeProject(session.cwd))
+            setProjectCwd((previous) =>
+              isCurrent() ? normalizeProjectPath(session.cwd) : previous,
+            );
+          if (focusOpenSession(sessionId, isCurrent)) return isCurrent();
+          if (!isCurrent()) return false;
+          if (replaceBlankPaneWithSession(session, isCurrent)) return isCurrent();
+          if (!isCurrent()) return false;
+          const tab = newTab(session.id);
+          appendTab(tab, session.cwd, isCurrent);
+          setActiveTabId(tab.id, isCurrent);
+          if (!isCurrent()) return false;
+          activeTabIdRef.current = tab.id;
+          setProjectTerminalFocused((previous) =>
+            isCurrent() ? false : previous,
+          );
+          setComposerFocused((previous) => (isCurrent() ? true : previous));
+          return isCurrent();
+        },
+      }),
     [
       appendTab,
       ensureOpenSession,

@@ -3,10 +3,11 @@ import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSessionReminders } from "@/modules/harness/hooks/useSessionReminders";
+import type { ReminderSessionOpener } from "@/modules/harness/hooks/harnessReminderServiceContext";
+import { openSessionNavigation } from "@/modules/harness/lib/sessionNavigation";
 import {
   createPersistenceAdmission,
   type PersistenceOwner,
-  type PersistencePermit,
 } from "@/modules/harness/lib/persistenceAdmission";
 
 const native = vi.hoisted(() => ({
@@ -53,9 +54,7 @@ function deferred() {
 let root: Root;
 let host: HTMLDivElement;
 let current: ReturnType<typeof useSessionReminders>;
-const open = vi.fn<(id: string, permit?: PersistencePermit) => Promise<void>>(
-  async () => {},
-);
+const open = vi.fn<ReminderSessionOpener>(async () => {});
 
 async function mount(
   owner: PersistenceOwner | undefined,
@@ -111,6 +110,37 @@ afterEach(async () => {
 });
 
 describe("reminder action admission", () => {
+  it("does not clear a reminder when production navigation cannot load its session", async () => {
+    const f = authority();
+    await mount(f.owner, async () => {});
+    const commit = vi.fn(() => true);
+    open.mockImplementationOnce((sessionId, request) =>
+      openSessionNavigation({
+        sessionId,
+        owner: f.owner,
+        request,
+        begin: () => {},
+        load: async () => null,
+        commit,
+      }),
+    );
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "reminder_take_pending_open")
+        return { sessionId: "missing", dueAt: 100 };
+      if (command === "reminder_list") return [];
+    });
+    await act(async () =>
+      required(native.listeners.get("voktty:reminder-open"))(),
+    );
+    expect(open).toHaveBeenCalledOnce();
+    expect(commit).not.toHaveBeenCalled();
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "reminder_clear",
+      ),
+    ).toEqual([]);
+  });
+
   it("coalesces notification consumption until session opening settles", async () => {
     const f = authority();
     await mount(f.owner, async () => {});

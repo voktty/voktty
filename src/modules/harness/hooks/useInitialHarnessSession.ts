@@ -7,7 +7,10 @@ import type {
 export function useInitialHarnessSession(
   sessionId: string | undefined,
   getOwner: () => PersistenceOwner | null,
-  open: (sessionId: string, permit: PersistencePermit) => Promise<void>,
+  open: (
+    sessionId: string,
+    permit: PersistencePermit,
+  ) => Promise<void> | Promise<boolean>,
   admissionRevision = 0,
 ) {
   const initializedOwner = useRef<PersistenceOwner | null>(null);
