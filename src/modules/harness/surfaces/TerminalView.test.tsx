@@ -146,6 +146,23 @@ it("retires its captured owner on unmount rather than issuing a logical-id close
   expect(pty.killPty).toHaveBeenCalledOnce();
 });
 
+it("observes a rejected teardown without leaking an unhandled rejection", async () => {
+  const { host, root } = setup();
+  await act(async () => {
+    root.render(
+      createElement(TerminalView, {
+        id: "failed-helper-cleanup",
+        cwd: "/srv/app",
+        active: true,
+      }),
+    );
+  });
+  pty.killPty.mockRejectedValueOnce(new Error("helper cleanup pending"));
+  await act(async () => root.unmount());
+  host.remove();
+  expect(owned.close).toHaveBeenCalledOnce();
+});
+
 it("routes input through the captured PTY owner and suppresses it after unmount", async () => {
   const { host, root } = setup();
   await act(async () => {

@@ -157,6 +157,25 @@ describe("Harness remote terminals", () => {
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(71);
   });
 
+  it("retains the real pooled helper after failed close and retries its original cleanup", async () => {
+    await spawnPty("pooled-cleanup-retry", projectPath, 80, 24);
+    const error = new Error("native helper cleanup pending");
+    mocks.closeRemoteWorkspace.mockRejectedValueOnce(error);
+    await expect(killPty("pooled-cleanup-retry")).rejects.toBe(error);
+    expect(remoteSessions.snapshot()).toEqual([
+      expect.objectContaining({ sessionId: 71, leases: 0, closing: true }),
+    ]);
+    await expect(
+      spawnPty("blocked-sibling", projectPath, 80, 24),
+    ).rejects.toThrow("cleanup failed");
+    expect(mocks.openPty).toHaveBeenCalledOnce();
+    await killPty("pooled-cleanup-retry");
+    expect(mocks.closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+    expect(remoteSessions.snapshot()).toEqual([]);
+    await killPty("pooled-cleanup-retry");
+    expect(mocks.closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+  });
+
   it("never borrows the global active SSH session without its own lease", async () => {
     useWorkspaceEnvStore.setState({
       env: {

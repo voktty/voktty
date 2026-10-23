@@ -73,6 +73,7 @@ function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
     if (!closing) {
       closing = Promise.resolve()
         .then(() => {
+          if (lease.releaseAndClose) return lease.releaseAndClose();
           lease.release();
           const entry = remoteSessions
             .snapshot()
@@ -81,11 +82,14 @@ function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
             return remoteSessions.closeSession(lease.info.session_id);
           }
         })
-        .catch(() => undefined)
         .then(() => {
           if (remoteWorkspaceClosers.get(id) === close) {
             remoteWorkspaceClosers.delete(id);
           }
+        })
+        .catch((error: unknown) => {
+          closing = undefined;
+          throw error;
         });
     }
     return closing;
@@ -116,6 +120,7 @@ export function startOwnedPty(
   let retired = false;
   const isCurrent = () => !retired && owns();
   let closing: Promise<void> | undefined;
+  let closeRemote: (() => Promise<void>) | undefined;
   return Object.freeze({
     ready,
     isCurrent,
@@ -134,7 +139,15 @@ export function startOwnedPty(
         closing = ready
           .catch(() => undefined)
           .then(() => {
-            if (owns()) return killPty(id);
+            if (owns()) {
+              closeRemote = remoteWorkspaceClosers.get(id);
+              return killPty(id);
+            }
+            return closeRemote?.();
+          })
+          .catch((error: unknown) => {
+            closing = undefined;
+            throw error;
           });
       return closing;
     },
@@ -154,7 +167,6 @@ async function spawnPtyAttempt(
   const existing = activeSessions.get(id);
   const closeExistingRemote = remoteWorkspaceClosers.get(id);
   activeSessions.delete(id);
-  remoteWorkspaceClosers.delete(id);
   if (existing) await existing.close().catch(() => undefined);
   await closeExistingRemote?.();
   if (!isCurrent()) return;
@@ -198,7 +210,7 @@ async function spawnPtyAttempt(
           exited = true;
           if (session) {
             if (activeSessions.get(id) === session) activeSessions.delete(id);
-            void closeRemote?.();
+            void closeRemote?.().catch(() => undefined);
           }
           if (isCurrent()) {
             exitHandlers.get(id)?.(code ?? null);
@@ -221,7 +233,13 @@ async function spawnPtyAttempt(
     activeSessions.set(id, session);
     if (closeRemote) remoteWorkspaceClosers.set(id, closeRemote);
   } catch (error) {
-    await closeRemote?.();
+    try {
+      await closeRemote?.();
+    } catch (cleanupError) {
+      if (closeRemote && isCurrent())
+        remoteWorkspaceClosers.set(id, closeRemote);
+      throw cleanupError;
+    }
     if (isCurrent()) spawnAttempts.delete(id);
     throw error;
   }
@@ -265,7 +283,6 @@ export async function killPty(id: string): Promise<void> {
   const session = activeSessions.get(id);
   const closeRemote = remoteWorkspaceClosers.get(id);
   activeSessions.delete(id);
-  remoteWorkspaceClosers.delete(id);
   dataHandlers.delete(id);
   exitHandlers.delete(id);
   clearBuffered(id);
@@ -280,7 +297,6 @@ export async function killAllPtys(): Promise<void> {
   const sessions = Array.from(activeSessions.values());
   const closers = Array.from(remoteWorkspaceClosers.values());
   activeSessions.clear();
-  remoteWorkspaceClosers.clear();
   dataHandlers.clear();
   exitHandlers.clear();
   dataBuffer.clear();

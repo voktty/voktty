@@ -375,6 +375,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
           if (stoppingPtys.get(id) === stopping) stoppingPtys.delete(id);
         });
       stoppingPtys.set(id, stopping);
+      void stopping.catch(() => undefined);
       term.dispose();
       termRef.current = null;
       spawned.current = false;
