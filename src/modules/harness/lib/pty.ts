@@ -15,7 +15,17 @@ export type PtyLaunchOptions = { multiplexerPicker?: SshMultiplexerPicker };
 
 const activeSessions = new Map<string, PtySession>();
 const spawnAttempts = new Map<string, object>();
-const remoteWorkspaceClosers = new Map<string, () => Promise<void>>();
+type PtyResource = {
+  id: string;
+  attempt: object;
+  opening: boolean;
+  session?: PtySession;
+  closeRemote?: () => Promise<void>;
+  nativeClosed: boolean;
+  closing?: Promise<void>;
+};
+const resources = new Set<PtyResource>();
+const MAX_RESOURCES = 256;
 const dataHandlers = new Map<string, DataHandler>();
 const exitHandlers = new Map<string, ExitHandler>();
 const dataBuffer = new Map<string, Uint8Array[]>();
@@ -67,7 +77,7 @@ function clearBuffered(id: string) {
   dataBufferBytes.delete(id);
 }
 
-function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
+function releaseRemoteLeaseOnce(lease: RemoteSessionLease) {
   let closing: Promise<void> | undefined;
   const close = () => {
     if (!closing) {
@@ -82,11 +92,6 @@ function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
             return remoteSessions.closeSession(lease.info.session_id);
           }
         })
-        .then(() => {
-          if (remoteWorkspaceClosers.get(id) === close) {
-            remoteWorkspaceClosers.delete(id);
-          }
-        })
         .catch((error: unknown) => {
           closing = undefined;
           throw error;
@@ -95,6 +100,39 @@ function releaseRemoteLeaseOnce(id: string, lease: RemoteSessionLease) {
     return closing;
   };
   return close;
+}
+
+function retireResource(resource: PtyResource) {
+  if (spawnAttempts.get(resource.id) === resource.attempt) {
+    spawnAttempts.delete(resource.id);
+    dataHandlers.delete(resource.id);
+    exitHandlers.delete(resource.id);
+    clearBuffered(resource.id);
+  }
+  if (resource.session && activeSessions.get(resource.id) === resource.session)
+    activeSessions.delete(resource.id);
+}
+
+function closeResource(resource: PtyResource): Promise<void> {
+  retireResource(resource);
+  if (!resource.closing) {
+    resource.closing = Promise.resolve()
+      .then(async () => {
+        if (!resource.nativeClosed) {
+          await resource.session?.close();
+          resource.nativeClosed = true;
+        }
+        await resource.closeRemote?.();
+        resources.delete(resource);
+        resource.session = undefined;
+        resource.closeRemote = undefined;
+      })
+      .catch((error: unknown) => {
+        resource.closing = undefined;
+        throw error;
+      });
+  }
+  return resource.closing;
 }
 
 export async function spawnPty(
@@ -114,13 +152,39 @@ export function startOwnedPty(
   rows: number,
   options?: PtyLaunchOptions,
 ) {
+  if (resources.size >= MAX_RESOURCES)
+    throw new Error("Harness terminal resource limit reached.");
   const attempt = {};
-  const ready = spawnPtyAttempt(id, attempt, cwd, cols, rows, options);
+  const resource: PtyResource = {
+    id,
+    attempt,
+    opening: true,
+    nativeClosed: false,
+  };
+  const predecessors = [...resources].filter((entry) => entry.id === id);
+  resources.add(resource);
+  spawnAttempts.set(id, attempt);
   const owns = () => spawnAttempts.get(id) === attempt;
+  const launchOptions = options && { ...options };
+  const ready = spawnPtyAttempt(
+    resource,
+    predecessors,
+    cwd,
+    cols,
+    rows,
+    launchOptions,
+  ).then(
+    async () => {
+      if (!owns()) await closeResource(resource);
+    },
+    async (error: unknown) => {
+      await closeResource(resource);
+      throw error;
+    },
+  );
   let retired = false;
   const isCurrent = () => !retired && owns();
   let closing: Promise<void> | undefined;
-  let closeRemote: (() => Promise<void>) | undefined;
   return Object.freeze({
     ready,
     isCurrent,
@@ -135,16 +199,11 @@ export function startOwnedPty(
       isCurrent() ? resizePty(id, cols, rows) : Promise.resolve(),
     close: () => {
       retired = true;
+      retireResource(resource);
       if (!closing)
         closing = ready
           .catch(() => undefined)
-          .then(() => {
-            if (owns()) {
-              closeRemote = remoteWorkspaceClosers.get(id);
-              return killPty(id);
-            }
-            return closeRemote?.();
-          })
+          .then(() => closeResource(resource))
           .catch((error: unknown) => {
             closing = undefined;
             throw error;
@@ -155,44 +214,37 @@ export function startOwnedPty(
 }
 
 async function spawnPtyAttempt(
-  id: string,
-  attempt: object,
+  resource: PtyResource,
+  predecessors: PtyResource[],
   cwd: string,
   cols: number,
   rows: number,
   options?: PtyLaunchOptions,
 ): Promise<void> {
-  spawnAttempts.set(id, attempt);
+  const { id, attempt } = resource;
   const isCurrent = () => spawnAttempts.get(id) === attempt;
-  const existing = activeSessions.get(id);
-  const closeExistingRemote = remoteWorkspaceClosers.get(id);
-  activeSessions.delete(id);
-  if (existing) await existing.close().catch(() => undefined);
-  await closeExistingRemote?.();
-  if (!isCurrent()) return;
-
   // Normalize "~" or empty string to undefined so openPty uses default home/workspace root
   const effectiveCwd =
     !cwd || cwd === "~" || cwd.trim() === "" ? undefined : cwd;
-  let session: PtySession | undefined;
   let exited = false;
-  let closeRemote: (() => Promise<void>) | undefined;
 
   try {
+    for (const predecessor of predecessors) {
+      retireResource(predecessor);
+      if (!predecessor.opening) await closeResource(predecessor);
+    }
+    if (!isCurrent()) return;
     const remoteTarget = effectiveCwd
       ? await openProjectTerminalTarget(
           effectiveCwd,
           options?.multiplexerPicker,
         )
       : undefined;
-    closeRemote = remoteTarget
-      ? releaseRemoteLeaseOnce(id, remoteTarget.lease)
+    resource.closeRemote = remoteTarget
+      ? releaseRemoteLeaseOnce(remoteTarget.lease)
       : undefined;
-    if (!isCurrent()) {
-      await closeRemote?.();
-      return;
-    }
-    session = await openPty(
+    if (!isCurrent()) return;
+    resource.session = await openPty(
       cols,
       rows,
       {
@@ -208,13 +260,12 @@ async function spawnPtyAttempt(
         onExit: (code?: number) => {
           if (exited) return;
           exited = true;
-          if (session) {
-            if (activeSessions.get(id) === session) activeSessions.delete(id);
-            void closeRemote?.().catch(() => undefined);
-          }
-          if (isCurrent()) {
-            exitHandlers.get(id)?.(code ?? null);
+          try {
+            if (isCurrent()) exitHandlers.get(id)?.(code ?? null);
+          } finally {
             if (isCurrent()) spawnAttempts.delete(id);
+            if (!resource.opening)
+              void closeResource(resource).catch(() => undefined);
           }
         },
       },
@@ -225,23 +276,11 @@ async function spawnPtyAttempt(
       remoteTarget?.workspace,
     );
 
-    if (!isCurrent() || exited) {
-      await session.close().catch(() => undefined);
-      await closeRemote?.();
-      return;
+    if (isCurrent() && !exited) {
+      activeSessions.set(id, resource.session);
     }
-    activeSessions.set(id, session);
-    if (closeRemote) remoteWorkspaceClosers.set(id, closeRemote);
-  } catch (error) {
-    try {
-      await closeRemote?.();
-    } catch (cleanupError) {
-      if (closeRemote && isCurrent())
-        remoteWorkspaceClosers.set(id, closeRemote);
-      throw cleanupError;
-    }
-    if (isCurrent()) spawnAttempts.delete(id);
-    throw error;
+  } finally {
+    resource.opening = false;
   }
 }
 
@@ -279,32 +318,26 @@ export async function getPtyStatus(
 }
 
 export async function killPty(id: string): Promise<void> {
-  spawnAttempts.delete(id);
-  const session = activeSessions.get(id);
-  const closeRemote = remoteWorkspaceClosers.get(id);
-  activeSessions.delete(id);
+  const captured = [...resources].filter((resource) => resource.id === id);
+  for (const resource of captured) retireResource(resource);
   dataHandlers.delete(id);
   exitHandlers.delete(id);
   clearBuffered(id);
-  if (session) {
-    await session.close().catch(() => undefined);
-  }
-  await closeRemote?.();
+  await Promise.all(
+    captured.filter((resource) => !resource.opening).map(closeResource),
+  );
 }
 
 export async function killAllPtys(): Promise<void> {
-  spawnAttempts.clear();
-  const sessions = Array.from(activeSessions.values());
-  const closers = Array.from(remoteWorkspaceClosers.values());
-  activeSessions.clear();
+  const captured = [...resources];
+  for (const resource of captured) retireResource(resource);
   dataHandlers.clear();
   exitHandlers.clear();
   dataBuffer.clear();
   dataBufferBytes.clear();
   await Promise.allSettled(
-    sessions.map((s) => s.close().catch(() => undefined)),
+    captured.filter((resource) => !resource.opening).map(closeResource),
   );
-  await Promise.allSettled(closers.map((close) => close()));
 }
 
 export function subscribePty(
