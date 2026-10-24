@@ -4669,7 +4669,8 @@ function DesktopApp() {
               onNewWsl={openNewWslTab}
               onNewBlock={openNewBlockTab}
               onNewPrivate={openNewPrivateTab}
-              onNewPreview={() => openPreviewTab("")}
+              onNewPreview={previewCommand.run}
+              previewDisabledReason={previewDisabledReason}
               onNewBrowser={openNewBrowser}
               onOpenPreviewSplit={openPreviewSplit}
               onOpenGitGraphSplit={openGitGraphSplit}
@@ -5114,7 +5115,8 @@ function DesktopApp() {
                           onNewWsl={openNewWslTab}
                           onNewBlock={openNewBlockTab}
                           onNewPrivate={openNewPrivateTab}
-                          onNewPreview={() => openPreviewTab("")}
+                          onNewPreview={previewCommand.run}
+                          previewDisabledReason={previewDisabledReason}
                           onNewBrowser={openNewBrowser}
                           onNewEditor={openNewEditor}
                           onNewRdp={(opts) => newRdpTab(opts)}

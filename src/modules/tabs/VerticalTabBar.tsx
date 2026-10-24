@@ -99,6 +99,7 @@ type Props = {
   onNewBlock?: () => void;
   onNewPrivate?: () => void;
   onNewPreview?: () => void;
+  previewDisabledReason?: string;
   onNewBrowser?: () => void;
   onNewEditor?: () => void;
   onNewApiClient?: () => void;
@@ -233,6 +234,7 @@ export function VerticalTabBar({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  previewDisabledReason,
   onNewBrowser,
   onNewEditor,
   onNewApiClient,
@@ -394,6 +396,7 @@ export function VerticalTabBar({
             onNewBlock={onNewBlock}
             onNewPrivate={onNewPrivate}
             onNewPreview={onNewPreview}
+            previewDisabledReason={previewDisabledReason}
             onNewBrowser={onNewBrowser}
             onNewEditor={onNewEditor}
             onNewApiClient={onNewApiClient}

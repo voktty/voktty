@@ -53,6 +53,7 @@ export type NewTabMenuProps = {
   onNewBlock: () => void;
   onNewPrivate: () => void;
   onNewPreview?: () => void;
+  previewDisabledReason?: string;
   onNewBrowser?: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
@@ -175,6 +176,7 @@ export function NewTabMenu({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  previewDisabledReason,
   onNewBrowser,
   onNewEditor,
   onNewApiClient,
@@ -244,6 +246,7 @@ export function NewTabMenu({
                 onNewBlock={onNewBlock}
                 onNewPrivate={onNewPrivate}
                 onNewPreview={onNewPreview}
+                previewDisabledReason={previewDisabledReason}
                 onNewBrowser={onNewBrowser}
                 onNewEditor={onNewEditor}
                 onNewApiClient={onNewApiClient}
@@ -291,6 +294,7 @@ export function NewTabMenuItems({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  previewDisabledReason,
   onNewBrowser,
   onNewEditor,
   onNewApiClient: _onNewApiClient,
@@ -487,9 +491,9 @@ export function NewTabMenuItems({
       />
 
       {/* 5. Navegador Web (Nueva pestaña en blanco) */}
-      {(onNewBrowser || onNewPreview) && (
+      {onNewBrowser && (
         <NewTabMenuItem
-          onSelect={onNewBrowser ?? onNewPreview!}
+          onSelect={onNewBrowser}
           customIcon={
             <HugeiconsIcon
               icon={Globe02Icon}
@@ -499,6 +503,21 @@ export function NewTabMenuItems({
             />
           }
           label={t("tabs.newBrowser")}
+        />
+      )}
+      {onNewPreview && (
+        <NewTabMenuItem
+          onSelect={onNewPreview}
+          disabledReason={previewDisabledReason}
+          customIcon={
+            <HugeiconsIcon
+              icon={Globe02Icon}
+              size={14}
+              strokeWidth={1.75}
+              className="shrink-0 text-cyan-400"
+            />
+          }
+          label={t("commandPalette.commands.newWebPreview")}
         />
       )}
 
@@ -549,6 +568,7 @@ type NewTabMenuItemProps = {
   label: string;
   shortcut?: string;
   trailingIcon?: typeof ArrowRight01Icon;
+  disabledReason?: string;
 };
 
 function NewTabMenuItem({
@@ -558,15 +578,27 @@ function NewTabMenuItem({
   label,
   shortcut,
   trailingIcon,
+  disabledReason,
 }: NewTabMenuItemProps) {
   return (
     <DropdownMenuItem
-      onSelect={onSelect}
+      disabled={Boolean(disabledReason)}
+      title={disabledReason}
+      onSelect={() => {
+        if (!disabledReason) onSelect();
+      }}
       onMouseEnter={onMouseEnter}
-      className="flex h-7.5 min-h-[28px] cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1 text-[12px] font-normal text-foreground/90 transition-colors hover:bg-accent/80 hover:text-foreground focus:bg-accent/80 focus:text-foreground"
+      className="flex min-h-7.5 cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1 text-[12px] font-normal text-foreground/90 transition-colors hover:bg-accent/80 hover:text-foreground focus:bg-accent/80 focus:text-foreground"
     >
       {customIcon}
-      <span className="flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{label}</span>
+        {disabledReason && (
+          <span className="block text-[10px] text-muted-foreground">
+            {disabledReason}
+          </span>
+        )}
+      </span>
       {shortcut ? (
         <span className="ml-auto shrink-0 font-mono text-[10px] tracking-tight text-muted-foreground/70">
           {shortcut}

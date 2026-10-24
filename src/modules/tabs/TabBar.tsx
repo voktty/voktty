@@ -130,6 +130,7 @@ type Props = {
   onNewBlock: () => void;
   onNewPrivate: () => void;
   onNewPreview?: () => void;
+  previewDisabledReason?: string;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
   onNewHarness?: () => void;
@@ -208,6 +209,7 @@ export function TabBar({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  previewDisabledReason,
   onNewBrowser,
   onNewEditor,
   onNewApiClient,
@@ -1330,6 +1332,7 @@ export function TabBar({
         onNewBlock={onNewBlock}
         onNewPrivate={onNewPrivate}
         onNewPreview={onNewPreview}
+        previewDisabledReason={previewDisabledReason}
         onNewBrowser={onNewBrowser}
         onNewEditor={onNewEditor}
         onNewApiClient={onNewApiClient}
