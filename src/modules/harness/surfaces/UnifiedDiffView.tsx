@@ -88,6 +88,7 @@ function fileDiffMenuItems(
   t: (key: string) => string,
   hasFolds = false,
   isFull = false,
+  historyUnavailableReason?: string,
 ): ExplorerMenuItem[] {
   const revealLabel = IS_MAC
     ? t("harness.chrome.revealInFinder")
@@ -131,6 +132,8 @@ function fileDiffMenuItems(
       kind: "item",
       id: "open-git-history",
       label: t("harness.chrome.viewFileHistory"),
+      disabled: !!historyUnavailableReason,
+      description: historyUnavailableReason,
     },
   ];
 }
@@ -386,10 +389,10 @@ export function UnifiedDiffView({
         case "open-git-history":
           if (onOpenGitHistory) {
             onOpenGitHistory(fullPath);
-          } else {
+          } else if (repoRoot?.trim()) {
             window.dispatchEvent(
               new CustomEvent("voktty:open-git-graph", {
-                detail: { repoRoot, branch: undefined, workspaceEnv: undefined },
+                detail: { repoRoot, branch: undefined, workspaceEnv },
               }),
             );
           }
@@ -523,7 +526,14 @@ export function UnifiedDiffView({
         <ExplorerMenu
           x={fileMenu.x}
           y={fileMenu.y}
-          items={fileDiffMenuItems(t, fileMenu.hasFolds, fileMenu.isFull)}
+          items={fileDiffMenuItems(
+            t,
+            fileMenu.hasFolds,
+            fileMenu.isFull,
+            onOpenGitHistory || repoRoot?.trim()
+              ? undefined
+              : t("harness.chrome.noProjectFolder"),
+          )}
           onPick={handleMenuPick}
           onClose={() => setFileMenu(null)}
         />

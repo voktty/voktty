@@ -207,7 +207,12 @@ export function SessionChangesDiff({
     );
   } else {
     content = (
-      <UnifiedDiffView files={models} focusPath={focusPath} totals={totals} />
+      <UnifiedDiffView
+        repoRoot={cwd}
+        files={models}
+        focusPath={focusPath}
+        totals={totals}
+      />
     );
   }
   return (
