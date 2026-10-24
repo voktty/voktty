@@ -24,6 +24,10 @@ import { useSortable } from "../hooks/useSortable";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { TabLabel } from "./TabLabel";
+import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
+import { labelFor } from "@/modules/tabs/lib/tabLabel";
+import type { TerminalTab } from "@/modules/tabs/lib/useTabs";
+import { TabIcon, TabProcessBottomBar } from "@/modules/tabs/TabBar";
 
 type Props = {
   files: FilePaneTab[];
@@ -49,6 +53,7 @@ export type SurfaceTabPresentation = {
 export function surfaceTabPresentation(
   file: FilePaneTab,
   t: (key: string, values?: Record<string, string | number>) => string,
+  canonical?: TerminalTab,
 ): SurfaceTabPresentation {
   if (isReleaseNotesTab(file)) {
     const title = releaseNotesTitle(file.releaseNotes.version);
@@ -81,10 +86,20 @@ export function surfaceTabPresentation(
 
   const review = isReviewTab(file);
   const terminal = isTerminalTab(file);
+  const bound =
+    terminal &&
+    canonical?.tabKey === file.canonicalTerminal?.tabKey &&
+    canonical?.projectCwd === file.canonicalTerminal?.projectCwd &&
+    !canonical?.private &&
+    !canonical?.collaboration
+      ? canonical
+      : undefined;
   const name = isPlanTab(file)
     ? file.plan.title.trim() || t("harness.chrome.plan")
     : terminal
-      ? terminalTabLabel(file)
+      ? bound
+        ? labelFor(bound)
+        : terminalTabLabel(file)
       : basename(file.path);
   return {
     name,
@@ -93,7 +108,7 @@ export function surfaceTabPresentation(
     tooltip: isPlanTab(file)
       ? name
       : terminal
-        ? `${name} — ${file.cwd}`
+        ? `${name} · ${bound?.cwd ?? file.cwd}`
         : review
           ? t("harness.chrome.workingTreeNamed", { name: file.path })
           : file.path,
@@ -177,6 +192,7 @@ export function SurfaceTabs({
   trailing,
 }: Props) {
   const { t } = useTranslation();
+  const catalog = useCanonicalTerminalCatalog();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeTabRef = useRef<HTMLDivElement | null>(null);
   const [menu, setMenu] = useState<SurfaceTabMenu | null>(null);
@@ -264,7 +280,15 @@ export function SurfaceTabs({
         const errors = fileErrorCounts.get(file.id) ?? 0;
         const review = isReviewTab(file);
         const terminal = isTerminalTab(file);
-        const { label, iconName, tooltip } = surfaceTabPresentation(file, t);
+        const canonical =
+          terminal && file.canonicalTerminal
+            ? catalog?.get(file.canonicalTerminal)
+            : undefined;
+        const { label, iconName, tooltip } = surfaceTabPresentation(
+          file,
+          t,
+          canonical,
+        );
         const showStart =
           sortable.draggingId &&
           sortable.toIndex === index &&
@@ -338,7 +362,9 @@ export function SurfaceTabs({
                   : "text-content/50 hover:bg-content/5 hover:text-content"
               }`}
             >
-              {terminal ? (
+              {canonical ? (
+                <TabIcon tab={canonical} animatedAgent />
+              ) : terminal ? (
                 <Terminal className="size-3.5 shrink-0" strokeWidth={1.75} />
               ) : (
                 <FileTypeIcon name={iconName} isDir={false} size={14} />
@@ -361,6 +387,7 @@ export function SurfaceTabs({
                   aria-label={t("harness.chrome.unsavedChanges")}
                 />
               ) : null}
+              {canonical ? <TabProcessBottomBar tab={canonical} /> : null}
             </button>
             <button
               type="button"
