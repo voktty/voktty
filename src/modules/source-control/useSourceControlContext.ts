@@ -3,11 +3,11 @@ import { t as translate } from "@/modules/i18n";
 import type { SidebarViewId } from "@/modules/sidebar";
 import type { Tab } from "@/modules/tabs";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
-import { useCallback, useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   activeRepositoryContextPath,
-  gitGraphRepositoryPath,
+  gitGraphTarget,
   type SourceControlRepositoryTarget,
   sourceControlRepositoryPath,
 } from "./repositoryTarget";
@@ -93,10 +93,11 @@ export function useSourceControlContext({
     hasOpenGitTab,
     target: repositoryTarget,
   });
-  const graphContextPath = gitGraphRepositoryPath({
-    contextPath: sourceControlContextPath,
-    workspaceFallbackPath:
-      workspaceEnv.kind === "local" ? workspaceFallbackPath : null,
+  const graphTarget = gitGraphTarget({
+    activeTab,
+    activeTerminalLeafCwd,
+    root: explorerRoot ?? workspaceFallbackPath,
+    workspace: workspaceEnv,
     sidebarView,
     target: repositoryTarget,
   });
@@ -110,26 +111,63 @@ export function useSourceControlContext({
     cycleSidebarView("source-control");
   }, [cycleSidebarView]);
 
+  const graphPath = graphTarget?.path;
+  const graphWorkspace = graphTarget?.workspace;
+  const sourceId = activeTab?.id;
+  const sourceKey = activeTab?.tabKey;
+  const sourceSpace = activeTab?.spaceId;
+  const sourceKind = activeTab?.kind;
+  const sourceLeaf =
+    activeTab?.kind === "terminal" ? activeTab.activeLeafId : undefined;
+  const targetMode = repositoryTarget.mode;
+  const graphBinding = useMemo(
+    () => ({
+      sourceId,
+      sourceKey,
+      sourceSpace,
+      sourceKind,
+      sourceLeaf,
+      graphPath,
+      graphWorkspace,
+      sidebarView,
+      targetMode,
+      openCommitHistoryTab,
+    }),
+    [
+      sourceId,
+      sourceKey,
+      sourceSpace,
+      sourceKind,
+      sourceLeaf,
+      graphPath,
+      graphWorkspace,
+      sidebarView,
+      targetMode,
+      openCommitHistoryTab,
+    ],
+  );
+  const graphOwner = useRef<object | null>(null);
+  const graphPending = useRef(new Set<object>());
+  useLayoutEffect(() => {
+    graphOwner.current = graphBinding;
+    return () => {
+      if (graphOwner.current === graphBinding) graphOwner.current = null;
+    };
+  }, [graphBinding]);
+
   const openGitGraphFromContext = useCallback(async () => {
-    const known = sourceControl.hasRepo ? sourceControl.repo : null;
-    const fixedTargetIsLoaded =
-      sidebarView !== "source-control" ||
-      repositoryTarget.mode !== "fixed" ||
-      known?.repoRoot === repositoryTarget.repoRoot;
-    if (known && fixedTargetIsLoaded) {
-      openCommitHistoryTab({
-        repoRoot: known.repoRoot,
-        branch: sourceControl.status?.branch ?? null,
-        workspaceEnv,
-      });
-      return;
-    }
-    if (!graphContextPath) {
+    const current = () => graphOwner.current === graphBinding;
+    if (!current()) return;
+    if (!graphPath || !graphWorkspace) {
       toast.info(translate("feedback.noGitRepository"));
       return;
     }
+    if (graphPending.current.size >= 256) return;
+    const request = {};
+    graphPending.current.add(request);
     try {
-      const repo = await native.gitResolveRepo(graphContextPath, workspaceEnv);
+      const repo = await native.gitResolveRepo(graphPath, graphWorkspace);
+      if (!current()) return;
       if (!repo) {
         toast.info(translate("feedback.noGitRepository"));
         return;
@@ -137,23 +175,17 @@ export function useSourceControlContext({
       openCommitHistoryTab({
         repoRoot: repo.repoRoot,
         branch: repo.branch,
-        workspaceEnv,
+        workspaceEnv: graphWorkspace,
       });
     } catch (error) {
+      if (!current()) return;
       toast.error(translate("feedback.resolveGitRepositoryFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
+    } finally {
+      graphPending.current.delete(request);
     }
-  }, [
-    openCommitHistoryTab,
-    sourceControl.hasRepo,
-    sourceControl.repo,
-    sourceControl.status?.branch,
-    graphContextPath,
-    repositoryTarget,
-    sidebarView,
-    workspaceEnv,
-  ]);
+  }, [openCommitHistoryTab, graphBinding, graphPath, graphWorkspace]);
 
   return { sourceControl, toggleSourceControl, openGitGraphFromContext };
 }

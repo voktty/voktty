@@ -1,5 +1,7 @@
 import type { SidebarViewId } from "@/modules/sidebar";
 import type { Tab } from "@/modules/tabs";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 
 export type SourceControlRepositoryTarget =
   | { mode: "follow-context" }
@@ -120,6 +122,34 @@ export function gitGraphRepositoryPath({
   return sidebarView === "source-control" && target.mode === "fixed"
     ? target.repoRoot
     : (contextPath ?? workspaceFallbackPath);
+}
+
+export function gitGraphTarget({
+  activeTab,
+  activeTerminalLeafCwd,
+  root,
+  workspace,
+  sidebarView,
+  target,
+}: {
+  activeTab: Tab | undefined;
+  activeTerminalLeafCwd: string | null;
+  root: string | null;
+  workspace: WorkspaceEnv;
+  sidebarView: SidebarViewId;
+  target: SourceControlRepositoryTarget;
+}) {
+  if (sidebarView === "source-control" && target.mode === "fixed")
+    return { path: target.repoRoot, workspace };
+  if (!activeTab)
+    return root && workspace.kind !== "serial"
+      ? { path: root, workspace }
+      : null;
+  const projected = tabDirectoryTarget(activeTab, { root, env: workspace });
+  if (!projected) return null;
+  return activeTab.kind === "terminal" && activeTerminalLeafCwd
+    ? { ...projected, path: activeTerminalLeafCwd }
+    : projected;
 }
 
 export function repositoryTargetIsPending({
