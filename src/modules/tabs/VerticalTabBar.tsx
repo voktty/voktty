@@ -56,7 +56,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { revealInFinder } from "@/modules/explorer/lib/contextActions";
+import { useTabFileManagerReveal } from "@/modules/tabs/lib/useTabFileManagerReveal";
 import { leafIds } from "@/modules/terminal/lib/panes";
 import { respawnSession } from "@/modules/terminal";
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
@@ -257,6 +257,7 @@ export function VerticalTabBar({
   onCardDrop,
 }: Props) {
   const { t } = useTranslation();
+  const fileManagerReveal = useTabFileManagerReveal(tabs);
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const workspaceDrag = useWorkspaceDrag();
   const pulsingTabs = useAgentStore((s) => s.pulsingTabs);
@@ -895,6 +896,7 @@ export function VerticalTabBar({
                     {(() => {
                       const tabPath = getTabPath(tab);
                       if (!tabPath) return null;
+                      const nativeRevealPath = fileManagerReveal.pathFor(tab);
                       return (
                         <>
                           <ContextMenuItem
@@ -912,7 +914,13 @@ export function VerticalTabBar({
                           </ContextMenuItem>
                           <ContextMenuItem
                             className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
-                            onSelect={() => void revealInFinder(tabPath)}
+                            disabled={nativeRevealPath === null}
+                            title={
+                              nativeRevealPath === null
+                                ? t("workspace.localMachine")
+                                : undefined
+                            }
+                            onSelect={() => fileManagerReveal.reveal(tab)}
                           >
                             <HugeiconsIcon
                               icon={Folder01Icon}
@@ -922,6 +930,11 @@ export function VerticalTabBar({
                             <span className="flex-1">
                               {t("tabs.revealInFileManager")}
                             </span>
+                            {nativeRevealPath === null && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {t("workspace.localMachine")}
+                              </span>
+                            )}
                           </ContextMenuItem>
                           <ContextMenuSeparator />
                         </>

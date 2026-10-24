@@ -80,7 +80,7 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { revealInFinder } from "@/modules/explorer/lib/contextActions";
+import { useTabFileManagerReveal } from "@/modules/tabs/lib/useTabFileManagerReveal";
 import { leafIds } from "@/modules/terminal/lib/panes";
 import { respawnSession } from "@/modules/terminal";
 import { getTabPath } from "./lib/tabMetadata";
@@ -250,6 +250,7 @@ export function TabBar({
   onCardDrop,
 }: Props) {
   const { t: translate } = useTranslation();
+  const fileManagerReveal = useTabFileManagerReveal(tabs);
   const pulsingTabs = useAgentStore((s) => s.pulsingTabs);
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -973,6 +974,7 @@ export function TabBar({
                     {(() => {
                       const tabPath = getTabPath(t);
                       if (!tabPath) return null;
+                      const nativeRevealPath = fileManagerReveal.pathFor(t);
                       return (
                         <>
                           <ContextMenuItem
@@ -990,7 +992,13 @@ export function TabBar({
                           </ContextMenuItem>
                           <ContextMenuItem
                             className="gap-2 rounded-md px-2 py-1.5 text-xs"
-                            onSelect={() => void revealInFinder(tabPath)}
+                            disabled={nativeRevealPath === null}
+                            title={
+                              nativeRevealPath === null
+                                ? translate("workspace.localMachine")
+                                : undefined
+                            }
+                            onSelect={() => fileManagerReveal.reveal(t)}
                           >
                             <HugeiconsIcon
                               icon={Folder01Icon}
@@ -1000,6 +1008,11 @@ export function TabBar({
                             <span className="flex-1">
                               {translate("tabs.revealInFileManager")}
                             </span>
+                            {nativeRevealPath === null && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {translate("workspace.localMachine")}
+                              </span>
+                            )}
                           </ContextMenuItem>
                           <ContextMenuSeparator />
                         </>
