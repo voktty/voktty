@@ -193,6 +193,30 @@ export function captureTerminalInputTarget(
   return null;
 }
 
+export function useTerminalInputTarget(
+  requestedLeafId: number | null | undefined,
+): TerminalInputTarget | null {
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      if (requestedLeafId === null) return () => {};
+      inputTargetListeners.add(notify);
+      return () => {
+        inputTargetListeners.delete(notify);
+      };
+    },
+    [requestedLeafId],
+  );
+  const getSnapshot = useMemo(() => {
+    let target: TerminalInputTarget | null = null;
+    return () => {
+      if (!target?.isAvailable())
+        target = captureTerminalInputTarget(requestedLeafId);
+      return target;
+    };
+  }, [requestedLeafId]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => null);
+}
+
 function createTerminalInputTarget(
   leafId: number,
   epoch: object,
@@ -1367,6 +1391,7 @@ function attachSession(
   if (!s || s.disposed) return;
   s.callbacks = callbacks;
   s.container = container;
+  retireInputTarget(s);
   if (s.visibleNow) bindLeafToSlot(leafId, s);
   startPtyOpening(leafId, s, s.initialCwd);
 }

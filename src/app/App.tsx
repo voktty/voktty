@@ -4,6 +4,7 @@ import {
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
+import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
 import { usePreviewFileNavigation } from "@/modules/preview/lib/usePreviewFileNavigation";
@@ -4466,24 +4467,10 @@ function DesktopApp() {
     editorRefs,
   });
 
-  const handleRunTerminalCommand = useCallback(
-    (command: string) => {
-      const activeLeaf = activeTerminalTab?.activeLeafId ?? activeLeafId;
-      const term =
-        activeLeaf !== null ? terminalRefs.current.get(activeLeaf) : undefined;
-      if (term) {
-        term.write(`${command}\r`);
-        term.focus();
-      } else {
-        const firstTerm = Array.from(terminalRefs.current.values())[0];
-        if (firstTerm) {
-          firstTerm.write(`${command}\r`);
-          firstTerm.focus();
-        }
-      }
-    },
-    [activeTerminalTab?.activeLeafId, activeLeafId],
-  );
+  const terminalCommand = useSurfaceTerminalCommand(activeTab);
+  const handleRunTerminalCommand = terminalCommand.run;
+  const terminalCommandDisabledReason = terminalCommand.disabledReason
+    ? t(terminalCommand.disabledReason) : undefined;
 
   const launcherContext = useMemo<LauncherActionContext>(
     () =>
@@ -5199,6 +5186,7 @@ function DesktopApp() {
               onOpenAi={togglePanelAndFocus}
               onOpenSettings={() => void openSettingsWindow()}
               onRunCommand={handleRunTerminalCommand}
+              runCommandDisabledReason={terminalCommandDisabledReason}
               onOpenFile={(path) => openFileTab(path, true)}
               onOpenDevServer={openDevServerPreview}
               onOpenPreview={openPreviewTab}

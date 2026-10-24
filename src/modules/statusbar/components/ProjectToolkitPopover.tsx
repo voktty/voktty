@@ -65,7 +65,8 @@ type TabId = "ai" | "lsp" | "setup";
 
 type Props = {
   cwd: string | null | undefined;
-  onRunCommand?: (command: string) => void;
+  onRunCommand?: (command: string) => boolean;
+  runCommandDisabledReason?: string;
   onOpenFile?: (path: string) => void;
   onOpenSettings: () => void;
 };
@@ -73,6 +74,7 @@ type Props = {
 export function ProjectToolkitPopover({
   cwd,
   onRunCommand,
+  runCommandDisabledReason,
   onOpenFile,
   onOpenSettings,
 }: Props) {
@@ -186,8 +188,7 @@ export function ProjectToolkitPopover({
   }, [cwd, t]);
 
   const handleRun = (cmd: string, actionId: string) => {
-    if (onRunCommand) {
-      onRunCommand(cmd);
+    if (!runCommandDisabledReason && onRunCommand?.(cmd)) {
       setExecutedId(actionId);
     }
   };
@@ -543,6 +544,10 @@ export function ProjectToolkitPopover({
                       executed={executedId === action.id}
                       onCopy={() => handleCopy(action.command, action.id)}
                       onRun={() => handleRun(action.command, action.id)}
+                      disabledReason={
+                        runCommandDisabledReason ??
+                        (!onRunCommand ? t("editor.terminalNoActive") : undefined)
+                      }
                     />
                   ))}
                 </div>
@@ -569,6 +574,10 @@ export function ProjectToolkitPopover({
                     executed={executedId === action.id}
                     onCopy={() => handleCopy(action.command, action.id)}
                     onRun={() => handleRun(action.command, action.id)}
+                    disabledReason={
+                      runCommandDisabledReason ??
+                      (!onRunCommand ? t("editor.terminalNoActive") : undefined)
+                    }
                   />
                 ))}
               </div>
@@ -747,12 +756,14 @@ function ActionCard({
   executed,
   onCopy,
   onRun,
+  disabledReason,
 }: {
   action: ConfigurableTool;
   copied: boolean;
   executed: boolean;
   onCopy: () => void;
   onRun: () => void;
+  disabledReason?: string;
 }) {
   const { t } = useTranslation();
   const IconComponent = resolveActionIcon(action);
@@ -801,7 +812,8 @@ function ActionCard({
             size="xs"
             className="h-6 gap-1 px-2 text-[10.5px] font-medium"
             onClick={onRun}
-            title={t("projectToolkit.runInActiveTerminal")}
+            disabled={Boolean(disabledReason)}
+            title={disabledReason ?? t("projectToolkit.runInActiveTerminal")}
           >
             <HugeiconsIcon
               icon={executed ? CheckmarkCircle01Icon : PlayIcon}
@@ -821,6 +833,10 @@ function ActionCard({
           {description}
         </p>
       ) : null}
+
+      {disabledReason && (
+        <p className="text-[10.5px] text-muted-foreground">{disabledReason}</p>
+      )}
 
       <div className="flex items-center gap-1.5 rounded-md border border-border/30 bg-muted/30 px-2 py-1 font-mono text-[10.5px] text-foreground/80 select-text">
         <span className="text-muted-foreground/60">$</span>

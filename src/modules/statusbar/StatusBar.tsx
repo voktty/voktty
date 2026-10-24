@@ -71,7 +71,8 @@ type Props = {
   /** Opens the panel, or Settings > Models when no API key is loaded. */
   onOpenAi: () => void;
   onOpenSettings: () => void;
-  onRunCommand?: (command: string) => void;
+  onRunCommand?: (command: string) => boolean;
+  runCommandDisabledReason?: string;
   onOpenFile?: (path: string) => void;
   onOpenDevServer: (capture: DevServerCapture) => void;
   onOpenPreview?: (url: string) => void;
@@ -104,6 +105,7 @@ export function StatusBar({
   onOpenAi,
   onOpenSettings,
   onRunCommand,
+  runCommandDisabledReason,
   onOpenFile,
   onOpenDevServer,
   onOpenPreview,
@@ -213,6 +215,7 @@ export function StatusBar({
         <ProjectToolkitPopover
           cwd={cwd}
           onRunCommand={onRunCommand}
+          runCommandDisabledReason={runCommandDisabledReason}
           onOpenFile={onOpenFile}
           onOpenSettings={onOpenSettings}
         />
