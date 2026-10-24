@@ -66,14 +66,8 @@ import {
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
-import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
-import {
-  closeSshProfileSessions,
-  DISCONNECT_SSH_EVENT,
-  OPEN_HARNESS_EVENT,
-  relatedProfileIds,
-} from "@/modules/connections/model/sshConnectionActions";
-import { remoteSshConnectionIdForEnvironment } from "@/modules/connections/model/remoteSshProfiles";
+import { OPEN_HARNESS_EVENT } from "@/modules/connections/model/sshConnectionActions";
+import { useSshDisconnection } from "@/modules/connections/hooks/useSshDisconnection";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -1963,91 +1957,16 @@ function DesktopApp() {
     ],
   );
 
-  useEffect(() => {
-    const disconnectHandler = (event: Event) => {
-      const requested = (event as CustomEvent<{ connectionId?: unknown }>)
-        .detail?.connectionId;
-      const connectionId =
-        typeof requested === "string" && requested ? requested : undefined;
-      const current = useWorkspaceEnvStore.getState().env;
-      const targetId =
-        connectionId ?? (current.kind === "ssh" ? current.connection.id : null);
-      const saved = usePreferencesStore.getState().sshConnections ?? [];
-      const ids =
-        targetId === null
-          ? new Set<string>()
-          : relatedProfileIds(
-              targetId,
-              saved,
-              current.kind === "ssh" ? [current.connection] : [],
-            );
-      const workspaceAffected =
-        current.kind === "ssh" &&
-        (targetId === null ||
-          ids.has(current.connection.id) ||
-          current.connection.id === targetId);
-      if (targetId) {
-        void closeSshProfileSessions(targetId, ids).catch(() => {});
-      }
-      if (workspaceAffected && current.kind === "ssh") {
-        if (current.sessionId !== undefined) {
-          void closeRemoteSessionById("workspace", current.sessionId).catch(() => {});
-        }
-        if (activeSpaceId) {
-          useSpaces.getState().setEnv(activeSpaceId, LOCAL_WORKSPACE);
-          useSpaces
-            .getState()
-            .setRoot(
-              activeSpaceId,
-              localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
-            );
-        }
-        setWorkspaceEnv(LOCAL_WORKSPACE);
-      }
-      const onDisconnectedProfile = (cwd: string | undefined) => {
-        const environmentId = parseRemotePath(cwd ?? "")?.environmentId;
-        const profileId =
-          environmentId === undefined
-            ? undefined
-            : remoteSshConnectionIdForEnvironment(environmentId);
-        return profileId !== undefined && ids.has(profileId);
-      };
-      const fallback = localHome ?? "~";
-      for (const tab of tabsRef.current) {
-        if (tab.kind !== "harness") continue;
-        const resets =
-          tab.id === activeTab?.id
-            ? workspaceAffected || onDisconnectedProfile(tab.cwd)
-            : onDisconnectedProfile(tab.cwd);
-        if (!resets) continue;
-        updateTab(tab.id, { cwd: fallback });
-        if (tab.id === activeTab?.id) {
-          setHarnessCwd(fallback);
-          window.dispatchEvent(
-            new CustomEvent("voktty:harness-select-project", {
-              detail: { path: fallback },
-            }),
-          );
-        }
-      }      toast.success(
-        t("harness.connections.disconnected") || "Sesión remota desconectada",
-      );
-    };
-    window.addEventListener(DISCONNECT_SSH_EVENT, disconnectHandler);
-    return () => {
-      window.removeEventListener(DISCONNECT_SSH_EVENT, disconnectHandler);
-    };
-  }, [
-    activeSpaceId,
-    activeTab,
-    localHome,
-    localLaunchCwd,
-    initialLaunchCwd,
-    setWorkspaceEnv,
-    setHarnessCwd,
+  const getSelectedTab = useCallback(() => getTab(activeIdRef.current), [getTab]);
+  useSshDisconnection({
+    tabsRef,
+    getTab,
+    getSelectedTab,
     updateTab,
-    t,
-  ]);
+    setProjectFallback: setHarnessCwd,
+    localHome,
+    localRoot: localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+  });
 
   const handleShareTerminal = useCallback(
     (tabId: number) => {
