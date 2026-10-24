@@ -1562,19 +1562,21 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       repoRoot: string;
       branch?: string | null;
       workspaceEnv?: WorkspaceEnv;
+      spaceId?: string;
+      activate?: boolean;
     }) => {
       const curr = tabsRef.current;
       const plan = planCommitHistoryOpen(
         curr,
         input,
-        activeSpaceIdRef.current,
+        input.spaceId ?? activeSpaceIdRef.current,
         () => nextIdRef.current++,
       );
       if (plan.tabs !== curr) {
         tabsRef.current = plan.tabs;
         setTabs(plan.tabs);
       }
-      setActiveId(plan.targetId);
+      if (input.activate ?? true) setActiveId(plan.targetId);
       return plan.targetId;
     },
     [],

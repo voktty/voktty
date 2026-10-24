@@ -5,6 +5,7 @@ import {
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
+import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
@@ -2769,64 +2770,32 @@ function DesktopApp() {
     [getTab, effectiveActiveId, spaceViewLimit, t, openPreviewTab, setActiveId],
   );
 
-  const openGitGraphSplit = useCallback(
-    (sourceTabId?: number) => {
-      const sourceTab =
-        (sourceTabId ? getTab(sourceTabId) : null) ?? getTab(effectiveActiveId);
-      if (!sourceTab) return;
-      if (!hasRoomToSplit(sourceTab, spaceViewLimit)) {
-        playErrorTone();
-        toast.error(t("spaces.maxSlots"));
-        return;
-      }
-      const candidateCwd =
-        (sourceTab.kind === "terminal" ? sourceTab.cwd : undefined) ||
-        activeTerminalLeafCwd ||
-        explorerRoot ||
-        launchCwd;
-      if (!candidateCwd) return;
-
-      const candidateEnv =
-        sourceTab && "workspaceEnv" in sourceTab
-          ? sourceTab.workspaceEnv
-          : undefined;
-
-      void native
-        .gitResolveRepo(candidateCwd, candidateEnv)
-        .then((repo) => {
-          if (!repo) {
-            toast.info(t("feedback.noGitRepository"));
-            return;
-          }
-          const graphId = openCommitHistoryTab({
-            repoRoot: repo.repoRoot,
-            branch: repo.branch,
-            workspaceEnv: candidateEnv,
-          });
-          const graphTab = getTab(graphId);
-          if (graphTab) {
-            joinTabIntoSpaceNextTo(sourceTab, graphTab, spaceViewLimit);
-            setActiveId(graphId);
-          }
-        })
-        .catch((error) => {
-          toast.error(t("feedback.resolveGitRepositoryFailed"), {
-            description: error instanceof Error ? error.message : String(error),
-          });
-        });
+  const openGitGraphSplit = useTabGitSplit({
+    tabs,
+    selectedId: effectiveActiveId,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    limit: spaceViewLimit,
+    getTab,
+    destination: (source) => resolveSpaceJoinTarget(source).targetViewSpace ?? null,
+    hasRoom: hasRoomToSplit,
+    resolve: native.gitResolveRepo,
+    open: openCommitHistoryTab,
+    join: joinTabIntoSpaceNextTo,
+    activate: (id) => {
+      const tab = getTab(id);
+      if (!tab) return;
+      useSpaces.getState().setActive(tab.spaceId);
+      setActiveId(id);
     },
-    [
-      getTab,
-      effectiveActiveId,
-      spaceViewLimit,
-      t,
-      activeTerminalLeafCwd,
-      explorerRoot,
-      launchCwd,
-      openCommitHistoryTab,
-      setActiveId,
-    ],
-  );
+    onFull: () => {
+      playErrorTone();
+      toast.error(t("spaces.maxSlots"));
+    },
+    onMissing: () => toast.info(t("feedback.noGitRepository")),
+    onError: (error) => toast.error(t("feedback.resolveGitRepositoryFailed"), {
+      description: error instanceof Error ? error.message : String(error),
+    }),
+  });
 
   const openEditorSplit = useCallback(
     (sourceTabId?: number) => {
