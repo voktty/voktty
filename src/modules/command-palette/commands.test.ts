@@ -1,4 +1,8 @@
 import type { Tab } from "@/modules/tabs";
+import { createLauncherItems, type LauncherActionContext } from "@/modules/launcher/catalog";
+import { SHORTCUTS } from "@/modules/shortcuts/shortcuts";
+import { declaredCommandSurfaceRule, commandSurfaceUnavailableReason } from "@/modules/shortcuts/lib/commandSurface";
+import { resolveActiveSurface } from "@/modules/surfaces/lib/activeSurface";
 import { describe, expect, it } from "vitest";
 import {
   type CommandPaletteActionContext,
@@ -85,6 +89,34 @@ function reasonById(over: Partial<CommandPaletteActionContext>, id: string) {
   if (!item) throw new Error(`no command item ${id}`);
   return item.disabledReason;
 }
+
+it.each(["/project", "remote://machine/project"])("declares every catalog command and resolves its complete surface matrix at %s", (cwd) => {
+  const noop = () => {};
+  const ctx: LauncherActionContext = {
+    ...baseContext({ spaces: [{ id: "one", name: "One" }, { id: "two", name: "Two" }],
+      activeViewSpacePresentation: "composite", explorerRoot: cwd, aiAvailable: true }),
+    openConnections: noop, openSshConnect: noop, openRdpConnect: noop, openGuestConnect: noop,
+    openSerialConnect: noop, openFileFromDisk: noop, openNewApiClient: noop,
+    openRunDebug: noop, openGitClone: noop, openNewHarness: noop, openOnboarding: noop,
+  };
+  const catalog = [...createCommandItems(ctx), ...createLauncherItems(ctx)];
+  const ids = [...new Set([...catalog.map((item) => item.id), ...SHORTCUTS.map((item) => item.id)])];
+  expect(ids.filter((id) => !declaredCommandSurfaceRule(id))).toEqual([]);
+  const globalEditorCommands = new Set(["editor.openFile", "editor.openFolder", "editor.quickOpen", "editor.reopenClosed", "editor.problems"]);
+  const terminalCommands = new Set(["pane.focusNext", "pane.focusPrev", "pane.swapLeft", "pane.swapRight", "pane.swapUp", "pane.swapDown", "terminal.toggleInput", "blocks.prev", "blocks.next"]);
+  for (const kind of ["harness", "terminal", "editor", "other"] as const) {
+    const surface = resolveActiveSurface({ kind, ownerId: 1, cwd, projectCwd: cwd, folder: cwd });
+    for (const id of ids) {
+      const editorOnly = (id.startsWith("editor.") && !globalEditorCommands.has(id)) || id === "launch.outline";
+      const split = id === "pane.splitRight" || id === "pane.splitDown";
+      const allowed = editorOnly ? kind === "editor" : terminalCommands.has(id) ? kind === "terminal" : split ? kind === "editor" || kind === "terminal" : true;
+      const reason = editorOnly ? "editor-required" : "terminal-required";
+      expect(commandSurfaceUnavailableReason(id, surface), `${id} on ${kind} at ${cwd}`).toBe(allowed ? null : reason);
+      const item = catalog.find((candidate) => candidate.id === id);
+      if (item) expect(item.appliesTo?.includes(kind), `${id} catalog on ${kind}`).toBe(allowed);
+    }
+  }
+});
 
 describe("createCommandItems", () => {
   it("removes built-in AI actions when AI is unavailable", () => {

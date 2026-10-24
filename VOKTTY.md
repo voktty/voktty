@@ -311,6 +311,8 @@ Desktop Harness project opening lives in `surfaces/lib/useHarnessProjectOpening.
 
 Desktop SSH disconnection is coordinated by `connections/hooks/useSshDisconnection.ts`. It captures related profile IDs, the original workspace session and affected Harness tab identities before starting cleanup. Later presentation updates recheck the tab key, workspace and cwd; only a still-selected original view receives the directed home-project request. A reentrant workspace or selection replacement cannot redirect that request or overwrite the successor workspace. Native profile and workspace-hold cleanup retain their existing best-effort error policy and acknowledgement contracts.
 
+Every built-in shortcut has an explicit surface declaration enforced by an exhaustive `ShortcutId` record. Fixed palette and launcher commands are declared separately, while space-switch commands use a nonempty parameterized declaration. Catalog tests check every emitted built-in ID and its local and remote surface matrix. Unknown extension IDs retain the global compatibility rule and are distinguishable from explicitly declared commands. Real terminal focus restrictions remain in the shortcut dispatcher: clear and copilot may target a terminal slot inside an outer Harness view, so outer surface kind alone does not establish their availability.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

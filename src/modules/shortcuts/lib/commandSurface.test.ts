@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { commandSurfaceUnavailableReason } from "@/modules/shortcuts/lib/commandSurface";
+import { commandSurfaceRule, declaredCommandSurfaceRule, commandSurfaceUnavailableReason } from "@/modules/shortcuts/lib/commandSurface";
 import { resolveActiveSurface } from "@/modules/surfaces/lib/activeSurface";
 
 it.each(["/project", "remote://machine/project"])("resolves commands across Harness and terminal at %s", (cwd) => {
@@ -14,5 +14,17 @@ it.each(["/project", "remote://machine/project"])("resolves commands across Harn
   for (const surface of [harness, terminal, editor]) {
     expect(commandSurfaceUnavailableReason("tab.new", surface)).toBeNull();
     expect(commandSurfaceUnavailableReason("commandPalette.open", surface)).toBeNull();
+  }
+});
+
+it("distinguishes explicit global declarations from unregistered extension compatibility", () => {
+  expect(declaredCommandSurfaceRule("terminal.clear")?.appliesTo).toContain("harness");
+  expect(declaredCommandSurfaceRule("terminal.copilot")?.appliesTo).toContain("harness");
+  expect(declaredCommandSurfaceRule("launch.commandHistory")?.appliesTo).toContain("harness");
+  expect(declaredCommandSurfaceRule("spaces.switch.one")?.appliesTo).toContain("harness");
+  expect(declaredCommandSurfaceRule("spaces.switch.")).toBeUndefined();
+  for (const id of ["extension.custom", "constructor", "__proto__", "toString"]) {
+    expect(declaredCommandSurfaceRule(id)).toBeUndefined();
+    expect(commandSurfaceRule(id).appliesTo).toEqual(["terminal", "harness", "editor", "other"]);
   }
 });
