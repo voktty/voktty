@@ -5,11 +5,12 @@ import { blocksFromLines, type UnifiedLine } from "../lib/unifiedDiff";
 import { UnifiedDiffView, type UnifiedDiffFileModel } from "./UnifiedDiffView";
 
 type Props = {
+  projectPath: string;
   diff: GithubPrDiff;
   focusPath?: string;
 };
 
-export function InboxPrDiff({ diff, focusPath }: Props) {
+export function InboxPrDiff({ projectPath, diff, focusPath }: Props) {
   const files = useMemo(() => {
     const parsed = mergePrDiff(diff.files, parsePrPatch(diff.patch));
     return parsed.map((file) => toModel(file, diff.truncated));
@@ -17,6 +18,7 @@ export function InboxPrDiff({ diff, focusPath }: Props) {
 
   return (
     <UnifiedDiffView
+      repoRoot={projectPath}
       files={files}
       truncated={diff.truncated}
       totals={{ additions: diff.additions, deletions: diff.deletions }}

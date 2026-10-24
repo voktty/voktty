@@ -1575,6 +1575,7 @@ function InboxDetail({
         ) : prDiff ? (
           <InboxPrDiff
             key={`${item.projectPath}:${item.number}:${revision}`}
+            projectPath={item.projectPath}
             diff={prDiff}
             focusPath={diffFocusPath}
           />
