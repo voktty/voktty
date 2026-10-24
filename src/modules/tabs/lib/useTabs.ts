@@ -1849,11 +1849,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return tabId;
   }, [openFileTab]);
 
-  const updateTab = useCallback((id: number, patch: TabPatch) => {
+  const updateTab = useCallback((id: number, patch: TabPatch, admit?: (tab: Tab) => boolean) => {
     setTabs((t) => {
       let changed = false;
       const next = t.map((x) => {
         if (x.id !== id) return x;
+        if (admit && !admit(x)) return x;
         const basePatch = {
           ...(patch.color !== undefined && { color: patch.color }),
           ...(patch.icon !== undefined && {

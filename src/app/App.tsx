@@ -7,6 +7,7 @@ import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDeskt
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
 import { useTabPreviewSplit } from "@/modules/surfaces/lib/useTabPreviewSplit";
+import { usePreviewFileNavigation } from "@/modules/preview/lib/usePreviewFileNavigation";
 import { useEditorSplitCreation } from "@/modules/surfaces/lib/useEditorSplitCreation";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
@@ -120,7 +121,6 @@ import {
   useDevServerCaptureStore,
   useLiveComponentStore,
   useWebServerStore,
-  type WebServerInfo,
 } from "@/modules/preview";
 import {
   QuickOpenDialog,
@@ -2578,97 +2578,21 @@ function DesktopApp() {
     ],
   );
 
-  const navigateFileInPreview = useCallback(
-    async (previewTabId: number, filePath: string) => {
-      const servers = useWebServerStore.getState().servers;
-      const normFile = filePath.replace(/\\/g, "/").toLowerCase();
-      let matchedServer: WebServerInfo | undefined;
-      let matchedRelative = "";
-
-      for (const s of Object.values(servers)) {
-        const normRoot = s.root_path.replace(/\\/g, "/").toLowerCase();
-        if (normFile.startsWith(normRoot)) {
-          matchedServer = s;
-          matchedRelative = filePath
-            .slice(s.root_path.length)
-            .replace(/^[/\\]+/, "")
-            .replace(/\\/g, "/");
-          break;
-        }
-      }
-
-      if (matchedServer) {
-        const targetUrl = matchedRelative
-          ? `${matchedServer.url}/${matchedRelative}`
-          : matchedServer.url;
-        const currentTab = tabsRef.current.find((t) => t.id === previewTabId);
-        if (currentTab?.kind === "preview" && currentTab.url === targetUrl) {
-          previewRefs.current.get(previewTabId)?.reload();
-        } else {
-          updateTab(previewTabId, { url: targetUrl });
-        }
-        return;
-      }
-
-      const currentTab = tabsRef.current.find((t) => t.id === previewTabId);
-      if (currentTab && currentTab.kind === "preview" && currentTab.url) {
-        const localPort = extractLocalPort(currentTab.url);
-        if (localPort) {
-          const baseRoot = effectiveExplorerRoot || activeSpace?.root;
-          if (baseRoot) {
-            const normBase = baseRoot.replace(/\\/g, "/").toLowerCase();
-            if (normFile.startsWith(normBase)) {
-              const rel = filePath
-                .slice(baseRoot.length)
-                .replace(/^[/\\]+/, "")
-                .replace(/\\/g, "/");
-              try {
-                const origin = new URL(currentTab.url).origin;
-                const targetUrl = `${origin}/${rel}`;
-                if (currentTab.url === targetUrl) {
-                  previewRefs.current.get(previewTabId)?.reload();
-                } else {
-                  updateTab(previewTabId, { url: targetUrl });
-                }
-                return;
-              } catch {
-                const targetUrl = `http://localhost:${localPort}/${rel}`;
-                if (currentTab.url === targetUrl) {
-                  previewRefs.current.get(previewTabId)?.reload();
-                } else {
-                  updateTab(previewTabId, { url: targetUrl });
-                }
-                return;
-              }
-            }
-          }
-        }
-      }
-
-      const containingDir = filePath.replace(/[/\\][^/\\]+$/, "") || filePath;
-      const rootToUse = effectiveExplorerRoot || containingDir;
-
-      try {
-        const info = await useWebServerStore.getState().startServer(rootToUse);
-        const filename = filePath.split(/[/\\]/).pop() || "";
-        const rel = filePath
-          .replace(info.root_path, "")
-          .replace(rootToUse, "")
-          .replace(/^[/\\]+/, "")
-          .replace(/\\/g, "/");
-        const targetUrl =
-          rel && rel !== filePath
-            ? `${info.url}/${rel}`
-            : filename
-              ? `${info.url}/${filename}`
-              : info.url;
-        updateTab(previewTabId, { url: targetUrl });
-      } catch (err) {
-        console.error("Failed to navigate preview file:", err);
-      }
-    },
-    [activeSpace?.root, effectiveExplorerRoot, updateTab],
-  );
+  const navigateFileInPreview = usePreviewFileNavigation({
+    tabs,
+    selectedId: effectiveActiveId,
+    root: effectiveExplorerRoot || activeSpace?.root || null,
+    workspace: activeExplorerWorkspaceEnv,
+    getTab,
+    servers: () => Object.values(useWebServerStore.getState().servers),
+    start: (root) => useWebServerStore.getState().startServer(root),
+    update: (tab, url, current) => updateTab(tab.id, { url }, (live) =>
+      current() && live.tabKey === tab.tabKey && live.kind === "preview" &&
+      live.url === tab.url && live.spaceId === tab.spaceId),
+    reload: (id) => previewRefs.current.get(id)?.reload(),
+    onUnavailable: () => toast.info(t("editor.status.previewNotSupported")),
+    onError: () => toast.error(t("feedback.somethingWentWrong")),
+  });
 
   const openDevServerPreview = useCallback(
     (capture: DevServerCapture) => {
