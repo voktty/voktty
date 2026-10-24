@@ -73,6 +73,9 @@ type Props = {
   onOpenSettings: () => void;
   onRunCommand?: (command: string) => boolean;
   runCommandDisabledReason?: string;
+  toolkitTarget?: { path: string; workspace: WorkspaceEnv } | null;
+  toolkitSourceKey?: string;
+  onOpenToolkitFile?: (path: string, workspace: WorkspaceEnv) => void;
   onOpenFile?: (path: string) => void;
   onOpenDevServer: (capture: DevServerCapture) => void;
   onOpenPreview?: (url: string) => void;
@@ -106,6 +109,9 @@ export function StatusBar({
   onOpenSettings,
   onRunCommand,
   runCommandDisabledReason,
+  toolkitTarget,
+  toolkitSourceKey,
+  onOpenToolkitFile,
   onOpenFile,
   onOpenDevServer,
   onOpenPreview,
@@ -213,10 +219,12 @@ export function StatusBar({
         />
         <SearchInline ref={searchRef} target={searchTarget} />
         <ProjectToolkitPopover
-          cwd={cwd}
+          cwd={toolkitTarget === undefined ? cwd : toolkitTarget?.path}
+          workspace={toolkitTarget?.workspace}
+          sourceKey={toolkitSourceKey}
           onRunCommand={onRunCommand}
           runCommandDisabledReason={runCommandDisabledReason}
-          onOpenFile={onOpenFile}
+          onOpenFile={onOpenToolkitFile ?? onOpenFile}
           onOpenSettings={onOpenSettings}
         />
         <Button

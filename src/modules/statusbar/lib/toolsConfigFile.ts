@@ -1,5 +1,17 @@
-import { currentWorkspaceEnv } from "@/modules/workspace";
-import { invoke } from "@tauri-apps/api/core";
+import {
+  currentWorkspaceEnv,
+  LOCAL_WORKSPACE,
+  type WorkspaceEnv,
+  workspaceForDocumentPath,
+} from "@/modules/workspace";
+import { parentPath } from "@/modules/explorer/lib/path";
+import {
+  toolkitCreateDir,
+  toolkitRead,
+  toolkitStat,
+  toolkitWrite,
+  type ToolkitFileTarget,
+} from "@/modules/statusbar/lib/toolkitFilesystem";
 import { appConfigDir, join } from "@tauri-apps/api/path";
 
 export type ConfigurableTool = {
@@ -258,75 +270,161 @@ export async function getGlobalToolsFilePath(): Promise<string> {
 
 export async function getProjectToolsFilePath(
   cwd: string | null | undefined,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
 ): Promise<string> {
-  if (cwd) {
-    const projectLocalConfig = await join(cwd, ".voktty", "tools.json");
-    const ws = currentWorkspaceEnv();
-    const exists = await invoke("fs_stat", {
-      path: projectLocalConfig,
-      workspace: ws,
-    })
-      .then(() => true)
-      .catch(() => false);
-    if (exists) return projectLocalConfig;
-  }
-  return getGlobalToolsFilePath();
+  return (await getToolsConfigTarget(cwd, workspace)).path;
 }
 
-export async function ensureToolsConfigFile(
+function requireCurrent(current: () => boolean) {
+  if (!current()) throw new Error("Toolkit request was retired");
+}
+
+export async function getToolsConfigTarget(
   cwd: string | null | undefined,
-): Promise<string> {
-  const targetPath = await getProjectToolsFilePath(cwd);
-  const ws = currentWorkspaceEnv();
-  const exists = await invoke("fs_stat", { path: targetPath, workspace: ws })
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+  current: () => boolean = () => true,
+): Promise<ToolkitFileTarget> {
+  requireCurrent(current);
+  const projectWorkspace = cwd
+    ? workspaceForDocumentPath(workspace, cwd)
+    : workspace;
+  if (
+    cwd &&
+    projectWorkspace.kind !== "serial" &&
+    projectWorkspace.kind !== "docker"
+  ) {
+    const target = {
+      path: `${cwd.replace(/\\/g, "/").replace(/\/+$/, "")}/.voktty/tools.json`,
+      workspace: projectWorkspace,
+    };
+    const exists = await toolkitStat(target, current)
+      .then(() => true)
+      .catch(() => false);
+    requireCurrent(current);
+    if (exists) return target;
+  }
+  const path = await getGlobalToolsFilePath();
+  requireCurrent(current);
+  return { path, workspace: LOCAL_WORKSPACE };
+}
+
+export async function ensureToolsConfigTarget(
+  cwd: string | null | undefined,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+  current: () => boolean = () => true,
+): Promise<ToolkitFileTarget> {
+  const target = await getToolsConfigTarget(cwd, workspace, current);
+  requireCurrent(current);
+  const exists = await toolkitStat(target, current)
     .then(() => true)
     .catch(() => false);
-
+  requireCurrent(current);
   if (!exists) {
-    const dir = targetPath.substring(
-      0,
-      Math.max(targetPath.lastIndexOf("/"), targetPath.lastIndexOf("\\")),
-    );
+    const dir = parentPath(target.path);
     if (dir) {
-      await invoke("fs_create_dir", { path: dir, workspace: ws }).catch(
-        () => {},
-      );
+      await toolkitCreateDir({ ...target, path: dir }, current).catch(() => {});
+      requireCurrent(current);
     }
     const defaultContent: ProjectToolsConfigFile = {
       tools: DEFAULT_PROJECT_TOOLS,
     };
-    await invoke("fs_write_file", {
-      path: targetPath,
-      content: JSON.stringify(defaultContent, null, 2),
-      workspace: ws,
-      source: "tools-config",
-    });
+    await toolkitWrite(
+      target,
+      JSON.stringify(defaultContent, null, 2),
+      current,
+    );
+    requireCurrent(current);
   }
+  return target;
+}
 
-  return targetPath;
+export async function ensureToolsConfigFile(
+  cwd: string | null | undefined,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+): Promise<string> {
+  return (await ensureToolsConfigTarget(cwd, workspace)).path;
 }
 
 export async function loadToolsConfigFile(
   cwd: string | null | undefined,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+  current: () => boolean = () => true,
 ): Promise<ConfigurableTool[]> {
   try {
-    const path = await getProjectToolsFilePath(cwd);
-    const ws = currentWorkspaceEnv();
-    const res = await invoke<{ kind: string; content?: string }>(
-      "fs_read_file",
-      { path, workspace: ws },
-    );
-    if (res.kind === "text" && typeof res.content === "string") {
-      const parsed = JSON.parse(res.content);
-      if (Array.isArray(parsed.tools)) {
-        return parsed.tools;
-      }
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
+    return (await loadToolsConfigSnapshot(cwd, workspace, current)).tools;
   } catch {
     // Return default tools if not found or malformed
   }
   return DEFAULT_PROJECT_TOOLS;
+}
+
+export async function loadToolsConfigSnapshot(
+  cwd: string | null | undefined,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+  current: () => boolean = () => true,
+): Promise<{ target: ToolkitFileTarget; tools: ConfigurableTool[] }> {
+  const target = await getToolsConfigTarget(cwd, workspace, current);
+  requireCurrent(current);
+  let tools = DEFAULT_PROJECT_TOOLS;
+  try {
+    const content = await toolkitRead(target, current);
+    requireCurrent(current);
+    tools = parseToolsConfig(content) ?? DEFAULT_PROJECT_TOOLS;
+  } catch {
+    requireCurrent(current);
+  }
+  return { target, tools };
+}
+
+export function parseToolsConfig(content: string): ConfigurableTool[] | null {
+  if (content.length > 1024 * 1024) return null;
+  try {
+    const parsed = JSON.parse(content);
+    const tools = Array.isArray(parsed) ? parsed : parsed?.tools;
+    if (!Array.isArray(tools) || tools.length > 256) return null;
+    const ids = new Set<string>();
+    for (const item of tools) {
+      if (
+        !item ||
+        typeof item !== "object" ||
+        Array.isArray(item) ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        item.id.length > 256 ||
+        ids.has(item.id) ||
+        typeof item.command !== "string" ||
+        item.command.length > 16384 ||
+        !["ai", "setup", "custom"].includes(item.category)
+      )
+        return null;
+      ids.add(item.id);
+      for (const key of ["name", "nameKey", "description", "descriptionKey"]) {
+        if (
+          item[key] !== undefined &&
+          (typeof item[key] !== "string" || item[key].length > 16384)
+        )
+          return null;
+      }
+      for (const key of ["tags", "stacks"]) {
+        if (
+          item[key] !== undefined &&
+          (!Array.isArray(item[key]) ||
+            item[key].length > 128 ||
+            item[key].some(
+              (value: unknown) =>
+                typeof value !== "string" || value.length > 256,
+            ))
+        )
+          return null;
+      }
+      if (
+        item.recommended !== undefined &&
+        typeof item.recommended !== "boolean"
+      )
+        return null;
+    }
+    return tools;
+  } catch {
+    return null;
+  }
 }

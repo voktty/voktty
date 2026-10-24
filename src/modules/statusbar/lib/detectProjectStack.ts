@@ -1,4 +1,5 @@
-import { native } from "@/modules/ai/lib/native";
+import { currentWorkspaceEnv, type WorkspaceEnv } from "@/modules/workspace";
+import { toolkitReadDir } from "@/modules/statusbar/lib/toolkitFilesystem";
 import { allServers } from "@/modules/lsp";
 import type { LspCustomServer } from "@/modules/settings/store";
 
@@ -51,6 +52,7 @@ const STACK_LABEL_KEYS: Record<ProjectStackType, string> = {
 export async function detectProjectStack(
   cwd: string | null | undefined,
   customServers: LspCustomServer[] = [],
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
 ): Promise<ProjectStackInfo> {
   if (!cwd) {
     return {
@@ -68,7 +70,7 @@ export async function detectProjectStack(
   }
 
   try {
-    const entries = await native.readDir(cwd).catch(() => []);
+    const entries = await toolkitReadDir({ path: cwd, workspace }).catch(() => []);
     const fileNames = new Set(entries.map((e) => e.name));
     const detectedFiles: string[] = [];
 

@@ -5,6 +5,7 @@ import {
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
+import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
 import { usePreviewFileNavigation } from "@/modules/preview/lib/usePreviewFileNavigation";
@@ -4468,6 +4469,11 @@ function DesktopApp() {
   });
 
   const terminalCommand = useSurfaceTerminalCommand(activeTab);
+  const toolkitTarget = activeTab
+    ? tabDirectoryTarget(activeTab, { root: activeCwd, env: activeTabWorkspaceEnv })
+    : null;
+  const openToolkitFile = useCallback((path: string, workspace: WorkspaceEnv) =>
+    openFileTab(path, true, { workspaceEnv: workspace }), [openFileTab]);
   const handleRunTerminalCommand = terminalCommand.run;
   const terminalCommandDisabledReason = terminalCommand.disabledReason
     ? t(terminalCommand.disabledReason) : undefined;
@@ -5187,6 +5193,9 @@ function DesktopApp() {
               onOpenSettings={() => void openSettingsWindow()}
               onRunCommand={handleRunTerminalCommand}
               runCommandDisabledReason={terminalCommandDisabledReason}
+              toolkitTarget={toolkitTarget}
+              toolkitSourceKey={activeTab?.tabKey}
+              onOpenToolkitFile={openToolkitFile}
               onOpenFile={(path) => openFileTab(path, true)}
               onOpenDevServer={openDevServerPreview}
               onOpenPreview={openPreviewTab}

@@ -1,33 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
 import { detectProjectStack } from "./detectProjectStack";
 
-vi.mock("@/modules/ai/lib/native", () => ({
-  native: {
-    readDir: vi.fn(async (dir: string) => {
-      if (dir === "/projects/php-app") {
-        return [
-          { name: "composer.json", isDir: false },
-          { name: "artisan", isDir: false },
-        ];
-      }
-      if (dir === "/projects/python-app") {
-        return [
-          { name: "pyproject.toml", isDir: false },
-          { name: "requirements.txt", isDir: false },
-        ];
-      }
-      if (dir === "/projects/rust-app") {
-        return [{ name: "Cargo.toml", isDir: false }];
-      }
-      if (dir === "/projects/node-app") {
-        return [
-          { name: "package.json", isDir: false },
-          { name: "tsconfig.json", isDir: false },
-        ];
-      }
-      return [];
-    }),
-  },
+vi.mock("@/modules/statusbar/lib/toolkitFilesystem", () => ({
+  toolkitReadDir: vi.fn(async ({ path: dir }: { path: string }) => {
+    if (dir === "/projects/php-app") {
+      return [
+        { name: "composer.json", isDir: false },
+        { name: "artisan", isDir: false },
+      ];
+    }
+    if (dir === "/projects/python-app") {
+      return [
+        { name: "pyproject.toml", isDir: false },
+        { name: "requirements.txt", isDir: false },
+      ];
+    }
+    if (dir === "/projects/rust-app") {
+      return [{ name: "Cargo.toml", isDir: false }];
+    }
+    if (dir === "/projects/node-app") {
+      return [
+        { name: "package.json", isDir: false },
+        { name: "tsconfig.json", isDir: false },
+      ];
+    }
+    return [];
+  }),
 }));
 
 describe("detectProjectStack", () => {

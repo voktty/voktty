@@ -12,7 +12,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useTranslation } from "@/modules/i18n";
-import { listSkills, type DiscoveredSkill } from "@/modules/harness/lib/fs";
+import type { DiscoveredSkill } from "@/modules/harness/lib/fs";
+import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
+import { useProjectToolkit } from "@/modules/statusbar/lib/useProjectToolkit";
 import {
   allServers,
   detectBinary,
@@ -49,30 +51,25 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  detectProjectStack,
-  type ProjectStackInfo,
-} from "../lib/detectProjectStack";
-import {
-  type ConfigurableTool,
-  DEFAULT_PROJECT_TOOLS,
-  ensureToolsConfigFile,
-  getProjectToolsFilePath,
-  loadToolsConfigFile,
-} from "../lib/toolsConfigFile";
+import { toast } from "sonner";
+import type { ConfigurableTool } from "../lib/toolsConfigFile";
 
 type TabId = "ai" | "lsp" | "setup";
 
 type Props = {
   cwd: string | null | undefined;
+  workspace?: WorkspaceEnv;
+  sourceKey?: string;
   onRunCommand?: (command: string) => boolean;
   runCommandDisabledReason?: string;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, workspace: WorkspaceEnv) => void;
   onOpenSettings: () => void;
 };
 
 export function ProjectToolkitPopover({
   cwd,
+  workspace = LOCAL_WORKSPACE,
+  sourceKey,
   onRunCommand,
   runCommandDisabledReason,
   onOpenFile,
@@ -82,57 +79,49 @@ export function ProjectToolkitPopover({
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("ai");
   const [query, setQuery] = useState("");
-  const [stackInfo, setStackInfo] = useState<ProjectStackInfo | null>(null);
-  const [tools, setTools] = useState<ConfigurableTool[]>(DEFAULT_PROJECT_TOOLS);
-  const [skills, setSkills] = useState<DiscoveredSkill[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [executedId, setExecutedId] = useState<string | null>(null);
   const [installTarget, setInstallTarget] = useState<LspPreset | null>(null);
-  const [configFilePath, setConfigFilePath] = useState<string | null>(null);
 
   const activation = usePreferencesStore((s) => s.lspActivation);
   const customServers = usePreferencesStore((s) => s.lspCustomServers);
   const servers = useMemo(() => allServers(customServers), [customServers]);
+  const reportError = useCallback(
+    () => toast.error(t("feedback.somethingWentWrong")),
+    [t],
+  );
 
-  const reloadTools = useCallback(async () => {
-    const loaded = await loadToolsConfigFile(cwd);
-    setTools(loaded);
-    const resolvedPath = await getProjectToolsFilePath(cwd);
-    setConfigFilePath(resolvedPath);
-  }, [cwd]);
-
-  const reloadSkills = useCallback(async () => {
-    if (!cwd) {
-      setSkills([]);
-      return;
-    }
-    try {
-      const list = await listSkills(cwd);
-      setSkills(list);
-    } catch {
-      setSkills([]);
-    }
-  }, [cwd]);
-
-  useEffect(() => {
-    void reloadTools();
-    void reloadSkills();
-  }, [reloadTools, reloadSkills]);
-
-  useEffect(() => {
-    if (open) {
-      void reloadTools();
-      void reloadSkills();
-    }
-  }, [open, reloadTools, reloadSkills]);
+  const {
+    tools,
+    skills,
+    stackInfo,
+    configFilePath,
+    reloadTools,
+    reloadSkills,
+    editConfig,
+    openSkill,
+    skillsDisabledReason,
+    editDisabledReason,
+  } = useProjectToolkit({
+    cwd,
+    workspace,
+    sourceKey,
+    customServers,
+    openFile: onOpenFile,
+    onError: reportError,
+    enabled: open,
+  });
 
   // Listen for editor save events to hot-reload tools and skills instantly
   useEffect(() => {
+    if (!open) return;
+    let active = true;
     type FileWrittenPayload = { path: string; source?: string };
     const unlistenPromise =
       getCurrentWebviewWindow().listen<FileWrittenPayload>(
         "fs:file-written",
         (event) => {
+          if (!active) return;
           if (event.payload.source !== "editor") return;
           const normalized = event.payload.path
             .replace(/\\/g, "/")
@@ -152,21 +141,12 @@ export function ProjectToolkitPopover({
             void reloadSkills();
           }
         },
-      );
+      ).catch(() => () => {});
     return () => {
-      void unlistenPromise.then((un) => un());
+      active = false;
+      void unlistenPromise.then((un) => un()).catch(() => {});
     };
-  }, [reloadTools, reloadSkills]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void detectProjectStack(cwd, customServers).then((res) => {
-      if (!cancelled) setStackInfo(res);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [cwd, customServers]);
+  }, [open, reloadTools, reloadSkills]);
 
   useEffect(() => {
     if (!copiedId) return;
@@ -203,11 +183,7 @@ export function ProjectToolkitPopover({
   };
 
   const handleEditConfigFile = async () => {
-    const path = await ensureToolsConfigFile(cwd);
-    if (onOpenFile) {
-      onOpenFile(path);
-      setOpen(false);
-    }
+    if (await editConfig()) setOpen(false);
   };
 
   // Filter discovered skills based on search query
@@ -362,7 +338,12 @@ export function ProjectToolkitPopover({
                   size="icon-xs"
                   className="size-6 text-muted-foreground hover:text-foreground"
                   onClick={() => void handleEditConfigFile()}
-                  title={t("projectToolkit.editToolsTitle")}
+                  disabled={Boolean(editDisabledReason)}
+                  title={
+                    editDisabledReason
+                      ? t(editDisabledReason)
+                      : t("projectToolkit.editToolsTitle")
+                  }
                 >
                   <HugeiconsIcon
                     icon={Edit02Icon}
@@ -476,9 +457,19 @@ export function ProjectToolkitPopover({
           </div>
 
           {/* Scrollable list */}
+          {editDisabledReason && editDisabledReason !== "common.loading" && (
+            <p className="px-3 pt-2 text-[10.5px] text-muted-foreground">
+              {t(editDisabledReason)}
+            </p>
+          )}
           <div className="flex-1 overflow-y-auto p-2">
             {activeTab === "ai" && (
               <div className="flex flex-col gap-3">
+                {skillsDisabledReason && (
+                  <p className="px-1 text-[10.5px] text-muted-foreground">
+                    {t("projectToolkit.discoveredSkills", { count: 0 })}: {t(skillsDisabledReason)}
+                  </p>
+                )}
                 {/* Discovered Project / User Skills */}
                 {filteredSkills.length > 0 && (
                   <div className="flex flex-col gap-1.5">
@@ -508,8 +499,7 @@ export function ProjectToolkitPopover({
                         onOpen={
                           onOpenFile
                             ? () => {
-                                onOpenFile(skill.path);
-                                setOpen(false);
+                                if (openSkill(skill.path)) setOpen(false);
                               }
                             : undefined
                         }
@@ -531,6 +521,8 @@ export function ProjectToolkitPopover({
                     <button
                       type="button"
                       onClick={() => void handleEditConfigFile()}
+                      disabled={Boolean(editDisabledReason)}
+                      title={editDisabledReason ? t(editDisabledReason) : undefined}
                       className="cursor-pointer text-primary hover:underline lowercase"
                     >
                       {t("projectToolkit.editJson")} ✎
@@ -561,6 +553,8 @@ export function ProjectToolkitPopover({
                   <button
                     type="button"
                     onClick={() => void handleEditConfigFile()}
+                    disabled={Boolean(editDisabledReason)}
+                    title={editDisabledReason ? t(editDisabledReason) : undefined}
                     className="cursor-pointer text-primary hover:underline lowercase"
                   >
                     {t("projectToolkit.editJson")} ✎
@@ -621,8 +615,13 @@ export function ProjectToolkitPopover({
             <button
               type="button"
               onClick={() => void handleEditConfigFile()}
+              disabled={Boolean(editDisabledReason)}
               className="flex cursor-pointer items-center gap-1.5 font-medium text-foreground/80 hover:text-primary hover:underline"
-              title={configFilePath ?? undefined}
+              title={
+                editDisabledReason
+                  ? t(editDisabledReason)
+                  : configFilePath ?? undefined
+              }
             >
               <HugeiconsIcon icon={Edit02Icon} size={12} strokeWidth={1.75} />
               <span>{t("projectToolkit.editTools")}</span>
