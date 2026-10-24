@@ -1,8 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { useCommandHistoryStore } from "./commandHistoryStore";
 
-vi.mock("../lib/useTerminalSession", () => ({
-  getActiveTerminalLeafId: vi.fn(() => 42),
+vi.mock("@/modules/terminal/lib/useTerminalSession", () => ({
+  captureTerminalInputTarget: vi.fn((leafId?: number | null) =>
+    leafId === null ? null : { leafId: leafId ?? 42 },
+  ),
 }));
 
 describe("commandHistoryStore", () => {
@@ -10,6 +12,7 @@ describe("commandHistoryStore", () => {
     useCommandHistoryStore.setState({
       isOpen: false,
       targetLeafId: null,
+      inputTarget: null,
       searchQuery: "",
       shellFilter: "all",
       scrollPosition: 0,
@@ -39,6 +42,7 @@ describe("commandHistoryStore", () => {
     const state = useCommandHistoryStore.getState();
     expect(state.isOpen).toBe(false);
     expect(state.targetLeafId).toBeNull();
+    expect(state.inputTarget).toBeNull();
   });
 
   it("toggles history with explicit targetLeafId", () => {
@@ -49,5 +53,11 @@ describe("commandHistoryStore", () => {
     useCommandHistoryStore.getState().toggleHistory();
     expect(useCommandHistoryStore.getState().isOpen).toBe(false);
     expect(useCommandHistoryStore.getState().targetLeafId).toBeNull();
+  });
+
+  it("keeps an explicit missing target read-only instead of capturing another leaf", () => {
+    useCommandHistoryStore.getState().openHistory("ls", null);
+    expect(useCommandHistoryStore.getState().targetLeafId).toBeNull();
+    expect(useCommandHistoryStore.getState().inputTarget).toBeNull();
   });
 });

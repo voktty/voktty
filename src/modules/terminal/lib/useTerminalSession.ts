@@ -99,6 +99,7 @@ type Callbacks = {
 };
 
 type Session = {
+  inputEpoch: object;
   pty: PtySession | null;
   ptyOpening: boolean;
   workspaceEnv: WorkspaceEnv;
@@ -156,6 +157,77 @@ type Session = {
 };
 
 const sessions = new Map<number, Session>();
+const inputTargetListeners = new Set<() => void>();
+
+function retireInputTarget(session: Session): void {
+  session.inputEpoch = {};
+  for (const listener of inputTargetListeners) listener();
+}
+
+export type TerminalInputTarget = {
+  leafId: number;
+  isAvailable: () => boolean;
+  subscribe: (listener: () => void) => () => void;
+  insert: (text: string) => boolean;
+  run: (text: string) => boolean;
+};
+
+function acceptsCapturedInput(session: Session): boolean {
+  return (
+    !session.disposed && !session.shellExited &&
+    session.visibleNow && session.focusedNow && session.container !== null &&
+    session.pty !== null && session.connectionState.phase === "ready"
+  );
+}
+
+export function captureTerminalInputTarget(
+  requestedLeafId?: number | null,
+): TerminalInputTarget | null {
+  if (requestedLeafId === null) return null;
+  for (const [leafId, session] of sessions) {
+    if (requestedLeafId !== undefined && requestedLeafId !== leafId) continue;
+    if (acceptsCapturedInput(session)) {
+      return createTerminalInputTarget(leafId, session.inputEpoch);
+    }
+  }
+  return null;
+}
+
+function createTerminalInputTarget(
+  leafId: number,
+  epoch: object,
+): TerminalInputTarget {
+  const current = () => {
+    const live = sessions.get(leafId);
+    return live?.inputEpoch === epoch && acceptsCapturedInput(live) ? live : null;
+  };
+  return {
+    leafId,
+    isAvailable: () => current() !== null,
+    subscribe: (listener) => {
+      inputTargetListeners.add(listener);
+      return () => {
+        inputTargetListeners.delete(listener);
+      };
+    },
+    insert: (text) => {
+      const live = current();
+      if (!live?.pty) return false;
+      void live.pty.write(text);
+      return true;
+    },
+    run: (text) => {
+      const live = current();
+      if (!live?.pty) return false;
+      const pty = live.pty;
+      return submitSession(leafId, live, text, (data) => {
+        if (current()?.pty !== pty) return false;
+        void pty.write(data);
+        return true;
+      });
+    },
+  };
+}
 
 const leafFailureListeners = new Map<
   number,
@@ -209,6 +281,7 @@ function setLeafConnectionState(
 ): void {
   if (state === session.connectionState) return;
   session.connectionState = state;
+  retireInputTarget(session);
   const set = leafStatusListeners.get(leafId);
   if (set) {
     for (const cb of set) cb(state);
@@ -388,9 +461,22 @@ export function writeToSession(leafId: number, data: string): boolean {
 }
 
 export function submitToLeaf(leafId: number, text: string): void {
-  lastFocusedLiveLeafId = leafId;
   const s = sessions.get(leafId);
   if (!s || s.shellExited) return;
+  submitSession(leafId, s, text, (data) => {
+    if (s.pty) void s.pty.write(data);
+    else queuePendingInput(s, data);
+    return true;
+  });
+}
+
+function submitSession(
+  leafId: number,
+  s: Session,
+  text: string,
+  write: (data: string) => boolean,
+): boolean {
+  lastFocusedLiveLeafId = leafId;
   s.everSubmitted = true;
   const trimmed = text.trim();
   if (trimmed) {
@@ -409,8 +495,7 @@ export function submitToLeaf(leafId: number, text: string): void {
   const data = text.includes("\n")
     ? `\x1b[200~${text}\x1b[201~\r`
     : `${text}\r`;
-  if (s.pty) void s.pty.write(data);
-  else queuePendingInput(s, data);
+  return write(data);
 }
 
 export function interruptLeaf(leafId: number): void {
@@ -832,6 +917,7 @@ function ensureSession(
   }
 
   const session: Session = {
+    inputEpoch: {},
     pty: null,
     ptyOpening: false,
     workspaceEnv,
@@ -1288,9 +1374,10 @@ function attachSession(
 function detachSession(leafId: number): void {
   const s = sessions.get(leafId);
   if (!s) return;
+  s.container = null;
+  retireInputTarget(s);
   unbindLeafFromSlot(leafId, s);
   s.callbacks = {};
-  s.container = null;
 }
 
 export async function respawnSession(
@@ -1567,8 +1654,10 @@ export function useTerminalSession({
   useEffect(() => {
     const s = sessions.get(leafId);
     if (!s) return;
+    const changed = s.visibleNow !== visible || s.focusedNow !== focused;
     s.visibleNow = visible;
     s.focusedNow = focused;
+    if (changed) retireInputTarget(s);
     if (visible) {
       if (focused) {
         lastFocusedLiveLeafId = leafId;

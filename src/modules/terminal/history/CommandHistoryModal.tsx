@@ -31,6 +31,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { toast } from "sonner";
 import {
@@ -42,14 +43,12 @@ import {
   type VokttyHistoryEntry,
 } from "../block/lib/history";
 import {
-  getActiveTerminalLeafId,
-  submitToLeaf,
-  writeToSession,
-} from "../lib/useTerminalSession";
-import {
   type HistoryShellFilter,
   useCommandHistoryStore,
 } from "./commandHistoryStore";
+
+const subscribeUnavailable = () => () => {};
+const unavailable = () => false;
 
 function formatRelativeTime(timestampSec: number): string {
   if (!timestampSec || timestampSec <= 0) return "";
@@ -66,7 +65,12 @@ function formatRelativeTime(timestampSec: number): string {
 export function CommandHistoryModal() {
   const { t } = useTranslation();
   const isOpen = useCommandHistoryStore((s) => s.isOpen);
-  const targetLeafId = useCommandHistoryStore((s) => s.targetLeafId);
+  const inputTarget = useCommandHistoryStore((s) => s.inputTarget);
+  const canWrite = useSyncExternalStore(
+    inputTarget?.subscribe ?? subscribeUnavailable,
+    inputTarget?.isAvailable ?? unavailable,
+    unavailable,
+  );
   const closeHistory = useCommandHistoryStore((s) => s.closeHistory);
   const searchQuery = useCommandHistoryStore((s) => s.searchQuery);
   const setSearchQuery = useCommandHistoryStore((s) => s.setSearchQuery);
@@ -157,34 +161,30 @@ export function CommandHistoryModal() {
 
   const handleInsert = useCallback(
     (cmd: string) => {
-      const leafId = targetLeafId ?? getActiveTerminalLeafId();
-      if (leafId !== null) {
-        writeToSession(leafId, cmd);
+      if (inputTarget?.insert(cmd)) {
         toast.success(t("terminal.history.insertedToast"), {
           description: cmd,
         });
         closeHistory();
       } else {
-        void handleCopy(cmd);
+        toast.error(t("editor.terminalNoActive"));
       }
     },
-    [closeHistory, handleCopy, t, targetLeafId],
+    [closeHistory, t, inputTarget],
   );
 
   const handleRun = useCallback(
     (cmd: string) => {
-      const leafId = targetLeafId ?? getActiveTerminalLeafId();
-      if (leafId !== null) {
-        submitToLeaf(leafId, cmd);
+      if (inputTarget?.run(cmd)) {
         toast.success(t("terminal.history.executedToast"), {
           description: cmd,
         });
         closeHistory();
       } else {
-        void handleCopy(cmd);
+        toast.error(t("editor.terminalNoActive"));
       }
     },
-    [closeHistory, handleCopy, t, targetLeafId],
+    [closeHistory, t, inputTarget],
   );
 
   const handleDelete = useCallback(
@@ -550,7 +550,8 @@ export function CommandHistoryModal() {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
-                          title={t("terminal.history.insert")}
+                          disabled={!canWrite}
+                          title={t(canWrite ? "terminal.history.insert" : "editor.terminalNoActive")}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleInsert(entry.cmd);
@@ -562,7 +563,8 @@ export function CommandHistoryModal() {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 rounded hover:bg-primary/20 text-primary cursor-pointer"
-                          title={t("terminal.history.run")}
+                          disabled={!canWrite}
+                          title={t(canWrite ? "terminal.history.run" : "editor.terminalNoActive")}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleRun(entry.cmd);
@@ -609,6 +611,7 @@ export function CommandHistoryModal() {
             )}
           </div>
 
+          {!canWrite && <span role="status">{t("editor.terminalNoActive")}</span>}
           <div className="flex items-center gap-2.5 font-mono text-[10.5px] opacity-75">
             <span>
               <kbd className="px-1 py-0.2 rounded bg-muted border border-border/50 text-[9px]">

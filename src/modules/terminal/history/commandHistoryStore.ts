@@ -1,11 +1,15 @@
 import { create } from "zustand";
-import { getActiveTerminalLeafId } from "../lib/useTerminalSession";
+import {
+  captureTerminalInputTarget,
+  type TerminalInputTarget,
+} from "@/modules/terminal/lib/useTerminalSession";
 
 export type HistoryShellFilter = "all" | "powershell" | "unix" | "local";
 
 export type CommandHistoryStore = {
   isOpen: boolean;
   targetLeafId: number | null;
+  inputTarget: TerminalInputTarget | null;
   searchQuery: string;
   shellFilter: HistoryShellFilter;
   scrollPosition: number;
@@ -22,26 +26,33 @@ export type CommandHistoryStore = {
 export const useCommandHistoryStore = create<CommandHistoryStore>((set) => ({
   isOpen: false,
   targetLeafId: null,
+  inputTarget: null,
   searchQuery: "",
   shellFilter: "all",
   scrollPosition: 0,
   modalPosition: null,
-  openHistory: (initialQuery = "", targetLeafId) =>
+  openHistory: (initialQuery = "", targetLeafId) => {
+    const inputTarget = captureTerminalInputTarget(targetLeafId);
     set({
       isOpen: true,
       searchQuery: initialQuery,
-      targetLeafId: targetLeafId !== undefined ? targetLeafId : getActiveTerminalLeafId(),
-    }),
-  closeHistory: () => set({ isOpen: false, targetLeafId: null }),
+      targetLeafId: inputTarget?.leafId ?? null,
+      inputTarget,
+    });
+  },
+  closeHistory: () =>
+    set({ isOpen: false, targetLeafId: null, inputTarget: null }),
   toggleHistory: (targetLeafId) =>
-    set((s) => ({
-      isOpen: !s.isOpen,
-      targetLeafId: !s.isOpen
-        ? targetLeafId !== undefined
-          ? targetLeafId
-          : getActiveTerminalLeafId()
-        : null,
-    })),
+    set((s) => {
+      const inputTarget = s.isOpen
+        ? null
+        : captureTerminalInputTarget(targetLeafId);
+      return {
+        isOpen: !s.isOpen,
+        targetLeafId: inputTarget?.leafId ?? null,
+        inputTarget,
+      };
+    }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setShellFilter: (shellFilter) => set({ shellFilter }),
   setScrollPosition: (scrollPosition) => set({ scrollPosition }),
