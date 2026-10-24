@@ -22,6 +22,25 @@ export function isWebPreviewablePath(path: string): boolean {
   return /\.(?:html?|php|svg)$/i.test(path);
 }
 
+export function previewOpeningFilesystem(
+  source: Tab | undefined,
+  root: string | null,
+  workspace: WorkspaceEnv,
+  explicit?: PreviewOpeningOptions["filesystem"],
+) {
+  const ownsDirectory =
+    source &&
+    (source.kind === "terminal" ||
+      (source.kind === "harness" && source.cwd) ||
+      "path" in source ||
+      "repoRoot" in source);
+  return explicit
+    ? { ...explicit }
+    : !ownsDirectory
+      ? { root, workspace }
+      : undefined;
+}
+
 export function previewOpeningTarget(
   target: string,
   source: Tab | undefined,

@@ -42,6 +42,7 @@ export type ShortcutContextOptions = {
   blocksMode?: boolean;
   hasSelection?: boolean;
   isMac?: boolean;
+  previewDisabledReason?: string;
 };
 
 export function shouldDisableShortcut(
@@ -56,6 +57,8 @@ export function shouldDisableShortcut(
     hasSelection = false,
     isMac = IS_MAC,
   } = options;
+
+  if (commandSurfaceRule(id).requires === "preview-project" && options.previewDisabledReason) return true;
 
   const target =
     (event.target as HTMLElement | null) ??

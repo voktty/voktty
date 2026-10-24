@@ -351,5 +351,9 @@ export function createLauncherItems(
   ];
 
   return items.filter((item): item is LauncherItem => item !== null)
-    .map((item) => ({ ...item, appliesTo: commandSurfaceRule(item.id).appliesTo }));
+    .map((item) => {
+      const rule = commandSurfaceRule(item.id);
+      const disabledReason = item.disabledReason ?? (rule.requires === "preview-project" ? ctx.previewDisabledReason : undefined);
+      return { ...item, appliesTo: rule.appliesTo, disabledReason, run: disabledReason ? () => {} : item.run };
+    });
 }

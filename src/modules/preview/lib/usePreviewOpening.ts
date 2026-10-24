@@ -6,6 +6,7 @@ import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 import { previewTargetUrl } from "@/modules/surfaces/lib/tabPreviewTarget";
 import {
   previewOpeningTarget,
+  previewOpeningFilesystem,
   type PreviewOpeningOptions,
 } from "@/modules/preview/lib/previewOpeningTarget";
 
@@ -78,17 +79,12 @@ export function usePreviewOpening(input: Input) {
       const sourceTarget = original
         ? tabDirectoryTarget(original, sourceSpace)
         : null;
-      const ownsDirectory =
-        original &&
-        (original.kind === "terminal" ||
-          (original.kind === "harness" && original.cwd) ||
-          "path" in original ||
-          "repoRoot" in original);
-      const filesystem = options.filesystem
-        ? { ...options.filesystem }
-        : !ownsDirectory
-          ? { root: state.root, workspace: state.workspace }
-          : undefined;
+      const filesystem = previewOpeningFilesystem(
+        original,
+        state.root,
+        state.workspace,
+        options.filesystem,
+      );
       const split = options.splitWithActive ?? true;
       const callerCurrent = options.current;
       const capturedContext = contextOwner.current;

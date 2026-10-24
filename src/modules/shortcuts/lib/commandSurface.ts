@@ -4,6 +4,7 @@ import type { ShortcutId } from "@/modules/shortcuts/shortcuts";
 export type CommandSurfaceRule = {
   appliesTo: readonly SurfaceKind[];
   unavailableReason: "editor-required" | "terminal-required" | null;
+  requires?: "preview-project";
 };
 
 const EDITOR: CommandSurfaceRule = {
@@ -18,6 +19,8 @@ const SPLIT: CommandSurfaceRule = {
 const GLOBAL: CommandSurfaceRule = {
   appliesTo: ["terminal", "harness", "editor", "other"], unavailableReason: null,
 };
+
+const PREVIEW: CommandSurfaceRule = { ...GLOBAL, requires: "preview-project" };
 
 const RULES: Readonly<Record<ShortcutId, CommandSurfaceRule>> = {
   "agent.focusAttention": GLOBAL,
@@ -52,7 +55,7 @@ const RULES: Readonly<Record<ShortcutId, CommandSurfaceRule>> = {
   "tab.newBlock": GLOBAL,
   "tab.newEditor": GLOBAL,
   "tab.newHarness": GLOBAL,
-  "tab.newPreview": GLOBAL,
+  "tab.newPreview": PREVIEW,
   "tab.newPrivate": GLOBAL,
   "tab.next": GLOBAL,
   "tab.prev": GLOBAL,
@@ -138,7 +141,7 @@ const COMMAND_RULES: Readonly<Record<string, CommandSurfaceRule>> = {
   "launch.apiClient": GLOBAL,
   "launch.arcade": GLOBAL,
   "launch.blockTerminal": GLOBAL,
-  "launch.browser": GLOBAL,
+  "launch.browser": PREVIEW,
   "launch.commandHistory": GLOBAL,
   "launch.connections": GLOBAL,
   "launch.editor": GLOBAL,

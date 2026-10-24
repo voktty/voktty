@@ -85,6 +85,7 @@ export type CommandPaletteActionContext = {
   canNavigateBack: boolean;
   canNavigateForward: boolean;
   openNewPreview: () => void;
+  previewDisabledReason?: string;
   openNewApiClient?: () => void;
   openNewHarness?: () => void;
   openNewHarnessInWorktree?: () => void;
@@ -1344,7 +1345,7 @@ export function createCommandItems(
 
   const declared = items.map((item) => {
     const rule = commandSurfaceRule(item.id);
-    const disabledReason = item.disabledReason ?? (
+    const disabledReason = item.disabledReason ?? (rule.requires === "preview-project" ? ctx.previewDisabledReason : undefined) ?? (
       rule.unavailableReason === "editor-required" && !ctx.editorActions && item.id !== "editor.revealInExplorer"
         ? t("commandPalette.disabled.noEditorTab") : undefined
     );

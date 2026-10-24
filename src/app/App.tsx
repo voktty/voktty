@@ -8,6 +8,7 @@ import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProje
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
 import { usePreviewFileNavigation } from "@/modules/preview/lib/usePreviewFileNavigation";
 import { usePreviewOpening } from "@/modules/preview/lib/usePreviewOpening";
+import { usePreviewOpeningCommand } from "@/modules/preview/lib/usePreviewOpeningCommand";
 import { useEditorSplitCreation } from "@/modules/surfaces/lib/useEditorSplitCreation";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
@@ -2477,11 +2478,12 @@ function DesktopApp() {
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
 
+  const previewRoot = effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null;
   const openPreviewTab = usePreviewOpening({
     tabs,
     selectedId: effectiveActiveId,
     spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
-    root: effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null,
+    root: previewRoot,
     workspace: activeExplorerWorkspaceEnv,
     limit: spaceViewLimit,
     getTab,
@@ -2503,6 +2505,17 @@ function DesktopApp() {
     onUnavailable: () => toast.info(t("editor.status.previewNotSupported")),
     onError: () => toast.error(t("feedback.somethingWentWrong")),
   });
+
+  const previewSource = tabs.find((tab) => tab.id === effectiveActiveId);
+  const previewCommand = usePreviewOpeningCommand({
+    source: previewSource,
+    space: spaces.find((space) => space.id === (previewSource?.spaceId ?? activeSpaceId)),
+    root: previewRoot,
+    workspace: activeExplorerWorkspaceEnv,
+    hasRoom: !previewSource || hasRoomToSplit(previewSource, spaceViewLimit),
+    open: openPreviewTab,
+  });
+  const previewDisabledReason = previewCommand.disabledReason ? t(previewCommand.disabledReason) : undefined;
 
   const navigateFileInPreview = usePreviewFileNavigation({
     tabs,
@@ -2871,7 +2884,7 @@ function DesktopApp() {
       "tab.new": openNewTab,
       "tab.newBlock": openNewBlockTab,
       "tab.newPrivate": openNewPrivateTab,
-      "tab.newPreview": () => openPreviewTab(""),
+      "tab.newPreview": previewCommand.run,
       "preview.toggleInspector": () =>
         useLiveComponentStore.getState().toggleInspector(),
       "tab.newApiClient": () => newApiClientTab(),
@@ -3026,7 +3039,7 @@ function DesktopApp() {
       openNewPrivateTab,
       openNewEditor,
       openNewHarness,
-      openPreviewTab,
+      previewCommand.run,
       selectProjectedTabByIndex,
       splitActivePaneInActiveTab,
       focusNextPaneInTab,
@@ -3062,9 +3075,10 @@ function DesktopApp() {
         terminalPaneCount,
         blocksMode: activeTab?.kind === "terminal" && activeTab.blocks === true,
         hasSelection: !!sel && !!sel.trim(),
+        previewDisabledReason,
       });
     },
-    [activeTab, captureActiveSelection],
+    [activeTab, captureActiveSelection, previewDisabledReason],
   );
 
   useGlobalShortcuts(shortcutHandlers, { isDisabled: shortcutsDisabled });
@@ -4500,7 +4514,8 @@ function DesktopApp() {
         navigateForward: navigateEditorForward,
         canNavigateBack: navigationAvailability.canGoBack,
         canNavigateForward: navigationAvailability.canGoForward,
-        openNewPreview: () => openPreviewTab(""),
+        openNewPreview: previewCommand.run,
+        previewDisabledReason,
         openNewApiClient: () => newApiClientTab(),
         openNewHarness,
         openNewHarnessInWorktree: () => void openNewHarnessInWorktree(),
@@ -4592,7 +4607,8 @@ function DesktopApp() {
       navigateEditorBack,
       navigateEditorForward,
       navigationAvailability,
-      openPreviewTab,
+      previewCommand.run,
+      previewDisabledReason,
       openActiveTabsLaunchpad,
       openGitGraphFromContext,
       toggleSourceControl,
