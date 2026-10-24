@@ -19,6 +19,7 @@ import {
   useState,
 } from "react";
 import { EditorPane, type EditorPaneHandle } from "./EditorPane";
+import { useEditorGroupPlacements } from "@/modules/editor/lib/useEditorGroupPlacements";
 import {
   activateEditorInLayout,
   closeEditorGroup,
@@ -151,8 +152,17 @@ export function EditorStack({
     setLayouts((current) => {
       let changed = false;
       const next: Record<string, EditorGroupLayout> = {};
+      const liveBySpace = new Map<string, Set<number>>();
+      for (const editor of editors) {
+        const ids = liveBySpace.get(editor.spaceId) ?? new Set<number>();
+        ids.add(editor.id);
+        liveBySpace.set(editor.spaceId, ids);
+      }
       for (const [spaceId, layout] of Object.entries(current)) {
-        const retained = retainEditorsInLayout(layout, live);
+        const retained = retainEditorsInLayout(
+          layout,
+          liveBySpace.get(spaceId) ?? new Set(),
+        );
         next[spaceId] = retained;
         if (retained !== layout) changed = true;
       }
@@ -160,20 +170,42 @@ export function EditorStack({
     });
   }, [editors]);
 
+  const activeEditorId = activeEditor?.id;
+  const activeEditorSpaceId = activeEditor?.spaceId;
   useEffect(() => {
-    if (!activeEditor) return;
+    if (activeEditorId === undefined || activeEditorSpaceId === undefined)
+      return;
     setLayouts((current) => {
       const existing =
-        current[activeEditor.spaceId] ??
+        current[activeEditorSpaceId] ??
         createEditorGroupLayout(nextGroupIdRef.current++);
-      const next = activateEditorInLayout(existing, activeEditor.id);
-      return next === existing && current[activeEditor.spaceId]
+      const next = activateEditorInLayout(existing, activeEditorId);
+      return next === existing && current[activeEditorSpaceId]
         ? current
-        : { ...current, [activeEditor.spaceId]: next };
+        : { ...current, [activeEditorSpaceId]: next };
     });
-  }, [activeEditor]);
+  }, [activeEditorId, activeEditorSpaceId]);
 
   const activeLayout = activeSpaceId ? layouts[activeSpaceId] : undefined;
+  const groupPlacements = useEditorGroupPlacements(
+    activeLayout?.tree,
+    !placements &&
+      activeEditorId !== undefined &&
+      editorById.has(activeEditorId),
+  );
+  const groupByTab = useMemo(
+    () =>
+      new Map(
+        (activeLayout ? editorGroupLeaves(activeLayout.tree) : []).flatMap(
+          (leaf) =>
+            leaf.tabId !== null &&
+            editorById.get(leaf.tabId)?.spaceId === activeSpaceId
+              ? [[leaf.tabId, leaf.groupId]]
+              : [],
+        ),
+      ),
+    [activeLayout, activeSpaceId, editorById],
+  );
 
   const split = useCallback(
     (direction: EditorGroupDirection) => {
@@ -281,6 +313,11 @@ export function EditorStack({
       const focused = activeLayout?.activeGroupId === node.groupId;
       return (
         <div
+          ref={(element) => {
+            if (element)
+              groupPlacements.groupRefs.current.set(node.groupId, element);
+            else groupPlacements.groupRefs.current.delete(node.groupId);
+          }}
           data-editor-group={node.groupId}
           className={cn(
             "relative h-full min-h-0 overflow-hidden bg-background",
@@ -289,13 +326,11 @@ export function EditorStack({
           onMouseDownCapture={() => focusGroup(node.groupId, node.tabId)}
           onFocusCapture={() => focusGroup(node.groupId, node.tabId)}
         >
-          {tab ? (
-            renderEditor(tab)
-          ) : (
+          {!tab ? (
             <div className="grid h-full place-items-center text-xs text-muted-foreground">
               {t("commandPalette.commands.editorEmptyGroup")}
             </div>
-          )}
+          ) : null}
         </div>
       );
     }
@@ -320,67 +355,64 @@ export function EditorStack({
 
   if (editors.length === 0) return null;
 
-  if (placements) {
-    return (
-      <div className="relative h-full w-full">
-        {editors.map((editor) => {
-          const placement = placements.get(editor.id);
-          return (
-            <div
-              key={editor.id}
-              data-space-slot={placement?.slotId}
-              data-space-tab={editor.id}
-              className="absolute bg-background"
-              style={
-                placement
-                  ? {
-                      left: `${placement.rect.x * 100}%`,
-                      top: `${placement.rect.y * 100}%`,
-                      width: `${placement.rect.width * 100}%`,
-                      height: `${placement.rect.height * 100}%`,
-                      contain: "strict",
-                      isolation: "isolate",
-                    }
-                  : {
-                      inset: 0,
-                      visibility: "hidden",
-                      pointerEvents: "none",
-                      contain: "strict",
-                      isolation: "isolate",
-                    }
-              }
-              aria-hidden={!placement}
-            >
-              {renderEditor(editor)}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  const visibleIds = new Set(
-    activeLayout
-      ? editorGroupLeaves(activeLayout.tree).flatMap((leaf) =>
-          leaf.tabId === null ? [] : [leaf.tabId],
-        )
-      : [],
-  );
-
   return (
-    <div className="relative h-full w-full">
-      {activeLayout && renderGroupNode(activeLayout.tree)}
-      {editors
-        .filter((editor) => !visibleIds.has(editor.id))
-        .map((editor) => (
+    <div ref={groupPlacements.rootRef} className="relative h-full w-full">
+      <div key="editor-groups" className="absolute inset-0">
+        {!placements && activeLayout
+          ? renderGroupNode(activeLayout.tree)
+          : null}
+      </div>
+      {editors.map((editor) => {
+        const placement = placements?.get(editor.id);
+        const groupId = groupByTab.get(editor.id);
+        const rect = placements
+          ? placement?.rect
+          : groupId === undefined
+            ? !activeLayout && activeEditorId === editor.id
+              ? { x: 0, y: 0, width: 1, height: 1 }
+              : undefined
+            : groupPlacements.rects.get(groupId);
+        const focused =
+          !placements &&
+          groupId !== undefined &&
+          activeLayout?.activeGroupId === groupId;
+        return (
           <div
             key={editor.id}
-            className="invisible pointer-events-none absolute inset-0"
-            aria-hidden
+            data-space-slot={placement?.slotId}
+            data-space-tab={editor.id}
+            data-editor-group-owner={placements ? undefined : groupId}
+            className={cn(
+              "absolute bg-background",
+              focused && "ring-1 ring-inset ring-primary/35",
+            )}
+            style={{
+              ...(rect
+                ? {
+                    left: `${rect.x * 100}%`,
+                    top: `${rect.y * 100}%`,
+                    width: `${rect.width * 100}%`,
+                    height: `${rect.height * 100}%`,
+                  }
+                : { inset: 0, visibility: "hidden" }),
+              pointerEvents: rect ? "auto" : "none",
+              contain: "strict",
+              isolation: "isolate",
+            }}
+            aria-hidden={!rect}
+            onMouseDownCapture={() => {
+              if (!placements && groupId !== undefined)
+                focusGroup(groupId, editor.id);
+            }}
+            onFocusCapture={() => {
+              if (!placements && groupId !== undefined)
+                focusGroup(groupId, editor.id);
+            }}
           >
             {renderEditor(editor)}
           </div>
-        ))}
+        );
+      })}
     </div>
   );
 }
