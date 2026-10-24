@@ -9,6 +9,7 @@ import type { WindowCloseCapture } from "@/modules/lifecycle/windowCloseParticip
 const io = vi.hoisted(() => ({
   invoke: vi.fn(),
   write: vi.fn(),
+  read: vi.fn(),
   available: true,
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: io.invoke }));
@@ -20,7 +21,7 @@ vi.mock("@/modules/harness/lib/remoteSessionIo", () => ({
           environmentId: "voktty-ssh-final",
           root: "/srv/project",
           io: {
-            read: async () => null,
+            read: io.read,
             write: io.write,
             list: async () => [],
             remove: async () => {},
@@ -59,6 +60,7 @@ beforeEach(async () => {
   });
   io.available = true;
   io.write.mockReset().mockResolvedValue(undefined);
+  io.read.mockReset().mockResolvedValue(null);
   io.invoke.mockReset().mockResolvedValue([]);
   store = await import("@/modules/harness/lib/sessionStore");
   lifecycle = await import("@/modules/harness/lib/appLifecycle");
@@ -170,6 +172,16 @@ it("does not require a remote save for blank or ephemeral conversations", async 
 it("reports failed boot-time final persistence through the quit acknowledgement", async () => {
   const source = { ...session("boot"), harness: "claude" as const };
   const tab = newTab(source.id);
+  io.read.mockImplementation(async (path: string) =>
+    path.endsWith("/boot.json")
+      ? JSON.stringify({
+          ...source,
+          cwd: "/srv/project",
+          createdAt: 1,
+          updatedAt: 1,
+        })
+      : null,
+  );
   io.invoke.mockImplementation(async (command: string) => {
     if (command === "workspace_get_snapshot")
       return {

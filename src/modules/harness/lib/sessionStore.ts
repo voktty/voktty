@@ -530,10 +530,18 @@ export async function searchSessions(options: {
 export async function getSession(
   sessionId: string,
   persistencePermit?: PersistencePermit,
+  sourceCwd?: string,
 ): Promise<Session | null> {
+  const remoteSource = sourceCwd !== undefined && isRemoteProjectPath(sourceCwd);
+  const requestedHome = remoteSource ? remoteHomeFor(sourceCwd) : undefined;
+  if (remoteSource && !requestedHome) return null;
   const cached = getCachedSession(sessionId);
-  if (cached) return cached;
-  const remoteHome = remoteSessionHomes.get(sessionId);
+  if (cached && (sourceCwd === undefined || cached.cwd === sourceCwd))
+    return cached;
+  const remoteHome = sourceCwd === undefined
+    ? remoteSessionHomes.get(sessionId)
+    : requestedHome;
+  if (requestedHome) remoteSessionHomes.set(sessionId, requestedHome);
   const record = remoteHome
     ? await remoteHome.store
         .get(sessionId)

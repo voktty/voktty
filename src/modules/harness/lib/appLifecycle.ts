@@ -320,19 +320,29 @@ async function readResumedWorkspace(
   const snapshot = parseWorkspaceSnapshot(snapshotRaw);
 
   const ids = new Set<string>();
+  const sourceCwds = new Map<string, string>();
   if (snapshot) {
-    for (const stub of snapshot.sessions) ids.add(stub.id);
+    for (const stub of snapshot.sessions) {
+      ids.add(stub.id);
+      sourceCwds.set(stub.id, stub.cwd);
+    }
     for (const tab of snapshot.tabs) {
       for (const id of leafIds(tab.layout)) ids.add(id);
     }
   }
-  for (const ref of refs) ids.add(ref.sessionId);
+  for (const ref of refs) {
+    ids.add(ref.sessionId);
+    if (!sourceCwds.has(ref.sessionId)) sourceCwds.set(ref.sessionId, ref.cwd);
+  }
 
   const loaded = new Map<string, Session>();
   await Promise.all(
     [...ids].map(async (id) => {
       if (!isCurrent()) return;
-      const record = await getSession(id, permit).catch(() => null);
+      const cwd = sourceCwds.get(id);
+      const record = await (cwd === undefined
+        ? getSession(id, permit)
+        : getSession(id, permit, cwd)).catch(() => null);
       if (isCurrent() && record) loaded.set(id, record);
     }),
   );
