@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { windowSessionState } from "@/modules/lifecycle/windowSessionState";
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import { deleteGeneratedImages } from "./fs";
 import { isWeakToolTitle } from "./harness/preview";
@@ -718,6 +719,10 @@ export async function flushSessionWrites(): Promise<void> {
 let workspaceWrite: Promise<unknown> = Promise.resolve();
 
 export async function saveWorkspaceSnapshot(snapshot: unknown): Promise<void> {
+  if (windowSessionState.isManaged()) {
+    windowSessionState.changed();
+    return;
+  }
   const run = workspaceWrite
     .catch(() => undefined)
     .then(() => invoke("workspace_set_snapshot", { snapshot }));
@@ -726,6 +731,14 @@ export async function saveWorkspaceSnapshot(snapshot: unknown): Promise<void> {
 }
 
 export async function loadWorkspaceSnapshot(): Promise<unknown | null> {
+  if (windowSessionState.isManaged()) {
+    const boot = windowSessionState.boot();
+    if (!boot.restore) return null;
+    if (boot.state) {
+      const { parseHarnessWindowSnapshot } = await import("@/modules/harness/lib/harnessWindowSnapshot");
+      return parseHarnessWindowSnapshot(boot.state).workspace;
+    }
+  }
   const raw = await invoke<unknown | null>("workspace_get_snapshot");
   return raw ?? null;
 }

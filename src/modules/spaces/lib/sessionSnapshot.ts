@@ -30,6 +30,7 @@ import {
   type ViewSpace,
 } from "./spaceLayout";
 import type { ActiveStripItem, StripEntry } from "./spaceProjection";
+import { parseHarnessWindowState, type HarnessWindowState } from "@/modules/lifecycle/windowSessionState";
 
 export const SESSION_SCHEMA_VERSION = 2 as const;
 
@@ -49,6 +50,7 @@ export type SessionSerializedTab = SerializedTab & {
 };
 
 export type SessionSnapshot = {
+  harness?: HarnessWindowState;
   schemaVersion: typeof SESSION_SCHEMA_VERSION;
   workspaceContexts: WorkspaceContext[];
   activeWorkspaceContextId: string | null;
@@ -80,6 +82,7 @@ export type LegacySpacesStore = {
 };
 
 export type RuntimeSessionState = {
+  harness?: HarnessWindowState;
   workspaceContexts: WorkspaceContext[];
   activeWorkspaceContextId: string | null;
   tabs: Tab[];
@@ -447,6 +450,7 @@ export function snapshotFromRuntime(
   const active = serializableTabs.find((tab) => tab.id === state.activeTabId);
   return repairSessionSnapshot({
     schemaVersion: SESSION_SCHEMA_VERSION,
+    ...(state.harness ? { harness: state.harness } : {}),
     workspaceContexts: state.workspaceContexts.map((context) => ({
       ...context,
       env: persistentWorkspaceEnv(context.env),
@@ -733,6 +737,7 @@ export function repairSessionSnapshot(input: SessionSnapshot): SessionSnapshot {
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
     workspaceContexts: contexts,
+    ...(parseHarnessWindowState(input.harness) ? { harness: parseHarnessWindowState(input.harness) } : {}),
     activeWorkspaceContextId:
       activeTabContext && contextIds.has(activeTabContext)
         ? activeTabContext

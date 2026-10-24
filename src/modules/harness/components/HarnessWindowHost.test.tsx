@@ -18,6 +18,7 @@ import {
 import { useHarnessViewRegistration } from "@/modules/harness/hooks/useHarnessViewRegistration";
 import { HarnessApp } from "@/modules/harness/components/HarnessApp";
 import { HarnessStack } from "@/modules/harness/components/HarnessStack";
+import "@/modules/harness/components/HarnessRuntimeBootstrap";
 import type { HarnessTab } from "@/modules/tabs";
 import type { HarnessSummarySource } from "@/modules/harness/lib/harnessSummaryUpdates";
 import { createRoot, type Root } from "react-dom/client";

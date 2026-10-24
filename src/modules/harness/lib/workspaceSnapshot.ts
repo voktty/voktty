@@ -149,7 +149,7 @@ function withoutInboxSessions(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
   };
 }
 
-export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
+export function parseWorkspaceSnapshot(raw: unknown, allowEmpty = false): WorkspaceSnapshot | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as {
     tabs?: unknown;
@@ -165,7 +165,7 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
   const tabs = value.tabs
     .map(sanitizeTab)
     .filter((tab): tab is WorkspaceTab => tab != null);
-  if (tabs.length === 0) return null;
+  if (tabs.length === 0 && !allowEmpty) return null;
   const sessions = Array.isArray(value.sessions)
     ? value.sessions
         .map(sanitizeStub)
@@ -173,7 +173,7 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
     : [];
   const activeTabId = tabs.some((tab) => tab.id === value.activeTabId)
     ? value.activeTabId
-    : tabs[0].id;
+    : tabs[0]?.id ?? "";
   const projectCwd =
     typeof value.projectCwd === "string" && value.projectCwd.trim()
       ? value.projectCwd.trim()
@@ -184,7 +184,7 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
         .filter((dock): dock is ProjectTerminalDock => dock != null)
     : [];
   const snapshot = withoutInboxSessions({ tabs, sessions, activeTabId, projectCwd, projectTerminals });
-  return snapshot.tabs.length > 0
+  return snapshot.tabs.length > 0 || allowEmpty
     ? withProjectReturnTargets(
         snapshot,
         parseProjectReturnTargets(value.projectReturnTargets),
@@ -204,8 +204,9 @@ export function hydrateWorkspaceSnapshot(
   snapshot: WorkspaceSnapshot,
   loaded: Map<string, Session>,
   interruptedIds: ReadonlySet<string> = new Set(),
+  allowEmpty = false,
 ): ResumedWorkspace | null {
-  const parsed = parseWorkspaceSnapshot(snapshot);
+  const parsed = parseWorkspaceSnapshot(snapshot, allowEmpty);
   if (!parsed) return null;
 
   const paneIds = new Set<string>();
@@ -259,10 +260,10 @@ export function hydrateWorkspaceSnapshot(
     tabs.push(newTab(id));
   }
 
-  if (tabs.length === 0) return null;
+  if (tabs.length === 0 && !allowEmpty) return null;
   const activeTabId = tabs.some((tab) => tab.id === parsed.activeTabId)
     ? parsed.activeTabId
-    : tabs[0].id;
+    : tabs[0]?.id ?? "";
   const projectCwd =
     parsed.projectCwd !== "~"
       ? parsed.projectCwd

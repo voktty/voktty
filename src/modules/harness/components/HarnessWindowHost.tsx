@@ -66,6 +66,9 @@ import {
 } from "@/modules/harness/lib/pty";
 import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
 import { confirmCloseTerminal } from "@/modules/harness/lib/terminalClose";
+import { windowSessionState } from "@/modules/lifecycle/windowSessionState";
+import { collectHarnessWindowState } from "@/modules/harness/lib/harnessWindowSnapshot";
+import type { ResumedWorkspace } from "@/modules/harness/lib/inFlight";
 
 type WindowRuntime = {
   engine: ReturnType<typeof useHarnessSessionEngine>;
@@ -102,16 +105,42 @@ export function HarnessWindowHost({
   skipSnapshot = false,
   onOpenReminder,
   createNavigationView,
+  initialViews = [],
+  viewIdentities = [],
+  initialOwnerId: _initialOwnerId,
 }: {
   children: ReactNode;
   initialSessions?: () => Session[];
   skipSnapshot?: boolean;
   onOpenReminder?: ConfirmedReminderSessionOpener;
   createNavigationView?: CreateHarnessNavigationView;
+  initialViews?: { ownerId: number; tabKey?: string | null; workspace: ResumedWorkspace }[];
+  viewIdentities?: { ownerId: number; tabKey: string }[];
+  initialOwnerId?: number;
 }) {
   const [holds] = useState(createHarnessWindowSessionHolds);
   const [projects] = useState(createHarnessProjectReservations);
-  const [views] = useState(() => createHarnessWindowViews(holds, projects));
+  const [views] = useState(() => {
+    const restored = createHarnessWindowViews(holds, projects);
+    for (const { ownerId, workspace } of initialViews) {
+      restored.register(ownerId, {
+        ...workspace,
+        projectTerminals: workspace.projectTerminals ?? [],
+        projectReturnMemory: workspace.projectReturnMemory ?? new Map(),
+        report: normalizeHarnessSessionViewReport({ referencedSessionIds: workspace.sessions.map((session) => session.id) }),
+      }).release();
+    }
+    return restored;
+  });
+  const identityKeys = useRef(new Map<number, string>(initialViews.flatMap(
+    (view) => view.tabKey ? [[view.ownerId, view.tabKey] as const] : [],
+  )));
+  const currentKeys = new Map(viewIdentities.map((identity) => [identity.ownerId, identity.tabKey]));
+  for (const cohort of views.getSnapshot().cohorts) {
+    const key = currentKeys.get(cohort.ownerId) ?? identityKeys.current.get(cohort.ownerId);
+    if (key) currentKeys.set(cohort.ownerId, key);
+  }
+  identityKeys.current = currentKeys;
   const [terminalMigrations] = useState(() =>
     createLegacyTerminalMigrations(
       views,
@@ -297,6 +326,10 @@ export function HarnessWindowHost({
     () => captureHarnessWindowSnapshot(cohortSnapshot, engine.sessions),
     [engine.sessions, cohortSnapshot],
   );
+  const stateReader = useRef(() => collectHarnessWindowState(views.getSnapshot(), sessionsRef.current, identityKeys.current));
+  stateReader.current = () => collectHarnessWindowState(views.getSnapshot(), sessionsRef.current, identityKeys.current);
+  useEffect(() => windowSessionState.install(() => stateReader.current()), []);
+  useEffect(() => { windowSessionState.changed(); }, [workspace]);
   const activeTabs = useMemo(
     () =>
       cohortSnapshot.cohorts

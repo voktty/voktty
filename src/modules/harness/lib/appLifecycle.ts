@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { windowSessionState } from "@/modules/lifecycle/windowSessionState";
+import { parseHarnessWindowSnapshot, type HarnessWindowSnapshot } from "@/modules/harness/lib/harnessWindowSnapshot";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   bindHarnessSession,
@@ -57,6 +59,7 @@ export type { ResumedWorkspace };
 export { hasInFlightSessions };
 
 export type BootWorkspace = {
+  windowSnapshot?: HarnessWindowSnapshot;
   windowTransfer: WindowTransferPayload | null;
   resumed: ResumedWorkspace | null;
 };
@@ -283,8 +286,11 @@ export function loadBootWorkspace(): Promise<BootWorkspace> {
   if (!bootPromise) {
     bootPromise = (async () => {
       const windowTransfer = await loadWindowTransfer();
-      const resumed = windowTransfer ? null : await loadResumedWorkspace();
-      return { windowTransfer, resumed };
+      const boot = windowSessionState.boot();
+      const resumed = windowTransfer || !boot.restore ? null : await loadResumedWorkspace();
+      const windowSnapshot = !windowTransfer && boot.restore && boot.state
+        ? parseHarnessWindowSnapshot(boot.state) : undefined;
+      return { windowTransfer, resumed, ...(windowSnapshot ? { windowSnapshot } : {}) };
     })();
   }
   return bootPromise;
@@ -317,7 +323,7 @@ async function readResumedWorkspace(
   ]);
   if (!isCurrent()) return null;
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
-  const snapshot = parseWorkspaceSnapshot(snapshotRaw);
+  const snapshot = parseWorkspaceSnapshot(snapshotRaw, true);
 
   const ids = new Set<string>();
   const sourceCwds = new Map<string, string>();
@@ -349,7 +355,7 @@ async function readResumedWorkspace(
   if (!isCurrent()) return null;
 
   let workspace = snapshot
-    ? hydrateWorkspaceSnapshot(snapshot, loaded, interrupted)
+    ? hydrateWorkspaceSnapshot(snapshot, loaded, interrupted, true)
     : null;
   if (!workspace && refs.length > 0) {
     const sessions: Session[] = [];

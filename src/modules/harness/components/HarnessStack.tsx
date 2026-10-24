@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, useContext, useLayoutEffect } from "react";
+import { HarnessRestoreContext } from "@/modules/harness/hooks/harnessRestoreContext";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useTranslation } from "@/modules/i18n";
@@ -32,7 +33,10 @@ const LazyHarnessApp = lazy(() =>
   })),
 );
 const LazyHarnessRuntime = lazy(() =>
-  loadHarnessApp().then((m) => ({ default: m.HarnessRuntimeRoot })),
+  loadHarnessApp().then(async (m) => {
+    const { loadHarnessRuntime } = await import("@/modules/harness/components/HarnessRuntimeBootstrap");
+    return loadHarnessRuntime(m.HarnessRuntimeRoot);
+  }),
 );
 const LazyNativeAiView = lazy(() =>
   import("./HarnessNativeAiView").then((module) => ({
@@ -60,6 +64,10 @@ function HarnessWorkbench({
   layoutKey?: string;
 }) {
   const { t } = useTranslation();
+  const restored = useContext(HarnessRestoreContext);
+  const [bootView] = useState(() => restored && !restored.claimed.has(tab.tabKey)
+    ? restored.views.get(tab.tabKey) : undefined);
+  useLayoutEffect(() => { restored?.claimed.add(tab.tabKey); }, [restored, tab.tabKey]);
   const [view, setView] = useState<"harness" | "native">("harness");
   const activate = useHarnessViewActivation(
     focused && view === "harness",
@@ -111,6 +119,7 @@ function HarnessWorkbench({
           }}
         >
           <LazyHarnessApp
+            {...bootView}
             initialCwd={tab.cwd}
             initialSessionId={tab.sessionId}
             surfaceOwnerId={tab.id}
@@ -179,7 +188,9 @@ export function HarnessStack({
   return (
     <div className="relative h-full w-full">
       <Suspense fallback={null}>
-        <LazyHarnessRuntime createNavigationView={creation.create}>
+        <LazyHarnessRuntime createNavigationView={creation.create}
+          initialOwnerId={activeId}
+          viewIdentities={tabs.filter((tab) => tab.kind === "harness").map((tab) => ({ ownerId: tab.id, tabKey: tab.tabKey }))}>
           {harnessTabs.map((tab) => {
             const placement = placements?.get(tab.id);
             const visible = placements

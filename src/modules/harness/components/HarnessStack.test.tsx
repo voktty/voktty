@@ -12,6 +12,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HarnessTab } from "@/modules/tabs";
 import { HarnessStack } from "./HarnessStack";
+import "@/modules/harness/components/HarnessRuntimeBootstrap";
 import { createPersistenceAdmission } from "@/modules/harness/lib/persistenceAdmission";
 import type {
   CreateHarnessNavigationView,
@@ -29,6 +30,9 @@ const mounts = vi.hoisted(() => ({
   create: undefined as CreateHarnessNavigationView | undefined,
   registrations: vi.fn(),
   failedOwnerId: null as number | null,
+}));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),

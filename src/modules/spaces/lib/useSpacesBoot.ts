@@ -25,6 +25,7 @@ import { bindRestoredSshSession } from "./restoreRemoteWorkspace";
 import { freshHarnessTab, freshTerminalTab } from "./serialize";
 import { loadAll, type SpaceMeta } from "./store";
 import { useSpaces } from "./useSpaces";
+import { windowSessionState } from "@/modules/lifecycle/windowSessionState";
 
 type Params = {
   ready: boolean;
@@ -99,6 +100,7 @@ export function useSpacesBoot({
           startupSurface,
         );
         if (!bootPlan.restoreLastCleanSession) {
+          windowSessionState.seed(undefined, false);
           const root = bootPlan.root;
           const now = Date.now();
           const meta: SpaceMeta = {
@@ -143,6 +145,7 @@ export function useSpacesBoot({
           return;
         }
         const { spaces, activeId, states, session } = await loadAll();
+        windowSessionState.seed(session?.harness, true);
 
         if (spaces.length === 0) {
           const root = bootPlan.root;

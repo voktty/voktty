@@ -1,5 +1,6 @@
 import type { Tab } from "@/modules/tabs";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { windowSessionState } from "@/modules/lifecycle/windowSessionState";
 import { type SessionSnapshot, snapshotFromRuntime } from "./sessionSnapshot";
 import {
   promoteLastCleanSession,
@@ -37,6 +38,8 @@ export function useSpacePersistence({
   enabled,
   ownerInstanceId,
 }: Params) {
+  const harnessRevision = useSyncExternalStore(windowSessionState.subscribe, windowSessionState.getRevision);
+  useEffect(() => { windowSessionState.manage(); }, []);
   const workspaceContexts = useSpaces((state) => state.spaces);
   const viewSpaces = useSpaces((state) => state.viewSpaces);
   const stripEntries = useSpaces((state) => state.stripEntries);
@@ -50,6 +53,7 @@ export function useSpacePersistence({
     const runtime = latest.current;
     const spaces = useSpaces.getState();
     return snapshotFromRuntime({
+      harness: windowSessionState.capture(),
       workspaceContexts: spaces.spaces,
       activeWorkspaceContextId: runtime.activeSpaceId,
       tabs: runtime.tabs,
@@ -73,6 +77,7 @@ export function useSpacePersistence({
       tabs,
       viewSpaces,
       workspaceContexts,
+      harnessRevision,
     }),
     [
       activeId,
@@ -82,6 +87,7 @@ export function useSpacePersistence({
       tabs,
       viewSpaces,
       workspaceContexts,
+      harnessRevision,
     ],
   );
 
