@@ -1,3 +1,8 @@
+import {
+  parseRemotePath,
+  remotePath,
+} from "@/modules/connections/model/remoteProjects";
+
 /**
  * Resolves a relative path against a base markdown document file path.
  */
@@ -6,6 +11,16 @@ export function resolveRelativeDocPath(
   relativePath: string,
 ): string {
   if (!relativePath || !baseDocPath) return relativePath || "";
+
+  if (/^(?:\\\\|\/\/)/.test(relativePath)) return relativePath;
+
+  const remote = parseRemotePath(baseDocPath);
+  if (remote && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(relativePath)) {
+    return remotePath(
+      remote.environmentId,
+      resolveRelativeDocPath(remote.hostPath, relativePath),
+    );
+  }
 
   // If already absolute or URL with protocol (http, https, data, asset, mailto, etc.)
   if (
@@ -25,17 +40,22 @@ export function resolveRelativeDocPath(
 
   const parts = baseDir.split("/").filter(Boolean);
   const isWindowsDrive = /^[a-zA-Z]:/.test(normalizedBase);
-  const prefix = isWindowsDrive ? "" : normalizedBase.startsWith("/") ? "/" : "";
+  const isUnc = normalizedBase.startsWith("//");
+  const rootDepth = isUnc ? 2 : isWindowsDrive ? 1 : 0;
+  const prefix = isUnc
+    ? "//"
+    : isWindowsDrive
+      ? ""
+      : normalizedBase.startsWith("/")
+        ? "/"
+        : "";
 
   const relSegments = relativePath.replace(/\\/g, "/").split("/");
 
   for (const seg of relSegments) {
     if (seg === "." || seg === "") continue;
     if (seg === "..") {
-      if (
-        parts.length > 0 &&
-        !(parts.length === 1 && /^[a-zA-Z]:$/.test(parts[0]))
-      ) {
+      if (parts.length > rootDepth) {
         parts.pop();
       }
     } else {

@@ -6,6 +6,12 @@ import {
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
 import { useDirectoryTerminalOpening } from "@/modules/surfaces/lib/useDirectoryTerminalOpening";
+import { usePathOpening } from "@/modules/surfaces/lib/usePathOpening";
+import {
+  requestPathOpening,
+  type PathOpeningRequest,
+} from "@/modules/surfaces/lib/pathOpeningRequest";
+import { nativeFolderSource } from "@/modules/explorer/lib/nativeFolderSelection";
 import { useKanbanCardDrop } from "@/modules/notes-board/lib/useKanbanCardDrop";
 import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
@@ -257,7 +263,6 @@ import {
   useWorkspaceEnvStore,
   type WorkspaceEnv,
   workspaceForDocumentPath,
-  workspaceForNativeFs,
   workspaceScopeKey,
 } from "@/modules/workspace";
 import {
@@ -2150,51 +2155,47 @@ function DesktopApp() {
     [newTab, openLaunchFiles, wasDirectoryRequestAppliedAtBoot],
   );
 
-  const handleDroppedPath = useCallback(
-    async (path: string) => {
-      try {
-        const pathWorkspace = workspaceForDocumentPath(workspaceEnv, path);
-        const stat = await invoke<{ kind: "file" | "dir" | "symlink" }>(
-          "fs_stat",
-          {
-            path,
-            workspace: workspaceForNativeFs(pathWorkspace, path),
-          },
-        ).catch(() => null);
-
-        const isDir = stat ? stat.kind === "dir" : false;
-
-        if (isDir) {
-          const spaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
-          useSpaces.getState().setRoot(spaceId, path);
-          useSpaces.getState().setEnv(spaceId, pathWorkspace);
-          setWorkspaceEnv(pathWorkspace);
-          const currentSpaceTabs = tabsRef.current.filter(
-            (t) => t.spaceId === spaceId,
-          );
-          if (currentSpaceTabs.length === 0) {
-            newTab(path, pathWorkspace);
-          }
-        } else {
-          handleOpenFile(path, true, { workspaceEnv: pathWorkspace });
-        }
-      } catch (e) {
-        console.error("Failed to handle dropped path:", e);
-        handleOpenFile(path, true, {
-          workspaceEnv: workspaceForDocumentPath(workspaceEnv, path),
-        });
+  const openRequestedFile = useCallback(
+    (request: PathOpeningRequest) => {
+      handleOpenFile(request.path, true, {
+        workspaceEnv: request.workspace,
+        spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+      });
+    },
+    [handleOpenFile, activeSpaceId],
+  );
+  const openRequestedDirectory = useCallback(
+    (request: PathOpeningRequest, current: () => boolean) => {
+      const spaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
+      const selection = useSpaces.getState().activeId;
+      if (!useSpaces.getState().setContext(
+        spaceId, request.path, request.workspace, current,
+      )) return;
+      if (
+        useSpaces.getState().activeId !== selection ||
+        tabsRef.current.some((tab) => tab.spaceId === spaceId)
+      ) return;
+      if (request.path.startsWith("remote://")) newHarnessTab(spaceId, request.path);
+      else {
+        setActiveSpaceForNewTabs(spaceId);
+        newTab(request.path, request.workspace);
       }
     },
-    [workspaceEnv, activeSpaceId, setWorkspaceEnv, newTab, handleOpenFile],
+    [activeSpaceId, newHarnessTab, newTab, setActiveSpaceForNewTabs],
+  );
+  usePathOpening({
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    sourceKey: nativeFolderSource(activeTab, activeSpace),
+    openFile: openRequestedFile,
+    openDirectory: openRequestedDirectory,
+    onError: reportDirectoryTerminalError,
+  });
+  const handleDroppedPath = useCallback(
+    (path: string) => requestPathOpening(path, LOCAL_WORKSPACE, "unknown"),
+    [],
   );
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<string>;
-      if (custom.detail) {
-        void handleDroppedPath(custom.detail);
-      }
-    };
     const gitGraphHandler = (e: Event) => {
       const custom = e as CustomEvent<{
         repoRoot?: string;
@@ -2210,15 +2211,12 @@ function DesktopApp() {
         });
       }
     };
-    window.addEventListener("voktty:open-dropped-path", handler);
     window.addEventListener("voktty:open-git-graph", gitGraphHandler);
     return () => {
-      window.removeEventListener("voktty:open-dropped-path", handler);
       window.removeEventListener("voktty:open-git-graph", gitGraphHandler);
     };
   }, [
     explorerRoot,
-    handleDroppedPath,
     launchCwd,
     openCommitHistoryTab,
   ]);

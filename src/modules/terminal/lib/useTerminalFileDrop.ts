@@ -1,4 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
+import { LOCAL_WORKSPACE } from "@/modules/workspace";
 import { useEffect } from "react";
 import { useTerminalDropStore } from "./dropStore";
 import { formatDroppedPaths } from "./quoteShellPath";
@@ -118,9 +120,7 @@ export function createTerminalPathDropTarget({
   },
   openDroppedPath = (path: string) => {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("voktty:open-dropped-path", { detail: path }),
-      );
+      requestPathOpening(path, LOCAL_WORKSPACE, "unknown");
       return true;
     }
     return false;
@@ -238,9 +238,7 @@ export function useTerminalFileDrop(): TerminalPathDropTarget {
             pasteIntoLeaf(leafId, formatDroppedPaths(p.paths));
           } else {
             for (const path of p.paths) {
-              window.dispatchEvent(
-                new CustomEvent("voktty:open-dropped-path", { detail: path }),
-              );
+              requestPathOpening(path, LOCAL_WORKSPACE, "unknown");
             }
           }
         }

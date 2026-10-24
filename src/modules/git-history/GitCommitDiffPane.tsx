@@ -229,6 +229,7 @@ export function GitCommitDiffPane({
             truncated={anyTruncated}
             initialExpansion="all"
             repoRoot={repoRoot}
+            workspaceEnv={workspaceEnv}
             onOpenFile={onOpenFile}
             onOpenGitHistory={() => handleOpenCommitGraph()}
             fill

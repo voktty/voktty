@@ -1,4 +1,7 @@
 import type React from "react";
+import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
+import { LOCAL_WORKSPACE } from "@/modules/workspace";
+import { terminalProjectPath } from "@/modules/connections/model/remoteProjects";
 import { useTranslation } from "@/modules/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -275,8 +278,11 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
 
   const handleOpenFile = useCallback((path?: string) => {
     if (!path) return;
-    window.dispatchEvent(
-      new CustomEvent("voktty:open-dropped-path", { detail: path }),
+    requestPathOpening(
+      path.startsWith("remote://")
+        ? path
+        : terminalProjectPath(sessionRef.current.cwd, path),
+      LOCAL_WORKSPACE,
     );
   }, []);
 

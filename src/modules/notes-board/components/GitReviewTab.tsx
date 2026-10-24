@@ -33,6 +33,7 @@ import {
 } from "@/modules/source-control/lib/reviewQueue";
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { ExplorerMenu, type ExplorerMenuItem } from "@/modules/harness/chrome/ExplorerMenu";
 import { copyText } from "@/modules/harness/lib/clipboard";
@@ -56,7 +57,7 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { TabSummary } from "../lib/agentHandoff";
 
@@ -137,6 +138,7 @@ export function GitReviewTab({ cwd = null }: Props) {
   const repoRoot = sourceControl.status?.repoRoot ?? cwd ?? "";
   const hasRepo = sourceControl.hasRepo;
   const branchName = sourceControl.status?.branch ?? "";
+  useLayoutEffect(() => setFileMenu(null), [repoRoot, activeWorkspaceEnv]);
 
   const handleMenuPick = useCallback(
     (actionId: string) => {
@@ -150,9 +152,7 @@ export function GitReviewTab({ cwd = null }: Props) {
       let action: Promise<void> | void;
       switch (actionId) {
         case "open-file":
-          window.dispatchEvent(
-            new CustomEvent("voktty:open-dropped-path", { detail: fullPath }),
-          );
+          requestPathOpening(fullPath, activeWorkspaceEnv);
           return;
         case "open-default":
           action = openPath(fullPath);

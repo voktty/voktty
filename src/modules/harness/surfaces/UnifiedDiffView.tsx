@@ -10,6 +10,8 @@ import {
   UnfoldVertical,
 } from "../chrome/icons";
 import { t, useTranslation } from "@/modules/i18n";
+import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
+import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
 import {
   memo,
   useCallback,
@@ -140,6 +142,7 @@ type Props = {
   busyId?: string | null;
   totals?: { additions: number; deletions: number };
   repoRoot?: string;
+  workspaceEnv?: WorkspaceEnv;
   /** Fill the parent pane and scroll inside. Off when the parent already scrolls. */
   fill?: boolean;
   /** Changes uses a continuous stack; embedded review surfaces can use cards. */
@@ -160,6 +163,7 @@ export function UnifiedDiffView({
   busyId,
   totals,
   repoRoot,
+  workspaceEnv = LOCAL_WORKSPACE,
   fill = true,
   fileLayout = "stacked",
   initialExpansion = "all",
@@ -179,6 +183,7 @@ export function UnifiedDiffView({
     Record<string, Record<string, FoldReveal>>
   >({});
   const [fileMenu, setFileMenu] = useState<FileContextMenuState | null>(null);
+  useLayoutEffect(() => setFileMenu(null), [repoRoot, workspaceEnv]);
   const fileRefs = useRef(new Map<string, HTMLElement>());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileKey = useMemo(
@@ -357,9 +362,7 @@ export function UnifiedDiffView({
           if (onOpenFile) {
             onOpenFile(fullPath);
           } else {
-            window.dispatchEvent(
-              new CustomEvent("voktty:open-dropped-path", { detail: fullPath }),
-            );
+            requestPathOpening(fullPath, workspaceEnv);
           }
           return;
         case "toggle-full-file":
@@ -400,7 +403,7 @@ export function UnifiedDiffView({
         });
       }
     },
-    [fileMenu, onOpenFile, onOpenGitHistory, repoRoot, toggleFullFile],
+    [fileMenu, onOpenFile, onOpenGitHistory, repoRoot, toggleFullFile, workspaceEnv],
   );
 
   if (files.length === 0) {

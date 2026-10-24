@@ -1,4 +1,5 @@
 import { isExternalUrl, openExternalUrl } from "@/lib/external-link";
+import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
 import type { ComponentProps, MouseEventHandler } from "react";
 import { useMarkdownDoc } from "./lib/docContext";
 import { resolveRelativeDocPath } from "./lib/pathUtils";
@@ -16,7 +17,7 @@ export function MarkdownLink({
   onSettled,
   ...props
 }: MarkdownLinkProps) {
-  const { docPath } = useMarkdownDoc();
+  const { docPath, workspaceEnv } = useMarkdownDoc();
 
   const handleClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
     onClick?.(event);
@@ -43,9 +44,7 @@ export function MarkdownLink({
     if (docPath) {
       event.preventDefault();
       const resolved = resolveRelativeDocPath(docPath, href);
-      window.dispatchEvent(
-        new CustomEvent("voktty:open-dropped-path", { detail: resolved }),
-      );
+      requestPathOpening(resolved, workspaceEnv, "unknown");
       onSettled?.();
     }
   };
