@@ -57,7 +57,7 @@ import {
   PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { InlineRename } from "./components/InlineRename";
 import { accentFor, SPACE_COLORS } from "./lib/spaceColor";
@@ -69,6 +69,7 @@ import {
 import type { SpaceMeta } from "./lib/store";
 import { useSpaces } from "./lib/useSpaces";
 import { SpaceAvatar } from "./SpaceAvatar";
+import { groupProjectTabs } from "@/modules/spaces/lib/projectTabGroups";
 
 type Props = {
   open: boolean;
@@ -188,10 +189,11 @@ export function SpaceSwitcher({
   );
   const looseTabs = useMemo(
     () =>
-      menuModels.flatMap((model) =>
-        model.standaloneTabs.map((tab) => ({ space: model.space, tab })),
+      groupProjectTabs(
+        menuModels.flatMap((model) => model.standaloneTabs),
+        stripEntries,
       ),
-    [menuModels],
+    [menuModels, stripEntries],
   );
 
   const draggedTab =
@@ -462,27 +464,44 @@ export function SpaceSwitcher({
             </span>
             {looseTabs.length > 0 ? (
               <div className="mt-1 flex flex-col gap-px">
-                {looseTabs.map(({ space, tab }) => (
-                  <TabRow
-                    key={`${space.id}:${tab.id}`}
-                    tab={tab}
-                    dragging={dragging}
-                    drop={drop}
-                    onPointerDown={onPointerDown}
-                    onPointerMove={onPointerMove}
-                    onPointerUp={onPointerUp}
-                    onPointerCancel={handlePointerCancel}
-                    onJump={() => onJumpTab(tab.id)}
-                    onClose={() => onCloseTab(tab.id)}
-                    member={false}
-                    slotId={null}
-                    focused={false}
-                    viewSpaces={viewSpaces}
-                    onExtract={() => undefined}
-                    onMoveToSpace={(viewSpaceId) =>
-                      onMoveTabToViewSpace?.(tab.id, viewSpaceId)
-                    }
-                  />
+                {looseTabs.map(({ project, tabs }) => (
+                  <Fragment key={project?.key ?? "standalone"}>
+                    {project || looseTabs.length > 1 ? (
+                      <div
+                        title={project?.description}
+                        className="mt-1 truncate px-2 py-1 text-[10px] font-medium text-muted-foreground"
+                      >
+                        {project?.name ?? t("spaces.standaloneTabs")}
+                        {project ? (
+                          <span className="ml-1 font-normal text-muted-foreground/65">
+                            · {project.description}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {tabs.map((tab) => (
+                      <TabRow
+                        key={tab.tabKey}
+                        tab={tab}
+                        dragging={dragging}
+                        drop={drop}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={handlePointerCancel}
+                        onJump={() => onJumpTab(tab.id)}
+                        onClose={() => onCloseTab(tab.id)}
+                        member={false}
+                        slotId={null}
+                        focused={false}
+                        viewSpaces={viewSpaces}
+                        onExtract={() => undefined}
+                        onMoveToSpace={(viewSpaceId) =>
+                          onMoveTabToViewSpace?.(tab.id, viewSpaceId)
+                        }
+                      />
+                    ))}
+                  </Fragment>
                 ))}
               </div>
             ) : (
