@@ -103,6 +103,7 @@ import {
 } from "@/modules/editor/lib/navigationHistoryStore";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import { useTabExplorerReveal } from "@/modules/explorer/lib/useTabExplorerReveal";
+import { useNativeFolderOpening } from "@/modules/explorer/lib/useNativeFolderOpening";
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
@@ -2260,38 +2261,12 @@ function DesktopApp() {
     handleOpenFile,
   ]);
 
-  const pickAndOpenFolder = useCallback(async () => {
-    try {
-      const defaultDir =
-        activeTab?.kind === "terminal" && activeTab.cwd
-          ? activeTab.cwd
-          : activeTab?.kind === "editor" && activeTab.path
-            ? activeTab.path.replace(/[\\/][^\\/]+$/, "")
-            : activeSpace?.root || localLaunchCwd || localHome || undefined;
-
-      const picked = await invoke<string | null>("fs_pick_folder", {
-        defaultPath: defaultDir,
-      });
-      if (picked) {
-        const spaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
-        useSpaces.getState().setRoot(spaceId, picked);
-        const isLocal = /^[a-zA-Z]:[/\\]|^\\\\/.test(picked);
-        if (isLocal) {
-          useSpaces.getState().setEnv(spaceId, LOCAL_WORKSPACE);
-          setWorkspaceEnv(LOCAL_WORKSPACE);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to pick folder:", e);
-    }
-  }, [
-    activeTab,
-    activeSpace?.root,
+  const pickAndOpenFolder = useNativeFolderOpening({
+    source: activeTab,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
     localLaunchCwd,
     localHome,
-    activeSpaceId,
-    setWorkspaceEnv,
-  ]);
+  });
 
   const activateHarnessTab = useCallback((id: number) => {
     const tab = getTab(id);

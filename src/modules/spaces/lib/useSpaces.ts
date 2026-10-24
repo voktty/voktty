@@ -114,6 +114,12 @@ type State = {
   rename: (id: string, name: string) => void;
   setRoot: (id: string, root: string | null) => void;
   setEnv: (id: string, env: WorkspaceEnv) => void;
+  setContext: (
+    id: string,
+    root: string,
+    env: WorkspaceEnv,
+    admit?: () => boolean,
+  ) => boolean;
   setColor: (id: string, color: number | undefined) => void;
   reorder: (orderedIds: string[]) => void;
   remove: (id: string) => string | null;
@@ -709,6 +715,22 @@ export const useSpaces = create<State>((set, get) => ({
       s.id === id ? { ...s, env, updatedAt: Date.now() } : s,
     );
     set({ spaces });
+  },
+
+  setContext: (id, root, env, admit = () => true) => {
+    let accepted = false;
+    set((state) => {
+      if (!state.spaces.some((space) => space.id === id) || !admit()) return state;
+      accepted = true;
+      return {
+        spaces: state.spaces.map((space) =>
+          space.id === id
+            ? { ...space, root, env, updatedAt: Date.now() }
+            : space,
+        ),
+      };
+    });
+    return accepted;
   },
 
   setColor: (id, color) => {
