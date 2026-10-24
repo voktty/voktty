@@ -20,10 +20,10 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
+import type { AgentHandoffTarget } from "@/modules/notes-board/lib/useAgentHandoffTargets";
 import type { KanbanCard, KanbanColumnId } from "../lib/kanbanTypes";
 import { PRIORITY_LABEL_KEYS } from "../lib/kanbanTypes";
 import {
-  type ActiveAgentTarget,
   formatExecutionDuration,
   formatTaskForAgent,
 } from "../lib/agentHandoff";
@@ -34,8 +34,8 @@ type Props = {
   onRunCommand?: (command: string) => void;
   runCommandDisabledReason?: string;
   onActivateAgent?: (tabId: number, leafId: number) => void;
-  availableAgents?: ActiveAgentTarget[];
-  onAssignToAgent?: (card: KanbanCard, target: ActiveAgentTarget) => void;
+  availableAgents?: AgentHandoffTarget[];
+  onAssignToAgent?: (card: KanbanCard, target: AgentHandoffTarget) => void;
 };
 
 const NEXT_COLUMN: Record<KanbanColumnId, KanbanColumnId | null> = {
@@ -355,6 +355,8 @@ export function KanbanCardItem({
                     <DropdownMenuItem
                       key={`${target.tabId}-${target.leafId}`}
                       onClick={() => onAssignToAgent(card, target)}
+                      disabled={!target.submission}
+                      title={!target.submission ? t("notesBoard.noActiveTerminals") : undefined}
                       className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] cursor-pointer"
                     >
                       <div className="flex items-center gap-1.5 truncate">
@@ -373,6 +375,7 @@ export function KanbanCardItem({
                       </div>
                       <span className="text-[10px] text-muted-foreground shrink-0">
                         {target.tabTitle}
+                        {!target.submission && <span className="block">{t("notesBoard.noActiveTerminals")}</span>}
                       </span>
                     </DropdownMenuItem>
                   ))

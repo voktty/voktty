@@ -10,8 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
-import { useAgentStore } from "@/modules/agents/store/agentStore";
-import { submitToLeaf } from "@/modules/terminal";
+import { useAgentHandoffTargets, type AgentHandoffTarget } from "@/modules/notes-board/lib/useAgentHandoffTargets";
 import { useKanbanVault } from "@/modules/notes-board/lib/useKanbanVault";
 import type { VaultTarget } from "@/modules/notes-board/lib/vaultFilesystem";
 import {
@@ -22,9 +21,7 @@ import {
   type KanbanPriority,
 } from "../lib/kanbanTypes";
 import {
-  type ActiveAgentTarget,
   formatTaskForAgent,
-  resolveActiveAgentTargets,
   type TabSummary,
 } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
@@ -57,12 +54,8 @@ export function KanbanTab({
   const isObserving = useKanbanStore((s) => s.isObserving);
   const toggleObserving = useKanbanStore((s) => s.toggleObserving);
 
-  const agentSessions = useAgentStore((s) => s.sessions);
-
-  const availableAgents = useMemo(
-    () => resolveActiveAgentTargets(agentSessions, tabs),
-    [agentSessions, tabs],
-  );
+  const availableAgents = useAgentHandoffTargets(tabs);
+  const readyAgentCount = availableAgents.filter((target) => target.submission).length;
 
   const [query, setQuery] = useState("");
   const [activeColInput, setActiveColInput] = useState<KanbanColumnId | null>(
@@ -119,9 +112,9 @@ export function KanbanTab({
     setActiveColInput(null);
   };
 
-  const handleAssignToAgent = (card: KanbanCard, target: ActiveAgentTarget) => {
+  const handleAssignToAgent = (card: KanbanCard, target: AgentHandoffTarget) => {
     const prompt = formatTaskForAgent(card);
-    submitToLeaf(target.leafId, prompt);
+    if (!target.run(prompt)) return;
     assignCardToAgent(card.id, {
       leafId: target.leafId,
       tabId: target.tabId,
@@ -202,9 +195,9 @@ export function KanbanTab({
           </Button>
 
           <span>{t("notesBoard.cardsCount", { count: filteredCards.length })}</span>
-          {availableAgents.length > 0 && (
+          {readyAgentCount > 0 && (
             <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary text-[10px] font-medium">
-              {t("notesBoard.agentsReady", { count: availableAgents.length })}
+              {t("notesBoard.agentsReady", { count: readyAgentCount })}
             </span>
           )}
             <div className="flex items-center gap-1 border-l border-border/40 pl-2">

@@ -29,8 +29,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "@/modules/i18n";
-import { useAgentStore } from "@/modules/agents/store/agentStore";
-import { submitToLeaf } from "@/modules/terminal";
+import { useAgentHandoffTargets, type AgentHandoffTarget } from "@/modules/notes-board/lib/useAgentHandoffTargets";
 import {
   deleteNote,
   isNoteTitlePlaceholder,
@@ -39,9 +38,7 @@ import {
   type Note,
 } from "@/modules/harness/lib/notes";
 import {
-  type ActiveAgentTarget,
   formatTaskForAgent,
-  resolveActiveAgentTargets,
   type TabSummary,
 } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
@@ -81,11 +78,7 @@ export function NotesTab({
   const pendingNewNote = useNotesBoardStore((s) => s.pendingNewNote);
   const clearPendingNewNote = useNotesBoardStore((s) => s.clearPendingNewNote);
 
-  const agentSessions = useAgentStore((s) => s.sessions);
-  const availableAgents = useMemo(
-    () => resolveActiveAgentTargets(agentSessions, tabs),
-    [agentSessions, tabs],
-  );
+  const availableAgents = useAgentHandoffTargets(tabs);
 
   const refreshNotes = useCallback(async () => {
     try {
@@ -232,7 +225,7 @@ export function NotesTab({
     return match?.[1]?.trim() ?? null;
   }, [body]);
 
-  const handleSendToAgent = (target: ActiveAgentTarget, forceCommand = false) => {
+  const handleSendToAgent = (target: AgentHandoffTarget, forceCommand = false) => {
     let payload = "";
     if (forceCommand && detectedCommand) {
       payload = detectedCommand;
@@ -245,7 +238,7 @@ export function NotesTab({
       });
     }
 
-    submitToLeaf(target.leafId, payload);
+    if (!target.run(payload)) return;
     onActivateAgent?.(target.tabId, target.leafId);
     toast.success(
       t("notesBoard.sentTo", { name: target.displayName, tab: target.tabTitle }),
@@ -376,6 +369,8 @@ export function NotesTab({
                       <DropdownMenuItem
                         key={`${target.tabId}-${target.leafId}`}
                         onClick={() => handleSendToAgent(target)}
+                        disabled={!target.submission}
+                        title={!target.submission ? t("notesBoard.noActiveTerminals") : undefined}
                         className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] cursor-pointer"
                       >
                         <div className="flex items-center gap-1.5 truncate">
@@ -394,6 +389,7 @@ export function NotesTab({
                         </div>
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {target.tabTitle}
+                          {!target.submission && <span className="block">{t("notesBoard.noActiveTerminals")}</span>}
                         </span>
                       </DropdownMenuItem>
                     ))
@@ -408,6 +404,8 @@ export function NotesTab({
                         <DropdownMenuItem
                           key={`cmd-${target.tabId}-${target.leafId}`}
                           onClick={() => handleSendToAgent(target, true)}
+                          disabled={!target.submission}
+                          title={!target.submission ? t("notesBoard.noActiveTerminals") : undefined}
                           className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[10.5px] cursor-pointer"
                         >
                           <span className="font-mono text-primary truncate">
@@ -415,6 +413,7 @@ export function NotesTab({
                           </span>
                           <span className="text-[9.5px] text-muted-foreground shrink-0">
                             {t("notesBoard.commandOnTab", { tab: target.tabTitle })}
+                            {!target.submission && <span className="block">{t("notesBoard.noActiveTerminals")}</span>}
                           </span>
                         </DropdownMenuItem>
                       ))}

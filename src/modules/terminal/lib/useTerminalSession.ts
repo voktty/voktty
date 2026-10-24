@@ -159,6 +159,48 @@ type Session = {
 const sessions = new Map<number, Session>();
 const inputTargetListeners = new Set<() => void>();
 
+export function subscribeTerminalInputTargets(listener: () => void): () => void {
+  inputTargetListeners.add(listener);
+  return () => {
+    inputTargetListeners.delete(listener);
+  };
+}
+
+export type TerminalSubmissionTarget = {
+  isAvailable: () => boolean;
+  run: (text: string) => boolean;
+};
+
+export function captureTerminalSubmissionTarget(
+  leafId: number,
+): TerminalSubmissionTarget | null {
+  const session = sessions.get(leafId);
+  if (
+    !session || session.disposed || session.shellExited || !session.pty ||
+    session.connectionState.phase !== "ready" || isGuestPtyTarget(leafId)
+  ) return null;
+  const pty = session.pty;
+  const connection = session.connectionState;
+  const current = () => {
+    const live = sessions.get(leafId);
+    return live && !live.disposed && !live.shellExited && live.pty === pty &&
+      live.connectionState === connection && live.connectionState.phase === "ready" &&
+      !isGuestPtyTarget(leafId) ? live : null;
+  };
+  return {
+    isAvailable: () => current() !== null,
+    run: (text) => {
+      const live = current();
+      if (!live) return false;
+      return submitSession(leafId, live, text, (data) => {
+        if (!current()) return false;
+        void pty.write(data);
+        return true;
+      });
+    },
+  };
+}
+
 function retireInputTarget(session: Session): void {
   session.inputEpoch = {};
   for (const listener of inputTargetListeners) listener();
