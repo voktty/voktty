@@ -94,6 +94,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { EditorBreadcrumbs } from "./components/EditorBreadcrumbs";
+import type { PreviewDocumentAction } from "@/modules/preview/lib/previewOpeningTarget";
 import type { PeekDocumentState } from "./components/PeekPanel";
 import { InlineAiWidget } from "./components/InlineAiWidget";
 import {
@@ -298,7 +299,7 @@ type Props = {
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
   onClose?: () => void;
-  onOpenPreview?: (url: string) => void;
+  onOpenPreview?: PreviewDocumentAction;
   onWorkspaceEdit?: (request: WorkspaceTextEditRequest) => void;
   canNavigateBack?: boolean;
   canNavigateForward?: boolean;
@@ -1788,6 +1789,7 @@ export const EditorPane = memo(
           >
             <EditorBreadcrumbs
               editorId={editorId}
+              workspaceEnv={workspaceEnv}
               path={path}
               symbol={currentSymbol}
               language={langId ?? languageRef.current ?? "text"}

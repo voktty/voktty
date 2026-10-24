@@ -3,40 +3,68 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
 import { PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState } from "react";
-import { useWebServerStore } from "../store/webServerStore";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+  isWindowsNativePath,
+  LOCAL_WORKSPACE,
+  type WorkspaceEnv,
+} from "@/modules/workspace";
+import {
+  previewOpeningTarget,
+  type PreviewDocumentAction,
+} from "@/modules/preview/lib/previewOpeningTarget";
+
+export { isWebPreviewablePath } from "@/modules/preview/lib/previewOpeningTarget";
 
 type Props = {
   path: string;
-  onOpenPreview: (url: string) => void;
+  workspace: WorkspaceEnv;
+  onOpenPreview: PreviewDocumentAction;
 };
 
-export function isWebPreviewablePath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return (
-    lower.endsWith(".html") ||
-    lower.endsWith(".htm") ||
-    lower.endsWith(".php") ||
-    lower.endsWith(".svg")
-  );
-}
-
-export function LivePreviewButton({ path, onOpenPreview }: Props) {
+export function LivePreviewButton({ path, workspace, onOpenPreview }: Props) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
+  const binding = useMemo(
+    () => ({ path, workspace, onOpenPreview }),
+    [path, workspace, onOpenPreview],
+  );
+  const owner = useRef<object | null>(null);
+  const pending = useRef<{ binding: object } | null>(null);
+  const [busy, setBusy] = useState<object | null>(null);
+  const loading = busy === binding;
+  const supported =
+    previewOpeningTarget(path, undefined, {
+      root: null,
+      env: isWindowsNativePath(path) ? LOCAL_WORKSPACE : workspace,
+    })?.kind === "server";
+  useLayoutEffect(() => {
+    owner.current = binding;
+    return () => {
+      if (owner.current === binding) owner.current = null;
+    };
+  }, [binding]);
 
   const handleClick = async () => {
-    setLoading(true);
+    if (
+      !supported ||
+      owner.current !== binding ||
+      pending.current?.binding === binding
+    )
+      return;
+    const receipt = { binding };
+    pending.current = receipt;
+    setBusy(binding);
+    const current = () => owner.current === binding;
     try {
-      const dir = path.replace(/[/\\][^/\\]+$/, "");
-      const info = await useWebServerStore.getState().startServer(dir);
-      const filename = path.split(/[/\\]/).pop() || "";
-      const url = filename ? `${info.url}/${filename}` : info.url;
-      onOpenPreview(url);
-    } catch (err) {
-      console.error("Failed to start live preview:", err);
+      await onOpenPreview(path, current);
+    } catch {
+      if (current()) toast.error(t("feedback.somethingWentWrong"));
     } finally {
-      setLoading(false);
+      if (pending.current === receipt) {
+        pending.current = null;
+        if (current()) setBusy(null);
+      }
     }
   };
 
@@ -45,9 +73,11 @@ export function LivePreviewButton({ path, onOpenPreview }: Props) {
       type="button"
       size="icon-xs"
       variant="ghost"
-      onClick={handleClick}
-      disabled={loading}
-      title={t("tooltips.openLivePreview")}
+      onClick={() => void handleClick()}
+      disabled={loading || !supported}
+      title={
+        supported ? t("tooltips.openLivePreview") : t("workspace.localMachine")
+      }
       aria-label={t("tooltips.openLivePreview")}
       className={cn(
         "rounded-lg text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300",

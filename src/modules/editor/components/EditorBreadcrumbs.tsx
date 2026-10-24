@@ -20,9 +20,12 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { CurrentSymbol } from "../lib/breadcrumbs/symbolResolver";
 import { useCompletionStatusStore } from "../lib/autocomplete/statusStore";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import type { PreviewDocumentAction } from "@/modules/preview/lib/previewOpeningTarget";
 
 type Props = {
   editorId: number;
+  workspaceEnv: WorkspaceEnv;
   path: string;
   symbol: CurrentSymbol | null;
   language: string;
@@ -32,7 +35,7 @@ type Props = {
   warningCount: number;
   onTriggerInlineAi: () => void;
   onTriggerAiCompletion: () => void;
-  onOpenPreview?: (url: string) => void;
+  onOpenPreview?: PreviewDocumentAction;
   onJumpToError?: () => void;
   onQuickFix?: () => void;
   canNavigateBack?: boolean;
@@ -43,6 +46,7 @@ type Props = {
 
 export function EditorBreadcrumbs({
   editorId,
+  workspaceEnv,
   path,
   symbol,
   language,
@@ -180,7 +184,11 @@ export function EditorBreadcrumbs({
 
         <div className="flex items-center gap-1 border-l border-border/40 pl-1.5">
           {onOpenPreview && isWebPreviewablePath(path) ? (
-            <LivePreviewButton path={path} onOpenPreview={onOpenPreview} />
+            <LivePreviewButton
+              path={path}
+              workspace={workspaceEnv}
+              onOpenPreview={onOpenPreview}
+            />
           ) : null}
           {aiAvailable && autocompleteEnabled ? (
             <Button

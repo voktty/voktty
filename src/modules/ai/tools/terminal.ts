@@ -88,7 +88,7 @@ export function buildTerminalTools(ctx: ToolContext) {
             url,
           };
         }
-        const ok = ctx.openPreview(url);
+        const ok = await ctx.openPreview(url);
         if (!ok) return { error: "preview surface unavailable", url };
         return { url, ok: true };
       },

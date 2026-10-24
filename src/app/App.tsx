@@ -6,8 +6,8 @@ import {
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
-import { useTabPreviewSplit } from "@/modules/surfaces/lib/useTabPreviewSplit";
 import { usePreviewFileNavigation } from "@/modules/preview/lib/usePreviewFileNavigation";
+import { usePreviewOpening } from "@/modules/preview/lib/usePreviewOpening";
 import { useEditorSplitCreation } from "@/modules/surfaces/lib/useEditorSplitCreation";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
@@ -2477,106 +2477,32 @@ function DesktopApp() {
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
 
-  const openPreviewTab = useCallback(
-    (target?: string, options?: { splitWithActive?: boolean }) => {
-      const explicit = (target ?? "").trim();
-      const shouldSplit = options?.splitWithActive ?? true;
-
-      const setupSplitWithActive = (newTabId: number) => {
-        if (!shouldSplit) return;
-        const activeTab = getTab(effectiveActiveId);
-        if (!activeTab) return;
-        const newTab = getTab(newTabId);
-        if (!newTab) return;
-        joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
-      };
-
-      if (/^https?:\/\//i.test(explicit)) {
-        const id = newPreviewTab(explicit);
-        setupSplitWithActive(id);
-        return id;
-      }
-
-      const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
-      const activePath =
-        explicit ||
-        (activeTab && "path" in activeTab && typeof activeTab.path === "string"
-          ? activeTab.path
-          : activeFilePath);
-
-      const isSpecificWebFile =
-        typeof activePath === "string" &&
-        (activePath.endsWith(".html") ||
-          activePath.endsWith(".htm") ||
-          activePath.endsWith(".php") ||
-          activePath.endsWith(".svg"));
-
-      const activeFileDir = activePath
-        ? (isSpecificWebFile
-            ? activePath.replace(/[/\\][^/\\]+$/, "")
-            : activePath) || activePath
-        : null;
-
-      const termCwd =
-        activeTerminalLeafCwd ||
-        (activeTab && "paneTree" in activeTab && "activeLeafId" in activeTab
-          ? findLeafCwd(activeTab.paneTree, activeTab.activeLeafId)
-          : null) ||
-        (activeTab && "cwd" in activeTab && typeof activeTab.cwd === "string"
-          ? activeTab.cwd
-          : null);
-
-      const rootCandidate: string | null =
-        activeFileDir ||
-        termCwd ||
-        explorerRoot ||
-        activeSpace?.root ||
-        inheritedCwdForNewTab() ||
-        launchCwd ||
-        null;
-
-      const targetCandidate = rootCandidate || "";
-      const id = newPreviewTab("");
-      setupSplitWithActive(id);
-      void useWebServerStore
-        .getState()
-        .startServer(targetCandidate)
-        .then((info) => {
-          let targetUrl = info.url;
-          if (isSpecificWebFile && activePath) {
-            const filename = activePath.split(/[/\\]/).pop() || "";
-            const rel = activePath
-              .replace(info.root_path, "")
-              .replace(targetCandidate, "")
-              .replace(/^[/\\]+/, "")
-              .replace(/\\/g, "/");
-            if (rel && rel !== activePath) {
-              targetUrl = `${info.url}/${rel}`;
-            } else if (filename) {
-              targetUrl = `${info.url}/${filename}`;
-            }
-          }
-          updateTab(id, { url: targetUrl });
-        })
-        .catch((err) => {
-          console.error("Failed to auto-start live web server:", err);
-          setTimeout(() => previewRefs.current.get(id)?.focusAddressBar(), 0);
-        });
-      return id;
+  const openPreviewTab = usePreviewOpening({
+    tabs,
+    selectedId: effectiveActiveId,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    root: effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null,
+    workspace: activeExplorerWorkspaceEnv,
+    limit: spaceViewLimit,
+    getTab,
+    destination: (source) => resolveSpaceJoinTarget(source).targetViewSpace ?? null,
+    hasRoom: hasRoomToSplit,
+    start: (root) => useWebServerStore.getState().startServer(root),
+    open: newPreviewTab,
+    join: joinTabIntoSpaceNextTo,
+    activate: (id) => {
+      const tab = getTab(id);
+      if (!tab) return;
+      useSpaces.getState().setActive(tab.spaceId);
+      setActiveId(id);
     },
-    [
-      newPreviewTab,
-      effectiveActiveId,
-      activeFilePath,
-      activeTerminalLeafCwd,
-      explorerRoot,
-      activeSpace?.root,
-      inheritedCwdForNewTab,
-      launchCwd,
-      spaceViewLimit,
-      updateTab,
-    ],
-  );
+    onFull: () => {
+      playErrorTone();
+      toast.error(t("spaces.maxSlots"));
+    },
+    onUnavailable: () => toast.info(t("editor.status.previewNotSupported")),
+    onError: () => toast.error(t("feedback.somethingWentWrong")),
+  });
 
   const navigateFileInPreview = usePreviewFileNavigation({
     tabs,
@@ -2676,29 +2602,11 @@ function DesktopApp() {
     return newPreviewTab("about:blank");
   }, [newPreviewTab]);
 
-  const openPreviewSplit = useTabPreviewSplit({
-    tabs,
-    selectedId: effectiveActiveId,
-    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
-    limit: spaceViewLimit,
-    getTab,
-    destination: (source) => resolveSpaceJoinTarget(source).targetViewSpace ?? null,
-    hasRoom: hasRoomToSplit,
-    resolve: (path) => useWebServerStore.getState().startServer(path),
-    open: newPreviewTab,
-    join: joinTabIntoSpaceNextTo,
-    activate: (id) => {
-      const tab = getTab(id);
-      if (!tab) return;
-      useSpaces.getState().setActive(tab.spaceId);
-      setActiveId(id);
-    },
-    onFull: () => {
-      playErrorTone();
-      toast.error(t("spaces.maxSlots"));
-    },
-    onError: () => toast.error(t("feedback.somethingWentWrong")),
-  });
+  const openPreviewSplit = useCallback((sourceId?: number) => {
+    const source = tabs.find((tab) => tab.id === (sourceId ?? effectiveActiveId));
+    if (!source) return;
+    return openPreviewTab("", { source });
+  }, [tabs, effectiveActiveId, openPreviewTab]);
 
   const openGitGraphSplit = useTabGitSplit({
     tabs,
@@ -4885,7 +4793,14 @@ function DesktopApp() {
                             tabs.find((t) => t.id === effectiveActiveId)
                               ?.kind === "preview"
                           }
-                          onOpenPreview={openPreviewTab}
+                          onOpenPreview={(path) =>
+                            openPreviewTab(path, {
+                              filesystem: {
+                                root: effectiveExplorerRoot,
+                                workspace: activeExplorerWorkspaceEnv,
+                              },
+                            })
+                          }
                           onPathRenamed={handlePathRenamed}
                           onPathDeleted={handlePathDeleted}
                           onRevealInTerminal={cdInNewTab}

@@ -18,7 +18,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { EditorPane, type EditorPaneHandle } from "./EditorPane";
+import type { EditorPaneHandle } from "./EditorPane";
+import { PreviewEditorPane } from "@/modules/editor/components/PreviewEditorPane";
+import type { PreviewOpeningAction } from "@/modules/preview/lib/previewOpeningTarget";
 import { useEditorGroupPlacements } from "@/modules/editor/lib/useEditorGroupPlacements";
 import {
   activateEditorInLayout,
@@ -48,7 +50,7 @@ type Props = {
   onActivateTab: (id: number) => void;
   onCloseTab: (id: number) => void;
   onSetMarkdownView: (id: number, mode: "rendered" | "raw") => void;
-  onOpenPreview?: (url: string) => void;
+  onOpenPreview?: PreviewOpeningAction;
   onWorkspaceEdit?: (request: WorkspaceTextEditRequest) => void;
   canNavigateBack: boolean;
   canNavigateForward: boolean;
@@ -277,7 +279,7 @@ export function EditorStack({
     [activeSpaceId, onActivateTab],
   );
 
-  const renderEditor = (tab: EditorTab) => (
+  const renderEditor = (tab: EditorTab, visible: boolean) => (
     <div className="relative h-full overflow-hidden bg-background">
       {isMarkdownPath(tab.path) && (
         <MarkdownViewToggle
@@ -287,7 +289,9 @@ export function EditorStack({
           renderedHint={t("commandPalette.commands.editorSaveToPreview")}
         />
       )}
-      <EditorPane
+      <PreviewEditorPane
+        tab={tab}
+        visible={visible}
         ref={getRefCallback(tab.id)}
         editorId={tab.id}
         spaceId={tab.spaceId}
@@ -409,7 +413,7 @@ export function EditorStack({
                 focusGroup(groupId, editor.id);
             }}
           >
-            {renderEditor(editor)}
+            {renderEditor(editor, Boolean(rect))}
           </div>
         );
       })}

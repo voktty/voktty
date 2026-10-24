@@ -52,7 +52,7 @@ export type Live = {
   getActiveFile: () => string | null;
   getEditorBuffers: () => Promise<DevelopmentBuffer[]>;
   getWorkspaceDiagnostics: () => DevelopmentDiagnostic[];
-  openPreview: (url: string) => boolean;
+  openPreview: (url: string) => boolean | Promise<boolean>;
   spawnManagedAgent: (
     prompt: string,
     sessionId: string,

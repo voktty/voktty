@@ -42,7 +42,7 @@ type Params = {
   explorerRoot: string | null;
   launchCwd: string | null;
   home: string | null;
-  openPreviewTab: (url: string) => void;
+  openPreviewTab: (url: string) => unknown;
   newAgentTab: (
     cwd: string | undefined,
     title: string,
@@ -244,9 +244,14 @@ export function useAiLiveBridge(params: Params) {
           column: problem.column,
         }));
       },
-      openPreview: (url: string) => {
-        ref.current.openPreviewTab(url);
-        return true;
+      openPreview: async (url: string) => {
+        const open = ref.current.openPreviewTab;
+        try {
+          const id = await open(url);
+          return typeof id === "number" && Number.isSafeInteger(id) && id >= 0;
+        } catch {
+          return false;
+        }
       },
       spawnManagedAgent: (prompt: string, sessionId: string) => {
         const trimmed = prompt.trim();

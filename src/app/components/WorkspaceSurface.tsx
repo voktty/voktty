@@ -64,7 +64,7 @@ export type WorkspaceSurfaceProps = {
     id: number,
     handle: import("@/modules/markdown").MarkdownSearchHandle | null,
   ) => void;
-  onOpenPreview?: (url: string) => void;
+  onOpenPreview?: EditorStackProps["onOpenPreview"];
   onWorkspaceEdit: EditorStackProps["onWorkspaceEdit"];
   canNavigateBack: boolean;
   canNavigateForward: boolean;
