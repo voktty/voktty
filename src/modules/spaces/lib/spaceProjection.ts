@@ -1,6 +1,7 @@
 import type { TabKey } from "@/modules/tabs/lib/tabIdentity";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
 import type { SlotId, ViewSpace, ViewSpaceId } from "./spaceLayout";
+import { groupProjectStripItems } from "@/modules/spaces/lib/projectStripGroups";
 
 export type StripEntry =
   | { kind: "standalone"; tabKey: TabKey }
@@ -118,7 +119,7 @@ export function projectStripEntries({
       spaceId: null,
     });
   }
-  return projected;
+  return groupProjectStripItems(projected);
 }
 
 function collectSpaceSlots(

@@ -22,6 +22,8 @@ import {
   leafIds,
 } from "@/modules/terminal";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { projectStripEntries } from "@/modules/spaces/lib/spaceProjection";
+import { useSpaces } from "@/modules/spaces/lib/useSpaces";
 
 function confirmRunningTerminal(): boolean {
   return usePreferencesStore.getState().confirmCloseRunningTerminal;
@@ -94,7 +96,11 @@ export function useTabCloseGuards({
   const planCloseMany = useCallback(
     (kind: CloseManyKind, anchorId: number) => {
       if (kind === "right") {
-        return planCloseTabsToRight(tabsRef.current, anchorId, activeIdRef.current);
+        const { viewSpaces, stripEntries } = useSpaces.getState();
+        const ordered = projectStripEntries({
+          tabs: tabsRef.current, viewSpaces, stripEntries,
+        }).flatMap((item) => item.kind === "space" ? item.tabs : [item.tab]);
+        return planCloseTabsToRight(ordered, anchorId, activeIdRef.current);
       }
       if (kind === "other") {
         return planCloseOtherTabs(tabsRef.current, anchorId, activeIdRef.current);

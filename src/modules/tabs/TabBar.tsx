@@ -116,6 +116,8 @@ import type { Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
 import { TabColorBubbles } from "./TabColorBubbles";
 import { TabIconGlyph, TabIconPicker } from "./TabIconPicker";
+import { ProjectTabBadge } from "@/modules/tabs/components/ProjectTabBadge";
+import { projectStripLabel } from "@/modules/spaces/lib/projectStripGroups";
 
 type Props = {
   tabs: Tab[];
@@ -286,21 +288,25 @@ export function TabBar({
 
   const projectionEnabled =
     stripEntries !== undefined && viewSpaces !== undefined;
-  const projectedItems = useMemo<ProjectedStripItem[]>(
-    () => {
-      const items = projectionEnabled
-        ? projectStripEntries({ tabs, viewSpaces, stripEntries })
-        : tabs.map((tab) => ({
-            kind: "tab" as const,
-            tab,
-            tabKey: tab.tabKey,
-            spaceId: null,
-          }));
-      return items.filter(
+  const allProjectedItems = useMemo(
+    () => projectStripEntries({
+      tabs,
+      viewSpaces: viewSpaces ?? [],
+      stripEntries: stripEntries ?? [],
+    }),
+    [tabs, viewSpaces, stripEntries],
+  );
+  const projectedItems = useMemo(
+    () =>
+      allProjectedItems.filter(
         (item) => item.kind !== "tab" || item.tab.kind !== "harness",
-      );
-    },
-    [projectionEnabled, stripEntries, tabs, viewSpaces],
+      ),
+    [allProjectedItems],
+  );
+  const overflowTabs = useMemo(
+    () => allProjectedItems.flatMap((item) =>
+      item.kind === "space" ? item.tabs : [item.tab]),
+    [allProjectedItems],
   );
   const visibleTabs = useMemo(
     () =>
@@ -312,7 +318,7 @@ export function TabBar({
     .map((item) =>
       item.kind === "space"
         ? `${projectedItemKey(item)}:${item.space.name}:${item.tabs.length}:${item.space.color ?? ""}`
-        : `${projectedItemKey(item)}:${labelFor(item.tab)}:${item.tab.locked ? 1 : 0}:${item.tab.color ?? ""}:${"preview" in item.tab && item.tab.preview ? 1 : 0}:${item.tab.kind === "editor" && item.tab.dirty ? 1 : 0}`,
+        : `${projectedItemKey(item)}:${projectStripLabel(item)?.description ?? ""}:${labelFor(item.tab)}:${item.tab.locked ? 1 : 0}:${item.tab.color ?? ""}:${"preview" in item.tab && item.tab.preview ? 1 : 0}:${item.tab.kind === "editor" && item.tab.dirty ? 1 : 0}`,
     )
     .join("\u0000")}`;
   const activeProjectedIndex = projectedItems.findIndex((item) =>
@@ -492,6 +498,7 @@ export function TabBar({
               }
 
               const t = item.tab;
+              const project = projectStripLabel(item);
               const tabIndex = fittedTabs.findIndex(
                 (visibleTab) => visibleTab.id === t.id,
               );
@@ -550,6 +557,7 @@ export function TabBar({
                         />
                       )}
                       <TabIcon tab={t} animatedAgent />
+                      <ProjectTabBadge project={project} />
                       <TabRenameInput
                         initial={labelFor(t)}
                         onCommit={(value) => {
@@ -771,6 +779,7 @@ export function TabBar({
                       </DropdownMenu>
                     )}
                     <TabIcon tab={t} animatedAgent />
+                    <ProjectTabBadge project={project} />
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
                     <span
@@ -832,7 +841,8 @@ export function TabBar({
                 </TabsTrigger>
               );
 
-              const hasTabsToRight = tabIndex < visibleTabs.length - 1;
+              const hasTabsToRight =
+                visibleTabs.findIndex((tab) => tab.id === t.id) < visibleTabs.length - 1;
 
               const tabNode = (
                 <ContextMenu
@@ -1275,7 +1285,7 @@ export function TabBar({
                 </span>
               </div>
               <DropdownMenuSeparator className="my-1 border-border/30" />
-              {tabs.map((t) => (
+              {overflowTabs.map((t) => (
                 <DropdownMenuItem
                   key={t.id}
                   onSelect={() => onSelect(t.id)}

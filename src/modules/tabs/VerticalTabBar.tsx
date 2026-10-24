@@ -67,6 +67,11 @@ import type { Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
 import { TabIcon, TabProcessBadge, TabProcessBottomBar } from "./TabBar";
 import { TabColorBubbles } from "./TabColorBubbles";
+import {
+  projectStripGroupStart,
+  projectStripLabel,
+} from "@/modules/spaces/lib/projectStripGroups";
+import { tabProject } from "@/modules/spaces/lib/projectTabGroups";
 
 type Props = {
   tabs: Tab[];
@@ -274,15 +279,12 @@ export function VerticalTabBar({
     stripEntries !== undefined && viewSpaces !== undefined;
   const projectedItems = useMemo<ProjectedStripItem[]>(
     () =>
-      projectionEnabled
-        ? projectStripEntries({ tabs, viewSpaces, stripEntries })
-        : tabs.map((tab) => ({
-            kind: "tab" as const,
-            tab,
-            tabKey: tab.tabKey,
-            spaceId: null,
-          })),
-    [projectionEnabled, stripEntries, tabs, viewSpaces],
+      projectStripEntries({
+        tabs,
+        viewSpaces: viewSpaces ?? [],
+        stripEntries: stripEntries ?? [],
+      }),
+    [stripEntries, tabs, viewSpaces],
   );
 
   const filteredItems = useMemo(() => {
@@ -290,9 +292,11 @@ export function VerticalTabBar({
     if (!q) return projectedItems;
     return projectedItems.filter((item) => {
       if (item.kind === "space") {
-        return item.space.name.toLowerCase().includes(q);
+        return item.space.name.toLowerCase().includes(q) ||
+          item.tabs.some((tab) => tabProject(tab)?.description.toLowerCase().includes(q));
       }
       const tab = item.tab;
+      const project = tabProject(tab);
       const title = (tab.title || "").toLowerCase();
       const label = labelFor(tab).toLowerCase();
       const sub = getTabSubtitle(tab).text.toLowerCase();
@@ -307,7 +311,9 @@ export function VerticalTabBar({
         label.includes(q) ||
         sub.includes(q) ||
         path.includes(q) ||
-        cwd.includes(q)
+        cwd.includes(q) ||
+        project?.name.toLowerCase().includes(q) ||
+        project?.description.toLowerCase().includes(q)
       );
     });
   }, [projectedItems, searchQuery]);
@@ -441,7 +447,7 @@ export function VerticalTabBar({
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            {filteredItems.map((item) => {
+            {filteredItems.map((item, itemIndex) => {
               if (item.kind === "space") {
                 const isActive = isProjectedStripItemActive(
                   item,
@@ -462,6 +468,9 @@ export function VerticalTabBar({
               }
 
               const tab = item.tab;
+              const projectStart = projectStripGroupStart(
+                filteredItems, itemIndex,
+              );
               const tabIndex = filteredTabs.findIndex(
                 (filteredTab) => filteredTab.id === tab.id,
               );
@@ -491,7 +500,11 @@ export function VerticalTabBar({
                 tabIndex > 0 ? tabCategory(filteredTabs[tabIndex - 1]) : null;
               const currCat = tabCategory(tab);
               const isNewCategory =
-                !searchQuery && tabIndex > 0 && prevCat !== currCat;
+                !searchQuery && tabIndex > 0 && (
+                  prevCat !== currCat ||
+                  (projectStripLabel(filteredItems[itemIndex - 1]) &&
+                    !projectStripLabel(item))
+                );
 
               const handleDragStart = (e: React.PointerEvent) => {
                 if (e.button !== 0) return;
@@ -1148,7 +1161,18 @@ export function VerticalTabBar({
 
               return (
                 <div key={tab.id} className="flex flex-col gap-0.5">
-                  {isNewCategory && (
+                  {projectStart ? (
+                    <div
+                      data-project-label
+                      title={projectStart.description}
+                      className="mt-1 truncate px-2 py-1 text-[10px] font-medium text-muted-foreground"
+                    >
+                      {projectStart.name}
+                      <span className="ml-1 font-normal text-muted-foreground/65">
+                        · {projectStart.description}
+                      </span>
+                    </div>
+                  ) : isNewCategory && (
                     <div className="my-1.5 flex items-center gap-2 px-2 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider select-none">
                       <span className="h-px flex-1 bg-border/20" />
                       <span>
