@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
+import { commandSurfaceUnavailableReason } from "@/modules/shortcuts/lib/commandSurface";
 import {
   SHORTCUTS,
   matchBinding,
@@ -31,6 +33,8 @@ export function useGlobalShortcuts(
         const bindings = userShortcuts[s.id] || s.defaultBindings;
         const isMatch = bindings.some((b) => matchBinding(e, b, s.id));
         if (!isMatch) continue;
+        const surface = useActiveSurfaceStore.getState().surface;
+        if (surface.ownerId !== null && commandSurfaceUnavailableReason(s.id, surface)) return;
         if (options?.isDisabled?.(s.id, e)) return;
         const h = handlers[s.id];
         if (!h) return;

@@ -1,0 +1,18 @@
+import { expect, it } from "vitest";
+import { commandSurfaceUnavailableReason } from "@/modules/shortcuts/lib/commandSurface";
+import { resolveActiveSurface } from "@/modules/surfaces/lib/activeSurface";
+
+it.each(["/project", "remote://machine/project"])("resolves commands across Harness and terminal at %s", (cwd) => {
+  const harness = resolveActiveSurface({ kind: "harness", ownerId: 1, projectCwd: cwd });
+  const terminal = resolveActiveSurface({ kind: "terminal", ownerId: 2, cwd });
+  const editor = resolveActiveSurface({ kind: "editor", ownerId: 3, folder: cwd });
+  expect(commandSurfaceUnavailableReason("pane.splitRight", harness)).toBe("terminal-required");
+  expect(commandSurfaceUnavailableReason("pane.splitRight", terminal)).toBeNull();
+  expect(commandSurfaceUnavailableReason("editor.formatDocument", harness)).toBe("editor-required");
+  expect(commandSurfaceUnavailableReason("editor.formatDocument", terminal)).toBe("editor-required");
+  expect(commandSurfaceUnavailableReason("editor.formatDocument", editor)).toBeNull();
+  for (const surface of [harness, terminal, editor]) {
+    expect(commandSurfaceUnavailableReason("tab.new", surface)).toBeNull();
+    expect(commandSurfaceUnavailableReason("commandPalette.open", surface)).toBeNull();
+  }
+});

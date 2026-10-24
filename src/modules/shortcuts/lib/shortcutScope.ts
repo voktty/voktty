@@ -1,5 +1,6 @@
 import { IS_MAC } from "@/lib/platform";
 import type { ShortcutId } from "@/modules/shortcuts/shortcuts";
+import { commandSurfaceRule } from "@/modules/shortcuts/lib/commandSurface";
 
 export function isTerminalFocused(
   target: EventTarget | null = typeof document !== "undefined"
@@ -70,24 +71,7 @@ export function shouldDisableShortcut(
 
   // 2. Editor-specific text manipulation shortcuts (undo, redo, AI complete, code complete):
   // Disabled outside editor tabs or when terminal is focused.
-  if (
-    id === "editor.undo" ||
-    id === "editor.redo" ||
-    id === "editor.aiComplete" ||
-    id === "editor.codeComplete" ||
-    id === "editor.gotoLine" ||
-    id === "editor.formatDocument" ||
-    id === "editor.quickFix" ||
-    id === "editor.signatureHelp" ||
-    id === "editor.goToDefinition" ||
-    id === "editor.peekDefinition" ||
-    id === "editor.goToTypeDefinition" ||
-    id === "editor.goToImplementation" ||
-    id === "editor.findReferences" ||
-    id === "editor.navigateBack" ||
-    id === "editor.navigateForward" ||
-    id === "editor.outline"
-  ) {
+  if (commandSurfaceRule(id).unavailableReason === "editor-required") {
     return activeTabKind !== "editor" || inTerminal;
   }
 

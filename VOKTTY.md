@@ -291,6 +291,8 @@ Editor model roles are explicit: the active chat model owns reasoning, quick fix
 
 ### UI conventions
 
+Global shortcut dispatch reads the current committed `ActiveSurface` before consuming a key. The dependency-light `shortcuts/lib/commandSurface.ts` registry declares editor and terminal applicability with stable unavailability codes; unqualified commands remain global. The existing shortcut scope still owns terminal input priority, pane counts, block mode and selection checks. Before any surface has registered, dispatch retains the legacy scope fallback. Palette and launcher availability still have their separate contextual catalogs until their command migration is complete.
+
 - **shadcn/ui** is configured (`components.json`, style `radix-luma`, base `mist`, icon lib **hugeicons**). Primitives in `src/components/ui/` - don't hand-edit; re-run `pnpm dlx shadcn add` to upgrade.
 - **AI Elements** (Vercel) live in `src/components/ai-elements/` from the `@ai-elements` registry in `components.json`. Same rule: regenerate, don't hand-patch - composition wrappers belong in `modules/ai/components/`.
 - **Tailwind v4** - no `tailwind.config.*`, config is in `src/App.css` via `@theme`. Use `cn()` from `@/lib/utils`.
