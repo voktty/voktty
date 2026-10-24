@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -9,14 +9,11 @@ import {
   Upload01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { toast } from "sonner";
 import { useTranslation } from "@/modules/i18n";
 import { useAgentStore } from "@/modules/agents/store/agentStore";
 import { submitToLeaf } from "@/modules/terminal";
-import {
-  exportCardsToProjectVault,
-  importCardsFromProjectVault,
-} from "../lib/kanbanFsSync";
+import { useKanbanVault } from "@/modules/notes-board/lib/useKanbanVault";
+import type { VaultTarget } from "@/modules/notes-board/lib/vaultFilesystem";
 import {
   COLUMN_TITLE_KEYS,
   DEFAULT_COLUMNS,
@@ -37,6 +34,8 @@ type Props = {
   onRunCommand?: (command: string) => void;
   runCommandDisabledReason?: string;
   cwd?: string | null;
+  vaultTarget?: VaultTarget | null;
+  sourceKey?: string;
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
 };
@@ -45,6 +44,8 @@ export function KanbanTab({
   onRunCommand,
   runCommandDisabledReason,
   cwd,
+  vaultTarget,
+  sourceKey,
   tabs,
   onActivateAgent,
 }: Props) {
@@ -53,7 +54,6 @@ export function KanbanTab({
   const addCard = useKanbanStore((s) => s.addCard);
   const moveCard = useKanbanStore((s) => s.moveCard);
   const assignCardToAgent = useKanbanStore((s) => s.assignCardToAgent);
-  const mergeCards = useKanbanStore((s) => s.mergeCards);
   const isObserving = useKanbanStore((s) => s.isObserving);
   const toggleObserving = useKanbanStore((s) => s.toggleObserving);
 
@@ -72,40 +72,9 @@ export function KanbanTab({
   const [newDesc, setNewDesc] = useState("");
   const [newPriority, setNewPriority] = useState<KanbanPriority>("medium");
   const [overCol, setOverCol] = useState<KanbanColumnId | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleExportVault = async () => {
-    if (!cwd) return;
-    setIsSyncing(true);
-    try {
-      const res = await exportCardsToProjectVault(cwd, cards);
-      toast.success(t("notesBoard.exportedToast", { count: res.count }));
-    } catch {
-      toast.error(t("notesBoard.exportError"));
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleImportVault = async () => {
-    if (!cwd) return;
-    setIsSyncing(true);
-    try {
-      const imported = await importCardsFromProjectVault(cwd);
-      if (imported.length > 0) {
-        mergeCards(imported);
-        toast.success(
-          t("notesBoard.importedToast", { count: imported.length }),
-        );
-      } else {
-        toast.info(t("notesBoard.importEmpty"));
-      }
-    } catch {
-      toast.error(t("notesBoard.importError"));
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  const vault = useKanbanVault(vaultTarget, sourceKey);
+  const vaultReasonId = useId();
+  const vaultReason = vault.available ? undefined : t("harness.unavailableDirShort");
 
   const filteredCards = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -238,15 +207,15 @@ export function KanbanTab({
               {t("notesBoard.agentsReady", { count: availableAgents.length })}
             </span>
           )}
-          {cwd && (
             <div className="flex items-center gap-1 border-l border-border/40 pl-2">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={handleExportVault}
-                disabled={isSyncing}
-                title={t("notesBoard.exportVaultTitle")}
+                onClick={() => void vault.run("export", cards)}
+                disabled={vault.syncing || !vault.available}
+                title={vaultReason ?? t("notesBoard.exportVaultTitle")}
+                aria-describedby={vaultReason ? vaultReasonId : undefined}
               >
                 <HugeiconsIcon icon={Upload01Icon} size={12} />
                 <span>{t("notesBoard.exportVault")}</span>
@@ -255,15 +224,16 @@ export function KanbanTab({
                 variant="ghost"
                 size="sm"
                 className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={handleImportVault}
-                disabled={isSyncing}
-                title={t("notesBoard.importVaultTitle")}
+                onClick={() => void vault.run("import")}
+                disabled={vault.syncing || !vault.available}
+                title={vaultReason ?? t("notesBoard.importVaultTitle")}
+                aria-describedby={vaultReason ? vaultReasonId : undefined}
               >
                 <HugeiconsIcon icon={Download01Icon} size={12} />
                 <span>{t("notesBoard.importVault")}</span>
               </Button>
+              {vaultReason && <span id={vaultReasonId}>{vaultReason}</span>}
             </div>
-          )}
         </div>
       </div>
 

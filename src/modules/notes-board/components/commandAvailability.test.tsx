@@ -9,6 +9,7 @@ import { t } from "@/modules/i18n";
 
 const mocks = vi.hoisted(() => ({
   copy: vi.fn(),
+  vaultWrite: vi.fn(),
   notes: [
     {
       id: "note",
@@ -21,6 +22,11 @@ const mocks = vi.hoisted(() => ({
       updatedAt: 1,
     },
   ],
+}));
+vi.mock("@/modules/harness/lib/fs", () => ({
+  createPath: vi.fn(async () => undefined),
+  writeTextFile: mocks.vaultWrite,
+  listDir: vi.fn(async () => []),
 }));
 vi.mock("@/modules/harness/lib/notes", () => ({
   loadNotes: async () => mocks.notes,
@@ -74,6 +80,7 @@ beforeEach(() => {
   });
   run.mockClear();
   mocks.copy.mockClear();
+  mocks.vaultWrite.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: { writeText: mocks.copy.mockResolvedValue(undefined) },
@@ -154,4 +161,46 @@ it("preserves note copying while execution is unavailable", async () => {
   await act(async () => copy?.click());
   expect(mocks.copy).toHaveBeenCalledExactlyOnceWith("`echo example`");
   expect(run).not.toHaveBeenCalled();
+});
+
+it("exports from the widget's captured project target instead of its ambient cwd", async () => {
+  useNotesBoardStore.setState({ activeTab: "kanban" });
+  await act(async () => root.render(
+    <FloatingWorkspaceWidget
+      onClose={no}
+      cwd="/ambient"
+      vaultTarget={{ path: "remote://host/project", workspace: { kind: "local" } }}
+      sourceKey="harness-view"
+    />,
+  ));
+  const exportButton = [...node.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === t("notesBoard.exportVault"),
+  );
+  expect(exportButton?.disabled).toBe(false);
+  await act(async () => exportButton?.click());
+  expect(mocks.vaultWrite).toHaveBeenCalledExactlyOnceWith(
+    "remote://host/project/.voktty/tasks/todo/example-card.md",
+    expect.stringContaining("echo example"),
+  );
+});
+
+it.each([null, { path: "/project", workspace: { kind: "serial" as const, portName: "COM1", baudRate: 9600 } }])("keeps vault actions discoverable with an accessible reason without a usable filesystem", async (target) => {
+  useNotesBoardStore.setState({ activeTab: "kanban" });
+  await act(async () => root.render(
+    <FloatingWorkspaceWidget
+      onClose={no}
+      cwd="/ambient"
+      vaultTarget={target}
+    />,
+  ));
+  const buttons = [...node.querySelectorAll<HTMLButtonElement>("button")].filter(
+    (button) => [t("notesBoard.exportVault"), t("notesBoard.importVault")].includes(button.textContent ?? ""),
+  );
+  expect(buttons).toHaveLength(2);
+  for (const button of buttons) {
+    expect(button.disabled).toBe(true);
+    expect(document.getElementById(button.getAttribute("aria-describedby") ?? "")?.textContent).toBe(t("harness.unavailableDirShort"));
+    await act(async () => button.click());
+  }
+  expect(mocks.vaultWrite).not.toHaveBeenCalled();
 });

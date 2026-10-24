@@ -14,6 +14,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
+import type { VaultTarget } from "@/modules/notes-board/lib/vaultFilesystem";
 import type { TabSummary } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
 import {
@@ -29,6 +30,8 @@ type Props = {
   onRunCommand?: (command: string) => void;
   runCommandDisabledReason?: string;
   cwd?: string | null;
+  vaultTarget?: VaultTarget | null;
+  sourceKey?: string;
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
 };
@@ -38,6 +41,8 @@ export function FloatingWorkspaceWidget({
   onRunCommand,
   runCommandDisabledReason,
   cwd,
+  vaultTarget,
+  sourceKey,
   tabs,
   onActivateAgent,
 }: Props) {
@@ -268,9 +273,11 @@ export function FloatingWorkspaceWidget({
             />
           ) : activeTab === "kanban" ? (
             <KanbanTab
+              vaultTarget={vaultTarget}
+              sourceKey={sourceKey}
               onRunCommand={onRunCommand}
               runCommandDisabledReason={runCommandDisabledReason}
-              cwd={cwd}
+              cwd={vaultTarget === undefined ? cwd : vaultTarget?.path}
               tabs={tabs}
               onActivateAgent={onActivateAgent}
             />

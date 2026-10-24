@@ -9,6 +9,7 @@ const mockFiles: Record<string, string> = {};
 const mockDirs: Record<string, Array<{ name: string; path: string; isDir: boolean; ignored: boolean }>> = {};
 
 vi.mock("@/modules/harness/lib/fs", () => ({
+  createPath: vi.fn(async () => undefined),
   writeTextFile: vi.fn(async (path: string, content: string) => {
     mockFiles[path] = content;
   }),

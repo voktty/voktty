@@ -287,6 +287,8 @@ export function StatusBar({
       {notesBoardOpen ? (
         <Suspense fallback={null}>
           <LazyFloatingWorkspaceWidget
+            vaultTarget={toolkitTarget}
+            sourceKey={toolkitSourceKey}
             onClose={closeNotesBoard}
             onRunCommand={onRunCommand}
             runCommandDisabledReason={runCommandDisabledReason}
