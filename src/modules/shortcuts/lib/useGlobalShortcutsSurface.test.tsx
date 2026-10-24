@@ -38,3 +38,22 @@ it("checks the current surface at dispatch without consuming a rejected key or r
     vi.unstubAllGlobals();
   }
 });
+
+it.each(["/project/file.ts", "remote://machine/project/file.ts"])("admits editor split through the actual shortcut dispatcher at %s", async (folder) => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const split = vi.fn();
+  function Listener() { useGlobalShortcuts({ "pane.splitRight": split }); return null; }
+  try {
+    await act(async () => root.render(<Listener />));
+    publishActiveSurface({ kind: "editor", ownerId: 1, folder });
+    const event = new KeyboardEvent("keydown", { key: "d", ctrlKey: true, cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(split).toHaveBeenCalledOnce();
+  } finally {
+    await act(async () => root.unmount());
+    publishActiveSurface(null);
+    vi.unstubAllGlobals();
+  }
+});

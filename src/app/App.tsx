@@ -3166,30 +3166,14 @@ function DesktopApp() {
       if (activeTab.kind === "terminal") {
         handleDuplicateTab(activeTab.id);
       } else if (activeTab.kind === "editor" && activeTab.path) {
-        if (!hasRoomToSplit(activeTab, spaceViewLimit)) {
-          playErrorTone();
-          toast.error(t("spaces.maxSlots"));
-          return;
-        }
-
-        const newTabId = openFileTab(activeTab.path, true, {
-          spaceId: activeTab.spaceId,
-        });
-        const newTab = getTab(newTabId);
-        if (newTab) {
-          joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
-          setActiveId(newTabId);
-        }
+        openEditorSplit(activeTab.id);
       }
     },
     [
       effectiveActiveId,
       getTab,
       handleDuplicateTab,
-      openFileTab,
-      setActiveId,
-      spaceViewLimit,
-      t,
+      openEditorSplit,
     ],
   );
 

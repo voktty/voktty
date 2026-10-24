@@ -121,6 +121,20 @@ describe("createCommandItems", () => {
     expect(reasonById({}, "pane.splitDown")).toBeUndefined();
   });
 
+  it.each(["/workspace/file.ts", "remote://machine/project/file.ts"])("admits both editor splits for the saved document at %s", (path) => {
+    const calls: string[] = [];
+    const editor = { id: 1, kind: "editor", path, spaceId: "s", title: "file" } as Tab;
+    const items = createCommandItems(baseContext({ tabs: [editor],
+      splitPaneRight: () => calls.push("right"), splitPaneDown: () => calls.push("down") }));
+    for (const id of ["pane.splitRight", "pane.splitDown"]) {
+      const item = items.find((candidate) => candidate.id === id);
+      expect(item?.disabledReason).toBeUndefined();
+      expect(item?.appliesTo).toEqual(["terminal", "editor"]);
+      item?.run();
+    }
+    expect(calls).toEqual(["right", "down"]);
+  });
+
   it("exposes composed-space focus and lifecycle commands", () => {
     const calls: string[] = [];
     const items = createCommandItems(
@@ -163,13 +177,13 @@ describe("createCommandItems", () => {
     ).toBe("Pane limit");
   });
 
-  it("keeps terminal pane split disabled when active tab is not a terminal", () => {
+  it("keeps split disabled for an editor without a document path", () => {
     const editorTab = { ...terminalTab(1), kind: "editor" } as unknown as Tab;
     const item = createCommandItems(baseContext({ tabs: [editorTab] })).find(
       (i) => i.id === "pane.splitRight",
     );
     expect(item?.disabledReason).toBe("No terminal tab");
-    expect(item?.appliesTo).toEqual(["terminal"]);
+    expect(item?.appliesTo).toEqual(["terminal", "editor"]);
   });
 
   it("disables close on the last tab with a single pane", () => {
