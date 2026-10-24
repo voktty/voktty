@@ -6,6 +6,7 @@ import {
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
+import { useEditorSplitCreation } from "@/modules/surfaces/lib/useEditorSplitCreation";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
@@ -2797,47 +2798,33 @@ function DesktopApp() {
     }),
   });
 
-  const openEditorSplit = useCallback(
-    (sourceTabId?: number) => {
-      const sourceTab =
-        (sourceTabId ? getTab(sourceTabId) : null) ?? getTab(effectiveActiveId);
-      if (!sourceTab) return;
-      if (!hasRoomToSplit(sourceTab, spaceViewLimit)) {
-        playErrorTone();
-        toast.error(t("spaces.maxSlots"));
-        return;
-      }
-      const candidatePath =
-        (sourceTab.kind === "editor" ? sourceTab.path : null) || activeFilePath;
-      const candidateEnv =
-        sourceTab && "workspaceEnv" in sourceTab
-          ? sourceTab.workspaceEnv
-          : undefined;
-      if (candidatePath) {
-        const newTabId = openFileTab(candidatePath, true, {
-          spaceId: sourceTab.spaceId,
-          workspaceEnv: candidateEnv,
-        });
-        const newTab = getTab(newTabId);
-        if (newTab) {
-          joinTabIntoSpaceNextTo(sourceTab, newTab, spaceViewLimit);
-          setActiveId(newTabId);
-        }
-      } else {
-        pickAndOpenFile();
-      }
+  const editorSplit = useEditorSplitCreation({
+    tabs,
+    selectedId: effectiveActiveId,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    limit: spaceViewLimit,
+    getTab,
+    destination: (source) => resolveSpaceJoinTarget(source).targetViewSpace ?? null,
+    hasRoom: hasRoomToSplit,
+    open: openFileTab,
+    join: joinTabIntoSpaceNextTo,
+    activate: (id) => {
+      const tab = getTab(id);
+      if (!tab) return;
+      useSpaces.getState().setActive(tab.spaceId);
+      setActiveId(id);
     },
-    [
-      getTab,
-      effectiveActiveId,
-      spaceViewLimit,
-      t,
-      activeFilePath,
-      openFileTab,
-      setActiveId,
-      pickAndOpenFile,
-    ],
-  );
+    onFull: () => {
+      playErrorTone();
+      toast.error(t("spaces.maxSlots"));
+    },
+  });
+  const openEditorSplit = useCallback((sourceId?: number) => {
+    if (editorSplit.openEditorSplit(sourceId)) setNewEditorOpen(false);
+  }, [editorSplit.openEditorSplit]);
+  useLayoutEffect(() => {
+    if (newEditorOpen && editorSplit.request) editorSplit.close(editorSplit.request);
+  }, [newEditorOpen, editorSplit.request, editorSplit.close]);
 
   const handleDuplicateTab = useCallback(
     (id: number) => {
@@ -5495,6 +5482,18 @@ function DesktopApp() {
           />
 
           <NewEditorDialog
+            open={editorSplit.request !== null}
+            rootPath={editorSplit.request?.target.path ?? null}
+            workspace={editorSplit.request?.target.workspace}
+            requestKey={editorSplit.request}
+            isCurrent={() => editorSplit.request?.current() ?? false}
+            onCreated={(path) => editorSplit.request?.complete(path)}
+            onOpenChange={(open) => {
+              if (!open && editorSplit.request) editorSplit.close(editorSplit.request);
+            }}
+          />
+
+          <NewEditorDialog
             open={newEditorOpen}
             onOpenChange={(open) => {
               setNewEditorOpen(open);
@@ -5504,8 +5503,9 @@ function DesktopApp() {
               }
             }}
             rootPath={explorerRoot ?? home}
-            onCreated={(path) => {
-              const id = openFileTab(path);
+            workspace={activeExplorerWorkspaceEnv}
+            onCreated={(path, createdWorkspace) => {
+              const id = openFileTab(path, true, { workspaceEnv: createdWorkspace });
               const pending = pendingSpaceSlotRef.current;
               const adaptiveTarget = pendingAdaptiveViewSpaceRef.current;
               pendingSpaceSlotRef.current = null;
