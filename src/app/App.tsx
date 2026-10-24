@@ -5,6 +5,7 @@ import {
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
+import { useKanbanCardDrop } from "@/modules/notes-board/lib/useKanbanCardDrop";
 import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
@@ -44,11 +45,9 @@ import { cn, isMarkdownPath } from "@/lib/utils";
 import {
   type AgentLaunchRequest,
   AgentNotificationsBridge,
-  displayAgent,
   findAgentLauncher,
   matchAgentFromTitle,
   nextAttentionTarget,
-  useAgentStore,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
 import { useAgentHistoryStore } from "@/modules/agent-history/store/agentHistoryStore";
@@ -237,12 +236,10 @@ import {
   waitForLeafConnection,
   whenSessionReady,
   writeToSession,
-  submitToLeaf,
   CommandHistoryModal,
   useCommandHistoryStore,
 } from "@/modules/terminal";
 import { useTerminalCopilotStore } from "@/modules/terminal/copilot/terminalCopilotStore";
-import { useKanbanStore } from "@/modules/notes-board/store/kanbanStore";
 import {
   ThemeProvider,
   useThemeFileEditing,
@@ -2849,29 +2846,7 @@ function DesktopApp() {
     [setActiveId, focusPane],
   );
 
-  const handleCardDropOnTab = useCallback(
-    (tab: Tab, cardId: string, prompt: string) => {
-      if (tab.kind !== "terminal" || !tab.activeLeafId) return;
-      const leafId = tab.activeLeafId;
-      const session = useAgentStore.getState().sessions[leafId];
-      const agentName = session?.agent
-        ? displayAgent(session.agent)
-        : "Terminal";
-
-      submitToLeaf(leafId, prompt);
-
-      useKanbanStore.getState().assignCardToAgent(cardId, {
-        leafId,
-        tabId: tab.id,
-        agentName,
-        startedAt: Date.now(),
-        lastObservedStatus: session?.status ?? "working",
-      });
-
-      activateAgentTarget(tab.id, leafId);
-    },
-    [activateAgentTarget],
-  );
+  const handleCardDropOnTab = useKanbanCardDrop(tabs, activateAgentTarget);
 
   const shortcutHandlers = useMemo<ShortcutHandlers>(
     () => ({

@@ -168,7 +168,7 @@ export function subscribeTerminalInputTargets(listener: () => void): () => void 
 
 export type TerminalSubmissionTarget = {
   isAvailable: () => boolean;
-  run: (text: string) => boolean;
+  run: (text: string, admit?: () => boolean) => boolean;
 };
 
 export function captureTerminalSubmissionTarget(
@@ -189,11 +189,12 @@ export function captureTerminalSubmissionTarget(
   };
   return {
     isAvailable: () => current() !== null,
-    run: (text) => {
+    run: (text, admit = () => true) => {
+      if (!admit()) return false;
       const live = current();
       if (!live) return false;
       return submitSession(leafId, live, text, (data) => {
-        if (!current()) return false;
+        if (!admit() || !current()) return false;
         void pty.write(data);
         return true;
       });
