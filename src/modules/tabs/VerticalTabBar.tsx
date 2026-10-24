@@ -56,6 +56,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TabPreviewSplitMenuItem } from "@/modules/tabs/components/TabPreviewSplitMenuItem";
 import { useTabFileManagerReveal } from "@/modules/tabs/lib/useTabFileManagerReveal";
 import { leafIds } from "@/modules/terminal/lib/panes";
 import { respawnSession } from "@/modules/terminal";
@@ -940,6 +941,13 @@ export function VerticalTabBar({
                         </>
                       );
                     })()}
+                    {onOpenPreviewSplit && (
+                      <TabPreviewSplitMenuItem
+                        tab={tab}
+                        onOpen={onOpenPreviewSplit}
+                        className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                      />
+                    )}
                     {tab.kind === "terminal" && (
                       <>
                         {isSshTab(tab, workspaceEnv) && (
@@ -1021,22 +1029,6 @@ export function VerticalTabBar({
                             />
                             <span className="flex-1">
                               {t("tabs.splitDown")}
-                            </span>
-                          </ContextMenuItem>
-                        ) : null}
-                        {onOpenPreviewSplit ? (
-                          <ContextMenuItem
-                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
-                            onSelect={() => onOpenPreviewSplit(tab.id)}
-                          >
-                            <HugeiconsIcon
-                              icon={Globe02Icon}
-                              size={13}
-                              strokeWidth={1.75}
-                              className="text-cyan-400"
-                            />
-                            <span className="flex-1">
-                              {t("tabs.splitPreview")}
                             </span>
                           </ContextMenuItem>
                         ) : null}

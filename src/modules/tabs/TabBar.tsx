@@ -80,6 +80,7 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { TabPreviewSplitMenuItem } from "@/modules/tabs/components/TabPreviewSplitMenuItem";
 import { useTabFileManagerReveal } from "@/modules/tabs/lib/useTabFileManagerReveal";
 import { leafIds } from "@/modules/terminal/lib/panes";
 import { respawnSession } from "@/modules/terminal";
@@ -1018,6 +1019,13 @@ export function TabBar({
                         </>
                       );
                     })()}
+                    {onOpenPreviewSplit && (
+                      <TabPreviewSplitMenuItem
+                        tab={t}
+                        onOpen={onOpenPreviewSplit}
+                        className="gap-2 rounded-md px-2 py-1.5 text-xs"
+                      />
+                    )}
                     {t.kind === "terminal" && (
                       <>
                         {isSshTab(t, workspaceEnv) && (
@@ -1099,22 +1107,6 @@ export function TabBar({
                             />
                             <span className="flex-1">
                               {translate("tabs.splitDown")}
-                            </span>
-                          </ContextMenuItem>
-                        ) : null}
-                        {onOpenPreviewSplit ? (
-                          <ContextMenuItem
-                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
-                            onSelect={() => onOpenPreviewSplit(t.id)}
-                          >
-                            <HugeiconsIcon
-                              icon={Globe02Icon}
-                              size={13}
-                              strokeWidth={1.75}
-                              className="text-cyan-400"
-                            />
-                            <span className="flex-1">
-                              {translate("tabs.splitPreview")}
                             </span>
                           </ContextMenuItem>
                         ) : null}
