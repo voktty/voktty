@@ -599,6 +599,28 @@ export function planGitDiffOpen(
   return { tabs: next, targetId: id };
 }
 
+function sameGitHistoryWorkspace(
+  first: WorkspaceEnv,
+  second: WorkspaceEnv,
+): boolean {
+  if (workspaceScopeKey(first) !== workspaceScopeKey(second)) return false;
+  if (first.kind === "ssh" && second.kind === "ssh") {
+    return (
+      first.root === second.root &&
+      first.connection.id === second.connection.id &&
+      first.connection.host === second.connection.host &&
+      first.connection.user === second.connection.user &&
+      (first.connection.port ?? 22) === (second.connection.port ?? 22) &&
+      first.connection.identityFile === second.connection.identityFile &&
+      first.connection.extraArgs === second.connection.extraArgs
+    );
+  }
+  if (first.kind === "docker" && second.kind === "docker") {
+    return first.connection.user === second.connection.user;
+  }
+  return true;
+}
+
 export function planCommitHistoryOpen(
   tabs: Tab[],
   input: {
@@ -614,7 +636,8 @@ export function planCommitHistoryOpen(
     (tab): tab is GitHistoryTab =>
       tab.kind === "git-history" &&
       tab.spaceId === spaceId &&
-      tab.repoRoot === input.repoRoot,
+      tab.repoRoot === input.repoRoot &&
+      sameGitHistoryWorkspace(tab.workspaceEnv ?? LOCAL_WORKSPACE, resolvedEnv),
   );
   const title = input.branch ? `History · ${input.branch}` : "Git History";
   if (existing) {
