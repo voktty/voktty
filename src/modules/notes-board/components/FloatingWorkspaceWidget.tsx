@@ -27,6 +27,7 @@ import { NotesTab } from "./NotesTab";
 type Props = {
   onClose: () => void;
   onRunCommand?: (command: string) => void;
+  runCommandDisabledReason?: string;
   cwd?: string | null;
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
@@ -35,6 +36,7 @@ type Props = {
 export function FloatingWorkspaceWidget({
   onClose,
   onRunCommand,
+  runCommandDisabledReason,
   cwd,
   tabs,
   onActivateAgent,
@@ -267,6 +269,7 @@ export function FloatingWorkspaceWidget({
           ) : activeTab === "kanban" ? (
             <KanbanTab
               onRunCommand={onRunCommand}
+              runCommandDisabledReason={runCommandDisabledReason}
               cwd={cwd}
               tabs={tabs}
               onActivateAgent={onActivateAgent}
@@ -274,6 +277,7 @@ export function FloatingWorkspaceWidget({
           ) : (
             <NotesTab
               onRunCommand={onRunCommand}
+              runCommandDisabledReason={runCommandDisabledReason}
               cwd={cwd}
               tabs={tabs}
               onActivateAgent={onActivateAgent}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,6 +32,7 @@ import { extractTaskStats, useKanbanStore } from "../store/kanbanStore";
 type Props = {
   card: KanbanCard;
   onRunCommand?: (command: string) => void;
+  runCommandDisabledReason?: string;
   onActivateAgent?: (tabId: number, leafId: number) => void;
   availableAgents?: ActiveAgentTarget[];
   onAssignToAgent?: (card: KanbanCard, target: ActiveAgentTarget) => void;
@@ -66,11 +67,16 @@ const PRIORITY_STYLES: Record<string, { bg: string; fg: string }> = {
 export function KanbanCardItem({
   card,
   onRunCommand,
+  runCommandDisabledReason,
   onActivateAgent,
   availableAgents = [],
   onAssignToAgent,
 }: Props) {
   const { t } = useTranslation();
+  const runReasonId = useId();
+  const commandUnavailableReason =
+    runCommandDisabledReason ??
+    (!onRunCommand ? t("editor.terminalNoActive") : undefined);
   const [isHovered, setIsHovered] = useState(false);
   const deleteCard = useKanbanStore((s) => s.deleteCard);
   const moveCard = useKanbanStore((s) => s.moveCard);
@@ -375,18 +381,36 @@ export function KanbanCardItem({
             </DropdownMenu>
           )}
 
-          {detectedCommand && onRunCommand && (
+          {detectedCommand && (
             <button
               type="button"
-              onClick={() => onRunCommand(detectedCommand)}
-              className="flex items-center gap-1 rounded bg-accent/60 px-1.5 py-0.5 text-foreground hover:bg-accent hover:text-primary transition-colors cursor-pointer"
-              title={t("notesBoard.runInTerminal", { command: detectedCommand })}
+              disabled={Boolean(commandUnavailableReason)}
+              aria-describedby={
+                commandUnavailableReason ? runReasonId : undefined
+              }
+              onClick={() => {
+                if (!commandUnavailableReason)
+                  onRunCommand?.(detectedCommand);
+              }}
+              className="flex items-center gap-1 rounded bg-accent/60 px-1.5 py-0.5 text-foreground hover:bg-accent hover:text-primary transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50"
+              title={
+                commandUnavailableReason ??
+                t("notesBoard.runInTerminal", { command: detectedCommand })
+              }
             >
               <HugeiconsIcon icon={ComputerTerminal01Icon} size={10} />
               <span>{t("notesBoard.run")}</span>
             </button>
           )}
         </div>
+        {detectedCommand && commandUnavailableReason && (
+          <p
+            id={runReasonId}
+            className="basis-full text-[10px] text-muted-foreground"
+          >
+            {commandUnavailableReason}
+          </p>
+        )}
       </div>
     </div>
   );

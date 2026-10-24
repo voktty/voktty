@@ -281,6 +281,7 @@ export function StatusBar({
           <LazyFloatingWorkspaceWidget
             onClose={closeNotesBoard}
             onRunCommand={onRunCommand}
+            runCommandDisabledReason={runCommandDisabledReason}
             cwd={cwd}
             tabs={tabs}
             onActivateAgent={onActivateAgent}

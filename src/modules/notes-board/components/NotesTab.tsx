@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,6 +49,7 @@ import { useNotesBoardStore } from "../store/notesBoardStore";
 
 type Props = {
   onRunCommand?: (command: string) => void;
+  runCommandDisabledReason?: string;
   cwd?: string | null;
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
@@ -49,11 +57,16 @@ type Props = {
 
 export function NotesTab({
   onRunCommand,
+  runCommandDisabledReason,
   cwd,
   tabs,
   onActivateAgent,
 }: Props) {
   const { t } = useTranslation();
+  const runReasonId = useId();
+  const commandUnavailableReason =
+    runCommandDisabledReason ??
+    (!onRunCommand ? t("editor.terminalNoActive") : undefined);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -421,13 +434,23 @@ export function NotesTab({
                 <span>{t("notesBoard.toKanban")}</span>
               </Button>
 
-              {detectedCommand && onRunCommand && (
+              {detectedCommand && (
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-7 gap-1 px-2 text-[11px]"
-                  onClick={() => onRunCommand(detectedCommand)}
-                  title={t("notesBoard.runInTerminalTitle", { command: detectedCommand })}
+                  disabled={Boolean(commandUnavailableReason)}
+                  aria-describedby={
+                    commandUnavailableReason ? runReasonId : undefined
+                  }
+                  onClick={() => {
+                    if (!commandUnavailableReason)
+                      onRunCommand?.(detectedCommand);
+                  }}
+                  title={
+                    commandUnavailableReason ??
+                    t("notesBoard.runInTerminalTitle", { command: detectedCommand })
+                  }
                 >
                   <HugeiconsIcon icon={ComputerTerminal01Icon} size={12} />
                   <span>{t("notesBoard.run")}</span>
@@ -459,6 +482,15 @@ export function NotesTab({
               </Button>
             </div>
           </div>
+
+          {detectedCommand && commandUnavailableReason && (
+            <p
+              id={runReasonId}
+              className="pt-2 text-[10.5px] text-muted-foreground"
+            >
+              {commandUnavailableReason}
+            </p>
+          )}
 
           {/* Text Area */}
           <div className="flex flex-1 flex-col pt-2 min-h-0">

@@ -35,12 +35,19 @@ import { KanbanCardItem } from "./KanbanCardItem";
 
 type Props = {
   onRunCommand?: (command: string) => void;
+  runCommandDisabledReason?: string;
   cwd?: string | null;
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
 };
 
-export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
+export function KanbanTab({
+  onRunCommand,
+  runCommandDisabledReason,
+  cwd,
+  tabs,
+  onActivateAgent,
+}: Props) {
   const { t } = useTranslation();
   const cards = useKanbanStore((s) => s.cards);
   const addCard = useKanbanStore((s) => s.addCard);
@@ -374,6 +381,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                       key={card.id}
                       card={card}
                       onRunCommand={onRunCommand}
+                      runCommandDisabledReason={runCommandDisabledReason}
                       onActivateAgent={onActivateAgent}
                       availableAgents={availableAgents}
                       onAssignToAgent={handleAssignToAgent}
