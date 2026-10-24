@@ -319,6 +319,8 @@ Global command history remains readable and copyable from every surface. Opening
 
 Both tab bars declare their file-manager command and resolve it against the pointed tab rather than the selected surface. Native reveal accepts only a host-native absolute location owned by that tab or its workspace. Remote namespaces, remote POSIX paths, serial and guest locations remain disabled with a local-machine label; native Windows documents and WSL UNC paths keep their native interpretation. Harness roots retain their independent project identity. Delivery rechecks the original tab key, current path and environment against the bar's committed registry, and unmount retires cached callbacks. The separate sidebar-reveal action retains its existing routing.
 
+`FileExplorerHandle.reveal` accepts an optional caller-validity predicate. Its committed tree scope and latest reveal request guard directory responses, selection updaters and one cancellable scroll frame. Changing the visible or source root, navigation identity, workspace or native environment, or unmounting, retires pending publication permanently. A retired directory read removes only its own loading-state object and cannot remove a successor's loading state. POSIX filesystem-root reveals expand descendants normally. These guards cover reveal requests; ordinary tree refreshes and the desktop's source-tab attribution retain their separate contracts.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

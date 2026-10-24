@@ -36,6 +36,11 @@ describe("pathAncestorsWithinRoot", () => {
   it("rejects files outside the workspace root", () => {
     expect(pathAncestorsWithinRoot("C:/repo", "C:/other/a.ts")).toBeNull();
   });
+
+  it("reveals descendants of the POSIX filesystem root", () => {
+    expect(pathAncestorsWithinRoot("/", "/srv/app/file.ts")).toEqual(["/srv", "/srv/app"]);
+    expect(pathAncestorsWithinRoot("/", "/file.ts")).toEqual([]);
+  });
 });
 
 describe("hasDirListingMetadataChanged", () => {

@@ -58,6 +58,7 @@ export function dirname(path: string): string {
 const EXPANSION_CACHE_LIMIT = 8;
 const NETWORK_REFRESH_INTERVAL_MS = 5000;
 const expansionCache = new Map<string, string[]>();
+const alwaysCurrent = () => true;
 
 function rememberExpansion(root: string, expanded: Set<string>): void {
   expansionCache.delete(root);
@@ -143,7 +144,9 @@ export function pathAncestorsWithinRoot(
   const comparableTarget = caseInsensitive ? target.toLowerCase() : target;
   if (
     comparableTarget !== comparableRoot &&
-    !comparableTarget.startsWith(`${comparableRoot}/`)
+    !comparableTarget.startsWith(
+      comparableRoot === "/" ? "/" : `${comparableRoot}/`,
+    )
   ) {
     return null;
   }
@@ -215,8 +218,12 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     [workspace],
   );
 
-  const fetchChildren = useCallback(
-    async (path: string): Promise<boolean> => {
+  const readChildren = useCallback(
+    async (
+      path: string,
+      isCurrent: () => boolean = alwaysCurrent,
+    ): Promise<boolean> => {
+      if (!isCurrent()) return false;
       const remoteProject = isRemoteProjectUri(path);
       const isWorkspacePath =
         !remoteProject && isPathInWorkspace(workspace, path);
@@ -226,8 +233,15 @@ export function useFileTree(rootPath: string | null, options?: Options) {
       // a request for the new root through the previous server.
       if (isWorkspacePath && requestWorkspaceKey !== workspaceKey) return false;
 
+      const loadingState: ChildrenState = { status: "loading" };
+      const discardLoading = (current: TreeState): TreeState => {
+        if (current[path] !== loadingState) return current;
+        const next = { ...current };
+        delete next[path];
+        return next;
+      };
       if (nodesRef.current[path]?.status !== "loaded") {
-        setNodes((s) => ({ ...s, [path]: { status: "loading" } }));
+        setNodes((s) => isCurrent() ? { ...s, [path]: loadingState } : s);
       }
       try {
         const entries = remoteProject
@@ -256,6 +270,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
           return false;
         }
 
+        if (!isCurrent()) return false;
         const previousMetadata = listingMetadataRef.current.get(path);
         const metadataChanged = previousMetadata
           ? hasDirListingMetadataChanged(previousMetadata, entries)
@@ -292,6 +307,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         }
 
         setNodes((s) => {
+          if (!isCurrent()) return discardLoading(s);
           const next: TreeState = {};
           for (const [k, v] of Object.entries(s)) if (!dead.has(k)) next[k] = v;
           next[path] = { status: "loaded", entries };
@@ -301,6 +317,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         if (dead.size > 0) {
           for (const path of dead) listingMetadataRef.current.delete(path);
           setExpanded((c) => {
+            if (!isCurrent()) return c;
             let changed = false;
             const n = new Set(c);
             for (const d of dead) if (n.delete(d)) changed = true;
@@ -313,17 +330,25 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         }
         return true;
       } catch (e) {
-        if (activeWorkspaceKeyRef.current !== requestWorkspaceKey) {
+        if (
+          !isCurrent() || activeWorkspaceKeyRef.current !== requestWorkspaceKey
+        ) {
           return false;
         }
-        setNodes((s) => ({
-          ...s,
-          [path]: { status: "error", message: String(e) },
-        }));
+        setNodes((s) => isCurrent()
+          ? { ...s, [path]: { status: "error", message: String(e) } }
+          : discardLoading(s),
+        );
         return false;
+      } finally {
+        if (!isCurrent()) setNodes(discardLoading);
       }
     },
     [workspace, workspaceKey],
+  );
+  const fetchChildren = useCallback(
+    (path: string) => readChildren(path),
+    [readChildren],
   );
 
   // Root change → restore the cached expansion for this root, re-scope watches,
@@ -500,22 +525,31 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   );
 
   const reveal = useCallback(
-    async (path: string): Promise<boolean> => {
-      if (!rootPath) return false;
+    async (
+      path: string,
+      isCurrent: () => boolean = alwaysCurrent,
+    ): Promise<boolean> => {
+      if (!rootPath || !isCurrent()) return false;
       const ancestors = pathAncestorsWithinRoot(rootPath, path);
       if (ancestors === null) return false;
       if (ancestors.length > 0) {
         setExpanded((current) => {
+          if (!isCurrent()) return current;
           const next = new Set(current);
           for (const directory of ancestors) next.add(directory);
           return next;
         });
-        for (const directory of ancestors) addWatch(directory);
-        await Promise.all(ancestors.map(fetchChildren));
+        for (const directory of ancestors) {
+          if (!isCurrent()) return false;
+          addWatch(directory);
+        }
+        await Promise.all(
+          ancestors.map((directory) => readChildren(directory, isCurrent)),
+        );
       }
-      return true;
+      return isCurrent();
     },
-    [rootPath, addWatch, fetchChildren],
+    [rootPath, addWatch, readChildren],
   );
 
   const refresh = useCallback(

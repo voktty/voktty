@@ -59,6 +59,10 @@ import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { useExplorerDnd } from "./lib/useExplorerDnd";
 import { useExplorerFileDrop } from "./lib/useExplorerFileDrop";
 import { useFileTree } from "./lib/useFileTree";
+import {
+  type ExplorerReveal,
+  useExplorerReveal,
+} from "@/modules/explorer/lib/useExplorerReveal";
 import { useGitStatus } from "./lib/useGitStatus";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
@@ -81,7 +85,7 @@ export type FileExplorerHandle = {
   focus: () => void;
   isFocused: () => boolean;
   focusSearch: () => void;
-  reveal: (path: string) => Promise<boolean>;
+  reveal: ExplorerReveal;
 };
 
 type Props = {
@@ -547,6 +551,20 @@ export const FileExplorer = memo(
       },
       [entryIndexByPath, virtualizer],
     );
+    const revealScope = useMemo(() => ({
+      rootPath, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
+    }), [
+      rootPath, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
+    ]);
+    const reveal = useExplorerReveal({
+      scope: revealScope,
+      revealTree: tree.reveal,
+      select: (path, isCurrent) => {
+        setSelectedPaths((current) => isCurrent() ? new Set([path]) : current);
+        setAnchorPath((current) => isCurrent() ? path : current);
+      },
+      scroll: scrollEntryIntoView,
+    });
 
     const handleSelectPath = useCallback(
       (path: string, e?: React.MouseEvent) => {
@@ -625,16 +643,9 @@ export const FileExplorer = memo(
           setIsSearchOpen(true);
           searchRef.current?.focus();
         },
-        reveal: async (path: string) => {
-          const revealed = await tree.reveal(path);
-          if (!revealed) return false;
-          setSelectedPaths(new Set([path]));
-          setAnchorPath(path);
-          requestAnimationFrame(() => scrollEntryIntoView(path));
-          return true;
-        },
+        reveal,
       }),
-      [entryPaths, scrollEntryIntoView, selectedPaths.size, tree.reveal],
+      [entryPaths, scrollEntryIntoView, selectedPaths.size, reveal],
     );
 
     useGlobalShortcuts({
