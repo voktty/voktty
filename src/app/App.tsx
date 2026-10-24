@@ -6,6 +6,7 @@ import {
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { useTabGitSplit } from "@/modules/surfaces/lib/useTabGitSplit";
+import { useTabPreviewSplit } from "@/modules/surfaces/lib/useTabPreviewSplit";
 import { useEditorSplitCreation } from "@/modules/surfaces/lib/useEditorSplitCreation";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
@@ -2751,25 +2752,29 @@ function DesktopApp() {
     return newPreviewTab("about:blank");
   }, [newPreviewTab]);
 
-  const openPreviewSplit = useCallback(
-    (sourceTabId?: number) => {
-      const sourceTab =
-        (sourceTabId ? getTab(sourceTabId) : null) ?? getTab(effectiveActiveId);
-      if (!sourceTab) return;
-      if (!hasRoomToSplit(sourceTab, spaceViewLimit)) {
-        playErrorTone();
-        toast.error(t("spaces.maxSlots"));
-        return;
-      }
-      const previewId = openPreviewTab("", { splitWithActive: false });
-      const previewTab = getTab(previewId);
-      if (previewTab) {
-        joinTabIntoSpaceNextTo(sourceTab, previewTab, spaceViewLimit);
-        setActiveId(previewId);
-      }
+  const openPreviewSplit = useTabPreviewSplit({
+    tabs,
+    selectedId: effectiveActiveId,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    limit: spaceViewLimit,
+    getTab,
+    destination: (source) => resolveSpaceJoinTarget(source).targetViewSpace ?? null,
+    hasRoom: hasRoomToSplit,
+    resolve: (path) => useWebServerStore.getState().startServer(path),
+    open: newPreviewTab,
+    join: joinTabIntoSpaceNextTo,
+    activate: (id) => {
+      const tab = getTab(id);
+      if (!tab) return;
+      useSpaces.getState().setActive(tab.spaceId);
+      setActiveId(id);
     },
-    [getTab, effectiveActiveId, spaceViewLimit, t, openPreviewTab, setActiveId],
-  );
+    onFull: () => {
+      playErrorTone();
+      toast.error(t("spaces.maxSlots"));
+    },
+    onError: () => toast.error(t("feedback.somethingWentWrong")),
+  });
 
   const openGitGraphSplit = useTabGitSplit({
     tabs,
