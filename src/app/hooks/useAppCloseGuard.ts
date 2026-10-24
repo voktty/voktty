@@ -8,9 +8,27 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import { windowCloseParticipants } from "@/modules/lifecycle/windowCloseParticipants";
+
+type CloseParticipants = ReturnType<typeof windowCloseParticipants.capture>;
+
+function closeScope(tabs: Tab[]): string {
+  return JSON.stringify(
+    tabs.map((tab) => [
+      tab.tabKey,
+      tab.workspaceScopeId,
+      tab.spaceId,
+      tab.kind,
+      !!tab.locked,
+      tab.kind === "editor" ? [tab.path, tab.dirty] : null,
+      tab.kind === "terminal" ? leafIds(tab.paneTree) : null,
+    ]),
+  );
+}
 
 async function anyTerminalBusy(tabs: Tab[]): Promise<boolean> {
   const leaves = tabs.flatMap((t) =>
@@ -24,6 +42,7 @@ async function anyTerminalBusy(tabs: Tab[]): Promise<boolean> {
 export type AppCloseBlocker = {
   dirtyEditors: number;
   busyTerminal: boolean;
+  busyHarness?: boolean;
 };
 
 /**
@@ -31,7 +50,9 @@ export type AppCloseBlocker = {
  * same prompt is also the last warning before discarding unsaved buffers.
  */
 export function canOptOutOfAppClosePrompt(blocker: AppCloseBlocker): boolean {
-  return blocker.busyTerminal && blocker.dirtyEditors === 0;
+  return (
+    blocker.busyTerminal && !blocker.busyHarness && blocker.dirtyEditors === 0
+  );
 }
 
 export async function promoteSessionThenExit(
@@ -50,62 +71,175 @@ export function useAppCloseGuard(
     useState<AppCloseBlocker | null>(null);
   const forceClose = useRef(false);
   const closing = useRef(false);
+  const checking = useRef(false);
+  const requestedQuit = useRef(false);
+  const generation = useRef(0);
+  const lifetime = useRef<object | null>(null);
+  const participants = useRef<CloseParticipants | null>(null);
+  const pending = useRef<AppCloseBlocker | null>(null);
+  const pendingScope = useRef("");
 
-  const finishClose = useCallback(async () => {
-    if (closing.current) return;
-    closing.current = true;
-    try {
-      await promoteSessionThenExit(flushAndPromoteSession, async () => {
-        forceClose.current = true;
-        await invoke("app_exit_after_flush");
-      });
-    } catch (error) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A replacement promoter retires the old close authority.
+  useLayoutEffect(() => {
+    const original = {};
+    lifetime.current = original;
+    setPendingAppClose(null);
+    return () => {
+      if (lifetime.current === original) lifetime.current = null;
+      generation.current++;
+      participants.current?.cancel();
+      participants.current = null;
+      pending.current = null;
+      checking.current = false;
       closing.current = false;
       forceClose.current = false;
-      const { toast } = await import("sonner");
-      const { t: translate } = await import("@/modules/i18n");
-      toast.error(translate("feedback.sessionSaveFailed"), {
-        id: "session-save-failed",
-      });
-      console.error("[voktty] clean session promotion failed:", error);
-    }
+    };
   }, [flushAndPromoteSession]);
+
+  const finishClose = useCallback(
+    async (capture: CloseParticipants, isCurrent: () => boolean) => {
+      if (closing.current || !isCurrent()) return;
+      closing.current = true;
+      participants.current = capture;
+      const scope = closeScope(tabsRef.current);
+      const admitted = () =>
+        isCurrent() &&
+        capture.isCurrent() &&
+        closeScope(tabsRef.current) === scope;
+      try {
+        await capture.prepare();
+        if (!admitted()) throw new Error("Window close ownership changed.");
+        await promoteSessionThenExit(flushAndPromoteSession, async () => {
+          if (!admitted()) throw new Error("Window close ownership changed.");
+          forceClose.current = true;
+          await invoke("app_exit_after_flush");
+        });
+      } catch {
+        capture.cancel();
+        if (isCurrent()) {
+          forceClose.current = false;
+          const { toast } = await import("sonner");
+          const { t: translate } = await import("@/modules/i18n");
+          if (isCurrent())
+            toast.error(translate("feedback.sessionSaveFailed"), {
+              id: "session-save-failed",
+            });
+        }
+      } finally {
+        if (isCurrent()) closing.current = false;
+      }
+    },
+    [flushAndPromoteSession, tabsRef],
+  );
+
+  const beginClose = useCallback(
+    async (
+      original: object | null,
+      approved?: { blocker: AppCloseBlocker; scope: string; current: boolean },
+    ) => {
+      if (
+        !original ||
+        lifetime.current !== original ||
+        checking.current ||
+        closing.current
+      )
+        return;
+      checking.current = true;
+      const request = ++generation.current;
+      const isCurrent = () =>
+        lifetime.current === original && generation.current === request;
+      let capture: CloseParticipants | undefined;
+      try {
+        capture = windowCloseParticipants.capture();
+        if (!approved && !requestedQuit.current && capture.closeToTray) {
+          participants.current = capture;
+          await capture.hide();
+          capture.cancel();
+          return;
+        }
+        capture.cancel();
+        const busyTerminal =
+          usePreferencesStore.getState().confirmCloseRunningTerminal &&
+          (await anyTerminalBusy(tabsRef.current));
+        if (!isCurrent()) return;
+        const lockedTabs = tabsRef.current.filter((tab) => tab.locked).length;
+        if (lockedTabs) {
+          const { toast } = await import("sonner");
+          const { t: translate } = await import("@/modules/i18n");
+          if (isCurrent())
+            toast.error(
+              translate("tabs.cannotCloseAppWithLockedTabs", {
+                count: lockedTabs,
+              }),
+              { id: "locked-tabs-app-close-guard" },
+            );
+          pending.current = null;
+          setPendingAppClose(null);
+          return;
+        }
+        capture = windowCloseParticipants.capture();
+        participants.current = capture;
+        if (!capture.isCurrent())
+          throw new Error("Window close ownership changed.");
+        const blocker: AppCloseBlocker = {
+          dirtyEditors: tabsRef.current.filter(
+            (tab) => tab.kind === "editor" && tab.dirty,
+          ).length,
+          busyTerminal,
+          busyHarness: capture.busy,
+        };
+        const scope = closeScope(tabsRef.current);
+        const needsConfirmation =
+          blocker.dirtyEditors > 0 ||
+          blocker.busyTerminal ||
+          blocker.busyHarness;
+        const needsNewApproval =
+          !approved?.current ||
+          approved.scope !== scope ||
+          (blocker.busyTerminal && !approved.blocker.busyTerminal) ||
+          (blocker.busyHarness && !approved.blocker.busyHarness);
+        if (needsConfirmation && needsNewApproval) {
+          pending.current = blocker;
+          pendingScope.current = scope;
+          setPendingAppClose(blocker);
+        } else {
+          pending.current = null;
+          setPendingAppClose(null);
+          await finishClose(capture, isCurrent);
+        }
+      } catch {
+        capture?.cancel();
+        if (isCurrent()) {
+          const { toast } = await import("sonner");
+          const { t: translate } = await import("@/modules/i18n");
+          if (isCurrent())
+            toast.error(translate("feedback.sessionSaveFailed"), {
+              id: "session-save-failed",
+            });
+        }
+      } finally {
+        if (isCurrent()) {
+          checking.current = false;
+          requestedQuit.current = false;
+        }
+      }
+    },
+    [tabsRef, finishClose],
+  );
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
+    const original = lifetime.current;
     void getCurrentWindow()
-      .onCloseRequested(async (event) => {
-        if (forceClose.current) return;
-        event.preventDefault();
-
-        const lockedTabs = tabsRef.current.filter((t) => t.locked).length;
-        if (lockedTabs > 0) {
-          const { toast } = await import("sonner");
-          const { t: translate } = await import("@/modules/i18n");
-          toast.error(
-            translate("tabs.cannotCloseAppWithLockedTabs", {
-              count: lockedTabs,
-            }),
-            { id: "locked-tabs-app-close-guard" },
-          );
+      .onCloseRequested((event) => {
+        if (disposed || lifetime.current !== original) {
+          event.preventDefault();
           return;
         }
-
-        // Opting out skips the per-leaf IPC entirely; it never relaxes the
-        // unsaved-changes guard below.
-        const busyTerminal =
-          usePreferencesStore.getState().confirmCloseRunningTerminal &&
-          (await anyTerminalBusy(tabsRef.current));
-        // Count after the await so edits made during the IPC check are seen.
-        const dirtyEditors = tabsRef.current.filter(
-          (t) => t.kind === "editor" && t.dirty,
-        ).length;
-        if (dirtyEditors > 0 || busyTerminal) {
-          setPendingAppClose({ dirtyEditors, busyTerminal });
-        } else {
-          void finishClose();
-        }
+        if (forceClose.current) return;
+        event.preventDefault();
+        if (!pending.current) void beginClose(original);
       })
       .then((un) => {
         if (disposed) un();
@@ -115,12 +249,14 @@ export function useAppCloseGuard(
       disposed = true;
       unlisten?.();
     };
-  }, [tabsRef, finishClose]);
+  }, [beginClose]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
     void listen("voktty:request-app-close", () => {
+      if (disposed) return;
+      requestedQuit.current = true;
       void getCurrentWindow().close();
     }).then((stop) => {
       if (disposed) stop();
@@ -133,24 +269,26 @@ export function useAppCloseGuard(
   }, []);
 
   const confirmAppClose = useCallback(async () => {
-    const lockedTabs = tabsRef.current.filter((t) => t.locked).length;
-    if (lockedTabs > 0) {
-      const { toast } = await import("sonner");
-      const { t: translate } = await import("@/modules/i18n");
-      toast.error(
-        translate("tabs.cannotCloseAppWithLockedTabs", {
-          count: lockedTabs,
-        }),
-        { id: "locked-tabs-app-close-guard" },
-      );
-      setPendingAppClose(null);
-      return;
-    }
-    setPendingAppClose(null);
-    await finishClose();
-  }, [tabsRef, finishClose]);
+    if (!pending.current) return;
+    const approved = {
+      blocker: pending.current,
+      scope: pendingScope.current,
+      current: participants.current?.isCurrent() === true,
+    };
+    participants.current?.cancel();
+    await beginClose(lifetime.current, approved);
+  }, [beginClose]);
 
-  const cancelAppClose = useCallback(() => setPendingAppClose(null), []);
+  const cancelAppClose = useCallback(() => {
+    generation.current++;
+    participants.current?.cancel();
+    participants.current = null;
+    pending.current = null;
+    checking.current = false;
+    closing.current = false;
+    requestedQuit.current = false;
+    setPendingAppClose(null);
+  }, []);
 
   return { pendingAppClose, confirmAppClose, cancelAppClose };
 }

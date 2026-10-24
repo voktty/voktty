@@ -6,6 +6,7 @@ import type { PersistenceOwner } from "@/modules/harness/lib/persistenceAdmissio
 import { loadCloseToTray } from "@/modules/harness/lib/settings";
 import { toast } from "sonner";
 import { t } from "@/modules/i18n";
+import { windowCloseParticipants } from "@/modules/lifecycle/windowCloseParticipants";
 
 type Inputs = {
   getOwner: () => PersistenceOwner | null;
@@ -33,6 +34,7 @@ export function useHarnessWindowPersistence(inputs: Inputs) {
       flush: () => latest.current.flush(),
       skipSnapshot: () => latest.current.skipSnapshot,
       closeToTray: loadCloseToTray,
+      registerDesktopClose: windowCloseParticipants.register,
       onError: () => {
         toast.error(t("feedback.sessionSaveFailed"), { id: "session-save-failed" });
       },

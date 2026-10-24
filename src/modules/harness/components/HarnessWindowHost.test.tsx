@@ -27,6 +27,7 @@ import {
   useHarnessWindow,
 } from "@/modules/harness/components/HarnessWindowHost";
 import { abortQuit } from "@/modules/harness/lib/appLifecycle";
+import { windowCloseParticipants } from "@/modules/lifecycle/windowCloseParticipants";
 import type { HarnessEvent } from "@/modules/harness/lib/harness";
 import type {
   HarnessWindowViewCohort,
@@ -1350,7 +1351,7 @@ describe("window-owned Harness execution host", () => {
       root.render(<HarnessStack tabs={tabs} activeId={1} />),
     );
     expect(native.bridge).toHaveBeenCalledOnce();
-    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.register).not.toHaveBeenCalled();
     expect(native.panes.size).toBe(2);
     const ids = [...native.panes.keys()];
     await act(async () => {
@@ -1384,8 +1385,10 @@ describe("window-owned Harness execution host", () => {
     ).toBe(true);
     expect(sends).toHaveLength(2);
     expect(native.bridge).toHaveBeenCalledOnce();
-    expect(native.register).toHaveBeenCalledOnce();
-    await act(async () => closeListeners[0]({ preventDefault: vi.fn() }));
+    expect(native.register).not.toHaveBeenCalled();
+    const close = windowCloseParticipants.capture();
+    expect(close.busy).toBe(true);
+    await act(async () => close.prepare());
     const snapshots = native.invoke.mock.calls.filter(
       ([command]) => command === "workspace_set_snapshot",
     );
@@ -1394,7 +1397,8 @@ describe("window-owned Harness execution host", () => {
         .map((session: Session) => session.id)
         .sort(),
     ).toEqual([...ids].sort());
-    expect(native.invoke).toHaveBeenCalledWith("destroy_window");
+    expect(native.invoke).not.toHaveBeenCalledWith("destroy_window");
+    await act(async () => close.cancel());
   });
 
   it("routes keyboard and native actions only to the focused real App and retires cached listeners", async () => {
@@ -1491,7 +1495,7 @@ describe("window-owned Harness execution host", () => {
         />
       </>,
     );
-    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.register).not.toHaveBeenCalled();
     expect(native.bridge).toHaveBeenCalledOnce();
     await act(async () => {
       required(native.panes.get("one")).onSubmit("one", "local work", []);
@@ -1536,7 +1540,7 @@ describe("window-owned Harness execution host", () => {
       )?.busy,
     ).toBe(true);
     expect(native.bridge).toHaveBeenCalledOnce();
-    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.register).not.toHaveBeenCalled();
     expect(sends).toHaveLength(2);
   });
 
@@ -2795,7 +2799,7 @@ describe("window-owned Harness execution host", () => {
     );
     expect(capture.sessions).toHaveLength(2);
     expect(capture.tabs.map((tab) => tab.id)).toContain(one.input.tabs[0].id);
-    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.register).not.toHaveBeenCalled();
     expect(native.bridge).toHaveBeenCalledOnce();
   });
 
@@ -2814,10 +2818,10 @@ describe("window-owned Harness execution host", () => {
     await render(sessions, []);
     await act(async () => vi.advanceTimersByTimeAsync(250));
     native.invoke.mockClear();
-    const preventDefault = vi.fn();
-    await act(async () => closeListeners[0]({ preventDefault }));
-    expect(preventDefault).toHaveBeenCalledOnce();
-    expect(native.ask).toHaveBeenCalledOnce();
+    const close = windowCloseParticipants.capture();
+    expect(close.busy).toBe(true);
+    await act(async () => close.prepare());
+    expect(native.ask).not.toHaveBeenCalled();
     const saves = native.invoke.mock.calls.filter(
       ([command]) => command === "workspace_set_snapshot",
     );
@@ -2826,7 +2830,8 @@ describe("window-owned Harness execution host", () => {
     expect(
       saves[0][1].snapshot.sessions.map((session: Session) => session.id),
     ).toEqual(["one", "two"]);
-    expect(native.invoke).toHaveBeenCalledWith("destroy_window");
+    expect(native.invoke).not.toHaveBeenCalledWith("destroy_window");
+    await act(async () => close.cancel());
   });
 
   it("StrictMode leaves one owner and boot without a view preserves the saved layout", async () => {
@@ -2838,8 +2843,12 @@ describe("window-owned Harness execution host", () => {
         ([command]) => command === "workspace_set_snapshot",
       ),
     ).toHaveLength(0);
-    expect(native.register).toHaveBeenCalledTimes(2);
+    expect(native.register).not.toHaveBeenCalled();
+    const close = windowCloseParticipants.capture();
+    expect(close.isCurrent()).toBe(true);
     expect(native.bridge).toHaveBeenCalledTimes(2);
     expect(native.stopBridge).toHaveBeenCalledOnce();
+    await act(async () => root.render(null));
+    expect(close.isCurrent()).toBe(false);
   });
 });

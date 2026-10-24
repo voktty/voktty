@@ -1,5 +1,6 @@
 import {
   confirmAndCloseWindow,
+  hasInFlightSessions,
   hideCurrentWindow,
   isAppQuitting,
   persistLiveTranscripts,
@@ -31,6 +32,7 @@ import {
   collectWorkspaceSnapshot,
   workspaceSnapshotKey,
 } from "@/modules/harness/lib/workspaceSnapshot";
+import type { WindowCloseCapture } from "@/modules/lifecycle/windowCloseParticipants";
 
 export type HarnessWindowPersistenceInputs = {
   owner: PersistenceOwner;
@@ -39,6 +41,7 @@ export type HarnessWindowPersistenceInputs = {
   skipSnapshot: () => boolean;
   closeToTray: () => boolean;
   onError?: (error: unknown) => void;
+  registerDesktopClose?: (capture: () => WindowCloseCapture) => () => void;
   target: HarnessUnloadDependencies["target"];
   registerClose: Parameters<typeof ownHarnessWindowCloseSubscription>[0];
   schedule: (callback: () => void, delay: number) => () => void;
@@ -98,7 +101,82 @@ export function ownHarnessWindowPersistence(
     (tab) => capture.keepTab?.(tab) ?? true,
     owner,
   );
-  const closeSubscription = ownHarnessWindowCloseSubscription(
+  const desktopCapture = (): WindowCloseCapture => {
+    flush();
+    const permit = owner.capture();
+    if (!permit) throw new Error("Harness close ownership was retired.");
+    const current = { ...capture };
+    let cancelled = false;
+    let final: PersistenceFinal | undefined;
+    const isCurrent = () =>
+      !cancelled && active && closeActive && permit.isCurrent();
+    const cancel = () => {
+      if (cancelled) return;
+      cancelled = true;
+      final?.cancel();
+    };
+    const guarded: PersistencePermit = {
+      isCurrent,
+      run: (write) => (isCurrent() ? permit.run(write) : Promise.resolve(false)),
+      seal: () => (isCurrent() ? permit.seal() : null),
+    };
+    return {
+      busy: hasInFlightSessions(current.sessions),
+      closeToTray: inputs.closeToTray(),
+      isCurrent,
+      cancel,
+      hide: async () => {
+        if (!isCurrent()) throw new Error("Harness close ownership was retired.");
+        await guarded.run(() => persistLiveTranscripts(current.sessions));
+        if (isCurrent()) await hideCurrentWindow();
+      },
+      prepare: async () => {
+        if (!isCurrent()) throw new Error("Harness close ownership was retired.");
+        try {
+          await persistQuitState(
+            current.sessions,
+            current.tabs,
+            current.activeTabId,
+            current.projectCwd,
+            current.projectReturnMemory,
+            "quit",
+            current.projectTerminals,
+            current.keepTab,
+            {
+              permit: guarded,
+              final: true,
+              onSeal: (receipt) => {
+                final = receipt;
+              },
+            },
+          );
+          if (cancelled || !final?.isCurrent())
+            throw new Error("Harness close ownership was retired.");
+          const receipt = final;
+          return {
+            isCurrent: () => !cancelled && active && receipt.isCurrent(),
+            cancel,
+          };
+        } catch (error) {
+          final?.cancel();
+          throw error;
+        }
+      },
+    };
+  };
+  const closeSubscription = inputs.registerDesktopClose
+    ? (() => {
+        try {
+          return {
+            ready: Promise.resolve(),
+            release: inputs.registerDesktopClose(desktopCapture),
+          };
+        } catch (error) {
+          releaseQuit();
+          throw error;
+        }
+      })()
+    : ownHarnessWindowCloseSubscription(
     inputs.registerClose,
     () => {
       flush();

@@ -51,7 +51,7 @@ function appCloseMessage(
     blocker.dirtyEditors === 1
       ? t("closeDialogs.dirtyOne")
       : t("closeDialogs.dirtyMany", { count: blocker.dirtyEditors });
-  if (blocker.dirtyEditors > 0 && blocker.busyTerminal) {
+  if (blocker.dirtyEditors > 0 && (blocker.busyTerminal || blocker.busyHarness)) {
     return t("closeDialogs.processAndDirty", { dirty });
   }
   if (blocker.dirtyEditors > 0) {
@@ -323,7 +323,12 @@ export function CloseDialogs({
             <AlertDialogCancel onClick={cancelAppClose}>
               {t("common.cancel")}
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmAppClose()}>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmAppClose();
+              }}
+            >
               {pendingAppClose && pendingAppClose.dirtyEditors > 0
                 ? t("closeDialogs.discardAndQuit")
                 : t("closeDialogs.quit")}

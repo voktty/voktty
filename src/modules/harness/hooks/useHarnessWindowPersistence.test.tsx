@@ -14,6 +14,7 @@ import {
   type PersistenceOwner,
 } from "@/modules/harness/lib/persistenceAdmission";
 import { newSession } from "@/modules/harness/lib/session";
+import { windowCloseParticipants } from "@/modules/lifecycle/windowCloseParticipants";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), register: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
@@ -119,17 +120,18 @@ function snapshots() {
 }
 
 describe("Harness writer hook lifecycle", () => {
-  it("StrictMode retires the discarded listener and timer", async () => {
+  it("StrictMode retires discarded contributions and timers without a second native listener", async () => {
     await render(workspace("/work/project"));
-    expect(native.register).toHaveBeenCalledTimes(2);
-    expect(unlisten[0]).toHaveBeenCalledOnce();
-    const preventDefault = vi.fn();
-    await act(async () => listeners[0]({ preventDefault }));
-    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(native.register).not.toHaveBeenCalled();
+    const stale = windowCloseParticipants.capture();
+    await act(async () => root.render(null));
+    expect(stale.isCurrent()).toBe(false);
+    await expect(stale.hide()).rejects.toThrow("retired");
     expect(native.invoke).not.toHaveBeenCalledWith("hide_window");
+    await render(workspace("/work/project"));
     await act(async () => vi.advanceTimersByTimeAsync(250));
     expect(snapshots()).toHaveLength(1);
-    await act(async () => listeners[1]({ preventDefault }));
+    await act(async () => windowCloseParticipants.capture().hide());
     expect(native.invoke).toHaveBeenCalledWith("hide_window");
   });
 
@@ -138,7 +140,7 @@ describe("Harness writer hook lifecycle", () => {
     const original = owner;
     await render(workspace("/work/current"));
     expect(owner).toBe(original);
-    expect(native.register).toHaveBeenCalledTimes(2);
+    expect(native.register).not.toHaveBeenCalled();
     await act(async () => vi.advanceTimersByTimeAsync(250));
     expect(snapshots()).toHaveLength(1);
     expect(snapshots()[0][1].snapshot.projectCwd).toBe("/work/current");

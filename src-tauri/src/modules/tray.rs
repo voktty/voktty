@@ -137,7 +137,10 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), tauri::Error> {
                 show_and_focus(app);
                 let _ = app.emit("tray:new_preview", ());
             }
-            "quit" => crate::modules::window::request_quit(app),
+            "quit" => {
+                show_and_focus(app);
+                app.exit(0);
+            }
             _ => {}
         })
         .build(app)?;
