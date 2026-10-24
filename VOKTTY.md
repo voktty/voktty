@@ -313,6 +313,8 @@ Desktop SSH disconnection is coordinated by `connections/hooks/useSshDisconnecti
 
 Every built-in shortcut has an explicit surface declaration enforced by an exhaustive `ShortcutId` record. Fixed palette and launcher commands are declared separately, while space-switch commands use a nonempty parameterized declaration. Catalog tests check every emitted built-in ID and its local and remote surface matrix. Unknown extension IDs retain the global compatibility rule and are distinguishable from explicitly declared commands. Real terminal focus restrictions remain in the shortcut dispatcher: clear and copilot may target a terminal slot inside an outer Harness view, so outer surface kind alone does not establish their availability.
 
+The desktop tray creation bridge in `app/hooks/useTrayCommands.ts` listens to Rust's `tray:new_terminal` and `tray:new_preview` events. It delegates to the existing local-home terminal and empty-URL preview creators. Each subscription retires delivery before cleanup and independently releases late registration results; committed callback changes do not register another listener. Setup and synchronous or asynchronous cleanup failures are observed without disabling the sibling action. This frontend lifetime guard does not establish native cleanup acknowledgement or change the tray quit protocol.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

@@ -288,6 +288,7 @@ import { WorkspaceContent } from "@/app/components/WorkspaceContent";
 import { WorkspaceInputBar } from "./components/WorkspaceInputBar";
 import { useAppCloseGuard } from "./hooks/useAppCloseGuard";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
+import { useTrayCommands } from "@/app/hooks/useTrayCommands";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
 import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
 import { useProjectTerminalRequests } from "@/app/hooks/useProjectTerminalRequests";
@@ -2354,35 +2355,7 @@ function DesktopApp() {
     onRequest: applyLaunchRequest,
   });
 
-  // System tray integration events
-  useEffect(() => {
-    let unlistenTerminal: (() => void) | undefined;
-    let unlistenPreview: (() => void) | undefined;
-    let disposed = false;
-
-    (async () => {
-      const offTerm = await listen("tray-new-terminal", () => {
-        openNewTab();
-      });
-      const offPrev = await listen("tray-new-preview", () => {
-        newPreviewTab("");
-      });
-
-      if (disposed) {
-        offTerm();
-        offPrev();
-      } else {
-        unlistenTerminal = offTerm;
-        unlistenPreview = offPrev;
-      }
-    })();
-
-    return () => {
-      disposed = true;
-      unlistenTerminal?.();
-      unlistenPreview?.();
-    };
-  }, [newPreviewTab, openNewTab]);
+  useTrayCommands(openNewTab, newPreviewTab);
 
   const handlePathRenamed = useCallback(
     (from: string, to: string) => {
