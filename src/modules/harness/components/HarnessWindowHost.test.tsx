@@ -27,6 +27,7 @@ import {
   useHarnessWindow,
 } from "@/modules/harness/components/HarnessWindowHost";
 import { abortQuit } from "@/modules/harness/lib/appLifecycle";
+import { rememberRemoteProject } from "@/modules/connections/model/remoteProjects";
 import { windowCloseParticipants } from "@/modules/lifecycle/windowCloseParticipants";
 import type { HarnessEvent } from "@/modules/harness/lib/harness";
 import type {
@@ -229,6 +230,11 @@ vi.mock("@/modules/harness/lib/fileTree", () => ({
 vi.mock("@/modules/harness/lib/fs", () => ({
   notifyGitChanged: vi.fn(),
   basename: (path: string) => path.split(/[\\/]/).pop() ?? path,
+  invokeWorkspace: async (command: string) => {
+    if (command === "read_text_file") throw new Error("path does not exist");
+    if (command === "write_text_file") return;
+    throw new Error(`Unexpected remote fixture command: ${command}`);
+  },
 }));
 
 function required<T>(value: T | null | undefined): T {
@@ -1343,6 +1349,7 @@ describe("window-owned Harness execution host", () => {
   });
 
   it("activates the real Stack and App with one Host, survives zero views and closes from their union", async () => {
+    rememberRemoteProject("machine", { id: "two", name: "two", cwd: "/srv/two" });
     const tabs = [
       { id: 1, kind: "harness", cwd: "/work/one" },
       { id: 2, kind: "harness", cwd: "remote://machine/srv/two" },

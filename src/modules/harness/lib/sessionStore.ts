@@ -282,10 +282,13 @@ function remoteHomeFor(cwd: string): RemoteHome | undefined {
 
 async function upsertRemoteSession(
   payload: SessionUpsertPayload,
+  required = false,
 ): Promise<SessionSummary | null> {
   const home = remoteHomeFor(payload.cwd);
   if (!home) {
     reportRemoteSessionProblem("no-saved-project", payload.cwd);
+    if (required)
+      throw new Error("Remote project is unavailable for final persistence.");
     return null;
   }
   remoteSessionHomes.set(payload.id, home);
@@ -345,22 +348,52 @@ export async function upsertSession(
  */
 export async function upsertSessions(
   sessions: Session[],
+  options?: { requireRemotePersistence: boolean },
 ): Promise<SessionSummary[]> {
+  let remoteFailed = false;
+  let remoteFailure: unknown;
+  const rejectRemote = (error: unknown) => {
+    if (!remoteFailed) {
+      remoteFailed = true;
+      remoteFailure = error;
+    }
+  };
   const pending = new Map<string, SessionUpsertPayload>();
   for (const session of sessions) {
+    if (
+      options?.requireRemotePersistence &&
+      !deletedSessionIds.has(session.id) &&
+      !session.inboxAsk &&
+      isRemoteProjectPath(session.cwd) &&
+      remoteProjectForPath(session.cwd) === undefined &&
+      session.blocks.some((block) => block.role === "user")
+    ) {
+      reportRemoteSessionProblem("no-saved-project", session.cwd);
+      rejectRemote(
+        new Error("Remote project is unavailable for final persistence."),
+      );
+    }
     if (!shouldPersistSession(session) || deletedSessionIds.has(session.id))
       continue;
     pending.set(session.id, sanitizeSessionForPersist(session));
   }
   const all = [...pending.values()];
-  if (all.length === 0) return [];
+  if (all.length === 0) {
+    if (remoteFailed) throw remoteFailure;
+    return [];
+  }
   const remotePayloads = all.filter((payload) => isRemoteProjectPath(payload.cwd));
   const payloads = all.filter((payload) => !isRemoteProjectPath(payload.cwd));
   const remoteWrites = Promise.all(
     remotePayloads.map((payload) =>
       enqueueSessionWrite(payload.id, async () =>
-        deletedSessionIds.has(payload.id) ? null : upsertRemoteSession(payload),
-      ).catch(() => null),
+        deletedSessionIds.has(payload.id)
+          ? null
+          : upsertRemoteSession(payload, options?.requireRemotePersistence),
+      ).catch((error: unknown) => {
+        if (options?.requireRemotePersistence) rejectRemote(error);
+        return null;
+      }),
     ),
   );
 
@@ -385,6 +418,7 @@ export async function upsertSessions(
     localWrites,
   ]);
   if (remoteResult.status === "rejected") throw remoteResult.reason;
+  if (remoteFailed) throw remoteFailure;
   if (localResult.status === "rejected") throw localResult.reason;
   return [
     ...remoteResult.value

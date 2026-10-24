@@ -459,12 +459,13 @@ export async function persistQuitState(
       }
     }
     if (final?.pending) await final.pending;
+    const transcripts = sessions.map((session) =>
+      interrupted.has(session.id) ? markTurnInterrupted(session) : session,
+    );
     await write(() =>
-      upsertSessions(
-        sessions.map((session) =>
-          interrupted.has(session.id) ? markTurnInterrupted(session) : session,
-        ),
-      ),
+      persistence?.final
+        ? upsertSessions(transcripts, { requireRemotePersistence: true })
+        : upsertSessions(transcripts),
     );
   }
   if (writer && !writer.isCurrent()) return;
@@ -507,7 +508,9 @@ async function persistBootingResume(
     }
     if (final?.pending) await final.pending;
     const admitted = await writer
-      .run(() => upsertSessions(workspace.sessions))
+      .run(() =>
+        upsertSessions(workspace.sessions, { requireRemotePersistence: true }),
+      )
       .catch((error: unknown) => {
         transcriptFailure = { error };
         return false;
