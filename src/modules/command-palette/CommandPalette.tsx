@@ -37,6 +37,9 @@ import { fuzzyBest } from "./lib/fuzzy";
 import { MODE_HINTS, parseQuery } from "./lib/mode";
 import { mruRank, mruSnapshot, recordUse } from "./lib/mru";
 import type { PaletteItem } from "./types";
+import { useSurfaceCommands } from "@/modules/command-palette/hooks/useSurfaceCommands";
+import { captureSurfaceCommand } from "@/modules/command-palette/lib/surfaceCommand";
+import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
 
 type Props = {
   open: boolean;
@@ -89,11 +92,12 @@ export function CommandPalette({
   );
 
   const mru = useMemo(() => (open ? mruSnapshot() : {}), [open]);
+  const surfaceCommands = useSurfaceCommands(commandItems, open);
 
   const rankedCommands = useMemo(() => {
     if (inThemes || parsed.mode !== "commands") return [];
-    return rankCommands(commandItems, parsed.term, mru);
-  }, [commandItems, parsed.term, parsed.mode, inThemes, mru]);
+    return rankCommands(surfaceCommands, parsed.term, mru);
+  }, [surfaceCommands, parsed.term, parsed.mode, inThemes, mru]);
 
   const themeItems = useMemo(() => {
     if (!inThemes) return [];
@@ -180,11 +184,12 @@ export function CommandPalette({
 
   const runCommand = useCallback(
     (item: PaletteItem) => {
-      if (item.disabledReason) return;
+      const run = captureSurfaceCommand(item, () => useActiveSurfaceStore.getState().surface);
+      if (!run) return;
       if (item.id === "theme.pick") return enterThemes();
       if (item.id === "history.open") return setQuery(">");
       recordUse(item.id);
-      runAfterClose(item.run);
+      runAfterClose(run);
     },
     [enterThemes, runAfterClose],
   );

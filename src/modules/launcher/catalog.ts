@@ -30,6 +30,7 @@ import {
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import type { LauncherItem } from "./types";
+import { commandSurfaceRule } from "@/modules/shortcuts/lib/commandSurface";
 
 /** Surfaces the launcher can reach that the palette context does not already
  * carry. They live behind their own dialogs, so App wires them in. */
@@ -349,5 +350,6 @@ export function createLauncherItems(
     },
   ];
 
-  return items.filter((item): item is LauncherItem => item !== null);
+  return items.filter((item): item is LauncherItem => item !== null)
+    .map((item) => ({ ...item, appliesTo: commandSurfaceRule(item.id).appliesTo }));
 }

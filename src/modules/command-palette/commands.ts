@@ -8,6 +8,7 @@ import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
 import { leafIds, useCommandHistoryStore } from "@/modules/terminal";
 import { useVaultStore } from "@/modules/vault";
 import { copyPerfSnapshot } from "./copyPerfSnapshot";
+import { commandSurfaceRule } from "@/modules/shortcuts/lib/commandSurface";
 import {
   Alert02Icon,
   ArrowLeft01Icon,
@@ -155,6 +156,13 @@ export type CommandPaletteActionContext = {
 };
 
 const noop = () => {};
+const EMPTY_EDITOR_ACTIONS: NonNullable<CommandPaletteActionContext["editorActions"]> = {
+  openSearch: noop, openGotoLine: noop, formatDocument: noop,
+  triggerInlineAi: noop, triggerQuickFix: noop, triggerSignatureHelp: noop,
+  triggerLspNavigation: noop, triggerLspPeek: noop, triggerAiComplete: noop,
+  triggerCodeComplete: noop, runEditCommand: noop, runInlineSuggestionCommand: noop,
+  splitGroup: noop, closeGroup: noop, focusGroup: noop,
+};
 
 export function createCommandItems(
   ctx: CommandPaletteActionContext,
@@ -906,7 +914,7 @@ export function createCommandItems(
   ];
 
   // --- Contextual: Panes (Terminal only) ---
-  if (activeTerminalTab) {
+  {
     items.push(
       {
         id: "pane.splitRight",
@@ -1010,12 +1018,12 @@ export function createCommandItems(
   }
 
   // --- Contextual: Editor (only when active tab has editorActions) ---
-  if (ctx.editorActions) {
-    const editorActions = ctx.editorActions;
+  {
+    const editorActions = ctx.editorActions ?? EMPTY_EDITOR_ACTIONS;
     const isEditorOrMarkdown =
       activeTab?.kind === "editor" || activeTab?.kind === "markdown";
 
-    if (isEditorOrMarkdown) {
+    {
       items.push({
         id: "editor.revealInExplorer",
         title: t("commandPalette.commands.editorRevealInExplorer"),
@@ -1029,11 +1037,12 @@ export function createCommandItems(
           "revelar",
         ],
         icon: FileSearchIcon,
+        disabledReason: isEditorOrMarkdown ? undefined : t("commandPalette.disabled.noEditorTab"),
         run: () => ctx.revealActiveFileInExplorer?.(),
       });
     }
 
-    if (ctx.canNavigateBack) {
+    {
       items.push({
         id: "editor.navigateBack",
         title: t("commandPalette.commands.editorNavigateBack"),
@@ -1041,11 +1050,12 @@ export function createCommandItems(
         keywords: ["back", "previous", "location", "navigation", "atras"],
         icon: ArrowLeft01Icon,
         shortcutId: "editor.navigateBack",
+        disabledReason: ctx.canNavigateBack ? undefined : t("commandPalette.disabled.noPreviousLocation"),
         run: ctx.navigateBack,
       });
     }
 
-    if (ctx.canNavigateForward) {
+    {
       items.push({
         id: "editor.navigateForward",
         title: t("commandPalette.commands.editorNavigateForward"),
@@ -1053,6 +1063,7 @@ export function createCommandItems(
         keywords: ["forward", "next", "location", "navigation", "adelante"],
         icon: ArrowRight01Icon,
         shortcutId: "editor.navigateForward",
+        disabledReason: ctx.canNavigateForward ? undefined : t("commandPalette.disabled.noNextLocation"),
         run: ctx.navigateForward,
       });
     }
@@ -1330,6 +1341,14 @@ export function createCommandItems(
     // ignore extension store access errors if called outside React
   }
 
+  const declared = items.map((item) => {
+    const rule = commandSurfaceRule(item.id);
+    const disabledReason = item.disabledReason ?? (
+      rule.unavailableReason === "editor-required" && !ctx.editorActions && item.id !== "editor.revealInExplorer"
+        ? t("commandPalette.disabled.noEditorTab") : undefined
+    );
+    return { ...item, appliesTo: rule.appliesTo, disabledReason, run: disabledReason ? noop : item.run };
+  });
   if (ctx.aiAvailable === false) {
     const aiCommandIds = new Set([
       "ai.toggle",
@@ -1341,7 +1360,7 @@ export function createCommandItems(
       "editor.acceptAiToken",
       "editor.dismissAiCompletion",
     ]);
-    return items.filter((item) => !aiCommandIds.has(item.id));
+    return declared.filter((item) => !aiCommandIds.has(item.id));
   }
-  return items;
+  return declared;
 }

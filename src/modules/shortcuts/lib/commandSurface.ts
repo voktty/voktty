@@ -46,12 +46,36 @@ const RULES: Partial<Record<ShortcutId, CommandSurfaceRule>> = {
   "blocks.next": TERMINAL,
 };
 
-export function commandSurfaceRule(id: ShortcutId): CommandSurfaceRule {
-  return RULES[id] ?? GLOBAL;
+const COMMAND_RULES: Readonly<Record<string, CommandSurfaceRule>> = {
+  ...RULES,
+  "editor.find": EDITOR,
+  "editor.revealInExplorer": EDITOR,
+  "editor.inlineAi": EDITOR,
+  "editor.acceptAiCompletion": EDITOR,
+  "editor.acceptAiLine": EDITOR,
+  "editor.acceptAiToken": EDITOR,
+  "editor.dismissAiCompletion": EDITOR,
+  "editor.addCursorAbove": EDITOR,
+  "editor.addCursorBelow": EDITOR,
+  "editor.clearMultipleCursors": EDITOR,
+  "editor.moveLineUp": EDITOR,
+  "editor.moveLineDown": EDITOR,
+  "editor.copyLineUp": EDITOR,
+  "editor.copyLineDown": EDITOR,
+  "editor.expandSelection": EDITOR,
+  "editor.splitGroupRight": EDITOR,
+  "editor.splitGroupDown": EDITOR,
+  "editor.focusNextGroup": EDITOR,
+  "editor.closeGroup": EDITOR,
+  "launch.outline": EDITOR,
+};
+
+export function commandSurfaceRule(id: string): CommandSurfaceRule {
+  return Object.prototype.hasOwnProperty.call(COMMAND_RULES, id) ? COMMAND_RULES[id] : GLOBAL;
 }
 
 export function commandSurfaceUnavailableReason(
-  id: ShortcutId,
+  id: string,
   surface: Pick<ActiveSurface, "kind">,
 ): CommandSurfaceRule["unavailableReason"] {
   const rule = commandSurfaceRule(id);

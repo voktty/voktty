@@ -15,6 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { filterLauncherItems, groupLauncherItems } from "./lib/filter";
 import { useLauncherStore } from "./store";
 import type { LauncherItem } from "./types";
+import { useSurfaceCommands } from "@/modules/command-palette/hooks/useSurfaceCommands";
+import { captureSurfaceCommand } from "@/modules/command-palette/lib/surfaceCommand";
+import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
 
 type Props = {
   items: LauncherItem[];
@@ -29,10 +32,11 @@ export function ToolLauncher({ items }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const surfaceItems = useSurfaceCommands(items, open);
 
   const visible = useMemo(
-    () => filterLauncherItems(items, query),
-    [items, query],
+    () => filterLauncherItems(surfaceItems, query),
+    [surfaceItems, query],
   );
   // Headers only help while browsing; once a query narrows things down a
   // single grid reads faster than six one-item sections.
@@ -58,9 +62,11 @@ export function ToolLauncher({ items }: Props) {
   const launch = useCallback(
     (item: LauncherItem | undefined) => {
       if (!item) return;
+      const run = captureSurfaceCommand(item, () => useActiveSurfaceStore.getState().surface);
+      if (!run) return;
       recordUse(item.id);
       closeLauncher();
-      item.run();
+      run();
     },
     [closeLauncher],
   );
@@ -269,8 +275,10 @@ function Tile({
       onClick={onClick}
       onPointerEnter={onPointerEnter}
       aria-current={active}
+      disabled={!!item.disabledReason}
       className={cn(
         "flex cursor-pointer flex-col items-center gap-1.5 rounded-lg px-2 py-2.5 text-center transition-colors",
+        item.disabledReason && "cursor-default opacity-50",
         active ? "bg-accent/70" : "hover:bg-accent/35",
       )}
     >
@@ -283,6 +291,7 @@ function Tile({
       <span className="line-clamp-2 text-[11px] leading-tight text-foreground/90">
         {item.title}
       </span>
+      {item.disabledReason ? <span className="text-[10px] text-muted-foreground">{item.disabledReason}</span> : null}
     </button>
   );
 }

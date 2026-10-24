@@ -37,7 +37,7 @@ function baseContext(
 ): CommandPaletteActionContext {
   const noop = () => {};
   return {
-    tabs: [terminalTab(1)],
+    tabs: over.editorActions ? [{ ...terminalTab(1), kind: "editor" } as unknown as Tab] : [terminalTab(1)],
     activeId: 1,
     searchTarget: "content" as never,
     explorerRoot: "/workspace",
@@ -163,12 +163,13 @@ describe("createCommandItems", () => {
     ).toBe("Pane limit");
   });
 
-  it("omits terminal pane split when active tab is not a terminal", () => {
+  it("keeps terminal pane split disabled when active tab is not a terminal", () => {
     const editorTab = { ...terminalTab(1), kind: "editor" } as unknown as Tab;
     const item = createCommandItems(baseContext({ tabs: [editorTab] })).find(
       (i) => i.id === "pane.splitRight",
     );
-    expect(item).toBeUndefined();
+    expect(item?.disabledReason).toBe("No terminal tab");
+    expect(item?.appliesTo).toEqual(["terminal"]);
   });
 
   it("disables close on the last tab with a single pane", () => {
@@ -233,14 +234,13 @@ describe("createCommandItems", () => {
     expect(reason).toBe("Current space");
   });
 
-  it("omits specific editor commands without an active editor", () => {
+  it("keeps specific editor commands disabled without an active editor", () => {
     const items = createCommandItems(baseContext({ editorActions: null }));
-    const ids = items.map((i) => i.id);
-    expect(ids).not.toContain("editor.gotoLine");
-    expect(ids).not.toContain("editor.formatDocument");
-    expect(ids).not.toContain("editor.quickFix");
-    expect(ids).not.toContain("editor.signatureHelp");
-    expect(ids).not.toContain("editor.goToImplementation");
+    for (const id of ["editor.gotoLine", "editor.formatDocument", "editor.quickFix", "editor.signatureHelp", "editor.goToImplementation"]) {
+      const item = items.find((candidate) => candidate.id === id);
+      expect(item?.disabledReason).toBe("No active editor");
+      expect(item?.appliesTo).toEqual(["editor"]);
+    }
   });
 
   it("runs editor commands through the active editor contract", () => {
@@ -347,11 +347,9 @@ describe("createCommandItems", () => {
       closeGroup: noop,
       focusGroup: noop,
     };
-    const withoutNav = createCommandItems(baseContext({ editorActions })).map(
-      (i) => i.id,
-    );
-    expect(withoutNav).not.toContain("editor.navigateBack");
-    expect(withoutNav).not.toContain("editor.navigateForward");
+    const withoutNav = createCommandItems(baseContext({ editorActions }));
+    expect(withoutNav.find((item) => item.id === "editor.navigateBack")?.disabledReason).toBe("No previous editor location");
+    expect(withoutNav.find((item) => item.id === "editor.navigateForward")?.disabledReason).toBe("No next editor location");
 
     const withNav = createCommandItems(
       baseContext({

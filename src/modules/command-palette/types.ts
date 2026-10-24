@@ -1,9 +1,11 @@
 import type { ShortcutId } from "@/modules/shortcuts";
 import type { TerminalIcon } from "@hugeicons/core-free-icons";
+import type { SurfaceKind } from "@/modules/surfaces/lib/activeSurface";
 
 export type PaletteIcon = typeof TerminalIcon;
 
 export type PaletteItem = {
+  appliesTo?: readonly SurfaceKind[];
   id: string;
   title: string;
   group: string;

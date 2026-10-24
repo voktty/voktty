@@ -1,4 +1,5 @@
 import type { TerminalIcon } from "@hugeicons/core-free-icons";
+import type { SurfaceKind } from "@/modules/surfaces/lib/activeSurface";
 
 export type LauncherIcon = typeof TerminalIcon;
 
@@ -16,6 +17,7 @@ export const LAUNCHER_GROUPS = [
 export type LauncherGroup = (typeof LAUNCHER_GROUPS)[number];
 
 export type LauncherItem = {
+  appliesTo?: readonly SurfaceKind[];
   id: string;
   title: string;
   group: LauncherGroup;
@@ -25,5 +27,6 @@ export type LauncherItem = {
   icon: LauncherIcon;
   /** Tailwind text color for the tile glyph, so the grid is scannable. */
   tint?: string;
+  disabledReason?: string;
   run: () => void;
 };
