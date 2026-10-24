@@ -1,9 +1,12 @@
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import type { Tab } from "@/modules/tabs";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import type { SshMultiplexerPicker } from "@/modules/harness/lib/projectTerminalTarget";
-import { createProjectTerminalRequests } from "@/app/lib/projectTerminalRequests";
+import {
+  createProjectTerminalRequests,
+  type ProjectTerminalOpenOptions,
+} from "@/app/lib/projectTerminalRequests";
 import {
   claimProjectTerminalRequest,
   PROJECT_TERMINAL_REQUEST_EVENT,
@@ -148,4 +151,9 @@ export function useProjectTerminalRequests(props: Props) {
       if (service.current === current) service.current = null;
     };
   }, []);
+  return useCallback(
+    (cwd: string, options: ProjectTerminalOpenOptions = {}) =>
+      service.current?.open(cwd, options) ?? Promise.resolve(undefined),
+    [],
+  );
 }

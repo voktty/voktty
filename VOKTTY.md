@@ -353,6 +353,8 @@ Explorer file navigation into a preview retains the original selected preview, E
 
 The native folder picker updates the space's fallback root and local filesystem together through `useSpaces.setContext`; it does not replace the active terminal cwd or Harness project, which retain Explorer precedence. Its default directory must belong to the native filesystem. Remote, container and namespace paths are excluded, while native Windows paths from WSL are permitted. One unsettled dialog is retained per owner, including after retirement. A changed source, space selection, root, environment or unmounted owner permanently rejects late results and errors. Native results must be bounded absolute paths. This action does not reassign the selected resource's workspace environment, authorize a filesystem or start a process.
 
+Explorer and Source Control directory actions create terminals with the filesystem displayed by the originating panel. They pass the initial cwd to canonical tab creation without a delayed shell command or global environment reassignment. Namespace folders use the existing project-terminal request service and its owned connection lease, bounded admission and rollback. Source, root, filesystem, space or owner changes retire pending namespace delivery permanently; invalid folders and serial contexts cannot fall back to a local terminal. Cloning retains its separate native-directory action.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

@@ -5,6 +5,7 @@ import {
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
+import { useDirectoryTerminalOpening } from "@/modules/surfaces/lib/useDirectoryTerminalOpening";
 import { useKanbanCardDrop } from "@/modules/notes-board/lib/useKanbanCardDrop";
 import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
@@ -465,8 +466,7 @@ function DesktopApp() {
     resetWorkspace,
   } = useTabs(initialLaunchCwd ? { cwd: initialLaunchCwd } : undefined);
 
-  // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
-  // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
+  // Scheduled callbacks need the latest pane state instead of a stale closure.
   const { t } = useTranslation();
   const [androidBootstrapped, setAndroidBootstrapped] = useState(false);
   const tabsRef = useRef(tabs);
@@ -1794,7 +1794,7 @@ function DesktopApp() {
     [cancelProjectPicker, startSshConnection],
   );
 
-  useProjectTerminalRequests({
+  const openProjectTerminal = useProjectTerminalRequests({
     source: activeTab,
     spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
     projectCwd: activeHarnessCwd,
@@ -2051,21 +2051,33 @@ function DesktopApp() {
     [activeLeafId],
   );
 
-  const cdInNewTab = useCallback(
+  const openLocalDirectoryTerminal = useCallback(
     (path: string) => {
-      setWorkspaceEnv(LOCAL_WORKSPACE);
-      const tabId = newTab(path, LOCAL_WORKSPACE);
-      setTimeout(() => {
-        const tab = tabsRef.current.find((x) => x.id === tabId);
-        if (!tab || tab.kind !== "terminal") return;
-        const t = terminalRefs.current.get(tab.activeLeafId);
-        if (!t) return;
-        t.write(`cd ${quoteShellArg(path)}\r`);
-        t.focus();
-      }, 80);
+      newTab(path, LOCAL_WORKSPACE);
     },
-    [newTab, setWorkspaceEnv],
+    [newTab],
   );
+
+  const createDirectoryTerminal = useCallback(
+    (path: string, workspace: WorkspaceEnv, spaceId: string) => {
+      setActiveSpaceForNewTabs(spaceId);
+      newTab(path, workspace);
+    },
+    [newTab, setActiveSpaceForNewTabs],
+  );
+  const reportDirectoryTerminalError = useCallback(
+    () => toast.error(t("feedback.somethingWentWrong")),
+    [t],
+  );
+  const revealExplorerDirectoryInTerminal = useDirectoryTerminalOpening({
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    selectedKey: activeTabKey,
+    root: effectiveExplorerRoot,
+    workspace: activeExplorerWorkspaceEnv,
+    create: createDirectoryTerminal,
+    openProject: openProjectTerminal,
+    onError: reportDirectoryTerminalError,
+  });
 
   const handleOpenFile = useCallback(
     (path: string, pin?: boolean, options?: OpenFileTabOptions) => {
@@ -2450,6 +2462,15 @@ function DesktopApp() {
       openCommitHistoryTab,
     });
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
+  const revealRepositoryDirectoryInTerminal = useDirectoryTerminalOpening({
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    selectedKey: activeTabKey,
+    root: sourceControl.repo?.repoRoot ?? sourceControl.contextPath,
+    workspace: workspaceEnv,
+    create: createDirectoryTerminal,
+    openProject: openProjectTerminal,
+    onError: reportDirectoryTerminalError,
+  });
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
 
   const previewRoot = effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null;
@@ -4763,7 +4784,7 @@ function DesktopApp() {
                           }
                           onPathRenamed={handlePathRenamed}
                           onPathDeleted={handlePathDeleted}
-                          onRevealInTerminal={cdInNewTab}
+                          onRevealInTerminal={revealExplorerDirectoryInTerminal}
                           onOpenInSourceControl={
                             handleOpenRepositoryInSourceControl
                           }
@@ -4784,7 +4805,7 @@ function DesktopApp() {
                           onOpenDiff={openGitDiffTab}
                           onOpenGitGraph={openGitGraphFromContext}
                           onOpenFile={handleOpenFile}
-                          onNavigateToPath={cdInNewTab}
+                          onNavigateToPath={revealRepositoryDirectoryInTerminal}
                           repositoryTarget={sourceControlRepositoryTarget}
                           onFollowRepositoryContext={
                             handleFollowRepositoryContext
@@ -5399,7 +5420,7 @@ function DesktopApp() {
             onOpenChange={setGitCloneModalOpen}
             defaultParentDir={sourceControl.contextPath}
             onCloned={(clonedPath) => {
-              cdInNewTab(clonedPath);
+              openLocalDirectoryTerminal(clonedPath);
             }}
           />
 
