@@ -95,7 +95,7 @@ type Props = {
     source: WorkspaceDragSource,
     target: WorkspaceDropTarget,
   ) => void;
-  onRevealInExplorer?: (path: string) => void;
+  onRevealInExplorer?: (tab: Tab) => void;
   onReconnectTab?: (tab: Tab) => void;
   onToggleTabStyle: () => void;
   tabStyle: "horizontal" | "vertical";

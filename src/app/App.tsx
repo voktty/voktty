@@ -96,6 +96,7 @@ import {
   saveNavigationHistory,
 } from "@/modules/editor/lib/navigationHistoryStore";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
+import { useTabExplorerReveal } from "@/modules/explorer/lib/useTabExplorerReveal";
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
@@ -2421,51 +2422,25 @@ function DesktopApp() {
     openSidebarView("explorer");
     void setShowHidden(!usePreferencesStore.getState().showHidden);
   }, [openSidebarView]);
+  const openExplorerForReveal = useCallback(
+    () => openSidebarView("explorer"),
+    [openSidebarView],
+  );
+  const handleRevealInExplorer = useTabExplorerReveal({
+    tabs,
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    selectedTabKey: activeTab?.tabKey ?? null,
+    root: effectiveExplorerRoot,
+    workspace: activeExplorerWorkspaceEnv,
+    ready: sidebarView === "explorer" && !sidebarCollapsed,
+    explorerRef,
+    openExplorer: openExplorerForReveal,
+  });
   const revealActiveFileInExplorer = useCallback(() => {
-    if (activeTab?.kind !== "editor" && activeTab?.kind !== "markdown") return;
-    const path = activeTab.path;
-    const documentWorkspace = workspaceForDocumentPath(
-      activeTab.workspaceEnv ?? activeSpace?.env,
-      path,
-    );
-    openSidebarView("explorer");
-
-    const offerContainingFolder = () => {
-      toast.info(t("explorer.fileOutsideWorkspace"), {
-        action: {
-          label: t("explorer.openContainingFolder"),
-          onClick: () => {
-            const parent = path.replace(/[\\/][^\\/]+$/, "") || path;
-            const spaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
-            useSpaces.getState().setRoot(spaceId, parent);
-            useSpaces.getState().setEnv(spaceId, documentWorkspace);
-            setWorkspaceEnv(documentWorkspace);
-          },
-        },
-      });
-    };
-
-    if (
-      workspaceScopeKey(documentWorkspace) !==
-      workspaceScopeKey(activeExplorerWorkspaceEnv)
-    ) {
-      offerContainingFolder();
-      return;
+    if (activeTab?.kind === "editor" || activeTab?.kind === "markdown") {
+      handleRevealInExplorer(activeTab);
     }
-    requestAnimationFrame(() => {
-      void explorerRef.current?.reveal(path).then((revealed) => {
-        if (!revealed) offerContainingFolder();
-      });
-    });
-  }, [
-    activeTab,
-    activeSpace?.env,
-    activeSpaceId,
-    activeExplorerWorkspaceEnv,
-    openSidebarView,
-    setWorkspaceEnv,
-    t,
-  ]);
+  }, [activeTab, handleRevealInExplorer]);
   const {
     repositoryTarget: sourceControlRepositoryTarget,
     openInSourceControl: handleOpenRepositoryInSourceControl,
@@ -3413,32 +3388,6 @@ function DesktopApp() {
       }
     },
     [updateTab],
-  );
-
-  const handleRevealInExplorer = useCallback(
-    (targetPath: string) => {
-      if (!targetPath) return;
-      if (sidebarCollapsed && sidebarRef.current) {
-        sidebarRef.current.resize(`${sidebarWidthRef.current}px`);
-      }
-      if (sidebarView !== "explorer") {
-        persistSidebarView("explorer");
-      }
-      setTimeout(async () => {
-        if (explorerRef.current) {
-          await explorerRef.current.reveal(targetPath);
-          explorerRef.current.focus();
-        }
-      }, 50);
-    },
-    [
-      sidebarCollapsed,
-      sidebarRef,
-      sidebarWidthRef,
-      sidebarView,
-      persistSidebarView,
-      explorerRef,
-    ],
   );
 
   const handlePrepareExplorerNavigationRoot = useCallback(

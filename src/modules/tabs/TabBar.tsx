@@ -185,7 +185,7 @@ type Props = {
     source: WorkspaceDragSource,
     target: WorkspaceDropTarget,
   ) => void;
-  onRevealInExplorer?: (path: string) => void;
+  onRevealInExplorer?: (tab: Tab) => void;
   onReconnectTab?: (tab: Tab) => void;
   compact?: boolean;
   onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
@@ -979,7 +979,7 @@ export function TabBar({
                         <>
                           <ContextMenuItem
                             className="gap-2 rounded-md px-2 py-1.5 text-xs"
-                            onSelect={() => onRevealInExplorer?.(tabPath)}
+                            onSelect={() => onRevealInExplorer?.(t)}
                           >
                             <HugeiconsIcon
                               icon={PanelLeftOpenIcon}

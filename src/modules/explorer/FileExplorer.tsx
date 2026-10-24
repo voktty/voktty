@@ -82,7 +82,7 @@ import type {
 } from "@/modules/spaces/lib/workspaceDrag";
 
 export type FileExplorerHandle = {
-  focus: () => void;
+  focus: (options?: { preserveSelection?: boolean }) => void;
   isFocused: () => boolean;
   focusSearch: () => void;
   reveal: ExplorerReveal;
@@ -624,9 +624,12 @@ export const FileExplorer = memo(
     useImperativeHandle(
       ref,
       () => ({
-        focus: () => {
+        focus: (options) => {
           containerRef.current?.focus();
-          if (selectedPaths.size === 0 && entryPaths.length > 0) {
+          if (
+            !options?.preserveSelection &&
+            selectedPaths.size === 0 && entryPaths.length > 0
+          ) {
             const first = entryPaths[0];
             setSelectedPaths(new Set([first]));
             setAnchorPath(first);

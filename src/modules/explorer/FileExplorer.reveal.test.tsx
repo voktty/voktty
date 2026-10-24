@@ -161,6 +161,17 @@ it("uses the real tree and handle to expand, select and scroll within the curren
   expect(mocks.scroll).toHaveBeenCalled();
 });
 
+it("preserves a pending revealed selection when focus is requested before React commits it", async () => {
+  await render();
+  const original = explorer();
+  await act(async () => {
+    expect(await original.reveal("/work/old.ts")).toBe(true);
+    original.focus({ preserveSelection: true });
+  });
+  expect(node.querySelector('[data-fs-path="/work/old.ts"]')?.getAttribute("data-selected")).toBe("true");
+  expect(node.querySelector('[data-fs-path="/work/src"]')?.getAttribute("data-selected")).toBe("false");
+});
+
 it.each(["root", "navigation", "unmount"])(
   "rejects a late local read after %s retirement without populating the successor tree",
   async (change) => {

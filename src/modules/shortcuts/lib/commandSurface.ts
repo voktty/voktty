@@ -124,6 +124,7 @@ const COMMAND_RULES: Readonly<Record<string, CommandSurfaceRule>> = {
   "tab.serialConnect": GLOBAL,
   "tab.toggleLock": GLOBAL,
   "tab.revealInFileManager": GLOBAL,
+  "tab.revealInExplorer": GLOBAL,
   "theme.pick": GLOBAL,
   "vault.lock": GLOBAL,
   "workbench.openDebugger": GLOBAL,
