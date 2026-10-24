@@ -3,14 +3,15 @@ import {
   planRemoteExplorerSessionRelease,
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
-import { coerceCwd, firstCwd } from "@/app/lib/activeCwd";
+import { coerceCwd } from "@/app/lib/activeCwd";
 import {
   installLegacyHarnessSurfaceEvents,
-  publishActiveSurface,
   resolveActiveSurface,
   selectHarnessSurface,
   useHarnessSurfaceStore,
 } from "@/modules/surfaces";
+import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
+import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
 import { planTerminalTitle } from "@/app/lib/terminalTitle";
 import { TransferQueuePanel } from "@/modules/ssh-native/components/TransferQueuePanel";
@@ -977,9 +978,6 @@ function DesktopApp() {
         pathTab.workspaceEnv ?? activeSpace?.env,
         pathTab.path,
       );
-    }
-    if (activeTab?.kind === "harness") {
-      return activeSpace?.env ?? LOCAL_WORKSPACE;
     }
     return activeSpace?.env ?? LOCAL_WORKSPACE;
   }, [
@@ -3845,72 +3843,41 @@ function DesktopApp() {
   // checked: a persisted session document, a harness row, a CustomEvent
   // detail. Coerce once, so a poisoned value cannot reach a consumer that
   // calls a string method on it.
-  const activeCwd = firstCwd(
-    activeTerminalLeafCwd,
-    activeTab?.kind === "harness"
-      ? activeHarnessFolder
-      : firstCwd(
-          activeTab && "cwd" in activeTab
-            ? (activeTab as { cwd?: unknown }).cwd
-            : null,
-          explorerRoot,
-          inheritedCwdForNewTab,
-          activeSpace?.root,
-          lastProjectPath(),
-        ),
+  const activeCwd = desktopSurfaceCwd(
+    activeTab?.kind, activeTerminalLeafCwd, activeHarnessFolder,
+    [
+      activeTab && "cwd" in activeTab
+        ? (activeTab as { cwd?: unknown }).cwd
+        : null,
+      explorerRoot,
+      inheritedCwdForNewTab,
+      activeSpace?.root,
+      lastProjectPath(),
+    ],
   );
-  const selectedSurfaceOwnerId = activeTab?.id;
-  const selectedSurfaceTabKind = activeTab?.kind;
-  useEffect(() => {
-    if (
-      selectedSurfaceOwnerId === undefined ||
-      selectedSurfaceTabKind === undefined
-    ) {
-      publishActiveSurface(null);
-      return;
-    }
-    const kind =
-      selectedSurfaceTabKind === "terminal" || selectedSurfaceTabKind === "harness"
-        ? selectedSurfaceTabKind
-        : selectedSurfaceTabKind === "editor" ||
-            selectedSurfaceTabKind === "markdown"
-          ? "editor"
-          : "other";
-    publishActiveSurface({
-      kind,
-      ownerId: selectedSurfaceOwnerId,
-      projectCwd: kind === "harness" ? activeHarnessCwd : null,
-      focusFolder: kind === "harness" ? activeHarnessFolder : undefined,
-      cwd: activeCwd,
-      folder: kind === "editor" ? effectiveExplorerRoot : activeCwd,
-      workspaceEnv: activeTabWorkspaceEnv,
-    });
-  }, [
-    selectedSurfaceOwnerId,
-    selectedSurfaceTabKind,
-    activeHarnessCwd,
-    activeHarnessFolder,
-    activeCwd,
-    effectiveExplorerRoot,
-    activeTabWorkspaceEnv,
-  ]);
+  useDesktopSurface({
+    ownerId: activeTab?.id,
+    tabKind: activeTab?.kind,
+    projectCwd: activeHarnessCwd,
+    focusFolder: activeHarnessFolder,
+    cwd: activeCwd,
+    editorFolder: effectiveExplorerRoot,
+    workspaceEnv: activeTabWorkspaceEnv,
+  });
   const localWorkspaceRoot = localHome;
 
-  const handleStatusBarCd = useCallback(
+  const selectProjectFromChrome = useCallback(
     (path: string) => {
-      if (activeTab?.kind === "harness") {
-        window.dispatchEvent(
-          new CustomEvent("voktty:harness-select-project", {
-            detail: { path },
-          }),
-        );
-        setHarnessCwd(path);
-        return;
-      }
-      sendCd(path);
+      window.dispatchEvent(
+        new CustomEvent("voktty:harness-select-project", {
+          detail: { path },
+        }),
+      );
+      setHarnessCwd(path);
     },
-    [activeTab?.kind, sendCd],
+    [],
   );
+  const handleStatusBarCd = useSurfaceDirectoryNavigation(activeTab?.id, selectProjectFromChrome, sendCd);
 
   const handleNewSpace = useCallback(() => {
     const { spaces, create, ensureViewSpace, openViewSpace, setActive } =

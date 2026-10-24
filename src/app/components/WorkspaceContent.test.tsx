@@ -4,12 +4,15 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WorkspaceContent } from "@/app/components/WorkspaceContent";
 import { HarnessStack } from "@/modules/harness/components/HarnessStack";
+import "@/modules/harness/components/HarnessRuntimeBootstrap";
 import type { HarnessTab } from "@/modules/tabs";
 
 const runtime = vi.hoisted(() => ({ mount: vi.fn(), stop: vi.fn() }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  t: (key: string) => key,
 }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 vi.mock("@/modules/surfaces", () => ({ removeHarnessSurface: vi.fn() }));
 vi.mock("@/modules/harness/components/HarnessApp", () => ({
   HarnessRuntimeRoot: ({ children }: { children: ReactNode }) => {
