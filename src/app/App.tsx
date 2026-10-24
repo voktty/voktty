@@ -3,13 +3,7 @@ import {
   planRemoteExplorerSessionRelease,
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
-import { coerceCwd } from "@/app/lib/activeCwd";
-import {
-  installLegacyHarnessSurfaceEvents,
-  resolveActiveSurface,
-  selectHarnessSurface,
-  useHarnessSurfaceStore,
-} from "@/modules/surfaces";
+import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
@@ -928,32 +922,8 @@ function DesktopApp() {
       ) ?? null
     );
   }, [activeTabKey, activeViewSpace, viewSpaces]);
-  const [harnessCwd, setHarnessCwd] = useState<string | null>(() => {
-    try {
-      return lastProjectPath();
-    } catch {
-      return null;
-    }
-  });
-
-  const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
-  const activeHarnessCwd =
-    activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
-  const harnessSurfaceOwnerId = activeHarnessTab?.id;
-  const harnessFocusCwd = useHarnessSurfaceStore(
-    (s) => selectHarnessSurface(s, harnessSurfaceOwnerId).focusFolder,
-  );
-  const harnessReportedProject = useHarnessSurfaceStore(
-    (s) => selectHarnessSurface(s, harnessSurfaceOwnerId).projectCwd,
-  );
-  // What the explorer and breadcrumb show while the Harness is active: the
-  // folder of the focused surface (terminal or conversation), else its project.
-  const activeHarnessFolder = resolveActiveSurface({
-    kind: "harness",
-    projectCwd: activeHarnessCwd,
-    focusFolder: harnessFocusCwd,
-  }).folder;
-  useEffect(() => installLegacyHarnessSurfaceEvents(), []);
+  const harnessContext = useHarnessDesktopContext({ activeTab, tabsRef, updateTab, lastProjectPath });
+  const { projectCwd: activeHarnessCwd, folder: activeHarnessFolder, setProjectFallback: setHarnessCwd } = harnessContext;
 
   const activeLeafWorkspaceEnv = useLeafWorkspaceEnv(
     activeTab?.kind === "terminal" ? activeTab.activeLeafId : null,
@@ -988,21 +958,6 @@ function DesktopApp() {
     activeLeafWorkspaceEnv,
   ]);
 
-  useEffect(() => {
-    if (harnessSurfaceOwnerId === undefined) return;
-    const cwd = coerceCwd(harnessReportedProject);
-    if (cwd === null) return;
-    const harnessTab = tabsRef.current.find(
-      (t): t is HarnessTab =>
-        t.id === harnessSurfaceOwnerId && t.kind === "harness",
-    );
-    if (!harnessTab) return;
-    setHarnessCwd(cwd);
-    if (harnessTab.cwd !== cwd) {
-      updateTab(harnessSurfaceOwnerId, { cwd });
-    }
-  }, [harnessSurfaceOwnerId, harnessReportedProject, updateTab]);
-
   const localFallbackRoot =
     localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null;
   const spaceFallbackRoot =
@@ -1014,18 +969,13 @@ function DesktopApp() {
 
   const { explorerRoot, explorerTerminalId, inheritedCwdForNewTab } =
     useWorkspaceCwd(
-      activeTab?.kind === "harness" && activeHarnessFolder
-        ? { ...activeTab, cwd: activeHarnessFolder }
-        : activeTab,
+      harnessContext.workspaceTab,
       tabs,
       spaceFallbackRoot,
       activeSpaceId ?? DEFAULT_SPACE_ID,
     );
 
-  const effectiveExplorerRoot =
-    activeTab?.kind === "harness"
-      ? activeHarnessFolder || explorerRoot
-      : explorerRoot;
+  const effectiveExplorerRoot = activeHarnessFolder || explorerRoot;
   const explorerTerminal =
     explorerTerminalId === null
       ? undefined
@@ -1847,7 +1797,7 @@ function DesktopApp() {
   useProjectTerminalRequests({
     source: activeTab,
     spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
-    projectCwd: activeTab?.kind === "harness" ? activeHarnessCwd : undefined,
+    projectCwd: activeHarnessCwd,
     newTab,
     getTab,
     closeTab,
@@ -2094,6 +2044,7 @@ function DesktopApp() {
     localLaunchCwd,
     initialLaunchCwd,
     setWorkspaceEnv,
+    setHarnessCwd,
     updateTab,
     t,
   ]);
@@ -3859,7 +3810,7 @@ function DesktopApp() {
       );
       setHarnessCwd(path);
     },
-    [],
+    [setHarnessCwd],
   );
   const handleStatusBarCd = useSurfaceDirectoryNavigation(activeTab?.id, selectProjectFromChrome, sendCd);
 
