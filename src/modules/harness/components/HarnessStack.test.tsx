@@ -270,6 +270,81 @@ it("creates a headless view and confirms its live registration under StrictMode"
   expect(await create("later", permit)).toBeNull();
 });
 
+it("retains a directed request for its original view across a focus change", async () => {
+  const both = [
+    { ...tabs[0], tabKey: "tab-one" },
+    { ...tabs[0], id: 2, tabKey: "tab-two" },
+  ] as HarnessTab[];
+  await act(async () => root.render(<HarnessStack tabs={both} activeId={1} />));
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+      detail: { path: "remote://machine/project", target: { ownerId: 1, tabKey: "tab-one" } },
+    }));
+    root.render(<HarnessStack tabs={both} activeId={2} />);
+  });
+  expect(mounts.requests).not.toHaveBeenCalled();
+  await act(async () => root.render(<HarnessStack tabs={both} activeId={1} />));
+  expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(1, "remote://machine/project");
+});
+
+it("never falls back to another view for malformed or retired directed targets", async () => {
+  const original = { ...tabs[0], tabKey: "tab-original" } as HarnessTab;
+  const replacement = { ...original, tabKey: "tab-replacement" } as HarnessTab;
+  const other = { ...original, id: 2, tabKey: "tab-other" } as HarnessTab;
+  await act(async () => root.render(<HarnessStack tabs={[original, other]} activeId={2} />));
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+      detail: { path: "/retired", target: { ownerId: 1, tabKey: "tab-original" } },
+    }));
+    root.render(<HarnessStack tabs={[replacement, other]} activeId={1} />);
+  });
+  expect(mounts.requests).not.toHaveBeenCalled();
+  await act(async () => root.render(<HarnessStack tabs={[original, other]} activeId={1} />));
+  expect(mounts.requests).not.toHaveBeenCalled();
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+      detail: { path: "/invalid", target: { ownerId: 2 } },
+    }));
+  });
+  expect(mounts.requests).not.toHaveBeenCalled();
+});
+
+it("delivers a directed request emitted before its cold destination commits", async () => {
+  const cold = { ...tabs[0], id: 2, cold: true, tabKey: "tab-cold" } as HarnessTab;
+  await act(async () => root.render(<HarnessStack tabs={[...tabs, cold]} activeId={1} />));
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+      detail: { path: "C:/project", target: { ownerId: 2, tabKey: "tab-cold" } },
+    }));
+    root.render(<HarnessStack tabs={[...tabs, { ...cold, cold: false }]} activeId={2} />);
+  });
+  expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "C:/project");
+});
+
+it("accepts a newly created destination before its first outer render", async () => {
+  const created = { ...tabs[0], id: 2, tabKey: "tab-created" } as HarnessTab;
+  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+      detail: { path: "/created-project", target: { ownerId: 2, tabKey: "tab-created" } },
+    }));
+    root.render(<HarnessStack tabs={[...tabs, created]} activeId={2} />);
+  });
+  expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "/created-project");
+});
+
+it("returns a directed destination from native chat to Harness before consuming the request", async () => {
+  const destination = { ...tabs[0], tabKey: "tab-native" } as HarnessTab;
+  await act(async () => root.render(<HarnessStack tabs={[destination]} activeId={1} />));
+  await act(async () => container.querySelectorAll<HTMLButtonElement>("button")[1].click());
+  expect(container.querySelector("[data-native]")).not.toBeNull();
+  await act(async () => window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+    detail: { path: "/native-destination", target: { ownerId: 1, tabKey: "tab-native" } },
+  })));
+  expect(container.querySelector("[data-native]")).toBeNull();
+  expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(1, "/native-destination");
+});
+
 it("isolates a rejected view registration without stopping the host or its sibling", async () => {
   const errors = vi.spyOn(console, "error").mockImplementation(() => {});
   try {

@@ -10,6 +10,7 @@ import { useHarnessViewActivation } from "@/modules/harness/hooks/useHarnessView
 import { useHarnessViewCreation } from "@/modules/harness/hooks/useHarnessViewCreation";
 import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
+import { HARNESS_SELECT_PROJECT_EVENT, harnessProjectTargetMatches, parseHarnessProjectRequest, type HarnessProjectRequest } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
 
@@ -167,19 +168,24 @@ export function HarnessStack({
   );
 
   const [activated, setActivated] = useState(false);
-  const [projectRequest, setProjectRequest] = useState<{ path: string } | null>(
+  const [projectRequest, setProjectRequest] = useState<HarnessProjectRequest | null>(
     null,
   );
   useEffect(() => {
     const select = (event: Event) => {
-      const path = (event as CustomEvent<{ path?: unknown }>).detail?.path;
-      if (typeof path === "string" && path.length > 0 && path.length <= 32768)
-        setProjectRequest({ path });
+      const request = parseHarnessProjectRequest((event as CustomEvent<unknown>).detail);
+      if (request) setProjectRequest(request);
     };
-    window.addEventListener("voktty:harness-select-project", select);
+    window.addEventListener(HARNESS_SELECT_PROJECT_EVENT, select);
     return () =>
-      window.removeEventListener("voktty:harness-select-project", select);
+      window.removeEventListener(HARNESS_SELECT_PROJECT_EVENT, select);
   }, []);
+  useLayoutEffect(() => {
+    const target = projectRequest?.target;
+    if (target && !tabs.some((tab) => harnessProjectTargetMatches(target, tab))) {
+      setProjectRequest(null);
+    }
+  }, [projectRequest, tabs]);
   useEffect(() => {
     if (harnessTabs.length > 0) setActivated(true);
   }, [harnessTabs.length]);
@@ -261,7 +267,8 @@ export function HarnessStack({
                         return !!onActivateTab || tab.id === activeId;
                       }}
                       projectRequest={
-                        visible && tab.id === activeId
+                        visible && tab.id === activeId &&
+                        (!projectRequest?.target || harnessProjectTargetMatches(projectRequest.target, tab))
                           ? (projectRequest ?? undefined)
                           : undefined
                       }

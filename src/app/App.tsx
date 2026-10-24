@@ -4,6 +4,7 @@ import {
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
+import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 import { desktopSurfaceCwd } from "@/modules/surfaces/lib/desktopSurface";
 import { useDesktopSurface, useSurfaceDirectoryNavigation } from "@/modules/surfaces/lib/useDesktopSurface";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
@@ -193,7 +194,6 @@ import { StatusBar } from "@/modules/statusbar";
 import {
   ActiveTabsLaunchpad,
   type CloseTabsPlan,
-  type HarnessTab,
   labelFor,
   type OpenFileTabOptions,
   type PreviewTab,
@@ -2049,27 +2049,6 @@ function DesktopApp() {
     t,
   ]);
 
-  useEffect(() => {
-    const openHarnessHandler = (event: Event) => {
-      const path = (event as CustomEvent<{ path?: unknown }>).detail?.path;
-      if (typeof path !== "string" || !path) return;
-      const existing = tabsRef.current.find(
-        (tab): tab is HarnessTab =>
-          tab.kind === "harness" && tab.spaceId === activeSpaceIdRef.current,
-      );
-      if (!existing) {
-        newHarnessTab(undefined, path);
-        return;
-      }
-      setActiveId(existing.id);
-      window.dispatchEvent(
-        new CustomEvent("voktty:harness-select-project", { detail: { path } }),
-      );
-    };
-    window.addEventListener(OPEN_HARNESS_EVENT, openHarnessHandler);
-    return () =>
-      window.removeEventListener(OPEN_HARNESS_EVENT, openHarnessHandler);
-  }, [newHarnessTab, setActiveId]);
   const handleShareTerminal = useCallback(
     (tabId: number) => {
       const tab = tabsRef.current.find((candidate) => candidate.id === tabId);
@@ -2390,66 +2369,36 @@ function DesktopApp() {
     setWorkspaceEnv,
   ]);
 
-  const openNewHarness = useCallback(() => {
-    const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
-    const localRoot =
-      (isLocalSpace && activeSpace?.root) ||
-      localLaunchCwd ||
-      localHome ||
-      initialLaunchCwd ||
-      undefined;
-    newHarnessTab(undefined, localRoot);
-  }, [
-    activeSpace?.env,
-    activeSpace?.root,
-    initialLaunchCwd,
-    localHome,
-    localLaunchCwd,
+  const activateHarnessTab = useCallback((id: number) => {
+    const tab = getTab(id);
+    if (!tab) return;
+    const state = useSpaces.getState();
+    state.setActive(tab.spaceId);
+    state.focusVisualMember(tab.tabKey);
+    setActiveId(id);
+  }, [getTab, setActiveId]);
+  const reportHarnessOpeningError = useCallback((error: unknown) => {
+    toast.error(error instanceof Error ? error.message : String(error));
+  }, []);
+  const reportMissingHarnessProject = useCallback(() => {
+    toast.error(t("commandPalette.commands.worktreeNeedsProject"));
+  }, [t]);
+  const createLocalHarnessWorktree = useCallback((root: string, name: string) =>
+    native.gitWorktreeAdd(root, name, LOCAL_WORKSPACE), []);
+  const { openNewHarness, openNewHarnessInWorktree } = useHarnessProjectOpening({
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    selectedTabKey: activeTab?.tabKey,
+    localRoot: ((!activeSpace?.env || activeSpace.env.kind === "local") && activeSpace?.root) ||
+      localLaunchCwd || localHome || initialLaunchCwd || undefined,
+    tabsRef,
+    getTab,
     newHarnessTab,
-  ]);
-
-  const openNewHarnessInWorktree = useCallback(async () => {
-    const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
-    const repoRoot =
-      (isLocalSpace && activeSpace?.root) ||
-      localLaunchCwd ||
-      localHome ||
-      initialLaunchCwd ||
-      undefined;
-    if (!repoRoot) {
-      toast.error(t("commandPalette.commands.worktreeNeedsProject"));
-      return;
-    }
-    try {
-      const worktreePath = await native.gitWorktreeAdd(
-        repoRoot,
-        crypto.randomUUID(),
-      );
-      const hasHarnessTab = tabs.some(
-        (tab) => tab.kind === "harness" && tab.spaceId === activeSpaceId,
-      );
-      if (hasHarnessTab) {
-        window.dispatchEvent(
-          new CustomEvent("voktty:harness-select-project", {
-            detail: { path: worktreePath },
-          }),
-        );
-      } else {
-        newHarnessTab(undefined, worktreePath);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    }
-  }, [
-    activeSpace?.env,
-    activeSpace?.root,
-    activeSpaceId,
-    initialLaunchCwd,
-    localHome,
-    localLaunchCwd,
-    newHarnessTab,
-    tabs,
-  ]);
+    activateTab: activateHarnessTab,
+    createWorktree: createLocalHarnessWorktree,
+    onError: reportHarnessOpeningError,
+    onMissingProject: reportMissingHarnessProject,
+    openEventName: OPEN_HARNESS_EVENT,
+  });
 
   const pickAndOpenProjectInHarness = useCallback(async () => {
     const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
@@ -3416,6 +3365,7 @@ function DesktopApp() {
       openNewBlockTab,
       openNewPrivateTab,
       openNewEditor,
+      openNewHarness,
       openPreviewTab,
       selectProjectedTabByIndex,
       splitActivePaneInActiveTab,
@@ -4996,6 +4946,8 @@ function DesktopApp() {
       openNewPrivateTab,
       openConnectionsLaunchpad,
       openNewEditor,
+      openNewHarness,
+      openNewHarnessInWorktree,
       pickAndOpenFile,
       openQuickOpen,
       openWorkspaceSearch,
