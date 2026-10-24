@@ -38,6 +38,7 @@ export type HarnessWindowPersistenceInputs = {
   flush: () => void;
   skipSnapshot: () => boolean;
   closeToTray: () => boolean;
+  onError?: (error: unknown) => void;
   target: HarnessUnloadDependencies["target"];
   registerClose: Parameters<typeof ownHarnessWindowCloseSubscription>[0];
   schedule: (callback: () => void, delay: number) => () => void;
@@ -127,7 +128,9 @@ export function ownHarnessWindowPersistence(
           const persistencePermit = owner.capture();
           return persistencePermit ? { ...capture, persistencePermit } : null;
         },
-      );
+      ).catch((error: unknown) => {
+        if (active && closeActive) inputs.onError?.(error);
+      });
     },
   );
   void closeSubscription.ready.catch(() => {

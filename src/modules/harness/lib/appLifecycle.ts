@@ -422,8 +422,20 @@ export async function persistQuitState(
 ): Promise<void> {
   let writer = persistence?.permit;
   if (writer && !writer.isCurrent()) return;
-  const write = (effect: () => Promise<unknown>) =>
-    writer ? writer.run(effect) : effect();
+  let failed = false;
+  let failure: unknown;
+  const write = async (effect: () => Promise<unknown>) => {
+    try {
+      const admitted = writer ? await writer.run(effect) : await effect();
+      if (persistence?.final && admitted === false && writer?.isCurrent())
+        throw new Error("Final persistence write was not admitted.");
+    } catch (error) {
+      if (persistence?.final && !failed) {
+        failed = true;
+        failure = error;
+      }
+    }
+  };
   const refs = inFlightRefs(sessions, tabs);
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
   let snapshot: ReturnType<typeof collectWorkspaceSnapshot>;
@@ -453,15 +465,16 @@ export async function persistQuitState(
           interrupted.has(session.id) ? markTurnInterrupted(session) : session,
         ),
       ),
-    ).catch(() => []);
+    );
   }
   if (writer && !writer.isCurrent()) return;
-  await write(() => saveWorkspaceSnapshot(snapshot)).catch(() => undefined);
+  await write(() => saveWorkspaceSnapshot(snapshot));
   // Vite/webview reload must not wipe a restored snapshot: those chats are idle
   // in this process until Continue runs.
   if (mode === "quit" || refs.length > 0) {
-    await write(() => replaceInFlightSessions(refs)).catch(() => undefined);
+    await write(() => replaceInFlightSessions(refs));
   }
+  if (failed) throw failure;
 }
 
 async function persistBootingResume(
@@ -471,6 +484,7 @@ async function persistBootingResume(
   if (!permit.isCurrent()) return null;
   let writer: PersistencePermit = permit;
   let final: PersistenceFinal | null = null;
+  let transcriptFailure: { error: unknown } | undefined;
   let snapshot: ReturnType<typeof collectWorkspaceSnapshot>;
   let refs: ReturnType<typeof inFlightRefs>;
   try {
@@ -492,11 +506,29 @@ async function persistBootingResume(
       quitPersistence = final;
     }
     if (final?.pending) await final.pending;
-    await writer.run(() => upsertSessions(workspace.sessions)).catch(() => []);
+    const admitted = await writer
+      .run(() => upsertSessions(workspace.sessions))
+      .catch((error: unknown) => {
+        transcriptFailure = { error };
+        return false;
+      });
+    if (!admitted && writer.isCurrent())
+      transcriptFailure ??= {
+        error: new Error("Final transcript write was not admitted."),
+      };
   }
+  if (transcriptFailure) throw transcriptFailure.error;
   if (!final?.isCurrent()) return null;
-  await final.run(() => saveWorkspaceSnapshot(snapshot)).catch(() => undefined);
-  await final.run(() => replaceInFlightSessions(refs)).catch(() => undefined);
+  if (
+    !(await final.run(() => saveWorkspaceSnapshot(snapshot))) &&
+    final.isCurrent()
+  )
+    throw new Error("Final snapshot write was not admitted.");
+  if (
+    !(await final.run(() => replaceInFlightSessions(refs))) &&
+    final.isCurrent()
+  )
+    throw new Error("Final recovery write was not admitted.");
   return final.isCurrent() ? final : null;
 }
 
@@ -569,16 +601,15 @@ export async function confirmAndCloseWindow(
       capture.keepTab,
       persistence,
     );
-  } finally {
     const current = state.final
       ? state.final.isCurrent()
       : (capture.persistencePermit?.isCurrent() ?? true);
     if (current) {
-      await closeCurrentWindow().catch((error: unknown) => {
-        state.final?.cancel();
-        throw error;
-      });
+      await closeCurrentWindow();
     }
+  } catch (error) {
+    state.final?.cancel();
+    throw error;
   }
 }
 
