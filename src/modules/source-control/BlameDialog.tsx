@@ -8,9 +8,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { native, type GitBlameLine } from "@/modules/ai/lib/native";
-import { useTranslation } from "@/modules/i18n";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
-import { useEffect, useMemo, useState } from "react";
+import { t as translate, useTranslation } from "@/modules/i18n";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { canOpenNativeBlame } from "@/modules/source-control/useBlameOpening";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function errorMessage(err: unknown): string {
   return err && typeof err === "object" && "message" in err
@@ -32,37 +33,69 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; lines: GitBlameLine[] };
 
+const LOADING: LoadState = { status: "loading" };
+
 export function BlameDialog({
   open,
   onOpenChange,
   repoRoot,
   path,
+  workspace,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoRoot: string;
   path: string;
+  workspace: WorkspaceEnv;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const filesystem = JSON.stringify(workspace);
+  const binding = useMemo(
+    () => ({ open, repoRoot, path, filesystem }),
+    [open, repoRoot, path, filesystem],
+  );
+  const [loaded, setLoaded] = useState<{
+    binding: typeof binding;
+    value: LoadState;
+  } | null>(null);
+  const state = loaded?.binding === binding ? loaded.value : LOADING;
+  const unsettled = useRef(new Set<object>());
 
   useEffect(() => {
-    if (!open) return;
-    setState({ status: "loading" });
-    let cancelled = false;
-    void native
-      .gitBlame(repoRoot, path, workspaceEnv)
-      .then((lines) => {
-        if (!cancelled) setState({ status: "ready", lines });
-      })
-      .catch((err) => {
-        if (!cancelled) setState({ status: "error", message: errorMessage(err) });
-      });
-    return () => {
-      cancelled = true;
+    if (!binding.open) return;
+    const owner = { active: true };
+    const captured: WorkspaceEnv = JSON.parse(binding.filesystem);
+    const commit = (value: LoadState) => {
+      if (owner.active)
+        setLoaded((previous) => (owner.active ? { binding, value } : previous));
     };
-  }, [open, repoRoot, path, workspaceEnv]);
+    if (
+      !canOpenNativeBlame(binding.repoRoot, captured) ||
+      !canOpenNativeBlame(binding.path, captured) ||
+      unsettled.current.size >= 256
+    ) {
+      commit({ status: "error", message: translate("common.unknownError") });
+    } else {
+      unsettled.current.add(owner);
+      void (async () => {
+        try {
+          const lines = await native.gitBlame(
+            binding.repoRoot,
+            binding.path,
+            captured,
+          );
+          commit({ status: "ready", lines });
+        } catch (error) {
+          commit({ status: "error", message: errorMessage(error) });
+        } finally {
+          unsettled.current.delete(owner);
+        }
+      })();
+    }
+    return () => {
+      owner.active = false;
+    };
+  }, [binding]);
 
   // Blame info repeats for every line from the same commit; only render it
   // on the first line of each consecutive run, like every real blame view.

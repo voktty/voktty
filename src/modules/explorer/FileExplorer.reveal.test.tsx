@@ -8,6 +8,7 @@ import {
 } from "@/modules/explorer/FileExplorer";
 import type { DirEntry } from "@/modules/explorer/lib/useFileTree";
 import type { WorkspaceEnv } from "@/modules/workspace";
+import type { GitStatusSnapshot } from "@/modules/ai/lib/native";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -72,6 +73,10 @@ let root: Root;
 let node: HTMLDivElement;
 let handle: React.RefObject<FileExplorerHandle | null>;
 const local: WorkspaceEnv = { kind: "local" };
+const unrelatedStatus: GitStatusSnapshot = {
+  repoRoot: "/other", branch: "main", upstream: null, ahead: 0, behind: 0,
+  isDetached: false, truncated: false, changedFiles: [],
+};
 const entry = (name: string, kind: "file" | "dir" = "file"): DirEntry => ({
   name,
   kind,
@@ -177,7 +182,7 @@ it("never reads the previous root in a newly selected filesystem", async () => {
 it("initializes the visible Explorer root even when Source Control reports another repository", async () => {
   const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
   await act(async () => root.render(<FileExplorer
-    rootPath="/project" workspaceEnv={workspace} hasGitRepo={true} onOpenFile={() => {}}
+    rootPath="/project" workspaceEnv={workspace} gitStatus={unrelatedStatus} gitWorkspaceEnv={local} onOpenFile={() => {}}
   />));
   mocks.invoke.mockClear();
   const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
@@ -189,7 +194,7 @@ it("initializes the visible Explorer root even when Source Control reports anoth
 
 it("hides initialization for its own repository despite a negative Source Control badge", async () => {
   mocks.invoke.mockImplementation(async (command) => command === "git_resolve_repo" ? { repoRoot: "/project" } : []);
-  await act(async () => root.render(<FileExplorer rootPath="/project" workspaceEnv={local} hasGitRepo={false} onOpenFile={() => {}} />));
+  await act(async () => root.render(<FileExplorer rootPath="/project" workspaceEnv={local} gitStatus={null} onOpenFile={() => {}} />));
   expect(node.querySelector('button[aria-label="Initialize Repository"]')).toBeNull();
 });
 
@@ -215,7 +220,7 @@ it("discovers and initializes a manually selected parent instead of its source c
     if (command === "git_init") return;
     return [];
   });
-  await act(async () => root.render(<FileExplorer rootPath="/parent/repo" workspaceEnv={workspace} hasGitRepo={true} onOpenFile={() => {}} />));
+  await act(async () => root.render(<FileExplorer rootPath="/parent/repo" workspaceEnv={workspace} gitStatus={{ ...unrelatedStatus, repoRoot: "/parent/repo" }} gitWorkspaceEnv={workspace} onOpenFile={() => {}} />));
   expect(node.querySelector('button[aria-label="Initialize Repository"]')).toBeNull();
   const parent = node.querySelector<HTMLButtonElement>('button[aria-label="Go to parent directory"]');
   expect(parent).not.toBeNull();
@@ -224,6 +229,24 @@ it("discovers and initializes a manually selected parent instead of its source c
   expect(button).not.toBeNull();
   await act(async () => button?.click());
   expect(mocks.invoke).toHaveBeenCalledWith("git_init", { cwd: "/parent", workspace });
+});
+
+it("opens Blame for the pointed file with its captured Explorer filesystem", async () => {
+  const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
+  const open = vi.fn();
+  mocks.invoke.mockImplementation(async (command, args) => {
+    if (command === "git_resolve_repo") return { repoRoot: "/work" };
+    if (command === "fs_read_dir") return args.path === "/work" ? [entry("old.ts")] : [];
+    return false;
+  });
+  await act(async () => root.render(<FileExplorer rootPath="/work" workspaceEnv={workspace} onOpenFile={() => {}} onOpenBlame={open} />));
+  const row = node.querySelector<HTMLElement>('[data-fs-path="/work/old.ts"]');
+  expect(row).not.toBeNull();
+  await act(async () => row?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2, clientX: 20, clientY: 20 })));
+  const action = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Blame");
+  expect(action).toBeDefined();
+  await act(async () => action?.click());
+  expect(open).toHaveBeenCalledExactlyOnceWith({ repoRoot: "/work", path: "/work/old.ts", workspace });
 });
 
 it("resets manual navigation when only the filesystem changes", async () => {

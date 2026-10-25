@@ -66,12 +66,13 @@ import {
 import { useGitStatus } from "./lib/useGitStatus";
 import { useExplorerRepositoryInitialization } from "@/modules/explorer/lib/useExplorerRepositoryInitialization";
 import { useExplorerRepository } from "@/modules/explorer/lib/useExplorerRepository";
+import { canOpenNativeBlame, useBlameOpening, type BlameTarget } from "@/modules/source-control/useBlameOpening";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
 import { isRemoteProjectUri } from "./lib/remoteProjectDir";
 import { useExplorerVisibleRoot } from "@/modules/explorer/lib/useExplorerVisibleRoot";
-import { useTranslation } from "@/modules/i18n";
+import { t as translate, useTranslation } from "@/modules/i18n";
 import { isPathInWorkspace } from "@/modules/remote";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { useGlobalShortcuts } from "@/modules/shortcuts";
@@ -106,7 +107,7 @@ type Props = {
   onRevealInTerminal?: (path: string) => void;
   onOpenInSourceControl?: (path: string) => void;
   onOpenGitHistory?: (path: string) => void;
-  onOpenBlame?: (path: string) => void;
+  onOpenBlame?: (target: BlameTarget) => void;
   onAttachToAgent?: (path: string) => void;
   /** Kept for the outer workspace integration. Explorer resource drops do not
    * use it: they target terminal paths or AI context explicitly. */
@@ -117,7 +118,6 @@ type Props = {
   pathDropTarget?: TerminalPathDropTarget;
   gitStatus?: GitStatusSnapshot | null;
   gitWorkspaceEnv?: WorkspaceEnv;
-  hasGitRepo?: boolean;
   onPrepareNavigationRoot?: (path: string) => Promise<boolean>;
   onSyncToTerminal?: () => Promise<string | null | void> | string | null | void;
 };
@@ -271,7 +271,6 @@ export const FileExplorer = memo(
       pathDropTarget,
       gitStatus,
       gitWorkspaceEnv,
-      hasGitRepo,
       onPrepareNavigationRoot,
       onSyncToTerminal,
     },
@@ -446,7 +445,9 @@ export const FileExplorer = memo(
       path: string;
       name: string;
       isDir: boolean;
+      scope: object;
     } | null>(null);
+    const menuTargetRef = useRef<typeof menuTarget>(null);
     const [deleteRequest, setDeleteRequest] = useState<{
       paths: string[];
     } | null>(null);
@@ -548,9 +549,9 @@ export const FileExplorer = memo(
       [entryIndexByPath, virtualizer],
     );
     const revealScope = useMemo(() => ({
-      rootPath, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
+      rootPath, rootSource, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
     }), [
-      rootPath, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
+      rootPath, rootSource, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
     ]);
     const reveal = useExplorerReveal({
       scope: revealScope,
@@ -561,6 +562,9 @@ export const FileExplorer = memo(
       },
       scroll: scrollEntryIntoView,
     });
+    const onMissingBlameRepository = useCallback(() => toast.error(translate("feedback.noGitRepository")), []);
+    const onBlameError = useCallback((error: unknown) => toast.error(translate("feedback.resolveGitRepositoryFailed"), { description: String(error) }), []);
+    const openBlame = useBlameOpening({ scope: revealScope, workspace: workspaceEnv, open: onOpenBlame, onMissing: onMissingBlameRepository, onError: onBlameError });
     const { run: handleInitGit, available: canInitGit } = useExplorerRepositoryInitialization({
       scope: revealScope,
       rootPath,
@@ -987,7 +991,10 @@ export const FileExplorer = memo(
         {!isSearchActive ? (
           <ContextMenu
             onOpenChange={(open) => {
-              if (!open) setMenuTarget(null);
+              if (!open) {
+                menuTargetRef.current = null;
+                setMenuTarget(null);
+              }
             }}
           >
             <ContextMenuTrigger asChild>
@@ -1014,12 +1021,16 @@ export const FileExplorer = memo(
                       setSelectedPaths(new Set([row.path]));
                       setAnchorPath(row.path);
                     }
-                    setMenuTarget({
+                    const target = {
                       path: row.path,
                       name: row.name,
                       isDir: row.isDir,
-                    });
+                      scope: revealScope,
+                    };
+                    menuTargetRef.current = target;
+                    setMenuTarget(target);
                   } else {
+                    menuTargetRef.current = null;
                     setMenuTarget(null);
                   }
                   setMenuNonce((n) => n + 1);
@@ -1254,10 +1265,15 @@ export const FileExplorer = memo(
                         {t("sidebar.gitHistory")}
                       </ContextMenuItem>
                     )}
-                    {!menuTarget.isDir && hasGitRepo && onOpenBlame && (
+                    {!menuTarget.isDir && onOpenBlame && (
                       <ContextMenuItem
                         className={COMPACT_ITEM}
-                        onSelect={() => onOpenBlame(menuTarget.path)}
+                        disabled={menuTarget.scope !== revealScope || !canOpenNativeBlame(menuTarget.path, workspaceEnv)}
+                        onSelect={() => {
+                          if (menuTarget.scope !== revealScope || menuTargetRef.current !== menuTarget) return;
+                          menuTargetRef.current = null;
+                          void openBlame(menuTarget.path);
+                        }}
                       >
                         {t("git.blame.action")}
                       </ContextMenuItem>
