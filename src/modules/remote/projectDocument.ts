@@ -11,6 +11,7 @@ import type { SshConnection } from "@/modules/ssh/types";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
   remoteReadDocument,
+  remoteReadBinaryFile,
   remoteStat,
   remoteRelativePath,
   type RemoteWorkspaceEnv,
@@ -81,6 +82,8 @@ export function createProjectDocument(
   }
 
   return {
+    readBinary: (isCurrent: () => boolean) =>
+      run(isCurrent, (workspace) => remoteReadBinaryFile(workspace, hostPath)),
     read: (preferBinary: boolean, isCurrent: () => boolean) =>
       run(isCurrent, (workspace) =>
         remoteReadDocument(workspace, hostPath, preferBinary),

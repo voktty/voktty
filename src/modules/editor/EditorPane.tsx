@@ -1749,7 +1749,14 @@ export const EditorPane = memo(
       const mediaKind = classifyMediaExtension(ext);
 
       if (mediaKind) {
-        return <MediaPreview path={path} size={doc.size} kind={mediaKind} />;
+        return (
+          <MediaPreview
+            path={path}
+            size={doc.size}
+            kind={mediaKind}
+            workspaceEnv={workspaceEnv}
+          />
+        );
       }
 
       const canForce =

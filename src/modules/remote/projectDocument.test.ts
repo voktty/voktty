@@ -6,6 +6,7 @@ import type { RemoteSessionLease } from "@/modules/remote/sessionPool";
 const io = vi.hoisted(() => ({
   acquire: vi.fn(),
   read: vi.fn(),
+  binary: vi.fn(),
   stat: vi.fn(),
   request: vi.fn(),
 }));
@@ -14,6 +15,7 @@ vi.mock("@/modules/remote/sessionManager", () => ({
 }));
 vi.mock("@/modules/remote/filesystem", () => ({
   remoteReadDocument: io.read,
+  remoteReadBinaryFile: io.binary,
   remoteStat: io.stat,
   remoteRelativePath: (_: unknown, path: string) =>
     path.slice("/srv/project/".length),
@@ -56,6 +58,11 @@ beforeEach(() => {
     mtime: 10,
   });
   io.stat.mockResolvedValue({ kind: "file", size: 8, mtime: 11 });
+  io.binary.mockResolvedValue({
+    bytes: new Uint8Array([1, 2]),
+    size: 2,
+    mtime: 10,
+  });
   io.request.mockResolvedValue({});
 });
 
@@ -182,4 +189,45 @@ it("retains capacity for retired acquisitions until actual settlement", async ()
   ).toBe(true);
   io.acquire.mockResolvedValue(lease());
   await expect(document.stat(current)).resolves.toMatchObject({ mtime: 11 });
+});
+
+it("uses the captured project lease for binary reads without decoding text", async () => {
+  const own = lease();
+  io.acquire.mockResolvedValue(own);
+  const result = await createProjectDocument(path, project, [
+    profile,
+  ]).readBinary(current);
+  expect(result.bytes).toEqual(new Uint8Array([1, 2]));
+  expect(io.binary).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionId: 7 }),
+    "/srv/project/file.txt",
+  );
+  expect(io.read).not.toHaveBeenCalled();
+  expect(own.release).toHaveBeenCalledOnce();
+});
+
+it("retains binary read ownership until a retired response settles", async () => {
+  let finish!: (value: {
+    bytes: Uint8Array;
+    size: number;
+    mtime: number;
+  }) => void;
+  io.binary.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const own = lease();
+  io.acquire.mockResolvedValue(own);
+  let active = true;
+  const request = createProjectDocument(path, project, [profile]).readBinary(
+    () => active,
+  );
+  const rejected = expect(request).rejects.toThrow("retired");
+  await vi.waitFor(() => expect(io.binary).toHaveBeenCalledOnce());
+  active = false;
+  expect(own.release).not.toHaveBeenCalled();
+  finish({ bytes: new Uint8Array([1]), size: 1, mtime: 1 });
+  await rejected;
+  expect(own.release).toHaveBeenCalledOnce();
 });

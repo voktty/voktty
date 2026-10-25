@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useMediaSource } from "@/modules/editor/lib/useMediaSource";
+import { getMediaMimeType } from "@/modules/editor/lib/media";
 import {
   type ComponentProps,
   type SyntheticEvent,
   useCallback,
-  useMemo,
   useState,
 } from "react";
 import { useMarkdownDoc } from "./lib/docContext";
@@ -23,41 +23,39 @@ export function MarkdownImage({
   onError,
   ...props
 }: MarkdownImageProps) {
-  const { docPath } = useMarkdownDoc();
-  const [hasError, setHasError] = useState(false);
-
-  const resolvedSrc = useMemo(() => {
-    if (!src) return "";
-    if (
-      src.startsWith("http://") ||
-      src.startsWith("https://") ||
-      src.startsWith("data:") ||
-      src.startsWith("asset://") ||
-      src.startsWith("tauri://")
-    ) {
-      return src;
-    }
-    if (!docPath) return src;
-
-    const fullLocalPath = resolveRelativeDocPath(docPath, src);
-    try {
-      return convertFileSrc(fullLocalPath);
-    } catch {
-      return src;
-    }
-  }, [src, docPath]);
+  const { docPath, workspaceEnv } = useMarkdownDoc();
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const passthrough =
+    !docPath ||
+    (!!src &&
+      (src.startsWith("http://") ||
+        src.startsWith("https://") ||
+        src.startsWith("data:") ||
+        src.startsWith("asset://") ||
+        src.startsWith("tauri://")));
+  const target =
+    src && !passthrough ? resolveRelativeDocPath(docPath, src) : undefined;
+  const media = useMediaSource(
+    target,
+    workspaceEnv,
+    getMediaMimeType(target?.split(".").pop() ?? ""),
+  );
+  const resolvedSrc = passthrough ? src : media.src;
+  const hasError = passthrough ? failedSrc === src : media.failed;
 
   const handleError = useCallback(
     (e: SyntheticEvent<HTMLImageElement, Event>) => {
-      setHasError(true);
+      if (!passthrough && !media.isCurrent()) return;
+      if (passthrough) setFailedSrc(src);
+      else media.onError();
       onError?.(e);
     },
-    [onError],
+    [onError, passthrough, src, media],
   );
 
   if (!src) return null;
 
-  if (hasError) {
+  if (hasError || !resolvedSrc) {
     return (
       <span
         className={cn(
@@ -65,7 +63,11 @@ export function MarkdownImage({
           className,
         )}
       >
-        <HugeiconsIcon icon={Image01Icon} size={14} className="shrink-0 opacity-70" />
+        <HugeiconsIcon
+          icon={Image01Icon}
+          size={14}
+          className="shrink-0 opacity-70"
+        />
         <span>{alt || src}</span>
       </span>
     );

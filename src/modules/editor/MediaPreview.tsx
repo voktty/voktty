@@ -4,25 +4,17 @@ import {
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import {
   type MouseEvent,
   type WheelEvent,
-  useCallback,
-  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { useTranslation } from "@/modules/i18n";
-import {
-  isPathInRemoteWorkspace,
-  remoteReadBinaryFile,
-} from "@/modules/remote";
-import { currentWorkspaceEnv, workspaceForNativeFs } from "@/modules/workspace";
-import {
-  getMediaMimeType,
-  type MediaKind,
-} from "./lib/media";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { useMediaSource } from "./lib/useMediaSource";
+import { getMediaMimeType, type MediaKind } from "./lib/media";
 
 export { classifyMediaExtension, getMediaMimeType } from "./lib/media";
 
@@ -36,17 +28,19 @@ export function MediaPreview({
   path,
   size,
   kind,
+  workspaceEnv,
 }: {
   path: string;
   size?: number;
   kind: MediaKind;
+  workspaceEnv: WorkspaceEnv;
 }) {
   const { t } = useTranslation();
   const filename = path.split(/[\\/]/).pop() || path;
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
 
-  const [src, setSrc] = useState<string>(() => convertFileSrc(path));
-  const [loadFailed, setLoadFailed] = useState(false);
+  const media = useMediaSource(path, workspaceEnv, getMediaMimeType(ext));
+  const { src, failed: loadFailed } = media;
   const [naturalDimensions, setNaturalDimensions] = useState<{
     width: number;
     height: number;
@@ -58,83 +52,22 @@ export function MediaPreview({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
-  const objectUrlRef = useRef<string | null>(null);
-
-  const revokeBlobUrl = useCallback(() => {
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-  }, []);
-
-  // Fetch binary fallback via Tauri IPC or remote
-  const loadBinaryFallback = useCallback(async () => {
-    try {
-      const workspace = currentWorkspaceEnv();
-      const mime = getMediaMimeType(ext);
-
-      if (isPathInRemoteWorkspace(workspace, path)) {
-        const { bytes } = await remoteReadBinaryFile(workspace, path);
-        const content = bytes.buffer.slice(
-          bytes.byteOffset,
-          bytes.byteOffset + bytes.byteLength,
-        ) as ArrayBuffer;
-        const blob = new Blob([content], { type: mime });
-        revokeBlobUrl();
-        const url = URL.createObjectURL(blob);
-        objectUrlRef.current = url;
-        setSrc(url);
-        setLoadFailed(false);
-      } else {
-        const raw = await invoke<number[] | Uint8Array>("fs_read_binary_file", {
-          path,
-          workspace: workspaceForNativeFs(workspace, path),
-        });
-        const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
-        const blob = new Blob([u8.buffer as ArrayBuffer], { type: mime });
-        revokeBlobUrl();
-        const url = URL.createObjectURL(blob);
-        objectUrlRef.current = url;
-        setSrc(url);
-        setLoadFailed(false);
-      }
-    } catch {
-      setLoadFailed(true);
-    }
-  }, [path, ext, revokeBlobUrl]);
-
-  // Reset and try convertFileSrc on path change
-  useEffect(() => {
-    revokeBlobUrl();
-    setLoadFailed(false);
+  useLayoutEffect(() => {
+    if (!media.src) return;
     setNaturalDimensions(null);
     setScale(1);
     setFitMode("fit");
     setOffset({ x: 0, y: 0 });
-
-    const primaryUrl = convertFileSrc(path);
-    setSrc(primaryUrl);
-
-    return () => {
-      revokeBlobUrl();
-    };
-  }, [path, revokeBlobUrl]);
-
-  const handleMediaError = useCallback(() => {
-    if (!objectUrlRef.current) {
-      void loadBinaryFallback();
-    } else {
-      setLoadFailed(true);
-    }
-  }, [loadBinaryFallback]);
+    setIsDragging(false);
+  }, [media.src]);
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    if (!media.isCurrent()) return;
     const img = e.currentTarget;
     setNaturalDimensions({
       width: img.naturalWidth,
       height: img.naturalHeight,
     });
-    setLoadFailed(false);
   };
 
   // Zoom helpers
@@ -218,7 +151,7 @@ export function MediaPreview({
         </div>
         <button
           type="button"
-          onClick={() => void loadBinaryFallback()}
+          onClick={media.retry}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-foreground/[0.04] px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/[0.08]"
         >
           <HugeiconsIcon icon={RefreshIcon} size={14} />
@@ -235,11 +168,14 @@ export function MediaPreview({
       onMouseUp={kind === "image" ? handleMouseUp : undefined}
     >
       {/* Media Canvas */}
+      {!src && (
+        <span className="text-xs text-muted-foreground">{t("common.loading")}</span>
+      )}
       <div
         className="flex size-full items-center justify-center overflow-hidden p-6"
         onWheel={kind === "image" ? handleWheel : undefined}
       >
-        {kind === "image" && (
+        {kind === "image" && src && (
           <div
             className="relative flex items-center justify-center transition-transform duration-75 ease-out"
             style={{
@@ -255,7 +191,7 @@ export function MediaPreview({
               loading="eager"
               decoding="async"
               onLoad={handleImageLoad}
-              onError={handleMediaError}
+              onError={media.onError}
               className={`rounded-lg border border-border/30 shadow-2xl transition-all ${
                 fitMode === "fit"
                   ? "max-h-[calc(100vh-140px)] max-w-[calc(100vw-80px)] object-contain"
@@ -271,18 +207,18 @@ export function MediaPreview({
           </div>
         )}
 
-        {kind === "video" && (
+        {kind === "video" && src && (
           // biome-ignore lint/a11y/useMediaCaption: local video preview
           <video
             controls
             preload="metadata"
             src={src}
-            onError={handleMediaError}
+            onError={media.onError}
             className="max-h-full max-w-full rounded-lg border border-border/30 bg-black/40 shadow-2xl"
           />
         )}
 
-        {kind === "audio" && (
+        {kind === "audio" && src && (
           <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-border/40 bg-card/60 p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex size-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-inner">
               <HugeiconsIcon icon={File02Icon} size={28} />
@@ -302,17 +238,17 @@ export function MediaPreview({
               controls
               preload="metadata"
               src={src}
-              onError={handleMediaError}
+              onError={media.onError}
               className="w-full"
             />
           </div>
         )}
 
-        {kind === "pdf" && (
+        {kind === "pdf" && src && (
           <iframe
             src={src}
             title={filename}
-            onError={handleMediaError}
+            onError={media.onError}
             className="size-full rounded-lg border-none"
           />
         )}
