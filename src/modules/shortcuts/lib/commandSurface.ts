@@ -188,6 +188,10 @@ export function commandSurfaceRule(id: string): CommandSurfaceRule {
   return declaredCommandSurfaceRule(id) ?? GLOBAL;
 }
 
+export function fixedCommandSurfaceIds(): readonly string[] {
+  return Object.keys(COMMAND_RULES);
+}
+
 export function declaredCommandSurfaceRule(id: string): CommandSurfaceRule | undefined {
   if (id.startsWith("spaces.switch.") && id.length > "spaces.switch.".length) return GLOBAL;
   return Object.prototype.hasOwnProperty.call(COMMAND_RULES, id) ? COMMAND_RULES[id] : undefined;
