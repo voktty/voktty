@@ -21,6 +21,7 @@ import { useTranslation } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { playVokttySound } from "@/modules/sound";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
+import { toast } from "sonner";
 import {
   useCallback,
   useEffect,
@@ -566,6 +567,12 @@ export function useSourceControlPanel(
     summary.repo?.repoRoot,
     workspaceEnv,
   );
+  const captureContextOwner = usePanelActionOwner(
+    isOpen,
+    summary.contextPath,
+    undefined,
+    workspaceEnv,
+  );
   const selectedModelId = useChatStore((state) => state.selectedModelId);
   const agentStatus = useChatStore((state) => state.agentMeta.status);
   const hasApiKeyForSelected = useChatStore((state) => {
@@ -607,13 +614,16 @@ export function useSourceControlPanel(
     openDiffRef.current = onOpenDiff;
   }, [summary.busyAction, onOpenDiff]);
   const beginAction = useCallback(
-    (callerIsCurrent?: () => boolean): PanelAction | null => {
-      const ownsPanel = capturePanelOwner();
+    (
+      callerIsCurrent?: () => boolean,
+      scope: "repository" | "context" = "repository",
+    ): PanelAction | null => {
+      const ownsPanel =
+        scope === "context" ? captureContextOwner() : capturePanelOwner();
       if (
         !ownsPanel ||
         callerIsCurrent?.() === false ||
-        !repo ||
-        repo !== summary.repo ||
+        (scope === "repository" && (!repo || repo !== summary.repo)) ||
         summaryBusyRef.current ||
         actionRef.current?.isCurrent() ||
         unsettledActionsRef.current.size >= 256
@@ -630,7 +640,7 @@ export function useSourceControlPanel(
       actionRef.current = action;
       return action;
     },
-    [capturePanelOwner, repo, summary.repo],
+    [captureContextOwner, capturePanelOwner, repo, summary.repo],
   );
   const dirtyPathsRef = useRef(dirtyPaths);
   const [semanticGroups, setSemanticGroups] = useState<SemanticCommitGroup[]>(
@@ -644,7 +654,9 @@ export function useSourceControlPanel(
     const isCurrent = capturePanelOwner();
     discardRef.current = null;
     setPendingDiscard(null);
-    setLocalActionBusy(null);
+    setLocalActionBusy((current) =>
+      actionRef.current?.isCurrent() ? current : null,
+    );
     setActionMessage(null);
     setActionError(null);
     setSemanticGroups([]);
@@ -802,14 +814,52 @@ export function useSourceControlPanel(
   );
 
   const refresh = useCallback(async () => {
-    if (!isOpen) {
-      setPanelState("closed");
-      setSelectionTransition("none");
-      return;
-    }
+    if (!capturePanelOwner()) return;
     if (summary.repo) invalidateRepoDiffs(summary.repo.repoRoot, workspaceEnv);
     await summary.refresh({ remote: "never" });
-  }, [isOpen, summary, workspaceEnv]);
+  }, [capturePanelOwner, summary, workspaceEnv]);
+
+  const runRepositoryControl = useCallback(
+    async (command: "trust" | "init", path?: string) => {
+      const action = beginAction(undefined, "context");
+      if (!action) return;
+      const { isCurrent } = action;
+      setLocalActionBusy(command);
+      try {
+        const accepted =
+          command === "trust"
+            ? await summary.trustRepository(path)
+            : await summary.initRepository(path);
+        if (accepted && isCurrent())
+          toast.success(
+            t(
+              command === "trust"
+                ? "git.authorizedSuccess"
+                : "git.initRepoSuccess",
+            ),
+          );
+      } catch (error) {
+        if (isCurrent())
+          toast.error(t("common.unknownError"), { description: String(error) });
+      } finally {
+        if (isCurrent()) setLocalActionBusy(null);
+        action.finish();
+      }
+    },
+    [beginAction, summary, t],
+  );
+  const trustRepository = useCallback(
+    async (path?: string) => {
+      await runRepositoryControl("trust", path);
+    },
+    [runRepositoryControl],
+  );
+  const initRepository = useCallback(
+    async (path?: string) => {
+      await runRepositoryControl("init", path);
+    },
+    [runRepositoryControl],
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -1576,8 +1626,8 @@ export function useSourceControlPanel(
     applySemanticGroup,
     setCommitMessage,
     refresh,
-    trustRepository: summary.trustRepository,
-    initRepository: summary.initRepository,
+    trustRepository,
+    initRepository,
     selectEntry,
     selectFile,
     stageEntry,

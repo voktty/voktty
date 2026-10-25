@@ -86,8 +86,8 @@ function summary(staged: boolean): SourceControlSummary {
     lastRemoteError: null,
     applyStatus: vi.fn(),
     refresh: vi.fn(async () => {}),
-    trustRepository: vi.fn(async () => {}),
-    initRepository: vi.fn(async () => {}),
+    trustRepository: vi.fn(async () => true),
+    initRepository: vi.fn(async () => true),
     undoCommit: vi.fn(async () => true),
     runRemoteAction: vi.fn(async () => ({ ok: false, action: null })),
   };
@@ -845,6 +845,50 @@ it("does not bypass a newly committed remote busy action with cached callbacks",
   });
   expect(mocks.stage).not.toHaveBeenCalled();
   expect(mocks.commit).not.toHaveBeenCalled();
+});
+it.each(["refresh", "trustRepository", "initRepository"] as const)(
+  "rejects cached %s after panel close",
+  async (command) => {
+    const value = summary(false);
+    await act(async () => root.render(<Probe value={value} />));
+    const old = panel;
+    await act(async () => root.render(<Probe value={value} open={false} />));
+    await act(async () => old[command]());
+    expect(value[command]).not.toHaveBeenCalled();
+  },
+);
+it("keeps current refresh available without a resolved repository", async () => {
+  const value = { ...summary(false), repo: null, status: null, hasRepo: false };
+  await act(async () => root.render(<Probe value={value} />));
+  await act(async () => panel.refresh());
+  expect(value.refresh).toHaveBeenCalledExactlyOnceWith({ remote: "never" });
+});
+it("shares trust admission with other controls and Git mutations", async () => {
+  let done!: (accepted: boolean) => void;
+  const value = summary(false);
+  value.trustRepository = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        done = resolve;
+      }),
+  );
+  await act(async () => root.render(<Probe value={value} />));
+  const old = panel;
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = old.trustRepository();
+    void old.trustRepository();
+    void old.initRepository();
+    void old.stageAllEntries();
+  });
+  expect(value.trustRepository).toHaveBeenCalledTimes(1);
+  expect(value.initRepository).not.toHaveBeenCalled();
+  expect(mocks.stage).not.toHaveBeenCalled();
+  await act(async () => {
+    done(false);
+    await pending;
+  });
+  expect(panel.actionBusy).toBeNull();
 });
 it("waits for the new summary facts before admitting a same-root filesystem mutation", async () => {
   const local = summary(false);

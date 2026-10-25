@@ -258,7 +258,7 @@ it("stops local trust after its authorization returns to a retired caller", asyn
   await flushIdle();
   const pending = deferred<void>();
   mocks.authorize.mockReturnValue(pending.promise);
-  let operation!: Promise<void>;
+  let operation!: ReturnType<typeof output.trustRepository>;
   await act(async () => {
     operation = output.trustRepository();
   });
@@ -493,4 +493,60 @@ it("rechecks undo acknowledgement after its status refresh", async () => {
     pending.resolve(snapshot());
     expect(await operation).toBe(false);
   });
+});
+it.each(["trustRepository", "initRepository"] as const)(
+  "acknowledges a current %s command",
+  async (command) => {
+    await render();
+    await flushIdle();
+    await act(async () => expect(await output[command]()).toBe(true));
+  },
+);
+it.each(["trustRepository", "initRepository"] as const)(
+  "does not acknowledge a retired %s callback",
+  async (command) => {
+    await render();
+    await flushIdle();
+    const old = output;
+    await select(LOCAL_WORKSPACE);
+    await act(async () => expect(await old[command]()).toBe(false));
+    expect(mocks.safe).not.toHaveBeenCalled();
+    expect(mocks.init).not.toHaveBeenCalled();
+  },
+);
+it.each(["trustRepository", "initRepository"] as const)(
+  "does not acknowledge %s after native completion retires",
+  async (command) => {
+    await render();
+    await flushIdle();
+    const pending = deferred<void>();
+    (command === "trustRepository" ? mocks.safe : mocks.init).mockReturnValue(
+      pending.promise,
+    );
+    let operation!: Promise<unknown>;
+    await act(async () => {
+      operation = output[command]();
+    });
+    await select(LOCAL_WORKSPACE);
+    await act(async () => {
+      pending.resolve();
+      expect(await operation).toBe(false);
+    });
+  },
+);
+it("does not acknowledge a remote-namespace safe-directory refusal", async () => {
+  await render();
+  await flushIdle();
+  await act(async () =>
+    expect(await output.trustRepository("remote://host/project")).toBe(false),
+  );
+  expect(mocks.safe).not.toHaveBeenCalled();
+});
+it("acknowledges safe-directory success independently of repository discovery", async () => {
+  await render();
+  await flushIdle();
+  mocks.resolve.mockResolvedValue(null);
+  await act(async () => expect(await output.trustRepository()).toBe(true));
+  expect(mocks.safe).toHaveBeenCalledTimes(1);
+  expect(output.hasRepo).toBe(false);
 });

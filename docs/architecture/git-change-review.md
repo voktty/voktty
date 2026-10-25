@@ -25,13 +25,17 @@ Sidebar discard dialogs capture copied entries, the repository root and the full
 
 The summary's `undoCommit` returns a boolean acknowledgement after the native undo and status-refresh attempt. A missing repository or retired summary returns false. The sidebar also retains its original panel owner through completion, reports success only for a positive acknowledgement and refuses duplicate pending undo delivery for that owner. Context retirement clears published feedback and retires undo busy state; old completions cannot clear a successor's busy state or publish errors. Native failures still reject, and already admitted Git operations are not rolled back. A positive acknowledgement confirms native undo completion under the current owner, not a successful status read.
 
+Summary trust and initialization commands also return boolean acknowledgements. Their sidebar wrappers share the operation budget and retain the originating folder, filesystem and open panel independently of repository discovery, so a successful init may publish its result after that folder becomes a repository. The controller owns success and failure notifications before releasing admission; the view does not announce success after an unqualified await. Retired refresh callbacks perform no cache invalidation or summary read. These guards do not cancel admitted native work or add filesystem authority.
+
+Explorer initialization also requires a positive acknowledgement before displaying success. Its header and context menu share a captured view request, with one pending request per current owner and a 256-request unsettled budget. Changing the visible or source root, navigation, filesystem or initializer, or unmounting, permanently retires delivery and notifications. The delegated initializer still owns native filesystem routing; this receipt controls view admission and feedback rather than authorizing native work.
+
 Staging a file with an unsaved editor is allowed because it does not destroy the in-memory buffer. Only the current on-disk version is staged.
 
 ## Trust boundary
 
 React coordinates selection, confirmation and cache invalidation. Rust remains the only owner of Git process execution and workspace authorization through `git_stage`, `git_unstage`, `git_discard`, `git_status` and `git_diff_content`. Paths are always interpreted relative to the repository already authorized by the workspace registry.
 
-Accepting Git's dubious-ownership exception writes only the explicit `safe.directory` value and does not canonicalize the repository a second time. The action resolves as soon as that configuration succeeds; status refresh continues independently so a slow SMB or mapped-network share cannot hold the trust control hostage. The first status pass uses Git's `--untracked-files=normal` directory-level enumeration instead of recursively materializing every untracked descendant. Tracked changes remain exact, and an untracked directory can still be staged as a path.
+Accepting Git's dubious-ownership exception writes only the explicit `safe.directory` value and does not canonicalize the repository a second time. Its acknowledgement confirms that configuration succeeded under the current owner, independently of whether subsequent status discovery finds a repository or reports an error. The status attempt is still awaited. The first status pass uses Git's `--untracked-files=normal` directory-level enumeration instead of recursively materializing every untracked descendant. Tracked changes remain exact, and an untracked directory can still be staged as a path.
 
 ## Manual smoke
 

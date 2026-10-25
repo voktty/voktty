@@ -65,8 +65,8 @@ export type SourceControlSummary = {
     updater: (status: GitStatusSnapshot) => GitStatusSnapshot,
   ) => void;
   refresh: (options?: { remote?: SourceControlRefreshMode }) => Promise<void>;
-  trustRepository: (path?: string) => Promise<void>;
-  initRepository: (path?: string) => Promise<void>;
+  trustRepository: (path?: string) => Promise<boolean>;
+  initRepository: (path?: string) => Promise<boolean>;
   undoCommit: () => Promise<boolean>;
   runRemoteAction: (
     mode?: SourceControlRemoteActionMode,
@@ -786,16 +786,16 @@ export function useSourceControl(
   const trustRepository = useCallback(
     async (path?: string) => {
       const owner = capture();
-      if (!owner) return;
+      if (!owner) return false;
       const pathToTrust =
         path ?? stateRef.current.dubiousOwnershipPath ?? contextPath;
-      if (!pathToTrust || isRemoteWorkspacePath(pathToTrust)) return;
+      if (!pathToTrust || isRemoteWorkspacePath(pathToTrust)) return false;
       if (workspaceEnv.kind === "local") {
         await native.workspaceAuthorize(pathToTrust).catch(() => {});
-        if (!owns(owner)) return;
+        if (!owns(owner)) return false;
       }
       await native.gitAddSafeDirectory(pathToTrust, workspaceEnv);
-      if (!owns(owner)) return;
+      if (!owns(owner)) return false;
 
       const requestId = ++requestIdRef.current;
       inflightRef.current = null;
@@ -813,7 +813,7 @@ export function useSourceControl(
       try {
         const resolved = await native.gitResolveRepo(pathToTrust, workspaceEnv);
         if (requestId !== requestIdRef.current || !owns(owner)) {
-          return;
+          return owns(owner);
         }
         if (!resolved) {
           setState((current) => ({
@@ -825,11 +825,11 @@ export function useSourceControl(
             localError: null,
             dubiousOwnershipPath: null,
           }));
-          return;
+          return true;
         }
         const status = await native.gitStatus(resolved.repoRoot, workspaceEnv);
         if (requestId !== requestIdRef.current || !owns(owner)) {
-          return;
+          return owns(owner);
         }
         setState((current) => ({
           ...current,
@@ -843,7 +843,7 @@ export function useSourceControl(
         lastRefreshAtRef.current = Date.now();
       } catch (error) {
         if (requestId !== requestIdRef.current || !owns(owner)) {
-          return;
+          return owns(owner);
         }
         setState((current) => ({
           ...current,
@@ -855,6 +855,7 @@ export function useSourceControl(
           dubiousOwnershipPath: null,
         }));
       }
+      return owns(owner);
     },
     [contextPath, workspaceEnv, capture, owns, setState],
   );
@@ -862,13 +863,14 @@ export function useSourceControl(
   const initRepository = useCallback(
     async (targetPath?: string) => {
       const owner = capture();
-      if (!owner) return;
+      if (!owner) return false;
       const pathToInit = targetPath ?? contextPath;
-      if (!pathToInit) return;
+      if (!pathToInit) return false;
       await native.gitInit(pathToInit, workspaceEnv);
-      if (!owns(owner)) return;
+      if (!owns(owner)) return false;
       window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
       await doRefresh("never");
+      return owns(owner);
     },
     [contextPath, doRefresh, workspaceEnv, capture, owns],
   );

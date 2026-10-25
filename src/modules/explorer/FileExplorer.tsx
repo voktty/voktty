@@ -64,6 +64,7 @@ import {
   useExplorerReveal,
 } from "@/modules/explorer/lib/useExplorerReveal";
 import { useGitStatus } from "./lib/useGitStatus";
+import { useExplorerGitInitialization } from "@/modules/explorer/lib/useExplorerGitInitialization";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
@@ -115,7 +116,7 @@ type Props = {
   pathDropTarget?: TerminalPathDropTarget;
   gitStatus?: GitStatusSnapshot | null;
   hasGitRepo?: boolean;
-  onInitGit?: (path: string) => Promise<void> | void;
+  onInitGit?: (path: string) => Promise<boolean> | boolean;
   onPrepareNavigationRoot?: (path: string) => Promise<boolean>;
   onSyncToTerminal?: () => Promise<string | null | void> | string | null | void;
 };
@@ -565,6 +566,14 @@ export const FileExplorer = memo(
       },
       scroll: scrollEntryIntoView,
     });
+    const handleInitGit = useExplorerGitInitialization({
+      scope: revealScope,
+      rootPath,
+      initialize: onInitGit,
+      onSuccess: () => toast.success(t("git.initRepoSuccess")),
+      onError: (error) =>
+        toast.error(t("common.unknownError"), { description: String(error) }),
+    });
 
     const handleSelectPath = useCallback(
       (path: string, e?: React.MouseEvent) => {
@@ -957,16 +966,8 @@ export const FileExplorer = memo(
               variant="ghost"
               size="icon"
               className="size-6 text-muted-foreground hover:text-foreground"
-              onClick={async () => {
-                try {
-                  if (onInitGit) {
-                    await onInitGit(rootPath);
-                  }
-                  toast.success(t("git.initRepoSuccess"));
-                } catch (err) {
-                  toast.error(t("common.unknownError"), { description: String(err) });
-                }
-              }}
+              disabled={!onInitGit}
+              onClick={() => void handleInitGit()}
               title={t("git.initializeRepo")}
               aria-label={t("git.initializeRepo")}
             >
@@ -1387,16 +1388,8 @@ export const FileExplorer = memo(
                   {hasGitRepo === false && rootPath && (
                     <ContextMenuItem
                       className={COMPACT_ITEM}
-                      onSelect={async () => {
-                        try {
-                          if (onInitGit) {
-                            await onInitGit(rootPath);
-                          }
-                          toast.success(t("git.initRepoSuccess"));
-                        } catch (err) {
-                          toast.error(t("common.unknownError"), { description: String(err) });
-                        }
-                      }}
+                      disabled={!onInitGit}
+                      onSelect={() => void handleInitGit()}
                     >
                       {t("git.initializeRepo")}
                     </ContextMenuItem>

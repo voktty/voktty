@@ -1080,20 +1080,13 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   size="sm"
                   className="gap-1.5 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 hover:text-amber-400 border border-amber-500/30 font-medium"
                   disabled={isRefreshing || !!scm.actionBusy}
-                  onClick={async () => {
-                    try {
-                      await scm.trustRepository(
-                        scm.dubiousOwnershipPath ??
-                          sourceControl.contextPath ??
-                          undefined,
-                      );
-                      toast.success(
-                        t("git.authorizedSuccess"),
-                      );
-                    } catch (err) {
-                      toast.error(t("common.unknownError"), { description: String(err) });
-                    }
-                  }}
+                  onClick={() =>
+                    void scm.trustRepository(
+                      scm.dubiousOwnershipPath ??
+                        sourceControl.contextPath ??
+                        undefined,
+                    )
+                  }
                 >
                   <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
                   {t("git.authorizeDirectory")}
@@ -1128,16 +1121,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   size="sm"
                   className="gap-1.5 font-medium shadow-xs"
                   disabled={isRefreshing || !!scm.actionBusy}
-                  onClick={async () => {
-                    try {
-                      await scm.initRepository(
-                        sourceControl.contextPath ?? undefined,
-                      );
-                      toast.success(t("git.initRepoSuccess"));
-                    } catch (err) {
-                      toast.error(t("common.unknownError"), { description: String(err) });
-                    }
-                  }}
+                  onClick={() =>
+                    void scm.initRepository(
+                      sourceControl.contextPath ?? undefined,
+                    )
+                  }
                 >
                   <HugeiconsIcon icon={FolderGitTwoIcon} size={14} />
                   {t("git.initializeRepo")}
@@ -1158,18 +1146,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                     variant="ghost"
                     className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                     disabled={isRefreshing || !!scm.actionBusy}
-                    onClick={async () => {
-                      try {
-                        await scm.trustRepository(
-                          sourceControl.contextPath ?? undefined,
-                        );
-                        toast.success(
-                          t("git.authorizedSuccess"),
-                        );
-                      } catch (err) {
-                        toast.error(t("common.unknownError"), { description: String(err) });
-                      }
-                    }}
+                    onClick={() =>
+                      void scm.trustRepository(
+                        sourceControl.contextPath ?? undefined,
+                      )
+                    }
                   >
                     <HugeiconsIcon icon={CheckmarkCircle01Icon} size={13} />
                     {t("git.authorizeDirectory")}
@@ -1191,20 +1172,13 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                     size="sm"
                     className="gap-1.5 font-medium"
                     disabled={isRefreshing || !!scm.actionBusy}
-                    onClick={async () => {
-                      try {
-                        await scm.trustRepository(
-                          scm.dubiousOwnershipPath ??
-                            sourceControl.contextPath ??
-                            undefined,
-                        );
-                        toast.success(
-                          t("git.authorizedSuccess"),
-                        );
-                      } catch (err) {
-                        toast.error(t("common.unknownError"), { description: String(err) });
-                      }
-                    }}
+                    onClick={() =>
+                      void scm.trustRepository(
+                        scm.dubiousOwnershipPath ??
+                          sourceControl.contextPath ??
+                          undefined,
+                      )
+                    }
                   >
                     <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
                     {t("git.authorizeDirectory")}

@@ -139,8 +139,8 @@ beforeEach(() => {
     lastRemoteError: null,
     applyStatus: vi.fn(),
     refresh: vi.fn(async () => {}),
-    trustRepository: vi.fn(async () => {}),
-    initRepository: vi.fn(async () => {}),
+    trustRepository: vi.fn(async () => true),
+    initRepository: vi.fn(async () => true),
     undoCommit: vi.fn(async () => true),
     runRemoteAction: vi.fn(async () => ({ ok: false, action: null })),
   };
