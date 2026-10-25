@@ -12,7 +12,15 @@ import {
   workspaceForNativeFs,
 } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { remoteProjectForPath } from "@/modules/connections/model/remoteProjects";
 import { toast } from "sonner";
 import { t } from "@/modules/i18n";
 import { detectEol, type Eol, normalizeToLf, restoreEol } from "./eol";
@@ -36,7 +44,9 @@ export type DocumentReadErrorKind =
   | "permission-denied"
   | "unknown";
 
-export function classifyDocumentReadError(error: unknown): DocumentReadErrorKind {
+export function classifyDocumentReadError(
+  error: unknown,
+): DocumentReadErrorKind {
   const message = String(error).toLowerCase();
   if (
     /permission denied|access (?:is )?denied|eacces|eperm|os error 5\b/.test(
@@ -53,7 +63,9 @@ export function classifyDocumentReadError(error: unknown): DocumentReadErrorKind
     return "offline";
   }
   if (
-    /not found|cannot find|could not find|enoent|os error (?:2|3)\b/.test(message)
+    /not found|cannot find|could not find|enoent|os error (?:2|3)\b/.test(
+      message,
+    )
   ) {
     return "not-found";
   }
@@ -80,6 +92,50 @@ type Options = {
 };
 
 export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
+  const projectSource = useMemo(
+    () =>
+      path.replace(/\\/g, "/").startsWith("remote://")
+        ? {
+            path,
+            workspace: workspaceEnv,
+            project: remoteProjectForPath(path),
+            profiles: (usePreferencesStore.getState().sshConnections ?? []).map(
+              (profile) => ({ ...profile }),
+            ),
+          }
+        : undefined,
+    [path, workspaceEnv],
+  );
+  const projectOwner = useRef<{ source: typeof projectSource } | null>(null);
+  useLayoutEffect(() => {
+    const owner = { source: projectSource };
+    projectOwner.current = owner;
+    return () => {
+      if (projectOwner.current === owner) projectOwner.current = null;
+    };
+  }, [projectSource]);
+  const captureProjectRequest = useCallback(() => {
+    if (!projectSource) return () => true;
+    const owner = projectOwner.current;
+    return () =>
+      owner !== null &&
+      owner.source === projectSource &&
+      projectOwner.current === owner;
+  }, [projectSource]);
+  const projectDocument = useCallback(
+    async (isCurrent: () => boolean) => {
+      const { createProjectDocument, assertProjectDocumentCurrent } =
+        await import("@/modules/remote/projectDocument");
+      assertProjectDocumentCurrent(isCurrent);
+      if (!projectSource) throw new Error("No remote document source.");
+      return createProjectDocument(
+        projectSource.path,
+        projectSource.project,
+        projectSource.profiles,
+      );
+    },
+    [projectSource],
+  );
   const [doc, setDoc] = useState<DocumentState>({ status: "loading" });
   const [dirty, setDirty] = useState(false);
   const [eol, setEol] = useState<Eol>("\n");
@@ -89,6 +145,7 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
 
   // Track the saved buffer so we can detect changes cheaply.
   const savedRef = useRef<string>("");
+  const savedDiskRef = useRef<string>("");
   const bufferRef = useRef<string>("");
   const eolRef = useRef<Eol>("\n");
   const dirtyRef = useRef(false);
@@ -115,40 +172,75 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
     setEol(next);
   }, []);
 
-  const writeToDisk = useCallback(async () => {
-    const content = bufferRef.current;
-    const workspace = workspaceForDocumentPath(workspaceEnv, path);
-    const nextContent = restoreEol(content, eolRef.current);
-    const mtime = isPathInRemoteWorkspace(workspace, path)
-      ? await remoteWriteFile(workspace, path, nextContent)
-      : await invoke<number>("fs_write_file", {
-          path,
-          content: nextContent,
-          workspace: workspaceForNativeFs(workspace, path),
-          source: "editor",
-        });
-    diskMtimeRef.current = mtime;
-    savedRef.current = content;
-    // Edits typed while the write was in flight must stay dirty.
-    setDirty(bufferRef.current !== content);
-    notifyDocumentSaved(path);
-    window.dispatchEvent(
-      new CustomEvent("voktty:reload-preview", { detail: { path } }),
-    );
-  }, [path, workspaceEnv]);
+  const writeToDisk = useCallback(
+    async (isCurrent = captureProjectRequest(), overwrite = false) => {
+      if (!isCurrent()) return;
+      const content = bufferRef.current;
+      const workspace = workspaceForDocumentPath(workspaceEnv, path);
+      const nextContent = restoreEol(content, eolRef.current);
+      const expectedContent = overwrite ? undefined : savedDiskRef.current;
+      let mtime: number;
+      try {
+        mtime = projectSource
+          ? await (await projectDocument(isCurrent)).write(
+              nextContent,
+              isCurrent,
+              expectedContent,
+            )
+          : isPathInRemoteWorkspace(workspace, path)
+            ? await remoteWriteFile(workspace, path, nextContent)
+            : await invoke<number>("fs_write_file", {
+                path,
+                content: nextContent,
+                workspace: workspaceForNativeFs(workspace, path),
+                source: "editor",
+              });
+      } catch (error) {
+        if (!isCurrent()) return;
+        throw error;
+      }
+      if (!isCurrent()) return;
+      diskMtimeRef.current = mtime;
+      savedRef.current = content;
+      savedDiskRef.current = nextContent;
+      // Edits typed while the write was in flight must stay dirty.
+      setDirty(bufferRef.current !== content);
+      notifyDocumentSaved(path);
+      window.dispatchEvent(
+        new CustomEvent("voktty:reload-preview", { detail: { path } }),
+      );
+    },
+    [path, workspaceEnv, projectSource, projectDocument, captureProjectRequest],
+  );
+
+  const statDocument = useCallback(
+    async (isCurrent: () => boolean) => {
+      if (projectSource)
+        return (await projectDocument(isCurrent)).stat(isCurrent);
+      const workspace = workspaceForDocumentPath(workspaceEnv, path);
+      return isPathInRemoteWorkspace(workspace, path)
+        ? remoteStat(workspace, path)
+        : invoke<FileStat>("fs_stat", {
+            path,
+            workspace: workspaceForNativeFs(workspace, path),
+          });
+    },
+    [path, workspaceEnv, projectSource, projectDocument],
+  );
 
   // False when the write was withheld because the file changed on disk
   // since load; overwriting is an explicit user action from the toast.
   const saveNow = useCallback(async (): Promise<boolean> => {
+    const isCurrent = captureProjectRequest();
+    if (!isCurrent()) return false;
     const known = diskMtimeRef.current;
     if (known !== null) {
-      const workspace = workspaceForDocumentPath(workspaceEnv, path);
-      const stat = isPathInRemoteWorkspace(workspace, path)
-        ? await remoteStat(workspace, path).catch(() => null)
-        : await invoke<FileStat>("fs_stat", {
-            path,
-            workspace: workspaceForNativeFs(workspace, path),
-          }).catch(() => null);
+      const stat = await statDocument(isCurrent).catch((error: unknown) => {
+        if (!isCurrent()) return null;
+        if (projectSource) throw error;
+        return null;
+      });
+      if (!isCurrent()) return false;
       if (stat && stat.mtime !== known) {
         const name = path.split(/[\\/]/).pop() ?? path;
         toast.warning(t("feedback.fileChangedOnDisk"), {
@@ -156,15 +248,17 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
           description: t("feedback.fileChangedDescription", { name }),
           action: {
             label: t("feedback.overwrite"),
-            onClick: () => void writeToDisk(),
+            onClick: () => {
+              if (isCurrent()) void writeToDisk(isCurrent, true);
+            },
           },
         });
         return false;
       }
     }
-    await writeToDisk();
-    return true;
-  }, [path, workspaceEnv, writeToDisk]);
+    await writeToDisk(isCurrent);
+    return isCurrent();
+  }, [path, writeToDisk, statDocument, projectSource, captureProjectRequest]);
 
   // Notify parent of dirty transitions.
   const onDirtyChangeRef = useRef(onDirtyChange);
@@ -186,6 +280,7 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
       if (res.kind === "text") {
         updateEol(detectEol(res.content));
         diskMtimeRef.current = res.mtime;
+        savedDiskRef.current = res.content;
         const content = normalizeToLf(res.content);
         if (skipIfUnchanged && content === savedRef.current) return;
         savedRef.current = content;
@@ -203,6 +298,16 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
 
   const readFromDisk = useCallback(
     (force: boolean) => {
+      if (projectSource) {
+        const current = captureProjectRequest();
+        const generation = readGenerationRef.current;
+        const isCurrent = () =>
+          current() && readGenerationRef.current === generation;
+        const extension = path.split(".").pop() ?? "";
+        return projectDocument(isCurrent).then((io) =>
+          io.read(classifyMediaExtension(extension) !== null, isCurrent),
+        );
+      }
       const workspace = workspaceForDocumentPath(workspaceEnv, path);
       if (isPathInRemoteWorkspace(workspace, path)) {
         const extension = path.split(".").pop() ?? "";
@@ -218,7 +323,7 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
         force,
       });
     },
-    [path, workspaceEnv],
+    [path, workspaceEnv, projectSource, projectDocument, captureProjectRequest],
   );
 
   const loadDocument = useCallback(
@@ -270,19 +375,15 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
     if (doc.status !== "ready") return false;
     const known = diskMtimeRef.current;
     if (known === null) return false;
-    const workspace = workspaceForDocumentPath(workspaceEnv, path);
-    const stat = isPathInRemoteWorkspace(workspace, path)
-      ? await remoteStat(workspace, path).catch(() => null)
-      : await invoke<FileStat>("fs_stat", {
-          path,
-          workspace: workspaceForNativeFs(workspace, path),
-        }).catch(() => null);
+    const isCurrent = captureProjectRequest();
+    const stat = await statDocument(isCurrent).catch(() => null);
+    if (!isCurrent()) return false;
     if (stat && stat.mtime > 0 && stat.mtime !== known) {
       setExternalChange(true);
       return true;
     }
     return false;
-  }, [doc.status, path, workspaceEnv]);
+  }, [doc.status, statDocument, captureProjectRequest]);
 
   // Load on path change.
   useEffect(() => {
@@ -356,6 +457,7 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
       diskMtimeRef.current = mtime;
       const content = normalizeToLf(diskText);
       savedRef.current = content;
+      savedDiskRef.current = diskText;
       setDirty(bufferRef.current !== content);
       return content;
     },
