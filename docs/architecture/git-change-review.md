@@ -17,6 +17,8 @@ Sidebar stage, unstage, discard, semantic-group application, commit, push, undo 
 
 Commit-message and semantic-group generation pass their captured filesystem explicitly to Git and copy file, credential and model-preference inputs before awaiting. Each later model, generation, repair and publication stage checks the original owner. Closing or replacing the context retires pending delivery and clears published semantic groups, while unsettled requests keep their admission receipts. Already issued model requests are not cancelled. Current generation retains its existing error handling, single commit-message repair and semantic empty-diff fallback.
 
+The Source Control branch menu captures its repository, full filesystem and target context. Menu dismissal retires reads and cached navigation or checkout callbacks, while an already admitted checkout retains its repository owner until settlement. Repository, filesystem or panel retirement suppresses late feedback, refresh and menu changes, and a successor never inherits the old checkout's busy state. Reads and checkouts share a 256-operation budget per mounted reader, including retired work through settlement; exhausted readers can retry by reopening after capacity returns. These frontend guards do not cancel or roll back native Git operations.
+
 ## Unsaved-buffer safety
 
 Git actions operate on filesystem state, not on CodeMirror memory. Before any discard, both the sidebar and review queue compare the target path and rename source path with all dirty editor tabs. A match blocks the operation before Rust receives it. The check runs again after the confirmation dialog to close the race where a buffer becomes dirty while the dialog is open.

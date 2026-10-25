@@ -27,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
-import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
@@ -38,8 +37,7 @@ import {
 import { IS_MAC } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
-import { type GitBranchEntry, native } from "@/modules/ai/lib/native";
+import { useBranchDropdown } from "@/modules/source-control/useBranchDropdown";
 import {
   copyToClipboard,
   revealInFinder,
@@ -308,65 +306,20 @@ function BranchDropdown({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [open, setOpen] = useState(false);
-  const [branches, setBranches] = useState<GitBranchEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [checkingOut, setCheckingOut] = useState(false);
-  const requestRef = useRef(0);
-  const checkoutInFlight = useRef(false);
-
-  const loadBranches = useCallback(async () => {
-    const id = ++requestRef.current;
-    if (!repoRoot) {
-      setBranches([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await native.gitListBranches(repoRoot, workspaceEnv);
-      if (id !== requestRef.current) return;
-      setBranches(result.branches);
-    } catch (e) {
-      if (id !== requestRef.current) return;
-      setError(String(e));
-      setBranches([]);
-    } finally {
-      if (id === requestRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [repoRoot, workspaceEnv]);
-
-  useEffect(() => {
-    if (open) {
-      void loadBranches();
-    }
-  }, [open, loadBranches]);
-
-  const handleCheckout = useCallback(
-    async (branch: string) => {
-      if (!repoRoot || checkoutInFlight.current) return;
-      checkoutInFlight.current = true;
-      setCheckingOut(true);
-      try {
-        await native.gitCheckoutBranch(repoRoot, branch, workspaceEnv);
-        setBranches([]);
-        setOpen(false);
-        onRefresh();
-      } catch (e) {
-        toast.error(t("common.unknownError"), { description: String(e) });
-      } finally {
-        checkoutInFlight.current = false;
-        setCheckingOut(false);
-      }
-    },
-    [onRefresh, repoRoot, workspaceEnv],
-  );
+  const {
+    open,
+    setOpen,
+    branches,
+    loading,
+    error,
+    checkingOut,
+    checkout: handleCheckout,
+    runMenuAction,
+  } = useBranchDropdown({
+    repoRoot,
+    contextKey: JSON.stringify([displayRepoRoot, repositoryTarget]),
+    onRefresh,
+  });
 
   const localBranches = useMemo(
     () => branches.filter((b) => b.kind === "local"),
@@ -418,8 +371,7 @@ function BranchDropdown({
             {repositoryTarget.mode === "fixed" ? (
               <DropdownMenuItem
                 onSelect={() => {
-                  onFollowRepositoryContext();
-                  setOpen(false);
+                  runMenuAction(onFollowRepositoryContext);
                 }}
                 className="cursor-pointer text-[12px]"
               >
@@ -479,8 +431,9 @@ function BranchDropdown({
                     <DropdownMenuItem
                       key={b.worktreePath ?? b.name}
                       onSelect={() => {
-                        if (b.worktreePath && onNavigateToPath) {
-                          onNavigateToPath(b.worktreePath);
+                        const path = b.worktreePath;
+                        if (path && onNavigateToPath) {
+                          runMenuAction(() => onNavigateToPath(path));
                         }
                       }}
                       className="flex cursor-pointer items-center gap-2 text-[12px]"
