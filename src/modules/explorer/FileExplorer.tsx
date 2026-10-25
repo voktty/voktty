@@ -64,7 +64,7 @@ import {
   useExplorerReveal,
 } from "@/modules/explorer/lib/useExplorerReveal";
 import { useGitStatus } from "./lib/useGitStatus";
-import { useExplorerGitInitialization } from "@/modules/explorer/lib/useExplorerGitInitialization";
+import { useExplorerRepositoryInitialization } from "@/modules/explorer/lib/useExplorerRepositoryInitialization";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
@@ -116,7 +116,6 @@ type Props = {
   pathDropTarget?: TerminalPathDropTarget;
   gitStatus?: GitStatusSnapshot | null;
   hasGitRepo?: boolean;
-  onInitGit?: (path: string) => Promise<boolean> | boolean;
   onPrepareNavigationRoot?: (path: string) => Promise<boolean>;
   onSyncToTerminal?: () => Promise<string | null | void> | string | null | void;
 };
@@ -270,7 +269,6 @@ export const FileExplorer = memo(
       pathDropTarget,
       gitStatus,
       hasGitRepo,
-      onInitGit,
       onPrepareNavigationRoot,
       onSyncToTerminal,
     },
@@ -555,10 +553,10 @@ export const FileExplorer = memo(
       },
       scroll: scrollEntryIntoView,
     });
-    const handleInitGit = useExplorerGitInitialization({
+    const { run: handleInitGit, available: canInitGit } = useExplorerRepositoryInitialization({
       scope: revealScope,
       rootPath,
-      initialize: onInitGit,
+      workspace: workspaceEnv,
       onSuccess: () => toast.success(t("git.initRepoSuccess")),
       onError: (error) =>
         toast.error(t("common.unknownError"), { description: String(error) }),
@@ -955,7 +953,7 @@ export const FileExplorer = memo(
               variant="ghost"
               size="icon"
               className="size-6 text-muted-foreground hover:text-foreground"
-              disabled={!onInitGit}
+              disabled={!canInitGit}
               onClick={() => void handleInitGit()}
               title={t("git.initializeRepo")}
               aria-label={t("git.initializeRepo")}
@@ -1377,7 +1375,7 @@ export const FileExplorer = memo(
                   {hasGitRepo === false && rootPath && (
                     <ContextMenuItem
                       className={COMPACT_ITEM}
-                      disabled={!onInitGit}
+                      disabled={!canInitGit}
                       onSelect={() => void handleInitGit()}
                     >
                       {t("git.initializeRepo")}

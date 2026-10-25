@@ -173,6 +173,19 @@ it("never reads the previous root in a newly selected filesystem", async () => {
   }
 });
 
+it("initializes the visible Explorer root with its own filesystem and no delegated initializer", async () => {
+  const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
+  await act(async () => root.render(<FileExplorer
+    rootPath="/project" workspaceEnv={workspace} hasGitRepo={false} onOpenFile={() => {}}
+  />));
+  mocks.invoke.mockClear();
+  const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
+  expect(button).not.toBeNull();
+  expect(button?.disabled).toBe(false);
+  await act(async () => button?.click());
+  expect(mocks.invoke).toHaveBeenCalledWith("git_init", { cwd: "/project", workspace });
+});
+
 it("resets manual navigation when only the filesystem changes", async () => {
   await render("/work");
   const parent = node.querySelector<HTMLButtonElement>('button[aria-label="Go to parent directory"]');

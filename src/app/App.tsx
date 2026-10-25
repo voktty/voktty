@@ -4734,7 +4734,6 @@ function DesktopApp() {
                             explorerGitDecorations ? sourceControl.status : null
                           }
                           hasGitRepo={sourceControl.hasRepo}
-                          onInitGit={sourceControl.initRepository}
                           activeFilePath={explorerActiveFilePath}
                           onOpenFile={(path, pin) => {
                             const currentTab = tabsRef.current.find(

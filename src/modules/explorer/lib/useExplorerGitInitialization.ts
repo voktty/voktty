@@ -10,7 +10,7 @@ export function useExplorerGitInitialization({
   scope: object;
   rootPath: string | null;
   initialize?: (path: string) => Promise<boolean> | boolean;
-  onSuccess: () => void;
+  onSuccess: (isCurrent: () => boolean) => void;
   onError: (error: unknown) => void;
 }): () => Promise<void> {
   const binding = useMemo(
@@ -45,7 +45,7 @@ export function useExplorerGitInitialization({
     const isCurrent = () => current.current === owner;
     try {
       const accepted = await initialize(rootPath);
-      if (accepted && isCurrent()) onSuccess();
+      if (accepted && isCurrent()) onSuccess(isCurrent);
     } catch (error) {
       if (isCurrent()) onError(error);
     } finally {
