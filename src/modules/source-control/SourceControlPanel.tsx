@@ -837,7 +837,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             />
             <button
               type="button"
-              disabled={!scm.repo?.repoRoot}
+              disabled={fixedTargetPending || !scm.repo?.repoRoot}
               title={t("git.compare.action")}
               onClick={() => setCompareModalOpen(true)}
               className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -1596,8 +1596,9 @@ export const SourceControlPanel = memo(function SourceControlPanel({
       <BranchCompareDialog
         open={compareModalOpen}
         onOpenChange={setCompareModalOpen}
-        repoRoot={scm.repo?.repoRoot ?? null}
+        repoRoot={fixedTargetPending ? null : (scm.repo?.repoRoot ?? null)}
         currentBranch={scm.status?.branch ?? scm.repo?.branch ?? null}
+        contextKey={JSON.stringify([sourceControl.contextPath, repositoryTarget])}
       />
     </TooltipProvider>
   );

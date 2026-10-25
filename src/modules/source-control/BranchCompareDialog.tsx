@@ -14,91 +14,48 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  native,
-  type GitBranchComparison,
-  type GitLogEntry,
-} from "@/modules/ai/lib/native";
+import type { GitLogEntry } from "@/modules/ai/lib/native";
 import { useTranslation } from "@/modules/i18n";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useBranchComparison } from "@/modules/source-control/useBranchComparison";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useCallback, useEffect, useState } from "react";
-
-function errorMessage(err: unknown): string {
-  return err && typeof err === "object" && "message" in err
-    ? String((err as { message: unknown }).message)
-    : String(err);
-}
-
-type CompareState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; data: GitBranchComparison };
 
 export function BranchCompareDialog({
   open,
   onOpenChange,
   repoRoot,
   currentBranch,
+  contextKey = "",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoRoot: string | null;
   currentBranch: string | null;
+  contextKey?: string;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [branches, setBranches] = useState<string[]>([]);
-  const [base, setBase] = useState("");
-  const [compare, setCompare] = useState("");
-  const [state, setState] = useState<CompareState>({ status: "idle" });
-
-  useEffect(() => {
-    if (!open || !repoRoot) return;
-    setBase(currentBranch ?? "");
-    setCompare("");
-    setState({ status: "idle" });
-    void native
-      .gitListBranches(repoRoot, workspaceEnv)
-      .then((result) => {
-        setBranches(
-          result.branches
-            .filter((b) => b.kind === "local")
-            .map((b) => b.name),
-        );
-      })
-      .catch(() => setBranches([]));
-  }, [open, repoRoot, currentBranch, workspaceEnv]);
-
-  const runCompare = useCallback(
-    async (baseRef: string, compareRef: string) => {
-      if (!repoRoot || !baseRef || !compareRef || baseRef === compareRef) {
-        return;
-      }
-      setState({ status: "loading" });
-      try {
-        const data = await native.gitCompareBranches(
-          repoRoot,
-          baseRef,
-          compareRef,
-          workspaceEnv,
-        );
-        setState({ status: "ready", data });
-      } catch (err) {
-        setState({ status: "error", message: errorMessage(err) });
-      }
-    },
-    [repoRoot, workspaceEnv],
-  );
-
-  useEffect(() => {
-    if (base && compare && base !== compare) void runCompare(base, compare);
-  }, [base, compare, runCompare]);
+  const {
+    branches,
+    base,
+    compare,
+    state,
+    setBase,
+    setCompare,
+    setOpen,
+    listing,
+    listError,
+    retryBranches,
+    retryComparison,
+  } = useBranchComparison({
+    open,
+    onOpenChange,
+    repoRoot,
+    currentBranch,
+    contextKey,
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden sm:max-w-2xl bg-card/95 backdrop-blur-md border-border/80">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -110,6 +67,23 @@ export function BranchCompareDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {listing ? (
+          <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+            <Spinner className="size-3.5" />
+            {t("git.loadingBranches")}
+          </div>
+        ) : listError ? (
+          <div role="alert" className="py-2 text-xs text-destructive">
+            {listError}
+            <button
+              type="button"
+              className="ml-2 cursor-pointer underline"
+              onClick={retryBranches}
+            >
+              {t("common.retry")}
+            </button>
+          </div>
+        ) : null}
         <div className="flex items-center gap-2 py-2 text-xs">
           <Select value={base} onValueChange={setBase}>
             <SelectTrigger size="sm" className="h-8 flex-1 text-[12px]">
@@ -155,6 +129,13 @@ export function BranchCompareDialog({
           ) : state.status === "error" ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[12px] leading-relaxed text-destructive">
               {state.message}
+              <button
+                type="button"
+                className="ml-2 cursor-pointer underline"
+                onClick={retryComparison}
+              >
+                {t("common.retry")}
+              </button>
             </div>
           ) : (
             <ScrollArea className="h-full max-h-[60vh] pr-3">
