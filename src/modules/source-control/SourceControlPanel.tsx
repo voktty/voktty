@@ -39,16 +39,15 @@ import { cn } from "@/lib/utils";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import { useBranchDropdown } from "@/modules/source-control/useBranchDropdown";
 import {
-  copyToClipboard,
-  revealInFinder,
-} from "@/modules/explorer/lib/contextActions";
+  useSourceControlEntryMenu,
+  type SourceControlFileOpening,
+} from "@/modules/source-control/useSourceControlEntryMenu";
 import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
 import {
   COMPACT_CONTENT,
   COMPACT_ITEM,
 } from "@/modules/explorer/lib/menuItemClass";
 import { useTranslation } from "@/modules/i18n";
-import { joinPath } from "@/modules/explorer/lib/useFileTree";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   setGitCommitMessageUseEditorLanguage,
@@ -119,7 +118,7 @@ type Props = {
     originalPath: string | null;
     title?: string;
   }) => void;
-  onOpenFile?: (absolutePath: string) => void;
+  onOpenFile?: SourceControlFileOpening;
   onNavigateToPath?: (path: string) => void;
   repositoryTarget: SourceControlRepositoryTarget;
   onFollowRepositoryContext: () => void;
@@ -1533,6 +1532,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                               actionBusy={scm.actionBusy}
                               headerCheckState={scm.headerCheckState}
                               repoRoot={scm.repo?.repoRoot ?? null}
+                              contextKey={JSON.stringify([
+                                sourceControl.contextPath,
+                                repositoryTarget,
+                              ])}
                               onFocusRow={setFocusedRowKey}
                               onToggleAll={scm.toggleAll}
                               onSelectFile={scm.selectFile}
@@ -1724,12 +1727,13 @@ type RowRendererProps = {
   actionBusy: string | null;
   headerCheckState: CheckState;
   repoRoot: string | null;
+  contextKey: string;
   onFocusRow: (key: string | null) => void;
   onToggleAll: () => Promise<void> | void;
   onSelectFile: (entry: SourceControlFileEntry) => Promise<void>;
   onToggleStageFile: (entry: SourceControlFileEntry) => Promise<void>;
   onDiscardFile: (entry: SourceControlFileEntry) => void;
-  onOpenFile?: (absolutePath: string) => void;
+  onOpenFile?: SourceControlFileOpening;
 };
 
 const RowRenderer = memo(function RowRenderer(props: RowRendererProps) {
@@ -1801,6 +1805,7 @@ const EntryRow = memo(function EntryRow({
   selectedPath,
   actionBusy,
   repoRoot,
+  contextKey,
   onFocusRow,
   onSelectFile,
   onToggleStageFile,
@@ -1821,14 +1826,23 @@ const EntryRow = memo(function EntryRow({
   const isDiscardBusy = actionBusy === `discard:${entry.path}`;
   const disabled = actionBusy !== null;
 
-  const absolutePath = repoRoot
-    ? joinPath(repoRoot.replace(/\\/g, "/"), entry.path.replace(/\\/g, "/"))
-    : null;
+  const menu = useSourceControlEntryMenu({
+    entry,
+    repoRoot,
+    contextKey,
+    actionBusy,
+    onFocusRow,
+    onSelectFile,
+    onToggleStageFile,
+    onDiscardFile,
+    onOpenFile,
+  });
+  const absolutePath = menu.absolutePath;
   const isDeleted = entry.statusCode === "D";
 
   const { t } = useTranslation();
   return (
-    <ContextMenu>
+    <ContextMenu key={menu.key} onOpenChange={menu.setOpen}>
       <ContextMenuTrigger asChild>
         <div
           id={`scm-row-${row.key}`}
@@ -1932,17 +1946,19 @@ const EntryRow = memo(function EntryRow({
         {/* Open actions */}
         <ContextMenuItem
           className={COMPACT_ITEM}
-          onSelect={() => {
-            onFocusRow(row.key);
-            void onSelectFile(entry);
-          }}
+          onSelect={menu.diff}
         >
           {t("git.diff")}
         </ContextMenuItem>
         {!isDeleted && onOpenFile && absolutePath ? (
           <ContextMenuItem
             className={COMPACT_ITEM}
-            onSelect={() => onOpenFile(absolutePath)}
+            disabled={!menu.canOpen}
+            title={menu.canOpen ? undefined : t("git.unsupportedFilesystem")}
+            aria-description={
+              menu.canOpen ? undefined : t("git.unsupportedFilesystem")
+            }
+            onSelect={menu.openFile}
           >
             {t("common.open")}
           </ContextMenuItem>
@@ -1954,7 +1970,7 @@ const EntryRow = memo(function EntryRow({
         <ContextMenuItem
           className={COMPACT_ITEM}
           disabled={disabled}
-          onSelect={() => void onToggleStageFile(entry)}
+          onSelect={menu.stage}
         >
           {entry.checkState === "checked" ? t("git.unstage") : t("git.stage")}
         </ContextMenuItem>
@@ -1963,7 +1979,7 @@ const EntryRow = memo(function EntryRow({
             className={COMPACT_ITEM}
             variant="destructive"
             disabled={disabled}
-            onSelect={() => onDiscardFile(entry)}
+            onSelect={menu.discard}
           >
             {t("git.discard")}
           </ContextMenuItem>
@@ -1974,14 +1990,14 @@ const EntryRow = memo(function EntryRow({
         {/* Copy paths */}
         <ContextMenuItem
           className={COMPACT_ITEM}
-          onSelect={() => void copyToClipboard(entry.path.replace(/\\/g, "/"))}
+          onSelect={menu.copyRelative}
         >
           {t("explorer.copyRelativePath")}
         </ContextMenuItem>
         {absolutePath ? (
           <ContextMenuItem
             className={COMPACT_ITEM}
-            onSelect={() => void copyToClipboard(absolutePath)}
+            onSelect={menu.copyAbsolute}
           >
             {t("explorer.copyPath")}
           </ContextMenuItem>
@@ -1993,7 +2009,12 @@ const EntryRow = memo(function EntryRow({
             <ContextMenuSeparator />
             <ContextMenuItem
               className={COMPACT_ITEM}
-              onSelect={() => void revealInFinder(absolutePath)}
+              disabled={!menu.canReveal}
+              title={menu.canReveal ? undefined : t("workspace.localMachine")}
+              aria-description={
+                menu.canReveal ? undefined : t("workspace.localMachine")
+              }
+              onSelect={menu.reveal}
             >
               {t("explorer.revealInFinder")}
             </ContextMenuItem>
