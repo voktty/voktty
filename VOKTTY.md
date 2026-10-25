@@ -363,6 +363,8 @@ Diff default-application and file-manager actions require an absolute host-nativ
 
 Inbox pull-request diffs resolve the project's Git repository through the existing native resolver before running the local GitHub CLI. Their frontend result and cache retain that repository root, so repository-relative file paths do not inherit a project subdirectory. Missing repository resolution rejects the load instead of guessing a root; invalidated pending loads cannot replace the current diff cache. This does not add a remote GitHub CLI transport.
 
+Direct history actions from unified diffs, commit diffs and Git Review use the private synchronous Git history request channel. Sender retirement invalidates pending delivery; raw, fabricated and replayed event payloads cannot select an ambient repository. The desktop resolves the explicit directory through the existing native Git client with its captured filesystem, preserves the requested branch and original workspace, and bounds unresolved requests to 256 through actual settlement. Source, space and environment changes permanently retire delivery and error notifications. Explicit history callbacks and generic desktop history opening retain their separate routing contracts.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

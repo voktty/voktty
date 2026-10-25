@@ -34,6 +34,7 @@ import {
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
+import { useGitHistoryRequest } from "@/modules/source-control/gitHistoryRequest";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { ExplorerMenu, type ExplorerMenuItem } from "@/modules/harness/chrome/ExplorerMenu";
 import { copyText } from "@/modules/harness/lib/clipboard";
@@ -138,6 +139,7 @@ export function GitReviewTab({ cwd = null }: Props) {
   const repoRoot = sourceControl.status?.repoRoot ?? cwd ?? "";
   const hasRepo = sourceControl.hasRepo;
   const branchName = sourceControl.status?.branch ?? "";
+  const openHistory = useGitHistoryRequest({ repoRoot, branch: branchName, workspaceEnv: activeWorkspaceEnv });
   useLayoutEffect(() => setFileMenu(null), [repoRoot, activeWorkspaceEnv]);
 
   const handleMenuPick = useCallback(
@@ -170,15 +172,7 @@ export function GitReviewTab({ cwd = null }: Props) {
           action = copyText(basename(target.path));
           break;
         case "open-git-history":
-          window.dispatchEvent(
-            new CustomEvent("voktty:open-git-graph", {
-              detail: {
-                repoRoot,
-                branch: branchName,
-                workspaceEnv: activeWorkspaceEnv,
-              },
-            }),
-          );
+          openHistory();
           return;
         default:
           return;
@@ -189,7 +183,7 @@ export function GitReviewTab({ cwd = null }: Props) {
         });
       }
     },
-    [activeWorkspaceEnv, branchName, fileMenu, repoRoot],
+    [activeWorkspaceEnv, openHistory, fileMenu, repoRoot],
   );
 
   const changedFiles = useMemo(
@@ -495,17 +489,7 @@ export function GitReviewTab({ cwd = null }: Props) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent("voktty:open-git-graph", {
-                    detail: {
-                      repoRoot,
-                      branch: branchName,
-                      workspaceEnv: activeWorkspaceEnv,
-                    },
-                  }),
-                );
-              }}
+              onClick={() => { openHistory(); }}
               className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-muted"
               title={t("gitHistory.openCommitGraph")}
             >

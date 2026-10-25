@@ -7,6 +7,7 @@ import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDeskt
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
 import { useDirectoryTerminalOpening } from "@/modules/surfaces/lib/useDirectoryTerminalOpening";
 import { usePathOpening } from "@/modules/surfaces/lib/usePathOpening";
+import { useGitHistoryRequests } from "@/modules/source-control/useGitHistoryRequests";
 import {
   requestPathOpening,
   type PathOpeningRequest,
@@ -2195,31 +2196,15 @@ function DesktopApp() {
     [],
   );
 
-  useEffect(() => {
-    const gitGraphHandler = (e: Event) => {
-      const custom = e as CustomEvent<{
-        repoRoot?: string;
-        branch?: string;
-        workspaceEnv?: WorkspaceEnv;
-      }>;
-      const root = custom.detail?.repoRoot || explorerRoot || launchCwd;
-      if (root) {
-        openCommitHistoryTab({
-          repoRoot: root,
-          branch: custom.detail?.branch,
-          workspaceEnv: custom.detail?.workspaceEnv,
-        });
-      }
-    };
-    window.addEventListener("voktty:open-git-graph", gitGraphHandler);
-    return () => {
-      window.removeEventListener("voktty:open-git-graph", gitGraphHandler);
-    };
-  }, [
-    explorerRoot,
-    launchCwd,
-    openCommitHistoryTab,
-  ]);
+  useGitHistoryRequests({
+    spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    sourceKey: JSON.stringify([
+      nativeFolderSource(activeTab, activeSpace),
+      activeHarnessFolder,
+      activeTabWorkspaceEnv,
+    ]),
+    open: openCommitHistoryTab,
+  });
 
   const pickAndOpenFile = useCallback(async () => {
     const target = contextualInsertionTarget();

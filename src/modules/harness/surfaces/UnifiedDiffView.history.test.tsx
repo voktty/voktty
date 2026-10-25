@@ -12,6 +12,7 @@ import {
   type WorkspaceEnv,
 } from "@/modules/workspace";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { readGitHistoryRequest } from "@/modules/source-control/gitHistoryRequest";
 
 const mocks = vi.hoisted(() => ({
   status: vi.fn(),
@@ -83,14 +84,16 @@ let root: Root;
 let requests: {
   repoRoot?: string;
   workspaceEnv?: WorkspaceEnv;
-  branch?: string;
+  branch?: string | null;
 }[];
 let tabs: Tab[];
 let nextId: number;
 const originalWorkspace = useWorkspaceEnvStore.getState().env;
 const originalLanguage = usePreferencesStore.getState().language;
 const receive = (event: Event) => {
-  const input = (event as CustomEvent<(typeof requests)[number]>).detail;
+  const request = readGitHistoryRequest((event as CustomEvent).detail);
+  if (!request) return;
+  const input = request.input;
   requests.push(input);
   if (input.repoRoot)
     tabs = planCommitHistoryOpen(

@@ -1,5 +1,6 @@
 import { native, type GitCommitFileChange } from "@/modules/ai/lib/native";
-import type { WorkspaceEnv } from "@/modules/workspace";
+import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
+import { useGitHistoryRequest } from "@/modules/source-control/gitHistoryRequest";
 import { forEachConcurrent } from "@/modules/harness/lib/concurrent";
 import {
   buildUnifiedFile,
@@ -57,6 +58,7 @@ export function GitCommitDiffPane({
   onOpenFile,
 }: Props) {
   const { t } = useTranslation();
+  const openHistory = useGitHistoryRequest({ repoRoot, workspaceEnv: workspaceEnv ?? LOCAL_WORKSPACE });
   const [files, setFiles] = useState<GitCommitFileChange[] | null>(null);
   const [diffs, setDiffs] = useState<Map<string, LoadedDiff>>(new Map());
   const [error, setError] = useState<string | null>(null);
@@ -65,11 +67,7 @@ export function GitCommitDiffPane({
     if (onOpenCommitHistory) {
       onOpenCommitHistory({ repoRoot, workspaceEnv });
     } else {
-      window.dispatchEvent(
-        new CustomEvent("voktty:open-git-graph", {
-          detail: { repoRoot, workspaceEnv },
-        }),
-      );
+      openHistory();
     }
   };
 

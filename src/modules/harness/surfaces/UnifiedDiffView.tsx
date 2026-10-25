@@ -11,6 +11,7 @@ import {
 } from "../chrome/icons";
 import { t, useTranslation } from "@/modules/i18n";
 import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
+import { useGitHistoryRequest } from "@/modules/source-control/gitHistoryRequest";
 import { isNativeFolderPath } from "@/modules/explorer/lib/nativeFolderSelection";
 import {
   isWindowsNativePath,
@@ -205,6 +206,7 @@ export function UnifiedDiffView({
   onOpenGitHistory,
 }: Props) {
   const { t } = useTranslation();
+  const openHistory = useGitHistoryRequest({ repoRoot, workspaceEnv });
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const colorScheme = useColorScheme();
   const [open, setOpen] = useState<Set<string>>(() =>
@@ -420,11 +422,7 @@ export function UnifiedDiffView({
           if (onOpenGitHistory) {
             onOpenGitHistory(fullPath);
           } else if (repoRoot?.trim()) {
-            window.dispatchEvent(
-              new CustomEvent("voktty:open-git-graph", {
-                detail: { repoRoot, branch: undefined, workspaceEnv },
-              }),
-            );
+            openHistory();
           }
           return;
         default:
@@ -443,6 +441,7 @@ export function UnifiedDiffView({
       fileMenu,
       onOpenFile,
       onOpenGitHistory,
+      openHistory,
       repoRoot,
       toggleFullFile,
       workspaceEnv,
