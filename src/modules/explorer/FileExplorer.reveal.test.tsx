@@ -161,6 +161,47 @@ it("uses the real tree and handle to expand, select and scroll within the curren
   expect(mocks.scroll).toHaveBeenCalled();
 });
 
+it("never reads the previous root in a newly selected filesystem", async () => {
+  await render("/work");
+  mocks.invoke.mockClear();
+  const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
+  await render("/next", workspace, "next");
+  const reads = mocks.invoke.mock.calls.filter(([command]) => command === "fs_read_dir");
+  expect(reads.length).toBeGreaterThan(0);
+  for (const [, args] of reads) {
+    expect(args).toEqual(expect.objectContaining({ path: "/next", workspace }));
+  }
+});
+
+it("resets manual navigation when only the filesystem changes", async () => {
+  await render("/work");
+  const parent = node.querySelector<HTMLButtonElement>('button[aria-label="Go to parent directory"]');
+  expect(parent).not.toBeNull();
+  await act(async () => parent?.click());
+  mocks.invoke.mockClear();
+  const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
+  await render("/work", workspace);
+  const reads = mocks.invoke.mock.calls.filter(([command]) => command === "fs_read_dir");
+  expect(reads.length).toBeGreaterThan(0);
+  expect(reads[0][1]).toEqual(expect.objectContaining({ path: "/work", workspace }));
+  for (const [, args] of reads) {
+    expect(args.workspace).toEqual(workspace);
+    expect(args.path === "/work" || args.path.startsWith("/work/")).toBe(true);
+  }
+});
+
+it("preserves manual navigation across an equivalent filesystem publication", async () => {
+  await render("/work");
+  const parent = node.querySelector<HTMLButtonElement>('button[aria-label="Go to parent directory"]');
+  await act(async () => parent?.click());
+  mocks.invoke.mockClear();
+  await render("/work", { kind: "local" });
+  expect(node.querySelector('span[title="/"]')).not.toBeNull();
+  for (const [command, args] of mocks.invoke.mock.calls) {
+    if (command === "fs_read_dir") expect(args.path).toBe("/");
+  }
+});
+
 it("preserves a pending revealed selection when focus is requested before React commits it", async () => {
   await render();
   const original = explorer();

@@ -69,7 +69,7 @@ import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
 import { isRemoteProjectUri } from "./lib/remoteProjectDir";
-import { nextVisibleRoot } from "./lib/visibleRoot";
+import { useExplorerVisibleRoot } from "@/modules/explorer/lib/useExplorerVisibleRoot";
 import { useTranslation } from "@/modules/i18n";
 import { isPathInWorkspace } from "@/modules/remote";
 import type { WorkspaceEnv } from "@/modules/workspace";
@@ -282,33 +282,22 @@ export const FileExplorer = memo(
     const sourceRootIsReachable =
       sourceRootPath === null ||
       isPathInWorkspace(workspaceEnv, sourceRootPath);
-    const workspaceRoot =
-      workspaceEnv.kind === "ssh" ? workspaceEnv.root : null;
-    const [visibleRootPath, setVisibleRootPath] = useState(() =>
-      sourceRootIsReachable ? sourceRootPath : workspaceRoot,
-    );
-    const navigationKeyRef = useRef(navigationKey);
-    const sourceRootPathRef = useRef(sourceRootPath);
+    const {
+      rootPath,
+      navigate: setVisibleRootPath,
+      source: rootSource,
+    } = useExplorerVisibleRoot({
+      sourceRoot: sourceRootPath,
+      sourceReachable: sourceRootIsReachable,
+      workspace: workspaceEnv,
+      workspaceKey,
+      navigationKey,
+    });
     const refreshRequestRef = useRef(0);
     const refreshPendingNavigationRef = useRef<string | null | undefined>(null);
     useEffect(() => {
       refreshRequestRef.current += 1;
-      const navigationChanged = navigationKeyRef.current !== navigationKey;
-      const previousSourceRoot = sourceRootPathRef.current;
-      navigationKeyRef.current = navigationKey;
-      sourceRootPathRef.current = sourceRootPath;
-      setVisibleRootPath((currentVisibleRoot) =>
-        nextVisibleRoot({
-          currentVisibleRoot,
-          previousSourceRoot,
-          sourceRoot: sourceRootPath,
-          navigationChanged,
-          sourceReachable: sourceRootIsReachable,
-          workspaceRoot,
-        }),
-      );
-    }, [navigationKey, sourceRootIsReachable, sourceRootPath, workspaceRoot]);
-    const rootPath = visibleRootPath;
+    }, [rootSource]);
     const tree = useFileTree(rootPath, {
       workspaceKey,
       workspace: workspaceEnv,
@@ -386,7 +375,7 @@ export const FileExplorer = memo(
         }
       }
       setVisibleRootPath(parentPath);
-    }, [onPrepareNavigationRoot, parentPath, rootPath, t, workspaceEnv]);
+    }, [onPrepareNavigationRoot, parentPath, rootPath, setVisibleRootPath, t, workspaceEnv]);
 
     const moveExplorerTo = useCallback(
       async (targetPath: string, silent: boolean) => {
@@ -410,7 +399,7 @@ export const FileExplorer = memo(
         setVisibleRootPath(targetPath);
         if (!environmentChanged) tree.refresh(targetPath);
       },
-      [navigationKey, onPrepareNavigationRoot, t, tree],
+      [navigationKey, onPrepareNavigationRoot, setVisibleRootPath, t, tree],
     );
     const moveExplorerToRef = useRef(moveExplorerTo);
     moveExplorerToRef.current = moveExplorerTo;
