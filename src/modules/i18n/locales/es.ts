@@ -3112,6 +3112,14 @@ export const es: TranslationSchema = {
     dirtyQuit: "{dirty}. Salir los descartará.",
     processQuit:
       "Un proceso sigue en ejecución en una terminal. Salir lo terminará.",
+    harnessQuit:
+      "Harness tiene trabajo pendiente. Salir lo interrumpirá.",
+    harnessAndDirty:
+      "Harness tiene trabajo pendiente y {dirty}. Salir interrumpirá el trabajo y descartará los cambios.",
+    harnessAndProcessQuit:
+      "Harness tiene trabajo pendiente y un proceso sigue en ejecución en una terminal. Salir detendrá ambos.",
+    harnessProcessAndDirty:
+      "Harness tiene trabajo pendiente, un proceso sigue en ejecución en una terminal y {dirty}. Salir detendrá el trabajo y descartará los cambios.",
     dontAskProcess: "No volver a preguntar sobre procesos en ejecución",
     discardAndQuit: "Descartar y salir",
     quit: "Salir",

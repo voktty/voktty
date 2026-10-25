@@ -51,6 +51,16 @@ function appCloseMessage(
     blocker.dirtyEditors === 1
       ? t("closeDialogs.dirtyOne")
       : t("closeDialogs.dirtyMany", { count: blocker.dirtyEditors });
+  if (blocker.busyHarness) {
+    if (blocker.dirtyEditors > 0) {
+      return blocker.busyTerminal
+        ? t("closeDialogs.harnessProcessAndDirty", { dirty })
+        : t("closeDialogs.harnessAndDirty", { dirty });
+    }
+    return blocker.busyTerminal
+      ? t("closeDialogs.harnessAndProcessQuit")
+      : t("closeDialogs.harnessQuit");
+  }
   if (blocker.dirtyEditors > 0 && (blocker.busyTerminal || blocker.busyHarness)) {
     return t("closeDialogs.processAndDirty", { dirty });
   }

@@ -19,6 +19,7 @@ import { createTabIdentity } from "@/modules/tabs/lib/tabIdentity";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { windowCloseParticipants } from "@/modules/lifecycle/windowCloseParticipants";
+import { loadLocale } from "@/modules/i18n";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -200,6 +201,27 @@ it("uses one native listener and one prompt for Harness work, dirty buffers and 
   expect(commands()).not.toContain("destroy_window");
   expect(commands()).not.toContain("app_exit_after_flush");
   expect(owner.capture()).not.toBeNull();
+});
+
+it.each([
+  ["en", false, false, "Harness has unfinished work. Quitting will interrupt it."],
+  ["en", true, false, "Harness has unfinished work and a terminal process is still running. Quitting will stop both."],
+  ["en", false, true, "Harness has unfinished work and 1 file has unsaved changes. Quitting will interrupt the work and discard the changes."],
+  ["en", true, true, "Harness has unfinished work, a terminal process is still running and 1 file has unsaved changes. Quitting will stop the work and discard the changes."],
+  ["es", false, false, "Harness tiene trabajo pendiente. Salir lo interrumpirá."],
+  ["es", true, false, "Harness tiene trabajo pendiente y un proceso sigue en ejecución en una terminal. Salir detendrá ambos."],
+  ["es", false, true, "Harness tiene trabajo pendiente y 1 archivo tiene cambios sin guardar. Salir interrumpirá el trabajo y descartará los cambios."],
+  ["es", true, true, "Harness tiene trabajo pendiente, un proceso sigue en ejecución en una terminal y 1 archivo tiene cambios sin guardar. Salir detendrá el trabajo y descartará los cambios."],
+] as const)("describes Harness close hazards in %s (terminal=%s, dirty=%s)", async (language, busyTerminal, dirty, message) => {
+  await loadLocale(language);
+  usePreferencesStore.setState({ language });
+  native.foreground.mockResolvedValue(busyTerminal);
+  const tabs = [...(busyTerminal ? [terminal] : []), ...(dirty ? [editor] : [])];
+  await act(async () => root.render(<Desktop dialog tabs={tabs} />));
+  await requestClose();
+  expect(document.querySelector('[data-slot="alert-dialog-description"]')?.textContent).toBe(message);
+  expect(document.querySelector('[role="checkbox"]')).toBeNull();
+  expect(promote).not.toHaveBeenCalled();
 });
 
 it("persists the Harness before promoting and exiting through the desktop route", async () => {

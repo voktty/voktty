@@ -3029,6 +3029,14 @@ export const en = {
     dirtyQuit: "{dirty}. Quitting will discard them.",
     processQuit:
       "A process is still running in a terminal. Quitting will terminate it.",
+    harnessQuit:
+      "Harness has unfinished work. Quitting will interrupt it.",
+    harnessAndDirty:
+      "Harness has unfinished work and {dirty}. Quitting will interrupt the work and discard the changes.",
+    harnessAndProcessQuit:
+      "Harness has unfinished work and a terminal process is still running. Quitting will stop both.",
+    harnessProcessAndDirty:
+      "Harness has unfinished work, a terminal process is still running and {dirty}. Quitting will stop the work and discard the changes.",
     dontAskProcess: "Don't ask again about running processes",
     discardAndQuit: "Discard & Quit",
     quit: "Quit",
