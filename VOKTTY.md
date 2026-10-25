@@ -359,6 +359,8 @@ Desktop path opening uses `surfaces/lib/pathOpeningRequest.ts` to carry an expli
 
 Diff file-history actions carry the diff's captured filesystem into the desktop history opener. Session checkpoint review supplies its own project folder. Without a project root or an explicit history callback, the menu keeps the action visible and disabled with a localized reason and refuses unqualified delivery. Existing history callbacks retain their own routing contract.
 
+Diff default-application and file-manager actions require an absolute host-native path and the diff's own local filesystem, including native Windows paths from WSL. Unsupported destinations remain visible with a local-machine restriction and reject forced menu delivery. Absolute remote namespaces and UNC paths retain their identity when resolving diff file destinations.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

@@ -11,7 +11,12 @@ import {
 } from "../chrome/icons";
 import { t, useTranslation } from "@/modules/i18n";
 import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
-import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
+import { isNativeFolderPath } from "@/modules/explorer/lib/nativeFolderSelection";
+import {
+  isWindowsNativePath,
+  LOCAL_WORKSPACE,
+  type WorkspaceEnv,
+} from "@/modules/workspace";
 import {
   memo,
   useCallback,
@@ -78,10 +83,24 @@ type FileContextMenuState = {
 };
 
 function resolveFullPath(path: string, repoRoot?: string): string {
-  if (!repoRoot || /^(?:[a-zA-Z]:[/\\]|\/)/.test(path)) return path;
+  if (
+    !repoRoot ||
+    /^(?:[a-zA-Z]:[/\\]|[/\\]{2}|\/|[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)/.test(path)
+  )
+    return path;
   const cleanRoot = repoRoot.replace(/[/\\]+$/, "");
   const cleanRel = path.replace(/^[/\\]+/, "");
   return `${cleanRoot}/${cleanRel}`;
+}
+
+function nativeDiffPath(path: string, workspace: WorkspaceEnv): string | null {
+  if (!isNativeFolderPath(path)) return null;
+  const windowsPath = isWindowsNativePath(path);
+  if (workspace.kind !== "local" && !(workspace.kind === "wsl" && windowsPath))
+    return null;
+  return (IS_WIN ? windowsPath : path.startsWith("/") && !path.startsWith("//"))
+    ? path
+    : null;
 }
 
 function fileDiffMenuItems(
@@ -89,6 +108,7 @@ function fileDiffMenuItems(
   hasFolds = false,
   isFull = false,
   historyUnavailableReason?: string,
+  nativeUnavailableReason?: string,
 ): ExplorerMenuItem[] {
   const revealLabel = IS_MAC
     ? t("harness.chrome.revealInFinder")
@@ -117,8 +137,16 @@ function fileDiffMenuItems(
       kind: "item",
       id: "open-default",
       label: t("harness.chrome.openInDefaultApp"),
+      disabled: !!nativeUnavailableReason,
+      description: nativeUnavailableReason,
     },
-    { kind: "item", id: "reveal", label: revealLabel },
+    {
+      kind: "item",
+      id: "reveal",
+      label: revealLabel,
+      disabled: !!nativeUnavailableReason,
+      description: nativeUnavailableReason,
+    },
     { kind: "sep" },
     { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
     {
@@ -372,9 +400,11 @@ export function UnifiedDiffView({
           toggleFullFile(targetFile.id);
           return;
         case "open-default":
+          if (!nativeDiffPath(fullPath, workspaceEnv)) return;
           action = openPath(fullPath);
           break;
         case "reveal":
+          if (!nativeDiffPath(fullPath, workspaceEnv)) return;
           action = revealPath(fullPath);
           break;
         case "copy-path":
@@ -402,11 +432,21 @@ export function UnifiedDiffView({
       }
       if (action) {
         void action.catch((error) => {
-          console.error(`Failed to execute diff file action ${actionId}:`, error);
+          console.error(
+            `Failed to execute diff file action ${actionId}:`,
+            error,
+          );
         });
       }
     },
-    [fileMenu, onOpenFile, onOpenGitHistory, repoRoot, toggleFullFile, workspaceEnv],
+    [
+      fileMenu,
+      onOpenFile,
+      onOpenGitHistory,
+      repoRoot,
+      toggleFullFile,
+      workspaceEnv,
+    ],
   );
 
   if (files.length === 0) {
@@ -533,6 +573,12 @@ export function UnifiedDiffView({
             onOpenGitHistory || repoRoot?.trim()
               ? undefined
               : t("harness.chrome.noProjectFolder"),
+            nativeDiffPath(
+              resolveFullPath(fileMenu.file.path, repoRoot),
+              workspaceEnv,
+            )
+              ? undefined
+              : t("workspace.localMachine"),
           )}
           onPick={handleMenuPick}
           onClose={() => setFileMenu(null)}
@@ -805,10 +851,13 @@ function FileBody({
   onReveal: (foldId: string, direction: "up" | "down" | "all") => void;
   onStageHunk?: (id: string, pos: number) => void;
 }) {
-  if (file.binary) return <EmptyBody>{t("harness.chrome.binaryFileChanged")}</EmptyBody>;
-  if (file.tooLarge) return <EmptyBody>{t("harness.chrome.diffTooLarge")}</EmptyBody>;
+  if (file.binary)
+    return <EmptyBody>{t("harness.chrome.binaryFileChanged")}</EmptyBody>;
+  if (file.tooLarge)
+    return <EmptyBody>{t("harness.chrome.diffTooLarge")}</EmptyBody>;
   if (file.emptyMessage) return <EmptyBody>{file.emptyMessage}</EmptyBody>;
-  if (file.blocks.length === 0) return <EmptyBody>{t("harness.chrome.noTextualDiff")}</EmptyBody>;
+  if (file.blocks.length === 0)
+    return <EmptyBody>{t("harness.chrome.noTextualDiff")}</EmptyBody>;
 
   return (
     <VirtualRows
