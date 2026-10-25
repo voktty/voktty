@@ -119,6 +119,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   mocks.scroll.mockReset();
   mocks.invoke.mockReset().mockImplementation(async (command, args) => {
+    if (command === "git_resolve_repo") return null;
     if (command !== "fs_read_dir") return false;
     return args.path === "/work"
       ? [entry("src", "dir"), entry("old.ts")]
@@ -173,10 +174,10 @@ it("never reads the previous root in a newly selected filesystem", async () => {
   }
 });
 
-it("initializes the visible Explorer root with its own filesystem and no delegated initializer", async () => {
+it("initializes the visible Explorer root even when Source Control reports another repository", async () => {
   const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
   await act(async () => root.render(<FileExplorer
-    rootPath="/project" workspaceEnv={workspace} hasGitRepo={false} onOpenFile={() => {}}
+    rootPath="/project" workspaceEnv={workspace} hasGitRepo={true} onOpenFile={() => {}}
   />));
   mocks.invoke.mockClear();
   const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
@@ -184,6 +185,45 @@ it("initializes the visible Explorer root with its own filesystem and no delegat
   expect(button?.disabled).toBe(false);
   await act(async () => button?.click());
   expect(mocks.invoke).toHaveBeenCalledWith("git_init", { cwd: "/project", workspace });
+});
+
+it("hides initialization for its own repository despite a negative Source Control badge", async () => {
+  mocks.invoke.mockImplementation(async (command) => command === "git_resolve_repo" ? { repoRoot: "/project" } : []);
+  await act(async () => root.render(<FileExplorer rootPath="/project" workspaceEnv={local} hasGitRepo={false} onOpenFile={() => {}} />));
+  expect(node.querySelector('button[aria-label="Initialize Repository"]')).toBeNull();
+});
+
+it("refreshes repository discovery after initialization completes", async () => {
+  let initialized = false;
+  mocks.invoke.mockImplementation(async (command) => {
+    if (command === "git_init") { initialized = true; return; }
+    if (command === "git_resolve_repo") return initialized ? { repoRoot: "/project" } : null;
+    return [];
+  });
+  await act(async () => root.render(<FileExplorer rootPath="/project" workspaceEnv={local} onOpenFile={() => {}} />));
+  const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
+  expect(button).not.toBeNull();
+  await act(async () => button?.click());
+  expect(initialized).toBe(true);
+  expect(node.querySelector('button[aria-label="Initialize Repository"]')).toBeNull();
+});
+
+it("discovers and initializes a manually selected parent instead of its source cwd", async () => {
+  const workspace: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
+  mocks.invoke.mockImplementation(async (command, args) => {
+    if (command === "git_resolve_repo") return args.cwd === "/parent/repo" ? { repoRoot: "/parent/repo" } : null;
+    if (command === "git_init") return;
+    return [];
+  });
+  await act(async () => root.render(<FileExplorer rootPath="/parent/repo" workspaceEnv={workspace} hasGitRepo={true} onOpenFile={() => {}} />));
+  expect(node.querySelector('button[aria-label="Initialize Repository"]')).toBeNull();
+  const parent = node.querySelector<HTMLButtonElement>('button[aria-label="Go to parent directory"]');
+  expect(parent).not.toBeNull();
+  await act(async () => parent?.click());
+  const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
+  expect(button).not.toBeNull();
+  await act(async () => button?.click());
+  expect(mocks.invoke).toHaveBeenCalledWith("git_init", { cwd: "/parent", workspace });
 });
 
 it("resets manual navigation when only the filesystem changes", async () => {

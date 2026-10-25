@@ -65,6 +65,7 @@ import {
 } from "@/modules/explorer/lib/useExplorerReveal";
 import { useGitStatus } from "./lib/useGitStatus";
 import { useExplorerRepositoryInitialization } from "@/modules/explorer/lib/useExplorerRepositoryInitialization";
+import { useExplorerRepository } from "@/modules/explorer/lib/useExplorerRepository";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
@@ -294,6 +295,7 @@ export const FileExplorer = memo(
       navigationKey,
     });
     const refreshRequestRef = useRef(0);
+    const repository = useExplorerRepository({ scope: rootSource, rootPath, workspace: workspaceEnv });
     const refreshPendingNavigationRef = useRef<string | null | undefined>(null);
     useEffect(() => {
       refreshRequestRef.current += 1;
@@ -414,7 +416,8 @@ export const FileExplorer = memo(
       } catch {}
       if (!targetPath) return;
       await moveExplorerTo(targetPath, false);
-    }, [moveExplorerTo, onSyncToTerminal, sourceRootPath]);
+      if (targetPath === rootPath) repository.refresh();
+    }, [moveExplorerTo, onSyncToTerminal, sourceRootPath, rootPath, repository.refresh]);
 
     // The terminal moved to a folder the current remote session cannot list,
     // typically through a symlink or above the project root. Follow it once per
@@ -436,7 +439,8 @@ export const FileExplorer = memo(
 
     const handleRefreshCurrent = useCallback(() => {
       if (rootPath) tree.refresh(rootPath);
-    }, [rootPath, tree.refresh]);
+      repository.refresh();
+    }, [rootPath, tree.refresh, repository.refresh]);
 
     const [menuTarget, setMenuTarget] = useState<{
       path: string;
@@ -952,7 +956,7 @@ export const FileExplorer = memo(
           >
             <HugeiconsIcon icon={Refresh01Icon} size={12} strokeWidth={2} />
           </Button>
-          {hasGitRepo === false && rootPath && (
+          {(repository.hasRepo === false || !canInitGit) && rootPath && (
             <Button
               variant="ghost"
               size="icon"
@@ -1376,7 +1380,7 @@ export const FileExplorer = memo(
                       {t("preview.openPreview")}
                     </ContextMenuItem>
                   )}
-                  {hasGitRepo === false && rootPath && (
+                  {(repository.hasRepo === false || !canInitGit) && rootPath && (
                     <ContextMenuItem
                       className={COMPACT_ITEM}
                       disabled={!canInitGit}
