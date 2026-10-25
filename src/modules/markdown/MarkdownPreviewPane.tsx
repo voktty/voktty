@@ -18,6 +18,8 @@ import {
   PencilEdit02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { remoteProjectForPath } from "@/modules/connections/model/remoteProjects";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   isPathInRemoteWorkspace,
   remoteReadDocument,
@@ -44,7 +46,7 @@ import {
   type HighlightColor,
   normalizeHighlightPath,
   useDocumentHighlightStore,
-} from "../editor/store/documentHighlightStore";
+} from "@/modules/editor/store/documentHighlightStore";
 import { MarkdownDocContext } from "./lib/docContext";
 import { MarkdownImage } from "./MarkdownImage";
 import { MarkdownLink } from "./MarkdownLink";
@@ -208,12 +210,30 @@ export const MarkdownPreviewPane = forwardRef<MarkdownSearchHandle, Props>(
       let cancelled = false;
       setStatus({ kind: "loading" });
       const workspace = workspaceForDocumentPath(workspaceEnv, path);
-      const read = isPathInRemoteWorkspace(workspace, path)
-        ? remoteReadDocument(workspace, path, false)
-        : invoke<ReadResult>("fs_read_file", {
-            path,
-            workspace: workspaceForNativeFs(workspace, path),
-          });
+      const isNamespace = path.replace(/\\/g, "/").startsWith("remote://");
+      const project = isNamespace ? remoteProjectForPath(path) : undefined;
+      const profiles = isNamespace
+        ? (usePreferencesStore.getState().sshConnections ?? []).map(
+            (profile) => ({ ...profile }),
+          )
+        : [];
+      const read = isNamespace
+        ? import("@/modules/remote/projectDocument").then(
+            ({ createProjectDocument, assertProjectDocumentCurrent }) => {
+              const isCurrent = () => !cancelled;
+              assertProjectDocumentCurrent(isCurrent);
+              return createProjectDocument(path, project, profiles).read(
+                false,
+                isCurrent,
+              );
+            },
+          )
+        : isPathInRemoteWorkspace(workspace, path)
+          ? remoteReadDocument(workspace, path, false)
+          : invoke<ReadResult>("fs_read_file", {
+              path,
+              workspace: workspaceForNativeFs(workspace, path),
+            });
       read
         .then((res) => {
           if (cancelled) return;
