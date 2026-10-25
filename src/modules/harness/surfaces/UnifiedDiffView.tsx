@@ -12,12 +12,11 @@ import {
 import { t, useTranslation } from "@/modules/i18n";
 import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
 import { useGitHistoryRequest } from "@/modules/source-control/gitHistoryRequest";
-import { isNativeFolderPath } from "@/modules/explorer/lib/nativeFolderSelection";
 import {
-  isWindowsNativePath,
-  LOCAL_WORKSPACE,
-  type WorkspaceEnv,
-} from "@/modules/workspace";
+  nativeFileActionPath,
+  resolveFileActionPath,
+} from "@/modules/surfaces/lib/fileActionTarget";
+import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
 import {
   memo,
   useCallback,
@@ -82,27 +81,6 @@ type FileContextMenuState = {
   hasFolds: boolean;
   isFull: boolean;
 };
-
-function resolveFullPath(path: string, repoRoot?: string): string {
-  if (
-    !repoRoot ||
-    /^(?:[a-zA-Z]:[/\\]|[/\\]{2}|\/|[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)/.test(path)
-  )
-    return path;
-  const cleanRoot = repoRoot.replace(/[/\\]+$/, "");
-  const cleanRel = path.replace(/^[/\\]+/, "");
-  return `${cleanRoot}/${cleanRel}`;
-}
-
-function nativeDiffPath(path: string, workspace: WorkspaceEnv): string | null {
-  if (!isNativeFolderPath(path)) return null;
-  const windowsPath = isWindowsNativePath(path);
-  if (workspace.kind !== "local" && !(workspace.kind === "wsl" && windowsPath))
-    return null;
-  return (IS_WIN ? windowsPath : path.startsWith("/") && !path.startsWith("//"))
-    ? path
-    : null;
-}
 
 function fileDiffMenuItems(
   t: (key: string) => string,
@@ -216,6 +194,17 @@ export function UnifiedDiffView({
     Record<string, Record<string, FoldReveal>>
   >({});
   const [fileMenu, setFileMenu] = useState<FileContextMenuState | null>(null);
+  const menuBinding = useMemo(
+    () => ({ fileMenu, repoRoot, workspaceEnv, onOpenFile, onOpenGitHistory }),
+    [fileMenu, repoRoot, workspaceEnv, onOpenFile, onOpenGitHistory],
+  );
+  const menuOwner = useRef<typeof menuBinding | null>(null);
+  useLayoutEffect(() => {
+    menuOwner.current = menuBinding;
+    return () => {
+      if (menuOwner.current === menuBinding) menuOwner.current = null;
+    };
+  }, [menuBinding]);
   useLayoutEffect(() => setFileMenu(null), [repoRoot, workspaceEnv]);
   const fileRefs = useRef(new Map<string, HTMLElement>());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -384,10 +373,11 @@ export function UnifiedDiffView({
 
   const handleMenuPick = useCallback(
     (actionId: string) => {
-      if (!fileMenu) return;
+      if (!fileMenu || menuOwner.current !== menuBinding) return;
+      menuOwner.current = null;
       const targetFile = fileMenu.file;
       setFileMenu(null);
-      const fullPath = resolveFullPath(targetFile.path, repoRoot);
+      const fullPath = resolveFileActionPath(targetFile.path, repoRoot);
 
       let action: Promise<void> | void;
       switch (actionId) {
@@ -402,11 +392,11 @@ export function UnifiedDiffView({
           toggleFullFile(targetFile.id);
           return;
         case "open-default":
-          if (!nativeDiffPath(fullPath, workspaceEnv)) return;
+          if (!nativeFileActionPath(fullPath, workspaceEnv, IS_WIN)) return;
           action = openPath(fullPath);
           break;
         case "reveal":
-          if (!nativeDiffPath(fullPath, workspaceEnv)) return;
+          if (!nativeFileActionPath(fullPath, workspaceEnv, IS_WIN)) return;
           action = revealPath(fullPath);
           break;
         case "copy-path":
@@ -439,6 +429,7 @@ export function UnifiedDiffView({
     },
     [
       fileMenu,
+      menuBinding,
       onOpenFile,
       onOpenGitHistory,
       openHistory,
@@ -572,9 +563,10 @@ export function UnifiedDiffView({
             onOpenGitHistory || repoRoot?.trim()
               ? undefined
               : t("harness.chrome.noProjectFolder"),
-            nativeDiffPath(
-              resolveFullPath(fileMenu.file.path, repoRoot),
+            nativeFileActionPath(
+              resolveFileActionPath(fileMenu.file.path, repoRoot),
               workspaceEnv,
+              IS_WIN,
             )
               ? undefined
               : t("workspace.localMachine"),

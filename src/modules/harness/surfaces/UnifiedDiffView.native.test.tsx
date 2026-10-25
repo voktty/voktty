@@ -204,3 +204,22 @@ it("keeps an absolute remote namespace intact for internal opening", async () =>
   expect(mocks.open).not.toHaveBeenCalled();
   expect(mocks.reveal).not.toHaveBeenCalled();
 });
+
+it.each(["root", "filesystem", "unmount"])(
+  "retires a cached native menu after %s changes",
+  async (change) => {
+    await menu("file.ts", "/project", LOCAL_WORKSPACE);
+    const oldPick = mocks.pick;
+    if (change === "unmount") await act(async () => root.render(null));
+    else {
+      await menu(
+        "file.ts",
+        change === "root" ? "/other" : "/project",
+        change === "filesystem" ? ssh : LOCAL_WORKSPACE,
+      );
+      await menu("file.ts", "/project", LOCAL_WORKSPACE);
+    }
+    await act(async () => oldPick("open-default"));
+    expect(mocks.open).not.toHaveBeenCalled();
+  },
+);

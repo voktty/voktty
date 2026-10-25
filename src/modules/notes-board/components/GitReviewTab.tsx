@@ -34,6 +34,7 @@ import {
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
+import { nativeFileActionPath, resolveFileActionPath } from "@/modules/surfaces/lib/fileActionTarget";
 import { useGitHistoryRequest } from "@/modules/source-control/gitHistoryRequest";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { ExplorerMenu, type ExplorerMenuItem } from "@/modules/harness/chrome/ExplorerMenu";
@@ -69,7 +70,7 @@ type Props = {
   onActivateAgent?: (tabId: number, leafId: number) => void;
 };
 
-function reviewFileMenuItems(t: (key: string) => string): ExplorerMenuItem[] {
+function reviewFileMenuItems(t: (key: string) => string, nativeUnavailableReason?: string): ExplorerMenuItem[] {
   const revealLabel = IS_MAC
     ? t("harness.chrome.revealInFinder")
     : IS_WIN
@@ -78,8 +79,8 @@ function reviewFileMenuItems(t: (key: string) => string): ExplorerMenuItem[] {
 
   return [
     { kind: "item", id: "open-file", label: t("harness.chrome.openFile") },
-    { kind: "item", id: "open-default", label: t("harness.chrome.openInDefaultApp") },
-    { kind: "item", id: "reveal", label: revealLabel },
+    { kind: "item", id: "open-default", label: t("harness.chrome.openInDefaultApp"), disabled: !!nativeUnavailableReason, description: nativeUnavailableReason },
+    { kind: "item", id: "reveal", label: revealLabel, disabled: !!nativeUnavailableReason, description: nativeUnavailableReason },
     { kind: "sep" },
     { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
     { kind: "item", id: "copy-relative-path", label: t("harness.chrome.copyRelativePath") },
@@ -140,16 +141,21 @@ export function GitReviewTab({ cwd = null }: Props) {
   const hasRepo = sourceControl.hasRepo;
   const branchName = sourceControl.status?.branch ?? "";
   const openHistory = useGitHistoryRequest({ repoRoot, branch: branchName, workspaceEnv: activeWorkspaceEnv });
+  const menuBinding = useMemo(() => ({ fileMenu, repoRoot, activeWorkspaceEnv, openHistory }), [fileMenu, repoRoot, activeWorkspaceEnv, openHistory]);
+  const menuOwner = useRef<typeof menuBinding | null>(null);
+  useLayoutEffect(() => {
+    menuOwner.current = menuBinding;
+    return () => { if (menuOwner.current === menuBinding) menuOwner.current = null; };
+  }, [menuBinding]);
   useLayoutEffect(() => setFileMenu(null), [repoRoot, activeWorkspaceEnv]);
 
   const handleMenuPick = useCallback(
     (actionId: string) => {
-      if (!fileMenu) return;
+      if (!fileMenu || menuOwner.current !== menuBinding) return;
+      menuOwner.current = null;
       const target = fileMenu.entry;
       setFileMenu(null);
-      const fullPath = repoRoot
-        ? `${repoRoot.replace(/[/\\]+$/, "")}/${target.path.replace(/^[/\\]+/, "")}`
-        : target.path;
+      const fullPath = resolveFileActionPath(target.path, repoRoot);
 
       let action: Promise<void> | void;
       switch (actionId) {
@@ -157,9 +163,11 @@ export function GitReviewTab({ cwd = null }: Props) {
           requestPathOpening(fullPath, activeWorkspaceEnv);
           return;
         case "open-default":
+          if (!nativeFileActionPath(fullPath, activeWorkspaceEnv, IS_WIN)) return;
           action = openPath(fullPath);
           break;
         case "reveal":
+          if (!nativeFileActionPath(fullPath, activeWorkspaceEnv, IS_WIN)) return;
           action = revealPath(fullPath);
           break;
         case "copy-path":
@@ -183,7 +191,7 @@ export function GitReviewTab({ cwd = null }: Props) {
         });
       }
     },
-    [activeWorkspaceEnv, openHistory, fileMenu, repoRoot],
+    [activeWorkspaceEnv, openHistory, fileMenu, menuBinding, repoRoot],
   );
 
   const changedFiles = useMemo(
@@ -934,7 +942,7 @@ export function GitReviewTab({ cwd = null }: Props) {
           <ExplorerMenu
             x={fileMenu.x}
             y={fileMenu.y}
-            items={reviewFileMenuItems(t)}
+            items={reviewFileMenuItems(t, nativeFileActionPath(resolveFileActionPath(fileMenu.entry.path, repoRoot), activeWorkspaceEnv, IS_WIN) ? undefined : t("workspace.localMachine"))}
             onPick={handleMenuPick}
             onClose={() => setFileMenu(null)}
           />
