@@ -390,10 +390,13 @@ export async function stopPresetSessions(presetId: string): Promise<void> {
 
 export async function lspFormatDocument(
   view: EditorView,
+  isCurrent: () => boolean = () => true,
 ): Promise<"done" | "unsupported"> {
+  if (!isCurrent()) return "done";
   if (sessions.size === 0) return "unsupported";
   const { formatDocumentAndWait } = await import("./client");
-  return formatDocumentAndWait(view);
+  if (!isCurrent()) return "done";
+  return formatDocumentAndWait(view, isCurrent);
 }
 
 export async function lspOpenCodeActions(

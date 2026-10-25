@@ -1,6 +1,13 @@
 import { quoteShellArg } from "@/lib/shellQuote";
+import { IS_WINDOWS } from "@/lib/platform";
+import { t } from "@/modules/i18n";
 import type { EditorFormatter } from "@/modules/settings/store";
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import {
+  currentWorkspaceEnv,
+  LOCAL_WORKSPACE,
+  type WorkspaceEnv,
+  workspaceForDocumentPath,
+} from "@/modules/workspace";
 import type { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -96,15 +103,40 @@ export function resolveFormatter(
 function dirname(path: string): string {
   const segs = path.split(/[\\/]/);
   segs.pop();
-  return segs.join("/") || "/";
+  const parent = segs.join("/") || "/";
+  return /^[a-zA-Z]:$/.test(parent) ? `${parent}/` : parent;
+}
+
+export function formatterWorkspace(
+  path: string,
+  workspace: WorkspaceEnv,
+  windows = IS_WINDOWS,
+): WorkspaceEnv | undefined {
+  if (
+    path.length > 32768 ||
+    /[\0\r\n]/.test(path) ||
+    !/^(?:[a-zA-Z]:[\\/]|[\\/]{2}|\/)/.test(path)
+  )
+    return undefined;
+  const owner = workspaceForDocumentPath(workspace, path);
+  if (owner.kind === "wsl") return windows ? { ...owner } : undefined;
+  if (owner.kind !== "local") return undefined;
+  if (
+    workspace.kind !== "local" &&
+    workspace.kind !== "wsl" &&
+    !/^(?:[a-zA-Z]:[\\/]|[\\/]{2})/.test(path)
+  )
+    return undefined;
+  return LOCAL_WORKSPACE;
 }
 
 function buildCommand(
   formatter: ExternalFormatter,
   path: string,
   customTemplate: string,
+  windows: boolean,
 ): string | null {
-  const quoted = quoteShellArg(path);
+  const quoted = quoteShellArg(path, windows);
   if (formatter === "custom") {
     const template = customTemplate.trim();
     if (!template) return null;
@@ -120,8 +152,18 @@ export async function runExternalFormatter(
   formatter: ExternalFormatter,
   path: string,
   customTemplate = "",
+  workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE,
+  isCurrent: () => boolean = () => true,
 ): Promise<string | null> {
-  const command = buildCommand(formatter, path, customTemplate);
+  if (!isCurrent()) return null;
+  const workspace = formatterWorkspace(path, workspaceEnv);
+  if (!workspace) return t("git.unsupportedFilesystem");
+  const command = buildCommand(
+    formatter,
+    path,
+    customTemplate,
+    workspace.kind === "wsl" ? false : IS_WINDOWS,
+  );
   if (!command) {
     return "No custom format command configured in Settings.";
   }
@@ -130,26 +172,34 @@ export async function runExternalFormatter(
       command,
       cwd: dirname(path),
       timeoutSecs: 20,
-      workspace: currentWorkspaceEnv(),
+      workspace,
     });
+    if (!isCurrent()) return null;
     if (out.timed_out) return `${formatter} timed out`;
     if (out.exit_code !== 0) {
       return out.stderr.trim().slice(-300) || `${formatter} failed`;
     }
     return null;
   } catch (e) {
-    return String(e);
+    return isCurrent() ? String(e) : null;
   }
 }
 
 export async function readFileText(
   path: string,
+  workspaceEnv?: WorkspaceEnv,
+  isCurrent: () => boolean = () => true,
 ): Promise<{ text: string; mtime: number } | null> {
+  if (!isCurrent()) return null;
+  const workspace = workspaceEnv
+    ? formatterWorkspace(path, workspaceEnv)
+    : currentWorkspaceEnv();
+  if (!workspace) return null;
   const res = await invoke<ReadResult>("fs_read_file", {
     path,
-    workspace: currentWorkspaceEnv(),
+    workspace,
   }).catch(() => null);
-  if (res?.kind !== "text" || res.content == null) return null;
+  if (!isCurrent() || res?.kind !== "text" || res.content == null) return null;
   return { text: res.content, mtime: res.mtime ?? 0 };
 }
 

@@ -137,12 +137,7 @@ import {
   wordWrapExtension,
   wrapCompartment,
 } from "./lib/extensions";
-import {
-  applyFormattedContent,
-  readFileText,
-  resolveFormatter,
-  runExternalFormatter,
-} from "./lib/externalFormat";
+import { useEditorFormatting } from "./lib/useEditorFormatting";
 import { detectIndentUnit } from "./lib/indent";
 import { requestInlineEdit } from "./lib/inlineEditService";
 import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
@@ -421,8 +416,6 @@ export const EditorPane = memo(
 
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
-    const adoptDiskTextRef = useRef(adoptDiskText);
-    adoptDiskTextRef.current = adoptDiskText;
     const cmRef = useRef<ReactCodeMirrorRef>(null);
     const documentChangeListenersRef = useRef(new Set<() => void>());
     const viewStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -519,90 +512,40 @@ export const EditorPane = memo(
         unsubPrefs();
       };
     }, []);
-    // Stabilize save + onSaved via refs so the extensions array never changes
-    // identity — a new identity makes @uiw/react-codemirror reconfigure the
-    // whole state, wiping the language compartment.
-    const saveRef = useRef(save);
-    saveRef.current = save;
-    const onSavedRef = useRef(onSaved);
-    onSavedRef.current = onSaved;
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
     const lspActiveRef = useRef(false);
-    const warnedNoLspRef = useRef(false);
-    const warnedNoFormatRef = useRef(false);
     const docContent = doc.status === "ready" ? doc.content : "";
     const docSize = doc.status === "ready" ? doc.size : 0;
 
-    const performSave = useCallback(async () => {
-      const view = cmRef.current?.view;
-      const prefs = usePreferencesStore.getState();
-      const formatter = resolveFormatter(languageRef.current, prefs);
-      if (prefs.editorFormatOnSave && formatter === "lsp" && view) {
-        if (lspActiveRef.current) {
-          let res: "done" | "unsupported" = "done";
-          try {
-            res = await lspFormatDocument(view);
-          } catch (e) {
-            toast.error(t("feedback.editorLanguageServerFormatFailed"), {
-              description: String(e),
-            });
-          }
-          if (res === "unsupported" && !warnedNoFormatRef.current) {
-            warnedNoFormatRef.current = true;
-            toast.warning(t("feedback.editorFormatOnSaveSkipped"), {
-              description: t("feedback.editorNoFormatter"),
-            });
-          }
-        } else if (!warnedNoLspRef.current) {
-          warnedNoLspRef.current = true;
-          toast.warning(t("feedback.editorFormatOnSaveSkipped"), {
-            description: t("feedback.editorNoLanguageServer"),
-          });
-        }
-      }
-      // Snapshot before save: edits typed during the formatter round-trip
-      const docAtSave = view?.state.doc;
-      const saved = await saveRef.current();
-      if (!saved) return;
-      initialContentRef.current = view ? view.state.doc.toString() : docContent;
-      if (view) {
+    const initialContentRef = useRef<string>("");
+    const formatting = useEditorFormatting({
+      path,
+      workspaceEnv,
+      getView: () => cmRef.current?.view,
+      getLanguage: () => languageRef.current,
+      isLspActive: () => lspActiveRef.current,
+      formatLsp: lspFormatDocument,
+      save,
+      adoptDiskText,
+      onBaseline: (view, content) => {
+        initialContentRef.current = content;
         view.dispatch({
-          effects: diffGutterCompartment.reconfigure(
-            createDiffGutter(initialContentRef.current),
-          ),
+          effects: diffGutterCompartment.reconfigure(createDiffGutter(content)),
         });
-      }
-      if (prefs.editorFormatOnSave && formatter !== "lsp") {
-        const error = await runExternalFormatter(
-          formatter,
-          pathRef.current,
-          prefs.editorCustomFormatCommand,
-        );
-        if (error) {
-          toast.error(t("feedback.formatterFormatFailed", { formatter }), {
-            description: error,
-          });
-        } else {
-          const readBack = await readFileText(pathRef.current);
-          if (readBack !== null && view && view.state.doc === docAtSave) {
-            applyFormattedContent(
-              view,
-              adoptDiskTextRef.current(readBack.text, readBack.mtime),
-            );
-          }
-        }
-      }
-      onSavedRef.current?.();
-      playVokttySound("success", { retrigger: "restart" });
-    }, [docContent, t]);
+      },
+      onSaved: (isCurrent) => {
+        onSaved?.();
+        if (isCurrent()) playVokttySound("success", { retrigger: "restart" });
+      },
+    });
+    const performSave = formatting.save;
     const performSaveRef = useRef(performSave);
     performSaveRef.current = performSave;
 
     const pathRef = useRef(path);
     pathRef.current = path;
 
-    const initialContentRef = useRef<string>("");
     useEffect(() => {
       if (doc.status === "ready" && !initialContentRef.current) {
         initialContentRef.current = docContent;
@@ -859,42 +802,7 @@ export const EditorPane = memo(
       };
     }, [activePeekItem, path]);
 
-    const handleFormatDocument = useCallback(async () => {
-      const view = cmRef.current?.view;
-      if (!view) return;
-      if (lspActiveRef.current) {
-        try {
-          await lspFormatDocument(view);
-        } catch (e) {
-          toast.error(t("feedback.editorFormatFailed"), {
-            description: String(e),
-          });
-        }
-      } else {
-        const prefs = usePreferencesStore.getState();
-        const formatter = resolveFormatter(languageRef.current, prefs);
-        if (formatter !== "lsp") {
-          const err = await runExternalFormatter(
-            formatter,
-            pathRef.current,
-            prefs.editorCustomFormatCommand,
-          );
-          if (err) {
-            toast.error(t("feedback.formatterFormatFailed", { formatter }), {
-              description: err,
-            });
-          } else {
-            const readBack = await readFileText(pathRef.current);
-            if (readBack !== null) {
-              applyFormattedContent(
-                view,
-                adoptDiskTextRef.current(readBack.text, readBack.mtime),
-              );
-            }
-          }
-        }
-      }
-    }, [t]);
+    const handleFormatDocument = formatting.format;
 
     const pendingLineRef = useRef<{
       path: string;
@@ -2175,6 +2083,9 @@ export const EditorPane = memo(
           </ContextMenuItem>
           <ContextMenuItem
             onSelect={() => void handleFormatDocument()}
+            disabled={!!formatting.unavailableReason}
+            title={formatting.unavailableReason}
+            aria-description={formatting.unavailableReason}
             className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent focus:text-accent-foreground"
           >
             <HugeiconsIcon

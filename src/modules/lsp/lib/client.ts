@@ -391,7 +391,9 @@ function signatureHelpTriggers(client: VokttyLspClient): Extension {
 // silently doing nothing.
 export async function formatDocumentAndWait(
   view: EditorView,
+  isCurrent: () => boolean = () => true,
 ): Promise<LspFormatResult> {
+  if (!isCurrent()) return "done";
   const plugin = view.plugin(languageServerPlugin);
   if (!plugin) return "unsupported";
   const { client } = plugin;
@@ -399,8 +401,9 @@ export async function formatDocumentAndWait(
     return "unsupported";
   }
   const doc = view.state.doc;
+  const documentUri = plugin.documentUri;
   const edits = await client.textDocumentFormatting({
-    textDocument: { uri: plugin.documentUri },
+    textDocument: { uri: documentUri },
     options: {
       tabSize: view.state.tabSize,
       insertSpaces: view.state.facet(indentUnit) !== "\t",
@@ -409,7 +412,15 @@ export async function formatDocumentAndWait(
   if (!edits || edits.length === 0) return "done";
   // Edits are offsets into the requested snapshot; typing during the
   // round-trip would corrupt the document.
-  if (view.state.doc !== doc) return "done";
+  if (
+    !isCurrent() ||
+    view.plugin(languageServerPlugin) !== plugin ||
+    plugin.client !== client ||
+    plugin.documentUri !== documentUri ||
+    view.state.doc !== doc
+  ) {
+    return "done";
+  }
   view.dispatch({
     changes: edits.map((e) => ({
       from: offsetOf(doc, e.range.start),
