@@ -954,19 +954,19 @@ export function useSourceControlPanel(
         await runMutation(
           `unstage:${entry.path}`,
           (s) => optimisticUnstage(s, paths),
-          () => native.gitUnstage(repo.repoRoot, [entry.path]),
+          () => native.gitUnstage(repo.repoRoot, [entry.path], workspaceEnv),
           [entry.path],
         );
       } else {
         await runMutation(
           `stage:${entry.path}`,
           (s) => optimisticStage(s, paths),
-          () => native.gitStage(repo.repoRoot, [entry.path]),
+          () => native.gitStage(repo.repoRoot, [entry.path], workspaceEnv),
           [entry.path],
         );
       }
     },
-    [repo, runMutation],
+    [repo, runMutation, workspaceEnv],
   );
 
   const toggleStageFolder = useCallback(
