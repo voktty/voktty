@@ -633,6 +633,10 @@ export function useSourceControlPanel(
     [capturePanelOwner, repo, summary.repo],
   );
   const dirtyPathsRef = useRef(dirtyPaths);
+  const [semanticGroups, setSemanticGroups] = useState<SemanticCommitGroup[]>(
+    [],
+  );
+  const [semanticStagingOpen, setSemanticStagingOpen] = useState(false);
   useLayoutEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
   }, [dirtyPaths]);
@@ -643,14 +647,12 @@ export function useSourceControlPanel(
     setLocalActionBusy(null);
     setActionMessage(null);
     setActionError(null);
+    setSemanticGroups([]);
+    setSemanticStagingOpen(false);
     return () => {
       if (!isCurrent?.()) discardRef.current = null;
     };
   }, [capturePanelOwner]);
-  const [semanticGroups, setSemanticGroups] = useState<SemanticCommitGroup[]>(
-    [],
-  );
-  const [semanticStagingOpen, setSemanticStagingOpen] = useState(false);
   const selectedRef = useRef<DiffSelection | null>(null);
   const reconcileTimerRef = useRef(0);
 
@@ -1233,48 +1235,56 @@ export function useSourceControlPanel(
   const generateCommitMessage = useCallback(async () => {
     if (!isAiRuntimeAvailable()) return;
     const hasStaged = stagedEntries.length > 0;
-    const targetEntries = hasStaged ? stagedEntries : fileEntries;
+    const targetEntries = (hasStaged ? stagedEntries : fileEntries).map(
+      (entry) => ({ ...entry }),
+    );
     if (!repo || targetEntries.length === 0) return;
-    if (aiBusy) {
-      setActionError(t("feedback.waitAiAction"));
-      return;
-    }
-    if (aiUnavailableReason) {
-      setActionError(aiUnavailableReason);
-      return;
-    }
-    setLocalActionBusy("generate-message");
-    setActionMessage(null);
-    setActionError(null);
+    const action = beginAction();
+    if (!action) return;
+    const { isCurrent } = action;
     try {
-      const [{ buildConfiguredLanguageModel }, { generateText }, diff] =
-        await Promise.all([
-          import("@/modules/ai/lib/agent"),
-          import("ai"),
-          native.gitDiff(repo.repoRoot, null, hasStaged),
-        ]);
-      const { text: diffText, truncated } = truncateDiff(diff.diffText);
-      const chatState = useChatStore.getState();
+      if (aiBusy) {
+        setActionError(t("feedback.waitAiAction"));
+        return;
+      }
+      if (aiUnavailableReason) {
+        setActionError(aiUnavailableReason);
+        return;
+      }
+      setLocalActionBusy("generate-message");
+      setActionMessage(null);
+      setActionError(null);
+      const apiKeys = { ...useChatStore.getState().apiKeys };
       const prefs = usePreferencesStore.getState();
       const targetLanguageName = prefs.gitCommitMessageUseEditorLanguage
         ? COMMIT_MESSAGE_LANGUAGE_NAMES[prefs.language] || prefs.language
         : undefined;
 
+      const modelPreferences = {
+        lmstudioBaseURL: prefs.lmstudioBaseURL,
+        lmstudioModelId,
+        mlxBaseURL: prefs.mlxBaseURL,
+        mlxModelId,
+        ollamaBaseURL: prefs.ollamaBaseURL,
+        ollamaModelId,
+        openaiCompatibleBaseURL,
+        openaiCompatibleModelId,
+        openrouterModelId,
+      };
+      const [{ buildConfiguredLanguageModel }, { generateText }, diff] =
+        await Promise.all([
+          import("@/modules/ai/lib/agent"),
+          import("ai"),
+          native.gitDiff(repo.repoRoot, null, hasStaged, workspaceEnv),
+        ]);
+      if (!isCurrent()) return;
+      const { text: diffText, truncated } = truncateDiff(diff.diffText);
       const model = await buildConfiguredLanguageModel(
         selectedModelId,
-        chatState.apiKeys,
-        {
-          lmstudioBaseURL: prefs.lmstudioBaseURL,
-          lmstudioModelId,
-          mlxBaseURL: prefs.mlxBaseURL,
-          mlxModelId,
-          ollamaBaseURL: prefs.ollamaBaseURL,
-          ollamaModelId,
-          openaiCompatibleBaseURL,
-          openaiCompatibleModelId,
-          openrouterModelId,
-        },
+        apiKeys,
+        modelPreferences,
       );
+      if (!isCurrent()) return;
       const result = await generateText({
         model,
         system: getCommitMessageSystemPrompt(targetLanguageName),
@@ -1287,6 +1297,7 @@ export function useSourceControlPanel(
         maxOutputTokens: COMMIT_MESSAGE_MAX_OUTPUT_TOKENS,
         ...(selectedModelSupportsTemperature ? { temperature: 0.2 } : {}),
       });
+      if (!isCurrent()) return;
       let message = cleanCommitMessage(result.text);
       if (!isValidCommitMessage(message)) {
         const repair = await generateText({
@@ -1296,6 +1307,7 @@ export function useSourceControlPanel(
           maxOutputTokens: COMMIT_MESSAGE_MAX_OUTPUT_TOKENS,
           ...(selectedModelSupportsTemperature ? { temperature: 0 } : {}),
         });
+        if (!isCurrent()) return;
         message = cleanCommitMessage(repair.text);
       }
       if (!isValidCommitMessage(message)) {
@@ -1304,13 +1316,15 @@ export function useSourceControlPanel(
       setCommitMessage(message);
       setActionMessage(null);
     } catch (error) {
-      setActionError(normalizeError(error));
+      if (isCurrent()) setActionError(normalizeError(error));
     } finally {
-      setLocalActionBusy(null);
+      if (isCurrent()) setLocalActionBusy(null);
+      action.finish();
     }
   }, [
     aiBusy,
     aiUnavailableReason,
+    beginAction,
     fileEntries,
     lmstudioModelId,
     mlxModelId,
@@ -1323,23 +1337,27 @@ export function useSourceControlPanel(
     selectedModelSupportsTemperature,
     stagedEntries,
     t,
+    workspaceEnv,
   ]);
 
   const generateSemanticGroups = useCallback(async () => {
     if (!isAiRuntimeAvailable()) return;
     if (!repo || fileEntries.length === 0) return;
-    if (aiBusy) {
-      setActionError(t("feedback.waitAiAction"));
-      return;
-    }
-    if (!hasApiKeyForSelected) {
-      setActionError(t("feedback.connectAiForSemanticStaging"));
-      return;
-    }
-    setLocalActionBusy("semantic-staging");
-    setActionMessage(null);
-    setActionError(null);
+    const action = beginAction();
+    if (!action) return;
+    const { isCurrent } = action;
     try {
+      if (aiBusy) {
+        setActionError(t("feedback.waitAiAction"));
+        return;
+      }
+      if (!hasApiKeyForSelected) {
+        setActionError(t("feedback.connectAiForSemanticStaging"));
+        return;
+      }
+      setLocalActionBusy("semantic-staging");
+      setActionMessage(null);
+      setActionError(null);
       const chatState = useChatStore.getState();
       const prefs = usePreferencesStore.getState();
       const groups = await generateSemanticStagingGroups({
@@ -1358,19 +1376,24 @@ export function useSourceControlPanel(
           openaiCompatibleModelId,
           openrouterModelId,
         },
+        workspaceEnv,
+        isCurrent,
       });
+      if (!isCurrent()) return;
       setSemanticGroups(groups);
       setSemanticStagingOpen(groups.length > 0);
       if (groups.length === 0) {
         setActionMessage(t("feedback.noCommitGroups"));
       }
     } catch (error) {
-      setActionError(normalizeError(error));
+      if (isCurrent()) setActionError(normalizeError(error));
     } finally {
-      setLocalActionBusy(null);
+      if (isCurrent()) setLocalActionBusy(null);
+      action.finish();
     }
   }, [
     aiBusy,
+    beginAction,
     fileEntries,
     hasApiKeyForSelected,
     lmstudioModelId,
@@ -1381,6 +1404,8 @@ export function useSourceControlPanel(
     openrouterModelId,
     repo,
     selectedModelId,
+    t,
+    workspaceEnv,
   ]);
 
   const applySemanticGroup = useCallback(

@@ -1,6 +1,7 @@
 import { native } from "@/modules/ai/lib/native";
 import type { ProviderKeys } from "@/modules/ai/lib/keyring";
 import { requireAiRuntime } from "@/modules/ai/lib/runtimeAvailability";
+import type { WorkspaceEnv } from "@/modules/workspace";
 import type { SourceControlFileEntry } from "../useSourceControlPanel";
 
 export type SemanticCommitGroup = {
@@ -154,11 +155,15 @@ export async function generateSemanticStagingGroups({
   selectedModelId,
   apiKeys,
   preferences,
+  workspaceEnv,
+  isCurrent,
 }: {
   repoRoot: string;
   files: SourceControlFileEntry[];
   selectedModelId: string;
   apiKeys: ProviderKeys;
+  workspaceEnv: WorkspaceEnv;
+  isCurrent: () => boolean;
   preferences: {
     lmstudioBaseURL?: string;
     lmstudioModelId?: string;
@@ -171,27 +176,36 @@ export async function generateSemanticStagingGroups({
     openrouterModelId?: string;
   };
 }): Promise<SemanticCommitGroup[]> {
+  if (!isCurrent()) return [];
   requireAiRuntime();
   if (files.length === 0) return [];
+  const capturedFiles = files.map((file) => ({ ...file }));
+  const capturedKeys = { ...apiKeys };
+  const capturedPreferences = { ...preferences };
+  const capturedWorkspace = structuredClone(workspaceEnv);
 
   const [{ buildConfiguredLanguageModel }, { generateText }, diffResult] =
     await Promise.all([
       import("@/modules/ai/lib/agent"),
       import("ai"),
-      native.gitDiff(repoRoot, null, false).catch(() => ({ diffText: "" })),
+      native
+        .gitDiff(repoRoot, null, false, capturedWorkspace)
+        .catch(() => ({ diffText: "" })),
     ]);
+  if (!isCurrent()) return [];
 
-  const availableFiles = files.map((f) => f.path);
+  const availableFiles = capturedFiles.map((f) => f.path);
   const diffSnippet = diffResult.diffText.slice(0, 30_000);
 
   const model = await buildConfiguredLanguageModel(
     selectedModelId,
-    apiKeys,
-    preferences,
+    capturedKeys,
+    capturedPreferences,
   );
+  if (!isCurrent()) return [];
 
   const prompt = buildSemanticStagingPrompt(
-    files.map((f) => ({
+    capturedFiles.map((f) => ({
       path: f.path,
       statusCode: f.statusCode,
       statusLabel: f.statusLabel,
@@ -207,6 +221,7 @@ export async function generateSemanticStagingGroups({
     maxOutputTokens: 2048,
     temperature: 0.1,
   });
+  if (!isCurrent()) return [];
 
   return parseSemanticGroups(response.text, availableFiles);
 }
