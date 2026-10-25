@@ -14,6 +14,7 @@ import { LOCAL_WORKSPACE, useWorkspaceEnvStore } from "@/modules/workspace";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 
 const mocks = vi.hoisted(() => ({
+  repositoryRoot: undefined as string | undefined,
   diff: {
     additions: 1,
     deletions: 1,
@@ -28,8 +29,14 @@ vi.mock("@/modules/harness/lib/githubTasks", async (original) => ({
   githubWorkItemDetails: async () => ({ body: "", author: "" }),
   peekGithubWorkItemThread: () => ({}),
   githubWorkItemThread: async () => ({}),
-  peekGithubPrDiff: () => mocks.diff,
-  githubPrDiff: async () => mocks.diff,
+  peekGithubPrDiff: (cwd: string) => ({
+    ...mocks.diff,
+    repoRoot: mocks.repositoryRoot ?? cwd,
+  }),
+  githubPrDiff: async (cwd: string) => ({
+    ...mocks.diff,
+    repoRoot: mocks.repositoryRoot ?? cwd,
+  }),
 }));
 vi.mock("@/modules/harness/hooks/useTabGroupLogos", () => ({
   useTabGroupLogos: () => ({}),
@@ -125,6 +132,7 @@ async function render(projectPath: string) {
   await showCode();
 }
 beforeEach(() => {
+  mocks.repositoryRoot = undefined;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   usePreferencesStore.setState({ language: "en" });
   useWorkspaceEnvStore.setState({ env: { kind: "wsl", distro: "Ubuntu" } });
@@ -142,6 +150,20 @@ afterEach(async () => {
   usePreferencesStore.setState({ language: previousLanguage });
   useWorkspaceEnvStore.setState({ env: previousWorkspace });
   vi.unstubAllGlobals();
+});
+
+it("opens repository-relative PR files at the resolved root for a nested project", async () => {
+  mocks.repositoryRoot = "/work/repository";
+  await render("/work/repository/packages/app");
+  await showFileMenu();
+  await openFile();
+  expect(received).toEqual([
+    {
+      path: "/work/repository/src/app.ts",
+      workspace: LOCAL_WORKSPACE,
+      kind: "file",
+    },
+  ]);
 });
 
 it.each([

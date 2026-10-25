@@ -361,6 +361,8 @@ Diff file-history actions carry the diff's captured filesystem into the desktop 
 
 Diff default-application and file-manager actions require an absolute host-native path and the diff's own local filesystem, including native Windows paths from WSL. Unsupported destinations remain visible with a local-machine restriction and reject forced menu delivery. Absolute remote namespaces and UNC paths retain their identity when resolving diff file destinations.
 
+Inbox pull-request diffs resolve the project's Git repository through the existing native resolver before running the local GitHub CLI. Their frontend result and cache retain that repository root, so repository-relative file paths do not inherit a project subdirectory. Missing repository resolution rejects the load instead of guessing a root; invalidated pending loads cannot replace the current diff cache. This does not add a remote GitHub CLI transport.
+
 ### Window styling
 
 - macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.

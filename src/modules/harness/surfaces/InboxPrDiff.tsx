@@ -10,7 +10,7 @@ type Props = {
   focusPath?: string;
 };
 
-export function InboxPrDiff({ projectPath, diff, focusPath }: Props) {
+export function InboxPrDiff({ diff, focusPath }: Props) {
   const files = useMemo(() => {
     const parsed = mergePrDiff(diff.files, parsePrPatch(diff.patch));
     return parsed.map((file) => toModel(file, diff.truncated));
@@ -18,7 +18,7 @@ export function InboxPrDiff({ projectPath, diff, focusPath }: Props) {
 
   return (
     <UnifiedDiffView
-      repoRoot={projectPath}
+      repoRoot={diff.repoRoot}
       files={files}
       truncated={diff.truncated}
       totals={{ additions: diff.additions, deletions: diff.deletions }}

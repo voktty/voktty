@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { native } from "@/modules/ai/lib/native";
+import { LOCAL_WORKSPACE } from "@/modules/workspace";
 import {
   linearConnected,
   linearTeamIdsForFetch,
@@ -102,6 +104,7 @@ export type GithubPrFile = {
 };
 
 export type GithubPrDiff = {
+  repoRoot: string;
   additions: number;
   deletions: number;
   files: GithubPrFile[];
@@ -503,10 +506,25 @@ export async function githubPrDiff(
   if (cached && freshEnough(`diff:${key}`, options?.maxAgeMs)) return cached;
   const pending = prDiffInflight.get(key);
   if (pending) return pending;
-  const promise = invoke<GithubPrDiff>("git_github_pr_diff", { cwd, number })
-    .then((diff) => {
-      prDiffByKey.set(key, diff);
-      fetchedAt.set(`diff:${key}`, Date.now());
+  const promise = Promise.resolve()
+    .then(async () => {
+      const repo = await native.gitResolveRepo(cwd, LOCAL_WORKSPACE);
+      if (!repo?.repoRoot)
+        throw new Error(
+          "No Git repository found for the pull request project.",
+        );
+      const payload = await invoke<Omit<GithubPrDiff, "repoRoot">>(
+        "git_github_pr_diff",
+        {
+          cwd: repo.repoRoot,
+          number,
+        },
+      );
+      const diff = { ...payload, repoRoot: repo.repoRoot };
+      if (prDiffInflight.get(key) === promise) {
+        prDiffByKey.set(key, diff);
+        fetchedAt.set(`diff:${key}`, Date.now());
+      }
       return diff;
     })
     .finally(() => {
