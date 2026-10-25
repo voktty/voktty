@@ -43,6 +43,8 @@ React coordinates selection, confirmation and cache invalidation. Rust remains t
 
 Accepting Git's dubious-ownership exception writes only the explicit `safe.directory` value and does not canonicalize the repository a second time. Its acknowledgement confirms that configuration succeeded under the current owner, independently of whether subsequent status discovery finds a repository or reports an error. The status attempt is still awaited. The first status pass uses Git's `--untracked-files=normal` directory-level enumeration instead of recursively materializing every untracked descendant. Tracked changes remain exact, and an untracked directory can still be staged as a path.
 
+Explorer keeps initialization visible and disabled while repository discovery is pending or failed, with a localized loading or failure description in its header and context menu. Initialization is admitted only after the current discovery confirms repository absence; a disabled or retired admission cannot issue native initialization through a cached callback. Existing repositories hide the action. Refresh retries failed discovery without treating a read error as repository absence.
+
 ## Manual smoke
 
 1. Modify two text files and one binary file in the same repository.

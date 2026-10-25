@@ -569,10 +569,18 @@ export const FileExplorer = memo(
       scope: revealScope,
       rootPath,
       workspace: workspaceEnv,
+      enabled: repository.hasRepo === false,
       onSuccess: () => toast.success(t("git.initRepoSuccess")),
       onError: (error) =>
         toast.error(t("common.unknownError"), { description: String(error) }),
     });
+
+    const initDisabledReason =
+      repository.status === "loading"
+        ? t("git.waitRepoLoading")
+        : repository.status === "error"
+          ? t("feedback.resolveGitRepositoryFailed")
+          : undefined;
 
     const handleSelectPath = useCallback(
       (path: string, e?: React.MouseEvent) => {
@@ -960,15 +968,16 @@ export const FileExplorer = memo(
           >
             <HugeiconsIcon icon={Refresh01Icon} size={12} strokeWidth={2} />
           </Button>
-          {(repository.hasRepo === false || !canInitGit) && rootPath && (
+          {repository.hasRepo !== true && rootPath && (
             <Button
               variant="ghost"
               size="icon"
               className="size-6 text-muted-foreground hover:text-foreground"
               disabled={!canInitGit}
               onClick={() => void handleInitGit()}
-              title={t("git.initializeRepo")}
+              title={initDisabledReason ?? t("git.initializeRepo")}
               aria-label={t("git.initializeRepo")}
+              aria-description={initDisabledReason}
             >
               <HugeiconsIcon icon={FolderGitTwoIcon} size={13} strokeWidth={2} />
             </Button>
@@ -1396,10 +1405,12 @@ export const FileExplorer = memo(
                       {t("preview.openPreview")}
                     </ContextMenuItem>
                   )}
-                  {(repository.hasRepo === false || !canInitGit) && rootPath && (
+                  {repository.hasRepo !== true && rootPath && (
                     <ContextMenuItem
                       className={COMPACT_ITEM}
                       disabled={!canInitGit}
+                      title={initDisabledReason}
+                      aria-description={initDisabledReason}
                       onSelect={() => void handleInitGit()}
                     >
                       {t("git.initializeRepo")}

@@ -16,14 +16,17 @@ const scope = {};
 function Probe({
   workspace,
   path = "/project",
+  enabled = true,
 }: {
   workspace: WorkspaceEnv;
   path?: string;
+  enabled?: boolean;
 }) {
   action = useExplorerRepositoryInitialization({
     scope,
     rootPath: path,
     workspace,
+    enabled,
     onSuccess: success,
     onError: error,
   });
@@ -35,6 +38,25 @@ beforeEach(() => {
   success.mockReset();
   error.mockReset();
   root = createRoot(document.createElement("div"));
+});
+it("refuses unknown repository admission and never revives its cached action", async () => {
+  const workspace: WorkspaceEnv = { kind: "local" };
+  await act(async () => root.render(<Probe workspace={workspace} />));
+  const old = action.run;
+  await act(async () =>
+    root.render(<Probe workspace={workspace} enabled={false} />),
+  );
+  expect(action.available).toBe(false);
+  await act(async () => {
+    await old();
+    await action.run();
+  });
+  expect(init).not.toHaveBeenCalled();
+  await act(async () => root.render(<Probe workspace={workspace} />));
+  await act(async () => old());
+  expect(init).not.toHaveBeenCalled();
+  await act(async () => action.run());
+  expect(init).toHaveBeenCalledOnce();
 });
 afterEach(async () => {
   await act(async () => root.unmount());

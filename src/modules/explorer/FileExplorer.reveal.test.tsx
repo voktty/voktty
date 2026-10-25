@@ -198,6 +198,42 @@ it("hides initialization for its own repository despite a negative Source Contro
   expect(node.querySelector('button[aria-label="Initialize Repository"]')).toBeNull();
 });
 
+it("keeps initialization visible with a loading reason and refuses input until discovery confirms absence", async () => {
+  const discovery = pending<null>();
+  mocks.invoke.mockImplementation(async (command) => command === "git_resolve_repo" ? discovery.promise : []);
+  await render();
+  const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
+  expect(button).not.toBeNull();
+  expect(button?.disabled).toBe(true);
+  expect(button?.getAttribute("aria-description")).toBe("Wait for the selected repository to finish loading.");
+  const tree = node.querySelector<HTMLElement>("[data-explorer-drop]");
+  await act(async () => tree?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2, clientX: 20, clientY: 20 })));
+  const menu = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Initialize Repository");
+  expect(menu?.getAttribute("aria-disabled")).toBe("true");
+  expect(menu?.getAttribute("aria-description")).toBe(button?.getAttribute("aria-description"));
+  await act(async () => button?.click());
+  expect(mocks.invoke.mock.calls.some(([command]) => command === "git_init")).toBe(false);
+  await act(async () => discovery.resolve(null));
+  expect(node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]')?.disabled).toBe(false);
+});
+
+it("explains failed repository discovery without allowing initialization and recovers on refresh", async () => {
+  mocks.invoke.mockImplementation(async (command) => {
+    if (command === "git_resolve_repo") throw new Error("Unavailable");
+    return [];
+  });
+  await render();
+  const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
+  expect(button).not.toBeNull();
+  expect(button?.disabled).toBe(true);
+  expect(button?.getAttribute("aria-description")).toBe("Could not resolve Git repository");
+  await act(async () => button?.click());
+  expect(mocks.invoke.mock.calls.some(([command]) => command === "git_init")).toBe(false);
+  mocks.invoke.mockImplementation(async (command) => command === "git_resolve_repo" ? null : []);
+  await act(async () => window.dispatchEvent(new CustomEvent("voktty:git-refresh")));
+  expect(node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]')?.disabled).toBe(false);
+});
+
 it("refreshes repository discovery after initialization completes", async () => {
   let initialized = false;
   mocks.invoke.mockImplementation(async (command) => {

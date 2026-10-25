@@ -21,6 +21,7 @@ export function useExplorerRepository({
   const [result, setResult] = useState<{
     binding: typeof binding;
     hasRepo: boolean | undefined;
+    status: "loading" | "ready" | "error";
   } | null>(null);
   const unsettled = useRef(new Set<object>());
   const current = useRef<{
@@ -63,19 +64,23 @@ export function useExplorerRepository({
         owner.active && latestRequest === receipt && !owner.queued;
       unsettled.current.add(receipt);
       setResult((previous) =>
-        owns() ? { binding, hasRepo: undefined } : previous,
+        owns() ? { binding, hasRepo: undefined, status: "loading" } : previous,
       );
       void (async () => {
         try {
           const repo = await native.gitResolveRepo(path, captured);
           if (owns())
             setResult((previous) =>
-              owns() ? { binding, hasRepo: repo !== null } : previous,
+              owns()
+                ? { binding, hasRepo: repo !== null, status: "ready" }
+                : previous,
             );
         } catch {
           if (owns())
             setResult((previous) =>
-              owns() ? { binding, hasRepo: undefined } : previous,
+              owns()
+                ? { binding, hasRepo: undefined, status: "error" }
+                : previous,
             );
         } finally {
           unsettled.current.delete(receipt);
@@ -99,6 +104,11 @@ export function useExplorerRepository({
   }, [binding]);
   return {
     hasRepo: result?.binding === binding ? result.hasRepo : undefined,
+    status: !supported
+      ? "unsupported"
+      : result?.binding === binding
+        ? result.status
+        : "loading",
     refresh,
   };
 }

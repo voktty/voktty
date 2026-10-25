@@ -24,16 +24,19 @@ export function useExplorerRepositoryInitialization({
   scope,
   rootPath,
   workspace,
+  enabled = true,
   onSuccess,
   onError,
 }: {
   scope: object;
   rootPath: string | null;
   workspace: WorkspaceEnv;
+  enabled?: boolean;
   onSuccess: () => void;
   onError: (error: unknown) => void;
 }) {
-  const available = canInitializeExplorerRepository(rootPath, workspace);
+  const available =
+    enabled && canInitializeExplorerRepository(rootPath, workspace);
   const initialize = useMemo(() => {
     if (!available) return undefined;
     const captured = structuredClone(workspace);

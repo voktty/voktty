@@ -130,9 +130,28 @@ it("keeps errors unknown and retries through explicit refresh", async () => {
   resolveRepo.mockRejectedValue(new Error("Unavailable"));
   await act(async () => root.render(<Probe />));
   expect(view.hasRepo).toBeUndefined();
+  expect(view.status).toBe("error");
   resolveRepo.mockResolvedValue(null);
   await act(async () => view.refresh());
   expect(view.hasRepo).toBe(false);
+  expect(view.status).toBe("ready");
+});
+
+it("publishes loading while refreshing instead of reusing a previous absence", async () => {
+  await act(async () => root.render(<Probe />));
+  expect(view.status).toBe("ready");
+  let complete!: (value: null) => void;
+  resolveRepo.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  await act(async () => view.refresh());
+  expect(view.status).toBe("loading");
+  expect(view.hasRepo).toBeUndefined();
+  await act(async () => complete(null));
+  expect(view.status).toBe("ready");
 });
 it.each([
   "C:/project",
