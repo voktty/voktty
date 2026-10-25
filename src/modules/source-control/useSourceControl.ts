@@ -67,7 +67,7 @@ export type SourceControlSummary = {
   refresh: (options?: { remote?: SourceControlRefreshMode }) => Promise<void>;
   trustRepository: (path?: string) => Promise<void>;
   initRepository: (path?: string) => Promise<void>;
-  undoCommit: () => Promise<void>;
+  undoCommit: () => Promise<boolean>;
   runRemoteAction: (
     mode?: SourceControlRemoteActionMode,
   ) => Promise<SourceControlRemoteActionResult>;
@@ -875,13 +875,14 @@ export function useSourceControl(
 
   const undoCommit = useCallback(async () => {
     const owner = capture();
-    if (!owner) return;
+    if (!owner) return false;
     const { repo } = stateRef.current;
-    if (!repo) return;
+    if (!repo) return false;
     await native.gitUndoCommit(repo.repoRoot, workspaceEnv);
-    if (!owns(owner)) return;
+    if (!owns(owner)) return false;
     window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
     await doRefresh("never");
+    return owns(owner);
   }, [doRefresh, workspaceEnv, capture, owns]);
 
   useEffect(() => {

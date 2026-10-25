@@ -84,7 +84,7 @@ function summary(staged: boolean): SourceControlSummary {
     refresh: vi.fn(async () => {}),
     trustRepository: vi.fn(async () => {}),
     initRepository: vi.fn(async () => {}),
-    undoCommit: vi.fn(async () => {}),
+    undoCommit: vi.fn(async () => true),
     runRemoteAction: vi.fn(async () => ({ ok: false, action: null })),
   };
 }
@@ -378,4 +378,126 @@ it("refreshes the checkbox destination when only the filesystem changes", async 
     environments[2],
   );
   expect(mocks.stage).toHaveBeenCalledTimes(2);
+});
+
+it.each([false, true])(
+  "publishes undo success only for a positive acknowledgement (%s)",
+  async (accepted) => {
+    const value = summary(false);
+    value.undoCommit = vi.fn(async () => accepted);
+    await act(async () => root.render(<Probe value={value} />));
+    await act(async () => panel.undoCommit());
+    expect(value.undoCommit).toHaveBeenCalledTimes(1);
+    if (accepted) expect(panel.actionMessage).toBeTruthy();
+    else expect(panel.actionMessage).toBeNull();
+  },
+);
+it("does not call undo through a cached closed-panel callback", async () => {
+  const value = summary(false);
+  await act(async () => root.render(<Probe value={value} />));
+  const undo = panel.undoCommit;
+  await act(async () => root.render(<Probe value={value} open={false} />));
+  await act(async () => undo());
+  expect(value.undoCommit).not.toHaveBeenCalled();
+});
+it.each([false, true])(
+  "does not publish a retired undo completion (reject=%s)",
+  async (reject) => {
+    let resolve!: (value: boolean) => void;
+    let fail!: (error: Error) => void;
+    const value = summary(false);
+    value.undoCommit = vi.fn(
+      () =>
+        new Promise<boolean>((done, error) => {
+          resolve = done;
+          fail = error;
+        }),
+    );
+    await act(async () => root.render(<Probe value={value} />));
+    let operation!: Promise<void>;
+    await act(async () => {
+      operation = panel.undoCommit();
+    });
+    await act(async () => root.render(<Probe value={value} open={false} />));
+    expect(panel.actionBusy).toBeNull();
+    await act(async () => {
+      if (reject) fail(new Error("Old undo failed"));
+      else resolve(true);
+      await operation;
+    });
+    expect(panel.actionMessage).toBeNull();
+    expect(panel.actionError).toBeNull();
+  },
+);
+it("coalesces pending undo delivery and preserves a successor's busy flag", async () => {
+  const completions: ((value: boolean) => void)[] = [];
+  const value = summary(false);
+  value.undoCommit = vi.fn(
+    () =>
+      new Promise<boolean>((done) => {
+        completions.push(done);
+      }),
+  );
+  await act(async () => root.render(<Probe value={value} />));
+  const undo = panel.undoCommit;
+  let old!: Promise<void>;
+  await act(async () => {
+    old = undo();
+    void undo();
+  });
+  expect(value.undoCommit).toHaveBeenCalledTimes(1);
+  await act(async () => root.render(<Probe value={value} open={false} />));
+  await act(async () => root.render(<Probe value={value} />));
+  let next!: Promise<void>;
+  await act(async () => {
+    next = panel.undoCommit();
+  });
+  expect(value.undoCommit).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    completions[0](true);
+    await old;
+  });
+  expect(panel.actionBusy).toBe("undo");
+  expect(panel.actionMessage).toBeNull();
+  await act(async () => {
+    completions[1](true);
+    await next;
+  });
+  expect(panel.actionBusy).toBeNull();
+  expect(panel.actionMessage).toBeTruthy();
+});
+it("keeps the current undo failure visible without a success message", async () => {
+  const value = summary(false);
+  value.undoCommit = vi.fn(async () => {
+    throw new Error("Undo refused");
+  });
+  await act(async () => root.render(<Probe value={value} />));
+  await act(async () => panel.undoCommit());
+  expect(panel.actionError).toBe("Undo refused");
+  expect(panel.actionMessage).toBeNull();
+  expect(panel.actionBusy).toBeNull();
+});
+it("clears an already published undo message when its context retires", async () => {
+  const value = summary(false);
+  await act(async () => root.render(<Probe value={value} />));
+  await act(async () => panel.undoCommit());
+  expect(panel.actionMessage).toBeTruthy();
+  await act(async () => root.render(<Probe value={value} open={false} />));
+  expect(panel.actionMessage).toBeNull();
+  expect(panel.actionError).toBeNull();
+});
+it("does not revive a cached undo through a batched filesystem round trip", async () => {
+  const value = summary(false);
+  useWorkspaceEnvStore.setState({ env: environments[0] });
+  await act(async () => root.render(<Probe value={value} />));
+  const undo = panel.undoCommit;
+  await act(async () => {
+    useWorkspaceEnvStore.setState({ env: environments[2] });
+    useWorkspaceEnvStore.setState({ env: environments[0] });
+    await undo();
+  });
+  expect(value.undoCommit).not.toHaveBeenCalled();
+  expect(panel.actionMessage).toBeNull();
+  await act(async () => panel.undoCommit());
+  expect(value.undoCommit).toHaveBeenCalledTimes(1);
 });

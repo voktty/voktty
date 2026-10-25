@@ -440,3 +440,57 @@ it("does not inherit a retired action's busy flag when navigating within its rep
   expect(busy).toBeNull();
   expect(mocks.pull).not.toHaveBeenCalled();
 });
+
+it("acknowledges undo only after an admitted current native operation", async () => {
+  await render();
+  await flushIdle();
+  await act(async () => expect(await output.undoCommit()).toBe(true));
+  expect(mocks.undo).toHaveBeenCalledExactlyOnceWith(folder, ssh);
+});
+it("returns a negative undo acknowledgement for a retired callback", async () => {
+  await render();
+  await flushIdle();
+  const old = output;
+  await select(LOCAL_WORKSPACE);
+  await act(async () => expect(await old.undoCommit()).toBe(false));
+  expect(mocks.undo).not.toHaveBeenCalled();
+});
+it("returns a negative undo acknowledgement without a repository", async () => {
+  mocks.resolve.mockResolvedValue(null);
+  await render();
+  await flushIdle();
+  await act(async () => expect(await output.undoCommit()).toBe(false));
+  expect(mocks.undo).not.toHaveBeenCalled();
+});
+it("does not acknowledge undo after its native completion retires", async () => {
+  await render();
+  await flushIdle();
+  const pending = deferred<void>();
+  mocks.undo.mockReturnValue(pending.promise);
+  let result: Promise<unknown>;
+  await act(async () => {
+    result = output.undoCommit();
+  });
+  await select(LOCAL_WORKSPACE);
+  await act(async () => {
+    pending.resolve();
+    expect(await result).toBe(false);
+  });
+  expect(mocks.undo).toHaveBeenCalledTimes(1);
+});
+it("rechecks undo acknowledgement after its status refresh", async () => {
+  await render();
+  await flushIdle();
+  const pending = deferred<GitStatusSnapshot>();
+  mocks.status.mockReturnValue(pending.promise);
+  let operation!: Promise<unknown>;
+  await act(async () => {
+    operation = output.undoCommit();
+  });
+  expect(mocks.undo).toHaveBeenCalledTimes(1);
+  await select(LOCAL_WORKSPACE);
+  await act(async () => {
+    pending.resolve(snapshot());
+    expect(await operation).toBe(false);
+  });
+});

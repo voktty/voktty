@@ -132,7 +132,7 @@ type DiscardRequest = {
   isCurrent: () => boolean;
 };
 
-function useDiscardOwner(
+function usePanelActionOwner(
   open: boolean,
   contextPath: string | null,
   repoRoot: string | undefined,
@@ -554,7 +554,7 @@ export function useSourceControlPanel(
   dirtyPaths: readonly string[] = [],
 ): SourceControlPanelState {
   const workspaceEnv = useWorkspaceEnvStore((state) => state.env);
-  const captureDiscardOwner = useDiscardOwner(
+  const capturePanelOwner = usePanelActionOwner(
     isOpen,
     summary.contextPath,
     summary.repo?.repoRoot,
@@ -593,21 +593,24 @@ export function useSourceControlPanel(
   );
   const discardRef = useRef<DiscardRequest | null>(null);
   const discardOperationRef = useRef<DiscardRequest | null>(null);
+  const undoOperationRef = useRef<(() => boolean) | null>(null);
   const dirtyPathsRef = useRef(dirtyPaths);
   useLayoutEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
   }, [dirtyPaths]);
   useLayoutEffect(() => {
-    const isCurrent = captureDiscardOwner();
+    const isCurrent = capturePanelOwner();
     discardRef.current = null;
     setPendingDiscard(null);
     setLocalActionBusy((current) =>
-      current?.startsWith("discard:") ? null : current,
+      current === "undo" || current?.startsWith("discard:") ? null : current,
     );
+    setActionMessage(null);
+    setActionError(null);
     return () => {
       if (!isCurrent?.()) discardRef.current = null;
     };
-  }, [captureDiscardOwner]);
+  }, [capturePanelOwner]);
   const [semanticGroups, setSemanticGroups] = useState<SemanticCommitGroup[]>(
     [],
   );
@@ -943,7 +946,7 @@ export function useSourceControlPanel(
 
   const requestDiscard = useCallback(
     (scope: "single" | "all", entries: SourceControlEntry[]) => {
-      const isCurrent = captureDiscardOwner();
+      const isCurrent = capturePanelOwner();
       if (
         !isCurrent ||
         !repo ||
@@ -972,7 +975,7 @@ export function useSourceControlPanel(
       setPendingDiscard(request);
     },
     [
-      captureDiscardOwner,
+      capturePanelOwner,
       repo,
       summary.repo?.repoRoot,
       summary.busyAction,
@@ -1394,19 +1397,29 @@ export function useSourceControlPanel(
   }, [repo, status?.upstream, summary]);
 
   const undoCommit = useCallback(async () => {
-    if (!repo) return;
+    const isCurrent = capturePanelOwner();
+    if (
+      !isCurrent ||
+      !repo ||
+      repo.repoRoot !== summary.repo?.repoRoot ||
+      undoOperationRef.current?.()
+    )
+      return;
+    undoOperationRef.current = isCurrent;
     setActionMessage(null);
     setActionError(null);
     setLocalActionBusy("undo");
     try {
-      await summary.undoCommit();
-      setActionMessage(t("feedback.undoCommitSuccess"));
+      const accepted = await summary.undoCommit();
+      if (accepted && isCurrent())
+        setActionMessage(t("feedback.undoCommitSuccess"));
     } catch (error) {
-      setActionError(normalizeError(error));
+      if (isCurrent()) setActionError(normalizeError(error));
     } finally {
-      setLocalActionBusy(null);
+      if (isCurrent()) setLocalActionBusy(null);
+      if (undoOperationRef.current === isCurrent) undoOperationRef.current = null;
     }
-  }, [repo, summary, t]);
+  }, [capturePanelOwner, repo, summary, t]);
 
   const canUndo = (status?.ahead ?? 0) > 0;
 

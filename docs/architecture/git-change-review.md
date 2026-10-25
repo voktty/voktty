@@ -19,6 +19,8 @@ Git actions operate on filesystem state, not on CodeMirror memory. Before any di
 
 Sidebar discard dialogs capture copied entries, the repository root and the full filesystem descriptor. A committed panel context change, close or unmount permanently retires that confirmation, including a filesystem round trip before React commits. Confirm and cancel consume only their exact dialog; cached callbacks cannot act on a successor. Confirmation checks the latest committed dirty-buffer list. Retired discard results cannot publish errors, clear a successor's busy state or request reconciliation. These guards do not cancel or roll back a native Git operation already admitted.
 
+The summary's `undoCommit` returns a boolean acknowledgement after the native undo and status-refresh attempt. A missing repository or retired summary returns false. The sidebar also retains its original panel owner through completion, reports success only for a positive acknowledgement and refuses duplicate pending undo delivery for that owner. Context retirement clears published feedback and retires undo busy state; old completions cannot clear a successor's busy state or publish errors. Native failures still reject, and already admitted Git operations are not rolled back. A positive acknowledgement confirms native undo completion under the current owner, not a successful status read.
+
 Staging a file with an unsaved editor is allowed because it does not destroy the in-memory buffer. Only the current on-disk version is staged.
 
 ## Trust boundary
