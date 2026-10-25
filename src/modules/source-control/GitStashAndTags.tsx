@@ -24,7 +24,10 @@ import {
   type GitTagEntry,
 } from "@/modules/ai/lib/native";
 import { useTranslation } from "@/modules/i18n";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import {
+  useGitCollectionMenu,
+  type GitCollectionMenu,
+} from "@/modules/source-control/useGitCollectionMenu";
 import {
   Archive01Icon,
   ArchiveArrowUpIcon,
@@ -35,19 +38,15 @@ import {
   Upload01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 
 function formatWhen(timestampSecs: number): string {
   if (!timestampSecs) return "";
   return new Date(timestampSecs * 1000).toLocaleString();
 }
 
-function errorMessage(err: unknown): string {
-  return err && typeof err === "object" && "message" in err
-    ? String((err as { message: unknown }).message)
-    : String(err);
-}
+const stashKey = (entry: GitStashEntry) => String(entry.index);
+const tagKey = (entry: GitTagEntry) => entry.name;
 
 // ---------------------------------------------------------------------------
 // Stash
@@ -61,67 +60,17 @@ export function StashDropdown({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [open, setOpen] = useState(false);
-  const [saveOpen, setSaveOpen] = useState(false);
-  const [entries, setEntries] = useState<GitStashEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busyIndex, setBusyIndex] = useState<number | null>(null);
-  const requestRef = useRef(0);
-
-  const load = useCallback(async () => {
-    const id = ++requestRef.current;
-    if (!repoRoot) {
-      setEntries([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await native.gitStashList(repoRoot, workspaceEnv);
-      if (id !== requestRef.current) return;
-      setEntries(result);
-    } catch (err) {
-      if (id !== requestRef.current) return;
-      setError(errorMessage(err));
-      setEntries([]);
-    } finally {
-      if (id === requestRef.current) setLoading(false);
-    }
-  }, [repoRoot, workspaceEnv]);
-
-  useEffect(() => {
-    if (open) void load();
-  }, [open, load]);
-
-  const runAction = useCallback(
-    async (
-      index: number,
-      action: (root: string, i: number) => Promise<void>,
-      successKey: string,
-    ) => {
-      if (!repoRoot || busyIndex !== null) return;
-      setBusyIndex(index);
-      try {
-        await action(repoRoot, index);
-        toast.success(t(successKey));
-        onRefresh();
-        await load();
-      } catch (err) {
-        toast.error(errorMessage(err));
-      } finally {
-        setBusyIndex(null);
-      }
-    },
-    [busyIndex, load, onRefresh, repoRoot, t],
-  );
+  const control = useGitCollectionMenu({
+    repoRoot,
+    load: native.gitStashList,
+    keyOf: stashKey,
+    onRefresh,
+  });
+  const { items: entries, loading, error, busyKey } = control;
 
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={control.menuOpen} onOpenChange={control.setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -141,10 +90,8 @@ export function StashDropdown({
               size="xs"
               variant="ghost"
               className="h-6 cursor-pointer gap-1 px-1.5 text-[11px]"
-              onClick={() => {
-                setOpen(false);
-                setSaveOpen(true);
-              }}
+              disabled={busyKey !== null}
+              onClick={control.openDialog}
             >
               <HugeiconsIcon icon={PlusSignIcon} size={12} strokeWidth={2} />
               {t("git.stash.new")}
@@ -179,21 +126,32 @@ export function StashDropdown({
                       {formatWhen(entry.timestampSecs)}
                     </div>
                   </div>
-                  {busyIndex === entry.index ? (
+                  {busyKey === String(entry.index) ? (
                     <Spinner className="size-3 shrink-0" />
                   ) : (
                     <div className="flex shrink-0 items-center gap-0.5">
                       <button
                         type="button"
                         title={t("git.stash.apply")}
+                        aria-description={
+                          control.actionPending
+                            ? t("git.waitActionFinish")
+                            : undefined
+                        }
+                        disabled={control.actionPending}
                         onClick={() =>
-                          void runAction(
-                            entry.index,
-                            (root, i) => native.gitStashApply(root, i, workspaceEnv),
-                            "git.stash.applySuccess",
+                          void control.runEntry(
+                            String(entry.index),
+                            (root, workspace) =>
+                              native.gitStashApply(
+                                root,
+                                entry.index,
+                                workspace,
+                              ),
+                            t("git.stash.applySuccess"),
                           )
                         }
-                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <HugeiconsIcon
                           icon={ArchiveArrowUpIcon}
@@ -204,14 +162,21 @@ export function StashDropdown({
                       <button
                         type="button"
                         title={t("git.stash.pop")}
+                        aria-description={
+                          control.actionPending
+                            ? t("git.waitActionFinish")
+                            : undefined
+                        }
+                        disabled={control.actionPending}
                         onClick={() =>
-                          void runAction(
-                            entry.index,
-                            (root, i) => native.gitStashPop(root, i, workspaceEnv),
-                            "git.stash.popSuccess",
+                          void control.runEntry(
+                            String(entry.index),
+                            (root, workspace) =>
+                              native.gitStashPop(root, entry.index, workspace),
+                            t("git.stash.popSuccess"),
                           )
                         }
-                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <HugeiconsIcon
                           icon={ArchiveRestoreIcon}
@@ -222,14 +187,21 @@ export function StashDropdown({
                       <button
                         type="button"
                         title={t("git.stash.drop")}
+                        aria-description={
+                          control.actionPending
+                            ? t("git.waitActionFinish")
+                            : undefined
+                        }
+                        disabled={control.actionPending}
                         onClick={() =>
-                          void runAction(
-                            entry.index,
-                            (root, i) => native.gitStashDrop(root, i, workspaceEnv),
-                            "git.stash.dropSuccess",
+                          void control.runEntry(
+                            String(entry.index),
+                            (root, workspace) =>
+                              native.gitStashDrop(root, entry.index, workspace),
+                            t("git.stash.dropSuccess"),
                           )
                         }
-                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <HugeiconsIcon
                           icon={RemoveSquareIcon}
@@ -245,66 +217,36 @@ export function StashDropdown({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <StashSaveDialog
-        open={saveOpen}
-        onOpenChange={setSaveOpen}
-        repoRoot={repoRoot}
-        onSaved={() => {
-          onRefresh();
-          void load();
-        }}
-      />
+      {control.dialogKey !== null && (
+        <StashSaveDialog key={control.dialogKey} control={control} />
+      )}
     </>
   );
 }
 
 function StashSaveDialog({
-  open,
-  onOpenChange,
-  repoRoot,
-  onSaved,
+  control,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  repoRoot: string | null;
-  onSaved: () => void;
+  control: GitCollectionMenu<GitStashEntry>;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const [message, setMessage] = useState("");
   const [includeUntracked, setIncludeUntracked] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setMessage("");
-      setIncludeUntracked(false);
-      setSaving(false);
-    }
-  }, [open]);
-
-  const handleSave = useCallback(async () => {
-    if (!repoRoot || saving) return;
-    setSaving(true);
-    try {
-      await native.gitStashSave(
-        repoRoot,
-        message.trim() || undefined,
-        includeUntracked,
-        workspaceEnv,
-      );
-      toast.success(t("git.stash.saveSuccess"));
-      onOpenChange(false);
-      onSaved();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [includeUntracked, message, onOpenChange, onSaved, repoRoot, saving, t, workspaceEnv]);
+  const saving = control.busyKey !== null;
+  const handleSave = () =>
+    control.submitDialog(
+      (root, workspace) =>
+        native.gitStashSave(
+          root,
+          message.trim() || undefined,
+          includeUntracked,
+          workspace,
+        ),
+      t("git.stash.saveSuccess"),
+    );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={control.setDialogOpen}>
       <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-md border-border/80">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -349,7 +291,7 @@ function StashSaveDialog({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onOpenChange(false)}
+            onClick={() => control.setDialogOpen(false)}
             disabled={saving}
             className="text-xs"
           >
@@ -359,8 +301,13 @@ function StashSaveDialog({
             type="button"
             size="sm"
             onClick={() => void handleSave()}
-            disabled={saving || !repoRoot}
+            disabled={control.actionPending}
             className="gap-2 text-xs font-medium"
+            title={
+              control.actionPending && !saving
+                ? t("git.waitActionFinish")
+                : undefined
+            }
           >
             {saving ? <Spinner className="size-3.5" /> : null}
             {saving ? t("common.loading") : t("git.stash.saveAction")}
@@ -385,79 +332,18 @@ export function TagDropdown({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [open, setOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [tags, setTags] = useState<GitTagEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busyName, setBusyName] = useState<string | null>(null);
-  const requestRef = useRef(0);
-
-  const load = useCallback(async () => {
-    const id = ++requestRef.current;
-    if (!repoRoot) {
-      setTags([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await native.gitTagList(repoRoot, workspaceEnv);
-      if (id !== requestRef.current) return;
-      setTags(result);
-    } catch (err) {
-      if (id !== requestRef.current) return;
-      setError(errorMessage(err));
-      setTags([]);
-    } finally {
-      if (id === requestRef.current) setLoading(false);
-    }
-  }, [repoRoot, workspaceEnv]);
-
-  useEffect(() => {
-    if (open) void load();
-  }, [open, load]);
-
-  const handleDelete = useCallback(
-    async (name: string) => {
-      if (!repoRoot || busyName) return;
-      setBusyName(name);
-      try {
-        await native.gitTagDelete(repoRoot, name, workspaceEnv);
-        toast.success(t("git.tags.deleteSuccess", { name }));
-        onRefresh();
-        await load();
-      } catch (err) {
-        toast.error(errorMessage(err));
-      } finally {
-        setBusyName(null);
-      }
-    },
-    [busyName, load, onRefresh, repoRoot, t, workspaceEnv],
-  );
-
-  const handlePush = useCallback(
-    async (name: string) => {
-      if (!repoRoot || busyName) return;
-      setBusyName(name);
-      try {
-        await native.gitTagPush(repoRoot, name, undefined, workspaceEnv);
-        toast.success(t("git.tags.pushSuccess", { name }));
-      } catch (err) {
-        toast.error(errorMessage(err));
-      } finally {
-        setBusyName(null);
-      }
-    },
-    [busyName, repoRoot, t, workspaceEnv],
-  );
+  const control = useGitCollectionMenu({
+    repoRoot,
+    contextKey: headSha ?? "",
+    load: native.gitTagList,
+    keyOf: tagKey,
+    onRefresh,
+  });
+  const { items: tags, loading, error, busyKey: busyName } = control;
 
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={control.menuOpen} onOpenChange={control.setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -477,10 +363,8 @@ export function TagDropdown({
               size="xs"
               variant="ghost"
               className="h-6 cursor-pointer gap-1 px-1.5 text-[11px]"
-              onClick={() => {
-                setOpen(false);
-                setCreateOpen(true);
-              }}
+              disabled={busyName !== null}
+              onClick={control.openDialog}
             >
               <HugeiconsIcon icon={PlusSignIcon} size={12} strokeWidth={2} />
               {t("git.tags.new")}
@@ -526,16 +410,48 @@ export function TagDropdown({
                       <button
                         type="button"
                         title={t("git.tags.push")}
-                        onClick={() => void handlePush(tag.name)}
-                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                        aria-description={
+                          control.actionPending
+                            ? t("git.waitActionFinish")
+                            : undefined
+                        }
+                        disabled={control.actionPending}
+                        onClick={() =>
+                          void control.runEntry(
+                            tag.name,
+                            (root, workspace) =>
+                              native.gitTagPush(
+                                root,
+                                tag.name,
+                                undefined,
+                                workspace,
+                              ),
+                            t("git.tags.pushSuccess", { name: tag.name }),
+                            false,
+                          )
+                        }
+                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <HugeiconsIcon icon={Upload01Icon} size={13} strokeWidth={1.8} />
                       </button>
                       <button
                         type="button"
                         title={t("git.tags.delete")}
-                        onClick={() => void handleDelete(tag.name)}
-                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                        aria-description={
+                          control.actionPending
+                            ? t("git.waitActionFinish")
+                            : undefined
+                        }
+                        disabled={control.actionPending}
+                        onClick={() =>
+                          void control.runEntry(
+                            tag.name,
+                            (root, workspace) =>
+                              native.gitTagDelete(root, tag.name, workspace),
+                            t("git.tags.deleteSuccess", { name: tag.name }),
+                          )
+                        }
+                        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <HugeiconsIcon icon={RemoveSquareIcon} size={13} strokeWidth={1.8} />
                       </button>
@@ -547,75 +463,51 @@ export function TagDropdown({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <TagCreateDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        repoRoot={repoRoot}
-        headSha={headSha}
-        onCreated={() => {
-          onRefresh();
-          void load();
-        }}
-      />
+      {control.dialogKey !== null && (
+        <TagCreateDialog
+          key={control.dialogKey}
+          control={control}
+          headSha={headSha}
+        />
+      )}
     </>
   );
 }
 
 function TagCreateDialog({
-  open,
-  onOpenChange,
-  repoRoot,
+  control,
   headSha,
-  onCreated,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  repoRoot: string | null;
+  control: GitCollectionMenu<GitTagEntry>;
   headSha: string | null;
-  onCreated: () => void;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setName("");
-      setMessage("");
-      setCreating(false);
-      setError(null);
-    }
-  }, [open]);
-
-  const canCreate = name.trim().length > 0 && !creating && !!repoRoot;
-
-  const handleCreate = useCallback(async () => {
-    if (!repoRoot || !canCreate) return;
-    setCreating(true);
-    setError(null);
-    try {
-      await native.gitTagCreate(
-        repoRoot,
-        name.trim(),
-        undefined,
-        message.trim() || undefined,
-        workspaceEnv,
-      );
-      toast.success(t("git.tags.createSuccess", { name: name.trim() }));
-      onOpenChange(false);
-      onCreated();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setCreating(false);
-    }
-  }, [canCreate, message, name, onCreated, onOpenChange, repoRoot, t, workspaceEnv]);
+  const creating = control.busyKey !== null;
+  const error = control.dialogError;
+  const canCreate =
+    name.trim().length > 0 && !creating && !control.actionPending;
+  const handleCreate = () => {
+    if (!canCreate) return;
+    const capturedName = name.trim();
+    const capturedMessage = message.trim() || undefined;
+    return control.submitDialog(
+      (root, workspace) =>
+        native.gitTagCreate(
+          root,
+          capturedName,
+          undefined,
+          capturedMessage,
+          workspace,
+        ),
+      t("git.tags.createSuccess", { name: capturedName }),
+      true,
+    );
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={control.setDialogOpen}>
       <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-md border-border/80">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -674,7 +566,7 @@ function TagCreateDialog({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onOpenChange(false)}
+            onClick={() => control.setDialogOpen(false)}
             disabled={creating}
             className="text-xs"
           >
@@ -686,6 +578,11 @@ function TagCreateDialog({
             onClick={() => void handleCreate()}
             disabled={!canCreate}
             className="gap-2 text-xs font-medium"
+            title={
+              control.actionPending && !creating
+                ? t("git.waitActionFinish")
+                : undefined
+            }
           >
             {creating ? <Spinner className="size-3.5" /> : null}
             {creating ? t("common.loading") : t("git.tags.createAction")}
