@@ -132,6 +132,8 @@ type DiscardRequest = {
   isCurrent: () => boolean;
 };
 
+type PanelAction = { isCurrent: () => boolean; finish: () => void };
+
 function usePanelActionOwner(
   open: boolean,
   contextPath: string | null,
@@ -553,7 +555,11 @@ export function useSourceControlPanel(
     | null,
   dirtyPaths: readonly string[] = [],
 ): SourceControlPanelState {
-  const workspaceEnv = useWorkspaceEnvStore((state) => state.env);
+  const workspaceInput = useWorkspaceEnvStore((state) => state.env);
+  const workspaceEnv = useMemo(
+    () => structuredClone(workspaceInput),
+    [workspaceInput],
+  );
   const capturePanelOwner = usePanelActionOwner(
     isOpen,
     summary.contextPath,
@@ -592,8 +598,40 @@ export function useSourceControlPanel(
     null,
   );
   const discardRef = useRef<DiscardRequest | null>(null);
-  const discardOperationRef = useRef<DiscardRequest | null>(null);
-  const undoOperationRef = useRef<(() => boolean) | null>(null);
+  const actionRef = useRef<PanelAction | null>(null);
+  const unsettledActionsRef = useRef(new Set<PanelAction>());
+  const summaryBusyRef = useRef(summary.busyAction);
+  const openDiffRef = useRef(onOpenDiff);
+  useLayoutEffect(() => {
+    summaryBusyRef.current = summary.busyAction;
+    openDiffRef.current = onOpenDiff;
+  }, [summary.busyAction, onOpenDiff]);
+  const beginAction = useCallback(
+    (callerIsCurrent?: () => boolean): PanelAction | null => {
+      const ownsPanel = capturePanelOwner();
+      if (
+        !ownsPanel ||
+        callerIsCurrent?.() === false ||
+        !repo ||
+        repo !== summary.repo ||
+        summaryBusyRef.current ||
+        actionRef.current?.isCurrent() ||
+        unsettledActionsRef.current.size >= 256
+      )
+        return null;
+      const action: PanelAction = {
+        isCurrent: () => ownsPanel() && callerIsCurrent?.() !== false,
+        finish: () => {
+          unsettledActionsRef.current.delete(action);
+          if (actionRef.current === action) actionRef.current = null;
+        },
+      };
+      unsettledActionsRef.current.add(action);
+      actionRef.current = action;
+      return action;
+    },
+    [capturePanelOwner, repo, summary.repo],
+  );
   const dirtyPathsRef = useRef(dirtyPaths);
   useLayoutEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
@@ -602,9 +640,7 @@ export function useSourceControlPanel(
     const isCurrent = capturePanelOwner();
     discardRef.current = null;
     setPendingDiscard(null);
-    setLocalActionBusy((current) =>
-      current === "undo" || current?.startsWith("discard:") ? null : current,
-    );
+    setLocalActionBusy(null);
     setActionMessage(null);
     setActionError(null);
     return () => {
@@ -858,7 +894,13 @@ export function useSourceControlPanel(
 
   const selectEntry = useCallback(
     async (entry: SourceControlEntry) => {
-      if (!repo) return;
+      if (
+        !repo ||
+        !capturePanelOwner() ||
+        onOpenDiff !== openDiffRef.current ||
+        repo !== summary.repo
+      )
+        return;
       const nextSelection: DiffSelection = {
         path: entry.path,
         mode: entry.mode,
@@ -876,44 +918,57 @@ export function useSourceControlPanel(
       const file = status?.changedFiles.find((c) => c.path === entry.path);
       openSelection(nextSelection, repo.repoRoot, file);
     },
-    [openSelection, repo, selected, status],
+    [
+      capturePanelOwner,
+      onOpenDiff,
+      openSelection,
+      repo,
+      selected,
+      status,
+      summary.repo,
+    ],
   );
 
   const runMutation = useCallback(
     async (
       busyKey: string,
       optimistic: ((status: GitStatusSnapshot) => GitStatusSnapshot) | null,
-      ipc: () => Promise<void>,
+      ipc: (isCurrent: () => boolean) => Promise<void>,
       affected: string[],
-      isCurrent?: () => boolean,
+      callerIsCurrent?: () => boolean,
     ) => {
-      if (!repo || summary.busyAction || isCurrent?.() === false) return;
-      setLocalActionBusy(busyKey);
-      setActionMessage(null);
-      setActionError(null);
-      if (optimistic)
-        summary.applyStatus((current) =>
-          isCurrent?.() === false ? current : optimistic(current),
-        );
-      for (const path of affected) {
-        invalidateDiff(workingDiffKey(repo.repoRoot, path, "+"));
-        invalidateDiff(workingDiffKey(repo.repoRoot, path, "-"));
-      }
+      const action = beginAction(callerIsCurrent);
+      if (!action || !repo) return false;
+      const { isCurrent } = action;
       try {
-        if (isCurrent?.() === false) return;
-        await ipc();
-        if (isCurrent?.() === false) return;
+        setLocalActionBusy(busyKey);
+        setActionMessage(null);
+        setActionError(null);
+        if (optimistic)
+          summary.applyStatus((current) =>
+            isCurrent() ? optimistic(current) : current,
+          );
+        for (const path of affected) {
+          invalidateDiff(workingDiffKey(repo.repoRoot, path, "+"));
+          invalidateDiff(workingDiffKey(repo.repoRoot, path, "-"));
+        }
+        if (!isCurrent()) return false;
+        await ipc(isCurrent);
+        if (!isCurrent()) return false;
         scheduleReconcile(isCurrent);
+        return true;
       } catch (error) {
-        if (isCurrent?.() === false) return;
+        if (!isCurrent()) return false;
         setActionError(normalizeError(error));
         cancelReconcile();
         await summary.refresh({ remote: "never" }).catch(() => {});
+        return false;
       } finally {
-        if (isCurrent?.() !== false) setLocalActionBusy(null);
+        if (isCurrent()) setLocalActionBusy(null);
+        action.finish();
       }
     },
-    [cancelReconcile, repo, scheduleReconcile, summary],
+    [beginAction, cancelReconcile, repo, scheduleReconcile, summary],
   );
 
   const stageEntry = useCallback(
@@ -950,9 +1005,9 @@ export function useSourceControlPanel(
       if (
         !isCurrent ||
         !repo ||
-        repo.repoRoot !== summary.repo?.repoRoot ||
+        repo !== summary.repo ||
         summary.busyAction ||
-        discardOperationRef.current?.isCurrent() ||
+        actionRef.current?.isCurrent() ||
         entries.length === 0
       )
         return;
@@ -977,7 +1032,7 @@ export function useSourceControlPanel(
     [
       capturePanelOwner,
       repo,
-      summary.repo?.repoRoot,
+      summary.repo,
       summary.busyAction,
       t,
       workspaceEnv,
@@ -1033,26 +1088,20 @@ export function useSourceControlPanel(
       untracked: entry.untracked,
     }));
     const paths = new Set(list.map((entry) => entry.path));
-    discardOperationRef.current = pendingDiscard;
-    try {
-      await runMutation(
-        pendingDiscard.scope === "single"
-          ? `discard:${list[0].path}`
-          : "discard:all",
-        (s) => optimisticDiscard(s, paths),
-        () =>
-          native.gitDiscard(
-            pendingDiscard.repoRoot,
-            entries,
-            pendingDiscard.workspaceEnv,
-          ),
-        [...paths],
-        pendingDiscard.isCurrent,
-      );
-    } finally {
-      if (discardOperationRef.current === pendingDiscard)
-        discardOperationRef.current = null;
-    }
+    await runMutation(
+      pendingDiscard.scope === "single"
+        ? `discard:${list[0].path}`
+        : "discard:all",
+      (s) => optimisticDiscard(s, paths),
+      () =>
+        native.gitDiscard(
+          pendingDiscard.repoRoot,
+          entries,
+          pendingDiscard.workspaceEnv,
+        ),
+      [...paths],
+      pendingDiscard.isCurrent,
+    );
   }, [pendingDiscard, repo, runMutation, t]);
 
   const stageAllEntries = useCallback(async () => {
@@ -1079,7 +1128,13 @@ export function useSourceControlPanel(
 
   const selectFile = useCallback(
     async (entry: SourceControlFileEntry) => {
-      if (!repo) return;
+      if (
+        !repo ||
+        !capturePanelOwner() ||
+        onOpenDiff !== openDiffRef.current ||
+        repo !== summary.repo
+      )
+        return;
       const mode: DiffMode = entry.unstaged ? "-" : "+";
       const nextSelection: DiffSelection = { path: entry.path, mode };
       if (sameSelection(selected, nextSelection)) {
@@ -1095,7 +1150,15 @@ export function useSourceControlPanel(
       const file = status?.changedFiles.find((c) => c.path === entry.path);
       openSelection(nextSelection, repo.repoRoot, file);
     },
-    [openSelection, repo, selected, status],
+    [
+      capturePanelOwner,
+      onOpenDiff,
+      openSelection,
+      repo,
+      selected,
+      status,
+      summary.repo,
+    ],
   );
 
   const toggleStageFile = useCallback(
@@ -1323,32 +1386,38 @@ export function useSourceControlPanel(
   const applySemanticGroup = useCallback(
     async (group: SemanticCommitGroup) => {
       if (!repo) return;
-      const pathsToStage = new Set(group.files);
+      const files = [...group.files];
+      const message = group.message;
+      const allStaged = stagedEntries.map((entry) => entry.path);
+      const pathsToStage = new Set(files);
       await runMutation(
         `semantic-stage:${group.id}`,
         (s) => optimisticStage(s, pathsToStage),
-        async () => {
-          if (stagedEntries.length > 0) {
-            const allStaged = stagedEntries.map((e) => e.path);
+        async (ownsAction) => {
+          if (allStaged.length > 0) {
             await native.gitUnstage(repo.repoRoot, allStaged, workspaceEnv);
           }
-          await native.gitStage(repo.repoRoot, group.files, workspaceEnv);
+          if (!ownsAction()) return;
+          await native.gitStage(repo.repoRoot, files, workspaceEnv);
+          if (!ownsAction()) return;
+          setCommitMessage(message);
+          setActionMessage(
+            t("feedback.stagedFiles", {
+              count: files.length,
+              message,
+            }),
+          );
         },
         [...pathsToStage],
-      );
-      setCommitMessage(group.message);
-      setActionMessage(
-        t("feedback.stagedFiles", {
-          count: group.files.length,
-          message: group.message,
-        }),
       );
     },
     [repo, runMutation, stagedEntries, t, workspaceEnv],
   );
 
   const commit = useCallback(async () => {
-    if (!repo || summary.busyAction) return;
+    const action = beginAction();
+    if (!action || !repo) return;
+    const { isCurrent } = action;
     setLocalActionBusy("commit");
     setActionMessage(null);
     setActionError(null);
@@ -1359,8 +1428,10 @@ export function useSourceControlPanel(
         commitMessage,
         workspaceEnv,
       );
+      if (!isCurrent()) return;
       committed = true;
       playVokttySound("success", { retrigger: "restart" });
+      if (!isCurrent()) return;
       setCommitMessage("");
       setActionMessage(
         t("feedback.committed", {
@@ -1371,41 +1442,48 @@ export function useSourceControlPanel(
       invalidateRepoDiffs(repo.repoRoot, workspaceEnv);
       await summary.refresh({ remote: "never" });
     } catch (error) {
+      if (!isCurrent()) return;
       setActionError(normalizeError(error));
       if (!committed) playVokttySound("error", { retrigger: "restart" });
     } finally {
-      setLocalActionBusy(null);
+      if (isCurrent()) setLocalActionBusy(null);
+      action.finish();
     }
-  }, [commitMessage, repo, summary, t, workspaceEnv]);
+  }, [beginAction, commitMessage, repo, summary, t, workspaceEnv]);
 
   const push = useCallback(async () => {
-    if (!repo) return;
+    const action = beginAction();
+    if (!action) return;
+    const { isCurrent } = action;
+    setLocalActionBusy("push");
     setActionMessage(null);
     setActionError(null);
-    const result = await summary.runRemoteAction("push");
-    if (result.ok) {
-      setActionMessage(
-        status?.upstream
-          ? t("feedback.pushed", { upstream: status.upstream })
-          : t("feedback.pushCompleted"),
-      );
-      return;
+    try {
+      const result = await summary.runRemoteAction("push");
+      if (!isCurrent()) return;
+      if (result.ok) {
+        setActionMessage(
+          status?.upstream
+            ? t("feedback.pushed", { upstream: status.upstream })
+            : t("feedback.pushCompleted"),
+        );
+        return;
+      }
+      if (result.error) {
+        setActionError(result.error);
+      }
+    } catch (error) {
+      if (isCurrent()) setActionError(normalizeError(error));
+    } finally {
+      if (isCurrent()) setLocalActionBusy(null);
+      action.finish();
     }
-    if (result.error) {
-      setActionError(result.error);
-    }
-  }, [repo, status?.upstream, summary]);
+  }, [beginAction, status?.upstream, summary, t]);
 
   const undoCommit = useCallback(async () => {
-    const isCurrent = capturePanelOwner();
-    if (
-      !isCurrent ||
-      !repo ||
-      repo.repoRoot !== summary.repo?.repoRoot ||
-      undoOperationRef.current?.()
-    )
-      return;
-    undoOperationRef.current = isCurrent;
+    const action = beginAction();
+    if (!action) return;
+    const { isCurrent } = action;
     setActionMessage(null);
     setActionError(null);
     setLocalActionBusy("undo");
@@ -1417,9 +1495,9 @@ export function useSourceControlPanel(
       if (isCurrent()) setActionError(normalizeError(error));
     } finally {
       if (isCurrent()) setLocalActionBusy(null);
-      if (undoOperationRef.current === isCurrent) undoOperationRef.current = null;
+      action.finish();
     }
-  }, [capturePanelOwner, repo, summary, t]);
+  }, [beginAction, summary, t]);
 
   const canUndo = (status?.ahead ?? 0) > 0;
 
