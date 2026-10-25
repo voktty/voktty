@@ -7,6 +7,7 @@ import type { SourceControlSummary } from "@/modules/source-control/useSourceCon
 import { t } from "@/modules/i18n";
 
 const feedback = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const refreshCallbacks = vi.hoisted(() => [] as (() => void)[]);
 vi.mock("sonner", () => ({ toast: feedback }));
 vi.mock("@/modules/ai/lib/native", () => ({ native: {} }));
 vi.mock("@/modules/ai/lib/runtimeAvailability", () => ({
@@ -14,7 +15,10 @@ vi.mock("@/modules/ai/lib/runtimeAvailability", () => ({
   isAiRuntimeAvailable: () => false,
 }));
 vi.mock("@/modules/source-control/ConflictsPanel", () => ({
-  ConflictsPanel: () => null,
+  ConflictsPanel: ({ onRefresh }: { onRefresh: () => void }) => {
+    refreshCallbacks.push(onRefresh);
+    return null;
+  },
 }));
 vi.mock("@/modules/source-control/BranchCompareDialog", () => ({
   BranchCompareDialog: () => null,
@@ -61,6 +65,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   feedback.success.mockReset();
   feedback.error.mockReset();
+  refreshCallbacks.length = 0;
   container = document.createElement("div");
   root = createRoot(container);
   value = {
@@ -87,6 +92,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await act(async () => root.unmount());
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 it.each<Control>(["trust", "init"])(
@@ -99,6 +105,115 @@ it.each<Control>(["trust", "init"])(
     expect(feedback.error).not.toHaveBeenCalled();
   },
 );
+
+function clickRefresh() {
+  const button = container.querySelector<HTMLButtonElement>(
+    `button[aria-label="${t("git.refreshSourceControl")}"]`,
+  );
+  expect(button).not.toBeNull();
+  button?.click();
+}
+function refreshAnimating() {
+  return !!container.querySelector(
+    `button[aria-label="${t("git.refreshSourceControl")}"] .animate-spin`,
+  );
+}
+it("keeps a newer refresh animating while an older refresh settles", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  let first!: () => void;
+  let second!: () => void;
+  value.refresh = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          first = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          second = resolve;
+        }),
+    );
+  await render();
+  await act(async () => clickRefresh());
+  await act(async () => clickRefresh());
+  await act(async () => first());
+  await act(async () => vi.advanceTimersByTime(450));
+  expect(refreshAnimating()).toBe(true);
+  await act(async () => second());
+  await act(async () => vi.advanceTimersByTime(450));
+  expect(refreshAnimating()).toBe(false);
+});
+it("does not lend refresh animation or a cached refresh callback to another context", async () => {
+  let done!: () => void;
+  value.refresh = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        done = resolve;
+      }),
+  );
+  await render();
+  const retired = refreshCallbacks[refreshCallbacks.length - 1];
+  await act(async () => clickRefresh());
+  expect(refreshAnimating()).toBe(true);
+  value = { ...value, contextPath: "/replacement" };
+  await render();
+  expect(refreshAnimating()).toBe(false);
+  expect(retired).toBeDefined();
+  await act(async () => retired?.());
+  expect(refreshAnimating()).toBe(false);
+  await act(async () => done());
+});
+it("does not allocate a refresh timer after its panel unmounts", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  let done!: () => void;
+  value.refresh = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        done = resolve;
+      }),
+  );
+  await render();
+  await act(async () => clickRefresh());
+  await act(async () => root.render(null));
+  const before = vi.getTimerCount();
+  await act(async () => done());
+  expect(vi.getTimerCount()).toBe(before);
+});
+it("finishes current refresh feedback after rejection without an unhandled promise", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  value.refresh = vi.fn(async () => {
+    throw new Error("Refresh refused");
+  });
+  await render();
+  await act(async () => clickRefresh());
+  expect(refreshAnimating()).toBe(true);
+  await act(async () => vi.advanceTimersByTime(449));
+  expect(refreshAnimating()).toBe(true);
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(refreshAnimating()).toBe(false);
+  expect(feedback.error).not.toHaveBeenCalled();
+});
+it("does not revive refresh feedback after closing and reopening the same panel", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  let done!: () => void;
+  value.refresh = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        done = resolve;
+      }),
+  );
+  await render();
+  await act(async () => clickRefresh());
+  await render(false);
+  await render();
+  const before = vi.getTimerCount();
+  await act(async () => done());
+  expect(refreshAnimating()).toBe(false);
+  expect(vi.getTimerCount()).toBe(before);
+});
 it.each<Control>(["trust", "init"])(
   "announces current %s success exactly once",
   async (control) => {

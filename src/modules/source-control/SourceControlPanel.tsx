@@ -38,6 +38,7 @@ import { IS_MAC } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import { useBranchDropdown } from "@/modules/source-control/useBranchDropdown";
+import { useSourceControlRefreshAnimation } from "@/modules/source-control/useSourceControlRefreshAnimation";
 import {
   useSourceControlEntryMenu,
   type SourceControlFileOpening,
@@ -498,8 +499,6 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     () => scm.status?.changedFiles.filter((f) => f.conflicted) ?? [],
     [scm.status],
   );
-  const refreshAnimationRef = useRef<number | null>(null);
-  const [refreshAnimating, setRefreshAnimating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusedRowKey, setFocusedRowKey] = useState<string | null>(null);
@@ -508,14 +507,6 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   );
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (refreshAnimationRef.current) {
-        window.clearTimeout(refreshAnimationRef.current);
-      }
-    };
-  }, []);
 
   const fixedTargetPending = repositoryTargetIsPending({
     target: repositoryTarget,
@@ -606,18 +597,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     }
   };
 
-  const handleRefresh = useCallback(() => {
-    setRefreshAnimating(true);
-    if (refreshAnimationRef.current) {
-      window.clearTimeout(refreshAnimationRef.current);
-    }
-    void scm.refresh().finally(() => {
-      refreshAnimationRef.current = window.setTimeout(() => {
-        setRefreshAnimating(false);
-        refreshAnimationRef.current = null;
-      }, 450);
-    });
-  }, [scm]);
+  const { handleRefresh, refreshAnimating } = useSourceControlRefreshAnimation({
+    open,
+    contextKey: JSON.stringify([sourceControl.contextPath, repositoryTarget]),
+    refresh: scm.refresh,
+  });
 
   const handleFetch = useCallback(() => {
     void sourceControl.runRemoteAction("fetch");
