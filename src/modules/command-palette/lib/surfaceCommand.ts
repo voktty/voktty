@@ -13,6 +13,7 @@ export function surfaceCommandReason(command: SurfaceCommand, surface: ActiveSur
   const reason = commandSurfaceUnavailableReason(command.id, surface);
   if (reason === "editor-required") return "commandPalette.disabled.noEditorTab";
   if (reason === "terminal-required") return "commandPalette.disabled.noTerminalTab";
+  if (reason === "format-filesystem-unsupported") return "git.unsupportedFilesystem";
   return undefined;
 }
 

@@ -61,7 +61,7 @@ it.each(["/project", "remote://machine/project"])(
         expect(
           commandSurfaceUnavailableReason(id, surface),
           `${id} on ${kind} at ${cwd}`,
-        ).toBe(allowed ? null : reason);
+        ).toBe(id === "editor.formatDocument" && kind === "editor" && cwd.startsWith("remote://") ? "format-filesystem-unsupported" : allowed ? null : reason);
       }
     }
   },

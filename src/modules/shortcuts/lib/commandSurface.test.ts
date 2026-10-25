@@ -10,7 +10,7 @@ it.each(["/project", "remote://machine/project"])("resolves commands across Harn
   expect(commandSurfaceUnavailableReason("pane.splitRight", terminal)).toBeNull();
   expect(commandSurfaceUnavailableReason("editor.formatDocument", harness)).toBe("editor-required");
   expect(commandSurfaceUnavailableReason("editor.formatDocument", terminal)).toBe("editor-required");
-  expect(commandSurfaceUnavailableReason("editor.formatDocument", editor)).toBeNull();
+  expect(commandSurfaceUnavailableReason("editor.formatDocument", editor)).toBe(cwd.startsWith("remote://") ? "format-filesystem-unsupported" : null);
   for (const surface of [harness, terminal, editor]) {
     expect(commandSurfaceUnavailableReason("tab.new", surface)).toBeNull();
     expect(commandSurfaceUnavailableReason("commandPalette.open", surface)).toBeNull();

@@ -1,10 +1,15 @@
 import type { ActiveSurface, SurfaceKind } from "@/modules/surfaces/lib/activeSurface";
 import type { ShortcutId } from "@/modules/shortcuts/shortcuts";
+import { supportsDocumentFormatting } from "@/modules/surfaces/lib/documentFormatting";
 
 export type CommandSurfaceRule = {
   appliesTo: readonly SurfaceKind[];
-  unavailableReason: "editor-required" | "terminal-required" | null;
-  requires?: "preview-project";
+  unavailableReason:
+    | "editor-required"
+    | "terminal-required"
+    | "format-filesystem-unsupported"
+    | null;
+  requires?: "preview-project" | "document-format";
 };
 
 const EDITOR: CommandSurfaceRule = {
@@ -21,6 +26,7 @@ const GLOBAL: CommandSurfaceRule = {
 };
 
 const PREVIEW: CommandSurfaceRule = { ...GLOBAL, requires: "preview-project" };
+const FORMAT: CommandSurfaceRule = { ...EDITOR, requires: "document-format" };
 
 const RULES: Readonly<Record<ShortcutId, CommandSurfaceRule>> = {
   "agent.focusAttention": GLOBAL,
@@ -74,7 +80,7 @@ const RULES: Readonly<Record<ShortcutId, CommandSurfaceRule>> = {
   "editor.aiComplete": EDITOR,
   "editor.codeComplete": EDITOR,
   "editor.gotoLine": EDITOR,
-  "editor.formatDocument": EDITOR,
+  "editor.formatDocument": FORMAT,
   "editor.quickFix": EDITOR,
   "editor.signatureHelp": EDITOR,
   "editor.goToDefinition": EDITOR,
@@ -199,8 +205,17 @@ export function declaredCommandSurfaceRule(id: string): CommandSurfaceRule | und
 
 export function commandSurfaceUnavailableReason(
   id: string,
-  surface: Pick<ActiveSurface, "kind">,
+  surface: Pick<ActiveSurface, "kind"> &
+    Partial<Pick<ActiveSurface, "environment" | "folder">>,
 ): CommandSurfaceRule["unavailableReason"] {
   const rule = commandSurfaceRule(id);
-  return rule.appliesTo.includes(surface.kind) ? null : rule.unavailableReason;
+  if (!rule.appliesTo.includes(surface.kind)) return rule.unavailableReason;
+  if (
+    rule.requires === "document-format" &&
+    surface.environment &&
+    !supportsDocumentFormatting(surface.folder, surface.environment)
+  ) {
+    return "format-filesystem-unsupported";
+  }
+  return null;
 }

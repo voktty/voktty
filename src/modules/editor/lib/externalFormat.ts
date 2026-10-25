@@ -1,6 +1,7 @@
 import { quoteShellArg } from "@/lib/shellQuote";
 import { IS_WINDOWS } from "@/lib/platform";
 import { t } from "@/modules/i18n";
+import { supportsDocumentFormatting } from "@/modules/surfaces/lib/documentFormatting";
 import type { EditorFormatter } from "@/modules/settings/store";
 import {
   currentWorkspaceEnv,
@@ -112,21 +113,9 @@ export function formatterWorkspace(
   workspace: WorkspaceEnv,
   windows = IS_WINDOWS,
 ): WorkspaceEnv | undefined {
-  if (
-    path.length > 32768 ||
-    /[\0\r\n]/.test(path) ||
-    !/^(?:[a-zA-Z]:[\\/]|[\\/]{2}|\/)/.test(path)
-  )
-    return undefined;
+  if (!supportsDocumentFormatting(path, workspace, windows)) return undefined;
   const owner = workspaceForDocumentPath(workspace, path);
-  if (owner.kind === "wsl") return windows ? { ...owner } : undefined;
-  if (owner.kind !== "local") return undefined;
-  if (
-    workspace.kind !== "local" &&
-    workspace.kind !== "wsl" &&
-    !/^(?:[a-zA-Z]:[\\/]|[\\/]{2})/.test(path)
-  )
-    return undefined;
+  if (owner.kind === "wsl") return { ...owner };
   return LOCAL_WORKSPACE;
 }
 

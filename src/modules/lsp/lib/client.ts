@@ -964,14 +964,6 @@ export function lspInteractions(opts: {
         preventDefault: true,
         run: renameAtCursor,
       },
-      {
-        key: "Shift-Alt-f",
-        preventDefault: true,
-        run: (view) => {
-          void formatDocumentAndWait(view);
-          return true;
-        },
-      },
     ]),
     EditorView.domEventHandlers({
       mousedown: (event, view) => {

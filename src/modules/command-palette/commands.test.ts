@@ -3,7 +3,8 @@ import { createLauncherItems, type LauncherActionContext } from "@/modules/launc
 import { SHORTCUTS } from "@/modules/shortcuts/shortcuts";
 import { declaredCommandSurfaceRule, commandSurfaceUnavailableReason } from "@/modules/shortcuts/lib/commandSurface";
 import { resolveActiveSurface } from "@/modules/surfaces/lib/activeSurface";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { t } from "@/modules/i18n";
 import {
   type CommandPaletteActionContext,
   createCommandItems,
@@ -111,7 +112,7 @@ it.each(["/project", "remote://machine/project"])("declares every catalog comman
       const split = id === "pane.splitRight" || id === "pane.splitDown";
       const allowed = editorOnly ? kind === "editor" : terminalCommands.has(id) ? kind === "terminal" : split ? kind === "editor" || kind === "terminal" : true;
       const reason = editorOnly ? "editor-required" : "terminal-required";
-      expect(commandSurfaceUnavailableReason(id, surface), `${id} on ${kind} at ${cwd}`).toBe(allowed ? null : reason);
+      expect(commandSurfaceUnavailableReason(id, surface), `${id} on ${kind} at ${cwd}`).toBe(id === "editor.formatDocument" && kind === "editor" && cwd.startsWith("remote://") ? "format-filesystem-unsupported" : allowed ? null : reason);
       const item = catalog.find((candidate) => candidate.id === id);
       if (item) expect(item.appliesTo?.includes(kind), `${id} catalog on ${kind}`).toBe(allowed);
     }
@@ -119,6 +120,26 @@ it.each(["/project", "remote://machine/project"])("declares every catalog comman
 });
 
 describe("createCommandItems", () => {
+  it.each(["/workspace/file.ts", "remote://machine/project/file.ts"])("keeps format discoverable and constrains delivery to the document filesystem at %s", (path) => {
+    const noop = () => {};
+    const format = vi.fn();
+    const editorActions: NonNullable<CommandPaletteActionContext["editorActions"]> = {
+      openSearch: noop, openGotoLine: noop, formatDocument: format,
+      triggerInlineAi: noop, triggerQuickFix: noop, triggerSignatureHelp: noop,
+      triggerLspNavigation: noop, triggerLspPeek: noop, triggerAiComplete: noop,
+      triggerCodeComplete: noop, runEditCommand: noop, runInlineSuggestionCommand: noop,
+      splitGroup: noop, closeGroup: noop, focusGroup: noop,
+    };
+    const tab = { id: 1, kind: "editor", path, spaceId: "s", title: "file" } as Tab;
+    const items = createCommandItems(baseContext({ tabs: [tab], editorActions }));
+    const item = items.find((candidate) => candidate.id === "editor.formatDocument");
+    expect(item).toBeDefined();
+    expect(item?.appliesTo).toEqual(["editor"]);
+    expect(item?.disabledReason).toBe(path.startsWith("remote://") ? t("git.unsupportedFilesystem") : undefined);
+    item?.run();
+    expect(format).toHaveBeenCalledTimes(path.startsWith("remote://") ? 0 : 1);
+    expect(items.find((candidate) => candidate.id === "editor.find")?.disabledReason).toBeUndefined();
+  });
   it("removes built-in AI actions when AI is unavailable", () => {
     const noop = () => {};
     const editorActions = {

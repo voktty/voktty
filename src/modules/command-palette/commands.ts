@@ -9,6 +9,7 @@ import { leafIds, useCommandHistoryStore } from "@/modules/terminal";
 import { useVaultStore } from "@/modules/vault";
 import { copyPerfSnapshot } from "./copyPerfSnapshot";
 import { commandSurfaceRule } from "@/modules/shortcuts/lib/commandSurface";
+import { supportsDocumentFormatting } from "@/modules/surfaces/lib/documentFormatting";
 import {
   Alert02Icon,
   ArrowLeft01Icon,
@@ -1345,7 +1346,12 @@ export function createCommandItems(
 
   const declared = items.map((item) => {
     const rule = commandSurfaceRule(item.id);
-    const disabledReason = item.disabledReason ?? (rule.requires === "preview-project" ? ctx.previewDisabledReason : undefined) ?? (
+    const formatDisabledReason =
+      rule.requires === "document-format" &&
+      activeTab?.kind === "editor" &&
+      !supportsDocumentFormatting(activeTab.path, activeTab.workspaceEnv ?? { kind: "local" })
+        ? t("git.unsupportedFilesystem") : undefined;
+    const disabledReason = item.disabledReason ?? formatDisabledReason ?? (rule.requires === "preview-project" ? ctx.previewDisabledReason : undefined) ?? (
       rule.unavailableReason === "editor-required" && !ctx.editorActions && item.id !== "editor.revealInExplorer"
         ? t("commandPalette.disabled.noEditorTab") : undefined
     );
