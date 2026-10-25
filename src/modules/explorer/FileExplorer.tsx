@@ -115,6 +115,7 @@ type Props = {
   ) => void;
   pathDropTarget?: TerminalPathDropTarget;
   gitStatus?: GitStatusSnapshot | null;
+  gitWorkspaceEnv?: WorkspaceEnv;
   hasGitRepo?: boolean;
   onPrepareNavigationRoot?: (path: string) => Promise<boolean>;
   onSyncToTerminal?: () => Promise<string | null | void> | string | null | void;
@@ -268,6 +269,7 @@ export const FileExplorer = memo(
       onAttachToAgent,
       pathDropTarget,
       gitStatus,
+      gitWorkspaceEnv,
       hasGitRepo,
       onPrepareNavigationRoot,
       onSyncToTerminal,
@@ -307,6 +309,8 @@ export const FileExplorer = memo(
       rootPath,
       gitDecorations ? gitStatus : null,
       gitDecorations,
+      workspaceEnv,
+      gitWorkspaceEnv,
     );
     const [selectedPaths, setSelectedPaths] = useState<Set<string>>(
       () => new Set(),

@@ -1,11 +1,13 @@
-import { native, type GitStatusSnapshot } from "@/modules/ai/lib/native";
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import type { GitStatusSnapshot } from "@/modules/ai/lib/native";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   bubbleUpDirectoryStatuses,
   buildGitStatusMap,
   lookupGitStatus,
   normalizePath,
+  repoRelativePath,
   type GitStatusCode,
 } from "./gitStatusUtils";
 
@@ -18,25 +20,72 @@ export function useGitStatus(
   workspaceRoot: string | null,
   status: GitStatusSnapshot | null | undefined,
   enabled: boolean,
+  workspace: WorkspaceEnv,
+  statusWorkspace: WorkspaceEnv | undefined,
 ) {
-  const [canonicalRoot, setCanonicalRoot] = useState<string | null>(null);
-  const reqRef = useRef(0);
+  const filesystem = JSON.stringify(workspace);
+  const statusFilesystem = JSON.stringify(statusWorkspace);
+  const sameFilesystem = filesystem === statusFilesystem;
+  const hasSnapshot = !!status;
+  const binding = useMemo(
+    () => ({
+      workspaceRoot,
+      filesystem,
+      statusFilesystem,
+      enabled,
+      hasSnapshot,
+    }),
+    [workspaceRoot, filesystem, statusFilesystem, enabled, hasSnapshot],
+  );
+  const [canonical, setCanonical] = useState<{
+    binding: typeof binding;
+    path: string;
+  } | null>(null);
+  const unsettled = useRef(new Set<object>());
+  const canonicalRoot = canonical?.binding === binding ? canonical.path : null;
 
   useEffect(() => {
-    if (!enabled || !workspaceRoot || currentWorkspaceEnv().kind === "ssh") {
-      setCanonicalRoot(null);
+    const captured: WorkspaceEnv = JSON.parse(filesystem);
+    if (
+      !enabled ||
+      !hasSnapshot ||
+      !sameFilesystem ||
+      !workspaceRoot ||
+      (!workspaceRoot.startsWith("/") &&
+        !/^[A-Za-z]:[/\\]/.test(workspaceRoot)) ||
+      (captured.kind === "wsl" && !workspaceRoot.startsWith("/")) ||
+      (captured.kind !== "local" && captured.kind !== "wsl") ||
+      unsettled.current.size >= 256
+    ) {
       return;
     }
-    const req = ++reqRef.current;
-    void native
-      .canonicalize(workspaceRoot)
+    const receipt = { active: true };
+    unsettled.current.add(receipt);
+    void invoke<string>("fs_canonicalize", {
+      path: workspaceRoot,
+      workspace: captured,
+    })
       .then((c) => {
-        if (req === reqRef.current) setCanonicalRoot(c);
+        if (receipt.active)
+          setCanonical((previous) =>
+            receipt.active ? { binding, path: c } : previous,
+          );
       })
-      .catch(() => {
-        if (req === reqRef.current) setCanonicalRoot(null);
+      .catch(() => {})
+      .finally(() => {
+        unsettled.current.delete(receipt);
       });
-  }, [enabled, workspaceRoot]);
+    return () => {
+      receipt.active = false;
+    };
+  }, [
+    binding,
+    enabled,
+    hasSnapshot,
+    sameFilesystem,
+    workspaceRoot,
+    filesystem,
+  ]);
 
   const aliases = useMemo(() => {
     const out: string[] = [];
@@ -56,11 +105,13 @@ export function useGitStatus(
   const repoRoot0 = status ? normalizePath(status.repoRoot) : null;
   const covers =
     enabled &&
+    sameFilesystem &&
     !!status &&
-    !!repoRoot0 &&
+    repoRoot0 !== null &&
     aliases.some((a) => {
       const t = normalizePath(a);
       return (
+        (t === "" && a.startsWith("/") && repoRoot0.startsWith("/")) ||
         t === repoRoot0 ||
         t.startsWith(`${repoRoot0}/`) ||
         repoRoot0.startsWith(`${t}/`)
@@ -76,9 +127,20 @@ export function useGitStatus(
   const repoRoot = covers && status ? status.repoRoot : null;
 
   const lookup = useCallback(
-    (path: string): GitStatusCode | null =>
-      repoRoot ? lookupGitStatus(map, repoRoot, path, aliases) : null,
-    [repoRoot, map, aliases],
+    (path: string): GitStatusCode | null => {
+      if (!repoRoot) return null;
+      const direct = lookupGitStatus(map, repoRoot, path);
+      if (direct || !workspaceRoot || !canonicalRoot) return direct;
+      const relative = repoRelativePath(path, [workspaceRoot]);
+      return relative === null
+        ? null
+        : lookupGitStatus(
+            map,
+            repoRoot,
+            `${canonicalRoot.replace(/\/+$/, "")}/${relative}`,
+          );
+    },
+    [repoRoot, map, workspaceRoot, canonicalRoot],
   );
 
   return { lookup };
