@@ -17,6 +17,8 @@ After an action, Voktty invalidates both staged and unstaged diff cache entries 
 
 Git actions operate on filesystem state, not on CodeMirror memory. Before any discard, both the sidebar and review queue compare the target path and rename source path with all dirty editor tabs. A match blocks the operation before Rust receives it. The check runs again after the confirmation dialog to close the race where a buffer becomes dirty while the dialog is open.
 
+Sidebar discard dialogs capture copied entries, the repository root and the full filesystem descriptor. A committed panel context change, close or unmount permanently retires that confirmation, including a filesystem round trip before React commits. Confirm and cancel consume only their exact dialog; cached callbacks cannot act on a successor. Confirmation checks the latest committed dirty-buffer list. Retired discard results cannot publish errors, clear a successor's busy state or request reconciliation. These guards do not cancel or roll back a native Git operation already admitted.
+
 Staging a file with an unsaved editor is allowed because it does not destroy the in-memory buffer. Only the current on-disk version is staged.
 
 ## Trust boundary

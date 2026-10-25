@@ -21,7 +21,14 @@ import { useTranslation } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { playVokttySound } from "@/modules/sound";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   buildGitReviewEntries,
   type GitReviewCheckState,
@@ -116,6 +123,62 @@ export type PendingDiscard = {
   count: number;
   label: string;
 };
+
+type DiscardRequest = {
+  scope: "single" | "all";
+  entries: SourceControlEntry[];
+  repoRoot: string;
+  workspaceEnv: WorkspaceEnv;
+  isCurrent: () => boolean;
+};
+
+function useDiscardOwner(
+  open: boolean,
+  contextPath: string | null,
+  repoRoot: string | undefined,
+  workspace: WorkspaceEnv,
+) {
+  const workspaceKey = JSON.stringify(workspace);
+  const [epoch, setEpoch] = useState(0);
+  const epochRef = useRef(0);
+  const binding = useMemo(
+    () => ({ open, contextPath, repoRoot, workspaceKey, epoch }),
+    [open, contextPath, repoRoot, workspaceKey, epoch],
+  );
+  const current = useRef<{ binding: typeof binding; live: boolean } | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    let previous = JSON.stringify(useWorkspaceEnvStore.getState().env);
+    return useWorkspaceEnvStore.subscribe((next) => {
+      const key = JSON.stringify(next.env);
+      if (key !== previous) {
+        epochRef.current++;
+        setEpoch(epochRef.current);
+      }
+      previous = key;
+    });
+  }, []);
+  useLayoutEffect(() => {
+    const owner = { binding, live: true };
+    current.current = owner;
+    return () => {
+      owner.live = false;
+    };
+  }, [binding]);
+  return useCallback(() => {
+    const owner = current.current;
+    const isCurrent = () =>
+      !!owner?.live &&
+      current.current === owner &&
+      owner.binding === binding &&
+      binding.open &&
+      binding.epoch === epochRef.current &&
+      binding.workspaceKey ===
+        JSON.stringify(useWorkspaceEnvStore.getState().env);
+    return isCurrent() ? isCurrent : null;
+  }, [binding]);
+}
 
 type SourceControlPanelState = {
   panelState: PanelState;
@@ -491,6 +554,12 @@ export function useSourceControlPanel(
   dirtyPaths: readonly string[] = [],
 ): SourceControlPanelState {
   const workspaceEnv = useWorkspaceEnvStore((state) => state.env);
+  const captureDiscardOwner = useDiscardOwner(
+    isOpen,
+    summary.contextPath,
+    summary.repo?.repoRoot,
+    workspaceEnv,
+  );
   const selectedModelId = useChatStore((state) => state.selectedModelId);
   const agentStatus = useChatStore((state) => state.agentMeta.status);
   const hasApiKeyForSelected = useChatStore((state) => {
@@ -519,11 +588,26 @@ export function useSourceControlPanel(
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [selectionTransition, setSelectionTransition] =
     useState<SelectionTransition>("none");
-  const [pendingDiscard, setPendingDiscard] = useState<
-    | { scope: "single"; entry: SourceControlEntry }
-    | { scope: "all"; entries: SourceControlEntry[] }
-    | null
-  >(null);
+  const [pendingDiscard, setPendingDiscard] = useState<DiscardRequest | null>(
+    null,
+  );
+  const discardRef = useRef<DiscardRequest | null>(null);
+  const discardOperationRef = useRef<DiscardRequest | null>(null);
+  const dirtyPathsRef = useRef(dirtyPaths);
+  useLayoutEffect(() => {
+    dirtyPathsRef.current = dirtyPaths;
+  }, [dirtyPaths]);
+  useLayoutEffect(() => {
+    const isCurrent = captureDiscardOwner();
+    discardRef.current = null;
+    setPendingDiscard(null);
+    setLocalActionBusy((current) =>
+      current?.startsWith("discard:") ? null : current,
+    );
+    return () => {
+      if (!isCurrent?.()) discardRef.current = null;
+    };
+  }, [captureDiscardOwner]);
   const [semanticGroups, setSemanticGroups] = useState<SemanticCommitGroup[]>(
     [],
   );
@@ -645,13 +729,17 @@ export function useSourceControlPanel(
     }
   }, []);
 
-  const scheduleReconcile = useCallback(() => {
-    cancelReconcile();
-    reconcileTimerRef.current = window.setTimeout(() => {
-      reconcileTimerRef.current = 0;
-      void summary.refresh({ remote: "never" });
-    }, RECONCILE_DEBOUNCE_MS);
-  }, [cancelReconcile, summary]);
+  const scheduleReconcile = useCallback(
+    (isCurrent?: () => boolean) => {
+      cancelReconcile();
+      reconcileTimerRef.current = window.setTimeout(() => {
+        reconcileTimerRef.current = 0;
+        if (isCurrent?.() === false) return;
+        void summary.refresh({ remote: "never" });
+      }, RECONCILE_DEBOUNCE_MS);
+    },
+    [cancelReconcile, summary],
+  );
 
   useEffect(() => () => cancelReconcile(), [cancelReconcile]);
 
@@ -794,25 +882,32 @@ export function useSourceControlPanel(
       optimistic: ((status: GitStatusSnapshot) => GitStatusSnapshot) | null,
       ipc: () => Promise<void>,
       affected: string[],
+      isCurrent?: () => boolean,
     ) => {
-      if (!repo || summary.busyAction) return;
+      if (!repo || summary.busyAction || isCurrent?.() === false) return;
       setLocalActionBusy(busyKey);
       setActionMessage(null);
       setActionError(null);
-      if (optimistic) summary.applyStatus(optimistic);
+      if (optimistic)
+        summary.applyStatus((current) =>
+          isCurrent?.() === false ? current : optimistic(current),
+        );
       for (const path of affected) {
         invalidateDiff(workingDiffKey(repo.repoRoot, path, "+"));
         invalidateDiff(workingDiffKey(repo.repoRoot, path, "-"));
       }
       try {
+        if (isCurrent?.() === false) return;
         await ipc();
-        scheduleReconcile();
+        if (isCurrent?.() === false) return;
+        scheduleReconcile(isCurrent);
       } catch (error) {
+        if (isCurrent?.() === false) return;
         setActionError(normalizeError(error));
         cancelReconcile();
         await summary.refresh({ remote: "never" }).catch(() => {});
       } finally {
-        setLocalActionBusy(null);
+        if (isCurrent?.() !== false) setLocalActionBusy(null);
       }
     },
     [cancelReconcile, repo, scheduleReconcile, summary],
@@ -846,43 +941,85 @@ export function useSourceControlPanel(
     [repo, runMutation, workspaceEnv],
   );
 
-  const requestDiscardEntry = useCallback(
-    (entry: SourceControlEntry) => {
-      if (!repo || summary.busyAction) return;
-      if (isGitReviewEntryDirty(repo.repoRoot, entry, dirtyPaths)) {
-        setActionError(`${t("explorer.unsavedChanges")}: ${entry.path}`);
+  const requestDiscard = useCallback(
+    (scope: "single" | "all", entries: SourceControlEntry[]) => {
+      const isCurrent = captureDiscardOwner();
+      if (
+        !isCurrent ||
+        !repo ||
+        repo.repoRoot !== summary.repo?.repoRoot ||
+        summary.busyAction ||
+        discardOperationRef.current?.isCurrent() ||
+        entries.length === 0
+      )
+        return;
+      const copies = entries.map((entry) => ({ ...entry }));
+      const dirtyEntry = copies.find((entry) =>
+        isGitReviewEntryDirty(repo.repoRoot, entry, dirtyPathsRef.current),
+      );
+      if (dirtyEntry) {
+        setActionError(`${t("explorer.unsavedChanges")}: ${dirtyEntry.path}`);
         return;
       }
-      setPendingDiscard({ scope: "single", entry });
+      const request: DiscardRequest = {
+        scope,
+        entries: copies,
+        repoRoot: repo.repoRoot,
+        workspaceEnv: structuredClone(workspaceEnv),
+        isCurrent,
+      };
+      discardRef.current = request;
+      setPendingDiscard(request);
     },
-    [dirtyPaths, repo, summary.busyAction, t],
+    [
+      captureDiscardOwner,
+      repo,
+      summary.repo?.repoRoot,
+      summary.busyAction,
+      t,
+      workspaceEnv,
+    ],
+  );
+
+  const requestDiscardEntry = useCallback(
+    (entry: SourceControlEntry) => {
+      requestDiscard("single", [entry]);
+    },
+    [requestDiscard],
   );
 
   const requestDiscardAll = useCallback(() => {
-    if (!repo || summary.busyAction || unstagedEntries.length === 0) return;
-    const dirtyEntry = unstagedEntries.find((entry) =>
-      isGitReviewEntryDirty(repo.repoRoot, entry, dirtyPaths),
-    );
-    if (dirtyEntry) {
-      setActionError(`${t("explorer.unsavedChanges")}: ${dirtyEntry.path}`);
-      return;
-    }
-    setPendingDiscard({ scope: "all", entries: unstagedEntries });
-  }, [dirtyPaths, repo, summary.busyAction, t, unstagedEntries]);
+    requestDiscard("all", unstagedEntries);
+  }, [requestDiscard, unstagedEntries]);
 
   const cancelPendingDiscard = useCallback(() => {
+    if (
+      !pendingDiscard ||
+      discardRef.current !== pendingDiscard ||
+      !pendingDiscard.isCurrent()
+    )
+      return;
+    discardRef.current = null;
     setPendingDiscard(null);
-  }, []);
+  }, [pendingDiscard]);
 
   const confirmPendingDiscard = useCallback(async () => {
-    if (!repo || !pendingDiscard) return;
-    const list =
-      pendingDiscard.scope === "single"
-        ? [pendingDiscard.entry]
-        : pendingDiscard.entries;
+    if (
+      !repo ||
+      !pendingDiscard ||
+      discardRef.current !== pendingDiscard ||
+      !pendingDiscard.isCurrent()
+    )
+      return;
+    const list = pendingDiscard.entries;
+    discardRef.current = null;
     setPendingDiscard(null);
     const dirtyEntry = list.find((entry) =>
-      isGitReviewEntryDirty(repo.repoRoot, entry, dirtyPaths),
+      isGitReviewEntryDirty(
+        pendingDiscard.repoRoot,
+        entry,
+        dirtyPathsRef.current,
+      ),
     );
     if (dirtyEntry) {
       setActionError(`${t("explorer.unsavedChanges")}: ${dirtyEntry.path}`);
@@ -893,15 +1030,27 @@ export function useSourceControlPanel(
       untracked: entry.untracked,
     }));
     const paths = new Set(list.map((entry) => entry.path));
-    await runMutation(
-      pendingDiscard.scope === "single"
-        ? `discard:${list[0].path}`
-        : "discard:all",
-      (s) => optimisticDiscard(s, paths),
-      () => native.gitDiscard(repo.repoRoot, entries, workspaceEnv),
-      [...paths],
-    );
-  }, [dirtyPaths, pendingDiscard, repo, runMutation, t, workspaceEnv]);
+    discardOperationRef.current = pendingDiscard;
+    try {
+      await runMutation(
+        pendingDiscard.scope === "single"
+          ? `discard:${list[0].path}`
+          : "discard:all",
+        (s) => optimisticDiscard(s, paths),
+        () =>
+          native.gitDiscard(
+            pendingDiscard.repoRoot,
+            entries,
+            pendingDiscard.workspaceEnv,
+          ),
+        [...paths],
+        pendingDiscard.isCurrent,
+      );
+    } finally {
+      if (discardOperationRef.current === pendingDiscard)
+        discardOperationRef.current = null;
+    }
+  }, [pendingDiscard, repo, runMutation, t]);
 
   const stageAllEntries = useCallback(async () => {
     if (!repo || unstagedEntries.length === 0) return;
@@ -998,14 +1147,8 @@ export function useSourceControlPanel(
 
   const requestDiscardFile = useCallback(
     (entry: SourceControlFileEntry) => {
-      if (!repo || summary.busyAction) return;
-      if (isGitReviewEntryDirty(repo.repoRoot, entry, dirtyPaths)) {
-        setActionError(`${t("explorer.unsavedChanges")}: ${entry.path}`);
-        return;
-      }
-      setPendingDiscard({
-        scope: "single",
-        entry: {
+      requestDiscard("single", [
+        {
           key: `-:${entry.path}`,
           path: entry.path,
           mode: "-",
@@ -1016,9 +1159,9 @@ export function useSourceControlPanel(
           originalPath: entry.originalPath,
           untracked: entry.untracked,
         },
-      });
+      ]);
     },
-    [dirtyPaths, repo, summary.busyAction, t],
+    [requestDiscard],
   );
 
   const generateCommitMessage = useCallback(async () => {
@@ -1268,12 +1411,12 @@ export function useSourceControlPanel(
   const canUndo = (status?.ahead ?? 0) > 0;
 
   const pendingDiscardView = useMemo<PendingDiscard | null>(() => {
-    if (!pendingDiscard) return null;
+    if (!pendingDiscard?.isCurrent()) return null;
     if (pendingDiscard.scope === "single") {
       return {
         scope: "single",
         count: 1,
-        label: pendingDiscard.entry.path,
+        label: pendingDiscard.entries[0].path,
       };
     }
     return {
