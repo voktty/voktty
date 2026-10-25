@@ -1448,6 +1448,8 @@ export const en = {
     dropFilePath: "Drop file path here",
   },
   git: {
+    unsupportedFilesystem: "This action is unavailable for this filesystem.",
+    targetChanged: "The target changed. Open the menu again.",
     authorizeDirectory: "Authorize Directory",
     authorizedSuccess: "Directory authorized successfully",
     publish: "Publish",

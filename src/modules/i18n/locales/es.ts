@@ -1492,6 +1492,9 @@ export const es: TranslationSchema = {
     dropFilePath: "Suelta aquí la ruta del archivo",
   },
   git: {
+    unsupportedFilesystem:
+      "Esta acción no está disponible para este sistema de archivos.",
+    targetChanged: "El destino cambió. Abre el menú de nuevo.",
     authorizeDirectory: "Autorizar directorio",
     authorizedSuccess: "Directorio autorizado con éxito",
     publish: "Publicar",

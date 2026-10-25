@@ -285,6 +285,48 @@ it("opens Blame for the pointed file with its captured Explorer filesystem", asy
   expect(open).toHaveBeenCalledExactlyOnceWith({ repoRoot: "/work", path: "/work/old.ts", workspace });
 });
 
+it.each<WorkspaceEnv>([
+  { kind: "serial", portName: "port", baudRate: 9600 },
+  { kind: "docker", connection: { containerId: "box", containerName: "Box", image: "image" } },
+])("explains unavailable Init and Blame on $kind without local Git fallback", async (workspace) => {
+  const open = vi.fn();
+  await act(async () => root.render(<FileExplorer rootPath="/work" workspaceEnv={workspace} onOpenFile={() => {}} onOpenBlame={open} />));
+  const reason = "This action is unavailable for this filesystem.";
+  const button = node.querySelector<HTMLButtonElement>('button[aria-label="Initialize Repository"]');
+  expect(button?.disabled).toBe(true);
+  expect(button?.title).toBe(reason);
+  expect(button?.getAttribute("aria-description")).toBe(reason);
+  const tree = node.querySelector<HTMLElement>("[data-explorer-drop]");
+  await act(async () => tree?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2, clientX: 20, clientY: 20 })));
+  const init = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Initialize Repository");
+  expect(init?.getAttribute("aria-disabled")).toBe("true");
+  expect(init?.getAttribute("aria-description")).toBe(reason);
+  const row = node.querySelector<HTMLElement>('[data-fs-path="/work/old.ts"]');
+  expect(row).not.toBeNull();
+  await act(async () => row?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2, clientX: 20, clientY: 20 })));
+  const blame = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Blame");
+  expect(blame?.getAttribute("aria-disabled")).toBe("true");
+  expect(blame?.getAttribute("aria-description")).toBe(reason);
+  expect(blame?.title).toBe(reason);
+  await act(async () => { button?.click(); init?.click(); blame?.click(); });
+  expect(open).not.toHaveBeenCalled();
+  expect(mocks.invoke.mock.calls.some(([command]) => command === "git_init" || command === "git_resolve_repo")).toBe(false);
+});
+
+it("explains a Blame menu retired by an Explorer context change", async () => {
+  const open = vi.fn();
+  const props = { rootPath: "/work", workspaceEnv: local, onOpenFile: () => {}, onOpenBlame: open };
+  await act(async () => root.render(<FileExplorer {...props} navigationKey="first" />));
+  const row = node.querySelector<HTMLElement>('[data-fs-path="/work/old.ts"]');
+  await act(async () => row?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2, clientX: 20, clientY: 20 })));
+  await act(async () => root.render(<FileExplorer {...props} navigationKey="second" />));
+  const blame = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Blame");
+  expect(blame?.getAttribute("aria-disabled")).toBe("true");
+  expect(blame?.getAttribute("aria-description")).toBe("The target changed. Open the menu again.");
+  await act(async () => blame?.click());
+  expect(open).not.toHaveBeenCalled();
+});
+
 it("resets manual navigation when only the filesystem changes", async () => {
   await render("/work");
   const parent = node.querySelector<HTMLButtonElement>('button[aria-label="Go to parent directory"]');

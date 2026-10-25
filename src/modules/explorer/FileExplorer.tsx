@@ -580,6 +580,14 @@ export const FileExplorer = memo(
         ? t("git.waitRepoLoading")
         : repository.status === "error"
           ? t("feedback.resolveGitRepositoryFailed")
+          : repository.status === "unsupported"
+            ? t("git.unsupportedFilesystem")
+            : undefined;
+    const blameDisabledReason =
+      menuTarget?.scope !== revealScope
+        ? t("git.targetChanged")
+        : !canOpenNativeBlame(menuTarget.path, workspaceEnv)
+          ? t("git.unsupportedFilesystem")
           : undefined;
 
     const handleSelectPath = useCallback(
@@ -1277,7 +1285,9 @@ export const FileExplorer = memo(
                     {!menuTarget.isDir && onOpenBlame && (
                       <ContextMenuItem
                         className={COMPACT_ITEM}
-                        disabled={menuTarget.scope !== revealScope || !canOpenNativeBlame(menuTarget.path, workspaceEnv)}
+                        disabled={Boolean(blameDisabledReason)}
+                        title={blameDisabledReason}
+                        aria-description={blameDisabledReason}
                         onSelect={() => {
                           if (menuTarget.scope !== revealScope || menuTargetRef.current !== menuTarget) return;
                           menuTargetRef.current = null;
