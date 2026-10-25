@@ -148,7 +148,7 @@ export function DiffPane({
           open
           sourceControl={sourceControl}
           onOpenDiff={(input) => onOpenFile(input.path)}
-          onOpenFile={onOpenFile}
+          onOpenProjectFile={onOpenFile}
           repositoryTarget={{ mode: "follow-context" }}
           onFollowRepositoryContext={() => {}}
         />

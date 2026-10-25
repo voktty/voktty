@@ -6,6 +6,8 @@ import { SourceControlPanel } from "@/modules/source-control/SourceControlPanel"
 import type { SourceControlSummary } from "@/modules/source-control/useSourceControl";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import { t } from "@/modules/i18n";
+import { SourceControl as HarnessSourceControl } from "@/modules/harness/chrome/SourceControl";
+import { DiffPane } from "@/modules/harness/surfaces/DiffPane";
 
 type Item = {
   onSelect?: () => void;
@@ -19,8 +21,15 @@ const mocks = vi.hoisted(() => ({
   stage: vi.fn(),
   windows: false,
   realMenu: false,
+  summary: null as SourceControlSummary | null,
   items: new Map<string, Item>(),
   close: undefined as undefined | ((open: boolean) => void),
+}));
+vi.mock("@/modules/source-control/useSourceControl", () => ({
+  useSourceControl: () => {
+    if (!mocks.summary) throw new Error("Missing project summary");
+    return mocks.summary;
+  },
 }));
 vi.mock("@/lib/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/platform")>()),
@@ -213,6 +222,7 @@ beforeEach(() => {
   mocks.close = undefined;
   mocks.windows = false;
   mocks.realMenu = false;
+  mocks.summary = null;
   mocks.reveal.mockReset().mockResolvedValue(undefined);
   mocks.copy.mockReset().mockResolvedValue(undefined);
   mocks.stage.mockReset().mockResolvedValue(undefined);
@@ -444,3 +454,34 @@ it("stages a current file through the real Radix menu event ordering", async () 
     kind: "local",
   });
 });
+it.each([
+  ["sidebar", "remote://voktty-ssh-test/project"],
+  ["diff-pane", "remote://voktty-ssh-test/project"],
+  ["sidebar", "/project"],
+  ["diff-pane", "/project"],
+])(
+  "keeps project opening available in the Harness %s at %s",
+  async (surface, path) => {
+    mocks.summary = summary(path);
+    await act(async () =>
+      root.render(
+        surface === "sidebar" ? (
+          <HarnessSourceControl cwd={path} enabled onOpenFile={openFile} />
+        ) : (
+          <DiffPane
+            cwd={path}
+            focused
+            onFocus={() => {}}
+            onOpenFile={openFile}
+          />
+        ),
+      ),
+    );
+    await menu();
+    const open = item("common.open");
+    expect(open.disabled).toBe(false);
+    await act(async () => open.onSelect?.());
+    expect(openFile).toHaveBeenCalledExactlyOnceWith(`${path}/file.ts`);
+    expect(mocks.reveal).not.toHaveBeenCalled();
+  },
+);

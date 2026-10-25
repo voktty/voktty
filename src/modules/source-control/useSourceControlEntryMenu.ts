@@ -28,6 +28,7 @@ export function useSourceControlEntryMenu({
   onToggleStageFile,
   onDiscardFile,
   onOpenFile,
+  onOpenProjectFile,
 }: {
   entry: SourceControlFileEntry;
   repoRoot: string | null;
@@ -38,6 +39,7 @@ export function useSourceControlEntryMenu({
   onToggleStageFile: (entry: SourceControlFileEntry) => Promise<void>;
   onDiscardFile: (entry: SourceControlFileEntry) => void;
   onOpenFile?: SourceControlFileOpening;
+  onOpenProjectFile?: (path: string) => void;
 }) {
   const workspace = useWorkspaceEnvStore((state) => state.env);
   const filesystem = JSON.stringify(workspace);
@@ -61,6 +63,7 @@ export function useSourceControlEntryMenu({
       onToggleStageFile,
       onDiscardFile,
       onOpenFile,
+      onOpenProjectFile,
     }),
     [
       target,
@@ -72,6 +75,7 @@ export function useSourceControlEntryMenu({
       onToggleStageFile,
       onDiscardFile,
       onOpenFile,
+      onOpenProjectFile,
     ],
   );
   type Owner = { binding: typeof binding; live: boolean };
@@ -149,12 +153,25 @@ export function useSourceControlEntryMenu({
     ? nativeFileActionPath(absolutePath, workspace, IS_WINDOWS)
     : null;
   const isDeleted = file.statusCode === "D";
-  const canOpen =
+  const canOpenNative =
     !isDeleted &&
     !!absolutePath &&
     isNativeFolderPath(absolutePath) &&
     workspace.kind !== "docker" &&
     workspace.kind !== "serial";
+  const projectNamespace =
+    !!absolutePath &&
+    absolutePath.length <= 32768 &&
+    !/[\x00-\x1f\x7f]/.test(absolutePath) &&
+    /^remote:\/\/[^/]+\/.+/.test(absolutePath);
+  const canOpenProject =
+    !isDeleted &&
+    !!absolutePath &&
+    (projectNamespace ||
+      (isNativeFolderPath(absolutePath) &&
+        (workspace.kind === "local" || !!nativePath)));
+  const canOpen =
+    (!!onOpenProjectFile && canOpenProject) || (!!onOpenFile && canOpenNative);
   return {
     key: binding.key,
     setOpen,
@@ -168,7 +185,10 @@ export function useSourceControlEntryMenu({
       }),
     openFile: () =>
       run(() => {
-        if (canOpen && absolutePath && onOpenFile)
+        if (!absolutePath) return;
+        if (onOpenProjectFile && canOpenProject)
+          onOpenProjectFile(absolutePath);
+        else if (onOpenFile && canOpenNative)
           onOpenFile(absolutePath, true, {
             workspaceEnv: JSON.parse(binding.filesystem),
           });

@@ -46,7 +46,7 @@ export function SourceControl({
         open={enabled}
         sourceControl={sourceControl}
         onOpenDiff={handleOpenDiff}
-        onOpenFile={onOpenFile}
+        onOpenProjectFile={onOpenFile}
         repositoryTarget={{ mode: "follow-context" }}
         onFollowRepositoryContext={() => {}}
       />

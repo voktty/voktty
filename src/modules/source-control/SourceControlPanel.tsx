@@ -119,6 +119,7 @@ type Props = {
     title?: string;
   }) => void;
   onOpenFile?: SourceControlFileOpening;
+  onOpenProjectFile?: (absolutePath: string) => void;
   onNavigateToPath?: (path: string) => void;
   repositoryTarget: SourceControlRepositoryTarget;
   onFollowRepositoryContext: () => void;
@@ -474,6 +475,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   onOpenGitGraph,
   onOpenDiff,
   onOpenFile,
+  onOpenProjectFile,
   onNavigateToPath,
   repositoryTarget,
   onFollowRepositoryContext,
@@ -1542,6 +1544,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                               onToggleStageFile={scm.toggleStageFile}
                               onDiscardFile={scm.requestDiscardFile}
                               onOpenFile={onOpenFile}
+                              onOpenProjectFile={onOpenProjectFile}
                             />
                           )}
                         </div>
@@ -1734,6 +1737,7 @@ type RowRendererProps = {
   onToggleStageFile: (entry: SourceControlFileEntry) => Promise<void>;
   onDiscardFile: (entry: SourceControlFileEntry) => void;
   onOpenFile?: SourceControlFileOpening;
+  onOpenProjectFile?: (absolutePath: string) => void;
 };
 
 const RowRenderer = memo(function RowRenderer(props: RowRendererProps) {
@@ -1811,6 +1815,7 @@ const EntryRow = memo(function EntryRow({
   onToggleStageFile,
   onDiscardFile,
   onOpenFile,
+  onOpenProjectFile,
 }: RowRendererProps & {
   row: Extract<RowDescriptor, { kind: "entry" }>;
 }) {
@@ -1836,6 +1841,7 @@ const EntryRow = memo(function EntryRow({
     onToggleStageFile,
     onDiscardFile,
     onOpenFile,
+    onOpenProjectFile,
   });
   const absolutePath = menu.absolutePath;
   const isDeleted = entry.statusCode === "D";
@@ -1950,7 +1956,7 @@ const EntryRow = memo(function EntryRow({
         >
           {t("git.diff")}
         </ContextMenuItem>
-        {!isDeleted && onOpenFile && absolutePath ? (
+        {!isDeleted && (onOpenFile || onOpenProjectFile) && absolutePath ? (
           <ContextMenuItem
             className={COMPACT_ITEM}
             disabled={!menu.canOpen}

@@ -3,7 +3,7 @@ import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useSourceControlEntryMenu } from "@/modules/source-control/useSourceControlEntryMenu";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 
 const helpers = vi.hoisted(() => ({ copy: vi.fn(), reveal: vi.fn() }));
 vi.mock("@/modules/explorer/lib/contextActions", () => ({
@@ -180,3 +180,83 @@ it("retains deleted files for diff and copy but refuses open and reveal", async 
   await act(async () => api.diff());
   expect(input.onSelectFile).toHaveBeenCalledExactlyOnceWith(input.entry);
 });
+it("opens a namespace only through the captured project router and consumes it once", async () => {
+  const projectOpen = vi.fn();
+  input = {
+    ...input,
+    repoRoot: "remote://test/project",
+    onOpenProjectFile: projectOpen,
+  };
+  await render();
+  await open();
+  expect(api.canOpen).toBe(true);
+  expect(api.canReveal).toBe(false);
+  await act(async () => {
+    api.openFile();
+    api.openFile();
+  });
+  expect(projectOpen).toHaveBeenCalledExactlyOnceWith(
+    "remote://test/project/file.ts",
+  );
+  expect(input.onOpenFile).not.toHaveBeenCalled();
+  await open();
+  await act(async () => api.reveal());
+  expect(helpers.reveal).not.toHaveBeenCalled();
+});
+it("retires a project opener independently of the native opener", async () => {
+  const oldOpen = vi.fn();
+  input = {
+    ...input,
+    repoRoot: "remote://test/project",
+    onOpenProjectFile: oldOpen,
+  };
+  await render();
+  await open();
+  const retired = api;
+  const nextOpen = vi.fn();
+  input = { ...input, onOpenProjectFile: nextOpen };
+  await render();
+  await act(async () => retired.openFile());
+  expect(oldOpen).not.toHaveBeenCalled();
+  expect(nextOpen).not.toHaveBeenCalled();
+  await open();
+  await act(async () => api.openFile());
+  expect(nextOpen).toHaveBeenCalledExactlyOnceWith(
+    "remote://test/project/file.ts",
+  );
+  expect(input.onOpenFile).not.toHaveBeenCalled();
+});
+it.each<WorkspaceEnv>([
+  { kind: "wsl", distro: "test-distro" },
+  {
+    kind: "ssh",
+    connection: { id: "test", name: "test", host: "test.example" },
+    root: "/project",
+    sessionId: 7,
+  },
+])(
+  "does not reinterpret a $kind host path through a project-only router",
+  async (env) => {
+    const projectOpen = vi.fn();
+    input = { ...input, onOpenFile: undefined, onOpenProjectFile: projectOpen };
+    useWorkspaceEnvStore.setState({ env });
+    await render();
+    await open();
+    expect(api.canOpen).toBe(false);
+    await act(async () => api.openFile());
+    expect(projectOpen).not.toHaveBeenCalled();
+  },
+);
+it.each(["remote:///project", "remote://test/project\0"])(
+  "refuses malformed project target %j before delivery",
+  async (path) => {
+    const projectOpen = vi.fn();
+    input = { ...input, repoRoot: path, onOpenProjectFile: projectOpen };
+    await render();
+    await open();
+    expect(api.canOpen).toBe(false);
+    await act(async () => api.openFile());
+    expect(projectOpen).not.toHaveBeenCalled();
+    expect(input.onOpenFile).not.toHaveBeenCalled();
+  },
+);
