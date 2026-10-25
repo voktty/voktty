@@ -1,27 +1,15 @@
 import { Button } from "@/components/ui/button";
-import {
-  native,
-  type GitChangedFile,
-  type GitOperationKind,
-} from "@/modules/ai/lib/native";
+import type { GitChangedFile, GitOperationKind } from "@/modules/ai/lib/native";
 import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
 import { useTranslation } from "@/modules/i18n";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useConflictsPanel } from "@/modules/source-control/useConflictsPanel";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { ConflictResolverDialog } from "./ConflictResolverDialog";
 
 function basename(path: string): string {
   const idx = path.lastIndexOf("/");
   return idx >= 0 ? path.slice(idx + 1) : path;
-}
-
-function errorMessage(err: unknown): string {
-  return err && typeof err === "object" && "message" in err
-    ? String((err as { message: unknown }).message)
-    : String(err);
 }
 
 const OPERATION_LABEL_KEY: Record<Exclude<GitOperationKind, "none">, string> = {
@@ -41,66 +29,25 @@ export function ConflictsPanel({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [operation, setOperation] = useState<GitOperationKind>("none");
-  const [busy, setBusy] = useState<"abort" | "continue" | null>(null);
-  const [resolvingPath, setResolvingPath] = useState<string | null>(null);
-
-  const loadOperation = useCallback(async () => {
-    if (!repoRoot) {
-      setOperation("none");
-      return;
-    }
-    try {
-      const result = await native.gitOperationStatus(repoRoot, workspaceEnv);
-      setOperation(result.kind);
-    } catch {
-      setOperation("none");
-    }
-  }, [repoRoot, workspaceEnv]);
-
-  useEffect(() => {
-    void loadOperation();
-  }, [loadOperation]);
-
-  if (operation === "none" && conflictedFiles.length === 0) return null;
-
-  const handleAbort = async () => {
-    if (!repoRoot || operation === "none" || busy) return;
-    setBusy("abort");
-    try {
-      await native.gitOperationAbort(repoRoot, operation, workspaceEnv);
-      toast.success(t("git.conflicts.abortSuccess"));
-      await loadOperation();
-      onRefresh();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleContinue = async () => {
-    if (!repoRoot || operation === "none" || busy) return;
-    if (conflictedFiles.length > 0) {
-      toast.error(t("git.conflicts.continueBlocked"));
-      return;
-    }
-    setBusy("continue");
-    try {
-      await native.gitOperationContinue(repoRoot, operation, workspaceEnv);
-      toast.success(t("git.conflicts.continueSuccess"));
-      await loadOperation();
-      onRefresh();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setBusy(null);
-    }
-  };
+  const control = useConflictsPanel(repoRoot, conflictedFiles, onRefresh);
+  const { operation, busy, dialog } = control;
+  if (operation === "none" && conflictedFiles.length === 0 && !control.error)
+    return null;
 
   return (
     <div className="shrink-0 border-b border-border/50 bg-destructive/[0.06]">
+      {control.error && (
+        <div className="px-3 py-2 text-xs text-destructive">
+          {control.error}
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => void control.loadOperation()}
+          >
+            {t("common.refresh")}
+          </Button>
+        </div>
+      )}
       {operation !== "none" ? (
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] font-medium text-destructive">
@@ -113,7 +60,7 @@ export function ConflictsPanel({
               variant="outline"
               className="h-6 cursor-pointer px-2 text-[10.5px]"
               disabled={busy !== null}
-              onClick={() => void handleAbort()}
+              onClick={() => void control.run("abort")}
             >
               {busy === "abort" ? t("git.conflicts.aborting") : t("git.conflicts.abort")}
             </Button>
@@ -121,7 +68,12 @@ export function ConflictsPanel({
               size="xs"
               className="h-6 cursor-pointer px-2 text-[10.5px]"
               disabled={busy !== null || conflictedFiles.length > 0}
-              onClick={() => void handleContinue()}
+              onClick={() => void control.run("continue")}
+              title={
+                conflictedFiles.length
+                  ? t("git.conflicts.continueBlocked")
+                  : undefined
+              }
             >
               {busy === "continue" ? t("git.conflicts.continuing") : t("git.conflicts.continue")}
             </Button>
@@ -138,7 +90,7 @@ export function ConflictsPanel({
               <button
                 key={file.path}
                 type="button"
-                onClick={() => setResolvingPath(file.path)}
+                onClick={() => control.openFile(file.path)}
                 className="flex w-full cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-left text-[11.5px] transition-colors hover:bg-destructive/10"
               >
                 <img
@@ -152,18 +104,18 @@ export function ConflictsPanel({
           </div>
         </div>
       ) : null}
-      {repoRoot && resolvingPath ? (
+      {repoRoot && dialog ? (
         <ConflictResolverDialog
-          open={resolvingPath !== null}
-          onOpenChange={(open) => {
-            if (!open) setResolvingPath(null);
-          }}
+          key={dialog.key}
+          open
+          onOpenChange={dialog.close}
           repoRoot={repoRoot}
-          path={resolvingPath}
-          onResolved={() => {
-            setResolvingPath(null);
-            onRefresh();
-          }}
+          path={dialog.path}
+          workspace={dialog.workspace}
+          isCurrent={dialog.isCurrent}
+          admit={dialog.admit}
+          blocked={busy !== null}
+          onResolved={dialog.resolved}
         />
       ) : null}
     </div>

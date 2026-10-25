@@ -9,10 +9,10 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
-import { native } from "@/modules/ai/lib/native";
-import { joinPath } from "@/modules/explorer/lib/useFileTree";
 import { useTranslation } from "@/modules/i18n";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { useConflictResolver } from "@/modules/source-control/useConflictResolver";
+import type { ConflictAdmission } from "@/modules/source-control/useConflictScope";
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
@@ -20,26 +20,6 @@ import {
   File02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import {
-  applyConflictResolutions,
-  parseConflictMarkers,
-  type ConflictResolution,
-  type ParsedConflicts,
-} from "./lib/conflictMarkers";
-
-function errorMessage(err: unknown): string {
-  return err && typeof err === "object" && "message" in err
-    ? String((err as { message: unknown }).message)
-    : String(err);
-}
-
-type LoadState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "unresolvable" }
-  | { status: "ready"; parsed: ParsedConflicts };
 
 export function ConflictResolverDialog({
   open,
@@ -47,100 +27,50 @@ export function ConflictResolverDialog({
   repoRoot,
   path,
   onResolved,
+  workspace,
+  isCurrent,
+  admit,
+  blocked,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoRoot: string;
   path: string;
   onResolved: () => void;
+  workspace: WorkspaceEnv;
+  isCurrent?: () => boolean;
+  admit?: ConflictAdmission;
+  blocked?: boolean;
 }) {
   const { t } = useTranslation();
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [resolutions, setResolutions] = useState<
-    Map<number, ConflictResolution>
-  >(new Map());
-  const [saving, setSaving] = useState(false);
-
-  const absolutePath = useMemo(
-    () => joinPath(repoRoot, path),
-    [repoRoot, path],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    setState({ status: "loading" });
-    setResolutions(new Map());
-    let cancelled = false;
-    void native
-      .readFile(absolutePath)
-      .then((result) => {
-        if (cancelled) return;
-        if (result.kind !== "text") {
-          setState({ status: "unresolvable" });
-          return;
-        }
-        const parsed = parseConflictMarkers(result.content);
-        if (parsed.hunks.length === 0) {
-          setState({ status: "unresolvable" });
-          return;
-        }
-        setState({ status: "ready", parsed });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setState({ status: "error", message: errorMessage(err) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, absolutePath]);
-
-  const setResolution = useCallback(
-    (hunkIndex: number, resolution: ConflictResolution) => {
-      setResolutions((prev) => {
-        const next = new Map(prev);
-        next.set(hunkIndex, resolution);
-        return next;
-      });
-    },
-    [],
-  );
-
-  const hunkCount = state.status === "ready" ? state.parsed.hunks.length : 0;
-  const allResolved = hunkCount > 0 && resolutions.size === hunkCount;
-
-  const handleSave = useCallback(async () => {
-    if (state.status !== "ready" || !allResolved || saving) return;
-    setSaving(true);
-    try {
-      const finalText = applyConflictResolutions(state.parsed, resolutions);
-      await native.writeFile(absolutePath, finalText);
-      await native.gitStage(repoRoot, [path], workspaceEnv);
-      toast.success(t("git.conflicts.resolvedSuccess", { path }));
-      onOpenChange(false);
-      onResolved();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    absolutePath,
+  const {
+    state,
+    resolutions,
+    setResolution,
+    hunkCount,
     allResolved,
+    saving,
+    handleSave,
+    requestClose,
+  } = useConflictResolver({
+    open,
+    repoRoot,
+    path,
+    workspace,
     onOpenChange,
     onResolved,
-    path,
-    repoRoot,
-    resolutions,
-    saving,
-    state,
-    t,
-    workspaceEnv,
-  ]);
+    isCurrent,
+    admit,
+    blocked,
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) requestClose();
+      }}
+    >
       <DialogContent className="flex max-h-[80vh] flex-col gap-0 overflow-hidden sm:max-w-3xl bg-card/95 backdrop-blur-md border-border/80">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -186,6 +116,7 @@ export function ConflictResolverDialog({
                             variant={resolution === "ours" ? "default" : "outline"}
                             className="h-6 cursor-pointer gap-1 px-1.5 text-[10.5px]"
                             onClick={() => setResolution(index, "ours")}
+                            disabled={saving}
                           >
                             <HugeiconsIcon icon={ArrowLeft01Icon} size={11} strokeWidth={2} />
                             {t("git.conflicts.acceptOurs")}
@@ -195,6 +126,7 @@ export function ConflictResolverDialog({
                             variant={resolution === "theirs" ? "default" : "outline"}
                             className="h-6 cursor-pointer gap-1 px-1.5 text-[10.5px]"
                             onClick={() => setResolution(index, "theirs")}
+                            disabled={saving}
                           >
                             <HugeiconsIcon icon={ArrowRight01Icon} size={11} strokeWidth={2} />
                             {t("git.conflicts.acceptTheirs")}
@@ -204,6 +136,7 @@ export function ConflictResolverDialog({
                             variant={resolution === "both" ? "default" : "outline"}
                             className="h-6 cursor-pointer gap-1 px-1.5 text-[10.5px]"
                             onClick={() => setResolution(index, "both")}
+                            disabled={saving}
                           >
                             <HugeiconsIcon icon={CheckmarkCircle01Icon} size={11} strokeWidth={2} />
                             {t("git.conflicts.acceptBoth")}
@@ -241,7 +174,7 @@ export function ConflictResolverDialog({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onOpenChange(false)}
+            onClick={requestClose}
             disabled={saving}
             className="text-xs"
           >
@@ -252,7 +185,8 @@ export function ConflictResolverDialog({
               type="button"
               size="sm"
               onClick={() => void handleSave()}
-              disabled={!allResolved || saving}
+              disabled={!allResolved || saving || blocked}
+              title={blocked && !saving ? t("git.waitActionFinish") : undefined}
               className="gap-2 text-xs font-medium"
             >
               {saving ? <Spinner className="size-3.5" /> : null}

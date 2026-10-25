@@ -121,19 +121,22 @@ export function applyConflictResolutions(
   let cursor = 0;
   for (let h = 0; h < parsed.hunks.length; h++) {
     const hunk = parsed.hunks[h];
-    out.push(...parsed.lines.slice(cursor, hunk.startLine));
+    for (let line = cursor; line < hunk.startLine; line++)
+      out.push(parsed.lines[line]);
     const resolution = resolutions.get(h) ?? "ours";
     if (resolution === "theirs") {
-      out.push(...hunk.theirsLines);
+      for (const line of hunk.theirsLines) out.push(line);
     } else if (resolution === "both") {
-      out.push(...hunk.oursLines, ...hunk.theirsLines);
+      for (const line of hunk.oursLines) out.push(line);
+      for (const line of hunk.theirsLines) out.push(line);
     } else if (resolution === "base" && hunk.baseLines !== null) {
-      out.push(...hunk.baseLines);
+      for (const line of hunk.baseLines) out.push(line);
     } else {
-      out.push(...hunk.oursLines);
+      for (const line of hunk.oursLines) out.push(line);
     }
     cursor = hunk.endLine + 1;
   }
-  out.push(...parsed.lines.slice(cursor));
+  for (let line = cursor; line < parsed.lines.length; line++)
+    out.push(parsed.lines[line]);
   return out.join("\n");
 }
