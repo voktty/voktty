@@ -10,8 +10,20 @@ import {
   watchRemoveTree,
 } from "@/modules/explorer/lib/watch";
 import { t as translate } from "@/modules/i18n";
-import { useWorkspaceEnvStore, workspaceScopeKey } from "@/modules/workspace";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useWorkspaceEnvStore,
+  workspaceScopeKey,
+  type WorkspaceEnv,
+} from "@/modules/workspace";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react";
 import { extractDubiousOwnershipPath, isRemoteWorkspacePath } from "./gitTrust";
 
 const AUTO_FETCH_THROTTLE_MS = 5 * 60_000;
@@ -80,6 +92,63 @@ type SourceControlSummaryState = {
   busyAction: SourceControlRemoteAction | null;
   lastRemoteError: string | null;
 };
+
+type OwnedSourceControlState = {
+  workspaceKey: string;
+  binding: object;
+  value: SourceControlSummaryState;
+};
+
+function emptySourceControlState(
+  contextPath: string | null = null,
+): SourceControlSummaryState {
+  return {
+    contextPath,
+    repo: null,
+    status: null,
+    hasRepo: false,
+    isLoading: false,
+    localError: null,
+    dubiousOwnershipPath: null,
+    busyAction: null,
+    lastRemoteError: null,
+  };
+}
+
+function sourceControlStateForContext(
+  owned: OwnedSourceControlState,
+  workspaceKey: string,
+  contextPath: string | null,
+  enabled: boolean,
+  binding: object,
+): SourceControlSummaryState {
+  if (!enabled) return emptySourceControlState();
+  if (
+    owned.workspaceKey !== workspaceKey ||
+    (owned.value.contextPath !== contextPath &&
+      !repositoryContainsContext(
+        owned.value.repo?.repoRoot ?? null,
+        contextPath,
+      ))
+  )
+    return emptySourceControlState(contextPath);
+  const value =
+    owned.binding === binding
+      ? owned.value
+      : {
+          ...owned.value,
+          busyAction: null,
+          isLoading: false,
+          localError: null,
+          dubiousOwnershipPath: null,
+          lastRemoteError: null,
+        };
+  return value.contextPath === contextPath ? value : { ...value, contextPath };
+}
+
+function sourceControlWorkspaceKey(workspace: WorkspaceEnv): string {
+  return `${workspaceScopeKey(workspace)}\0${JSON.stringify(workspace)}`;
+}
 
 type RefreshableSourceControlState = Pick<
   SourceControlSummaryState,
@@ -173,7 +242,10 @@ export async function loadSharedSourceControlSnapshot(
   const existing = sharedSnapshotInflight.get(key);
   if (existing) return existing;
 
-  const promise = load()
+  if (sharedSnapshotInflight.size >= 256)
+    throw new Error("Source control snapshot limit reached");
+  const promise = Promise.resolve()
+    .then(load)
     .then((snapshot) => {
       const resolvedKey = snapshot.repo?.repoRoot
         ? sharedRootKey(workspaceKey, snapshot.repo.repoRoot)
@@ -395,38 +467,103 @@ export function useSourceControl(
   enabled: boolean = true,
   live: boolean = enabled,
 ): SourceControlSummary {
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const workspaceKey = workspaceScopeKey(workspaceEnv);
-  const [state, setState] = useState<SourceControlSummaryState>({
-    contextPath: null,
-    repo: null,
-    status: null,
-    hasRepo: false,
-    isLoading: false,
-    localError: null,
-    dubiousOwnershipPath: null,
-    busyAction: null,
-    lastRemoteError: null,
-  });
+  const workspaceInput = useWorkspaceEnvStore((s) => s.env);
+  const workspaceKey = sourceControlWorkspaceKey(workspaceInput);
+  const workspaceEnv = useMemo(
+    () => structuredClone(workspaceInput),
+    [workspaceInput],
+  );
+  const contextKey = useMemo(
+    () => sourceControlContextKey(workspaceKey, contextPath),
+    [workspaceKey, contextPath],
+  );
+  const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
+  const workspaceEpochRef = useRef(0);
+  const binding = useMemo(
+    () => ({ contextKey, workspaceKey, workspaceEpoch, enabled }),
+    [contextKey, workspaceKey, workspaceEpoch, enabled],
+  );
+  const [ownedState, setOwnedState] = useState<OwnedSourceControlState>(() => ({
+    workspaceKey,
+    binding,
+    value: emptySourceControlState(),
+  }));
+  const state = useMemo(
+    () =>
+      sourceControlStateForContext(
+        ownedState,
+        workspaceKey,
+        contextPath,
+        enabled,
+        binding,
+      ),
+    [ownedState, workspaceKey, contextPath, enabled, binding],
+  );
   const stateRef = useRef(state);
   const requestIdRef = useRef(0);
   const lastRefreshAtRef = useRef(0);
   const autoFetchByRepoRef = useRef<Map<string, number>>(new Map());
   const inflightRef = useRef<InflightRefresh | null>(null);
 
-  const contextKey = useMemo(
-    () => sourceControlContextKey(workspaceKey, contextPath),
-    [workspaceKey, contextPath],
+  useLayoutEffect(() => {
+    let previous = sourceControlWorkspaceKey(
+      useWorkspaceEnvStore.getState().env,
+    );
+    return useWorkspaceEnvStore.subscribe((next) => {
+      const key = sourceControlWorkspaceKey(next.env);
+      if (key !== previous) {
+        workspaceEpochRef.current++;
+        setWorkspaceEpoch(workspaceEpochRef.current);
+      }
+      previous = key;
+    });
+  }, []);
+  type Owner = { binding: typeof binding; live: boolean };
+  const ownerRef = useRef<Owner | null>(null);
+  useLayoutEffect(() => {
+    const owner = { binding, live: true };
+    ownerRef.current = owner;
+    requestIdRef.current++;
+    inflightRef.current = null;
+    return () => {
+      owner.live = false;
+    };
+  }, [binding]);
+  const owns = useCallback(
+    (owner: Owner | null) =>
+      !!owner?.live &&
+      ownerRef.current === owner &&
+      owner.binding.workspaceEpoch === workspaceEpochRef.current &&
+      owner.binding.workspaceKey ===
+        sourceControlWorkspaceKey(useWorkspaceEnvStore.getState().env),
+    [],
   );
-  const contextKeyRef = useRef(contextKey);
-
-  useEffect(() => {
+  const capture = useCallback(() => {
+    const owner = ownerRef.current;
+    return enabled && owner?.binding === binding && owns(owner) ? owner : null;
+  }, [binding, enabled, owns]);
+  useLayoutEffect(() => {
     stateRef.current = state;
   }, [state]);
-
-  useEffect(() => {
-    contextKeyRef.current = contextKey;
-  }, [contextKey]);
+  const setState = useCallback(
+    (update: SetStateAction<SourceControlSummaryState>) => {
+      const owner = capture();
+      if (!owner) return;
+      setOwnedState((previous) => {
+        if (!owns(owner)) return previous;
+        const current = sourceControlStateForContext(
+          previous,
+          workspaceKey,
+          contextPath,
+          enabled,
+          binding,
+        );
+        const value = typeof update === "function" ? update(current) : update;
+        return owns(owner) ? { workspaceKey, binding, value } : previous;
+      });
+    },
+    [capture, owns, workspaceKey, contextPath, enabled, binding],
+  );
 
   const applyStatus = useCallback(
     (updater: (status: GitStatusSnapshot) => GitStatusSnapshot) => {
@@ -447,7 +584,7 @@ export function useSourceControl(
         };
       });
     },
-    [],
+    [setState],
   );
 
   const doRefresh = useCallback(
@@ -455,6 +592,8 @@ export function useSourceControl(
       remoteMode: SourceControlRefreshMode = "auto",
       reuseCached: boolean = false,
     ) => {
+      const owner = capture();
+      if (!owner) return;
       const activeContextPath = contextPath;
       const activeContextKey = contextKey;
 
@@ -498,8 +637,9 @@ export function useSourceControl(
       );
 
       const isCurrentContext = () =>
+        owns(owner) &&
         requestId === requestIdRef.current &&
-        activeContextKey === contextKeyRef.current;
+        owner.binding === binding;
 
       const refreshPromise = (async () => {
         try {
@@ -507,36 +647,19 @@ export function useSourceControl(
             current.repo && canReuseRepo
               ? sharedRootKey(workspaceKey, current.repo.repoRoot)
               : sharedContextKey(workspaceKey, activeContextPath);
-          const snapshot = await loadSharedSourceControlSnapshot(
+          let snapshot = await loadSharedSourceControlSnapshot(
             snapshotKey,
             workspaceKey,
             reuseCached,
             async () => {
               let repo = canReuseRepo ? current.repo : null;
-              let remoteError: string | null = null;
               if (!repo) {
                 repo = await native.gitResolveRepo(
                   activeContextPath,
                   workspaceEnv,
                 );
               }
-              if (!repo) return { repo: null, status: null, remoteError };
-
-              const shouldAutoFetch =
-                remoteMode === "always" ||
-                (remoteMode === "auto" &&
-                  repo.upstream !== null &&
-                  Date.now() -
-                    (autoFetchByRepoRef.current.get(repo.repoRoot) ?? 0) >=
-                    AUTO_FETCH_THROTTLE_MS);
-              if (shouldAutoFetch) {
-                try {
-                  await native.gitFetch(repo.repoRoot, workspaceEnv);
-                  touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
-                } catch (error) {
-                  remoteError = normalizeError(error);
-                }
-              }
+              if (!repo) return { repo: null, status: null, remoteError: null };
               const status = await native.gitStatus(
                 repo.repoRoot,
                 workspaceEnv,
@@ -544,10 +667,48 @@ export function useSourceControl(
               return {
                 repo: repositoryInfoFromStatus(status),
                 status,
-                remoteError,
+                remoteError: null,
               };
             },
           );
+
+          if (!isCurrentContext()) return;
+          const repo = snapshot.repo;
+          const autoFetchKey = repo
+            ? sharedRootKey(workspaceKey, repo.repoRoot)
+            : null;
+          const shouldAutoFetch =
+            repo &&
+            autoFetchKey &&
+            (remoteMode === "always" ||
+              (remoteMode === "auto" &&
+                repo.upstream !== null &&
+                Date.now() -
+                  (autoFetchByRepoRef.current.get(autoFetchKey) ?? 0) >=
+                  AUTO_FETCH_THROTTLE_MS));
+          if (shouldAutoFetch && repo && autoFetchKey) {
+            let remoteError: string | null = null;
+            try {
+              await native.gitFetch(repo.repoRoot, workspaceEnv);
+              if (!isCurrentContext()) return;
+              touchAutoFetch(autoFetchByRepoRef.current, autoFetchKey);
+            } catch (error) {
+              if (!isCurrentContext()) return;
+              remoteError = normalizeError(error);
+            }
+            const status = await native.gitStatus(repo.repoRoot, workspaceEnv);
+            if (!isCurrentContext()) return;
+            snapshot = {
+              repo: repositoryInfoFromStatus(status),
+              status,
+              remoteError,
+            };
+            rememberSharedSnapshot(
+              sharedRootKey(workspaceKey, status.repoRoot),
+              workspaceKey,
+              snapshot,
+            );
+          }
 
           if (isCurrentContext()) {
             setState((s) => ({
@@ -602,7 +763,17 @@ export function useSourceControl(
 
       return refreshPromise;
     },
-    [contextPath, contextKey, enabled, workspaceEnv, workspaceKey],
+    [
+      contextPath,
+      contextKey,
+      enabled,
+      workspaceEnv,
+      workspaceKey,
+      capture,
+      owns,
+      binding,
+      setState,
+    ],
   );
 
   const refresh = useCallback(
@@ -614,13 +785,17 @@ export function useSourceControl(
 
   const trustRepository = useCallback(
     async (path?: string) => {
+      const owner = capture();
+      if (!owner) return;
       const pathToTrust =
         path ?? stateRef.current.dubiousOwnershipPath ?? contextPath;
       if (!pathToTrust || isRemoteWorkspacePath(pathToTrust)) return;
-      const trustedContextKey = contextKeyRef.current;
-      await native.workspaceAuthorize(pathToTrust).catch(() => {});
+      if (workspaceEnv.kind === "local") {
+        await native.workspaceAuthorize(pathToTrust).catch(() => {});
+        if (!owns(owner)) return;
+      }
       await native.gitAddSafeDirectory(pathToTrust, workspaceEnv);
-      if (trustedContextKey !== contextKeyRef.current) return;
+      if (!owns(owner)) return;
 
       const requestId = ++requestIdRef.current;
       inflightRef.current = null;
@@ -637,10 +812,7 @@ export function useSourceControl(
 
       try {
         const resolved = await native.gitResolveRepo(pathToTrust, workspaceEnv);
-        if (
-          requestId !== requestIdRef.current ||
-          trustedContextKey !== contextKeyRef.current
-        ) {
+        if (requestId !== requestIdRef.current || !owns(owner)) {
           return;
         }
         if (!resolved) {
@@ -656,10 +828,7 @@ export function useSourceControl(
           return;
         }
         const status = await native.gitStatus(resolved.repoRoot, workspaceEnv);
-        if (
-          requestId !== requestIdRef.current ||
-          trustedContextKey !== contextKeyRef.current
-        ) {
+        if (requestId !== requestIdRef.current || !owns(owner)) {
           return;
         }
         setState((current) => ({
@@ -673,10 +842,7 @@ export function useSourceControl(
         }));
         lastRefreshAtRef.current = Date.now();
       } catch (error) {
-        if (
-          requestId !== requestIdRef.current ||
-          trustedContextKey !== contextKeyRef.current
-        ) {
+        if (requestId !== requestIdRef.current || !owns(owner)) {
           return;
         }
         setState((current) => ({
@@ -690,27 +856,33 @@ export function useSourceControl(
         }));
       }
     },
-    [contextKey, contextPath, workspaceEnv],
+    [contextPath, workspaceEnv, capture, owns, setState],
   );
 
   const initRepository = useCallback(
     async (targetPath?: string) => {
+      const owner = capture();
+      if (!owner) return;
       const pathToInit = targetPath ?? contextPath;
       if (!pathToInit) return;
       await native.gitInit(pathToInit, workspaceEnv);
+      if (!owns(owner)) return;
       window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
       await doRefresh("never");
     },
-    [contextPath, doRefresh, workspaceEnv],
+    [contextPath, doRefresh, workspaceEnv, capture, owns],
   );
 
   const undoCommit = useCallback(async () => {
+    const owner = capture();
+    if (!owner) return;
     const { repo } = stateRef.current;
     if (!repo) return;
     await native.gitUndoCommit(repo.repoRoot, workspaceEnv);
+    if (!owns(owner)) return;
     window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
     await doRefresh("never");
-  }, [doRefresh, workspaceEnv]);
+  }, [doRefresh, workspaceEnv, capture, owns]);
 
   useEffect(() => {
     // The explorer emits one of these per coalesced filesystem batch, so a
@@ -765,6 +937,8 @@ export function useSourceControl(
     async (
       mode: SourceControlRemoteActionMode = "contextual",
     ): Promise<SourceControlRemoteActionResult> => {
+      const owner = capture();
+      if (!owner) return { ok: false, action: null, blocked: "no-repo" };
       const { repo, status } = stateRef.current;
       if (!repo || !status) {
         return { ok: false, action: null, blocked: "no-repo" };
@@ -779,44 +953,53 @@ export function useSourceControl(
       }
 
       setState((current) => ({ ...current, busyAction: action }));
-      const actionContextKey = contextKeyRef.current;
-      const isCurrentContext = () => actionContextKey === contextKeyRef.current;
+      const isCurrentContext = () => owns(owner);
+      const autoFetchKey = sharedRootKey(workspaceKey, repo.repoRoot);
 
       try {
         if (action === "fetch") {
           await native.gitFetch(repo.repoRoot, workspaceEnv);
-          touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
+          if (!isCurrentContext()) return { ok: false, action };
+          touchAutoFetch(autoFetchByRepoRef.current, autoFetchKey);
         } else if (action === "pull") {
           await native.gitFetch(repo.repoRoot, workspaceEnv);
-          touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
+          if (!isCurrentContext()) return { ok: false, action };
+          touchAutoFetch(autoFetchByRepoRef.current, autoFetchKey);
           await native.gitPullFfOnly(repo.repoRoot, workspaceEnv);
         } else if (action === "publish") {
           await native.gitPublish(repo.repoRoot, undefined, workspaceEnv);
         } else {
           await native.gitPush(repo.repoRoot, workspaceEnv);
         }
+        if (!isCurrentContext()) return { ok: false, action };
         if (isCurrentContext()) {
           setState((current) => ({ ...current, lastRemoteError: null }));
           await refresh({ remote: "never" });
         }
-        return { ok: true, action };
+        return isCurrentContext()
+          ? { ok: true, action }
+          : { ok: false, action };
       } catch (error) {
+        if (!isCurrentContext()) return { ok: false, action };
         const message = normalizeError(error);
         if (isCurrentContext()) {
           setState((current) => ({ ...current, lastRemoteError: message }));
           await refresh({ remote: "never" }).catch(() => {});
         }
-        return { ok: false, action, error: message };
+        return isCurrentContext()
+          ? { ok: false, action, error: message }
+          : { ok: false, action };
       } finally {
         if (isCurrentContext()) {
           setState((current) => ({ ...current, busyAction: null }));
         }
       }
     },
-    [refresh, workspaceEnv],
+    [refresh, workspaceEnv, workspaceKey, capture, owns, setState],
   );
 
   useEffect(() => {
+    const owner = capture();
     if (!enabled) {
       requestIdRef.current++;
       setState({
@@ -834,6 +1017,7 @@ export function useSourceControl(
     }
     setState((current) => ({ ...current, lastRemoteError: null }));
     const run = () => {
+      if (!owns(owner)) return;
       const root = stateRef.current.repo?.repoRoot;
       const sameRepo = repositoryContainsContext(root ?? null, contextPath);
       const fresh = Date.now() - lastRefreshAtRef.current < SC_STATUS_TTL_MS;
@@ -862,7 +1046,7 @@ export function useSourceControl(
         window.clearTimeout(idle as number);
       }
     };
-  }, [doRefresh, contextPath, enabled]);
+  }, [doRefresh, contextPath, enabled, capture, owns, setState]);
 
   useEffect(() => {
     if (!enabled || !live) return;
