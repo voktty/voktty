@@ -278,3 +278,66 @@ it.each(["switch", "unmount", "stop"])(
     expect(focus).not.toHaveBeenCalled();
   },
 );
+
+it.each(["switch", "roundtrip", "replace", "unmount"])(
+  "does not publish browser attachments after %s",
+  async (mode) => {
+    makeChat("original");
+    makeChat("selected");
+    let finish!: (text: string) => void;
+    const file = new File(["original"], "fixture.txt");
+    vi.spyOn(file, "text").mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = composer.addFiles([file] as unknown as FileList);
+    });
+    await act(async () => {
+      if (mode === "unmount") {
+        root?.unmount();
+        root = null;
+      } else if (mode === "replace") makeChat("original");
+      else {
+        useChatStore.getState().switchSession("selected");
+        if (mode === "roundtrip")
+          useChatStore.getState().switchSession("original");
+      }
+      finish("original content");
+      await pending;
+    });
+    expect(composer.files).toEqual([]);
+  },
+);
+
+it("refuses a cached browser attachment action before reading after a selection round trip", async () => {
+  makeChat("original");
+  makeChat("selected");
+  const add = composer.addFiles;
+  const file = new File(["original"], "fixture.txt");
+  const read = vi.spyOn(file, "text");
+  await act(async () => {
+    useChatStore.getState().switchSession("selected");
+    useChatStore.getState().switchSession("original");
+    await add([file] as unknown as FileList);
+  });
+  expect(read).not.toHaveBeenCalled();
+  expect(composer.files).toEqual([]);
+});
+
+it("keeps a current browser attachment and deduplicates the same file", async () => {
+  const file = new File(["original"], "fixture.txt");
+  await act(async () => {
+    await composer.addFiles([file, file] as unknown as FileList);
+  });
+  expect(composer.files).toEqual([
+    expect.objectContaining({
+      name: "fixture.txt",
+      text: "original",
+      kind: "text",
+    }),
+  ]);
+});

@@ -13,6 +13,8 @@ import { useWhisperRecording } from "../hooks/useWhisperRecording";
 import { expandSnippetTokens, type Snippet } from "../lib/snippets";
 import { useChatStore } from "../store/chatStore";
 import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
+import { readBrowserAttachments } from "@/modules/ai/lib/browserAttachments";
+export { MAX_TEXT_INLINE } from "@/modules/ai/lib/browserAttachments";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
 import {
@@ -36,7 +38,6 @@ type MessagePart =
   | { type: "text"; text: string }
   | { type: "file"; mediaType: string; url: string; filename?: string };
 
-export const MAX_TEXT_INLINE = 200_000;
 export const ACCEPTED_FILES =
   "image/*,.txt,.md,.json,.yaml,.yml,.toml,.sh,.zsh,.bash,.py,.js,.jsx,.ts,.tsx,.rs,.go,.java,.c,.cpp,.h,.hpp,.html,.css,.csv,.log,.env,.config,.conf,.ini,Dockerfile,.dockerfile";
 
@@ -266,15 +267,21 @@ export function AiComposerProvider({ children }: ProviderProps) {
     },
   });
 
-  const addFiles = async (list: FileList | null) => {
-    if (!list) return;
-    const next: FileAttachment[] = [];
-    for (const f of Array.from(list)) {
-      const att = await readAttachment(f);
-      if (att) next.push(att);
-    }
-    if (next.length) setFiles((prev) => [...prev, ...next]);
-  };
+  const addFiles = useCallback(
+    async (list: FileList | null) => {
+      const owner = captureOwner();
+      if (!list || !owner) return;
+      await readBrowserAttachments(list, owner.isCurrent, (next) => {
+        setFiles((prev) => {
+          if (!owner.isCurrent()) return prev;
+          const existing = new Set(prev.map((file) => file.id));
+          const added = next.filter((file) => !existing.has(file.id));
+          return added.length ? [...prev, ...added] : prev;
+        });
+      });
+    },
+    [captureOwner],
+  );
 
   const removeFile = (id: string) =>
     setFiles((prev) => prev.filter((f) => f.id !== id));
@@ -474,38 +481,4 @@ export function AiComposerProvider({ children }: ProviderProps) {
   };
 
   return <Ctx.Provider value={ctx}>{children}</Ctx.Provider>;
-}
-
-async function readAttachment(file: File): Promise<FileAttachment | null> {
-  const id = `${file.name}-${file.size}-${file.lastModified}`;
-  if (file.type.startsWith("image/")) {
-    const url = await readAsDataURL(file);
-    return {
-      id,
-      name: file.name,
-      kind: "image",
-      mediaType: file.type || "image/png",
-      url,
-      size: file.size,
-    };
-  }
-  if (file.size > MAX_TEXT_INLINE) return null;
-  const text = await file.text();
-  return {
-    id,
-    name: file.name,
-    kind: "text",
-    mediaType: file.type || "text/plain",
-    text,
-    size: file.size,
-  };
-}
-
-function readAsDataURL(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
