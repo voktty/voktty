@@ -37,6 +37,7 @@ export { resolvePath, type ToolContext } from "./context";
 export function buildTools(
   ctx: import("./context").ToolContext,
   mcpTools: ToolSet = {},
+  onSubagentStep?: (step: string) => void,
 ) {
   const builtins = {
     ...buildFsTools(ctx),
@@ -44,7 +45,7 @@ export function buildTools(
     ...buildEditTools(ctx),
     ...buildSearchTools(ctx),
     ...buildShellTools(ctx),
-    ...buildSubagentTools(ctx),
+    ...buildSubagentTools(ctx, onSubagentStep),
     ...buildTerminalTools(ctx),
     ...buildTodoTools(ctx),
     ...buildManagedAgentTools(ctx),

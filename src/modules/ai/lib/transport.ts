@@ -43,7 +43,7 @@ type Deps = {
   getCustomEndpoints?: () => readonly CustomEndpoint[];
   getCustomEndpointKeys?: () => CustomEndpointKeys;
   onStep?: (step: string | null) => void;
-  onUsage?: (delta: AgentUsageDelta) => void;
+  onUsage?: (delta: AgentUsageDelta, isCurrent?: boolean) => void;
   onCompact?: (info: { droppedCount: number }) => void;
   onFinishMeta?: (info: { hitStepCap: boolean; finishReason: string }) => void;
   getPlanMode?: () => boolean;
@@ -56,16 +56,33 @@ type SendOptions = {
 };
 
 export function createContextAwareTransport(deps: Deps) {
+  let latestRequest: object | null = null;
   const run = async (options: SendOptions) => {
     if (deps.isAvailable?.() === false) {
       requireAiRuntime();
     }
-    const lifetime = fileToolCallsFor(deps.toolContext).captureLifetime();
+    const calls = fileToolCallsFor(deps.toolContext);
+    const lifetime = calls.captureLifetime();
+    const abortSignal = options.abortSignal;
+    const request = {};
+    let finished = false;
+    const requestCurrent = () => !abortSignal?.aborted && lifetime();
+    if (!requestCurrent())
+      throw new Error("The original AI request has retired.");
+    latestRequest = request;
+    const canPublish = () =>
+      !finished && latestRequest === request && requestCurrent();
     const assertCurrent = () => {
-      if (options.abortSignal?.aborted || !lifetime())
+      if (latestRequest !== request || !requestCurrent())
         throw new Error("The original AI request has retired.");
     };
-    assertCurrent();
+    const callbacks = {
+      step: deps.onStep,
+      usage: deps.onUsage,
+      compact: deps.onCompact,
+      finish: deps.onFinishMeta,
+      subagentStep: deps.toolContext.onAgentStep,
+    };
     const live = { ...deps.getLive() };
     const source = deps.toolContext.getFileRootContext?.() ?? null;
     const boundary = source ? structuredClone(source) : null;
@@ -77,10 +94,23 @@ export function createContextAwareTransport(deps: Deps) {
       customInstructions: deps.getCustomInstructions(),
       agentPersona: persona ? { ...persona } : null,
       toolContext: deps.toolContext,
-      onStep: deps.onStep,
-      onUsage: deps.onUsage,
-      onCompact: deps.onCompact,
-      onFinishMeta: deps.onFinishMeta,
+      onStep: (step: string | null) => {
+        if (canPublish()) callbacks.step?.(step);
+      },
+      onSubagentStep: (step: string) => {
+        if (canPublish()) callbacks.subagentStep?.(step);
+      },
+      onUsage: (delta: AgentUsageDelta) => {
+        if (calls.isCurrent()) callbacks.usage?.(delta, canPublish());
+      },
+      onCompact: (info: { droppedCount: number }) => {
+        if (canPublish()) callbacks.compact?.(info);
+      },
+      onFinishMeta: (info: { hitStepCap: boolean; finishReason: string }) => {
+        const publish = canPublish();
+        finished = true;
+        if (publish) callbacks.finish?.(info);
+      },
       lmstudioBaseURL: deps.getLmstudioBaseURL?.(),
       lmstudioModelId: deps.getLmstudioModelId?.(),
       mlxBaseURL: deps.getMlxBaseURL?.(),
@@ -94,7 +124,7 @@ export function createContextAwareTransport(deps: Deps) {
       customEndpoints: structuredClone(deps.getCustomEndpoints?.()),
       customEndpointKeys: structuredClone(deps.getCustomEndpointKeys?.()),
       planMode: deps.getPlanMode?.(),
-      abortSignal: options.abortSignal,
+      abortSignal,
     };
     const projectMemory = await projectMemoryReader.read(
       boundary,
@@ -105,16 +135,24 @@ export function createContextAwareTransport(deps: Deps) {
     const messagesForRun = envBlock
       ? injectEnvIntoLastUser(options.messages, envBlock)
       : options.messages;
-    const result = await runAgentStream({
-      ...captured,
-      projectMemory,
-      uiMessages: messagesForRun,
-    });
-    assertCurrent();
-    return result.toUIMessageStream({
-      originalMessages: options.messages,
-      onError: formatAiError,
-    });
+    try {
+      const result = await runAgentStream({
+        ...captured,
+        projectMemory,
+        uiMessages: messagesForRun,
+      });
+      assertCurrent();
+      return result.toUIMessageStream({
+        originalMessages: options.messages,
+        onError: (error) => {
+          finished = true;
+          return formatAiError(error);
+        },
+      });
+    } catch (error) {
+      finished = true;
+      throw error;
+    }
   };
 
   return {

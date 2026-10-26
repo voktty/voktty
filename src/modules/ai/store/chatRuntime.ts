@@ -110,7 +110,7 @@ function makeChat(sessionId: string): Chat<UIMessage> {
         .getState()
         .patchAgentMeta({ hitStepCap: info.hitStepCap }, chat);
     },
-    onUsage: (delta) => {
+    onUsage: (delta, isCurrent = true) => {
       useChatStore.getState().patchAgentMeta(
         (current) => ({
           tokens: {
@@ -119,8 +119,12 @@ function makeChat(sessionId: string): Chat<UIMessage> {
             cachedInputTokens:
               current.tokens.cachedInputTokens + delta.cachedInputTokens,
           },
-          lastInputTokens: delta.lastInputTokens,
-          lastCachedTokens: delta.lastCachedTokens,
+          ...(isCurrent
+            ? {
+                lastInputTokens: delta.lastInputTokens,
+                lastCachedTokens: delta.lastCachedTokens,
+              }
+            : {}),
         }),
         chat,
       );

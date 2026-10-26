@@ -7,7 +7,7 @@ import type { ToolContext } from "./context";
 
 const TYPE_KEYS = Object.keys(SUBAGENTS) as [SubagentType, ...SubagentType[]];
 
-export function buildSubagentTools(ctx: ToolContext) {
+export function buildSubagentTools(ctx: ToolContext, onStep = ctx.onAgentStep) {
   return {
     run_subagent: tool({
       description: `Spawn an isolated subagent with its own restricted toolset and a fresh message history. Use when you need to delegate a self-contained read-only investigation (large search, code review, security audit) without polluting your own context. The subagent returns a single text summary; pick a 'type' that matches its job.
@@ -38,7 +38,7 @@ Auto-executes (no approval) — subagents are read-only by design.`,
             modelId: selectedModelId,
             toolContext: ctx,
             abortSignal,
-            onStep: ctx.onAgentStep,
+            onStep,
           });
           return {
             type,

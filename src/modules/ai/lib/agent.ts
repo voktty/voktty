@@ -384,6 +384,7 @@ export type RunAgentOptions = {
   agentPersona?: { name: string; instructions: string } | null;
   toolContext: ToolContext;
   onStep?: (step: string | null) => void;
+  onSubagentStep?: (step: string) => void;
   onUsage?: (delta: AgentUsageDelta) => void;
   onCompact?: (info: { droppedCount: number }) => void;
   onFinishMeta?: (info: { hitStepCap: boolean; finishReason: string }) => void;
@@ -462,7 +463,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
   const mcpTools = await loadMcpToolsForRun(opts.uiMessages);
 
   let stepsSeen = 0;
-  const tools = buildTools(opts.toolContext, mcpTools);
+  const tools = buildTools(opts.toolContext, mcpTools, opts.onSubagentStep);
   return streamText({
     model,
     system: prompt.system,
