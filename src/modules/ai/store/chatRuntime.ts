@@ -10,6 +10,7 @@ import { isAiRuntimeAvailable } from "../lib/runtimeAvailability";
 import {
   registerChatFileTools,
   retireChatFileTools,
+  retireChatToolApproval,
 } from "@/modules/ai/lib/chatFileTools";
 import { useAgentsStore } from "./agentsStore";
 import { usePlanStore } from "./planStore";
@@ -136,6 +137,11 @@ function makeChat(sessionId: string): Chat<UIMessage> {
   chat.stop = () => {
     retireChatFileTools(chat);
     return stop();
+  };
+  const respond = chat.addToolApprovalResponse;
+  chat.addToolApprovalResponse = (response) => {
+    if (!response.approved) retireChatToolApproval(chat, response.id);
+    return respond(response);
   };
   return chat;
 }

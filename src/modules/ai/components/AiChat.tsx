@@ -69,6 +69,7 @@ import { sendMessage } from "../store/chatRuntime";
 import { useChatStore } from "../store/chatStore";
 import { type McpApprovalPart, respondToMcpApproval } from "../tools/mcp";
 import { AiToolApproval } from "./AiToolApproval";
+import { ApprovalSessionContext } from "@/modules/ai/lib/useShellApprovalSource";
 
 function CommandSnippet({ name }: { name: string }) {
   const meta = SLASH_COMMANDS[name];
@@ -263,12 +264,14 @@ export function AiChatView({
       resize={status === "streaming" ? "instant" : "smooth"}
     >
       <ConversationContent className="gap-5 p-3">
-        <ConversationMessageWindow
-          sessionId={sessionId}
-          messages={messages}
-          onApproval={onApproval}
-          streamingMessageId={streamingMessageId}
-        />
+        <ApprovalSessionContext.Provider value={sessionId}>
+          <ConversationMessageWindow
+            sessionId={sessionId}
+            messages={messages}
+            onApproval={onApproval}
+            streamingMessageId={streamingMessageId}
+          />
+        </ApprovalSessionContext.Provider>
         {compactionNotice && (
           <CompactionNotice
             droppedCount={compactionNotice.droppedCount}

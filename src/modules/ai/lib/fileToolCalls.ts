@@ -10,7 +10,8 @@ export type FileToolName =
   | "edit"
   | "multi_edit";
 
-export type CapturedToolName = FileToolName | "bash_run" | "bash_background";
+export type ShellToolName = "bash_run" | "bash_background";
+export type CapturedToolName = FileToolName | ShellToolName;
 
 export type FileToolTarget = {
   directory: string;
@@ -33,6 +34,7 @@ type Call = {
   approvalId?: string;
   retireGlobal: () => void;
   epoch: object;
+  observers?: Set<() => void>;
 };
 
 type Budget = {
@@ -121,7 +123,14 @@ export function createFileToolCalls(budget?: Budget) {
   };
   const retire = (id: string, call: Call) => {
     if (calls.get(id) !== call) return;
-    call.retired = true;
+    if (!call.retired) {
+      call.retired = true;
+      for (const observer of [...(call.observers ?? [])]) {
+        try {
+          observer();
+        } catch {}
+      }
+    }
     if (!call.running && call.readers === 0) collect(id, call);
   };
   const match = (id: string, tool: CapturedToolName, input: unknown): Call => {
@@ -205,9 +214,10 @@ export function createFileToolCalls(budget?: Budget) {
     },
     observe(
       id: string,
-      tool: FileToolName,
+      tool: CapturedToolName,
       input: unknown,
       approvalId?: string,
+      onRetire?: () => void,
     ) {
       const call = match(id, tool, input);
       if (approvalId !== undefined && call.approvalId !== approvalId)
@@ -216,6 +226,10 @@ export function createFileToolCalls(budget?: Budget) {
         throw new Error("Too many unsettled file previews.");
       call.readers++;
       shared.readers++;
+      if (onRetire) {
+        call.observers ??= new Set();
+        call.observers.add(onRetire);
+      }
       let released = false;
       return {
         target: structuredClone(call.target),
@@ -226,6 +240,7 @@ export function createFileToolCalls(budget?: Budget) {
         release: () => {
           if (released) return;
           released = true;
+          if (onRetire) call.observers?.delete(onRetire);
           call.readers--;
           shared.readers--;
           if (call.retired && !call.running && call.readers === 0)
@@ -265,6 +280,12 @@ export function createFileToolCalls(budget?: Budget) {
     retireApproval(id: string, approvalId: string): void {
       const call = calls.get(id);
       if (call?.approvalId === approvalId) retire(id, call);
+    },
+    retireApprovalId(approvalId: string): void {
+      const captured = [...calls].filter(
+        ([, call]) => call.approvalId === approvalId,
+      );
+      for (const [id, call] of captured) retire(id, call);
     },
     retireAll(): void {
       if (!budget) {

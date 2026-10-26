@@ -3,6 +3,7 @@ import type { ToolContext } from "@/modules/ai/tools/context";
 import {
   fileToolCallsFor,
   type FileToolName,
+  type ShellToolName,
 } from "@/modules/ai/lib/fileToolCalls";
 
 const contexts = new WeakMap<object, ToolContext>();
@@ -27,9 +28,33 @@ export function previewChatFileTool(
   return fileToolCallsFor(context).observe(id, tool, input, approvalId);
 }
 
+export function observeChatShellTool(
+  chat: object,
+  id: string,
+  tool: ShellToolName,
+  input: unknown,
+  approvalId: string,
+  onRetire?: () => void,
+) {
+  const context = contexts.get(chat);
+  if (!context) throw new Error("The original shell capture is unavailable.");
+  return fileToolCallsFor(context).observe(
+    id,
+    tool,
+    input,
+    approvalId,
+    onRetire,
+  );
+}
+
 export function retireChatFileTools(chat: object): void {
   const context = contexts.get(chat);
   if (context) fileToolCallsFor(context).retireAll();
+}
+
+export function retireChatToolApproval(chat: object, approvalId: string): void {
+  const context = contexts.get(chat);
+  if (context) fileToolCallsFor(context).retireApprovalId(approvalId);
 }
 
 export function forgetChatFileTools(chat: object): void {

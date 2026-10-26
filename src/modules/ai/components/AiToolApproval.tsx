@@ -15,7 +15,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { ToolUIPart } from "ai";
-import { memo } from "react";
+import { memo, useContext } from "react";
+import {
+  ApprovalSessionContext,
+  useShellApprovalSource,
+} from "@/modules/ai/lib/useShellApprovalSource";
+import { fileDestinationLabel } from "@/modules/workspace/fileDestinationLabel";
 
 type Props = {
   part: Extract<ToolUIPart, { state: "approval-requested" }>;
@@ -38,6 +43,14 @@ const TOOL_META: Record<string, { icon: typeof FilePlusIcon }> = {
 
 function AiToolApprovalImpl({ part, toolName, onRespond }: Props) {
   const { t } = useTranslation();
+  const sessionId = useContext(ApprovalSessionContext);
+  const shell = useShellApprovalSource(
+    sessionId,
+    toolName,
+    part.toolCallId,
+    part.approval.id,
+    part.input,
+  );
   const meta = TOOL_META[toolName];
   const toolMetadata = (part as typeof part & { toolMetadata?: unknown }).toolMetadata;
   const mcpDisplayName =
@@ -94,6 +107,27 @@ function AiToolApprovalImpl({ part, toolName, onRespond }: Props) {
       </div>
 
       <div className="px-3 py-2.5">
+        {shell.required && (
+          <div className="mb-2 break-all text-[10.5px] text-muted-foreground">
+            {shell.source ? (
+              <>
+                <span>{t("harness.chrome.source")}: </span>
+                <span className="font-mono">{shell.source.directory}</span>
+                <span>
+                  {" · "}
+                  {fileDestinationLabel(
+                    shell.source.directory,
+                    shell.source.workspace,
+                    t("workspace.localMachine"),
+                    t("statusbar.serial"),
+                  )}
+                </span>
+              </>
+            ) : (
+              <span role="status">{t("common.expired")}</span>
+            )}
+          </div>
+        )}
         {mcpMetadata?.origin === "mcp" ? (
           <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[9.5px] text-muted-foreground">
             <span>{String(mcpMetadata.serverId ?? "MCP")}</span>
@@ -114,7 +148,9 @@ function AiToolApprovalImpl({ part, toolName, onRespond }: Props) {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => onRespond(false)}
+          onClick={() => {
+            if (!shell.required || shell.canRespond(false)) onRespond(false);
+          }}
           className="h-7 gap-1.5 text-[11px]"
         >
           <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
@@ -123,7 +159,10 @@ function AiToolApprovalImpl({ part, toolName, onRespond }: Props) {
         <Button
           size="sm"
           variant="default"
-          onClick={() => onRespond(true)}
+          disabled={shell.required && !shell.source}
+          onClick={() => {
+            if (!shell.required || shell.canRespond(true)) onRespond(true);
+          }}
           className="h-7 gap-1.5 text-[11px]"
         >
           <HugeiconsIcon icon={Tick02Icon} size={12} strokeWidth={2} />
@@ -142,6 +181,8 @@ export const AiToolApproval = memo(AiToolApprovalImpl, (a, b) => {
   return (
     a.toolName === b.toolName &&
     a.part.approval.id === b.part.approval.id &&
+    a.part.toolCallId === b.part.toolCallId &&
+    a.part.input === b.part.input &&
     a.onRespond === b.onRespond
   );
 });

@@ -134,3 +134,108 @@ it("still aborts the SDK's active transport after retiring file captures", async
   await request;
   call.release();
 });
+
+function pendingApprovals(chat: ReturnType<typeof getOrCreateChat>) {
+  chat.messages = [
+    {
+      id: "message",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-bash_run",
+          toolCallId: "shell",
+          input: { command: "fixture" },
+          state: "approval-requested",
+          approval: { id: "deny" },
+        },
+        {
+          type: "tool-write_file",
+          toolCallId: "sibling",
+          input,
+          state: "approval-requested",
+          approval: { id: "keep" },
+        },
+      ],
+    },
+  ];
+}
+
+it("retires a denied shell capture immediately while another SDK approval is pending", async () => {
+  const original = getOrCreateChat("original");
+  const other = getOrCreateChat("other");
+  pendingApprovals(original);
+  const owner = context();
+  const sibling = context();
+  registerChatFileTools(original, owner);
+  registerChatFileTools(other, sibling);
+  const calls = fileToolCallsFor(owner);
+  calls
+    .capture("shell", "bash_run", { command: "fixture" }, target)
+    .bindApproval("deny");
+  calls.capture("sibling", "write_file", input, target).bindApproval("keep");
+  fileToolCallsFor(sibling)
+    .capture("shell", "bash_run", { command: "fixture" }, target)
+    .bindApproval("deny");
+  useChatStore.setState({ activeSessionId: "other" });
+  const response = original.addToolApprovalResponse({
+    id: "deny",
+    approved: false,
+  });
+  expect(() =>
+    calls.claim("shell", "bash_run", { command: "fixture" }, "deny"),
+  ).toThrow("unavailable");
+  expect(calls.preview("sibling", "write_file", input)).toEqual(target);
+  const otherCall = fileToolCallsFor(sibling).claim(
+    "shell",
+    "bash_run",
+    { command: "fixture" },
+    "deny",
+  );
+  expect(otherCall.isCurrent()).toBe(true);
+  otherCall.release();
+  await response;
+  expect(fixture.send).not.toHaveBeenCalled();
+  calls.retireAll();
+});
+
+it("does not retire an approved capture or an unknown approval", async () => {
+  const chat = getOrCreateChat("original");
+  pendingApprovals(chat);
+  const owner = context();
+  registerChatFileTools(chat, owner);
+  const calls = fileToolCallsFor(owner);
+  calls
+    .capture("shell", "bash_run", { command: "fixture" }, target)
+    .bindApproval("deny");
+  await chat.addToolApprovalResponse({ id: "missing", approved: false });
+  await chat.addToolApprovalResponse({ id: "deny", approved: true });
+  const call = calls.claim("shell", "bash_run", { command: "fixture" }, "deny");
+  expect(call.isCurrent()).toBe(true);
+  call.release();
+});
+
+it("retains a denied running call's budget until physical settlement", async () => {
+  const chat = getOrCreateChat("original");
+  pendingApprovals(chat);
+  const owner = context();
+  registerChatFileTools(chat, owner);
+  const calls = fileToolCallsFor(owner);
+  calls
+    .capture("shell", "bash_run", { command: "fixture" }, target)
+    .bindApproval("deny");
+  const call = calls.claim("shell", "bash_run", { command: "fixture" }, "deny");
+  const response = chat.addToolApprovalResponse({
+    id: "deny",
+    approved: false,
+  });
+  expect(call.isCurrent()).toBe(false);
+  for (let index = 0; index < 255; index++)
+    calls.capture(String(index), "read_file", {}, target);
+  expect(() => calls.capture("extra", "read_file", {}, target)).toThrow(
+    "Too many",
+  );
+  call.release();
+  calls.capture("extra", "read_file", {}, target);
+  await response;
+  calls.retireAll();
+});
