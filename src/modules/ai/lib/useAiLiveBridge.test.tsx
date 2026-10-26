@@ -19,6 +19,7 @@ import { useAiLiveBridge } from "./useAiLiveBridge";
 import type { Tab } from "@/modules/tabs";
 import { IS_WINDOWS } from "@/lib/platform";
 import { asTabKey, asWorkspaceScopeId } from "@/modules/tabs/lib/tabIdentity";
+import type { WorkspaceEnv } from "@/modules/workspace";
 
 const LOCAL_APP_PATH = IS_WINDOWS
   ? "C:\\proyectos\\local-app"
@@ -61,6 +62,7 @@ describe("useAiLiveBridge", () => {
     activeId: number;
     tabs: Tab[];
     explorerRoot?: string | null;
+    explorerWorkspace?: WorkspaceEnv;
     launchCwd?: string | null;
     home?: string | null;
     strict?: boolean;
@@ -74,6 +76,7 @@ describe("useAiLiveBridge", () => {
         activeId: props.activeId,
         tabs: props.tabs,
         explorerRoot: props.explorerRoot ?? null,
+        explorerWorkspace: props.explorerWorkspace,
         launchCwd: props.launchCwd ?? null,
         home: props.home ?? null,
         openPreviewTab: vi.fn(),
@@ -236,12 +239,52 @@ describe("useAiLiveBridge", () => {
       strict: true,
       activeId: 1,
       tabs: [{ id: 1, kind: "editor", path: "/repo/file.ts" } as Tab],
+      explorerRoot: "/repo",
+      explorerWorkspace: { kind: "local" },
     });
     expect(publications).toHaveLength(2);
     expect(publications[0].getFileContext?.()).toBeNull();
+    expect(publications[0].getFileRootContext?.()).toBeNull();
+    expect(publications[1].getFileRootContext?.()).toEqual({
+      root: "/repo",
+      workspace: { kind: "local" },
+    });
     expect(publications[1].getFileContext?.()).toEqual({
       directory: "/repo",
       workspace: { kind: "local" },
     });
+  });
+
+  it("keeps the Explorer boundary separate from the active document filesystem", () => {
+    renderBridge({
+      activeId: 1,
+      tabs: [{ id: 1, kind: "editor", path: "/same/file.ts" } as Tab],
+      explorerRoot: "/same",
+      explorerWorkspace: { kind: "wsl", distro: "fixture" },
+    });
+    const live = liveCapture as Live | null;
+    expect(live?.getFileContext?.()).toEqual({
+      directory: "/same",
+      workspace: { kind: "local" },
+    });
+    expect(live?.getFileRootContext?.()).toEqual({
+      root: "/same",
+      workspace: { kind: "wsl", distro: "fixture" },
+    });
+    act(() => root?.unmount());
+    root = null;
+    expect(live?.getFileRootContext?.()).toBeNull();
+  });
+
+  it("does not label an unqualified legacy root with the document filesystem", () => {
+    renderBridge({
+      activeId: 1,
+      tabs: [{ id: 1, kind: "editor", path: "/repo/file.ts" } as Tab],
+      explorerRoot: "/repo",
+      launchCwd: "/launch",
+      home: "/fixture-home",
+    });
+    expect(liveCapture?.getFileRootContext?.()).toBeNull();
+    expect(liveCapture?.getWorkspaceRoot()).toBe("/repo");
   });
 });

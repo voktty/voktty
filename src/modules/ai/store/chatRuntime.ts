@@ -22,6 +22,8 @@ import {
 function makeChat(sessionId: string): Chat<UIMessage> {
   const readCache = new Map<string, { size: number; hash: number }>();
   const toolContext: ToolContext = {
+    getFileRootContext: () =>
+      useChatStore.getState().live.getFileRootContext?.() ?? null,
     getFileContext: () =>
       useChatStore.getState().live.getFileContext?.() ?? null,
     getCwd: () => useChatStore.getState().live.getCwd(),

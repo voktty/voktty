@@ -10,11 +10,16 @@ import {
 } from "@/modules/terminal";
 import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
-import { resolveAiFileContext, type AiFileContext } from "./aiFileContext";
+import {
+  resolveAiFileContext,
+  resolveAiFileRootContext,
+  type AiFileContext,
+  type AiFileRootContext,
+} from "./aiFileContext";
 import type { Live } from "../store/chatStore";
 import { redactSensitive } from "./redact";
 import { selectAiWorkspaceCwd } from "./selectAiWorkspaceCwd";
-import { isLocalPath } from "@/modules/workspace";
+import { isLocalPath, type WorkspaceEnv } from "@/modules/workspace";
 import type { EditorPaneHandle } from "@/modules/editor";
 import {
   collectWorkspaceProblems,
@@ -42,6 +47,7 @@ type Params = {
   activeId: number;
   tabs: Tab[];
   explorerRoot: string | null;
+  explorerWorkspace?: WorkspaceEnv;
   launchCwd: string | null;
   home: string | null;
   openPreviewTab: (url: string) => unknown;
@@ -71,12 +77,23 @@ export function useAiLiveBridge(params: Params) {
     activeTab?.kind === "terminal" ? activeTab.activeLeafId : null,
   );
   const fileContextRef = useRef<AiFileContext | null>(null);
+  const fileRootContextRef = useRef<AiFileRootContext | null>(null);
   useLayoutEffect(() => {
     fileContextRef.current = resolveAiFileContext(activeTab, terminalWorkspace);
+    fileRootContextRef.current = resolveAiFileRootContext(
+      params.explorerRoot,
+      params.explorerWorkspace,
+    );
     return () => {
       fileContextRef.current = null;
+      fileRootContextRef.current = null;
     };
-  }, [activeTab, terminalWorkspace]);
+  }, [
+    activeTab,
+    terminalWorkspace,
+    params.explorerRoot,
+    params.explorerWorkspace,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -177,6 +194,10 @@ export function useAiLiveBridge(params: Params) {
     };
 
     setLive({
+      getFileRootContext: () =>
+        active && fileRootContextRef.current
+          ? structuredClone(fileRootContextRef.current)
+          : null,
       getFileContext: () =>
         active && fileContextRef.current
           ? structuredClone(fileContextRef.current)

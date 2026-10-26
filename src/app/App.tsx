@@ -4395,6 +4395,7 @@ function DesktopApp() {
     activeId: effectiveActiveId,
     tabs,
     explorerRoot,
+    explorerWorkspace: activeExplorerWorkspaceEnv,
     launchCwd,
     home,
     openPreviewTab,

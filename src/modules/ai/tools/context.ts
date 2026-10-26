@@ -2,9 +2,13 @@ import type {
   DevelopmentBuffer,
   DevelopmentDiagnostic,
 } from "../lib/developmentContext";
-import type { AiFileContext } from "@/modules/ai/lib/aiFileContext";
+import type {
+  AiFileContext,
+  AiFileRootContext,
+} from "@/modules/ai/lib/aiFileContext";
 
 export type ToolContext = {
+  getFileRootContext?: () => AiFileRootContext | null;
   getFileContext?: () => AiFileContext | null;
   /** Active terminal tab cwd, used to resolve relative paths. Null = home. */
   getCwd: () => string | null;

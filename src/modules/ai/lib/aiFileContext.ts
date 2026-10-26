@@ -1,11 +1,40 @@
 import type { Tab } from "@/modules/tabs";
 import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
-import { isWindowsNativePath, type WorkspaceEnv } from "@/modules/workspace";
+import {
+  isWindowsNativePath,
+  workspaceForDocumentPath,
+  type WorkspaceEnv,
+} from "@/modules/workspace";
 
 export type AiFileContext = {
   directory: string;
   workspace: WorkspaceEnv;
 };
+
+export type AiFileRootContext = {
+  root: string;
+  workspace: WorkspaceEnv;
+};
+
+export function resolveAiFileRootContext(
+  root: string | null,
+  workspace: WorkspaceEnv | undefined,
+): AiFileRootContext | null {
+  if (
+    !root ||
+    !workspace ||
+    root.startsWith("remote://") ||
+    (!root.startsWith("/") && !isWindowsNativePath(root))
+  )
+    return null;
+  if (
+    !isWindowsNativePath(root) &&
+    (workspace.kind === "docker" || workspace.kind === "serial")
+  )
+    return null;
+  const owner = workspaceForDocumentPath(workspace, root);
+  return { root, workspace: structuredClone(owner) };
+}
 
 export function resolveAiFileContext(
   tab: Tab | undefined,
