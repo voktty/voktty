@@ -11,6 +11,7 @@ import {
   LOCAL_WORKSPACE,
   workspaceForDocumentPath,
   workspaceScopeKey,
+  isWindowsNativePath,
 } from "@/modules/workspace";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
@@ -41,13 +42,12 @@ function editorWorkspaceKey(workspace: WorkspaceEnv): string {
 
 export function collectEditorWatchGroups(
   tabs: Tab[],
-  fallbackWorkspace: WorkspaceEnv,
 ): Map<string, EditorWatchGroup> {
   const groups = new Map<string, EditorWatchGroup>();
   for (const tab of tabs) {
     if (tab.kind !== "editor" || isRemoteProjectUri(tab.path)) continue;
     const workspace = workspaceForDocumentPath(
-      tab.workspaceEnv ?? fallbackWorkspace,
+      tab.workspaceEnv ?? LOCAL_WORKSPACE,
       tab.path,
     );
     const key = editorWorkspaceKey(workspace);
@@ -56,7 +56,14 @@ export function collectEditorWatchGroups(
       paths: new Set<string>(),
       workspace,
     };
-    group.paths.add(parentDir(tab.path));
+    const separator = tab.path.lastIndexOf("/");
+    group.paths.add(
+      isWindowsNativePath(tab.path)
+        ? parentDir(tab.path)
+        : separator < 0
+          ? tab.path
+          : tab.path.slice(0, Math.max(1, separator)),
+    );
     groups.set(key, group);
   }
   return groups;
@@ -67,12 +74,7 @@ export function collectEditorWatchGroups(
  * diffs, external writes, and fs-watch events, and maintains the watch set for
  * the directories of open editor files.
  */
-export function useEditorFileSync({
-  tabs,
-  tabsRef,
-  editorRefs,
-  workspace,
-}: Params) {
+export function useEditorFileSync({ tabs, tabsRef, editorRefs }: Params) {
   // When an AI diff is approved (write_file applied to disk), reload any
   // open editor tabs for that path so the user sees the new content. We
   // track which approvalIds we've already handled to fire the reload only
@@ -129,7 +131,7 @@ export function useEditorFileSync({
 
   const editorWatchRef = useRef<Map<string, EditorWatchGroup>>(new Map());
   useEffect(() => {
-    const next = collectEditorWatchGroups(tabs, workspace);
+    const next = collectEditorWatchGroups(tabs);
     const previous = editorWatchRef.current;
 
     for (const [key, prior] of previous) {
@@ -147,7 +149,7 @@ export function useEditorFileSync({
       watchAdd(toAdd, wanted.workspace);
     }
     editorWatchRef.current = next;
-  }, [tabs, workspace]);
+  }, [tabs]);
 
   useEffect(
     () => () => {
@@ -163,34 +165,51 @@ export function useEditorFileSync({
   useEffect(() => {
     let alive = true;
     const unlisteners: Array<() => void> = [];
-    const groups = collectEditorWatchGroups(tabs, workspace);
+    const groups = collectEditorWatchGroups(tabs);
     for (const group of groups.values()) {
-      void listenFsChanged(
-        (paths) => {
-          const changed = new Set(paths.map((p) => p.replace(/\\/g, "/")));
-          for (const tab of tabsRef.current) {
-            if (tab.kind !== "editor") continue;
-            const tabWorkspace = workspaceForDocumentPath(
-              tab.workspaceEnv ?? workspace,
-              tab.path,
-            );
-            if (editorWorkspaceKey(tabWorkspace) !== group.key) continue;
-            if (changed.has(tab.path.replace(/\\/g, "/"))) {
-              const handle = editorRefs.current.get(tab.id);
-              handle?.notifyExternalChange();
+      void listenFsChanged((paths) => {
+        if (!alive) return;
+        const changed = new Set(paths.map(editorWatchPath));
+        for (const tab of tabsRef.current) {
+          if (!alive) return;
+          if (
+            tab.kind !== "editor" ||
+            isRemoteProjectUri(tab.path) ||
+            !tabsRef.current.includes(tab)
+          )
+            continue;
+          const tabWorkspace = workspaceForDocumentPath(
+            tab.workspaceEnv ?? LOCAL_WORKSPACE,
+            tab.path,
+          );
+          if (editorWorkspaceKey(tabWorkspace) !== group.key) continue;
+          if (changed.has(editorWatchPath(tab.path))) {
+            const handle = editorRefs.current.get(tab.id);
+            handle?.notifyExternalChange();
+            if (
+              alive &&
+              tabsRef.current.includes(tab) &&
+              editorRefs.current.get(tab.id) === handle
+            )
               handle?.reload(false);
-            }
           }
-        },
-        group.workspace,
-      ).then((unlisten) => {
-        if (alive) unlisteners.push(unlisten);
-        else unlisten();
-      });
+        }
+      }, group.workspace)
+        .then((unlisten) => {
+          if (alive) unlisteners.push(unlisten);
+          else unlisten();
+        })
+        .catch(() => {});
     }
     return () => {
       alive = false;
       for (const unlisten of unlisteners) unlisten();
     };
-  }, [tabs, tabsRef, editorRefs, workspace]);
+  }, [tabs, tabsRef, editorRefs]);
+}
+
+function editorWatchPath(path: string): string {
+  return isWindowsNativePath(path)
+    ? path.replace(/\\/g, "/").toLowerCase()
+    : path;
 }
