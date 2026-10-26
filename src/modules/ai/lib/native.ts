@@ -50,6 +50,10 @@ import {
   resolveRemoteGitRepo,
 } from "./remoteGitHistory";
 import { remoteGitPanel } from "./remoteGitPanel.wire";
+import {
+  remoteSearchGlob,
+  remoteSearchGrep,
+} from "@/modules/ai/lib/remoteSearch";
 
 export type ReadResult =
   | { kind: "text"; content: string; size: number }
@@ -485,7 +489,12 @@ export const native = {
     },
     explicitWorkspace?: WorkspaceEnv,
   ) => {
-    const workspace = resolveNativeSearchWorkspace(params.root, explicitWorkspace);
+    const source = resolveFilesystemWorkspace(
+      params.root,
+      explicitWorkspace ?? currentWorkspaceEnv(),
+    );
+    if (source.kind === "ssh") return remoteSearchGrep(source, params);
+    const workspace = resolveNativeSearchWorkspace(params.root, source);
     return invoke<GrepResponse>("fs_grep", {
       pattern: params.pattern,
       root: params.root,
@@ -499,7 +508,12 @@ export const native = {
     params: { pattern: string; root: string; maxResults?: number },
     explicitWorkspace?: WorkspaceEnv,
   ) => {
-    const workspace = resolveNativeSearchWorkspace(params.root, explicitWorkspace);
+    const source = resolveFilesystemWorkspace(
+      params.root,
+      explicitWorkspace ?? currentWorkspaceEnv(),
+    );
+    if (source.kind === "ssh") return remoteSearchGlob(source, params);
+    const workspace = resolveNativeSearchWorkspace(params.root, source);
     return invoke<GlobResponse>("fs_glob", {
       pattern: params.pattern,
       root: params.root,

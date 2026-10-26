@@ -246,12 +246,67 @@ it.each([local, wsl])(
 
 it("never falls back to native local search for an SSH root", async () => {
   io.current.mockReturnValue(local);
+  const failure = new Error("method_not_found: update the remote helper");
+  io.invoke.mockRejectedValue(failure);
   for (const operation of [
     () => native.grep({ pattern: "fixture", root: "/work" }, ssh),
     () => native.glob({ pattern: "**/*", root: "/work" }, ssh),
   ])
-    await expect(Promise.resolve().then(operation)).rejects.toThrow();
-  expect(io.invoke).not.toHaveBeenCalled();
+    await expect(Promise.resolve().then(operation)).rejects.toBe(failure);
+  expect(io.invoke.mock.calls.map(([command]) => command)).toEqual([
+    "remote_request",
+    "remote_request",
+  ]);
+  expect(io.invoke.mock.calls.map(([, args]) => args.request.method)).toEqual([
+    "fs.grepIndependent",
+    "fs.glob",
+  ]);
+  expect(io.current).not.toHaveBeenCalled();
+});
+
+it("runs concurrent SSH searches on their original sessions without interactive cancellation", async () => {
+  io.current.mockReturnValue(local);
+  const pending: Array<(value: unknown) => void> = [];
+  io.invoke.mockImplementation(
+    () => new Promise((resolve) => pending.push(resolve)),
+  );
+  const first = native.grep({ root: "/work/src", pattern: "first" }, ssh);
+  const second = native.glob(
+    { root: "/work/lib", pattern: "*" },
+    { ...ssh, sessionId: 8 },
+  );
+  expect(
+    io.invoke.mock.calls.map(([, args]) => [
+      args.sessionId,
+      args.request.method,
+      args.request.params.cwd,
+    ]),
+  ).toEqual([
+    [7, "fs.grepIndependent", "src"],
+    [8, "fs.glob", "lib"],
+  ]);
+  pending[1]({
+    ok: true,
+    result: { hits: [{ path: "/work/lib/a", rel: "a" }], truncated: false },
+  });
+  expect(await second).toEqual({
+    hits: [{ path: "/work/lib/a", rel: "a" }],
+    truncated: false,
+  });
+  pending[0]({
+    ok: true,
+    result: {
+      hits: [{ path: "/work/src/b", rel: "b", line: 2, text: "first" }],
+      truncated: false,
+      files_scanned: 1,
+    },
+  });
+  expect(await first).toEqual({
+    hits: [{ path: "/work/src/b", rel: "b", line: 2, text: "first" }],
+    truncated: false,
+    files_scanned: 1,
+  });
+  expect(io.invoke).toHaveBeenCalledTimes(2);
   expect(io.current).not.toHaveBeenCalled();
 });
 

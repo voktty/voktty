@@ -14,9 +14,11 @@ const io = vi.hoisted(() => ({
 }));
 vi.mock("@/modules/ai/lib/native", () => ({ native: io }));
 
-function fixture() {
+function fixture(
+  initialWorkspace: WorkspaceEnv = { kind: "wsl", distro: "original" },
+) {
   let directory = "/fixture/original";
-  let workspace: WorkspaceEnv = { kind: "wsl", distro: "original" };
+  let workspace: WorkspaceEnv = initialWorkspace;
   const ctx: ToolContext = {
     getCwd: () => directory,
     getWorkspaceRoot: () => directory,
@@ -231,3 +233,43 @@ it("keeps the captured filesystem through real generateText input and execution 
     { kind: "wsl", distro: "original" },
   );
 });
+
+it.each(["grep", "glob"] as const)(
+  "discards a late SSH %s response after cancellation and selection replacement",
+  async (name) => {
+    const workspace: WorkspaceEnv = {
+      kind: "ssh",
+      root: "/fixture",
+      sessionId: 7,
+      connection: { id: "original", name: "Original", host: "fixture.invalid" },
+    };
+    const owner = fixture(workspace);
+    let finish!: (result: unknown) => void;
+    io[name].mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const args = { ...options, abortSignal: controller.signal };
+    const tool = buildSearchTools(owner.ctx)[name];
+    const input = { pattern: "needle" };
+    await tool.onInputAvailable?.({ ...args, input });
+    const pending = tool.execute?.(input, args);
+    await vi.waitFor(() => expect(io[name]).toHaveBeenCalledTimes(1));
+    owner.move();
+    controller.abort();
+    finish({
+      hits: [
+        { path: "/fixture/original/a", rel: "a", line: 1, text: "needle" },
+      ],
+      truncated: false,
+      files_scanned: 1,
+    });
+    expect(await pending).toHaveProperty("error");
+    expect(io[name]).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ root: "/fixture/original" }),
+      workspace,
+    );
+  },
+);
