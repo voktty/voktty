@@ -14,6 +14,7 @@ import { useChatStore } from "../store/chatStore";
 import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
 import { readBrowserAttachments } from "@/modules/ai/lib/browserAttachments";
 import { readPathAttachment } from "@/modules/ai/lib/pathAttachments";
+import type { ProjectAttachmentSource } from "@/modules/ai/lib/projectAttachmentSource";
 import { FILE_ATTACHMENT_EVENT, takeFileAttachmentRequest } from "@/modules/ai/lib/fileAttachmentRequest";
 export { MAX_TEXT_INLINE } from "@/modules/ai/lib/browserAttachments";
 import { useSnippetsStore } from "../store/snippetsStore";
@@ -54,6 +55,7 @@ type ComposerCtx = {
     path: string,
     workspace: WorkspaceEnv,
     isCurrent?: () => boolean,
+    projectSource?: ProjectAttachmentSource,
   ) => Promise<boolean>;
   attachTextFile: (
     attachment: {
@@ -136,11 +138,12 @@ export function AiComposerProvider({ children }: ProviderProps) {
       path: string,
       workspace: WorkspaceEnv,
       isCallerCurrent: () => boolean = () => true,
+      projectSource?: ProjectAttachmentSource,
     ) => {
       const owner = captureOwner();
       const isCurrent = () => Boolean(owner?.isCurrent() && isCallerCurrent());
       if (!isCurrent() || !workspace) return false;
-      const attachment = await readPathAttachment(path, workspace, isCurrent);
+      const attachment = await readPathAttachment(path, workspace, isCurrent, projectSource);
       if (!attachment || !isCurrent()) return false;
       setFiles((prev) =>
         !isCurrent() || prev.some((file) => file.id === attachment.id)
@@ -202,7 +205,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
     const onAttach = (e: Event) => {
       if (!captureOwner()) return;
       const request = takeFileAttachmentRequest((e as CustomEvent).detail);
-      if (request) void attachFileByPath(request.path, request.workspace, request.isCurrent);
+      if (request) void attachFileByPath(request.path, request.workspace, request.isCurrent, request.projectSource);
     };
     const onInsertPrompt = (e: Event) => {
       const prompt = (e as CustomEvent<{ prompt: string }>).detail?.prompt;

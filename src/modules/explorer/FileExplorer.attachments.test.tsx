@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FileExplorer } from "@/modules/explorer/FileExplorer";
 import type { WorkspaceEnv } from "@/modules/workspace";
+import { rememberRemoteProject } from "@/modules/connections/model/remoteProjects";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(async () => null) }));
 vi.mock("@/modules/explorer/lib/useFileTree", () => ({
@@ -95,11 +97,15 @@ const original: WorkspaceEnv = {
   sessionId: 7,
   connection: { id: "fixture", name: "Fixture", host: "a.test" },
 };
-async function render(workspace = original, navigationKey = "first") {
+async function render(
+  workspace = original,
+  navigationKey = "first",
+  rootPath = "/repo",
+) {
   await act(async () =>
     root.render(
       <FileExplorer
-        rootPath="/repo"
+        rootPath={rootPath}
         navigationKey={navigationKey}
         workspaceEnv={workspace}
         onOpenFile={() => {}}
@@ -128,6 +134,8 @@ const attach = () =>
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   send.mockClear();
+  localStorage.clear();
+  usePreferencesStore.setState({ sshConnections: [] });
   node = document.createElement("div");
   document.body.append(node);
   root = createRoot(node);
@@ -178,4 +186,28 @@ it("keeps unsupported attachment actions visible with a filesystem reason", asyn
   );
   await act(async () => action?.click());
   expect(send).not.toHaveBeenCalled();
+});
+
+it("enables registered project attachments independently of the ambient filesystem", async () => {
+  const rootPath = "remote://voktty-ssh-fixture/srv/project";
+  const local: WorkspaceEnv = { kind: "local" };
+  usePreferencesStore.setState({
+    sshConnections: [{ id: "fixture", name: "Fixture", host: "a.test" }],
+  });
+  rememberRemoteProject("voktty-ssh-fixture", {
+    id: "project",
+    name: "Project",
+    cwd: "/srv/project",
+  });
+  await render(local, "project", rootPath);
+  await menu(`${rootPath}/a.ts`);
+  const action = attach();
+  expect(action).toBeDefined();
+  expect(action?.getAttribute("aria-disabled")).not.toBe("true");
+  await act(async () => action?.click());
+  expect(send).toHaveBeenCalledExactlyOnceWith(
+    `${rootPath}/a.ts`,
+    local,
+    expect.any(Function),
+  );
 });

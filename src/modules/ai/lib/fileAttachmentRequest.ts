@@ -4,6 +4,10 @@ import {
   type WorkspaceEnv,
 } from "@/modules/workspace";
 import { IS_WINDOWS } from "@/lib/platform";
+import {
+  captureProjectAttachment,
+  type ProjectAttachmentSource,
+} from "@/modules/ai/lib/projectAttachmentSource";
 
 export const FILE_ATTACHMENT_EVENT = "voktty:ai-attach-file";
 export type FileAttachmentHandler = (
@@ -15,6 +19,7 @@ type Request = {
   path: string;
   workspace: WorkspaceEnv;
   isCurrent: () => boolean;
+  projectSource?: ProjectAttachmentSource;
 };
 const requests = new WeakMap<object, Request>();
 
@@ -30,6 +35,8 @@ export function canRequestFileAttachment(
   )
     return false;
   if (isWindowsNativePath(path)) return true;
+  if (path.startsWith("remote://"))
+    return captureProjectAttachment(path) !== null;
   return (
     path.startsWith("/") &&
     (workspace.kind === "local" ||
@@ -49,11 +56,20 @@ export function requestFileAttachment(
     !canRequestFileAttachment(path, workspace)
   )
     return false;
+  const projectSource = path.startsWith("remote://")
+    ? captureProjectAttachment(path)
+    : undefined;
+  if (projectSource === null) return false;
   const key = {};
   const owner = isWindowsNativePath(path)
     ? workspaceForDocumentPath(workspace, path)
     : workspace;
-  requests.set(key, { path, workspace: structuredClone(owner), isCurrent });
+  requests.set(key, {
+    path,
+    workspace: structuredClone(owner),
+    isCurrent,
+    ...(projectSource ? { projectSource } : {}),
+  });
   try {
     window.dispatchEvent(
       new CustomEvent(FILE_ATTACHMENT_EVENT, { detail: key }),
