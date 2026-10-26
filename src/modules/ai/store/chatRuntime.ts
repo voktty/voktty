@@ -50,6 +50,8 @@ function makeChat(sessionId: string): Chat<UIMessage> {
       useChatStore.getState().live.readLeafBuffer(leafId),
     readCache,
     getSessionId: () => sessionId,
+    onAgentStep: (step) =>
+      useChatStore.getState().patchAgentMeta({ step }, chat),
   };
 
   const transport = createContextAwareTransport({
@@ -93,27 +95,35 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     getCustomEndpoints: () => usePreferencesStore.getState().customEndpoints,
     getCustomEndpointKeys: () => useChatStore.getState().customEndpointKeys,
     onStep: (step) => {
-      useChatStore.getState().patchAgentMeta({ step });
+      useChatStore.getState().patchAgentMeta({ step }, chat);
     },
     onCompact: (info) => {
-      useChatStore.getState().patchAgentMeta({
-        compactionNotice: { droppedCount: info.droppedCount, at: Date.now() },
-      });
+      useChatStore.getState().patchAgentMeta(
+        {
+          compactionNotice: { droppedCount: info.droppedCount, at: Date.now() },
+        },
+        chat,
+      );
     },
     onFinishMeta: (info) => {
-      useChatStore.getState().patchAgentMeta({ hitStepCap: info.hitStepCap });
+      useChatStore
+        .getState()
+        .patchAgentMeta({ hitStepCap: info.hitStepCap }, chat);
     },
     onUsage: (delta) => {
-      const cur = useChatStore.getState().agentMeta.tokens;
-      useChatStore.getState().patchAgentMeta({
-        tokens: {
-          inputTokens: cur.inputTokens + delta.inputTokens,
-          outputTokens: cur.outputTokens + delta.outputTokens,
-          cachedInputTokens: cur.cachedInputTokens + delta.cachedInputTokens,
-        },
-        lastInputTokens: delta.lastInputTokens,
-        lastCachedTokens: delta.lastCachedTokens,
-      });
+      useChatStore.getState().patchAgentMeta(
+        (current) => ({
+          tokens: {
+            inputTokens: current.tokens.inputTokens + delta.inputTokens,
+            outputTokens: current.tokens.outputTokens + delta.outputTokens,
+            cachedInputTokens:
+              current.tokens.cachedInputTokens + delta.cachedInputTokens,
+          },
+          lastInputTokens: delta.lastInputTokens,
+          lastCachedTokens: delta.lastCachedTokens,
+        }),
+        chat,
+      );
     },
   }) as unknown as ChatTransport<UIMessage>;
 
@@ -126,10 +136,13 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     messages: initialMessages,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onError: (e) => {
-      useChatStore.getState().patchAgentMeta({
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      });
+      useChatStore.getState().patchAgentMeta(
+        {
+          status: "error",
+          error: e instanceof Error ? e.message : String(e),
+        },
+        chat,
+      );
     },
   });
   registerChatFileTools(chat, toolContext);

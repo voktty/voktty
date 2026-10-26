@@ -59,6 +59,8 @@ Conversations are organized into sessions. Persistence lives in `voktty-ai-sessi
 
 `AgentRunBridge` mirrors active-session messages to disk on every change and auto-derives titles from the first user message.
 
+Runtime usage, progress, compaction notices, step limits and errors belong to the exact cached Chat object. Background callbacks update that conversation without notifying selected-chat readers; switching back restores its metadata. Deletion and LRU replacement reject callbacks from the former object even when its session ID is reused. The bridge qualifies lifecycle updates with its observed Chat, and read-only subagents publish progress through their original tool context. These in-memory receipts do not establish per-turn cancellation or background message persistence.
+
 ### Long-conversation rendering
 
 `AiChatView` keeps the canonical `UIMessage[]` intact but windows the rendered history after 24 messages, or after 60,000 characters when at least five messages exist. `@tanstack/react-virtual` measures each mounted message and keeps four items of overscan. Only messages near the viewport parse Markdown, mount tool cards or start code highlighting; the streaming trailing message remains live. Virtual rows expose their position and total through ARIA metadata, while selection, copy, approvals and keyboard interaction continue to use the normal message components.

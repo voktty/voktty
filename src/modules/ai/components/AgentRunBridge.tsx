@@ -125,13 +125,18 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
     else if (status === "streaming") runStatus = "streaming";
     else if (status === "error") runStatus = "error";
     else runStatus = "idle";
-    patch({
-      status: runStatus,
-      approvalsPending,
-      ...(runStatus === "idle" || runStatus === "error" ? { step: null } : {}),
-      ...(runStatus === "idle" ? { error: null } : {}),
-    });
-  }, [status, approvalsPending, patch]);
+    patch(
+      {
+        status: runStatus,
+        approvalsPending,
+        ...(runStatus === "idle" || runStatus === "error"
+          ? { step: null }
+          : {}),
+        ...(runStatus === "idle" ? { error: null } : {}),
+      },
+      chat,
+    );
+  }, [status, approvalsPending, patch, chat]);
 
   useEffect(() => {
     if (approvalsPending > 0) presentChat();

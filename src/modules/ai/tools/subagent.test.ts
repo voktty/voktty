@@ -50,6 +50,20 @@ async function run(input: Record<string, unknown>): Promise<Result> {
 beforeEach(() => vi.clearAllMocks());
 
 describe("run_subagent", () => {
+  it("publishes child progress through its captured context", async () => {
+    const owner = makeContext();
+    const onStep = vi.fn();
+    owner.onAgentStep = onStep;
+    runSubagentMock.mockImplementationOnce(async (args) => {
+      args.onStep?.("original child");
+      return { summary: "done", stepCount: 1, durationMs: 1 };
+    });
+    const execute = buildSubagentTools(owner).run_subagent.execute;
+    if (!execute) throw new Error("run_subagent has no execute");
+    await execute({ type: "explore", prompt: "fixture" }, toolOptions);
+    expect(onStep).toHaveBeenCalledExactlyOnceWith("original child");
+  });
+
   it("passes the SDK cancellation signal to the original child run", async () => {
     runSubagentMock.mockResolvedValue({
       summary: "done",

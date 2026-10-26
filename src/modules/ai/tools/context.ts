@@ -8,6 +8,7 @@ import type {
 } from "@/modules/ai/lib/aiFileContext";
 
 export type ToolContext = {
+  onAgentStep?: (step: string) => void;
   getFileRootContext?: () => AiFileRootContext | null;
   getFileContext?: () => AiFileContext | null;
   /** Active terminal tab cwd, used to resolve relative paths. Null = home. */

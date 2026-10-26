@@ -253,6 +253,17 @@ it("never reads an ambient file for an approval without its original runtime cap
   expect(open).not.toHaveBeenCalled();
 });
 
+it("qualifies lifecycle metadata with the exact Chat observed by the bridge", async () => {
+  await render();
+  expect(fixture.store.patchAgentMeta).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      status: "awaiting-approval",
+      approvalsPending: 1,
+    }),
+    fixture.chat,
+  );
+});
+
 it.each([false, true])(
   "closes a directly denied review with preview settled=%s",
   async (settled) => {

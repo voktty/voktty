@@ -86,6 +86,10 @@ export type AgentMeta = {
   compactionNotice: { droppedCount: number; at: number } | null;
 };
 
+type AgentMetaPatch =
+  | Partial<AgentMeta>
+  | ((current: AgentMeta) => Partial<AgentMeta>);
+
 const ZERO_USAGE: AgentUsage = {
   inputTokens: 0,
   outputTokens: 0,
@@ -173,7 +177,7 @@ type StoreState = {
   consumeSelections: () => PendingSelection[];
 
   agentMeta: AgentMeta;
-  patchAgentMeta: (patch: Partial<AgentMeta>) => void;
+  patchAgentMeta: (patch: AgentMetaPatch, owner?: Chat<UIMessage>) => void;
   resetAgentMeta: () => void;
 
   // Sessions
@@ -210,6 +214,12 @@ const NOOP_LIVE: Live = {
 
 const CHATS_LRU_CAP = 8;
 export const chats = new Map<string, Chat<UIMessage>>();
+const chatMetadata = new WeakMap<Chat<UIMessage>, AgentMeta>();
+
+function metadataForSession(id: string | null): AgentMeta {
+  const chat = id ? chats.get(id) : undefined;
+  return (chat && chatMetadata.get(chat)) ?? IDLE_META;
+}
 
 export function touchChat(id: string, c: Chat<UIMessage>) {
   if (chats.has(id)) chats.delete(id);
@@ -421,9 +431,25 @@ export const useChatStore = create<StoreState>((set, get) => ({
   },
 
   agentMeta: IDLE_META,
-  patchAgentMeta: (patch) =>
-    set((s) => ({ agentMeta: { ...s.agentMeta, ...patch } })),
-  resetAgentMeta: () => set({ agentMeta: IDLE_META }),
+  patchAgentMeta: (patch, owner) =>
+    set((s) => {
+      const chat =
+        owner ?? (s.activeSessionId ? chats.get(s.activeSessionId) : undefined);
+      if (!chat || chats.get(chat.id) !== chat) return s;
+      const current = chatMetadata.get(chat) ?? IDLE_META;
+      const next = {
+        ...current,
+        ...(typeof patch === "function" ? patch(current) : patch),
+      };
+      chatMetadata.set(chat, next);
+      return s.activeSessionId === chat.id ? { agentMeta: next } : s;
+    }),
+  resetAgentMeta: () => {
+    const id = get().activeSessionId;
+    const chat = id ? chats.get(id) : undefined;
+    if (chat) chatMetadata.set(chat, IDLE_META);
+    set({ agentMeta: IDLE_META });
+  },
 
   sessionsHydrated: false,
   sessions: [],
@@ -465,6 +491,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
     set({
       sessions: nextSessions,
       activeSessionId: targetId,
+      agentMeta: metadataForSession(targetId),
       sessionsHydrated: true,
     });
   },
@@ -491,7 +518,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
     // Lazily seed the chat with persisted messages the first time we open
     // this session. Subsequent switches reuse the cached Chat instance.
     const flip = () => {
-      set({ activeSessionId: id, agentMeta: IDLE_META });
+      set({ activeSessionId: id, agentMeta: metadataForSession(id) });
       void saveActiveId(id);
     };
     if (chats.has(id) || seedMessages.has(id)) {
@@ -526,7 +553,11 @@ export const useChatStore = create<StoreState>((set, get) => ({
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      set({ sessions: [fresh], activeSessionId: fresh.id });
+      set({
+        sessions: [fresh],
+        activeSessionId: fresh.id,
+        agentMeta: IDLE_META,
+      });
       void saveSessionsList([fresh]);
       void saveActiveId(fresh.id);
       return;
@@ -534,7 +565,11 @@ export const useChatStore = create<StoreState>((set, get) => ({
 
     const wasActive = get().activeSessionId === id;
     const nextActive = wasActive ? remaining[0].id : get().activeSessionId;
-    set({ sessions: remaining, activeSessionId: nextActive });
+    set({
+      sessions: remaining,
+      activeSessionId: nextActive,
+      agentMeta: metadataForSession(nextActive),
+    });
     void saveSessionsList(remaining);
     if (wasActive) void saveActiveId(nextActive);
   },
