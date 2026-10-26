@@ -17,6 +17,7 @@ import {
   workspaceForNativeFs,
 } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
+import { IS_WINDOWS } from "@/lib/platform";
 import {
   isDirectSshProfilePath,
   loadRemoteGitBranches,
@@ -299,6 +300,21 @@ function resolveNativeSearchWorkspace(
   return workspaceForNativeFs(workspace, root);
 }
 
+function resolveShellWorkspace(
+  cwd: string | null | undefined,
+  explicitWorkspace?: WorkspaceEnv,
+): WorkspaceEnv {
+  const workspace = explicitWorkspace ?? currentWorkspaceEnv();
+  if (
+    cwd?.startsWith("remote://") ||
+    (workspace.kind !== "local" && !(workspace.kind === "wsl" && IS_WINDOWS))
+  )
+    throw new Error(
+      "Shell execution is unavailable for this workspace transport.",
+    );
+  return workspace;
+}
+
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
   workspaceAuthorize: (path: string) =>
@@ -521,24 +537,30 @@ export const native = {
       workspace,
     });
   },
-  runCommand: (command: string, cwd?: string | null, timeoutSecs?: number) =>
+  runCommand: (
+    command: string,
+    cwd?: string | null,
+    timeoutSecs?: number,
+    explicitWorkspace?: WorkspaceEnv,
+  ) =>
     invoke<CommandOutput>("shell_run_command", {
       command,
       cwd: cwd ?? null,
       timeoutSecs: timeoutSecs ?? null,
-      workspace: currentWorkspaceEnv(),
+      workspace: resolveShellWorkspace(cwd, explicitWorkspace),
     }),
 
-  shellSessionOpen: (cwd?: string | null) =>
+  shellSessionOpen: (cwd?: string | null, explicitWorkspace?: WorkspaceEnv) =>
     invoke<number>("shell_session_open", {
       cwd: cwd ?? null,
-      workspace: currentWorkspaceEnv(),
+      workspace: resolveShellWorkspace(cwd, explicitWorkspace),
     }),
   shellSessionRun: (
     id: number,
     command: string,
     cwd?: string | null,
     timeoutSecs?: number,
+    explicitWorkspace?: WorkspaceEnv,
   ) =>
     invoke<{
       stdout: string;
@@ -552,15 +574,19 @@ export const native = {
       command,
       cwd: cwd ?? null,
       timeoutSecs: timeoutSecs ?? null,
-      workspace: currentWorkspaceEnv(),
+      workspace: resolveShellWorkspace(cwd, explicitWorkspace),
     }),
   shellSessionClose: (id: number) =>
     invoke<void>("shell_session_close", { id }),
-  shellBgSpawn: (command: string, cwd?: string | null) =>
+  shellBgSpawn: (
+    command: string,
+    cwd?: string | null,
+    explicitWorkspace?: WorkspaceEnv,
+  ) =>
     invoke<number>("shell_bg_spawn", {
       command,
       cwd: cwd ?? null,
-      workspace: currentWorkspaceEnv(),
+      workspace: resolveShellWorkspace(cwd, explicitWorkspace),
     }),
   shellBgLogs: (handle: number, sinceOffset?: number) =>
     invoke<{

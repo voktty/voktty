@@ -94,6 +94,8 @@ The remote helper separately advertises `fs.grepIndependent` and `fs.glob`. Both
 
 Every runtime Chat's `stop` retires that exact chat's file-call family synchronously before delegating to SDK cancellation, including direct composer and hook calls. A subagent receives its parent tool's abort signal, retires its own namespace on abort and checks cancellation and family ownership around model setup, step publication and completion. Finishing or cancelling a child permanently seals that child namespace while its parent and siblings remain usable. Its listener is removed on settlement, and already admitted file IO retains the shared budget until it physically settles.
 
+Native one-shot, persistent-session and background shell clients accept an explicit workspace independently of the selected environment. Their current execution backend supports local workspaces and WSL on Windows; SSH, Docker, serial and unresolved project namespaces reject before IPC rather than starting a local shell. Callers without an explicit workspace retain selection-based routing for supported transports. This client boundary does not bind shell tool approvals to their original destination or own the lifetime of native shell sessions.
+
 Read-before-edit facts are keyed by the complete captured filesystem. Plan entries retain their original filesystem, mode, session and model even if selection changes while approval is pending. Restored approvals without their original in-memory receipt fail closed.
 
 ## Edit diffs
