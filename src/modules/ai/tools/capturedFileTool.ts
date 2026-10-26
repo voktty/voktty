@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type { ToolContext } from "@/modules/ai/tools/context";
 import {
   fileToolCallsFor,
+  type CapturedToolName,
   type FileToolName,
   type FileToolTarget,
 } from "@/modules/ai/lib/fileToolCalls";
@@ -78,8 +79,12 @@ function captureTarget(ctx: ToolContext): FileToolTarget {
   };
 }
 
-export type FileExecution = FileToolTarget & {
+export type CapturedExecution = FileToolTarget & {
   assertCurrent: () => void;
+  guarded: <Result>(action: () => Promise<Result>) => Promise<Result>;
+};
+
+export type FileExecution = CapturedExecution & {
   cacheKey: (path: string) => string;
   io: {
     canonicalize: (path: string) => ReturnType<typeof native.canonicalize>;
@@ -99,16 +104,17 @@ export type FileExecution = FileToolTarget & {
   };
 };
 
-export function capturedFileTool<Input>(
+export function capturedTool<Input>(
   ctx: ToolContext,
-  name: FileToolName,
+  name: CapturedToolName,
   definition: {
     description: string;
     inputSchema: z.ZodType<Input>;
     needsApproval?: boolean;
+    captureTarget: (ctx: ToolContext) => FileToolTarget;
     execute: (
       input: Input,
-      execution: FileExecution,
+      execution: CapturedExecution,
     ) => Promise<Record<string, unknown>>;
   },
 ) {
@@ -126,7 +132,7 @@ export function capturedFileTool<Input>(
         toolCallId,
         name,
         definition.inputSchema.parse(input),
-        captureTarget(ctx),
+        definition.captureTarget(ctx),
         () => {
           abortSignal?.removeEventListener("abort", retire);
           unregister();
@@ -170,23 +176,7 @@ export function capturedFileTool<Input>(
         return await definition.execute(definition.inputSchema.parse(input), {
           ...target,
           assertCurrent,
-          cacheKey: (path) => fileReadCacheKey(path, target.workspace),
-          io: {
-            canonicalize: (path) =>
-              guarded(() => native.canonicalize(path, target.workspace)),
-            readFile: (path) =>
-              guarded(() => native.readFile(path, target.workspace)),
-            readDir: (path) =>
-              guarded(() => native.readDir(path, target.workspace)),
-            writeFile: (path, content) =>
-              guarded(() => native.writeFile(path, content, target.workspace)),
-            createDir: (path) =>
-              guarded(() => native.createDir(path, target.workspace)),
-            grep: (params) =>
-              guarded(() => native.grep(params, target.workspace)),
-            glob: (params) =>
-              guarded(() => native.glob(params, target.workspace)),
-          },
+          guarded,
         });
       } finally {
         signal?.removeEventListener("abort", retire);
@@ -197,4 +187,41 @@ export function capturedFileTool<Input>(
   });
   registerFileToolRegistry(built, calls);
   return built;
+}
+
+export function capturedFileTool<Input>(
+  ctx: ToolContext,
+  name: FileToolName,
+  definition: {
+    description: string;
+    inputSchema: z.ZodType<Input>;
+    needsApproval?: boolean;
+    execute: (
+      input: Input,
+      execution: FileExecution,
+    ) => Promise<Record<string, unknown>>;
+  },
+) {
+  return capturedTool(ctx, name, {
+    ...definition,
+    captureTarget,
+    execute: (input, execution) => {
+      const { workspace, guarded } = execution;
+      return definition.execute(input, {
+        ...execution,
+        cacheKey: (path) => fileReadCacheKey(path, workspace),
+        io: {
+          canonicalize: (path) =>
+            guarded(() => native.canonicalize(path, workspace)),
+          readFile: (path) => guarded(() => native.readFile(path, workspace)),
+          readDir: (path) => guarded(() => native.readDir(path, workspace)),
+          writeFile: (path, content) =>
+            guarded(() => native.writeFile(path, content, workspace)),
+          createDir: (path) => guarded(() => native.createDir(path, workspace)),
+          grep: (params) => guarded(() => native.grep(params, workspace)),
+          glob: (params) => guarded(() => native.glob(params, workspace)),
+        },
+      });
+    },
+  });
 }

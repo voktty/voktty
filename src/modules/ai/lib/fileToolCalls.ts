@@ -10,6 +10,8 @@ export type FileToolName =
   | "edit"
   | "multi_edit";
 
+export type CapturedToolName = FileToolName | "bash_run" | "bash_background";
+
 export type FileToolTarget = {
   directory: string;
   root: string;
@@ -20,7 +22,7 @@ export type FileToolTarget = {
 };
 
 type Call = {
-  tool: FileToolName;
+  tool: CapturedToolName;
   input: string;
   target: FileToolTarget;
   charge: number;
@@ -122,7 +124,7 @@ export function createFileToolCalls(budget?: Budget) {
     call.retired = true;
     if (!call.running && call.readers === 0) collect(id, call);
   };
-  const match = (id: string, tool: FileToolName, input: unknown): Call => {
+  const match = (id: string, tool: CapturedToolName, input: unknown): Call => {
     const call = calls.get(id);
     if (
       !call ||
@@ -140,7 +142,7 @@ export function createFileToolCalls(budget?: Budget) {
     isCurrent: ownerCurrent,
     capture(
       id: string,
-      tool: FileToolName,
+      tool: CapturedToolName,
       input: unknown,
       target: FileToolTarget,
       onCollect: () => void = () => {},
@@ -231,7 +233,12 @@ export function createFileToolCalls(budget?: Budget) {
         },
       };
     },
-    claim(id: string, tool: FileToolName, input: unknown, approvalId?: string) {
+    claim(
+      id: string,
+      tool: CapturedToolName,
+      input: unknown,
+      approvalId?: string,
+    ) {
       const call = match(id, tool, input);
       if (approvalId !== undefined && call.approvalId !== approvalId)
         throw new Error("The original file approval is unavailable.");

@@ -2,34 +2,90 @@ import { tool } from "ai";
 import { z } from "zod";
 import { native } from "../lib/native";
 import { checkShellCommand } from "../lib/security";
-import type { ToolContext } from "./context";
-import { currentWorkspaceEnv, workspaceScopeKey } from "@/modules/workspace";
+import { resolvePath, type ToolContext } from "./context";
+import type { FileToolTarget } from "@/modules/ai/lib/fileToolCalls";
+import {
+  capturedTool,
+  fileReadCacheKey,
+  type CapturedExecution,
+} from "@/modules/ai/tools/capturedFileTool";
 
-/**
- * Per-session lazy shell-session id. The agent gets one persistent shell per
- * chat session, so cwd survives across tool calls (cd, mkdir+cd, etc).
- */
-const sessionShells = new Map<string, Promise<number>>();
+// Persistent cwd state cannot cross chat, filesystem or source boundaries.
+type SessionShell = { opening: Promise<number>; tail: Promise<void> };
+const sessionShells = new Map<string, SessionShell>();
+const shellOwners = new WeakMap<ToolContext, number>();
+let nextOwnerKey = 0;
 
-async function getSessionShell(
-  sessionId: string,
-  cwd: string | null,
-): Promise<number> {
-  let p = sessionShells.get(sessionId);
-  if (!p) {
-    p = native.shellSessionOpen(cwd);
-    sessionShells.set(sessionId, p);
+function runInSessionShell(
+  ctx: ToolContext,
+  captured: CapturedExecution,
+  command: string,
+  timeoutSecs?: number,
+) {
+  captured.assertCurrent();
+  let owner = shellOwners.get(ctx);
+  if (owner === undefined) {
+    owner = ++nextOwnerKey;
+    shellOwners.set(ctx, owner);
   }
-  return p;
+  const key = JSON.stringify([
+    owner,
+    captured.sessionId,
+    fileReadCacheKey(captured.directory, captured.workspace),
+  ]);
+  let entry = sessionShells.get(key);
+  if (!entry) {
+    if (sessionShells.size >= 256)
+      throw new Error("Too many cached agent shells.");
+    const opening = Promise.resolve().then(() => {
+      captured.assertCurrent();
+      return native.shellSessionOpen(captured.directory, captured.workspace);
+    });
+    entry = { opening, tail: Promise.resolve() };
+    sessionShells.set(key, entry);
+    const original = entry;
+    void opening.catch(() => {
+      if (sessionShells.get(key) === original) sessionShells.delete(key);
+    });
+  }
+  const original = entry;
+  const result = original.tail.then(async () => {
+    captured.assertCurrent();
+    const shellId = await original.opening;
+    captured.assertCurrent();
+    return captured.guarded(() =>
+      native.shellSessionRun(
+        shellId,
+        command,
+        captured.directory,
+        timeoutSecs,
+        captured.workspace,
+      ),
+    );
+  });
+  original.tail = result.then(
+    () => {},
+    () => {},
+  );
+  return result;
 }
 
-function workspaceSessionKey(sessionId: string): string {
-  return `${sessionId}:${workspaceScopeKey(currentWorkspaceEnv())}`;
+function captureShellTarget(ctx: ToolContext): FileToolTarget {
+  const source = ctx.getFileContext?.();
+  const sessionId = ctx.getSessionId();
+  if (!source || !sessionId)
+    throw new Error("The original shell destination or chat is unavailable.");
+  return {
+    directory: source.directory,
+    root: source.directory,
+    workspace: source.workspace,
+    sessionId,
+  };
 }
 
 export function buildShellTools(ctx: ToolContext) {
   return {
-    bash_run: tool({
+    bash_run: capturedTool(ctx, "bash_run", {
       description:
         "Run a foreground shell command in this session's persistent agent shell. cwd persists across calls (so `cd foo` then `bash_run pwd` works). Use for short-lived commands (lint, test, search, build). For long-running or daemon processes (dev servers, watch tasks), use `bash_background`. NEVER invoke interactive tools (vim, less, top) — they will hang. Asks for user approval.",
       inputSchema: z.object({
@@ -37,18 +93,15 @@ export function buildShellTools(ctx: ToolContext) {
         timeout_secs: z.number().int().min(1).max(300).optional(),
       }),
       needsApproval: true,
-      execute: async ({ command, timeout_secs }) => {
+      captureTarget: captureShellTarget,
+      execute: async ({ command, timeout_secs }, captured) => {
         const safety = checkShellCommand(command);
         if (!safety.ok) return { error: safety.reason };
-        const sid = ctx.getSessionId();
-        if (!sid) return { error: "no active chat session" };
         try {
-          const cwd = ctx.getCwd();
-          const shellId = await getSessionShell(workspaceSessionKey(sid), cwd);
-          const r = await native.shellSessionRun(
-            shellId,
+          const r = await runInSessionShell(
+            ctx,
+            captured,
             command,
-            cwd,
             timeout_secs,
           );
           return {
@@ -66,7 +119,7 @@ export function buildShellTools(ctx: ToolContext) {
       },
     }),
 
-    bash_background: tool({
+    bash_background: capturedTool(ctx, "bash_background", {
       description:
         "Spawn a long-running background process (e.g. `pnpm dev`, `cargo watch`, log tailers). Returns a handle; use `bash_logs` to read its output and `bash_kill` to stop it. Output is captured into a 4MB ring buffer. Asks for user approval.",
       inputSchema: z.object({
@@ -74,12 +127,17 @@ export function buildShellTools(ctx: ToolContext) {
         cwd: z.string().nullable().optional(),
       }),
       needsApproval: true,
-      execute: async ({ command, cwd }) => {
+      captureTarget: captureShellTarget,
+      execute: async ({ command, cwd }, captured) => {
         const safety = checkShellCommand(command);
         if (!safety.ok) return { error: safety.reason };
-        const effectiveCwd = cwd ?? ctx.getCwd();
         try {
-          const handle = await native.shellBgSpawn(command, effectiveCwd);
+          const effectiveCwd = cwd
+            ? resolvePath(cwd, captured.directory)
+            : captured.directory;
+          const handle = await captured.guarded(() =>
+            native.shellBgSpawn(command, effectiveCwd, captured.workspace),
+          );
           return { handle, command, cwd: effectiveCwd, ok: true };
         } catch (e) {
           return { error: String(e) };
