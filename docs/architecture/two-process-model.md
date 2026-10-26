@@ -85,6 +85,13 @@ Frontend readers require a validated filesystem identity and ignore unqualified 
 - `fs_search` - fuzzy file finder
 - `fs_list_files` - recursive file listing
 
+Explorer filename-search results retain their original root, filesystem,
+query, hidden-file setting and mounted search lifetime. Changing that context
+withdraws accepted rows immediately and retires their cached menu callbacks,
+including after returning to the previous context. Unsettled native reads
+remain counted against the shared 16-request budget until settlement.
+This presentation guard does not cancel native scans or add SSH search support.
+
 #### Grep
 
 - `fs_grep` - content search

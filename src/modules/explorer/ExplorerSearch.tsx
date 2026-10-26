@@ -21,6 +21,8 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -87,10 +89,29 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       (workspace.kind !== "docker" && workspace.kind !== "serial" &&
         (owner.kind === "local" || (owner.kind === "wsl" && IS_WINDOWS))));
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchHit[]>([]);
+  const searchOwner = useMemo(
+    () => ({ rootPath, filesystem, showHidden, query, open, lifetime: { current: false } }),
+    [rootPath, filesystem, showHidden, query, open],
+  );
+  useLayoutEffect(() => {
+    const lifetime = { current: open && available };
+    searchOwner.lifetime = lifetime;
+    return () => {
+      lifetime.current = false;
+    };
+  }, [searchOwner, open, available]);
+  const [publication, setPublication] = useState<{
+    owner: typeof searchOwner;
+    lifetime: { current: boolean };
+    result: SearchResult;
+  } | null>(null);
+  const resultLifetime =
+    publication?.owner === searchOwner ? publication.lifetime : undefined;
+  const results =
+    publication && resultLifetime?.current ? publication.result.hits : [];
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searching, setSearching] = useState(false);
-  const [truncated, setTruncated] = useState(false);
+  const truncated = resultLifetime?.current && publication?.result.truncated;
   const [failed, setFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -107,30 +128,33 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       inputRef.current?.focus();
     } else {
       setQuery("");
-      setResults([]);
+      setPublication(null);
       setSelectedIndex(0);
       setSearching(false);
-      setTruncated(false);
     }
   }, [open]);
 
   useEffect(() => {
+    const { query, rootPath, showHidden, filesystem, open } = searchOwner;
     const q = query.trim();
-    if (q.length < MIN_QUERY_LEN || !available) {
-      setResults([]);
+    if (q.length < MIN_QUERY_LEN || !available || !open) {
+      setPublication(null);
       setSelectedIndex(0);
       setSearching(false);
-      setTruncated(false);
       setFailed(false);
       return;
     }
     setSearching(true);
     setFailed(false);
     let alive = true;
+    const lifetime = searchOwner.lifetime;
     const captured = workspaceForDocumentPath(JSON.parse(filesystem) as WorkspaceEnv, rootPath);
     const handle = setTimeout(async () => {
       if (pendingSearches >= 16) {
-        if (alive) { setFailed(true); setSearching(false); }
+        if (alive && lifetime.current) {
+          setFailed(true);
+          setSearching(false);
+        }
         return;
       }
       pendingSearches++;
@@ -142,21 +166,19 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
           showHidden,
           workspace: captured,
         });
-        if (alive) {
-          setResults(res.hits);
-          setTruncated(res.truncated);
+        if (alive && lifetime.current) {
+          setPublication({ owner: searchOwner, lifetime, result: res });
           setSelectedIndex(0);
         }
       } catch {
-        if (alive) {
+        if (alive && lifetime.current) {
           setFailed(true);
-          setResults([]);
-          setTruncated(false);
+          setPublication(null);
           setSelectedIndex(0);
         }
       } finally {
         pendingSearches--;
-        if (alive) setSearching(false);
+        if (alive && lifetime.current) setSearching(false);
       }
     }, DEBOUNCE_MS);
 
@@ -164,7 +186,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       alive = false;
       clearTimeout(handle);
     };
-  }, [query, rootPath, showHidden, filesystem, available]);
+  }, [available, searchOwner]);
 
   useImperativeHandle(
     ref,
@@ -187,7 +209,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
   }, [selectedIndex, results, active]);
 
   const handleSelect = (hit: SearchHit) => {
-    if (!hit.is_dir) {
+    if (resultLifetime?.current && !hit.is_dir) {
       onOpenFile(hit.path);
     }
   };
@@ -303,7 +325,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                       {!hit.is_dir && (
                         <ContextMenuItem
                           className={COMPACT_ITEM}
-                          onSelect={() => onOpenFile(hit.path)}
+                          onSelect={() => { if (resultLifetime?.current) onOpenFile(hit.path); }}
                         >
                           {t("explorer.open")}
                         </ContextMenuItem>
@@ -311,7 +333,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                       {hit.is_dir && onRevealInTerminal && (
                         <ContextMenuItem
                           className={COMPACT_ITEM}
-                          onSelect={() => onRevealInTerminal(hit.path)}
+                          onSelect={() => { if (resultLifetime?.current) onRevealInTerminal(hit.path); }}
                         >
                           {t("explorer.openInTerminal")}
                         </ContextMenuItem>
@@ -319,7 +341,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                       {hit.is_dir && onOpenInSourceControl && (
                         <ContextMenuItem
                           className={COMPACT_ITEM}
-                          onSelect={() => onOpenInSourceControl(hit.path)}
+                          onSelect={() => { if (resultLifetime?.current) onOpenInSourceControl(hit.path); }}
                         >
                           {t("explorer.openInSourceControl")}
                         </ContextMenuItem>
@@ -327,28 +349,28 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                       {hit.is_dir && onOpenGitHistory && (
                         <ContextMenuItem
                           className={COMPACT_ITEM}
-                          onSelect={() => onOpenGitHistory(hit.path)}
+                          onSelect={() => { if (resultLifetime?.current) onOpenGitHistory(hit.path); }}
                         >
                           {t("explorer.openGitHistory")}
                         </ContextMenuItem>
                       )}
                       <ContextMenuItem
                         className={COMPACT_ITEM}
-                        onSelect={() => void revealInFinder(hit.path)}
+                        onSelect={() => { if (resultLifetime?.current) void revealInFinder(hit.path); }}
                       >
                         {t("explorer.revealInFinder")}
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem
                         className={COMPACT_ITEM}
-                        onSelect={() => void copyToClipboard(hit.path)}
+                        onSelect={() => { if (resultLifetime?.current) void copyToClipboard(hit.path); }}
                       >
                         {t("explorer.copyPath")}
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem
                         className={COMPACT_ITEM}
-                        onSelect={() => onAttachToAgent?.(hit.path)}
+                        onSelect={() => { if (resultLifetime?.current) onAttachToAgent?.(hit.path); }}
                       >
                         {t("explorer.attachToAgent")}
                       </ContextMenuItem>
