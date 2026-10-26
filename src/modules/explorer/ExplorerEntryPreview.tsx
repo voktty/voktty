@@ -5,6 +5,8 @@ import {
 } from "@/components/ui/hover-card";
 import { classifyMediaExtension, getMediaMimeType } from "@/modules/editor/lib/media";
 import { useTranslation } from "@/modules/i18n";
+import { useProjectEntryMetadata } from "@/modules/explorer/lib/useProjectEntryMetadata";
+import { isRemoteProjectUri } from "@/modules/explorer/lib/remoteProjectDir";
 import { isPathInRemoteWorkspace, remoteReadBinaryFile } from "@/modules/remote";
 import { type WorkspaceEnv, workspaceForNativeFs } from "@/modules/workspace";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -132,6 +134,9 @@ export function ExplorerEntryPreview({
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const metadata = useProjectEntryMetadata(path, workspace, open);
+  const displayedSize = isRemoteProjectUri(path) ? metadata?.size : size;
+  const displayedMtime = isRemoteProjectUri(path) ? metadata?.mtime : mtime;
   const pointerDownRef = useRef(false);
   const extension = extensionOf(name);
   const isImage = !isDir && extension !== null && classifyMediaExtension(extension) === "image";
@@ -190,9 +195,9 @@ export function ExplorerEntryPreview({
             <span className="text-muted-foreground">{t("explorer.previewType")}</span>
             <span>{isDir ? t("explorer.previewFolder") : extension?.toUpperCase() ?? t("explorer.previewFile")}</span>
             <span className="text-muted-foreground">{t("explorer.previewSize")}</span>
-            <span>{isDir ? "—" : formatBytes(size)}</span>
+            <span>{isDir || displayedSize === undefined ? "—" : formatBytes(displayedSize)}</span>
             <span className="text-muted-foreground">{t("explorer.previewModified")}</span>
-            <span>{mtime ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(mtime)) : "—"}</span>
+            <span>{displayedMtime ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(displayedMtime)) : "—"}</span>
           </div>
           {isImage && size > IMAGE_PREVIEW_LIMIT ? (
             <div className="pt-1 text-[11px] text-muted-foreground">{t("explorer.previewImageTooLarge")}</div>
