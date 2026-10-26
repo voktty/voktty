@@ -90,6 +90,12 @@ export type FileExecution = FileToolTarget & {
       content: string,
     ) => ReturnType<typeof native.writeFile>;
     createDir: (path: string) => ReturnType<typeof native.createDir>;
+    grep: (
+      params: Parameters<typeof native.grep>[0],
+    ) => ReturnType<typeof native.grep>;
+    glob: (
+      params: Parameters<typeof native.glob>[0],
+    ) => ReturnType<typeof native.glob>;
   };
 };
 
@@ -176,6 +182,10 @@ export function capturedFileTool<Input>(
               guarded(() => native.writeFile(path, content, target.workspace)),
             createDir: (path) =>
               guarded(() => native.createDir(path, target.workspace)),
+            grep: (params) =>
+              guarded(() => native.grep(params, target.workspace)),
+            glob: (params) =>
+              guarded(() => native.glob(params, target.workspace)),
           },
         });
       } finally {

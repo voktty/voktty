@@ -1,6 +1,5 @@
-import { tool } from "ai";
+import { capturedFileTool } from "@/modules/ai/tools/capturedFileTool";
 import { z } from "zod";
-import { native } from "../lib/native";
 import {
   checkCanonicalWorkspacePath,
   checkReadable,
@@ -11,23 +10,16 @@ import { resolvePath, type ToolContext } from "./context";
 
 function resolveRoot(
   rawRoot: string | undefined,
-  ctx: ToolContext,
+  captured: { directory: string; root: string },
 ): { ok: true; path: string } | { ok: false; error: string } {
   if (rawRoot && rawRoot.trim().length > 0) {
     try {
-      return { ok: true, path: resolvePath(rawRoot, ctx.getCwd()) };
+      return { ok: true, path: resolvePath(rawRoot, captured.directory) };
     } catch (e) {
       return { ok: false, error: String(e) };
     }
   }
-  const ws = ctx.getWorkspaceRoot();
-  if (ws) return { ok: true, path: ws };
-  const cwd = ctx.getCwd();
-  if (cwd) return { ok: true, path: cwd };
-  return {
-    ok: false,
-    error: "no workspace root or active cwd; pass `root` explicitly.",
-  };
+  return { ok: true, path: captured.root };
 }
 
 const MAX_LINE_LEN = 160;
@@ -50,7 +42,7 @@ function isReadableSearchHit(path: string, root: string): boolean {
 
 export function buildSearchTools(ctx: ToolContext) {
   return {
-    grep: tool({
+    grep: capturedFileTool(ctx, "grep", {
       description:
         "Search file contents in the workspace using a regular expression. Honors .gitignore. Returns up to `max_results` (default 30, max 500) `{path, line, text}` hits, with a `truncated` flag when more existed. Long match lines are clipped to 160 chars. Use this for code navigation — do NOT brute-force read_file across the tree. Narrow with `glob` when you can; raise `max_results` only if the first batch truly isn't enough.",
       inputSchema: z.object({
@@ -63,7 +55,7 @@ export function buildSearchTools(ctx: ToolContext) {
           .string()
           .optional()
           .describe(
-            "Root to search under. Defaults to workspace root, then active cwd.",
+            "Root to search under. Defaults to the captured workspace root.",
           ),
         glob: z
           .array(z.string())
@@ -74,30 +66,27 @@ export function buildSearchTools(ctx: ToolContext) {
         case_insensitive: z.boolean().optional(),
         max_results: z.number().int().min(1).max(500).optional(),
       }),
-      execute: async ({
-        pattern,
-        root,
-        glob,
-        case_insensitive,
-        max_results,
-      }) => {
-        const r = resolveRoot(root, ctx);
+      execute: async (
+        { pattern, root, glob, case_insensitive, max_results },
+        captured,
+      ) => {
+        const r = resolveRoot(root, captured);
         if (!r.ok) return { error: r.error };
         const safety = await checkReadableCanonical(
           r.path,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, root: r.path };
         r.path = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           r.path,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, root: r.path };
         const cap = Math.min(max_results ?? 30, 500);
         try {
-          const res = await native.grep({
+          const res = await captured.io.grep({
             pattern,
             root: r.path,
             glob,
@@ -124,7 +113,7 @@ export function buildSearchTools(ctx: ToolContext) {
       },
     }),
 
-    glob: tool({
+    glob: capturedFileTool(ctx, "glob", {
       description:
         "Find files by path pattern (gitignore-aware). Use over `list_directory` when you want all matches recursively. Patterns use globset syntax: `**/*.ts`, `src/**/test_*.py`. Returns up to `max_results` matches.",
       inputSchema: z.object({
@@ -132,23 +121,23 @@ export function buildSearchTools(ctx: ToolContext) {
         root: z.string().optional(),
         max_results: z.number().int().min(1).max(2000).optional(),
       }),
-      execute: async ({ pattern, root, max_results }) => {
-        const r = resolveRoot(root, ctx);
+      execute: async ({ pattern, root, max_results }, captured) => {
+        const r = resolveRoot(root, captured);
         if (!r.ok) return { error: r.error };
         const safety = await checkReadableCanonical(
           r.path,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, root: r.path };
         r.path = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           r.path,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, root: r.path };
         try {
-          const res = await native.glob({
+          const res = await captured.io.glob({
             pattern,
             root: r.path,
             maxResults: max_results,

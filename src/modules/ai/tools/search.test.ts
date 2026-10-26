@@ -24,6 +24,8 @@ function makeContext(root = "/workspace"): ToolContext {
   return {
     getCwd: () => root,
     getWorkspaceRoot: () => root,
+    getFileContext: () => ({ directory: root, workspace: { kind: "local" } }),
+    getFileRootContext: () => ({ root, workspace: { kind: "local" } }),
     getTerminalContext: () => null,
     isActiveTerminalPrivate: () => false,
     injectIntoActivePty: () => false,
@@ -85,6 +87,10 @@ describe("AI search tools path safety", () => {
     const tools = buildSearchTools(makeContext());
     const execute = tools.grep.execute;
     if (!execute) throw new Error("grep tool execute missing");
+    await tools.grep.onInputAvailable?.({
+      ...toolOptions,
+      input: { pattern: "token|root|PRIVATE KEY", root: "/workspace" },
+    });
     const result = (await execute(
       { pattern: "token|root|PRIVATE KEY", root: "/workspace" },
       toolOptions,
@@ -111,6 +117,10 @@ describe("AI search tools path safety", () => {
     const tools = buildSearchTools(makeContext("/home/me/project"));
     const execute = tools.glob.execute;
     if (!execute) throw new Error("glob tool execute missing");
+    await tools.glob.onInputAvailable?.({
+      ...toolOptions,
+      input: { pattern: "**/*", root: "/home/me/project" },
+    });
     const result = (await execute(
       { pattern: "**/*", root: "/home/me/project" },
       toolOptions,
@@ -125,6 +135,10 @@ describe("AI search tools path safety", () => {
     const tools = buildSearchTools(makeContext());
     const execute = tools.glob.execute;
     if (!execute) throw new Error("glob tool execute missing");
+    await tools.glob.onInputAvailable?.({
+      ...toolOptions,
+      input: { pattern: "**/*", root: "/other" },
+    });
     const result = (await execute(
       { pattern: "**/*", root: "/other" },
       toolOptions,

@@ -1,6 +1,8 @@
 import type { WorkspaceEnv } from "@/modules/workspace";
 
 export type FileToolName =
+  | "grep"
+  | "glob"
   | "read_file"
   | "list_directory"
   | "write_file"

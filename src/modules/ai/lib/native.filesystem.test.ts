@@ -217,3 +217,53 @@ it("retains the SSH destination through operation preflight, write and removal",
   expect(io.current).not.toHaveBeenCalled();
   expect(io.invoke).not.toHaveBeenCalled();
 });
+
+it.each([local, wsl])(
+  "keeps explicit $kind search on its original filesystem",
+  async (workspace) => {
+    await native.grep({ pattern: "fixture", root: "/work" }, workspace);
+    await native.glob({ pattern: "**/*.ts", root: "/work" }, workspace);
+    expect(io.invoke.mock.calls).toEqual([
+      [
+        "fs_grep",
+        {
+          pattern: "fixture",
+          root: "/work",
+          glob: null,
+          caseInsensitive: null,
+          maxResults: null,
+          workspace,
+        },
+      ],
+      [
+        "fs_glob",
+        { pattern: "**/*.ts", root: "/work", maxResults: null, workspace },
+      ],
+    ]);
+    expect(io.current).not.toHaveBeenCalled();
+  },
+);
+
+it("never falls back to native local search for an SSH root", async () => {
+  io.current.mockReturnValue(local);
+  for (const operation of [
+    () => native.grep({ pattern: "fixture", root: "/work" }, ssh),
+    () => native.glob({ pattern: "**/*", root: "/work" }, ssh),
+  ])
+    await expect(Promise.resolve().then(operation)).rejects.toThrow();
+  expect(io.invoke).not.toHaveBeenCalled();
+  expect(io.current).not.toHaveBeenCalled();
+});
+
+it.each(["C:/work", "//server/share/work", "\\\\server\\share\\work"])(
+  "keeps native search roots on this computer: %s",
+  async (root) => {
+    await native.grep({ pattern: "fixture", root }, ssh);
+    await native.glob({ pattern: "**/*", root }, wsl);
+    expect(io.invoke.mock.calls.map(([, args]) => args.workspace)).toEqual([
+      local,
+      local,
+    ]);
+    expect(io.current).not.toHaveBeenCalled();
+  },
+);

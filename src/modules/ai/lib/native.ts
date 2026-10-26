@@ -282,6 +282,19 @@ function resolveFilesystemWorkspace(
   return explicitWorkspace;
 }
 
+function resolveNativeSearchWorkspace(
+  root: string,
+  explicitWorkspace?: WorkspaceEnv,
+): WorkspaceEnv {
+  const workspace = resolveFilesystemWorkspace(
+    root,
+    explicitWorkspace ?? currentWorkspaceEnv(),
+  );
+  if (workspace.kind !== "local" && workspace.kind !== "wsl")
+    throw new Error("Remote search requires the authenticated helper.");
+  return workspaceForNativeFs(workspace, root);
+}
+
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
   workspaceAuthorize: (path: string) =>
@@ -462,28 +475,38 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  grep: (params: {
-    pattern: string;
-    root: string;
-    glob?: string[];
-    caseInsensitive?: boolean;
-    maxResults?: number;
-  }) =>
-    invoke<GrepResponse>("fs_grep", {
+  grep: (
+    params: {
+      pattern: string;
+      root: string;
+      glob?: string[];
+      caseInsensitive?: boolean;
+      maxResults?: number;
+    },
+    explicitWorkspace?: WorkspaceEnv,
+  ) => {
+    const workspace = resolveNativeSearchWorkspace(params.root, explicitWorkspace);
+    return invoke<GrepResponse>("fs_grep", {
       pattern: params.pattern,
       root: params.root,
       glob: params.glob ?? null,
       caseInsensitive: params.caseInsensitive ?? null,
       maxResults: params.maxResults ?? null,
-      workspace: currentWorkspaceEnv(),
-    }),
-  glob: (params: { pattern: string; root: string; maxResults?: number }) =>
-    invoke<GlobResponse>("fs_glob", {
+      workspace,
+    });
+  },
+  glob: (
+    params: { pattern: string; root: string; maxResults?: number },
+    explicitWorkspace?: WorkspaceEnv,
+  ) => {
+    const workspace = resolveNativeSearchWorkspace(params.root, explicitWorkspace);
+    return invoke<GlobResponse>("fs_glob", {
       pattern: params.pattern,
       root: params.root,
       maxResults: params.maxResults ?? null,
-      workspace: currentWorkspaceEnv(),
-    }),
+      workspace,
+    });
+  },
   runCommand: (command: string, cwd?: string | null, timeoutSecs?: number) =>
     invoke<CommandOutput>("shell_run_command", {
       command,
