@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useTranslation } from "@/modules/i18n";
+import type { InlineEditProposal } from "@/modules/editor/lib/inlineEditTarget";
 import {
   ArrowRight01Icon,
   Cancel01Icon,
@@ -10,14 +11,22 @@ import {
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 type Props = {
   isOpen: boolean;
   initialPrompt?: string;
   onClose: () => void;
-  onSubmit: (instruction: string, signal?: AbortSignal) => Promise<string>;
-  onAccept: (newCode: string) => void;
+  onSubmit: (
+    instruction: string,
+    signal?: AbortSignal,
+  ) => Promise<InlineEditProposal>;
 };
 
 const QUICK_ACTIONS = [
@@ -33,12 +42,11 @@ export function InlineAiWidget({
   initialPrompt,
   onClose,
   onSubmit,
-  onAccept,
 }: Props) {
   const { t } = useTranslation();
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
-  const [proposal, setProposal] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<InlineEditProposal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const ownerRef = useRef<{
@@ -46,6 +54,15 @@ export function InlineAiWidget({
     prompt: string | undefined;
   } | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const proposalRef = useRef<{
+    owner: NonNullable<typeof ownerRef.current>;
+    proposal: InlineEditProposal;
+  } | null>(null);
+  const discardProposal = useCallback(() => {
+    const receipt = proposalRef.current;
+    proposalRef.current = null;
+    receipt?.proposal.discard();
+  }, []);
   useLayoutEffect(() => {
     const owner = { submit: onSubmit, prompt: initialPrompt };
     ownerRef.current = isOpen ? owner : null;
@@ -56,13 +73,15 @@ export function InlineAiWidget({
       if (ownerRef.current === owner) ownerRef.current = null;
       requestRef.current?.abort();
       requestRef.current = null;
+      discardProposal();
     };
-  }, [isOpen, onSubmit, initialPrompt]);
+  }, [isOpen, onSubmit, initialPrompt, discardProposal]);
 
   const handleClose = () => {
     ownerRef.current = null;
     requestRef.current?.abort();
     requestRef.current = null;
+    discardProposal();
     onClose();
   };
 
@@ -80,9 +99,13 @@ export function InlineAiWidget({
 
     setLoading(true);
     setError(null);
+    discardProposal();
     try {
       const result = await onSubmit(text, controller.signal);
-      if (current()) setProposal(result);
+      if (current()) {
+        proposalRef.current = { owner, proposal: result };
+        setProposal(result);
+      } else result.discard();
     } catch (err) {
       if (current())
         setError(
@@ -117,6 +140,24 @@ export function InlineAiWidget({
 
   if (!isOpen) return null;
 
+  const applyProposal = (candidate: InlineEditProposal) => {
+    const receipt = proposalRef.current;
+    if (
+      !receipt ||
+      receipt.proposal !== candidate ||
+      receipt.owner !== ownerRef.current
+    )
+      return;
+    proposalRef.current = null;
+    try {
+      if (candidate.apply()) return;
+    } catch {
+      // An uncertain dispatch cannot authorize another application.
+    }
+    if (receipt.owner === ownerRef.current)
+      setError(t("editor.codeActions.documentChanged"));
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -124,7 +165,7 @@ export function InlineAiWidget({
     } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (proposal !== null) {
-        onAccept(proposal);
+        applyProposal(proposal);
       } else {
         void handleSubmit();
       }
@@ -219,7 +260,7 @@ export function InlineAiWidget({
       ) : (
         <div className="space-y-2.5">
           <div className="max-h-48 overflow-y-auto rounded-xl border border-border/60 bg-background/80 p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground select-text">
-            <pre className="whitespace-pre-wrap">{proposal}</pre>
+            <pre className="whitespace-pre-wrap">{proposal.text}</pre>
           </div>
 
           <div className="flex items-center justify-between pt-1">
@@ -227,7 +268,10 @@ export function InlineAiWidget({
               size="xs"
               variant="ghost"
               className="h-7 gap-1 text-[11px] text-muted-foreground hover:text-foreground rounded-lg"
-              onClick={() => setProposal(null)}
+              onClick={() => {
+                discardProposal();
+                setProposal(null);
+              }}
             >
               <HugeiconsIcon icon={Refresh01Icon} size={12} />
               <span>{t("editor.inlineAi.modifyInstruction")}</span>
@@ -245,7 +289,7 @@ export function InlineAiWidget({
               <Button
                 size="xs"
                 className="h-7 gap-1 rounded-lg px-3 text-[11px] font-medium bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm"
-                onClick={() => onAccept(proposal)}
+                onClick={() => applyProposal(proposal)}
               >
                 <HugeiconsIcon icon={CheckmarkCircle01Icon} size={13} />
                 <span>{t("editor.inlineAi.apply")}</span>

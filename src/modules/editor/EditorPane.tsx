@@ -139,7 +139,7 @@ import {
 } from "./lib/extensions";
 import { useEditorFormatting } from "./lib/useEditorFormatting";
 import { detectIndentUnit } from "./lib/indent";
-import { requestInlineEdit } from "./lib/inlineEditService";
+import { useEditorInlineEdit } from "@/modules/editor/lib/useEditorInlineEdit";
 import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
 import { loadMinimapExtension } from "./lib/minimap";
 import { expandSelectionCommand } from "./lib/selectionExpand";
@@ -1480,56 +1480,13 @@ export const EditorPane = memo(
       ],
     );
 
-    const handleInlineAiSubmit = useCallback(
-      async (instruction: string, signal?: AbortSignal) => {
-        const view = cmRef.current?.view;
-        if (!view) throw new Error(t("feedback.editorUnavailable"));
-
-        const { from, to } = view.state.selection.main;
-        const docText = view.state.doc.toString();
-        const selectedCode =
-          from !== to
-            ? docText.slice(from, to)
-            : docText.slice(
-                view.state.doc.lineAt(from).from,
-                view.state.doc.lineAt(from).to,
-              );
-        const prefix = docText.slice(0, from);
-        const suffix = docText.slice(to);
-
-        return await requestInlineEdit(
-          {
-            instruction,
-            code: selectedCode,
-            path,
-            language: languageRef.current ?? undefined,
-            prefix,
-            suffix,
-            workspaceEnv,
-          },
-          undefined,
-          signal,
-        );
-      },
-      [path, workspaceEnv, t],
-    );
-
-    const handleInlineAiAccept = useCallback((newCode: string) => {
-      const view = cmRef.current?.view;
-      if (!view) return;
-      const { from, to } = view.state.selection.main;
-      const range =
-        from !== to
-          ? { from, to }
-          : {
-              from: view.state.doc.lineAt(from).from,
-              to: view.state.doc.lineAt(from).to,
-            };
-      view.dispatch({
-        changes: { from: range.from, to: range.to, insert: newCode },
-      });
-      setInlineAiOpen(false);
-    }, []);
+    const handleInlineAiSubmit = useEditorInlineEdit({
+      path,
+      workspaceEnv,
+      getView: () => cmRef.current?.view,
+      getLanguage: () => languageRef.current,
+      onApplied: () => setInlineAiOpen(false),
+    });
 
     const readyDocContent = doc.status === "ready" ? doc.content : null;
     // Reconcile and load saved highlights for this document
@@ -1791,7 +1748,6 @@ export const EditorPane = memo(
                   setInlineAiPrompt(undefined);
                 }}
                 onSubmit={handleInlineAiSubmit}
-                onAccept={handleInlineAiAccept}
               />
             ) : null}
 
