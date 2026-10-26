@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,7 @@ import type { Live } from "../store/chatStore";
 import { useAiLiveBridge } from "./useAiLiveBridge";
 import type { Tab } from "@/modules/tabs";
 import { IS_WINDOWS } from "@/lib/platform";
+import { asTabKey, asWorkspaceScopeId } from "@/modules/tabs/lib/tabIdentity";
 
 const LOCAL_APP_PATH = IS_WINDOWS
   ? "C:\\proyectos\\local-app"
@@ -35,9 +36,11 @@ describe("useAiLiveBridge", () => {
   let container: HTMLDivElement | null = null;
   let root: Root | null = null;
   let liveCapture: Live | null = null;
+  let publications: Live[] = [];
 
   beforeEach(() => {
     liveCapture = null;
+    publications = [];
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -60,11 +63,13 @@ describe("useAiLiveBridge", () => {
     explorerRoot?: string | null;
     launchCwd?: string | null;
     home?: string | null;
+    strict?: boolean;
   }) {
     function BridgeHost() {
       useAiLiveBridge({
         setLive: (live) => {
           liveCapture = live;
+          publications.push(live);
         },
         activeId: props.activeId,
         tabs: props.tabs,
@@ -80,7 +85,11 @@ describe("useAiLiveBridge", () => {
     }
 
     act(() => {
-      root?.render(createElement(BridgeHost));
+      root?.render(
+        props.strict
+          ? createElement(StrictMode, null, createElement(BridgeHost))
+          : createElement(BridgeHost),
+      );
     });
   }
 
@@ -184,5 +193,55 @@ describe("useAiLiveBridge", () => {
     });
 
     expect(liveCapture?.getLocalWorkspaceRoot?.()).toBe(APP_PATH);
+  });
+
+  it("captures the editor filesystem independently of a hidden terminal and retires on unmount", () => {
+    renderBridge({
+      activeId: 2,
+      tabs: [
+        {
+          id: 1,
+          spaceId: "fixture",
+          tabKey: asTabKey("tab-fixture"),
+          workspaceScopeId: asWorkspaceScopeId("fixture"),
+          title: "Fixture",
+          kind: "terminal",
+          cwd: "/other",
+          paneTree: { kind: "leaf", id: 1, cwd: "/other" },
+          activeLeafId: 1,
+        },
+        {
+          id: 2,
+          kind: "editor",
+          path: "/repo/file.ts",
+          workspaceEnv: { kind: "wsl", distro: "fixture" },
+        } as Tab,
+      ],
+      explorerRoot: "/other",
+    });
+    const captured = liveCapture as
+      | (Live & { getFileContext?: () => unknown })
+      | null;
+    expect(captured?.getFileContext?.()).toEqual({
+      directory: "/repo",
+      workspace: { kind: "wsl", distro: "fixture" },
+    });
+    act(() => root?.unmount());
+    root = null;
+    expect(captured?.getFileContext?.()).toBeNull();
+  });
+
+  it("does not revive the discarded StrictMode publication", () => {
+    renderBridge({
+      strict: true,
+      activeId: 1,
+      tabs: [{ id: 1, kind: "editor", path: "/repo/file.ts" } as Tab],
+    });
+    expect(publications).toHaveLength(2);
+    expect(publications[0].getFileContext?.()).toBeNull();
+    expect(publications[1].getFileContext?.()).toEqual({
+      directory: "/repo",
+      workspace: { kind: "local" },
+    });
   });
 });

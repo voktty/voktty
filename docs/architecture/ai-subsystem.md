@@ -92,6 +92,8 @@ AI-proposed file edits open in an `ai-diff` tab. The user accepts or rejects per
 
 `App.tsx` calls `setLive({ getCwd, getTerminalContext, … })` so tools can read the currently active terminal's cwd and the last 300 lines of buffer. It is lazy by design - tools call for it only when needed rather than pre-snapshotting every turn.
 
+The desktop bridge also exposes optional `getFileContext` on `Live` and `ToolContext`. It returns a detached `{directory, workspace}` from the committed active surface, using an editor's own containing directory or a terminal's runtime filesystem rather than another tab or the ambient workspace. Legacy documents remain local, and native Windows documents retain local ownership. Missing targets, unresolved project namespaces, private or collaborative terminals and unsupported filesystem transports return no context. Unmount retires this getter; reading it opens no filesystem or process resource. The directory is source metadata, not a workspace authorization grant or a project-root boundary. Consumers must retain their own per-call capture across approval and asynchronous stages; the getter does not itself bind legacy tool execution or its independent project-root getter.
+
 ## Invariants
 
 - Keep the Vercel AI SDK v6 chat shape (`streamText`, tools, step limits); the rest of the UI depends on it.

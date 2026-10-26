@@ -1,4 +1,5 @@
 import type { Chat, UIMessage } from "@ai-sdk/react";
+import type { AiFileContext } from "@/modules/ai/lib/aiFileContext";
 import { create } from "zustand";
 import { t as translate } from "@/modules/i18n";
 import {
@@ -41,6 +42,7 @@ export type FileCitationSource =
   | { kind: "collab"; leafId: number; available: boolean };
 
 export type Live = {
+  getFileContext?: () => AiFileContext | null;
   getCwd: () => string | null;
   getLocalCwd?: () => string | null;
   getTerminalContext: () => string | null;
@@ -179,6 +181,7 @@ type StoreState = {
 };
 
 const NOOP_LIVE: Live = {
+  getFileContext: () => null,
   getCwd: () => null,
   getLocalCwd: () => null,
   getTerminalContext: () => null,

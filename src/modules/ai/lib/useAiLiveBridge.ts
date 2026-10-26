@@ -6,9 +6,11 @@ import {
   type TerminalPaneHandle,
   whenSessionReady,
   writeToSession,
+  useLeafWorkspaceEnv,
 } from "@/modules/terminal";
 import { invoke } from "@tauri-apps/api/core";
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
+import { resolveAiFileContext, type AiFileContext } from "./aiFileContext";
 import type { Live } from "../store/chatStore";
 import { redactSensitive } from "./redact";
 import { selectAiWorkspaceCwd } from "./selectAiWorkspaceCwd";
@@ -64,8 +66,20 @@ export function useAiLiveBridge(params: Params) {
   const { setLive, terminalRefs } = params;
   const ref = useRef(params);
   ref.current = params;
+  const activeTab = params.tabs.find((tab) => tab.id === params.activeId);
+  const terminalWorkspace = useLeafWorkspaceEnv(
+    activeTab?.kind === "terminal" ? activeTab.activeLeafId : null,
+  );
+  const fileContextRef = useRef<AiFileContext | null>(null);
+  useLayoutEffect(() => {
+    fileContextRef.current = resolveAiFileContext(activeTab, terminalWorkspace);
+    return () => {
+      fileContextRef.current = null;
+    };
+  }, [activeTab, terminalWorkspace]);
 
   useEffect(() => {
+    let active = true;
     const isLocalTab = (tab: Tab): boolean => {
       if (
         "workspaceEnv" in tab &&
@@ -163,6 +177,10 @@ export function useAiLiveBridge(params: Params) {
     };
 
     setLive({
+      getFileContext: () =>
+        active && fileContextRef.current
+          ? structuredClone(fileContextRef.current)
+          : null,
       getCwd: findCwd,
       getLocalCwd: findLocalCwd,
       getTerminalContext: () => {
@@ -304,5 +322,8 @@ export function useAiLiveBridge(params: Params) {
         return buf ? redactSensitive(buf) : null;
       },
     });
+    return () => {
+      active = false;
+    };
   }, [setLive, terminalRefs]);
 }
