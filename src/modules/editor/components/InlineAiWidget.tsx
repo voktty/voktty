@@ -10,13 +10,13 @@ import {
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   isOpen: boolean;
   initialPrompt?: string;
   onClose: () => void;
-  onSubmit: (instruction: string) => Promise<string>;
+  onSubmit: (instruction: string, signal?: AbortSignal) => Promise<string>;
   onAccept: (newCode: string) => void;
 };
 
@@ -41,22 +41,60 @@ export function InlineAiWidget({
   const [proposal, setProposal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const ownerRef = useRef<{
+    submit: Props["onSubmit"];
+    prompt: string | undefined;
+  } | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  useLayoutEffect(() => {
+    const owner = { submit: onSubmit, prompt: initialPrompt };
+    ownerRef.current = isOpen ? owner : null;
+    setLoading(false);
+    setProposal(null);
+    setError(null);
+    return () => {
+      if (ownerRef.current === owner) ownerRef.current = null;
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
+  }, [isOpen, onSubmit, initialPrompt]);
+
+  const handleClose = () => {
+    ownerRef.current = null;
+    requestRef.current?.abort();
+    requestRef.current = null;
+    onClose();
+  };
 
   const handleSubmit = async (customPrompt?: string) => {
     const text = (customPrompt ?? instruction).trim();
-    if (!text || loading) return;
+    const owner = ownerRef.current;
+    if (!text || !owner || owner.submit !== onSubmit || requestRef.current)
+      return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const current = () =>
+      ownerRef.current === owner &&
+      requestRef.current === controller &&
+      !controller.signal.aborted;
 
     setLoading(true);
     setError(null);
     try {
-      const result = await onSubmit(text);
-      setProposal(result);
+      const result = await onSubmit(text, controller.signal);
+      if (current()) setProposal(result);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("editor.inlineAi.generationFailed"),
-      );
+      if (current())
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("editor.inlineAi.generationFailed"),
+        );
     } finally {
-      setLoading(false);
+      if (current()) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -71,7 +109,8 @@ export function InlineAiWidget({
         setInstruction("");
         setProposal(null);
         setError(null);
-        setTimeout(() => inputRef.current?.focus(), 50);
+        const timer = setTimeout(() => inputRef.current?.focus(), 50);
+        return () => clearTimeout(timer);
       }
     }
   }, [isOpen, initialPrompt]);
@@ -81,7 +120,7 @@ export function InlineAiWidget({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
-      onClose();
+      handleClose();
     } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (proposal !== null) {
@@ -121,7 +160,7 @@ export function InlineAiWidget({
         <Button
           size="icon-xs"
           variant="ghost"
-          onClick={onClose}
+          onClick={handleClose}
           className="rounded-lg text-muted-foreground hover:text-foreground"
         >
           <HugeiconsIcon icon={Cancel01Icon} size={13} />
@@ -199,7 +238,7 @@ export function InlineAiWidget({
                 size="xs"
                 variant="ghost"
                 className="h-7 text-[11px] rounded-lg"
-                onClick={onClose}
+                onClick={handleClose}
               >
                 {t("editor.inlineAi.discard")}
               </Button>

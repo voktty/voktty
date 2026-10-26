@@ -1481,7 +1481,7 @@ export const EditorPane = memo(
     );
 
     const handleInlineAiSubmit = useCallback(
-      async (instruction: string) => {
+      async (instruction: string, signal?: AbortSignal) => {
         const view = cmRef.current?.view;
         if (!view) throw new Error(t("feedback.editorUnavailable"));
 
@@ -1497,16 +1497,21 @@ export const EditorPane = memo(
         const prefix = docText.slice(0, from);
         const suffix = docText.slice(to);
 
-        return await requestInlineEdit({
-          instruction,
-          code: selectedCode,
-          path,
-          language: languageRef.current ?? undefined,
-          prefix,
-          suffix,
-        });
+        return await requestInlineEdit(
+          {
+            instruction,
+            code: selectedCode,
+            path,
+            language: languageRef.current ?? undefined,
+            prefix,
+            suffix,
+            workspaceEnv,
+          },
+          undefined,
+          signal,
+        );
       },
-      [path, t],
+      [path, workspaceEnv, t],
     );
 
     const handleInlineAiAccept = useCallback((newCode: string) => {
