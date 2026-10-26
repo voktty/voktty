@@ -26,6 +26,7 @@ pub struct PreparedSearch {
     params: SearchParams,
     generation: Arc<AtomicU64>,
     ticket: u64,
+    independent: bool,
 }
 
 #[derive(Deserialize)]
@@ -75,6 +76,7 @@ impl RemoteSearchState {
             params,
             generation: self.generation.clone(),
             ticket,
+            independent: false,
         })
     }
 
@@ -83,14 +85,29 @@ impl RemoteSearchState {
     }
 }
 
-fn resolve_search_root(root: &Path, cwd: Option<&str>) -> Result<(PathBuf, PathBuf), String> {
+pub(super) fn resolve_search_root(
+    root: &Path,
+    cwd: Option<&str>,
+) -> Result<(PathBuf, PathBuf), String> {
+    let normalized = cwd
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| value.replace('\\', "/"));
+    resolve_search_root_literal(root, normalized.as_deref())
+}
+
+pub(super) fn resolve_search_root_literal(
+    root: &Path,
+    cwd: Option<&str>,
+) -> Result<(PathBuf, PathBuf), String> {
     let workspace_root = std::fs::canonicalize(root)
         .map_err(|error| format!("workspace root is not available: {error}"))?;
-    let Some(cwd) = cwd.filter(|cwd| !cwd.trim().is_empty()) else {
+    if !workspace_root.is_dir() {
+        return Err("workspace root is not a directory".into());
+    }
+    let Some(cwd) = cwd.filter(|cwd| !cwd.is_empty()) else {
         return Ok((workspace_root.clone(), workspace_root));
     };
-    let normalized = cwd.replace('\\', "/");
-    let relative = Path::new(&normalized);
+    let relative = Path::new(cwd);
     if relative.is_absolute()
         || relative.components().any(|component| {
             matches!(
@@ -115,6 +132,37 @@ fn resolve_search_root(root: &Path, cwd: Option<&str>) -> Result<(PathBuf, PathB
 }
 
 pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
+    run_search_bounded(search, &|| false, &|_| true)
+}
+
+pub(super) fn prepare_independent(root: &Path, params: Value) -> Result<PreparedSearch, String> {
+    if serde_json::to_vec(&params)
+        .map_err(|error| error.to_string())?
+        .len()
+        > 256 * 1024
+    {
+        return Err("search parameters exceed the request limit".to_string());
+    }
+    let params: SearchParams = serde_json::from_value(params).map_err(|error| error.to_string())?;
+    if params.pattern.is_empty() {
+        return Err("empty pattern".into());
+    }
+    let (_, root) = resolve_search_root_literal(root, params.cwd.as_deref())?;
+    Ok(PreparedSearch {
+        workspace_root: root.clone(),
+        root,
+        params,
+        generation: Arc::new(AtomicU64::new(0)),
+        ticket: 0,
+        independent: true,
+    })
+}
+
+pub(super) fn run_search_bounded(
+    search: PreparedSearch,
+    stop: &(dyn Fn() -> bool + Sync),
+    admit: &(dyn Fn(usize) -> bool + Sync),
+) -> Result<Value, String> {
     let pattern = search_pattern(
         &search.params.pattern,
         search.params.regex,
@@ -129,6 +177,7 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
     let exclude = build_globset(&search.params.exclude)?;
     let cap = search.params.max_results.clamp(1, HARD_MAX_RESULTS);
     let walker = WalkBuilder::new(&search.root)
+        .threads(if search.independent { 2 } else { 0 })
         .hidden(!search.params.show_hidden)
         .git_ignore(true)
         .git_global(true)
@@ -140,7 +189,7 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
     let hits = Arc::new(Mutex::new(Vec::<SearchHit>::new()));
     let scanned = Arc::new(AtomicUsize::new(0));
     let truncated = Arc::new(AtomicBool::new(false));
-    let cancelled = || search.generation.load(Ordering::SeqCst) != search.ticket;
+    let cancelled = || search.generation.load(Ordering::SeqCst) != search.ticket || stop();
 
     walker.run(|| {
         let workspace_root = search.workspace_root.clone();
@@ -153,7 +202,10 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
         let generation = search.generation.clone();
         let ticket = search.ticket;
         Box::new(move |entry| {
-            if truncated.load(Ordering::Relaxed) || generation.load(Ordering::SeqCst) != ticket {
+            if truncated.load(Ordering::Relaxed)
+                || generation.load(Ordering::SeqCst) != ticket
+                || stop()
+            {
                 return WalkState::Quit;
             }
             let entry = match entry {
@@ -165,7 +217,7 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
             }
             let path = entry.path();
             let rel = match path.strip_prefix(&workspace_root) {
-                Ok(rel) => canonical_path(rel),
+                Ok(rel) => search_display_path(rel, search.independent),
                 Err(_) => return WalkState::Continue,
             };
             if include.as_ref().is_some_and(|set| !set.is_match(&rel))
@@ -177,7 +229,7 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
                 return WalkState::Continue;
             }
             scanned.fetch_add(1, Ordering::Relaxed);
-            let absolute = canonical_path(path);
+            let absolute = search_display_path(path, search.independent);
             let relative = rel.clone();
             let mut searcher = SearcherBuilder::new()
                 .binary_detection(BinaryDetection::quit(b'\0'))
@@ -188,8 +240,20 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
                 path,
                 UTF8(|line, text| {
                     let line_text = text.trim_end_matches(&['\r', '\n'][..]);
-                    let (column, match_length, preview_column, text) =
-                        match_preview(&matcher, line_text);
+                    if stop() {
+                        return Ok(false);
+                    }
+                    let Some((column, match_length, preview_column, text)) =
+                        match_preview(&matcher, line_text, &|bytes| {
+                            admit(
+                                bytes
+                                    .saturating_add(absolute.len())
+                                    .saturating_add(relative.len()),
+                            )
+                        })
+                    else {
+                        return Ok(false);
+                    };
                     let mut hits = hits.lock().unwrap();
                     if hits.len() >= cap {
                         truncated.store(true, Ordering::Relaxed);
@@ -250,6 +314,14 @@ fn canonical_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+fn search_display_path(path: &Path, independent: bool) -> String {
+    if independent {
+        path.to_string_lossy().into_owned()
+    } else {
+        canonical_path(path)
+    }
+}
+
 fn build_globset(patterns: &[String]) -> Result<Option<GlobSet>, String> {
     if patterns.is_empty() {
         return Ok(None);
@@ -288,9 +360,13 @@ fn search_pattern(pattern: &str, regex: bool, whole_word: bool) -> String {
     }
 }
 
-fn match_preview(matcher: &RegexMatcher, text: &str) -> (usize, usize, usize, String) {
+fn match_preview(
+    matcher: &RegexMatcher,
+    text: &str,
+    admit: &dyn Fn(usize) -> bool,
+) -> Option<(usize, usize, usize, String)> {
     let Some(found) = matcher.find(text.as_bytes()).ok().flatten() else {
-        return (1, 0, 1, String::new());
+        return admit(0).then(|| (1, 0, 1, String::new()));
     };
     let column = text[..found.start()].encode_utf16().count() + 1;
     let match_length = text[found.start()..found.end()].encode_utf16().count();
@@ -306,12 +382,15 @@ fn match_preview(matcher: &RegexMatcher, text: &str) -> (usize, usize, usize, St
         preview_end -= 1;
     }
     let preview_column = text[preview_start..found.start()].encode_utf16().count() + 1;
-    (
+    if !admit(preview_end - preview_start) {
+        return None;
+    }
+    Some((
         column,
         match_length,
         preview_column,
         text[preview_start..preview_end].to_string(),
-    )
+    ))
 }
 
 #[cfg(test)]

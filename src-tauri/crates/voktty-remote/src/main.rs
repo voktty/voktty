@@ -4,6 +4,7 @@ mod file_preview;
 mod git_output;
 mod line_metrics;
 mod opencode_service;
+mod owned_search;
 mod proc_host;
 mod search;
 
@@ -20,6 +21,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use base64::Engine;
 use git_output::read_capped;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use owned_search::OwnedSearchState;
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use proc_host::{FrameSink, ProcHost};
 use search::{run_search, PreparedSearch, RemoteSearchState};
@@ -29,15 +31,15 @@ use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
     METHOD_AGENT_PROBE, METHOD_CANONICALIZE, METHOD_COPY, METHOD_COUNT_TEXT_LINES,
     METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
-    METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GREP, METHOD_GREP_CANCEL,
-    METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH,
-    METHOD_PROC_CLOSE, METHOD_PROC_DETACH, METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN,
-    METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
-    METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME,
-    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
-    METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
-    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
-    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
+    METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GLOB, METHOD_GREP,
+    METHOD_GREP_CANCEL, METHOD_GREP_INDEPENDENT, METHOD_HANDSHAKE, METHOD_LIST_DIR,
+    METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH, METHOD_PROC_CLOSE, METHOD_PROC_DETACH,
+    METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD,
+    METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE,
+    METHOD_READ_FILE_PREVIEW, METHOD_RENAME, METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW,
+    METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD,
+    METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW,
+    METHOD_WRITE_FILE, PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -116,6 +118,7 @@ struct RemoteServer {
     ptys: Arc<Mutex<HashMap<u64, Arc<RemotePty>>>>,
     watcher: Option<Arc<Mutex<RemoteWatch>>>,
     search: RemoteSearchState,
+    owned_search: OwnedSearchState,
     proc_host: Option<ProcHost>,
 }
 
@@ -155,6 +158,7 @@ impl RemoteServer {
             ptys: Arc::new(Mutex::new(HashMap::new())),
             watcher: None,
             search: RemoteSearchState::default(),
+            owned_search: OwnedSearchState::default(),
             proc_host: None,
         }
     }
@@ -329,6 +333,7 @@ impl RemoteServer {
             METHOD_COPY => self.copy(request),
             METHOD_DELETE => self.delete(request),
             METHOD_GREP => self.grep(request),
+            METHOD_GREP_INDEPENDENT | METHOD_GLOB => self.owned_search(request),
             METHOD_GREP_CANCEL => self.cancel_grep(request),
             METHOD_REPLACE_PREVIEW => self.replace_preview(request),
             METHOD_REPLACE_APPLY => self.replace_apply(request),
@@ -385,6 +390,8 @@ impl RemoteServer {
                     METHOD_COPY,
                     METHOD_DELETE,
                     METHOD_GREP,
+                    METHOD_GREP_INDEPENDENT,
+                    METHOD_GLOB,
                     METHOD_GREP_CANCEL,
                     METHOD_REPLACE_PREVIEW,
                     METHOD_REPLACE_APPLY,
@@ -766,6 +773,39 @@ impl RemoteServer {
                     Err(error) => RemoteResponse::failure(request_id, "search_failed", error),
                 };
                 let _ = send_frame(&output, &Frame::Response(response));
+            }) {
+            Ok(_) => None,
+            Err(error) => Some(RemoteResponse::failure(
+                failure_id,
+                "search_spawn_failed",
+                error.to_string(),
+            )),
+        }
+    }
+
+    fn owned_search(&self, request: RemoteRequest) -> RemoteResponse {
+        match self.owned_search.prepare(self.root.as_deref(), request) {
+            Ok(mut job) => job.run(),
+            Err(response) => response,
+        }
+    }
+
+    fn start_owned_search(
+        &self,
+        request: RemoteRequest,
+        output: FrameSink,
+    ) -> Option<RemoteResponse> {
+        let failure_id = request.id.clone();
+        let mut job = match self.owned_search.prepare(self.root.as_deref(), request) {
+            Ok(job) => job,
+            Err(response) => return Some(response),
+        };
+        match thread::Builder::new()
+            .name("voktty-remote-owned-search".to_string())
+            .spawn(move || {
+                let response = job.run();
+                let _ = output(Frame::Response(response));
+                drop(job);
             }) {
             Ok(_) => None,
             Err(error) => Some(RemoteResponse::failure(
@@ -2789,6 +2829,13 @@ fn run_stdio() -> io::Result<()> {
                         METHOD_WATCH_TREE_ADD => server.add_watch_tree(request, stdout.clone()),
                         METHOD_GREP => {
                             if let Some(response) = server.start_grep(request, stdout.clone()) {
+                                send_frame(&stdout, &Frame::Response(response))?;
+                            }
+                            continue;
+                        }
+                        METHOD_GREP_INDEPENDENT | METHOD_GLOB => {
+                            if let Some(response) = server.start_owned_search(request, sink.clone())
+                            {
                                 send_frame(&stdout, &Frame::Response(response))?;
                             }
                             continue;
