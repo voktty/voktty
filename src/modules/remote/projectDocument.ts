@@ -14,7 +14,6 @@ import {
   remoteReadDocument,
   remoteReadBinaryFile,
   remoteStat,
-  remoteRelativePath,
   type RemoteWorkspaceEnv,
 } from "@/modules/remote/filesystem";
 import { requestRemoteResult } from "@/modules/remote/client";
@@ -22,6 +21,22 @@ import { requestRemoteResult } from "@/modules/remote/client";
 let pending = 0;
 const MAX_PENDING = 256;
 type OwnedWorkspace = RemoteWorkspaceEnv & { sessionId: number };
+
+function documentPath(root: string, relative: string): string {
+  const windows = /^[a-zA-Z]:[\\/]/.test(root) || root.startsWith("\\\\");
+  const normalized = windows ? root.replace(/\\/g, "/") : root;
+  if (
+    !root ||
+    root.includes("\0") ||
+    (!root.startsWith("/") && !windows) ||
+    normalized.split("/").some((part) => part === "." || part === "..")
+  ) {
+    throw new Error("Invalid remote document root.");
+  }
+  if (relative === ".") return root;
+  const base = windows ? root.replace(/[\\/]+$/, "") : root.replace(/\/+$/, "");
+  return `${base}/${relative}`;
+}
 
 export function assertProjectDocumentCurrent(isCurrent: () => boolean): void {
   if (!isCurrent()) throw new Error("Remote document request was retired.");
@@ -32,12 +47,18 @@ export function createProjectDocument(
   project: RemoteProject | undefined,
   profiles: SshConnection[],
 ) {
+  const root = project?.cwd;
   const parsed = parseRemotePath(path);
+  const relative =
+    parsed && root !== undefined
+      ? relativeWithinProject(root, parsed.hostPath)
+      : undefined;
   if (
     !parsed ||
     !project ||
     project.environmentId !== parsed.environmentId ||
-    relativeWithinProject(project.cwd, parsed.hostPath) === undefined
+    root === undefined ||
+    relative === undefined
   ) {
     throw new Error("The document is outside a saved remote project.");
   }
@@ -48,8 +69,7 @@ export function createProjectDocument(
     throw new Error("The saved SSH connection for this document is missing.");
   const captured = { ...profile };
   const connection = remoteSshConnectionForProfile(captured);
-  const root = project.cwd;
-  const hostPath = parsed.hostPath;
+  const projectRoot = root;
 
   async function run<T>(
     isCurrent: () => boolean,
@@ -61,7 +81,7 @@ export function createProjectDocument(
     pending++;
     try {
       const lease = await remoteSessions.acquire(
-        { profileId: captured.id, root },
+        { profileId: captured.id, root: projectRoot },
         { ...connection },
       );
       try {
@@ -94,12 +114,9 @@ export function createProjectDocument(
         new TextEncoder().encode(query).length > 4096
       )
         return Promise.reject(new Error("Invalid filename search query."));
-      const cwd = relativeWithinProject(root, hostPath);
-      if (cwd === undefined)
-        return Promise.reject(new Error("Search is outside its project."));
       return run(isCurrent, (workspace) =>
         requestRemoteResult<unknown>(workspace.sessionId, "fs.searchNames", {
-          cwd,
+          cwd: relative,
           query,
           showHidden,
           maxResults: 200,
@@ -112,10 +129,7 @@ export function createProjectDocument(
       maxBytes: number,
     ) =>
       run(isCurrent, async (workspace) => {
-        const relative = relativeWithinProject(root, hostPath);
-        if (relative === undefined)
-          throw new Error("Reference is outside its project.");
-        const target = `${workspace.root.replace(/[/\\]+$/, "")}/${relative}`;
+        const target = documentPath(workspace.root, relative);
         const canonical = await remoteCanonicalize(workspace, target);
         assertProjectDocumentCurrent(isCurrent);
         if (
@@ -129,26 +143,35 @@ export function createProjectDocument(
         return remoteReadDocument(workspace, canonical, false);
       }),
     readBinary: (isCurrent: () => boolean) =>
-      run(isCurrent, (workspace) => remoteReadBinaryFile(workspace, hostPath)),
+      run(isCurrent, (workspace) =>
+        remoteReadBinaryFile(workspace, documentPath(workspace.root, relative)),
+      ),
     read: (preferBinary: boolean, isCurrent: () => boolean) =>
       run(isCurrent, (workspace) =>
-        remoteReadDocument(workspace, hostPath, preferBinary),
+        remoteReadDocument(
+          workspace,
+          documentPath(workspace.root, relative),
+          preferBinary,
+        ),
       ),
     stat: (isCurrent: () => boolean) =>
-      run(isCurrent, (workspace) => remoteStat(workspace, hostPath)),
+      run(isCurrent, (workspace) =>
+        remoteStat(workspace, documentPath(workspace.root, relative)),
+      ),
     write: (
       content: string,
       isCurrent: () => boolean,
       expectedContent?: string,
     ) =>
       run(isCurrent, async (workspace) => {
+        const path = documentPath(workspace.root, relative);
         await requestRemoteResult(workspace.sessionId, "fs.writeFile", {
-          path: remoteRelativePath(workspace, hostPath),
+          path: relative,
           content,
           ...(expectedContent === undefined ? {} : { expectedContent }),
         });
         assertProjectDocumentCurrent(isCurrent);
-        return (await remoteStat(workspace, hostPath)).mtime;
+        return (await remoteStat(workspace, path)).mtime;
       }),
   };
 }

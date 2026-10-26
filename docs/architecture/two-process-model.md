@@ -116,6 +116,12 @@ profile changes; each change retires old requests and menus synchronously,
 including a return to the original binding. Closing search releases those
 metadata subscriptions without cancelling admitted native reads.
 
+Project document IO captures the original project-relative target and maps it
+under each accepted lease's canonical workspace root. Opening or conditionally
+saving a result through a saved root alias preserves its namespace and saved
+project binding. Text, binary, metadata and SFTP reads use that accepted root;
+writes retain the helper's relative-path and expected-content checks.
+
 Unknown projects or saved profiles, unsupported Host-only namespaces, Docker
 and serial filename searches remain unavailable. Native Windows and UNC
 paths retain their explicit local interpretation. The existing namespace

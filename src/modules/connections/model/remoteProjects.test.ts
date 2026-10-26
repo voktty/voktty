@@ -113,3 +113,17 @@ it("expresses a folder relative to its project root", () => {
   expect(relativeWithinProject("/config", "/config-other/x")).toBeUndefined();
   expect(relativeWithinProject("/config", "/config/../etc")).toBeUndefined();
 });
+
+it.each([
+  ["/config", "/config/a//b", "a/b"],
+  ["/config", "/config/a/./b", "a/b"],
+  ["/config", "/config/a/../b", "b"],
+  ["C:\\Config", "c:\\config\\Source\\file.ts", "Source/file.ts"],
+  ["\\\\Host\\Share\\Config", "//HOST/share/config/Src/FILE.ts", "Src/FILE.ts"],
+  ["C:/Config", "c:/CONFIG/Src/İİFILE.ts", "Src/İİFILE.ts"],
+])(
+  "preserves the normalized relative destination for %s and %s",
+  (root, path, expected) => {
+    expect(relativeWithinProject(root, path)).toBe(expected);
+  },
+);

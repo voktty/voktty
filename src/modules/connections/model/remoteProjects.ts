@@ -21,13 +21,20 @@ export const REMOTE_PROJECTS_CHANGED = "terax:remote-projects-changed";
 
 const slashed = (path: string) => path.replace(/\\/g, "/");
 
-function normalizedHostPath(path: string): string | undefined {
+function normalizedHostPath(
+  path: string,
+  preserveCase = false,
+): string | undefined {
   const value = slashed(path);
   const unc = value.startsWith("//");
   const drive = value.match(/^([A-Za-z]:)(?:\/|$)/)?.[1];
   const absolute = unc || !!drive || value.startsWith("/");
   if (!absolute) return undefined;
-  const prefix = unc ? "//" : drive ? `${drive.toLowerCase()}/` : "/";
+  const prefix = unc
+    ? "//"
+    : drive
+      ? `${preserveCase ? drive : drive.toLowerCase()}/`
+      : "/";
   const rest = unc ? value.slice(2) : drive ? value.slice(2) : value.slice(1);
   const parts: string[] = [];
   for (const part of rest.split("/")) {
@@ -39,7 +46,9 @@ function normalizedHostPath(path: string): string | undefined {
     parts.push(part);
   }
   const normalized = `${prefix}${parts.join("/")}`.replace(/\/$/, "") || prefix;
-  return unc || drive ? normalized.toLocaleLowerCase("en-US") : normalized;
+  return (unc || drive) && !preserveCase
+    ? normalized.toLocaleLowerCase("en-US")
+    : normalized;
 }
 
 function hostPathIsWithin(root: string, candidate: string): boolean {
@@ -59,12 +68,13 @@ export function relativeWithinProject(
 ): string | undefined {
   const root = normalizedHostPath(projectCwd);
   const target = normalizedHostPath(hostPath);
-  if (!root || !target || !hostPathIsWithin(projectCwd, hostPath)) return undefined;
+  if (!root || !target || !hostPathIsWithin(projectCwd, hostPath))
+    return undefined;
   if (target === root) return ".";
-  const prefix = root.endsWith("/") ? root : `${root}/`;
-  const slashedTarget = slashed(hostPath).replace(/\/+$/, "");
-  const cut = slashedTarget.length - (target.length - prefix.length);
-  return slashedTarget.slice(cut).replace(/^\/+/, "") || ".";
+  const original = normalizedHostPath(hostPath, true);
+  if (!original) return undefined;
+  const rootDepth = root.split("/").filter(Boolean).length;
+  return original.split("/").filter(Boolean).slice(rootDepth).join("/") || ".";
 }
 
 export function remoteProjectKey(environmentId: string, cwd: string): string {
