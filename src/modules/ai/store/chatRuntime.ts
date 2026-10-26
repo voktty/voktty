@@ -170,16 +170,22 @@ export function getOrCreateChat(sessionId: string): Chat<UIMessage> {
   return c;
 }
 
-export async function sendMessage(text: string): Promise<boolean> {
+export async function sendMessage(
+  text: string,
+  owner?: Chat<UIMessage>,
+): Promise<boolean> {
   const state = useChatStore.getState();
-  const sessionId = state.activeSessionId;
+  const sessionId = owner?.id ?? state.activeSessionId;
   if (!sessionId) return false;
+  if (owner && chats.get(sessionId) !== owner) return false;
+  if (owner && (owner.status === "submitted" || owner.status === "streaming"))
+    return false;
   if (
     providerNeedsKey(getModel(state.selectedModelId as ModelId).provider) &&
     !getActiveProviderKey()
   )
     return false;
-  const c = getOrCreateChat(sessionId);
+  const c = owner ?? getOrCreateChat(sessionId);
   await c.sendMessage({ text });
   return true;
 }

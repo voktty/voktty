@@ -70,6 +70,7 @@ import { useChatStore } from "../store/chatStore";
 import { type McpApprovalPart, respondToMcpApproval } from "../tools/mcp";
 import { AiToolApproval } from "./AiToolApproval";
 import { ApprovalSessionContext } from "@/modules/ai/lib/useShellApprovalSource";
+import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
 
 function CommandSnippet({ name }: { name: string }) {
   const meta = SLASH_COMMANDS[name];
@@ -219,6 +220,7 @@ export function AiChatView({
 }: Props) {
   const { t } = useTranslation();
   const isBusy = status === "submitted" || status === "streaming";
+  const captureOwner = useChatActionOwner(sessionId);
   const lastMessage = messages[messages.length - 1];
   const showSpinner = isBusy && lastMessage?.role === "user";
   const streamingMessageId =
@@ -275,7 +277,15 @@ export function AiChatView({
         {compactionNotice && (
           <CompactionNotice
             droppedCount={compactionNotice.droppedCount}
-            onDismiss={() => patchAgentMeta({ compactionNotice: null })}
+            onDismiss={() => {
+              const chat = captureOwner()?.resolve();
+              if (
+                chat &&
+                useChatStore.getState().agentMeta.compactionNotice ===
+                  compactionNotice
+              )
+                patchAgentMeta({ compactionNotice: null }, chat);
+            }}
           />
         )}
         {showSpinner && (
@@ -287,9 +297,20 @@ export function AiChatView({
         {showContinue && (
           <ContinueRow
             onContinue={() => {
-              patchAgentMeta({ hitStepCap: false });
+              const owner = captureOwner();
+              const chat = owner?.resolve();
+              if (!chat || !owner) return;
+              if (
+                !useChatStore.getState().agentMeta.hitStepCap ||
+                chat.status === "submitted" ||
+                chat.status === "streaming"
+              )
+                return;
+              patchAgentMeta({ hitStepCap: false }, chat);
+              if (!owner.isCurrent()) return;
               void sendMessage(
                 "Continue from where you stopped. Don't recap — just keep going.",
+                chat,
               );
             }}
           />

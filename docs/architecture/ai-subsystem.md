@@ -75,6 +75,8 @@ The context indicator uses the append-only AI SDK invariant to update the traili
 
 The composer derives `isBusy` from `agentMeta.status` so it can mount safely before sessions hydrate.
 
+Composer submission, Stop, Continue and compaction dismissal retain their committed chat presentation and exact runtime when one exists. Selection changes, deletion, runtime replacement and unmount permanently retire old actions, including a selection round trip before React commits. Current presentations rearm independently. A deferred runtime import cannot create or send a retired conversation; Stop also retires that pending submission without disabling future actions. Duplicate submits coalesce per presentation, and at most 256 deferred or running submissions remain counted until their promises settle, including retired work. Draft cleanup preserves text and attachments changed during loading, and deferred submission focus is guarded and cancelled by its original presentation. These guards do not cancel an already admitted model request when the user merely changes views.
+
 ## Tools and approval
 
 Tool definitions live under `src/modules/ai/tools/`:

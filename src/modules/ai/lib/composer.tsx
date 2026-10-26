@@ -11,7 +11,8 @@ import {
 } from "react";
 import { useWhisperRecording } from "../hooks/useWhisperRecording";
 import { expandSnippetTokens, type Snippet } from "../lib/snippets";
-import { getChat, useChatStore } from "../store/chatStore";
+import { useChatStore } from "../store/chatStore";
+import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
 import {
@@ -84,6 +85,7 @@ type ProviderProps = {
 
 export function AiComposerProvider({ children }: ProviderProps) {
   const sessionId = useChatStore((s) => s.activeSessionId);
+  const captureOwner = useChatActionOwner(sessionId);
   const status = useChatStore((s) => s.agentMeta.status);
   const isBusy = status === "thinking" || status === "streaming";
 
@@ -92,6 +94,19 @@ export function AiComposerProvider({ children }: ProviderProps) {
   const [pickedSnippets, setPickedSnippets] = useState<Snippet[]>([]);
   const [pickedCommands, setPickedCommands] = useState<SlashCommandMeta[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const submissionFocus = useRef<{
+    publication: typeof captureOwner;
+    frame: number;
+  } | null>(null);
+  useEffect(
+    () => () => {
+      const pending = submissionFocus.current;
+      if (pending?.publication !== captureOwner) return;
+      cancelAnimationFrame(pending.frame);
+      submissionFocus.current = null;
+    },
+    [captureOwner],
+  );
 
   const focusSignal = useChatStore((s) => s.focusSignal);
   const pendingPrefill = useChatStore((s) => s.pendingPrefill);
@@ -253,6 +268,8 @@ export function AiComposerProvider({ children }: ProviderProps) {
     setPickedCommands((prev) => prev.filter((c) => c.name !== name));
 
   const submit = () => {
+    const owner = captureOwner();
+    if (!owner) return;
     if (isBusy) return;
     const trimmed = value.trim();
     if (
@@ -349,27 +366,55 @@ export function AiComposerProvider({ children }: ProviderProps) {
     }
 
     if (!sessionId) return;
-    const store = useChatStore.getState();
-    store.patchAgentMeta({ hitStepCap: false, compactionNotice: null });
-    store.presentChat();
-    void (async () => {
+    void owner.run(async (isActionCurrent) => {
       const { getOrCreateChat } = await import("../store/chatRuntime");
-      const chat = getOrCreateChat(sessionId);
-      void chat.sendMessage({ role: "user", parts } as Parameters<
+      if (!isActionCurrent()) return false;
+      const chat = owner.resolve(() => getOrCreateChat(sessionId));
+      if (!chat || chat.status === "submitted" || chat.status === "streaming")
+        return false;
+      const store = useChatStore.getState();
+      store.presentChat();
+      if (!isActionCurrent()) return false;
+      store.patchAgentMeta({ hitStepCap: false, compactionNotice: null }, chat);
+      if (!isActionCurrent()) return false;
+      const submission = chat.sendMessage({ role: "user", parts } as Parameters<
         typeof chat.sendMessage
       >[0]);
-    })();
-    setValue("");
-    setFiles([]);
-    setPickedSnippets([]);
-    setPickedCommands([]);
-    // Re-focus immediately after submit so the user can type a follow-up
-    requestAnimationFrame(() => textareaRef.current?.focus());
+      setValue((current) =>
+        isActionCurrent() && current === value ? "" : current,
+      );
+      setFiles((current) =>
+        isActionCurrent() && current === files ? [] : current,
+      );
+      setPickedSnippets((current) =>
+        isActionCurrent() && current === pickedSnippets ? [] : current,
+      );
+      setPickedCommands((current) =>
+        isActionCurrent() && current === pickedCommands ? [] : current,
+      );
+      if (submissionFocus.current)
+        cancelAnimationFrame(submissionFocus.current.frame);
+      const focus = {
+        publication: captureOwner,
+        frame: requestAnimationFrame(() => {
+          if (submissionFocus.current === focus) submissionFocus.current = null;
+          if (isActionCurrent()) textareaRef.current?.focus();
+        }),
+      };
+      submissionFocus.current = focus;
+      await submission;
+      return true;
+    });
   };
 
   const stop = () => {
-    if (!sessionId) return;
-    void getChat(sessionId)?.stop();
+    const owner = captureOwner();
+    owner?.cancelPending();
+    if (owner && submissionFocus.current?.publication === captureOwner) {
+      cancelAnimationFrame(submissionFocus.current.frame);
+      submissionFocus.current = null;
+    }
+    void owner?.resolve()?.stop();
   };
 
   const canSend =
