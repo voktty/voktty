@@ -70,10 +70,10 @@ export function createContextAwareTransport(deps: Deps) {
     if (!requestCurrent())
       throw new Error("The original AI request has retired.");
     latestRequest = request;
-    const canPublish = () =>
-      !finished && latestRequest === request && requestCurrent();
+    const requestActive = () => latestRequest === request && requestCurrent();
+    const canPublish = () => !finished && requestActive();
     const assertCurrent = () => {
-      if (latestRequest !== request || !requestCurrent())
+      if (!requestActive())
         throw new Error("The original AI request has retired.");
     };
     const callbacks = {
@@ -125,6 +125,7 @@ export function createContextAwareTransport(deps: Deps) {
       customEndpointKeys: structuredClone(deps.getCustomEndpointKeys?.()),
       planMode: deps.getPlanMode?.(),
       abortSignal,
+      isCurrent: requestActive,
     };
     const projectMemory = await projectMemoryReader.read(
       boundary,

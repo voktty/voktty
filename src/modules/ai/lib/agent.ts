@@ -31,6 +31,7 @@ import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
 import { prepareAgentPrompt } from "./prompt";
 import { createProxyFetch } from "./proxyFetch";
 import { reconcileFileToolCalls } from "@/modules/ai/lib/chatFileTools";
+import { fileToolCallsFor } from "@/modules/ai/lib/fileToolCalls";
 import {
   fileToolApprovalTransform,
   retireFileToolRun,
@@ -404,10 +405,21 @@ export type RunAgentOptions = {
   projectMemory?: string | null;
   uiMessages: UIMessage[];
   abortSignal?: AbortSignal;
+  isCurrent?: () => boolean;
 };
 
 export async function runAgentStream(opts: RunAgentOptions) {
-  reconcileFileToolCalls(opts.toolContext, opts.uiMessages);
+  const toolContext = opts.toolContext;
+  const abortSignal = opts.abortSignal;
+  const isCurrent = opts.isCurrent;
+  const lifetime = fileToolCallsFor(toolContext).captureLifetime();
+  const assertCurrent = () => {
+    if (isCurrent?.() === false || abortSignal?.aborted || !lifetime())
+      throw new Error("The original AI request has retired.");
+  };
+  assertCurrent();
+  reconcileFileToolCalls(toolContext, opts.uiMessages);
+  assertCurrent();
   const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
   const model = await buildConfiguredLanguageModel(modelId, opts.keys, {
     lmstudioBaseURL: opts.lmstudioBaseURL,
@@ -422,6 +434,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
     customEndpoints: opts.customEndpoints,
     customEndpointKeys: opts.customEndpointKeys,
   });
+  assertCurrent();
   const endpoints = opts.customEndpoints ?? [];
   const info = resolveModel(modelId, endpoints);
   const provider = info.provider;
@@ -435,6 +448,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
   );
 
   const history = await convertToModelMessages(opts.uiMessages);
+  assertCurrent();
   const keepsReasoning = modelKeepsReasoning(info);
   const prunedHistory = pruneMessages({
     messages: history,
@@ -453,6 +467,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
   if (compact.compacted) {
     opts.onCompact?.({ droppedCount: compact.droppedCount });
   }
+  assertCurrent();
 
   const prompt = prepareAgentPrompt(
     stableSystem,
@@ -461,9 +476,11 @@ export async function runAgentStream(opts: RunAgentOptions) {
     provider,
   );
   const mcpTools = await loadMcpToolsForRun(opts.uiMessages);
+  assertCurrent();
 
   let stepsSeen = 0;
-  const tools = buildTools(opts.toolContext, mcpTools, opts.onSubagentStep);
+  const tools = buildTools(toolContext, mcpTools, opts.onSubagentStep);
+  assertCurrent();
   return streamText({
     model,
     system: prompt.system,
@@ -472,7 +489,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
     tools,
     experimental_transform: fileToolApprovalTransform(tools, prompt.messages),
     stopWhen: stepCountIs(MAX_AGENT_STEPS),
-    abortSignal: opts.abortSignal,
+    abortSignal,
     onAbort: () => retireFileToolRun(tools),
     onError: () => retireFileToolRun(tools),
     onStepFinish: (step) => {
