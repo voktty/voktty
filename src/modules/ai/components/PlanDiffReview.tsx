@@ -14,37 +14,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { usePlanStore, type QueuedEdit } from "../store/planStore";
 import { createLineDiff, formatLineDiffHunkHeader } from "../lib/lineDiff";
-import { isWindowsNativePath } from "@/modules/workspace";
+import { fileDestinationLabel } from "@/modules/workspace/fileDestinationLabel";
 
 function basename(p: string): string {
   const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
   return i >= 0 ? p.slice(i + 1) : p;
-}
-
-function planDestination(
-  item: QueuedEdit,
-  localLabel: string,
-  serialLabel: string,
-): string {
-  const workspace = item.workspaceEnv;
-  if (
-    !workspace ||
-    workspace.kind === "local" ||
-    isWindowsNativePath(item.path)
-  )
-    return localLabel;
-  if (workspace.kind === "wsl") return `WSL · ${workspace.distro}`;
-  if (workspace.kind === "ssh") {
-    const { name, host, user, port } = workspace.connection;
-    const hostname =
-      host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
-    return ["SSH", name, `${user ? `${user}@` : ""}${hostname}:${port ?? 22}`]
-      .filter(Boolean)
-      .join(" · ");
-  }
-  if (workspace.kind === "docker")
-    return `Docker · ${workspace.connection.containerName || workspace.connection.containerId}`;
-  return `${serialLabel} · ${workspace.portName}`;
 }
 
 export function PlanDiffReview() {
@@ -195,8 +169,9 @@ function PlanRow({
     ? null
     : createLineDiff(item.originalContent, item.proposedContent).stats;
   const Icon = isDir ? FolderAddIcon : isNew ? FilePlusIcon : FileEditIcon;
-  const destination = planDestination(
-    item,
+  const destination = fileDestinationLabel(
+    item.path,
+    item.workspaceEnv,
     t("workspace.localMachine"),
     t("statusbar.serial"),
   );

@@ -1,6 +1,5 @@
-import { tool } from "ai";
+import { capturedFileTool } from "@/modules/ai/tools/capturedFileTool";
 import { z } from "zod";
-import { native } from "../lib/native";
 import {
   checkCanonicalWorkspacePath,
   checkReadableCanonical,
@@ -20,7 +19,7 @@ function djb2(s: string): number {
 
 export function buildFsTools(ctx: ToolContext) {
   return {
-    read_file: tool({
+    read_file: capturedFileTool(ctx, "read_file", {
       description:
         "Read a UTF-8 text file. Defaults to the first 2000 lines (capped at 25KB). Pass `offset`/`limit` for line-based windowing of large files. Refuses binary, oversized, or sensitive files (.env, keys, credentials). If you call this on the same path twice in a session without edits in between, the second call returns `unchanged: true` instead of re-emitting the content — re-read the prior tool result.",
       inputSchema: z.object({
@@ -41,22 +40,22 @@ export function buildFsTools(ctx: ToolContext) {
           .optional()
           .describe("Max lines to return. Default 2000."),
       }),
-      execute: async ({ path, offset, limit }) => {
-        const reqPath = resolvePath(path, ctx.getCwd());
+      execute: async ({ path, offset, limit }, captured) => {
+        const reqPath = resolvePath(path, captured.directory);
         const safety = await checkReadableCanonical(
           reqPath,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, path: reqPath };
         const abs = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           abs,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, path: abs };
         try {
-          const r = await native.readFile(abs);
+          const r = await captured.io.readFile(abs);
           if (r.kind === "binary")
             return { error: "binary file refused", path: abs, size: r.size };
           if (r.kind === "toolarge")
@@ -67,7 +66,7 @@ export function buildFsTools(ctx: ToolContext) {
 
           const hash = djb2(r.content);
           const isFullRead = offset === undefined && limit === undefined;
-          const prior = ctx.readCache.get(abs);
+          const prior = ctx.readCache.get(captured.cacheKey(abs));
           if (
             isFullRead &&
             prior &&
@@ -76,7 +75,7 @@ export function buildFsTools(ctx: ToolContext) {
           ) {
             return { path: abs, unchanged: true, size: r.size };
           }
-          ctx.readCache.set(abs, { size: r.size, hash });
+          ctx.readCache.set(captured.cacheKey(abs), { size: r.size, hash });
 
           if (isFullRead) {
             const lines = r.content.split("\n");
@@ -126,7 +125,7 @@ export function buildFsTools(ctx: ToolContext) {
       },
     }),
 
-    list_directory: tool({
+    list_directory: capturedFileTool(ctx, "list_directory", {
       description:
         "List immediate entries (files + directories) in a directory. Hidden entries are omitted.",
       inputSchema: z.object({
@@ -134,22 +133,22 @@ export function buildFsTools(ctx: ToolContext) {
           .string()
           .describe("Absolute path, or relative to the active terminal cwd."),
       }),
-      execute: async ({ path }) => {
-        const reqPath = resolvePath(path, ctx.getCwd());
+      execute: async ({ path }, captured) => {
+        const reqPath = resolvePath(path, captured.directory);
         const safety = await checkReadableCanonical(
           reqPath,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, path: reqPath };
         const abs = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           abs,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, path: abs };
         try {
-          const entries = await native.readDir(abs);
+          const entries = await captured.io.readDir(abs);
           return {
             path: abs,
             entries: entries.map((e) => ({ name: e.name, kind: e.kind })),
@@ -160,7 +159,7 @@ export function buildFsTools(ctx: ToolContext) {
       },
     }),
 
-    write_file: tool({
+    write_file: capturedFileTool(ctx, "write_file", {
       description:
         "Create or overwrite a file with the given content. Always asks the user before running. Prefer `edit` / `multi_edit` for in-place changes — only use `write_file` for creating a brand-new file or fully replacing a tiny one.",
       inputSchema: z.object({
@@ -168,30 +167,31 @@ export function buildFsTools(ctx: ToolContext) {
         content: z.string(),
       }),
       needsApproval: true,
-      execute: async ({ path, content }) => {
-        const reqPath = resolvePath(path, ctx.getCwd());
+      execute: async ({ path, content }, captured) => {
+        const reqPath = resolvePath(path, captured.directory);
         const safety = await checkWritableCanonical(
           reqPath,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, path: reqPath };
         const abs = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           abs,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, path: abs };
 
-        if (usePlanStore.getState().active) {
+        if (captured.planMode) {
           let original = "";
           let isNewFile = false;
           try {
-            const r = await native.readFile(abs);
+            const r = await captured.io.readFile(abs);
             if (r.kind === "text") original = r.content;
           } catch {
             isNewFile = true;
           }
+          captured.assertCurrent();
           const queued = usePlanStore.getState().enqueue({
             id: newQueuedEditId(),
             kind: "write_file",
@@ -199,8 +199,9 @@ export function buildFsTools(ctx: ToolContext) {
             originalContent: original,
             proposedContent: content,
             isNewFile,
-            sessionId: ctx.getSessionId(),
-            modelId: ctx.getModelId?.() ?? "unknown",
+            workspaceEnv: captured.workspace,
+            sessionId: captured.sessionId ?? null,
+            modelId: captured.modelId ?? "unknown",
             createdAt: Date.now(),
           });
           if (!queued.ok) return { error: queued.error, path: abs };
@@ -212,8 +213,11 @@ export function buildFsTools(ctx: ToolContext) {
         }
 
         try {
-          await native.writeFile(abs, content);
-          ctx.readCache.set(abs, { size: content.length, hash: djb2(content) });
+          await captured.io.writeFile(abs, content);
+          ctx.readCache.set(captured.cacheKey(abs), {
+            size: content.length,
+            hash: djb2(content),
+          });
           return { path: abs, bytesWritten: content.length, ok: true };
         } catch (e) {
           return { error: String(e), path: abs };
@@ -221,28 +225,29 @@ export function buildFsTools(ctx: ToolContext) {
       },
     }),
 
-    create_directory: tool({
+    create_directory: capturedFileTool(ctx, "create_directory", {
       description:
         "Create a directory (and any missing parents). Always asks the user before running.",
       inputSchema: z.object({
         path: z.string(),
       }),
       needsApproval: true,
-      execute: async ({ path }) => {
-        const reqPath = resolvePath(path, ctx.getCwd());
+      execute: async ({ path }, captured) => {
+        const reqPath = resolvePath(path, captured.directory);
         const safety = await checkWritableCanonical(
           reqPath,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, path: reqPath };
         const abs = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           abs,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, path: abs };
-        if (usePlanStore.getState().active) {
+        if (captured.planMode) {
+          captured.assertCurrent();
           const queued = usePlanStore.getState().enqueue({
             id: newQueuedEditId(),
             kind: "create_directory",
@@ -251,15 +256,16 @@ export function buildFsTools(ctx: ToolContext) {
             proposedContent: "",
             isNewFile: true,
             description: "Create directory",
-            sessionId: ctx.getSessionId(),
-            modelId: ctx.getModelId?.() ?? "unknown",
+            workspaceEnv: captured.workspace,
+            sessionId: captured.sessionId ?? null,
+            modelId: captured.modelId ?? "unknown",
             createdAt: Date.now(),
           });
           if (!queued.ok) return { error: queued.error, path: abs };
           return { path: abs, queued_for_plan_review: true, ok: true };
         }
         try {
-          await native.createDir(abs);
+          await captured.io.createDir(abs);
           return { path: abs, ok: true };
         } catch (e) {
           return { error: String(e), path: abs };

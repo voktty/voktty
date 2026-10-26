@@ -5,8 +5,8 @@ import { AiDiffPane } from "./AiDiffPane";
 type Props = {
   tabs: Tab[];
   activeId: number;
-  onAccept: (approvalId: string) => void;
-  onReject: (approvalId: string) => void;
+  onAccept: (approvalId: string, sessionId?: string) => void;
+  onReject: (approvalId: string, sessionId?: string) => void;
   placements?: ReadonlyMap<number, WorkspacePlacement>;
 };
 
@@ -55,13 +55,14 @@ export function AiDiffStack({
               }
             >
               <AiDiffPane
+                workspaceEnv={tab.workspaceEnv}
                 path={tab.path}
                 originalContent={tab.originalContent}
                 proposedContent={tab.proposedContent}
                 status={tab.status}
                 isNewFile={tab.isNewFile}
-                onAccept={() => onAccept(tab.approvalId)}
-                onReject={() => onReject(tab.approvalId)}
+                onAccept={() => onAccept(tab.approvalId, tab.approvalSessionId)}
+                onReject={() => onReject(tab.approvalId, tab.approvalSessionId)}
               />
             </div>
           </div>

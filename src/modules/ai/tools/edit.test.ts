@@ -1,3 +1,5 @@
+import { fileReadCacheKey } from "@/modules/ai/tools/capturedFileTool";
+import { captureFileApproval } from "@/modules/ai/lib/fileToolApprovals";
 import type { ToolExecutionOptions } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "./context";
@@ -27,7 +29,28 @@ import { buildEditTools } from "./edit";
 
 const toolOptions: ToolExecutionOptions<Record<string, unknown>> = {
   toolCallId: "tool-call",
-  messages: [],
+  messages: [
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "tool-approval-request",
+          toolCallId: "tool-call",
+          approvalId: "fixture-approval",
+        },
+      ],
+    },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-approval-response",
+          approvalId: "fixture-approval",
+          approved: true,
+        },
+      ],
+    },
+  ],
   context: {},
 };
 
@@ -35,6 +58,14 @@ const FILE = "/workspace/a.txt";
 
 function makeContext(readCache: Map<string, { size: number; hash: number }>) {
   return {
+    getFileContext: () => ({
+      directory: "/workspace",
+      workspace: { kind: "local" },
+    }),
+    getFileRootContext: () => ({
+      root: "/workspace",
+      workspace: { kind: "local" },
+    }),
     getCwd: () => "/workspace",
     getWorkspaceRoot: () => "/workspace",
     getTerminalContext: () => null,
@@ -50,7 +81,11 @@ function makeContext(readCache: Map<string, { size: number; hash: number }>) {
 
 /** Context with the file already marked as read, satisfying read-before-edit. */
 function readContext() {
-  return makeContext(new Map([[FILE, { size: 0, hash: 0 }]]));
+  return makeContext(
+    new Map([
+      [fileReadCacheKey(FILE, { kind: "local" }), { size: 0, hash: 0 }],
+    ]),
+  );
 }
 
 function setFile(content: string) {
@@ -67,7 +102,16 @@ async function runEdit(
   ctx: ToolContext,
   input: Record<string, unknown>,
 ): Promise<EditResult> {
-  const execute = buildEditTools(ctx).edit.execute;
+  const current = buildEditTools(ctx).edit;
+  await current.onInputAvailable?.({ input: input as never, ...toolOptions });
+  const execute = current.execute;
+  captureFileApproval(
+    { edit: current },
+    {
+      approvalId: "fixture-approval",
+      toolCall: { toolName: "edit", toolCallId: "tool-call" },
+    },
+  );
   if (!execute) throw new Error("edit tool has no execute");
   return (await execute(input as never, toolOptions)) as unknown as EditResult;
 }
@@ -76,8 +120,17 @@ async function runMultiEdit(
   ctx: ToolContext,
   input: Record<string, unknown>,
 ): Promise<EditResult> {
-  const execute = buildEditTools(ctx).multi_edit.execute;
+  const current = buildEditTools(ctx).multi_edit;
+  await current.onInputAvailable?.({ input: input as never, ...toolOptions });
+  const execute = current.execute;
   if (!execute) throw new Error("multi_edit tool has no execute");
+  captureFileApproval(
+    { multi_edit: current },
+    {
+      approvalId: "fixture-approval",
+      toolCall: { toolName: "multi_edit", toolCallId: "tool-call" },
+    },
+  );
   return (await execute(input as never, toolOptions)) as unknown as EditResult;
 }
 
@@ -176,7 +229,9 @@ describe("edit tool replacement", () => {
       new_string: "there",
     });
     expect(result.replacements).toBe(1);
-    expect(nativeMock.writeFile).toHaveBeenCalledWith(FILE, "hello there");
+    expect(nativeMock.writeFile).toHaveBeenCalledWith(FILE, "hello there", {
+      kind: "local",
+    });
   });
 
   it("replaces every occurrence and counts them with replace_all", async () => {
@@ -188,7 +243,9 @@ describe("edit tool replacement", () => {
       replace_all: true,
     });
     expect(result.replacements).toBe(3);
-    expect(nativeMock.writeFile).toHaveBeenCalledWith(FILE, "z b z b z");
+    expect(nativeMock.writeFile).toHaveBeenCalledWith(FILE, "z b z b z", {
+      kind: "local",
+    });
   });
 });
 
@@ -203,7 +260,9 @@ describe("multi_edit atomicity", () => {
       ],
     });
     expect(result.replacements).toBe(2);
-    expect(nativeMock.writeFile).toHaveBeenCalledWith(FILE, "1 2");
+    expect(nativeMock.writeFile).toHaveBeenCalledWith(FILE, "1 2", {
+      kind: "local",
+    });
   });
 
   it("writes nothing when a later edit in the batch fails", async () => {

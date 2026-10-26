@@ -84,9 +84,17 @@ Tool definitions live under `src/modules/ai/tools/`:
 
 Auto-send after approval uses `lastAssistantMessageIsCompleteWithApprovalResponses`.
 
+The six filesystem tools (`read_file`, `list_directory`, `write_file`, `create_directory`, `edit`, `multi_edit`) capture the source directory, compatible Explorer boundary, filesystem, plan mode and provenance when the SDK accepts their normalized input. Their runtime receipts survive tool reconstruction. Mutations additionally bind the SDK approval ID through the stream transform; a missing runtime capture, changed input or tool, mismatched approval, or ambiguous reused provider ID cannot execute. Source and boundary must refer to the same filesystem; SSH helpers may have different roots or native session IDs when their saved connection and authentication binding match. Canonical checks and IO still use the original source's own helper and native authorization.
+
+Each chat and its read-only subagents share limits of 256 unsettled calls and 8 Mi characters of serialized captures. Each input or target is capped at 1 Mi characters, 20,000 nodes and depth 16. Up to 256 preview readers remain admitted until settlement. Cancellation retires authority immediately, while actual reads and writes retain their budget through promise settlement. Subagents have independent provider-call namespaces and snapshot file context before model setup. These are JavaScript ownership and admission guarantees, not native IO cancellation or rollback of an already admitted write. Search, shell and project-memory consumers retain their separate routing contracts.
+
+Read-before-edit facts are keyed by the complete captured filesystem. Plan entries retain their original filesystem, mode, session and model even if selection changes while approval is pending. Restored approvals without their original in-memory receipt fail closed.
+
 ## Edit diffs
 
 AI-proposed file edits open in an `ai-diff` tab. The user accepts or rejects per hunk. Only after acceptance does the `write_file` or `edit` tool actually run. This keeps the approval UI decoupled from the tool execution.
+
+File review reads the same captured destination under canonical path and workspace checks. Retired, denied and unmounted readers cannot publish a late review; ordinary text streaming does not restart an admitted read. Review tabs retain their filesystem and originating chat session, show the destination beside the path and route approval to that original chat rather than the currently selected session. Missing original runtimes never fall back to another chat. Review labels display connection identity without authentication configuration.
 
 ## Live context bridge
 

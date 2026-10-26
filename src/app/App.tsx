@@ -4926,9 +4926,11 @@ function DesktopApp() {
                               onEditorCloseTab={disposeTab}
                               registerPreviewHandle={registerPreviewHandle}
                               onPreviewUrlChange={handlePreviewUrl}
-                              onAiDiffAccept={(id) => respondToApproval(id, true)}
-                              onAiDiffReject={(id) =>
-                                respondToApproval(id, false)
+                              onAiDiffAccept={(id, sessionId) =>
+                                respondToApproval(id, true, sessionId)
+                              }
+                              onAiDiffReject={(id, sessionId) =>
+                                respondToApproval(id, false, sessionId)
                               }
                               onOpenCommitFile={handleOpenCommitFileWithSplit}
                               onOpenCommitDiff={handleOpenCommitDiffWithSplit}

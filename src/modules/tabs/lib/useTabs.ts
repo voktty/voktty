@@ -141,8 +141,10 @@ export type AiDiffTab = TabBase & {
   proposedContent: string;
   /** Tool-call approval id used to resolve the AI SDK approval. */
   approvalId: string;
+  approvalSessionId?: string;
   status: AiDiffStatus;
   isNewFile: boolean;
+  workspaceEnv?: WorkspaceEnv;
 };
 
 export type GitDiffTab = TabBase & {
@@ -1341,11 +1343,18 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       proposedContent: string;
       approvalId: string;
       isNewFile: boolean;
+      workspaceEnv?: WorkspaceEnv;
+      approvalSessionId?: string;
     }) => {
+      const captured = {
+        ...input,
+        workspaceEnv: structuredClone(input.workspaceEnv ?? LOCAL_WORKSPACE),
+      };
+      const spaceId = activeSpaceIdRef.current;
       let targetId: number | null = null;
       setTabs((curr) => {
         const existing = curr.find(
-          (t) => t.kind === "ai-diff" && t.approvalId === input.approvalId,
+          (t) => t.kind === "ai-diff" && t.approvalId === captured.approvalId,
         );
         if (existing) {
           targetId = existing.id;
@@ -1353,21 +1362,23 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         }
         const id = nextIdRef.current++;
         targetId = id;
-        const title = `${basename(input.path)} (AI diff)`;
+        const title = `${basename(captured.path)} (AI diff)`;
         return [
           ...curr,
           {
             id,
-            ...createTabIdentity(activeSpaceIdRef.current),
+            ...createTabIdentity(spaceId),
             kind: "ai-diff",
-            spaceId: activeSpaceIdRef.current,
+            spaceId,
             title,
-            path: input.path,
-            originalContent: input.originalContent,
-            proposedContent: input.proposedContent,
-            approvalId: input.approvalId,
+            path: captured.path,
+            originalContent: captured.originalContent,
+            proposedContent: captured.proposedContent,
+            approvalId: captured.approvalId,
             status: "pending",
-            isNewFile: input.isNewFile,
+            isNewFile: captured.isNewFile,
+            workspaceEnv: captured.workspaceEnv,
+            approvalSessionId: captured.approvalSessionId,
           },
         ];
       });

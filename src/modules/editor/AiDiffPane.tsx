@@ -2,6 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/modules/i18n";
 import type { AiDiffStatus } from "@/modules/tabs";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { fileDestinationLabel } from "@/modules/workspace/fileDestinationLabel";
 import { presentableDiff, unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -18,6 +20,7 @@ import { resolveLanguage, resolveLanguageSync } from "./lib/languageResolver";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
 type Props = {
+  workspaceEnv?: WorkspaceEnv;
   path: string;
   originalContent: string;
   proposedContent: string;
@@ -81,6 +84,7 @@ const STATUS_BADGE: Record<
 };
 
 export function AiDiffPane({
+  workspaceEnv,
   path,
   originalContent,
   proposedContent,
@@ -90,6 +94,12 @@ export function AiDiffPane({
   onReject,
 }: Props) {
   const { t } = useTranslation();
+  const destination = fileDestinationLabel(
+    path,
+    workspaceEnv,
+    t("workspace.localMachine"),
+    t("statusbar.serial"),
+  );
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const themeExt = useEditorThemeExt();
 
@@ -133,7 +143,10 @@ export function AiDiffPane({
   );
 
   return (
-    <div dir="ltr" className="flex h-full min-h-0 flex-col bg-background text-left">
+    <div
+      dir="ltr"
+      className="flex h-full min-h-0 flex-col bg-background text-left"
+    >
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge
@@ -152,6 +165,12 @@ export function AiDiffPane({
             title={path}
           >
             {path}
+          </span>
+          <span
+            className="truncate text-[11px] text-muted-foreground"
+            title={destination}
+          >
+            {destination}
           </span>
           <span className="flex shrink-0 items-center gap-1.5 text-[10.5px] tabular-nums">
             <span className="text-emerald-600 dark:text-emerald-400">

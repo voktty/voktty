@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   createFileToolCalls,
   fileToolCallsFor,
+  inheritFileToolCalls,
   type FileToolTarget,
 } from "@/modules/ai/lib/fileToolCalls";
 
@@ -16,6 +17,152 @@ const target = (): FileToolTarget => ({
   },
 });
 const input = () => ({ path: "file.ts", content: "fixture" });
+
+it("keeps approval binding exact across same-ID replacements", () => {
+  const calls = createFileToolCalls();
+  const old = calls.capture("call", "write_file", input(), target());
+  old.bindApproval("old");
+  old.retire();
+  const current = calls.capture("call", "write_file", input(), target());
+  current.bindApproval("current");
+  old.bindApproval("old");
+  calls.retireApproval("call", "old");
+  expect(() => calls.claim("call", "write_file", input(), "old")).toThrow(
+    "approval",
+  );
+  expect(() => calls.observe("call", "write_file", input(), "old")).toThrow(
+    "approval",
+  );
+  expect(
+    calls.claim("call", "write_file", input(), "current").isCurrent(),
+  ).toBe(true);
+});
+
+it("retains an executing call through its last preview read", () => {
+  const calls = createFileToolCalls();
+  calls.capture("call", "write_file", input(), target());
+  const reader = calls.observe("call", "write_file", input());
+  const execution = calls.claim("call", "write_file", input());
+  execution.release();
+  expect(reader.isCurrent()).toBe(false);
+  expect(() => calls.capture("call", "write_file", input(), target())).toThrow(
+    "duplicate",
+  );
+  reader.release();
+  calls.capture("call", "write_file", input(), target());
+  reader.release();
+  execution.release();
+  expect(calls.claim("call", "write_file", input()).isCurrent()).toBe(true);
+});
+
+it("counts retired previews until actual read settlement", () => {
+  const calls = createFileToolCalls();
+  calls.capture("old", "write_file", input(), target());
+  const readers = Array.from({ length: 256 }, () =>
+    calls.observe("old", "write_file", input()),
+  );
+  calls.retire("old");
+  calls.capture("current", "write_file", input(), target());
+  expect(() => calls.observe("current", "write_file", input())).toThrow(
+    "Too many",
+  );
+  readers[0].release();
+  const current = calls.observe("current", "write_file", input());
+  for (const read of readers) read.release();
+  expect(current.isCurrent()).toBe(true);
+  current.release();
+});
+
+it("isolates child SDK call IDs while sharing the parent's physical budget", () => {
+  const parent = {};
+  const first = {};
+  const second = {};
+  inheritFileToolCalls(parent, first);
+  inheritFileToolCalls(parent, second);
+  const a = fileToolCallsFor(first);
+  const b = fileToolCallsFor(second);
+  a.capture("same", "read_file", input(), target());
+  b.capture("same", "read_file", input(), {
+    ...target(),
+    directory: "/second",
+  });
+  a.retireAll();
+  expect(b.preview("same", "read_file", input()).directory).toBe("/second");
+  fileToolCallsFor(parent).retireAll();
+  expect(() => b.preview("same", "read_file", input())).toThrow("unavailable");
+});
+
+it("cannot evade shared capacity with child owners or cancellation", () => {
+  const parent = {};
+  const children = Array.from({ length: 256 }, () => ({}));
+  for (const child of children) {
+    inheritFileToolCalls(parent, child);
+    fileToolCallsFor(child).capture("same", "read_file", input(), target());
+  }
+  const calls = fileToolCallsFor(parent);
+  const running = fileToolCallsFor(children[0]).claim(
+    "same",
+    "read_file",
+    input(),
+  );
+  expect(() => calls.capture("extra", "read_file", input(), target())).toThrow(
+    "Too many",
+  );
+  calls.retireAll();
+  expect(running.isCurrent()).toBe(false);
+  for (let index = 0; index < 255; index++)
+    calls.capture(String(index), "read_file", input(), target());
+  expect(() => calls.capture("extra", "read_file", input(), target())).toThrow(
+    "Too many",
+  );
+  running.release();
+  calls.capture("extra", "read_file", input(), target());
+});
+
+it("cannot revive an old child owner after the chat stops", () => {
+  const parent = {};
+  const child = {};
+  inheritFileToolCalls(parent, child);
+  fileToolCallsFor(child).capture("old", "read_file", input(), target());
+  fileToolCallsFor(parent).retireAll();
+  expect(() =>
+    fileToolCallsFor(child).capture("late", "read_file", input(), target()),
+  ).toThrow("retired");
+  const current = {};
+  inheritFileToolCalls(parent, current);
+  fileToolCallsFor(current).capture("new", "read_file", input(), target());
+});
+
+it("matches parsed inputs independently of JSON object key order", () => {
+  const calls = createFileToolCalls();
+  calls.capture("call", "write_file", input(), target());
+  expect(
+    calls
+      .claim("call", "write_file", {
+        content: "fixture",
+        path: "file.ts",
+      })
+      .isCurrent(),
+  ).toBe(true);
+});
+
+it("collects the original abort listener once and never retires a replacement", () => {
+  const calls = createFileToolCalls();
+  let collections = 0;
+  const receipt = calls.capture("call", "write_file", input(), target(), () => {
+    collections++;
+  });
+  const execution = calls.claim("call", "write_file", input());
+  receipt.retire();
+  expect(collections).toBe(0);
+  expect(execution.isCurrent()).toBe(false);
+  execution.release();
+  execution.release();
+  expect(collections).toBe(1);
+  calls.capture("call", "write_file", input(), target());
+  receipt.retire();
+  expect(calls.claim("call", "write_file", input()).isCurrent()).toBe(true);
+});
 
 it("shares captures across tool reconstruction for only the same runtime owner", () => {
   const owner = {};

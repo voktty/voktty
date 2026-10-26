@@ -1,4 +1,8 @@
 import type { Chat, UIMessage } from "@ai-sdk/react";
+import {
+  forgetChatFileTools,
+  retireChatFileTools,
+} from "@/modules/ai/lib/chatFileTools";
 import type {
   AiFileContext,
   AiFileRootContext,
@@ -127,7 +131,11 @@ type StoreState = {
    */
   approvalResponder: ApprovalResponder | null;
   setApprovalResponder: (fn: ApprovalResponder | null) => void;
-  respondToApproval: (approvalId: string, approved: boolean) => void;
+  respondToApproval: (
+    approvalId: string,
+    approved: boolean,
+    sessionId?: string,
+  ) => void;
 
   apiKeys: ProviderKeys;
   setApiKeys: (keys: ProviderKeys) => void;
@@ -214,6 +222,8 @@ export function touchChat(id: string, c: Chat<UIMessage>) {
     if (!oldest || oldest === id) break;
     if (useChatStore.getState().activeSessionId === oldest) break;
     flushPersistEntry(oldest);
+    const retired = chats.get(oldest);
+    if (retired) forgetChatFileTools(retired);
     void chats.get(oldest)?.stop();
     chats.delete(oldest);
   }
@@ -293,7 +303,15 @@ export const useChatStore = create<StoreState>((set, get) => ({
 
   approvalResponder: null,
   setApprovalResponder: (fn) => set({ approvalResponder: fn }),
-  respondToApproval: (approvalId, approved) => {
+  respondToApproval: (approvalId, approved, sessionId) => {
+    if (sessionId !== undefined) {
+      const chat = chats.get(sessionId);
+      if (chat)
+        void Promise.resolve(
+          chat.addToolApprovalResponse({ id: approvalId, approved }),
+        ).catch(() => {});
+      return;
+    }
     const fn = get().approvalResponder;
     if (fn) fn(approvalId, approved);
   },
@@ -491,6 +509,8 @@ export const useChatStore = create<StoreState>((set, get) => ({
 
   deleteSession: (id) => {
     const remaining = get().sessions.filter((s) => s.id !== id);
+    const retired = chats.get(id);
+    if (retired) forgetChatFileTools(retired);
     chats.get(id)?.stop();
     chats.delete(id);
     seedMessages.delete(id);
@@ -592,5 +612,7 @@ export function getChat(sessionId?: string): Chat<UIMessage> | undefined {
 export function stop(): void {
   const id = useChatStore.getState().activeSessionId;
   if (!id) return;
+  const chat = chats.get(id);
+  if (chat) retireChatFileTools(chat);
   void chats.get(id)?.stop();
 }

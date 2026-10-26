@@ -7,6 +7,7 @@ import { getModel, providerNeedsKey, type ModelId } from "../config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { BUILTIN_AGENTS } from "../lib/agents";
 import { isAiRuntimeAvailable } from "../lib/runtimeAvailability";
+import { registerChatFileTools } from "@/modules/ai/lib/chatFileTools";
 import { useAgentsStore } from "./agentsStore";
 import { usePlanStore } from "./planStore";
 import { createContextAwareTransport } from "../lib/transport";
@@ -115,7 +116,7 @@ function makeChat(sessionId: string): Chat<UIMessage> {
   const initialMessages = seedMessages.get(sessionId);
   seedMessages.delete(sessionId);
 
-  return new Chat<UIMessage>({
+  const chat = new Chat<UIMessage>({
     id: sessionId,
     transport,
     messages: initialMessages,
@@ -127,6 +128,8 @@ function makeChat(sessionId: string): Chat<UIMessage> {
       });
     },
   });
+  registerChatFileTools(chat, toolContext);
+  return chat;
 }
 
 export function getOrCreateChat(sessionId: string): Chat<UIMessage> {

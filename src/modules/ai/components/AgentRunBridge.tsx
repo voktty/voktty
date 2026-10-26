@@ -2,8 +2,20 @@ import { useChat, type UIMessage } from "@ai-sdk/react";
 import type { ToolUIPart, UIMessagePart } from "ai";
 import { useEffect, useMemo, useRef } from "react";
 import { native } from "../lib/native";
-import { checkReadable } from "../lib/security";
-import { resolvePath } from "../tools/tools";
+import {
+  checkReadableCanonical,
+  checkCanonicalWorkspacePath,
+} from "../lib/security";
+import {
+  previewChatFileTool,
+  reconcileChatFileTools,
+} from "@/modules/ai/lib/chatFileTools";
+import type {
+  FileToolName,
+  FileToolTarget,
+} from "@/modules/ai/lib/fileToolCalls";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { resolvePath } from "@/modules/ai/tools/context";
 import {
   flushPersist,
   useChatStore,
@@ -25,11 +37,13 @@ import { getOrCreateChat } from "../store/chatRuntime";
  */
 
 export type DiffOpenInput = {
+  approvalSessionId: string;
   path: string;
   originalContent: string;
   proposedContent: string;
   approvalId: string;
   isNewFile: boolean;
+  workspaceEnv: WorkspaceEnv;
 };
 
 export type AgentRunBridgeProps = {
@@ -136,6 +150,17 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
   // We track which approvalIds have already opened a tab so re-renders don't
   // open duplicates. Reset when the session changes.
   const openedRef = useRef<Set<string>>(new Set());
+  const previewReads = useMemo(
+    () => ({ chat, reads: new Map<string, { active: boolean }>() }),
+    [chat],
+  );
+  useEffect(
+    () => () => {
+      for (const read of previewReads.reads.values()) read.active = false;
+      previewReads.reads.clear();
+    },
+    [previewReads],
+  );
   const fileMutationFingerprintRef = useRef<string>("");
   useEffect(() => {
     openedRef.current = new Set();
@@ -154,7 +179,8 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
         if (
           t === "tool-write_file" ||
           t === "tool-edit" ||
-          t === "tool-multi_edit"
+          t === "tool-multi_edit" ||
+          t === "tool-create_directory"
         ) {
           const state = (p as { state?: string }).state ?? "";
           const id = (p as { approval?: { id?: string } }).approval?.id ?? "";
@@ -167,6 +193,9 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
 
   useEffect(() => {
     type Pending = {
+      toolCallId: string;
+      toolName: FileToolName;
+      input: unknown;
       approvalId: string;
       path: string;
       /**
@@ -181,8 +210,10 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
       return;
     }
     fileMutationFingerprintRef.current = fileMutationFingerprint;
+    reconcileChatFileTools(chat, messages);
 
     const pending: Pending[] = [];
+    const requested = new Set<string>();
     const toClose = new Set<string>();
 
     for (const m of messages) {
@@ -193,8 +224,24 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
         const { state, approvalId, path, derive } = info;
         if (!approvalId) continue;
         if (state === "approval-requested") {
+          requested.add(approvalId);
           if (!openedRef.current.has(approvalId)) {
-            pending.push({ approvalId, path, derive });
+            const toolCallId = "toolCallId" in part ? part.toolCallId : null;
+            if (typeof toolCallId !== "string") continue;
+            const toolName =
+              part.type === "tool-write_file"
+                ? "write_file"
+                : part.type === "tool-edit"
+                  ? "edit"
+                  : "multi_edit";
+            pending.push({
+              approvalId,
+              path,
+              derive,
+              toolCallId,
+              toolName,
+              input: "input" in part ? part.input : undefined,
+            });
           }
         } else if (
           state === "approval-responded" ||
@@ -206,6 +253,13 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
       }
     }
 
+    for (const [id, read] of previewReads.reads) {
+      if (!requested.has(id)) {
+        read.active = false;
+        previewReads.reads.delete(id);
+      }
+    }
+
     for (const id of toClose) {
       openedRef.current.delete(id);
       closeAiDiffTab(id);
@@ -213,47 +267,71 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
 
     if (pending.length === 0) return;
 
-    let cancelled = false;
     void (async () => {
-      const cwd = useChatStore.getState().live.getCwd();
       for (const p of pending) {
-        if (cancelled) return;
+        if (previewReads.reads.has(p.approvalId)) continue;
+        const read = { active: true };
+        previewReads.reads.set(p.approvalId, read);
         // Mark as opened up-front so a re-render mid-await doesn't double-open.
         openedRef.current.add(p.approvalId);
-        let abs: string;
+        let observation: ReturnType<typeof previewChatFileTool>;
         try {
-          abs = resolvePath(p.path, cwd);
+          observation = previewChatFileTool(
+            chat,
+            p.toolCallId,
+            p.toolName,
+            p.input,
+            p.approvalId,
+          );
         } catch {
-          abs = p.path;
+          if (previewReads.reads.get(p.approvalId) === read)
+            previewReads.reads.delete(p.approvalId);
+          continue;
         }
-        const original = await readOriginal(abs);
-        if (cancelled) return;
-        let proposed = "";
-        if (p.derive.kind === "literal") {
-          proposed = p.derive.content;
-        } else {
-          const r = applyEditsLocally(original.content, p.derive.edits);
-          if (!r.ok) {
-            // Edit precondition failed (string not found / not unique).
-            // Skip opening the tab; the approval modal will surface the error.
-            continue;
+        try {
+          const current = () => read.active && observation.isCurrent();
+          const abs = resolvePath(p.path, observation.target.directory);
+          const original = await readOriginal(abs, observation.target, current);
+          if (!current()) continue;
+          let proposed = "";
+          if (p.derive.kind === "literal") {
+            proposed = p.derive.content;
+          } else {
+            const r = applyEditsLocally(original.content, p.derive.edits);
+            if (!r.ok) {
+              // Edit precondition failed (string not found / not unique).
+              // Skip opening the tab; the approval modal will surface the error.
+              continue;
+            }
+            proposed = r.content;
           }
-          proposed = r.content;
+          openAiDiffTab({
+            approvalSessionId: sessionId,
+            path: abs,
+            originalContent: original.content,
+            proposedContent: proposed,
+            approvalId: p.approvalId,
+            isNewFile: original.isNewFile,
+            workspaceEnv: observation.target.workspace,
+          });
+        } catch {
+          openedRef.current.delete(p.approvalId);
+        } finally {
+          observation.release();
+          if (previewReads.reads.get(p.approvalId) === read)
+            previewReads.reads.delete(p.approvalId);
         }
-        openAiDiffTab({
-          path: abs,
-          originalContent: original.content,
-          proposedContent: proposed,
-          approvalId: p.approvalId,
-          isNewFile: original.isNewFile,
-        });
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [messages, fileMutationFingerprint, openAiDiffTab, closeAiDiffTab]);
+  }, [
+    chat,
+    sessionId,
+    previewReads,
+    messages,
+    fileMutationFingerprint,
+    openAiDiffTab,
+    closeAiDiffTab,
+  ]);
 
   return null;
 }
@@ -358,23 +436,46 @@ function applyEditsLocally(
 
 async function readOriginal(
   abs: string,
+  target: FileToolTarget,
+  current: () => boolean,
 ): Promise<{ content: string; isNewFile: boolean }> {
   // The fs guard rejects sensitive paths even on read; mirror that here so
   // the user sees an empty "before" rather than an error tab.
-  const safety = checkReadable(abs);
-  if (!safety.ok) return { content: "", isNewFile: false };
+  const guard = () => {
+    if (!current()) throw new Error("The original file preview has retired.");
+  };
+  const canonicalize = async (path: string) => {
+    guard();
+    const result = await native.canonicalize(path, target.workspace);
+    guard();
+    return result;
+  };
+  guard();
+  const safety = await checkReadableCanonical(abs, canonicalize);
+  guard();
+  if (!safety.ok) throw new Error(safety.reason);
+  const boundary = await checkCanonicalWorkspacePath(
+    safety.canonical,
+    target.root,
+    canonicalize,
+  );
+  guard();
+  if (!boundary.ok) throw new Error(boundary.reason);
   try {
-    const r = await native.readFile(abs);
+    const r = await native.readFile(safety.canonical, target.workspace);
+    guard();
     if (r.kind === "text") return { content: r.content, isNewFile: false };
     // Binary or oversized — we can't render the original sensibly. Show the
     // proposed content as a "new" view; the user can still cancel.
     return { content: "", isNewFile: false };
   } catch (e) {
+    guard();
     const msg = String(e).toLowerCase();
     const notFound =
       msg.includes("no such file") ||
       msg.includes("not found") ||
       msg.includes("os error 2");
-    return { content: "", isNewFile: notFound };
+    if (notFound) return { content: "", isNewFile: true };
+    throw e;
   }
 }

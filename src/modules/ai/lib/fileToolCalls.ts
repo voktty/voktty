@@ -12,6 +12,9 @@ export type FileToolTarget = {
   directory: string;
   root: string;
   workspace: WorkspaceEnv;
+  sessionId?: string | null;
+  modelId?: string;
+  planMode?: boolean;
 };
 
 type Call = {
@@ -21,7 +24,21 @@ type Call = {
   charge: number;
   running: boolean;
   retired: boolean;
+  onCollect: () => void;
+  readers: number;
+  approvalId?: string;
+  retireGlobal: () => void;
+  epoch: object;
 };
+
+type Budget = {
+  count: number;
+  characters: number;
+  readers: number;
+  retire: Set<() => void>;
+  epoch: object;
+};
+const budgets = new WeakMap<object, Budget>();
 
 const MAX_CALLS = 256;
 const MAX_CHARACTERS = 8 * 1024 * 1024;
@@ -62,26 +79,51 @@ function encodeInput(input: unknown): string {
       throw new Error("File tool input is too large.");
   };
   visit(input, 0);
-  const encoded = JSON.stringify(input);
+  const encoded = JSON.stringify(input, (_key, value: unknown) =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+        )
+      : value,
+  );
   if (encoded.length > MAX_INPUT_CHARACTERS)
     throw new Error("File tool input is too large.");
   return encoded;
 }
 
 /** Runtime-only receipts; retaining a target never grants filesystem authority. */
-export function createFileToolCalls() {
+export function createFileToolCalls(budget?: Budget) {
   const calls = new Map<string, Call>();
-  let characters = 0;
+  const shared = budget ?? {
+    count: 0,
+    characters: 0,
+    readers: 0,
+    retire: new Set<() => void>(),
+    epoch: {},
+  };
+
+  const ownerEpoch = shared.epoch;
+  const ownerCurrent = () => !budget || shared.epoch === ownerEpoch;
 
   const collect = (id: string, call: Call) => {
     if (calls.get(id) !== call) return;
     calls.delete(id);
-    characters -= call.charge;
+    shared.characters -= call.charge;
+    shared.count--;
+    shared.retire.delete(call.retireGlobal);
+    call.onCollect();
+  };
+  const retire = (id: string, call: Call) => {
+    if (calls.get(id) !== call) return;
+    call.retired = true;
+    if (!call.running && call.readers === 0) collect(id, call);
   };
   const match = (id: string, tool: FileToolName, input: unknown): Call => {
     const call = calls.get(id);
     if (
       !call ||
+      !ownerCurrent() ||
+      call.epoch !== shared.epoch ||
       call.retired ||
       call.tool !== tool ||
       call.input !== encodeInput(input)
@@ -90,59 +132,138 @@ export function createFileToolCalls() {
     return call;
   };
 
-  return {
+  const registry = {
+    isCurrent: ownerCurrent,
     capture(
       id: string,
       tool: FileToolName,
       input: unknown,
       target: FileToolTarget,
-    ): void {
+      onCollect: () => void = () => {},
+    ) {
+      if (!ownerCurrent())
+        throw new Error("The original file tool owner has retired.");
       if (!id || id.length > 1024 || calls.has(id))
         throw new Error("Invalid or duplicate file tool call.");
-      if (calls.size >= MAX_CALLS)
+      if (shared.count >= MAX_CALLS)
         throw new Error("Too many unsettled file tool calls.");
       const encoded = encodeInput(input);
       const encodedTarget = encodeInput(target);
       const capturedTarget = structuredClone(target);
       const charge = encoded.length + encodedTarget.length + id.length;
-      if (characters + charge > MAX_CHARACTERS)
+      if (shared.characters + charge > MAX_CHARACTERS)
         throw new Error("File tool captures exceed the memory limit.");
-      calls.set(id, {
+      const call: Call = {
         tool,
         input: encoded,
         target: capturedTarget,
         charge,
         running: false,
         retired: false,
-      });
-      characters += charge;
+        onCollect,
+        readers: 0,
+        retireGlobal: () => retire(id, call),
+        epoch: shared.epoch,
+      };
+      calls.set(id, call);
+      shared.characters += charge;
+      shared.count++;
+      shared.retire.add(call.retireGlobal);
+      return {
+        retire: () => retire(id, call),
+        bindApproval: (approvalId: string) => {
+          if (
+            calls.get(id) !== call ||
+            call.retired ||
+            call.epoch !== shared.epoch
+          )
+            return;
+          if (
+            !approvalId ||
+            approvalId.length > 1024 ||
+            (call.approvalId && call.approvalId !== approvalId)
+          )
+            throw new Error("The original file approval is unavailable.");
+          if (!call.approvalId) {
+            if (shared.characters + approvalId.length > MAX_CHARACTERS)
+              throw new Error("File tool captures exceed the memory limit.");
+            shared.characters += approvalId.length;
+            call.charge += approvalId.length;
+          }
+          call.approvalId = approvalId;
+        },
+      };
     },
     preview(id: string, tool: FileToolName, input: unknown): FileToolTarget {
       return structuredClone(match(id, tool, input).target);
     },
-    claim(id: string, tool: FileToolName, input: unknown) {
+    observe(
+      id: string,
+      tool: FileToolName,
+      input: unknown,
+      approvalId?: string,
+    ) {
       const call = match(id, tool, input);
+      if (approvalId !== undefined && call.approvalId !== approvalId)
+        throw new Error("The original file approval is unavailable.");
+      if (shared.readers >= MAX_CALLS)
+        throw new Error("Too many unsettled file previews.");
+      call.readers++;
+      shared.readers++;
+      let released = false;
+      return {
+        target: structuredClone(call.target),
+        isCurrent: () =>
+          calls.get(id) === call &&
+          !call.retired &&
+          call.epoch === shared.epoch,
+        release: () => {
+          if (released) return;
+          released = true;
+          call.readers--;
+          shared.readers--;
+          if (call.retired && !call.running && call.readers === 0)
+            collect(id, call);
+        },
+      };
+    },
+    claim(id: string, tool: FileToolName, input: unknown, approvalId?: string) {
+      const call = match(id, tool, input);
+      if (approvalId !== undefined && call.approvalId !== approvalId)
+        throw new Error("The original file approval is unavailable.");
       if (call.running) throw new Error("File tool call is already running.");
       call.running = true;
       return {
         target: structuredClone(call.target),
-        isCurrent: () => calls.get(id) === call && !call.retired,
-        release: () => collect(id, call),
+        isCurrent: () =>
+          calls.get(id) === call &&
+          !call.retired &&
+          call.epoch === shared.epoch,
+        release: () => {
+          call.running = false;
+          retire(id, call);
+        },
+        retire: () => retire(id, call),
       };
     },
     retire(id: string): void {
       const call = calls.get(id);
       if (!call) return;
-      call.retired = true;
-      if (!call.running) collect(id, call);
+      retire(id, call);
+    },
+    retireApproval(id: string, approvalId: string): void {
+      const call = calls.get(id);
+      if (call?.approvalId === approvalId) retire(id, call);
     },
     retireAll(): void {
-      for (const [id, call] of calls) {
-        call.retired = true;
-        if (!call.running) collect(id, call);
-      }
+      if (!budget) {
+        shared.epoch = {};
+        for (const retireCaptured of [...shared.retire]) retireCaptured();
+      } else for (const [id, call] of calls) retire(id, call);
     },
   };
+  budgets.set(registry, shared);
+  return registry;
 }
 
 export type FileToolCalls = ReturnType<typeof createFileToolCalls>;
@@ -156,4 +277,14 @@ export function fileToolCallsFor(owner: object): FileToolCalls {
     owners.set(owner, calls);
   }
   return calls;
+}
+
+export function inheritFileToolCalls(parent: object, child: object): void {
+  if (owners.has(child)) throw new Error("File tool owner already exists.");
+  const parentCalls = fileToolCallsFor(parent);
+  if (!parentCalls.isCurrent())
+    throw new Error("The original file tool owner has retired.");
+  const budget = budgets.get(parentCalls);
+  if (!budget) throw new Error("File tool budget is unavailable.");
+  owners.set(child, createFileToolCalls(budget));
 }

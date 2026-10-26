@@ -30,6 +30,11 @@ import { compactModelMessagesDetailed } from "./compact";
 import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
 import { prepareAgentPrompt } from "./prompt";
 import { createProxyFetch } from "./proxyFetch";
+import { reconcileFileToolCalls } from "@/modules/ai/lib/chatFileTools";
+import {
+  fileToolApprovalTransform,
+  retireFileToolRun,
+} from "@/modules/ai/lib/fileToolApprovals";
 
 const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
 
@@ -401,6 +406,7 @@ export type RunAgentOptions = {
 };
 
 export async function runAgentStream(opts: RunAgentOptions) {
+  reconcileFileToolCalls(opts.toolContext, opts.uiMessages);
   const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
   const model = await buildConfiguredLanguageModel(modelId, opts.keys, {
     lmstudioBaseURL: opts.lmstudioBaseURL,
@@ -456,14 +462,18 @@ export async function runAgentStream(opts: RunAgentOptions) {
   const mcpTools = await loadMcpToolsForRun(opts.uiMessages);
 
   let stepsSeen = 0;
+  const tools = buildTools(opts.toolContext, mcpTools);
   return streamText({
     model,
     system: prompt.system,
     messages: prompt.messages,
     allowSystemInMessages: false,
-    tools: buildTools(opts.toolContext, mcpTools),
+    tools,
+    experimental_transform: fileToolApprovalTransform(tools, prompt.messages),
     stopWhen: stepCountIs(MAX_AGENT_STEPS),
     abortSignal: opts.abortSignal,
+    onAbort: () => retireFileToolRun(tools),
+    onError: () => retireFileToolRun(tools),
     onStepFinish: (step) => {
       stepsSeen++;
       if (opts.onStep) {

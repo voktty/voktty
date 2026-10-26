@@ -1,6 +1,8 @@
-import { tool } from "ai";
+import {
+  capturedFileTool,
+  type FileExecution,
+} from "@/modules/ai/tools/capturedFileTool";
 import { z } from "zod";
-import { native } from "../lib/native";
 import {
   checkCanonicalWorkspacePath,
   checkWritableCanonical,
@@ -23,8 +25,9 @@ async function applyEdits(
   edits: { old_string: string; new_string: string; replace_all?: boolean }[],
   kind: "edit" | "multi_edit",
   ctx: ToolContext,
+  captured: FileExecution,
 ): Promise<EditResult> {
-  const r = await native.readFile(abs);
+  const r = await captured.io.readFile(abs);
   if (r.kind === "binary") return { error: "binary file refused", path: abs };
   if (r.kind === "toolarge")
     return { error: `file too large (${r.size} bytes)`, path: abs };
@@ -88,7 +91,8 @@ async function applyEdits(
     }
   }
 
-  if (usePlanStore.getState().active) {
+  if (captured.planMode) {
+    captured.assertCurrent();
     const queued = usePlanStore.getState().enqueue({
       id: newQueuedEditId(),
       kind,
@@ -96,8 +100,9 @@ async function applyEdits(
       originalContent: original,
       proposedContent: content,
       isNewFile: false,
-      sessionId: ctx.getSessionId(),
-      modelId: ctx.getModelId?.() ?? "unknown",
+      workspaceEnv: captured.workspace,
+      sessionId: captured.sessionId ?? null,
+      modelId: captured.modelId ?? "unknown",
       createdAt: Date.now(),
     });
     if (!queued.ok) return { error: queued.error, path: abs };
@@ -110,8 +115,11 @@ async function applyEdits(
   }
 
   try {
-    await native.writeFile(abs, content);
-    ctx.readCache.set(abs, { size: content.length, hash: djb2(content) });
+    await captured.io.writeFile(abs, content);
+    ctx.readCache.set(captured.cacheKey(abs), {
+      size: content.length,
+      hash: djb2(content),
+    });
     return {
       ok: true,
       replacements: totalReplacements,
@@ -125,7 +133,7 @@ async function applyEdits(
 
 export function buildEditTools(ctx: ToolContext) {
   return {
-    edit: tool({
+    edit: capturedFileTool(ctx, "edit", {
       description:
         "Replace an exact string in a file. Requires read_file on this path first in the current session — this prevents blind edits. `old_string` must be unique in the file unless `replace_all: true`. Asks for user approval before writing.",
       inputSchema: z.object({
@@ -139,21 +147,24 @@ export function buildEditTools(ctx: ToolContext) {
         replace_all: z.boolean().optional(),
       }),
       needsApproval: true,
-      execute: async ({ path, old_string, new_string, replace_all }) => {
-        const reqPath = resolvePath(path, ctx.getCwd());
+      execute: async (
+        { path, old_string, new_string, replace_all },
+        captured,
+      ) => {
+        const reqPath = resolvePath(path, captured.directory);
         const safety = await checkWritableCanonical(
           reqPath,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, path: reqPath };
         const abs = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           abs,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, path: abs };
-        if (!ctx.readCache.has(abs)) {
+        if (!ctx.readCache.has(captured.cacheKey(abs))) {
           return {
             error:
               "must call read_file on this path first (read-before-edit invariant).",
@@ -165,11 +176,12 @@ export function buildEditTools(ctx: ToolContext) {
           [{ old_string, new_string, replace_all }],
           "edit",
           ctx,
+          captured,
         );
       },
     }),
 
-    multi_edit: tool({
+    multi_edit: capturedFileTool(ctx, "edit", {
       description:
         "Apply several exact-string replacements to a single file atomically. Each edit is applied in order to the running buffer; if any edit's old_string is missing or non-unique, the whole batch aborts before writing. Requires prior read_file on the path. Asks for user approval before writing.",
       inputSchema: z.object({
@@ -185,28 +197,28 @@ export function buildEditTools(ctx: ToolContext) {
           .min(1),
       }),
       needsApproval: true,
-      execute: async ({ path, edits }) => {
-        const reqPath = resolvePath(path, ctx.getCwd());
+      execute: async ({ path, edits }, captured) => {
+        const reqPath = resolvePath(path, captured.directory);
         const safety = await checkWritableCanonical(
           reqPath,
-          native.canonicalize,
+          captured.io.canonicalize,
         );
         if (!safety.ok) return { error: safety.reason, path: reqPath };
         const abs = safety.canonical;
         const boundary = await checkCanonicalWorkspacePath(
           abs,
-          ctx.getWorkspaceRoot(),
-          native.canonicalize,
+          captured.root,
+          captured.io.canonicalize,
         );
         if (!boundary.ok) return { error: boundary.reason, path: abs };
-        if (!ctx.readCache.has(abs)) {
+        if (!ctx.readCache.has(captured.cacheKey(abs))) {
           return {
             error:
               "must call read_file on this path first (read-before-edit invariant).",
             path: abs,
           };
         }
-        return applyEdits(abs, edits, "multi_edit", ctx);
+        return applyEdits(abs, edits, "multi_edit", ctx, captured);
       },
     }),
   } as const;

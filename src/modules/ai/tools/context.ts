@@ -38,6 +38,12 @@ export type ToolContext = {
 };
 
 export function resolvePath(rawPath: string, cwd: string | null): string {
+  if (
+    rawPath.startsWith("\\\\") &&
+    cwd &&
+    (/^[a-zA-Z]:[\\/]/.test(cwd) || /^[/\\]{2}/.test(cwd))
+  )
+    return rawPath;
   if (rawPath.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(rawPath))
     return rawPath;
   if (!cwd)
