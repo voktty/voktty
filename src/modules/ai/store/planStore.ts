@@ -45,6 +45,7 @@ type PlanState = {
   lastOperation: DevelopmentOperation | null;
   lastError: string | null;
   pendingCommands: CommandProvenance[];
+  pendingOperation: "apply" | "revert" | null;
   toggle: () => void;
   enable: () => void;
   disable: () => void;
@@ -58,6 +59,12 @@ type PlanState = {
 };
 
 let nextId = 1;
+type PlanReceipt = { kind: "apply" | "revert"; entries: Set<QueuedEdit> };
+let pending: PlanReceipt | null = null;
+
+function retainedEntries(queue: QueuedEdit[]): QueuedEdit[] {
+  return queue.filter((entry) => pending?.entries.has(entry));
+}
 export function newQueuedEditId(): string {
   return `q-${Date.now().toString(36)}-${(nextId++).toString(36)}`;
 }
@@ -83,14 +90,20 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   lastOperation: null,
   lastError: null,
   pendingCommands: [],
+  pendingOperation: null,
   toggle: () =>
     set((state) => ({
       active: !state.active,
-      queue: state.active ? [] : state.queue,
+      queue: state.active ? retainedEntries(state.queue) : state.queue,
       lastError: null,
     })),
   enable: () => set({ active: true, lastError: null }),
-  disable: () => set({ active: false, queue: [], lastError: null }),
+  disable: () =>
+    set((state) => ({
+      active: false,
+      queue: retainedEntries(state.queue),
+      lastError: null,
+    })),
   enqueue: (edit) => {
     const captured = {
       ...edit,
@@ -107,56 +120,104 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   },
   removeOne: (id) =>
     set((state) => ({
-      queue: state.queue.filter((edit) => edit.id !== id),
+      queue: state.queue.filter(
+        (edit) => edit.id !== id || pending?.entries.has(edit),
+      ),
       lastError: null,
     })),
-  clear: () => set({ queue: [], lastError: null }),
+  clear: () =>
+    set((state) => ({ queue: retainedEntries(state.queue), lastError: null })),
   async applyAll() {
+    if (pending)
+      return { ok: false, error: "another plan operation is running" };
     const queue = get().queue;
-    const result = await applyOperation(
-      operationEntries(queue),
-      nativeOperationAdapter,
-    );
-    if (!result.ok) {
-      set({ lastError: result.error });
+    const commands = get().pendingCommands;
+    const capturedCommands = new Set(commands);
+    const receipt: PlanReceipt = { kind: "apply", entries: new Set(queue) };
+    pending = receipt;
+    try {
+      set({ pendingOperation: "apply", lastError: null });
+      const result = await applyOperation(
+        operationEntries(queue),
+        nativeOperationAdapter,
+      );
+      if (!result.ok) {
+        set({ lastError: result.error });
+        return result;
+      }
+      const sessionIds = new Set(queue.map((edit) => edit.sessionId));
+      const modelIds = new Set(queue.map((edit) => edit.modelId));
+      const lastOperation: DevelopmentOperation = {
+        id: operationId(),
+        transaction: result.operation,
+        status: "applied",
+        sessionId: sessionIds.size === 1 ? (queue[0]?.sessionId ?? null) : null,
+        modelId:
+          modelIds.size === 1 ? (queue[0]?.modelId ?? "unknown") : "mixed",
+        files: [...new Set(queue.map((edit) => edit.path))],
+        commands,
+        createdAt: Math.min(...queue.map((edit) => edit.createdAt)),
+        revertedAt: null,
+      };
+      set((state) => ({
+        queue: state.queue.filter((entry) => !receipt.entries.has(entry)),
+        pendingCommands: state.pendingCommands.filter(
+          (command) => !capturedCommands.has(command),
+        ),
+        lastOperation,
+        lastError: null,
+      }));
       return result;
+    } finally {
+      if (pending === receipt) {
+        pending = null;
+        set({ pendingOperation: null });
+      }
     }
-    const sessionIds = new Set(queue.map((edit) => edit.sessionId));
-    const modelIds = new Set(queue.map((edit) => edit.modelId));
-    const lastOperation: DevelopmentOperation = {
-      id: operationId(),
-      transaction: result.operation,
-      status: "applied",
-      sessionId: sessionIds.size === 1 ? (queue[0]?.sessionId ?? null) : null,
-      modelId: modelIds.size === 1 ? (queue[0]?.modelId ?? "unknown") : "mixed",
-      files: [...new Set(queue.map((edit) => edit.path))],
-      commands: get().pendingCommands,
-      createdAt: Math.min(...queue.map((edit) => edit.createdAt)),
-      revertedAt: null,
-    };
-    set({ queue: [], pendingCommands: [], lastOperation, lastError: null });
-    return result;
   },
   async revertLast() {
+    if (pending)
+      return { ok: false, error: "another plan operation is running" };
     const current = get().lastOperation;
     if (current?.status !== "applied") {
       return { ok: false, error: "there is no applied operation to revert" };
     }
-    const result = await revertOperation(
-      current.transaction,
-      nativeOperationAdapter,
-    );
-    if (!result.ok) {
-      set({ lastError: result.error });
+    const receipt: PlanReceipt = { kind: "revert", entries: new Set() };
+    pending = receipt;
+    try {
+      set({ pendingOperation: "revert", lastError: null });
+      const result = await revertOperation(
+        current.transaction,
+        nativeOperationAdapter,
+      );
+      if (!result.ok) {
+        set({ lastError: result.error });
+        return result;
+      }
+      set((state) =>
+        state.lastOperation?.transaction === current.transaction
+          ? {
+              lastOperation: {
+                ...state.lastOperation,
+                status: "reverted",
+                revertedAt: Date.now(),
+              },
+              lastError: null,
+            }
+          : {},
+      );
       return result;
+    } finally {
+      if (pending === receipt) {
+        pending = null;
+        set({ pendingOperation: null });
+      }
     }
-    set({
-      lastOperation: { ...current, status: "reverted", revertedAt: Date.now() },
-      lastError: null,
-    });
-    return result;
   },
-  dismissLast: () => set({ lastOperation: null, lastError: null }),
+  dismissLast: () => {
+    if (pending?.kind !== "revert")
+      set({ lastOperation: null, lastError: null });
+  },
   recordCommand: (command) =>
     set((state) =>
       state.lastOperation?.status === "applied"

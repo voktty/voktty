@@ -30,7 +30,7 @@ export function PlanDiffReview() {
   const lastError = usePlanStore((s) => s.lastError);
   const revertLast = usePlanStore((s) => s.revertLast);
   const dismissLast = usePlanStore((s) => s.dismissLast);
-  const [busy, setBusy] = useState(false);
+  const busy = usePlanStore((s) => s.pendingOperation !== null);
 
   if (queue.length === 0) {
     if (!lastOperation) return null;
@@ -64,12 +64,7 @@ export function PlanDiffReview() {
               className="h-7 gap-1 text-[10.5px]"
               disabled={busy}
               onClick={async () => {
-                setBusy(true);
-                try {
-                  await revertLast();
-                } finally {
-                  setBusy(false);
-                }
+                await revertLast();
               }}
             >
               <HugeiconsIcon
@@ -86,6 +81,7 @@ export function PlanDiffReview() {
             variant="ghost"
             className="size-7"
             onClick={dismissLast}
+            disabled={busy}
             aria-label={t("common.close")}
           >
             <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={1.75} />
@@ -96,13 +92,8 @@ export function PlanDiffReview() {
   }
 
   const onApply = async () => {
-    setBusy(true);
-    try {
-      const result = await applyAll();
-      if (!result.ok) console.error("plan apply failure:", result.error);
-    } finally {
-      setBusy(false);
-    }
+    const result = await applyAll();
+    if (!result.ok) console.error("plan apply failure:", result.error);
   };
 
   return (
@@ -148,7 +139,12 @@ export function PlanDiffReview() {
       </div>
       <ul className="flex flex-1 flex-col gap-1.5 overflow-auto p-3">
         {queue.map((q) => (
-          <PlanRow key={q.id} item={q} onReject={() => removeOne(q.id)} />
+          <PlanRow
+            key={q.id}
+            item={q}
+            onReject={() => removeOne(q.id)}
+            disabled={busy}
+          />
         ))}
       </ul>
     </div>
@@ -158,9 +154,11 @@ export function PlanDiffReview() {
 function PlanRow({
   item,
   onReject,
+  disabled,
 }: {
   item: QueuedEdit;
   onReject: () => void;
+  disabled: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -231,6 +229,7 @@ function PlanRow({
           variant="ghost"
           className="size-5 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100"
           onClick={onReject}
+          disabled={disabled}
           aria-label={t("ai.diff.reject")}
         >
           <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={1.75} />
