@@ -10,6 +10,8 @@ import {
 import { native } from "@/modules/ai/lib/native";
 import { usePlanStore } from "@/modules/ai/store/planStore";
 import type { WorkspaceEnv } from "@/modules/workspace";
+import { fileReadCacheKey } from "@/modules/ai/lib/filesystemCacheKey";
+export { fileReadCacheKey } from "@/modules/ai/lib/filesystemCacheKey";
 import {
   approvedFileToolId,
   isFileToolRunCurrent,
@@ -17,26 +19,6 @@ import {
   registerFileToolRegistry,
   trackFileToolExecution,
 } from "@/modules/ai/lib/fileToolApprovals";
-
-export function fileReadCacheKey(
-  path: string,
-  workspace: WorkspaceEnv,
-): string {
-  const filesystem =
-    workspace.kind === "ssh"
-      ? [
-          workspace.kind,
-          workspace.root,
-          workspace.sessionId,
-          Object.entries(workspace.connection)
-            .filter(([, value]) => value !== undefined)
-            .sort(([a], [b]) => a.localeCompare(b)),
-        ]
-      : workspace.kind === "wsl"
-        ? [workspace.kind, workspace.distro]
-        : [workspace.kind];
-  return JSON.stringify([filesystem, path]);
-}
 
 function sameFilesystem(source: WorkspaceEnv, boundary: WorkspaceEnv): boolean {
   if (source.kind !== boundary.kind) return false;

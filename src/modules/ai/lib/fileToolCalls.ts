@@ -149,6 +149,10 @@ export function createFileToolCalls(budget?: Budget) {
 
   const registry = {
     isCurrent: ownerCurrent,
+    captureLifetime(): () => boolean {
+      const epoch = shared.epoch;
+      return () => ownerCurrent() && shared.epoch === epoch;
+    },
     capture(
       id: string,
       tool: CapturedToolName,

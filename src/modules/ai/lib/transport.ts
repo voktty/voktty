@@ -6,39 +6,13 @@ import { formatAiError } from "./errors";
 import { requireAiRuntime } from "./runtimeAvailability";
 import { native } from "./native";
 import type { ToolContext } from "../tools/tools";
-import {
-  LEGACY_PROJECT_MEMORY_FILE,
-  PROJECT_MEMORY_FILE,
-} from "@/lib/identity";
+import { createProjectMemoryReader } from "@/modules/ai/lib/projectMemory";
+import { fileToolCallsFor } from "@/modules/ai/lib/fileToolCalls";
 
-const VOKTTY_MD_MAX_BYTES = 32 * 1024;
-type MemoryCacheEntry = { content: string | null; mtime: number };
-const projectMemoryCache = new Map<string, MemoryCacheEntry>();
-
-async function readVokttyMd(
-  workspaceRoot: string | null,
-): Promise<string | null> {
-  if (!workspaceRoot) return null;
-  const cached = projectMemoryCache.get(workspaceRoot);
-  if (cached && Date.now() - cached.mtime < 30_000) return cached.content;
-  const root = workspaceRoot.replace(/\/$/, "");
-  for (const filename of [PROJECT_MEMORY_FILE, LEGACY_PROJECT_MEMORY_FILE]) {
-    try {
-      const r = await native.readFile(`${root}/${filename}`);
-      if (r.kind !== "text") continue;
-      const content =
-        r.content.length > VOKTTY_MD_MAX_BYTES
-          ? r.content.slice(0, VOKTTY_MD_MAX_BYTES)
-          : r.content;
-      projectMemoryCache.set(workspaceRoot, { content, mtime: Date.now() });
-      return content;
-    } catch {
-      // Try the legacy project memory filename before giving up.
-    }
-  }
-  projectMemoryCache.set(workspaceRoot, { content: null, mtime: Date.now() });
-  return null;
-}
+const projectMemoryReader = createProjectMemoryReader({
+  canonicalize: native.canonicalize,
+  readFile: native.readFile,
+});
 
 type LiveSnapshot = {
   cwd: string | null;
@@ -86,18 +60,22 @@ export function createContextAwareTransport(deps: Deps) {
     if (deps.isAvailable?.() === false) {
       requireAiRuntime();
     }
-    const live = deps.getLive();
-    const projectMemory = await readVokttyMd(live.workspaceRoot);
-    const envBlock = formatEnvBlock(live);
-    const messagesForRun = envBlock
-      ? injectEnvIntoLastUser(options.messages, envBlock)
-      : options.messages;
-    const result = await runAgentStream({
-      keys: deps.getKeys(),
+    const lifetime = fileToolCallsFor(deps.toolContext).captureLifetime();
+    const assertCurrent = () => {
+      if (options.abortSignal?.aborted || !lifetime())
+        throw new Error("The original AI request has retired.");
+    };
+    assertCurrent();
+    const live = { ...deps.getLive() };
+    const source = deps.toolContext.getFileRootContext?.() ?? null;
+    const boundary = source ? structuredClone(source) : null;
+    const persona = deps.getAgentPersona();
+    const captured = {
+      keys: { ...deps.getKeys() },
       modelId: deps.getModelId(),
       languageId: deps.getLanguage?.(),
       customInstructions: deps.getCustomInstructions(),
-      agentPersona: deps.getAgentPersona(),
+      agentPersona: persona ? { ...persona } : null,
       toolContext: deps.toolContext,
       onStep: deps.onStep,
       onUsage: deps.onUsage,
@@ -113,13 +91,26 @@ export function createContextAwareTransport(deps: Deps) {
       openaiCompatibleModelId: deps.getOpenaiCompatibleModelId?.(),
       openaiCompatibleContextLimit: deps.getOpenaiCompatibleContextLimit?.(),
       openrouterModelId: deps.getOpenrouterModelId?.(),
-      customEndpoints: deps.getCustomEndpoints?.(),
-      customEndpointKeys: deps.getCustomEndpointKeys?.(),
+      customEndpoints: structuredClone(deps.getCustomEndpoints?.()),
+      customEndpointKeys: structuredClone(deps.getCustomEndpointKeys?.()),
       planMode: deps.getPlanMode?.(),
+      abortSignal: options.abortSignal,
+    };
+    const projectMemory = await projectMemoryReader.read(
+      boundary,
+      assertCurrent,
+    );
+    assertCurrent();
+    const envBlock = formatEnvBlock(live);
+    const messagesForRun = envBlock
+      ? injectEnvIntoLastUser(options.messages, envBlock)
+      : options.messages;
+    const result = await runAgentStream({
+      ...captured,
       projectMemory,
       uiMessages: messagesForRun,
-      abortSignal: options.abortSignal,
     });
+    assertCurrent();
     return result.toUIMessageStream({
       originalMessages: options.messages,
       onError: formatAiError,
