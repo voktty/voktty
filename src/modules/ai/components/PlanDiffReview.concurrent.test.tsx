@@ -11,7 +11,10 @@ vi.mock("@/modules/ai/lib/nativeOperationAdapter", () => ({
   nativeOperationAdapter: io,
 }));
 vi.mock("@/modules/i18n", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      key === "ai.planReview.provenance" ? JSON.stringify(params) : key,
+  }),
 }));
 let root: Root;
 let node: HTMLDivElement;
@@ -101,4 +104,80 @@ it("retains the operation when its review presentation unmounts", async () => {
   await act(async () => root.render(<PlanDiffReview />));
   expect(node.textContent).toContain("ai.planReview.operationApplied");
   expect(io.writeFile).toHaveBeenCalledOnce();
+});
+
+it("distinguishes identical review paths by captured filesystem without displaying SSH credentials", async () => {
+  const first = usePlanStore.getState().queue[0];
+  usePlanStore.getState().enqueue({
+    ...first,
+    id: "wsl",
+    workspaceEnv: { kind: "wsl", distro: "fixture-distro" },
+  });
+  for (const host of ["first.invalid", "second.invalid"]) {
+    usePlanStore.getState().enqueue({
+      ...first,
+      id: host,
+      workspaceEnv: {
+        kind: "ssh",
+        root: "/repo",
+        sessionId: 7,
+        connection: {
+          id: host,
+          name: "Same profile name",
+          host,
+          user: "fixture-user",
+          port: 2201,
+          identityFile: "/private/key-fixture",
+          extraArgs: "-J private-jump-fixture",
+        },
+      },
+    });
+  }
+  await act(async () => root.render(<PlanDiffReview />));
+  const rows = [...node.querySelectorAll("li")];
+  expect(rows).toHaveLength(4);
+  expect(rows[0].textContent).toContain("workspace.localMachine");
+  expect(rows[1].textContent).toContain("fixture-distro");
+  expect(rows[2].textContent).toContain("fixture-user@first.invalid:2201");
+  expect(rows[3].textContent).toContain("fixture-user@second.invalid:2201");
+  expect(node.textContent).not.toContain("key-fixture");
+  expect(node.textContent).not.toContain("private-jump-fixture");
+  expect(io.inspect).not.toHaveBeenCalled();
+});
+
+it("shows native Windows paths as local even when captured from WSL", async () => {
+  usePlanStore.getState().clear();
+  usePlanStore.getState().enqueue({
+    id: "windows",
+    kind: "edit",
+    path: "C:/repo/file.ts",
+    originalContent: "before",
+    proposedContent: "after",
+    isNewFile: false,
+    workspaceEnv: { kind: "wsl", distro: "fixture-distro" },
+    sessionId: "fixture",
+    modelId: "fixture",
+    createdAt: 1,
+  });
+  await act(async () => root.render(<PlanDiffReview />));
+  expect(node.querySelector("li")?.textContent).toContain(
+    "workspace.localMachine",
+  );
+  expect(node.querySelector("li")?.textContent).not.toContain("fixture-distro");
+});
+
+it("counts identical paths on different filesystems as separate applied files", async () => {
+  const first = usePlanStore.getState().queue[0];
+  usePlanStore.getState().enqueue({
+    ...first,
+    id: "wsl",
+    workspaceEnv: { kind: "wsl", distro: "fixture-distro" },
+  });
+  await act(async () => {
+    applying = usePlanStore.getState().applyAll();
+    release({ kind: "file", content: "before" });
+    await applying;
+    root.render(<PlanDiffReview />);
+  });
+  expect(node.textContent).toContain('"files":2');
 });

@@ -14,10 +14,37 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { usePlanStore, type QueuedEdit } from "../store/planStore";
 import { createLineDiff, formatLineDiffHunkHeader } from "../lib/lineDiff";
+import { isWindowsNativePath } from "@/modules/workspace";
 
 function basename(p: string): string {
   const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
   return i >= 0 ? p.slice(i + 1) : p;
+}
+
+function planDestination(
+  item: QueuedEdit,
+  localLabel: string,
+  serialLabel: string,
+): string {
+  const workspace = item.workspaceEnv;
+  if (
+    !workspace ||
+    workspace.kind === "local" ||
+    isWindowsNativePath(item.path)
+  )
+    return localLabel;
+  if (workspace.kind === "wsl") return `WSL · ${workspace.distro}`;
+  if (workspace.kind === "ssh") {
+    const { name, host, user, port } = workspace.connection;
+    const hostname =
+      host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+    return ["SSH", name, `${user ? `${user}@` : ""}${hostname}:${port ?? 22}`]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (workspace.kind === "docker")
+    return `Docker · ${workspace.connection.containerName || workspace.connection.containerId}`;
+  return `${serialLabel} · ${workspace.portName}`;
 }
 
 export function PlanDiffReview() {
@@ -46,7 +73,7 @@ export function PlanDiffReview() {
             <div className="truncate text-[10px] text-muted-foreground">
               {t("ai.planReview.provenance", {
                 model: lastOperation.modelId,
-                files: lastOperation.files.length,
+                files: lastOperation.transaction.entries.length,
                 commands: lastOperation.commands.length,
               })}
             </div>
@@ -168,6 +195,11 @@ function PlanRow({
     ? null
     : createLineDiff(item.originalContent, item.proposedContent).stats;
   const Icon = isDir ? FolderAddIcon : isNew ? FilePlusIcon : FileEditIcon;
+  const destination = planDestination(
+    item,
+    t("workspace.localMachine"),
+    t("statusbar.serial"),
+  );
 
   return (
     <li className="group/row overflow-hidden rounded-md border border-border/50 bg-card">
@@ -204,6 +236,12 @@ function PlanRow({
           </div>
           <div className="truncate font-mono text-[10px] text-muted-foreground">
             {item.path}
+          </div>
+          <div
+            className="truncate text-[10px] text-muted-foreground"
+            title={destination}
+          >
+            {destination}
           </div>
           {stats ? (
             <div className="mt-0.5 flex items-center gap-2 text-[10px] tabular-nums">
