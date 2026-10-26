@@ -137,3 +137,32 @@ it("does not reload after notification replaces the captured editor handle", () 
   expect(previous.reload).not.toHaveBeenCalled();
   expect(reload).not.toHaveBeenCalled();
 });
+
+it("waits for a filesystem write instead of treating approval as a disk change", async () => {
+  tabsRef.current = [
+    ...tabsRef.current,
+    {
+      id: 4,
+      kind: "ai-diff",
+      path: "/work/file.ts",
+      approvalId: "fixture-approved",
+      status: "approved",
+      originalContent: "before",
+      proposedContent: "after",
+      isNewFile: false,
+    } as Tab,
+  ];
+  await act(async () => root.render(<Reader />));
+  for (const handle of editorRefs.current.values())
+    expect(handle.reload).not.toHaveBeenCalled();
+
+  callback({
+    payload: {
+      path: "/work/file.ts",
+      filesystem: { kind: "wsl", distro: "first" },
+    },
+  });
+  expect(editorRefs.current.get(1)?.reload).not.toHaveBeenCalled();
+  expect(editorRefs.current.get(2)?.reload).toHaveBeenCalledWith(false);
+  expect(editorRefs.current.get(3)?.reload).not.toHaveBeenCalled();
+});

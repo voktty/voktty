@@ -70,30 +70,10 @@ export function collectEditorWatchGroups(
 }
 
 /**
- * Keeps open editor tabs in sync with on-disk changes: reloads on applied AI
- * diffs, external writes, and fs-watch events, and maintains the watch set for
- * the directories of open editor files.
+ * Keeps open editor tabs in sync with filesystem writes and watch events,
+ * and maintains the watch set for the directories of open editor files.
  */
 export function useEditorFileSync({ tabs, tabsRef, editorRefs }: Params) {
-  // When an AI diff is approved (write_file applied to disk), reload any
-  // open editor tabs for that path so the user sees the new content. We
-  // track which approvalIds we've already handled to fire the reload only
-  // once per applied diff.
-  const appliedDiffsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    for (const t of tabs) {
-      if (t.kind !== "ai-diff") continue;
-      if (t.status !== "approved") continue;
-      if (appliedDiffsRef.current.has(t.approvalId)) continue;
-      appliedDiffsRef.current.add(t.approvalId);
-      for (const e of tabs) {
-        if (e.kind !== "editor") continue;
-        if (e.path !== t.path) continue;
-        editorRefs.current.get(e.id)?.reload();
-      }
-    }
-  }, [tabs, editorRefs]);
-
   useEffect(() => {
     let active = true;
     const unlistenPromise = getCurrentWebviewWindow()
