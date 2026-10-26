@@ -31,6 +31,7 @@ vi.mock("@/modules/remote", () => ({
   remoteReadDocument: io.read,
 }));
 vi.mock("@/modules/remote/filesystem", () => ({
+  remoteCanonicalize: io.canonical,
   remoteStat: io.stat,
   remoteReadDocument: io.read,
 }));
@@ -160,7 +161,8 @@ it("reads a namespace only through its captured saved project and own helper lea
     "/srv/project/helper.ts",
     false,
   );
-  expect(io.release).toHaveBeenCalledTimes(2);
+  expect(io.acquire).toHaveBeenCalledTimes(1);
+  expect(io.release).toHaveBeenCalledTimes(1);
   expect(io.invoke).not.toHaveBeenCalled();
 });
 
@@ -230,4 +232,106 @@ it("retires after canonicalization without issuing a later read", async () => {
     ),
   ).toBeUndefined();
   expect(io.invoke).toHaveBeenCalledTimes(1);
+});
+
+const namespaceDocument = "remote://voktty-ssh-fixture/srv/project/main.ts";
+
+it.each([
+  "/srv/project/.env.local",
+  "/srv/project/.ssh/config",
+  "/srv/other/public.txt",
+])(
+  "does not read a forbidden canonical namespace target %s",
+  async (canonical) => {
+    io.canonical.mockResolvedValue(canonical);
+    expect(
+      await createInlineReferenceReader(namespaceDocument, local)(
+        "innocent.txt",
+        current,
+      ),
+    ).toBeUndefined();
+    expect(io.stat).not.toHaveBeenCalled();
+    expect(io.read).not.toHaveBeenCalled();
+    expect(io.release).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("uses the confirmed session root for a saved project alias", async () => {
+  io.acquire.mockResolvedValue({
+    info: { session_id: 7, workspace_root: "/canonical/project" },
+    release: io.release,
+  });
+  io.canonical.mockResolvedValue("/canonical/project/actual.txt");
+  expect(
+    await createInlineReferenceReader(namespaceDocument, local)(
+      "alias.txt",
+      current,
+    ),
+  ).toBe("remote");
+  expect(io.canonical).toHaveBeenCalledWith(
+    expect.objectContaining({ root: "/canonical/project", sessionId: 7 }),
+    "/canonical/project/alias.txt",
+  );
+  expect(io.stat).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionId: 7 }),
+    "/canonical/project/actual.txt",
+  );
+  expect(io.read).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionId: 7 }),
+    "/canonical/project/actual.txt",
+    false,
+  );
+  expect(io.acquire).toHaveBeenCalledTimes(1);
+  expect(io.release).toHaveBeenCalledTimes(1);
+});
+
+it("releases the namespace lease on canonicalization failure without reading", async () => {
+  io.canonical.mockRejectedValue(new Error("method_not_found"));
+  await expect(
+    createInlineReferenceReader(namespaceDocument, local)("alias.txt", current),
+  ).rejects.toThrow("method_not_found");
+  expect(io.stat).not.toHaveBeenCalled();
+  expect(io.read).not.toHaveBeenCalled();
+  expect(io.release).toHaveBeenCalledTimes(1);
+  expect(io.invoke).not.toHaveBeenCalled();
+});
+
+it.each(["canonical", "stat"] as const)(
+  "retires namespace work after %s",
+  async (stage) => {
+    let active = true;
+    if (stage === "canonical")
+      io.canonical.mockImplementation(async (_: unknown, path: string) => {
+        active = false;
+        return path;
+      });
+    else
+      io.stat.mockImplementation(async () => {
+        active = false;
+        return { kind: "file", size: 10 };
+      });
+    await expect(
+      createInlineReferenceReader(namespaceDocument, local)(
+        "alias.txt",
+        () => active,
+      ),
+    ).rejects.toThrow("retired");
+    expect(io.read).not.toHaveBeenCalled();
+    expect(io.release).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([
+  { size: 1024 * 1024 + 1, kind: "file" },
+  { size: 10, kind: "dir" },
+])("does not read unsuitable namespace metadata %j", async (stat) => {
+  io.stat.mockResolvedValue(stat);
+  expect(
+    await createInlineReferenceReader(namespaceDocument, local)(
+      "alias.txt",
+      current,
+    ),
+  ).toBeUndefined();
+  expect(io.read).not.toHaveBeenCalled();
+  expect(io.release).toHaveBeenCalledTimes(1);
 });

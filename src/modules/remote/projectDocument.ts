@@ -10,6 +10,7 @@ import {
 import type { SshConnection } from "@/modules/ssh/types";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
+  remoteCanonicalize,
   remoteReadDocument,
   remoteReadBinaryFile,
   remoteStat,
@@ -82,6 +83,28 @@ export function createProjectDocument(
   }
 
   return {
+    readReference: (
+      isCurrent: () => boolean,
+      allowPath: (canonical: string) => boolean,
+      maxBytes: number,
+    ) =>
+      run(isCurrent, async (workspace) => {
+        const relative = relativeWithinProject(root, hostPath);
+        if (relative === undefined)
+          throw new Error("Reference is outside its project.");
+        const target = `${workspace.root.replace(/[/\\]+$/, "")}/${relative}`;
+        const canonical = await remoteCanonicalize(workspace, target);
+        assertProjectDocumentCurrent(isCurrent);
+        if (
+          relativeWithinProject(workspace.root, canonical) === undefined ||
+          !allowPath(canonical)
+        )
+          return;
+        const stat = await remoteStat(workspace, canonical);
+        assertProjectDocumentCurrent(isCurrent);
+        if (stat.kind !== "file" || stat.size > maxBytes) return;
+        return remoteReadDocument(workspace, canonical, false);
+      }),
     readBinary: (isCurrent: () => boolean) =>
       run(isCurrent, (workspace) => remoteReadBinaryFile(workspace, hostPath)),
     read: (preferBinary: boolean, isCurrent: () => boolean) =>

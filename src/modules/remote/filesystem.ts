@@ -10,6 +10,7 @@ import { nativeHandleFor } from "@/modules/ssh-native/handles";
 import { SshNativeCallError } from "@/modules/ssh-native/client";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
+  sftpCanonicalize,
   sftpCreateDir,
   sftpCreateFile,
   sftpDelete,
@@ -169,12 +170,50 @@ function withRemoteBackend<A extends unknown[], T>(
   };
 }
 
+function validCanonicalPathInput(path: string): boolean {
+  return (
+    path.length > 0 &&
+    path.length <= 32768 &&
+    new TextEncoder().encode(path).length <= 32768 &&
+    !Array.from(path).some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || (code >= 127 && code <= 159);
+    })
+  );
+}
+
 export async function remoteCanonicalize(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<string> {
-  await remoteStat(env, path);
-  return normalizePath(path);
+  if (!validCanonicalPathInput(path)) {
+    throw new Error("Invalid remote canonicalization path.");
+  }
+  const handle = await nativeHandleFor(env);
+  const result: unknown =
+    handle === undefined
+      ? (
+          await requestRemoteResult<{ path: unknown }>(
+            requireSession(env),
+            "fs.canonicalize",
+            {
+              path: remoteRelativePath(env, path),
+            },
+          )
+        )?.path
+      : await sftpCanonicalize(handle, parseRemotePath(path)?.hostPath ?? path);
+  if (
+    typeof result !== "string" ||
+    !validCanonicalPathInput(result) ||
+    (!result.startsWith("/") && !/^[a-zA-Z]:[\\/]|^\\\\/.test(result)) ||
+    result
+      .replace(/\\/g, "/")
+      .split("/")
+      .some((part) => part === "." || part === "..")
+  ) {
+    throw new Error("Invalid remote canonicalization response.");
+  }
+  return result;
 }
 
 async function helperReadDir(

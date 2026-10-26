@@ -42,7 +42,7 @@ export function createInlineReferenceReader(
     if (!current() || !documentPath || mention.length > 32768) return;
     const path = resolveRelativeDocPath(documentPath, mention);
     if (path.length > 32768 || !checkReadable(path).ok) return;
-    let result: ReadResult;
+    let result: ReadResult | undefined;
     if (namespace) {
       if (!path.startsWith("remote://")) return;
       const { createProjectDocument } = await import(
@@ -50,10 +50,11 @@ export function createInlineReferenceReader(
       );
       if (!current()) return;
       const document = createProjectDocument(path, project, profiles);
-      const stat = await document.stat(current);
-      if (!current() || stat.kind !== "file" || stat.size > MAX_REFERENCE_BYTES)
-        return;
-      result = await document.read(false, current);
+      result = await document.readReference(
+        current,
+        (canonical) => checkReadable(canonical).ok,
+        MAX_REFERENCE_BYTES,
+      );
     } else {
       if (!path.startsWith("/") && !/^[a-zA-Z]:[\\/]/.test(path)) return;
       if (
@@ -93,6 +94,7 @@ export function createInlineReferenceReader(
     }
     if (
       !current() ||
+      !result ||
       result.kind !== "text" ||
       result.size > MAX_REFERENCE_BYTES
     )

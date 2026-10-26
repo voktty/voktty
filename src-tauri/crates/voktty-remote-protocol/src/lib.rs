@@ -14,6 +14,7 @@ pub const METHOD_COUNT_TEXT_LINES: &str = "fs.countTextLines";
 pub const METHOD_READ_BINARY_FILE: &str = "fs.readBinaryFile";
 pub const METHOD_WRITE_FILE: &str = "fs.writeFile";
 pub const METHOD_STAT: &str = "fs.stat";
+pub const METHOD_CANONICALIZE: &str = "fs.canonicalize";
 pub const METHOD_CREATE_FILE: &str = "fs.createFile";
 pub const METHOD_CREATE_DIR: &str = "fs.createDir";
 pub const METHOD_RENAME: &str = "fs.rename";

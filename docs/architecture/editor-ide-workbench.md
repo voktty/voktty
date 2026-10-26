@@ -140,6 +140,8 @@ Agentic editing follows a preview-first transaction:
 
 The filesystem secret deny-list applies to both context reads and proposed writes. Workspace authorization, command approval, cancellation and timeouts remain mandatory.
 
+Inline-edit file references check both the literal path and its resolved canonical target before reading content. SSH uses SFTP realpath or the helper's advertised `fs.canonicalize` operation, which accepts an existing path of at most 32,768 UTF-8 bytes without control characters and returns `{path}` beneath the authenticated root. Missing support or resolution failure skips the reference instead of treating metadata as canonicalization. Saved remote project references retain one captured project lease through canonicalization, metadata and content reads, checking retirement between stages. Ordinary document navigation keeps its existing symlink behavior. Canonical preflight does not make separate filesystem operations atomic against concurrent path replacement.
+
 ## Tasks, tests, debugging and extensions
 
 The Run and Debug activity surface is lazy. Opening it discovers bounded tasks from `package.json`, `Cargo.toml` and `.voktty/tasks.json`. It does not scan or spawn anything while hidden. Task and test execution reuse the authorized background-shell host, keep at most 1 MiB of frontend output and remain cancelable. A workspace change terminates an active task before clearing its output, so runs cannot leak across environment scopes. Test output is normalized into a bounded explorer for Vitest and Rust test lines without replacing the raw log.
