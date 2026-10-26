@@ -1,8 +1,13 @@
 import type { FileCitationSource } from "@/modules/ai/store/chatStore";
 import { searchGuestFiles } from "@/modules/collab/lib/guestRuntime";
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  citationFileTarget,
+  createCitationFileIndex,
+  isCitationRelativePath,
+  type CitationFileIndex,
+} from "@/modules/ai/lib/workspaceCitationFiles";
 
 export type WorkspaceFilesState = {
   files: string[];
@@ -13,45 +18,36 @@ export type WorkspaceFilesState = {
   error: string | null;
 };
 
-type ListFilesResult = { files: string[]; truncated: boolean };
-
-type CacheEntry = {
-  files: string[];
-  truncated: boolean;
-  fetchedAt: number;
-};
-
-const CACHE_TTL_MS = 60_000;
-const REMOTE_RESULT_LIMIT = 30;
-const cache = new Map<string, CacheEntry>();
-const inflight = new Map<string, Promise<CacheEntry>>();
-
-function isFresh(entry: CacheEntry): boolean {
-  return Date.now() - entry.fetchedAt < CACHE_TTL_MS;
-}
-
-function fetchLocalFiles(root: string): Promise<CacheEntry> {
-  const existing = inflight.get(root);
-  if (existing) return existing;
-  const promise = invoke<ListFilesResult>("fs_list_files", {
-    root,
-    workspace: currentWorkspaceEnv(),
-  })
-    .then((result) => {
-      const entry: CacheEntry = {
-        files: result.files,
-        truncated: result.truncated,
-        fetchedAt: Date.now(),
-      };
-      cache.set(root, entry);
-      return entry;
-    })
-    .finally(() => {
-      inflight.delete(root);
+const index = createCitationFileIndex(async ({ root, workspace }) => {
+  if (workspace.kind !== "ssh")
+    return invoke<CitationFileIndex>("fs_list_files", {
+      root,
+      workspace,
+      limit: 10_000,
+      maxDepth: 16,
     });
-  inflight.set(root, promise);
-  return promise;
-}
+  const [{ indexRemoteFiles }, { remoteReadDir }] = await Promise.all([
+    import("@/modules/quick-open/lib/remoteFileIndex"),
+    import("@/modules/remote"),
+  ]);
+  let directories = 0;
+  let entries = 0;
+  return indexRemoteFiles(root, async (path) => {
+    if (++directories > 256) throw new Error("File index directory limit");
+    const result = await remoteReadDir(workspace, path);
+    entries += result.length;
+    if (entries > 20_000) throw new Error("File index entry limit");
+    if (
+      result.some(
+        (entry) =>
+          entry.name.includes("/") || !isCitationRelativePath(entry.name),
+      )
+    )
+      throw new Error("Invalid file index entry");
+    return result;
+  });
+});
+let guestSearches = 0;
 
 const EMPTY_STATE: WorkspaceFilesState = {
   files: [],
@@ -67,113 +63,56 @@ export function useWorkspaceFiles(
   query: string,
   enabled: boolean,
 ): WorkspaceFilesState {
-  const kind = source.kind;
-  const root = source.kind === "local" ? source.root : null;
-  const leafId = source.kind === "collab" ? source.leafId : null;
-  const remoteAvailable = source.kind === "collab" && source.available;
-  const [state, setState] = useState<WorkspaceFilesState>(EMPTY_STATE);
+  const descriptor = JSON.stringify(source);
+  const binding = useMemo(() => {
+    const captured = JSON.parse(descriptor) as FileCitationSource;
+    return {
+      target: citationFileTarget(captured),
+      guest: captured.kind === "collab" ? captured : null,
+    };
+  }, [descriptor]);
+  const searchQuery = source.kind === "collab" ? query : "";
+  const [state, setState] = useState<{
+    binding: typeof binding;
+    value: WorkspaceFilesState;
+  } | null>(null);
+  const available = Boolean(binding.target || binding.guest?.available);
+  const remote = Boolean(binding.guest);
 
   useEffect(() => {
-    if (kind === "collab") {
-      if (!remoteAvailable || leafId === null) {
-        setState({ ...EMPTY_STATE, remote: true });
-        return;
-      }
-      if (!enabled) {
-        setState((current) => ({
-          ...current,
-          hasWorkspace: true,
-          remote: true,
-          error: null,
-        }));
-        return;
-      }
-      let cancelled = false;
-      setState((current) => ({
-        ...current,
-        indexing: true,
-        hasWorkspace: true,
-        remote: true,
-        error: null,
-      }));
-      searchGuestFiles(leafId, query, REMOTE_RESULT_LIMIT)
-        .then((result) => {
-          if (cancelled) return;
-          setState({
-            files: result.files,
-            indexing: false,
-            truncated: result.truncated,
-            hasWorkspace: true,
-            remote: true,
-            error: null,
-          });
-        })
-        .catch((error) => {
-          if (cancelled) return;
-          setState({
-            files: [],
-            indexing: false,
-            truncated: false,
-            hasWorkspace: true,
-            remote: true,
-            error: String(error),
-          });
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (!root) {
-      setState(EMPTY_STATE);
-      return;
-    }
-    const cached = cache.get(root);
-    if (cached) {
-      setState({
-        files: cached.files,
-        truncated: cached.truncated,
-        indexing: false,
-        hasWorkspace: true,
-        remote: false,
-        error: null,
-      });
-      if (isFresh(cached)) return;
-    }
-    if (!enabled) return;
-
-    let cancelled = false;
-    setState((current) => ({
-      ...current,
-      indexing: true,
-      hasWorkspace: true,
-      remote: false,
-      error: null,
-    }));
-    fetchLocalFiles(root)
-      .then((entry) => {
-        if (cancelled) return;
-        setState({
-          files: entry.files,
-          truncated: entry.truncated,
-          indexing: false,
-          hasWorkspace: true,
-          remote: false,
-          error: null,
-        });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setState((current) => ({
-          ...current,
-          indexing: false,
-          error: String(error),
-        }));
-      });
-    return () => {
-      cancelled = true;
+    if (!enabled || !available) return;
+    let current = true;
+    const publish = (value: WorkspaceFilesState) => {
+      if (current)
+        setState((previous) => (current ? { binding, value } : previous));
     };
-  }, [enabled, kind, leafId, query, remoteAvailable, root]);
+    const base = { ...EMPTY_STATE, hasWorkspace: true, remote };
+    publish({ ...base, indexing: true });
+    const read = async (): Promise<CitationFileIndex> => {
+      if (binding.target) return index.load(binding.target);
+      if (!binding.guest || guestSearches >= 16)
+        throw new Error("File search is busy");
+      guestSearches++;
+      try {
+        return await searchGuestFiles(binding.guest.leafId, searchQuery, 30);
+      } finally {
+        guestSearches--;
+      }
+    };
+    void read()
+      .then((result) => publish({ ...base, ...result }))
+      .catch(() => publish({ ...base, error: "File search unavailable" }));
+    return () => {
+      current = false;
+    };
+  }, [available, binding, enabled, remote, searchQuery]);
 
-  return state;
+  return state?.binding === binding
+    ? state.value
+    : {
+        ...EMPTY_STATE,
+        hasWorkspace: available,
+        remote,
+        indexing: enabled && available,
+      };
 }

@@ -271,9 +271,13 @@ describe("useAiLiveBridge", () => {
       root: "/same",
       workspace: { kind: "wsl", distro: "fixture" },
     });
+    expect(live?.getFileCitationSource()).toEqual({
+      kind: "local", root: "/same", workspace: { kind: "wsl", distro: "fixture" },
+    });
     act(() => root?.unmount());
     root = null;
     expect(live?.getFileRootContext?.()).toBeNull();
+    expect(live?.getFileCitationSource()).toEqual({ kind: "local", root: null });
   });
 
   it("does not label an unqualified legacy root with the document filesystem", () => {
@@ -285,6 +289,7 @@ describe("useAiLiveBridge", () => {
       home: "/fixture-home",
     });
     expect(liveCapture?.getFileRootContext?.()).toBeNull();
+    expect(liveCapture?.getFileCitationSource()).toEqual({ kind: "local", root: null });
     expect(liveCapture?.getWorkspaceRoot()).toBe("/repo");
   });
 });

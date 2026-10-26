@@ -4,7 +4,12 @@ import { usePresence } from "@/lib/usePresence";
 import { cn } from "@/lib/utils";
 import { readGuestFile } from "@/modules/collab/lib/guestRuntime";
 import { useTranslation } from "@/modules/i18n";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
+import {
+  citationFileTarget,
+  isCitationRelativePath,
+} from "@/modules/ai/lib/workspaceCitationFiles";
 import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import { useComposer } from "../lib/composer";
 import { SLASH_COMMANDS } from "../lib/slashCommands";
@@ -26,6 +31,8 @@ type FileTrigger = {
   end: number;
   query: string;
 };
+
+let guestCitations = 0;
 
 function detectSnippetTrigger(
   value: string,
@@ -67,7 +74,27 @@ export function AiComposerInput() {
   const live = useChatStore((state) => state.live);
   const focusSignal = useChatStore((state) => state.focusSignal);
   const fileSource = live.getFileCitationSource();
-  const workspaceRoot = fileSource.kind === "local" ? fileSource.root : null;
+  const sessionId = useChatStore((state) => state.activeSessionId);
+  const captureChat = useChatActionOwner(sessionId);
+  const sourceKey = JSON.stringify(fileSource);
+  const publication = useMemo(
+    () => ({ sourceKey, captureChat }),
+    [sourceKey, captureChat],
+  );
+  const committed = useRef<{
+    publication: typeof publication;
+    active: boolean;
+    frame: number | null;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const owner = { publication, active: true, frame: null as number | null };
+    committed.current = owner;
+    return () => {
+      owner.active = false;
+      if (owner.frame !== null) cancelAnimationFrame(owner.frame);
+      if (committed.current === owner) committed.current = null;
+    };
+  }, [publication]);
 
   const [trigger, setTrigger] = useState<SnippetTrigger | null>(null);
   const [fileTrigger, setFileTrigger] = useState<FileTrigger | null>(null);
@@ -198,23 +225,48 @@ export function AiComposerInput() {
   };
 
   const onPickFile = async (filePath: string) => {
-    if (!fileTrigger) return;
+    const owner = committed.current;
+    const chat = captureChat();
+    const isCurrent = () =>
+      Boolean(
+        owner?.active &&
+        owner.publication === publication &&
+        chat?.isCurrent() &&
+        JSON.stringify(useChatStore.getState().live.getFileCitationSource()) ===
+          sourceKey,
+      );
+    if (!fileTrigger || !isCurrent() || !isCitationRelativePath(filePath))
+      return;
     const before = c.value.slice(0, fileTrigger.start);
     const after = c.value.slice(fileTrigger.end);
     c.setValue(`${before}${after}`);
     setFileTrigger(null);
     setActiveIndex(0);
+    let attached = false;
     try {
       if (fileSource.kind === "collab") {
-        const remote = await readGuestFile(fileSource.leafId, filePath);
-        const name = remote.path.split("/").pop() || remote.path;
-        c.attachTextFile({
-          id: `collab-${fileSource.leafId}-${remote.path}`,
-          name,
-          text: remote.content,
-          size: remote.content.length,
-        });
-      } else if (workspaceRoot) {
+        if (!fileSource.available || guestCitations >= 16) return;
+        guestCitations++;
+        try {
+          const remote = await readGuestFile(fileSource.leafId, filePath);
+          if (!isCurrent()) return;
+          const name = remote.path.split("/").pop() || remote.path;
+          attached = c.attachTextFile(
+            {
+              id: `collab-${fileSource.leafId}-${remote.path}`,
+              name,
+              text: remote.content,
+              size: remote.content.length,
+            },
+            isCurrent,
+          );
+        } finally {
+          guestCitations--;
+        }
+      } else {
+        const target = citationFileTarget(fileSource);
+        if (!target) return;
+        const workspaceRoot = target.root;
         const sep =
           workspaceRoot.includes("\\") && !workspaceRoot.includes("/")
             ? "\\"
@@ -222,12 +274,20 @@ export function AiComposerInput() {
         const fullPath = workspaceRoot.endsWith(sep)
           ? `${workspaceRoot}${filePath}`
           : `${workspaceRoot}${sep}${filePath}`;
-        await c.attachFileByPath(fullPath);
+        attached = await c.attachFileByPath(
+          fullPath,
+          target.workspace,
+          isCurrent,
+        );
       }
-    } catch (error) {
-      console.error("remote file citation failed", error);
+    } catch {
+      return;
     }
-    requestAnimationFrame(() => {
+    if (!attached || !isCurrent() || !owner) return;
+    if (owner.frame !== null) cancelAnimationFrame(owner.frame);
+    owner.frame = requestAnimationFrame(() => {
+      owner.frame = null;
+      if (!isCurrent()) return;
       const el = c.textareaRef.current;
       if (!el) return;
       el.focus();

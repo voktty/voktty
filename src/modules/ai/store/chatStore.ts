@@ -1,4 +1,5 @@
 import type { Chat, UIMessage } from "@ai-sdk/react";
+import type { WorkspaceEnv } from "@/modules/workspace";
 import { forgetChatFileTools } from "@/modules/ai/lib/chatFileTools";
 import type {
   AiFileContext,
@@ -42,7 +43,7 @@ import type {
 } from "../lib/developmentContext";
 
 export type FileCitationSource =
-  | { kind: "local"; root: string | null }
+  | { kind: "local"; root: string | null; workspace?: WorkspaceEnv }
   | { kind: "collab"; leafId: number; available: boolean };
 
 export type Live = {

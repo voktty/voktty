@@ -233,22 +233,23 @@ export function useAiLiveBridge(params: Params) {
       },
       getLocalWorkspaceRoot: findLocalWorkspaceRoot,
       getFileCitationSource: () => {
-        const { activeId, tabs, explorerRoot, launchCwd, home } = ref.current;
-        const active = tabs.find((tab) => tab.id === activeId);
+        if (!active) return { kind: "local", root: null };
+        const { activeId, tabs } = ref.current;
+        const tab = tabs.find((candidate) => candidate.id === activeId);
         if (
-          active?.kind === "terminal" &&
-          active.collaboration?.mode === "guest"
+          tab?.kind === "terminal" &&
+          tab.collaboration?.mode === "guest"
         ) {
           return {
             kind: "collab" as const,
-            leafId: active.activeLeafId,
-            available: guestFileCitationsEnabled(active.activeLeafId),
+            leafId: tab.activeLeafId,
+            available: guestFileCitationsEnabled(tab.activeLeafId),
           };
         }
-        return {
-          kind: "local" as const,
-          root: explorerRoot ?? launchCwd ?? home ?? null,
-        };
+        const context = fileRootContextRef.current;
+        return context
+          ? { kind: "local", ...structuredClone(context) }
+          : { kind: "local", root: null };
       },
       getActiveFile: () => {
         const { activeId, tabs } = ref.current;

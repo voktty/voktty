@@ -1,4 +1,4 @@
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import { currentWorkspaceEnv, type WorkspaceEnv } from "@/modules/workspace";
 import { t } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -14,6 +14,7 @@ import { expandSnippetTokens, type Snippet } from "../lib/snippets";
 import { useChatStore } from "../store/chatStore";
 import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
 import { readBrowserAttachments } from "@/modules/ai/lib/browserAttachments";
+import { readPathAttachment } from "@/modules/ai/lib/pathAttachments";
 export { MAX_TEXT_INLINE } from "@/modules/ai/lib/browserAttachments";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
@@ -49,14 +50,20 @@ type ComposerCtx = {
   setValue: React.Dispatch<React.SetStateAction<string>>;
   files: FileAttachment[];
   addFiles: (list: FileList | null) => Promise<void>;
-  /** Attach a file by absolute path — used by the file explorer's "Attach to Agent". */
-  attachFileByPath: (path: string) => Promise<void>;
-  attachTextFile: (attachment: {
-    id: string;
-    name: string;
-    text: string;
-    size: number;
-  }) => void;
+  attachFileByPath: (
+    path: string,
+    workspace?: WorkspaceEnv,
+    isCurrent?: () => boolean,
+  ) => Promise<boolean>;
+  attachTextFile: (
+    attachment: {
+      id: string;
+      name: string;
+      text: string;
+      size: number;
+    },
+    isCurrent?: () => boolean,
+  ) => boolean;
   removeFile: (id: string) => void;
   pickedSnippets: Snippet[];
   addSnippet: (s: Snippet) => void;
@@ -124,43 +131,71 @@ export function AiComposerProvider({ children }: ProviderProps) {
   const pendingSelections = useChatStore((s) => s.pendingSelections);
   const consumeSelections = useChatStore((s) => s.consumeSelections);
 
-  const attachFileByPath = useCallback(async (path: string) => {
-    try {
-      type ReadResult =
-        | { kind: "text"; content: string; size: number }
-        | { kind: "binary"; size: number }
-        | { kind: "toolarge"; size: number; limit: number };
-      const result = await invoke<ReadResult>("fs_read_file", {
-        path,
-        workspace: currentWorkspaceEnv(),
-      });
-      if (result.kind !== "text") {
-        console.warn("attachFileByPath: skipped non-text file", path, result);
-        return;
+  const attachFileByPath = useCallback(
+    async (
+      path: string,
+      workspace?: WorkspaceEnv,
+      isCallerCurrent: () => boolean = () => true,
+    ) => {
+      const owner = captureOwner();
+      const isCurrent = () => Boolean(owner?.isCurrent() && isCallerCurrent());
+      if (!isCurrent()) return false;
+      if (workspace) {
+        const attachment = await readPathAttachment(path, workspace, isCurrent);
+        if (!attachment || !isCurrent()) return false;
+        setFiles((prev) =>
+          !isCurrent() || prev.some((file) => file.id === attachment.id)
+            ? prev
+            : [...prev, attachment],
+        );
+        if (!isCurrent()) return false;
+        useChatStore.getState().focusInput();
+        return isCurrent();
       }
-      const name = path.split(/[/\\]/).pop() || path;
-      const id = `path-${path}`;
-      setFiles((prev) => {
-        if (prev.some((f) => f.id === id)) return prev;
-        const att: FileAttachment = {
-          id,
-          name,
-          kind: "text",
-          mediaType: "text/plain",
-          text: result.content,
-          size: result.size,
-        };
-        return [...prev, att];
-      });
-      useChatStore.getState().focusInput();
-    } catch (e) {
-      console.error("attachFileByPath failed:", e);
-    }
-  }, []);
+      try {
+        type ReadResult =
+          | { kind: "text"; content: string; size: number }
+          | { kind: "binary"; size: number }
+          | { kind: "toolarge"; size: number; limit: number };
+        const result = await invoke<ReadResult>("fs_read_file", {
+          path,
+          workspace: currentWorkspaceEnv(),
+        });
+        if (!isCurrent() || result.kind !== "text") return false;
+        const name = path.split(/[/\\]/).pop() || path;
+        const id = `path-${path}`;
+        setFiles((prev) => {
+          if (!isCurrent()) return prev;
+          if (prev.some((f) => f.id === id)) return prev;
+          const att: FileAttachment = {
+            id,
+            name,
+            kind: "text",
+            mediaType: "text/plain",
+            text: result.content,
+            size: result.size,
+          };
+          return [...prev, att];
+        });
+        useChatStore.getState().focusInput();
+        return isCurrent();
+      } catch {
+        return false;
+      }
+    },
+    [captureOwner],
+  );
 
   const attachTextFile = useCallback(
-    (attachment: { id: string; name: string; text: string; size: number }) => {
+    (
+      attachment: { id: string; name: string; text: string; size: number },
+      isCallerCurrent: () => boolean = () => true,
+    ) => {
+      const owner = captureOwner();
+      const isCurrent = () => Boolean(owner?.isCurrent() && isCallerCurrent());
+      if (!isCurrent()) return false;
       setFiles((prev) => {
+        if (!isCurrent()) return prev;
         if (prev.some((file) => file.id === attachment.id)) return prev;
         return [
           ...prev,
@@ -172,8 +207,9 @@ export function AiComposerProvider({ children }: ProviderProps) {
         ];
       });
       useChatStore.getState().focusInput();
+      return isCurrent();
     },
-    [],
+    [captureOwner],
   );
 
   useEffect(() => {

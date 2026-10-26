@@ -6,7 +6,14 @@ import { Chat, type UIMessage } from "@ai-sdk/react";
 import { AiComposerProvider, useComposer } from "@/modules/ai/lib/composer";
 import { chats, useChatStore } from "@/modules/ai/store/chatStore";
 
-const fixture = vi.hoisted(() => ({ createChat: vi.fn(), present: vi.fn() }));
+const fixture = vi.hoisted(() => ({
+  createChat: vi.fn(),
+  present: vi.fn(),
+  nativeRead: vi.fn(),
+}));
+vi.mock("@/modules/ai/lib/native", () => ({
+  native: { readFile: fixture.nativeRead },
+}));
 vi.mock("@/modules/ai/store/chatRuntime", () => ({
   getOrCreateChat: fixture.createChat,
 }));
@@ -59,6 +66,7 @@ beforeEach(async () => {
     .mockReset()
     .mockImplementation((id: string) => chats.get(id) ?? makeChat(id));
   fixture.present.mockReset();
+  fixture.nativeRead.mockReset();
   chats.clear();
   useChatStore.setState({
     activeSessionId: "original",
@@ -340,4 +348,50 @@ it("keeps a current browser attachment and deduplicates the same file", async ()
       kind: "text",
     }),
   ]);
+});
+
+it("reads an explicit native file through its supplied filesystem and publishes its chip", async () => {
+  fixture.nativeRead.mockResolvedValue({
+    kind: "text",
+    content: "original",
+    size: 8,
+  });
+  await act(async () => {
+    expect(
+      await composer.attachFileByPath("/repo/file.ts", { kind: "local" }),
+    ).toBe(true);
+  });
+  expect(fixture.nativeRead).toHaveBeenCalledExactlyOnceWith("/repo/file.ts", {
+    kind: "local",
+  });
+  expect(composer.files).toEqual([
+    expect.objectContaining({ name: "file.ts", text: "original" }),
+  ]);
+});
+
+it("keeps a late explicit native file out of a successor chat", async () => {
+  makeChat("original");
+  makeChat("selected");
+  let finish!: (result: {
+    kind: "text";
+    content: string;
+    size: number;
+  }) => void;
+  fixture.nativeRead.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  let pending!: Promise<boolean>;
+  await act(async () => {
+    pending = composer.attachFileByPath("/repo/file.ts", { kind: "local" });
+    await vi.dynamicImportSettled();
+  });
+  await act(async () => {
+    useChatStore.getState().switchSession("selected");
+    finish({ kind: "text", content: "retired", size: 7 });
+    expect(await pending).toBe(false);
+  });
+  expect(composer.files).toEqual([]);
 });
