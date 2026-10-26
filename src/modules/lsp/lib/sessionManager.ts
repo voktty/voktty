@@ -1,5 +1,6 @@
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { isLocalLspDocument } from "@/modules/lsp/lib/documentFilesystem";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { WorkspaceTextEditRequest } from "@/modules/workspace-edit";
@@ -45,8 +46,12 @@ export type LspPresentationOptions = {
 };
 
 const sessions = new Map<string, Managed>();
-const creating = new Map<string, Promise<Managed | null>>();
+const creating = new Map<
+  string,
+  { promise: Promise<Managed | null>; callers: Set<() => boolean> }
+>();
 const crashTimes = new Map<string, number[]>();
+let pendingAcquisitions = 0;
 
 function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
@@ -70,13 +75,41 @@ function recordCrash(key: string): void {
 export async function acquireDocExtension(
   path: string,
   langId: string,
+  workspace: WorkspaceEnv,
   onWorkspaceEdit?: (request: WorkspaceTextEditRequest) => void,
   presentation: LspPresentationOptions = {
     semanticTokens: true,
     inlayHints: true,
   },
+  isCurrent: () => boolean = () => true,
 ): Promise<LspDocHandle | null> {
-  if (currentWorkspaceEnv().kind !== "local") return null;
+  if (
+    !isCurrent() ||
+    !isLocalLspDocument(path, workspace) ||
+    pendingAcquisitions >= 256
+  )
+    return null;
+  pendingAcquisitions++;
+  try {
+    return await acquireLocalDocExtension(
+      path,
+      langId,
+      onWorkspaceEdit,
+      presentation,
+      isCurrent,
+    );
+  } finally {
+    pendingAcquisitions--;
+  }
+}
+
+async function acquireLocalDocExtension(
+  path: string,
+  langId: string,
+  onWorkspaceEdit: ((request: WorkspaceTextEditRequest) => void) | undefined,
+  presentation: LspPresentationOptions,
+  isCurrent: () => boolean,
+): Promise<LspDocHandle | null> {
   const prefs = usePreferencesStore.getState();
   const preset = serverForLanguage(
     langId,
@@ -86,6 +119,7 @@ export async function acquireDocExtension(
   if (!preset) return null;
   if (prefs.lspActivation[preset.id] !== "enabled") return null;
   if (!(await detectBinary(preset.command))) return null;
+  if (!isCurrent()) return null;
 
   // No project root means no session: a per-directory fallback multiplied
   // servers per open file and burned gigabytes.
@@ -94,12 +128,18 @@ export async function acquireDocExtension(
     path,
     markers,
   }).catch(() => null);
-  if (!root) return null;
+  if (!root || !isCurrent()) return null;
   const key = `${preset.id}\u0000${root}`;
   if (crashedOut(key)) return null;
   if (
     !sessions.has(key) &&
-    [...sessions.values()].filter((m) => m.preset.id === preset.id).length >=
+    !creating.has(key) &&
+    [...sessions.values()].filter((m) => m.preset.id === preset.id).length +
+      [...creating.keys()].filter(
+        (candidate) =>
+          candidate.startsWith(`${preset.id}\u0000`) &&
+          !sessions.has(candidate),
+      ).length >=
       MAX_SESSIONS_PER_PRESET
   ) {
     console.warn(
@@ -125,21 +165,35 @@ export async function acquireDocExtension(
   }
 
   const managed =
-    sessions.get(key) ?? (await getOrCreateSession(key, preset, root));
+    sessions.get(key) ??
+    (await getOrCreateSession(key, preset, root, isCurrent));
   if (!managed) return null;
+  if (!isCurrent()) {
+    scheduleIdleClose(managed);
+    return null;
+  }
 
   const uri = pathToFileUri(path);
   const languageId = preset.languages[langId] ?? langId;
   const mod = await import("./client");
+  if (!isCurrent() || managed.closing || sessions.get(key) !== managed) {
+    scheduleIdleClose(managed);
+    return null;
+  }
   const extension: Extension = [
     mod.lspInteractions({
       client: managed.client,
       documentUri: uri,
       rootPath: managed.root.replace(/\\/g, "/"),
-      onWorkspaceEdit,
+      onWorkspaceEdit: onWorkspaceEdit
+        ? (request) => {
+            if (isCurrent()) onWorkspaceEdit(request);
+          }
+        : undefined,
       semanticTokens: presentation.semanticTokens,
       inlayHints: presentation.inlayHints,
       onNavigate: (extUri, line, column) => {
+        if (!isCurrent()) return false;
         const target = fileUriToPath(extUri);
         const navigator = getLspNavigator();
         if (!target || !navigator) return false;
@@ -177,22 +231,35 @@ function getOrCreateSession(
   key: string,
   preset: LspPreset,
   root: string,
+  isCurrent: () => boolean,
 ): Promise<Managed | null> {
   let inflight = creating.get(key);
   if (!inflight) {
-    inflight = createSession(key, preset, root).finally(() =>
-      creating.delete(key),
-    );
+    const callers = new Set<() => boolean>();
+    const promise = Promise.resolve()
+      .then(() =>
+        createSession(key, preset, root, () =>
+          [...callers].some((current) => current()),
+        ),
+      )
+      .finally(() => {
+        if (creating.get(key)?.promise === promise) creating.delete(key);
+      });
+    inflight = { promise, callers };
     creating.set(key, inflight);
   }
-  return inflight;
+  const captured = inflight;
+  captured.callers.add(isCurrent);
+  return captured.promise.finally(() => captured.callers.delete(isCurrent));
 }
 
 async function createSession(
   key: string,
   preset: LspPreset,
   root: string,
+  isCurrent: () => boolean,
 ): Promise<Managed | null> {
+  if (!isCurrent()) return null;
   const existing = sessions.get(key);
   if (existing) return existing;
 
@@ -203,11 +270,19 @@ async function createSession(
     import("./transport"),
     import("./client"),
   ]);
+  if (!isCurrent()) {
+    store.removeSessionQuiet(key);
+    return null;
+  }
 
   if (VokttyLspClient.hostPid === null) {
     VokttyLspClient.hostPid = await invoke<number>("lsp_host_pid").catch(
       () => null,
     );
+  }
+  if (!isCurrent()) {
+    store.removeSessionQuiet(key);
+    return null;
   }
 
   const transport = new TauriLspTransport();
@@ -348,7 +423,11 @@ function releaseRef(managed: Managed, uri: string): void {
   }
   managed.refs.delete(uri);
   if (!managed.closing) managed.client.textDocumentDidClose(uri);
-  if (managed.refs.size === 0 && !managed.closing) {
+  scheduleIdleClose(managed);
+}
+
+function scheduleIdleClose(managed: Managed): void {
+  if (managed.refs.size === 0 && !managed.closing && !managed.idleTimer) {
     managed.idleTimer = setTimeout(() => {
       void closeSession(managed);
     }, IDLE_SHUTDOWN_MS);

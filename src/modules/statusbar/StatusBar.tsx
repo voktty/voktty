@@ -186,7 +186,7 @@ export function StatusBar({
           onConnectDocker={onConnectDocker}
           onOpenSettings={onOpenSettings}
         />
-        <LspStatusPill filePath={filePath ?? null} />
+        <LspStatusPill filePath={filePath ?? null} workspaceEnv={activeWorkspaceEnv} />
         <DiagnosticsBadge filePath={filePath ?? null} />
         <DevServerPill
           leafId={activeLeafId}

@@ -16,6 +16,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
+import type { WorkspaceEnv } from "@/modules/workspace";
 import { redetectBinary } from "../lib/detect";
 import type { LspPreset } from "../lib/presets";
 import { restartPresetSessions } from "../lib/sessionManager";
@@ -23,15 +24,23 @@ import { useLspHint } from "../lib/useLspHint";
 
 type Props = {
   filePath: string | null;
+  workspaceEnv?: WorkspaceEnv;
 };
 
 const PILL_CLASS =
   "voktty-pill-in ml-1.5 flex h-6 shrink-0 cursor-pointer [&_button]:cursor-pointer items-center gap-1 rounded-full border border-border/50 bg-accent/50 px-2 text-[10.5px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground";
 
-export function LspStatusPill({ filePath }: Props) {
+export function LspStatusPill({ filePath, workspaceEnv }: Props) {
   const { t } = useTranslation();
-  const hint = useLspHint(filePath);
+  const hint = useLspHint(filePath, workspaceEnv);
   if (!hint) return null;
+
+  if (hint.kind === "unsupported") {
+    return <span className={PILL_CLASS} aria-disabled="true" title={t("editor.navigation.unavailable")}>
+      <HugeiconsIcon icon={SourceCodeIcon} size={11} strokeWidth={2} />
+      <span>{hint.preset.name} LSP</span>
+    </span>;
+  }
 
   if (hint.kind === "enable") {
     return (

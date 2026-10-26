@@ -1063,6 +1063,7 @@ export const EditorPane = memo(
       path,
       langId,
       doc.status === "ready",
+      workspaceEnv,
       onWorkspaceEdit,
     );
     useEffect(() => {

@@ -42,6 +42,8 @@ Editor status is keyed by tab id because two tabs may show the same path indepen
 
 Search, LSP extensions, debugger adapters and agent context collectors must be lazy. Disabled capabilities perform no workspace scan, process spawn or provider request. The existing 4 MiB syntax and LSP threshold and file size caps remain authoritative.
 
+LSP acquisition and its status indicator use the document's explicit filesystem, independently of the selected terminal environment. The local adapter rejects unresolved remote namespaces, SSH, WSL, Docker and serial document paths before binary detection or native root lookup; native Windows and UNC documents retain their local interpretation. Unsupported documents show a disabled indicator without local install or enable actions. Local startup always sends an explicit local workspace to Rust. Retired document readers cannot admit later acquisition stages or receive a replacement's handle. Shared startup continues while any original caller remains current, counts opening roots against the four-server limit and retains up to 256 unsettled acquisitions until settlement. A native startup already admitted without surviving readers follows the existing three-minute idle cleanup rather than claiming native cancellation.
+
 ## Quick Open
 
 `Ctrl+P` opens the workspace file picker. Its index is built only while the dialog is open, cached briefly per workspace and visibility preference, and capped at 10,000 files with the same ignored-directory policy used by the explorer. Local and WSL workspaces use `fs_list_files`; SSH workspaces traverse the existing authenticated remote filesystem channel with bounded concurrency. Serial and Docker workspaces expose an explicit unavailable state until they have a filesystem contract.
