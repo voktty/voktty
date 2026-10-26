@@ -264,6 +264,24 @@ function resolveGitWorkspace(
   return current;
 }
 
+function resolveFilesystemWorkspace(
+  path: string,
+  explicitWorkspace?: WorkspaceEnv,
+): WorkspaceEnv {
+  if (!explicitWorkspace) return currentWorkspaceEnv();
+  if (isWindowsNativePath(path)) return LOCAL_WORKSPACE;
+  if (path.startsWith("remote://"))
+    throw new Error(
+      "Resolve the remote project before accessing its filesystem.",
+    );
+  if (
+    explicitWorkspace.kind === "docker" ||
+    explicitWorkspace.kind === "serial"
+  )
+    throw new Error("This filesystem transport is unavailable.");
+  return explicitWorkspace;
+}
+
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
   workspaceAuthorize: (path: string) =>
@@ -271,8 +289,8 @@ export const native = {
       path,
       workspace: currentWorkspaceEnv(),
     }),
-  readFile: (path: string) => {
-    const workspace = currentWorkspaceEnv();
+  readFile: (path: string, explicitWorkspace?: WorkspaceEnv) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       return remoteReadFile(workspace, path).then(({ content, size }) => ({
         kind: "text" as const,
@@ -285,8 +303,12 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  writeFile: async (path: string, content: string) => {
-    const workspace = currentWorkspaceEnv();
+  writeFile: async (
+    path: string,
+    content: string,
+    explicitWorkspace?: WorkspaceEnv,
+  ) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       await remoteWriteFile(workspace, path, content);
       return;
@@ -297,8 +319,8 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  canonicalize: (path: string) => {
-    const workspace = currentWorkspaceEnv();
+  canonicalize: (path: string, explicitWorkspace?: WorkspaceEnv) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     return isPathInRemoteWorkspace(workspace, path)
       ? remoteCanonicalize(workspace, path)
       : invoke<string>("fs_canonicalize", {
@@ -317,8 +339,8 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  createDir: async (path: string) => {
-    const workspace = currentWorkspaceEnv();
+  createDir: async (path: string, explicitWorkspace?: WorkspaceEnv) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       await remoteCreateDir(workspace, path);
       return;
@@ -414,8 +436,8 @@ export const native = {
   },
   // AI tooling never sees dot-prefixed entries regardless of the user's
   // explorer preference — keeps .git / .env / .ssh out of agent context.
-  readDir: (path: string) => {
-    const workspace = currentWorkspaceEnv();
+  readDir: (path: string, explicitWorkspace?: WorkspaceEnv) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       return remoteReadDir(workspace, path).then((entries) =>
         entries
