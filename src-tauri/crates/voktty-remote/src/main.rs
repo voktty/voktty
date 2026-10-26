@@ -1,6 +1,7 @@
 mod agent_proc;
 mod canonical_path;
 mod file_preview;
+mod filename_search;
 mod git_output;
 mod line_metrics;
 mod opencode_service;
@@ -37,7 +38,7 @@ use voktty_remote_protocol::{
     METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD,
     METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE,
     METHOD_READ_FILE_PREVIEW, METHOD_RENAME, METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW,
-    METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD,
+    METHOD_SEARCH_NAMES, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD,
     METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW,
     METHOD_WRITE_FILE, PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
@@ -333,7 +334,9 @@ impl RemoteServer {
             METHOD_COPY => self.copy(request),
             METHOD_DELETE => self.delete(request),
             METHOD_GREP => self.grep(request),
-            METHOD_GREP_INDEPENDENT | METHOD_GLOB => self.owned_search(request),
+            METHOD_GREP_INDEPENDENT | METHOD_GLOB | METHOD_SEARCH_NAMES => {
+                self.owned_search(request)
+            }
             METHOD_GREP_CANCEL => self.cancel_grep(request),
             METHOD_REPLACE_PREVIEW => self.replace_preview(request),
             METHOD_REPLACE_APPLY => self.replace_apply(request),
@@ -392,6 +395,7 @@ impl RemoteServer {
                     METHOD_GREP,
                     METHOD_GREP_INDEPENDENT,
                     METHOD_GLOB,
+                    METHOD_SEARCH_NAMES,
                     METHOD_GREP_CANCEL,
                     METHOD_REPLACE_PREVIEW,
                     METHOD_REPLACE_APPLY,
@@ -2833,7 +2837,7 @@ fn run_stdio() -> io::Result<()> {
                             }
                             continue;
                         }
-                        METHOD_GREP_INDEPENDENT | METHOD_GLOB => {
+                        METHOD_GREP_INDEPENDENT | METHOD_GLOB | METHOD_SEARCH_NAMES => {
                             if let Some(response) = server.start_owned_search(request, sink.clone())
                             {
                                 send_frame(&stdout, &Frame::Response(response))?;

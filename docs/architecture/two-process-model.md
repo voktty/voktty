@@ -90,7 +90,26 @@ query, hidden-file setting and mounted search lifetime. Changing that context
 withdraws accepted rows immediately and retires their cached menu callbacks,
 including after returning to the previous context. Unsettled native reads
 remain counted against the shared 16-request budget until settlement.
-This presentation guard does not cancel native scans or add SSH search support.
+This presentation guard does not cancel native scans.
+
+SSH filename searches use the authenticated helper's independent
+`fs.searchNames` capability. The helper validates a relative search directory
+under its canonical workspace root and ranks regular files and directories
+with the same path-aware, smart-case matcher as native search. Ignore rules,
+hidden-file preferences and heavy-directory pruning apply without following
+symlinks. Requests allow a 4096-byte query and at most 1000 results; scans visit
+at most 50,000 entries and retain at most 8 MiB of result strings. The shared
+independent-search pool holds eight jobs through response-write settlement,
+with a 30-second cooperative deadline, 256 KiB request limit and 4 MiB response
+budget. Blocking filesystem calls are not forcibly interrupted.
+
+The Explorer captures its original helper session before lazy loading,
+validates up to 200 relative results and reconstructs paths under its captured
+search root. Missing capabilities and transport failures never fall back to
+local IO or cancel interactive content searches. Remote results cannot invoke
+the local file manager. Unresolved project namespaces, Docker and serial
+filename searches remain unavailable; native Windows and UNC paths retain
+their explicit local interpretation.
 
 #### Grep
 

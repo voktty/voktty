@@ -7,7 +7,11 @@ use globset::Glob;
 use ignore::WalkBuilder;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use voktty_remote_protocol::{RemoteRequest, RemoteResponse, METHOD_GLOB, METHOD_GREP_INDEPENDENT};
+use voktty_remote_protocol::{
+    RemoteRequest, RemoteResponse, METHOD_GLOB, METHOD_GREP_INDEPENDENT, METHOD_SEARCH_NAMES,
+};
+
+use crate::filename_search::FilenameSearch;
 
 use crate::search::{
     prepare_independent, resolve_search_root_literal, run_search_bounded, PreparedSearch,
@@ -56,6 +60,7 @@ struct GlobParams {
 enum Query {
     Grep(PreparedSearch),
     Glob(PathBuf, globset::GlobMatcher, usize),
+    Names(FilenameSearch),
 }
 
 struct Budget {
@@ -119,6 +124,10 @@ impl OwnedSearchState {
             ));
         }
         let query = match request.method.as_str() {
+            METHOD_SEARCH_NAMES => Query::Names(
+                FilenameSearch::prepare(root, request.params.clone())
+                    .map_err(|error| fail("invalid_params", error))?,
+            ),
             METHOD_GREP_INDEPENDENT => Query::Grep(
                 prepare_independent(root, request.params.clone())
                     .map_err(|error| fail("invalid_params", error))?,
@@ -165,6 +174,11 @@ impl OwnedSearchJob {
                 })
             }
             Some(Query::Glob(root, matcher, cap)) => self.glob(&root, &matcher, cap),
+            Some(Query::Names(search)) => {
+                search.run(self.budget.deadline, &|| self.budget.stopped(), &|bytes| {
+                    self.budget.admit(bytes)
+                })
+            }
             None => Err("remote search was already executed".into()),
         };
         let result = if self.budget.stopped() {
@@ -240,6 +254,182 @@ mod tests {
             method: method.into(),
             params,
         }
+    }
+
+    #[test]
+    fn filename_search_is_authenticated_advertised_and_ranks_files_and_directories() {
+        let directory = tempdir().unwrap();
+        std::fs::create_dir_all(directory.path().join("src/deep")).unwrap();
+        std::fs::create_dir(directory.path().join("CommandPanel")).unwrap();
+        std::fs::write(directory.path().join("CommandPalette.tsx"), "").unwrap();
+        std::fs::write(directory.path().join("config.rs"), "").unwrap();
+        std::fs::write(directory.path().join("src/deep/config.rs"), "").unwrap();
+        let mut server = RemoteServer::new();
+        assert!(
+            !server
+                .handle(request("fs.searchNames", json!({"query":"cmdp"})))
+                .ok
+        );
+        let ready = server.handle(request(
+            METHOD_HANDSHAKE,
+            json!({"workspaceRoot":directory.path()}),
+        ));
+        assert!(ready.result.unwrap()["capabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "fs.searchNames"));
+        let response = server.handle(request("fs.searchNames", json!({"query":"cmdp"})));
+        assert!(response.ok, "{:?}", response.error);
+        let hits = response.result.unwrap()["hits"].as_array().unwrap().clone();
+        assert!(hits
+            .iter()
+            .any(|hit| hit["rel"] == "CommandPanel" && hit["is_dir"] == true));
+        assert!(hits
+            .iter()
+            .any(|hit| hit["rel"] == "CommandPalette.tsx" && hit["is_dir"] == false));
+        assert!(hits.iter().all(|hit| hit.get("path").is_none()));
+        let response = server.handle(request(
+            "fs.searchNames",
+            json!({"query":"config", "maxResults":1}),
+        ));
+        let result = response.result.unwrap();
+        assert_eq!(result["hits"][0]["rel"], "config.rs");
+        assert_eq!(result["truncated"], true);
+    }
+
+    #[test]
+    fn filename_search_validates_parameters_without_leaking_admission() {
+        let directory = tempdir().unwrap();
+        let state = OwnedSearchState::default();
+        for params in [
+            json!({"query":""}),
+            json!({"query":"  "}),
+            json!({"query":"x".repeat(4097)}),
+            json!({"query":"a\u{0000}b"}),
+            json!({"query":"ab", "maxResults":0}),
+            json!({"query":"ab", "maxResults":1001}),
+            json!({"query":"ab", "cwd":"../outside"}),
+            json!({"query":"ab", "cwd":"/"}),
+            json!({"query":"ab", "unexpected":true}),
+        ] {
+            let error = state
+                .prepare(Some(directory.path()), request("fs.searchNames", params))
+                .err()
+                .expect("invalid parameters");
+            assert_eq!(error.error.unwrap().code, "invalid_params");
+        }
+        assert_eq!(state.active.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn filename_search_obeys_ignores_hidden_preferences_and_heavy_directory_pruning() {
+        let directory = tempdir().unwrap();
+        std::fs::create_dir(directory.path().join(".git")).unwrap();
+        std::fs::write(directory.path().join(".gitignore"), "ignored-note.txt\n").unwrap();
+        std::fs::create_dir_all(directory.path().join("node_modules/nested")).unwrap();
+        for name in [
+            "visible-note.txt",
+            ".hidden-note.txt",
+            "ignored-note.txt",
+            "node_modules/nested/note.txt",
+        ] {
+            std::fs::write(directory.path().join(name), "").unwrap();
+        }
+        let state = OwnedSearchState::default();
+        for hidden in [false, true] {
+            let response = state
+                .prepare(
+                    Some(directory.path()),
+                    request(
+                        "fs.searchNames",
+                        json!({"query":"note", "showHidden":hidden}),
+                    ),
+                )
+                .unwrap()
+                .run();
+            assert!(response.ok, "{:?}", response.error);
+            let result = response.result.unwrap();
+            let hits = result["hits"].as_array().unwrap();
+            assert_eq!(hits.len(), if hidden { 2 } else { 1 });
+            assert!(hits
+                .iter()
+                .all(|hit| !hit["rel"].as_str().unwrap().contains("ignored")
+                    && !hit["rel"].as_str().unwrap().contains("node_modules")));
+        }
+    }
+
+    #[test]
+    fn filename_search_retains_slots_and_checks_deadline_and_response_budget() {
+        let directory = tempdir().unwrap();
+        std::fs::write(directory.path().join("note.txt"), "").unwrap();
+        let state = OwnedSearchState::default();
+        let mut jobs = (0..MAX_JOBS)
+            .map(|_| {
+                state
+                    .prepare(
+                        Some(directory.path()),
+                        request("fs.searchNames", json!({"query":"note"})),
+                    )
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert!(jobs[0].run().ok);
+        assert!(state
+            .prepare(
+                Some(directory.path()),
+                request("fs.searchNames", json!({"query":"note"}))
+            )
+            .is_err());
+        jobs.pop();
+        let mut expired = state
+            .prepare(
+                Some(directory.path()),
+                request("fs.searchNames", json!({"query":"note"})),
+            )
+            .unwrap();
+        expired.budget.deadline = Instant::now();
+        assert!(!expired.run().ok);
+        drop(expired);
+        let mut full = state
+            .prepare(
+                Some(directory.path()),
+                request("fs.searchNames", json!({"query":"note"})),
+            )
+            .unwrap();
+        full.budget
+            .bytes
+            .store(MAX_RESPONSE_BYTES, Ordering::Relaxed);
+        assert!(!full.run().ok);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn filename_search_preserves_literal_roots_and_rejects_symlink_escapes() {
+        let directory = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        std::fs::create_dir(directory.path().join(" ")).unwrap();
+        std::fs::write(directory.path().join(" ").join("literal\\note.txt"), "").unwrap();
+        std::fs::write(directory.path().join("outside-note.txt"), "").unwrap();
+        std::os::unix::fs::symlink(outside.path(), directory.path().join("linked")).unwrap();
+        let state = OwnedSearchState::default();
+        assert!(state
+            .prepare(
+                Some(directory.path()),
+                request("fs.searchNames", json!({"query":"note", "cwd":"linked"}))
+            )
+            .is_err());
+        let response = state
+            .prepare(
+                Some(directory.path()),
+                request("fs.searchNames", json!({"query":"note", "cwd":" "})),
+            )
+            .unwrap()
+            .run();
+        let result = response.result.unwrap();
+        assert_eq!(result["hits"].as_array().unwrap().len(), 1);
+        assert_eq!(result["hits"][0]["rel"], "literal\\note.txt");
+        assert_eq!(result["hits"][0]["name"], "literal\\note.txt");
     }
 
     #[test]

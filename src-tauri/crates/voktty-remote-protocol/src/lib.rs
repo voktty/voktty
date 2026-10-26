@@ -23,6 +23,7 @@ pub const METHOD_DELETE: &str = "fs.delete";
 pub const METHOD_GREP: &str = "fs.grep";
 pub const METHOD_GREP_INDEPENDENT: &str = "fs.grepIndependent";
 pub const METHOD_GLOB: &str = "fs.glob";
+pub const METHOD_SEARCH_NAMES: &str = "fs.searchNames";
 pub const METHOD_GREP_CANCEL: &str = "fs.grepCancel";
 pub const METHOD_REPLACE_PREVIEW: &str = "fs.replacePreview";
 pub const METHOD_REPLACE_APPLY: &str = "fs.replaceApply";

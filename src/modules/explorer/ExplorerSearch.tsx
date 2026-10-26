@@ -14,8 +14,9 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
-import { invoke } from "@tauri-apps/api/core";
-import { isWindowsNativePath, workspaceForDocumentPath, type WorkspaceEnv } from "@/modules/workspace";
+import { workspaceForDocumentPath, type WorkspaceEnv } from "@/modules/workspace";
+import { canSearchFilenames, searchFilenames, FilenameSearchUnavailableError, type FilenameHit as SearchHit, type FilenameResult as SearchResult } from "@/modules/explorer/lib/filenameSearch";
+import { nativeFileActionPath } from "@/modules/surfaces/lib/fileActionTarget";
 import { IS_WINDOWS } from "@/lib/platform";
 import {
   forwardRef,
@@ -31,18 +32,6 @@ import { fileIconUrl } from "./lib/iconResolver";
 import { copyToClipboard, revealInFinder } from "./lib/contextActions";
 import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { cn } from "@/lib/utils";
-
-type SearchHit = {
-  path: string;
-  rel: string;
-  name: string;
-  is_dir: boolean;
-};
-
-type SearchResult = {
-  hits: SearchHit[];
-  truncated: boolean;
-};
 
 const MIN_QUERY_LEN = 2;
 const DEBOUNCE_MS = 300;
@@ -84,10 +73,8 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
   const showHidden = usePreferencesStore((s) => s.showHidden);
   const filesystem = JSON.stringify(workspace);
   const owner = workspaceForDocumentPath(workspace, rootPath);
-  const available = !rootPath.startsWith("remote://") &&
-    (isWindowsNativePath(rootPath) ||
-      (workspace.kind !== "docker" && workspace.kind !== "serial" &&
-        (owner.kind === "local" || (owner.kind === "wsl" && IS_WINDOWS))));
+  const available = canSearchFilenames(workspace, rootPath);
+  const canReveal = nativeFileActionPath(rootPath, owner, IS_WINDOWS) !== null;
   const [query, setQuery] = useState("");
   const searchOwner = useMemo(
     () => ({ rootPath, filesystem, showHidden, query, open, lifetime: { current: false } }),
@@ -113,6 +100,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
   const [searching, setSearching] = useState(false);
   const truncated = resultLifetime?.current && publication?.result.truncated;
   const [failed, setFailed] = useState(false);
+  const [unsupported, setUnsupported] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastKeyboardNavAt = useRef(0);
@@ -137,6 +125,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
   useEffect(() => {
     const { query, rootPath, showHidden, filesystem, open } = searchOwner;
     const q = query.trim();
+    setUnsupported(false);
     if (q.length < MIN_QUERY_LEN || !available || !open) {
       setPublication(null);
       setSelectedIndex(0);
@@ -159,20 +148,15 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       }
       pendingSearches++;
       try {
-        const res = await invoke<SearchResult>("fs_search", {
-          root: rootPath,
-          query: q,
-          limit: 200,
-          showHidden,
-          workspace: captured,
-        });
+        const res = await searchFilenames(captured, rootPath, q, showHidden, () => alive && lifetime.current);
         if (alive && lifetime.current) {
           setPublication({ owner: searchOwner, lifetime, result: res });
           setSelectedIndex(0);
         }
-      } catch {
+      } catch (error) {
         if (alive && lifetime.current) {
-          setFailed(true);
+          setUnsupported(error instanceof FilenameSearchUnavailableError);
+          setFailed(!(error instanceof FilenameSearchUnavailableError));
           setPublication(null);
           setSelectedIndex(0);
         }
@@ -271,9 +255,9 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       {active ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="py-1" ref={scrollRef}>
-            {!available || failed ? (
+            {!available || unsupported || failed ? (
               <div role="status" className="px-3 py-2 text-[11px] text-muted-foreground">
-                {t(!available ? "git.unsupportedFilesystem" : "feedback.somethingWentWrong")}
+                {t(!available || unsupported ? "git.unsupportedFilesystem" : "feedback.somethingWentWrong")}
               </div>
             ) : searching && results.length === 0 ? (
               <div className="px-3 py-2 text-[11px] text-muted-foreground">
@@ -356,7 +340,9 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                       )}
                       <ContextMenuItem
                         className={COMPACT_ITEM}
-                        onSelect={() => { if (resultLifetime?.current) void revealInFinder(hit.path); }}
+                        disabled={!canReveal}
+                        title={!canReveal ? t("git.unsupportedFilesystem") : undefined}
+                        onSelect={() => { if (resultLifetime?.current && canReveal) void revealInFinder(hit.path); }}
                       >
                         {t("explorer.revealInFinder")}
                       </ContextMenuItem>

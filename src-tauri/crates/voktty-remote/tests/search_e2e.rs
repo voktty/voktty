@@ -139,3 +139,40 @@ fn real_stdio_searches_require_handshake_and_survive_interactive_cancellation() 
     assert!(!escaped.ok);
     assert_eq!(escaped.error.unwrap().code, "invalid_params");
 }
+
+#[test]
+fn real_stdio_filename_searches_keep_directories_and_ignore_interactive_cancellation() {
+    let workspace = tempfile::tempdir().unwrap();
+    std::fs::create_dir(workspace.path().join("CommandPanel")).unwrap();
+    std::fs::write(workspace.path().join("CommandPalette.tsx"), "").unwrap();
+    let mut helper = Helper::start();
+    helper.send("no-auth", "fs.searchNames", json!({"query":"cmdp"}));
+    assert_eq!(helper.receive().error.unwrap().code, "handshake_required");
+    helper.send(
+        "ready",
+        METHOD_HANDSHAKE,
+        json!({"workspaceRoot":workspace.path()}),
+    );
+    let ready = helper.receive();
+    assert!(ready.result.unwrap()["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry == "fs.searchNames"));
+    helper.send("names", "fs.searchNames", json!({"query":"cmdp"}));
+    helper.send("cancel", METHOD_GREP_CANCEL, json!({}));
+    let mut replies = HashMap::new();
+    for _ in 0..2 {
+        let response = helper.receive();
+        assert!(response.ok, "{:?}", response.error);
+        replies.insert(response.id, response.result.unwrap());
+    }
+    let hits = replies["names"]["hits"].as_array().unwrap();
+    assert_eq!(hits.len(), 2);
+    assert!(hits
+        .iter()
+        .any(|hit| hit["rel"] == "CommandPanel" && hit["is_dir"] == true));
+    assert!(hits
+        .iter()
+        .any(|hit| hit["rel"] == "CommandPalette.tsx" && hit["is_dir"] == false));
+}

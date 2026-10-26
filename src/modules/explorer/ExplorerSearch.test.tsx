@@ -12,6 +12,7 @@ import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 
 const io = vi.hoisted(() => ({
   invoke: vi.fn(),
+  reveal: vi.fn(),
   change: null as ((value: string) => void) | null,
   menuActions: [] as (() => void)[],
 }));
@@ -39,6 +40,7 @@ vi.mock("@/components/ui/context-menu", () => {
   };
 });
 vi.mock("@tauri-apps/api/core", () => ({ invoke: io.invoke }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: io.reveal }));
 vi.mock("@/modules/explorer/lib/iconResolver", () => ({
   fileIconUrl: () => "",
 }));
@@ -83,6 +85,7 @@ beforeEach(() => {
     () => {},
   );
   io.invoke.mockReset();
+  io.reveal.mockReset();
   io.menuActions = [];
   node = document.createElement("div");
   root = createRoot(node);
@@ -110,7 +113,13 @@ it("searches the original local filesystem while the global workspace is WSL", a
   );
 });
 
-it("explains unsupported SSH filename search without falling back to local IO", async () => {
+it("explains an older SSH helper without falling back to local IO", async () => {
+  io.invoke.mockResolvedValue({
+    protocol: 2,
+    id: "old",
+    ok: false,
+    error: { code: "method_not_found", message: "unknown method" },
+  });
   await render({
     kind: "ssh",
     root: "/repo",
@@ -121,10 +130,96 @@ it("explains unsupported SSH filename search without falling back to local IO", 
     io.change?.("file");
   });
   await act(async () => vi.advanceTimersByTimeAsync(300));
-  expect(io.invoke).not.toHaveBeenCalled();
+  await act(async () => vi.dynamicImportSettled());
+  expect(io.invoke).toHaveBeenCalledExactlyOnceWith(
+    "remote_request",
+    expect.objectContaining({
+      sessionId: 1,
+      request: expect.objectContaining({ method: "fs.searchNames" }),
+    }),
+  );
   expect(node.textContent).toContain(
     "This action is unavailable for this filesystem.",
   );
+});
+
+it("opens SSH file results on the original host and refuses native reveal", async () => {
+  const opened = vi.fn();
+  io.invoke.mockResolvedValue({
+    protocol: 2,
+    id: "search",
+    ok: true,
+    result: {
+      hits: [
+        { rel: "src/file.ts", name: "file.ts", is_dir: false },
+        { rel: "src/files", name: "files", is_dir: true },
+      ],
+      truncated: false,
+    },
+  });
+  await render(
+    {
+      kind: "ssh",
+      root: "/repo",
+      sessionId: 7,
+      connection: { id: "original", name: "Original", host: "original.test" },
+    },
+    "/repo",
+    opened,
+  );
+  await act(async () => {
+    io.change?.("file");
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(300));
+  await act(async () => vi.dynamicImportSettled());
+  const file = [...node.querySelectorAll("button")].find(
+    (button) => button.title === "/repo/src/file.ts",
+  );
+  expect(file).toBeDefined();
+  await act(async () => {
+    file?.click();
+  });
+  expect(opened).toHaveBeenCalledExactlyOnceWith("/repo/src/file.ts");
+  expect(node.textContent).toContain("files");
+  for (const action of io.menuActions) await act(async () => action());
+  expect(io.reveal).not.toHaveBeenCalled();
+  expect(io.invoke).toHaveBeenCalledTimes(1);
+});
+
+it("rejects a late SSH result after another filesystem owns the search", async () => {
+  let finish!: (value: unknown) => void;
+  io.invoke
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValue({ hits: [], truncated: false });
+  await render({
+    kind: "ssh",
+    root: "/repo",
+    sessionId: 7,
+    connection: { id: "original", name: "Original", host: "original.test" },
+  });
+  await act(async () => {
+    io.change?.("file");
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(300));
+  await act(async () => vi.dynamicImportSettled());
+  await render();
+  await act(async () =>
+    finish({
+      protocol: 2,
+      id: "old",
+      ok: true,
+      result: {
+        hits: [{ rel: "old.ts", name: "old.ts", is_dir: false }],
+        truncated: false,
+      },
+    }),
+  );
+  expect(node.textContent).not.toContain("old.ts");
 });
 
 it("does not publish a late result from a replaced search root", async () => {
