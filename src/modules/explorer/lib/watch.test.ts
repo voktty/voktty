@@ -151,4 +151,42 @@ describe("filesystem watches", () => {
     expect(isPathWithinTree("C:/projectx/a.ts", "C:/project")).toBe(false);
     expect(isPathWithinTree("C:/other/a.ts", "C:/project")).toBe(false);
   });
+
+  it.each([{ kind: "local" } as WorkspaceEnv, wsl, remote])(
+    "never passes an unresolved project namespace to a watcher: %j",
+    (workspace) => {
+      const path = "remote://voktty-ssh-other/srv/project";
+      const slashed = "remote:\\\\voktty-ssh-other\\srv\\project";
+      watchAdd([path, slashed], workspace);
+      watchRemove([path, slashed], workspace);
+      watchAddTree(path, workspace);
+      watchRemoveTree(path, workspace);
+      watchAddTree(slashed, workspace);
+      watchRemoveTree(slashed, workspace);
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [{ kind: "local" } as WorkspaceEnv, "C:/project", "fs_watch"],
+    [wsl, "/home/fixture/project", "fs_watch"],
+    [remote, "/srv/app", "remote_watch"],
+  ] as const)(
+    "keeps supported siblings in a mixed watch request",
+    (workspace, path, command) => {
+      const namespace = "remote://voktty-ssh-other/srv/project";
+      watchAdd([namespace, path], workspace);
+      watchRemove([namespace, path], workspace);
+      const context =
+        workspace.kind === "ssh" ? { sessionId: 7 } : { workspace };
+      expect(invoke).toHaveBeenNthCalledWith(1, `${command}_add`, {
+        paths: [path],
+        ...context,
+      });
+      expect(invoke).toHaveBeenNthCalledWith(2, `${command}_remove`, {
+        paths: [path],
+        ...context,
+      });
+    },
+  );
 });

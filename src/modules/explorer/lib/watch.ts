@@ -1,4 +1,5 @@
 import { isPathInWorkspace } from "@/modules/remote";
+import { isRemoteProjectUri } from "@/modules/explorer/lib/remoteProjectDir";
 import {
   currentWorkspaceEnv,
   LOCAL_WORKSPACE,
@@ -39,6 +40,7 @@ export function watchAdd(
   const workspacePaths: string[] = [];
   const localPaths: string[] = [];
   for (const p of paths) {
+    if (isRemoteProjectUri(p)) continue;
     if (workspace.kind !== "local" && isPathInWorkspace(workspace, p)) {
       workspacePaths.push(p);
     } else {
@@ -77,6 +79,7 @@ export function watchRemove(
   const workspacePaths: string[] = [];
   const localPaths: string[] = [];
   for (const p of paths) {
+    if (isRemoteProjectUri(p)) continue;
     if (workspace.kind !== "local" && isPathInWorkspace(workspace, p)) {
       workspacePaths.push(p);
     } else {
@@ -116,6 +119,7 @@ export function watchAddTree(
   root: string,
   workspace: WorkspaceEnv = currentWorkspaceEnv(),
 ): void {
+  if (isRemoteProjectUri(root)) return;
   if (workspace.kind === "local") {
     if (isNetworkFilesystemPath(root)) return;
     void invoke("fs_watch_add_tree", {
@@ -134,6 +138,7 @@ export function watchRemoveTree(
   root: string,
   workspace: WorkspaceEnv = currentWorkspaceEnv(),
 ): void {
+  if (isRemoteProjectUri(root)) return;
   if (workspace.kind === "local") {
     void invoke("fs_watch_remove_tree", {
       root,

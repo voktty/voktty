@@ -5,6 +5,7 @@ import {
   watchRemove,
 } from "@/modules/explorer/lib/watch";
 import type { Tab } from "@/modules/tabs";
+import { isRemoteProjectUri } from "@/modules/explorer/lib/remoteProjectDir";
 import {
   type WorkspaceEnv,
   workspaceForDocumentPath,
@@ -39,7 +40,7 @@ export function collectEditorWatchGroups(
 ): Map<string, EditorWatchGroup> {
   const groups = new Map<string, EditorWatchGroup>();
   for (const tab of tabs) {
-    if (tab.kind !== "editor") continue;
+    if (tab.kind !== "editor" || isRemoteProjectUri(tab.path)) continue;
     const workspace = workspaceForDocumentPath(
       tab.workspaceEnv ?? fallbackWorkspace,
       tab.path,
