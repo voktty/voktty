@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { IS_WINDOWS } from "@/lib/platform";
 import {
+  captureProjectFilenameSearch,
+  isProjectFilenameSource,
+  type ProjectFilenameSource,
+} from "@/modules/explorer/lib/projectFilenameSearch";
+import {
   isWindowsNativePath,
   workspaceForDocumentPath,
   type WorkspaceEnv,
@@ -27,8 +32,24 @@ function posixAbsolute(path: string): boolean {
   );
 }
 
-function target(workspace: WorkspaceEnv, root: string) {
-  if (root.startsWith("remote://")) return null;
+function target(
+  workspace: WorkspaceEnv,
+  root: string,
+  projectSource?: ProjectFilenameSource | null,
+) {
+  if (root.startsWith("remote://")) {
+    const source =
+      projectSource === undefined
+        ? captureProjectFilenameSearch(root)
+        : projectSource;
+    return source && isProjectFilenameSource(source, root)
+      ? {
+          kind: "project" as const,
+          source,
+          directory: root.replace(/\/+$/, ""),
+        }
+      : null;
+  }
   const owner = workspaceForDocumentPath(workspace, root);
   if (
     isWindowsNativePath(root) ||
@@ -90,6 +111,7 @@ function decode(value: unknown, directory: string): FilenameResult {
       hit.rel.length > 32768 ||
       hit.rel.startsWith("/") ||
       hit.rel.includes("\0") ||
+      (directory.startsWith("remote://") && hit.rel.includes("\\")) ||
       hit.rel
         .split("/")
         .some((part) => !part || part === "." || part === "..") ||
@@ -110,6 +132,37 @@ function decode(value: unknown, directory: string): FilenameResult {
   return { hits, truncated: value.truncated };
 }
 
+export type CapturedFilenameSearch = Readonly<{
+  isCurrent: () => boolean;
+  run: (
+    query: string,
+    showHidden: boolean,
+    isCurrent: () => boolean,
+  ) => Promise<FilenameResult>;
+}>;
+
+export function captureFilenameSearch(
+  workspace: WorkspaceEnv,
+  root: string,
+  projectSource?: ProjectFilenameSource | null,
+): CapturedFilenameSearch | null {
+  const destination = target(workspace, root, projectSource);
+  if (!destination) return null;
+  const isCurrent = () =>
+    destination.kind !== "project" || destination.source.isCurrent();
+  return Object.freeze({
+    isCurrent,
+    run: (query, showHidden, callerCurrent) =>
+      searchCaptured(
+        destination,
+        root,
+        query,
+        showHidden,
+        () => isCurrent() && callerCurrent(),
+      ),
+  });
+}
+
 export async function searchFilenames(
   workspace: WorkspaceEnv,
   root: string,
@@ -117,8 +170,18 @@ export async function searchFilenames(
   showHidden: boolean,
   isCurrent: () => boolean,
 ): Promise<FilenameResult> {
-  const destination = target(workspace, root);
-  if (!destination) throw new FilenameSearchUnavailableError();
+  const captured = captureFilenameSearch(workspace, root);
+  if (!captured) throw new FilenameSearchUnavailableError();
+  return captured.run(query, showHidden, isCurrent);
+}
+
+async function searchCaptured(
+  destination: NonNullable<ReturnType<typeof target>>,
+  root: string,
+  query: string,
+  showHidden: boolean,
+  isCurrent: () => boolean,
+): Promise<FilenameResult> {
   if (
     !query.trim() ||
     query.includes("\0") ||
@@ -139,16 +202,19 @@ export async function searchFilenames(
   );
   if (!isCurrent()) throw new Error("Filename search retired.");
   try {
-    const response = await requestRemoteResult<unknown>(
-      destination.sessionId,
-      "fs.searchNames",
-      {
-        cwd: destination.cwd,
-        query,
-        showHidden,
-        maxResults: 200,
-      },
-    );
+    const response =
+      destination.kind === "project"
+        ? await destination.source.request(query, showHidden, isCurrent)
+        : await requestRemoteResult<unknown>(
+            destination.sessionId,
+            "fs.searchNames",
+            {
+              cwd: destination.cwd,
+              query,
+              showHidden,
+              maxResults: 200,
+            },
+          );
     if (!isCurrent()) throw new Error("Filename search retired.");
     return decode(response, destination.directory);
   } catch (error) {

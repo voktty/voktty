@@ -83,6 +83,29 @@ export function createProjectDocument(
   }
 
   return {
+    searchNames: (
+      query: string,
+      showHidden: boolean,
+      isCurrent: () => boolean,
+    ) => {
+      if (
+        !query.trim() ||
+        query.includes("\0") ||
+        new TextEncoder().encode(query).length > 4096
+      )
+        return Promise.reject(new Error("Invalid filename search query."));
+      const cwd = relativeWithinProject(root, hostPath);
+      if (cwd === undefined)
+        return Promise.reject(new Error("Search is outside its project."));
+      return run(isCurrent, (workspace) =>
+        requestRemoteResult<unknown>(workspace.sessionId, "fs.searchNames", {
+          cwd,
+          query,
+          showHidden,
+          maxResults: 200,
+        }),
+      );
+    },
     readReference: (
       isCurrent: () => boolean,
       allowPath: (canonical: string) => boolean,

@@ -107,9 +107,21 @@ The Explorer captures its original helper session before lazy loading,
 validates up to 200 relative results and reconstructs paths under its captured
 search root. Missing capabilities and transport failures never fall back to
 local IO or cancel interactive content searches. Remote results cannot invoke
-the local file manager. Unresolved project namespaces, Docker and serial
-filename searches remain unavailable; native Windows and UNC paths retain
-their explicit local interpretation.
+the local file manager. Registered project namespaces capture their saved
+project and SSH profile before debounce and lazy loading, acquire their own
+project lease and retain it through response settlement. Relative queries
+remain valid when the helper canonicalizes a saved root, and results keep
+their original namespace. An open namespace search observes project and
+profile changes; each change retires old requests and menus synchronously,
+including a return to the original binding. Closing search releases those
+metadata subscriptions without cancelling admitted native reads.
+
+Unknown projects or saved profiles, unsupported Host-only namespaces, Docker
+and serial filename searches remain unavailable. Native Windows and UNC
+paths retain their explicit local interpretation. The existing namespace
+format normalizes backslashes, so namespace search refuses paths or results
+containing literal POSIX backslashes rather than opening another resource;
+explicit SSH host-path search retains those names.
 
 #### Grep
 

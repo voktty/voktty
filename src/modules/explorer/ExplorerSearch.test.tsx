@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import {
   act,
+  StrictMode,
   type InputHTMLAttributes,
   type ChangeEvent,
   type ReactNode,
@@ -9,10 +10,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ExplorerSearch } from "@/modules/explorer/ExplorerSearch";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import {
+  rememberRemoteProject,
+  REMOTE_PROJECTS_CHANGED,
+} from "@/modules/connections/model/remoteProjects";
 
 const io = vi.hoisted(() => ({
   invoke: vi.fn(),
   reveal: vi.fn(),
+  acquire: vi.fn(),
   change: null as ((value: string) => void) | null,
   menuActions: [] as (() => void)[],
 }));
@@ -40,6 +47,9 @@ vi.mock("@/components/ui/context-menu", () => {
   };
 });
 vi.mock("@tauri-apps/api/core", () => ({ invoke: io.invoke }));
+vi.mock("@/modules/remote/sessionManager", () => ({
+  remoteSessions: { acquire: io.acquire },
+}));
 vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: io.reveal }));
 vi.mock("@/modules/explorer/lib/iconResolver", () => ({
   fileIconUrl: () => "",
@@ -86,6 +96,7 @@ beforeEach(() => {
   );
   io.invoke.mockReset();
   io.reveal.mockReset();
+  io.acquire.mockReset();
   io.menuActions = [];
   node = document.createElement("div");
   root = createRoot(node);
@@ -97,6 +108,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   useWorkspaceEnvStore.setState({ env: { kind: "local" } });
+  usePreferencesStore.setState({ sshConnections: [] });
+  localStorage.clear();
 });
 
 it("searches the original local filesystem while the global workspace is WSL", async () => {
@@ -220,6 +233,115 @@ it("rejects a late SSH result after another filesystem owns the search", async (
     }),
   );
   expect(node.textContent).not.toContain("old.ts");
+});
+
+it("searches a registered project in StrictMode and retires menus before a profile round trip commits", async () => {
+  const profile = { id: "fixture", name: "Fixture", host: "original.test" };
+  const path = "remote://voktty-ssh-fixture/srv/project/src";
+  rememberRemoteProject("voktty-ssh-fixture", {
+    id: "project",
+    name: "Fixture",
+    cwd: "/srv/project",
+  });
+  usePreferencesStore.setState({ sshConnections: [profile] });
+  const opened = vi.fn();
+  io.acquire.mockImplementation(async () => ({
+    info: {
+      session_id: 7,
+      workspace_root: "/canonical/project",
+      architecture: "x86_64",
+      helper_version: "1",
+      capabilities: ["fs.searchNames"],
+    },
+    release: vi.fn(),
+    releaseAndClose: vi.fn(async () => {}),
+  }));
+  io.invoke.mockResolvedValue({
+    protocol: 2,
+    id: "search",
+    ok: true,
+    result: {
+      hits: [{ rel: "file.ts", name: "file.ts", is_dir: false }],
+      truncated: false,
+    },
+  });
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <ExplorerSearch
+          rootPath={path}
+          workspace={{ kind: "local" }}
+          open
+          onRequestClose={() => {}}
+          onOpenFile={opened}
+        />
+      </StrictMode>,
+    ),
+  );
+  await act(async () => {
+    io.change?.("file");
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(300));
+  await act(async () => vi.dynamicImportSettled());
+  const file = [...node.querySelectorAll("button")].find(
+    (button) => button.title === `${path}/file.ts`,
+  );
+  expect(file).toBeDefined();
+  await act(async () => file?.click());
+  expect(opened).toHaveBeenCalledExactlyOnceWith(`${path}/file.ts`);
+  expect(io.acquire).toHaveBeenCalledExactlyOnceWith(
+    { profileId: "fixture", root: "/srv/project" },
+    expect.objectContaining({ host: "original.test" }),
+  );
+  expect(io.invoke).toHaveBeenCalledExactlyOnceWith(
+    "remote_request",
+    expect.objectContaining({
+      sessionId: 7,
+      request: expect.objectContaining({
+        method: "fs.searchNames",
+        params: expect.objectContaining({ cwd: "src" }),
+      }),
+    }),
+  );
+  const oldActions = [...io.menuActions];
+  opened.mockClear();
+  await act(async () => {
+    usePreferencesStore.setState({
+      sshConnections: [{ ...profile, host: "replacement.test" }],
+    });
+    usePreferencesStore.setState({ sshConnections: [profile] });
+    for (const action of oldActions) action();
+  });
+  expect(opened).not.toHaveBeenCalled();
+  expect(io.reveal).not.toHaveBeenCalled();
+  expect(node.textContent).not.toContain("file.ts");
+});
+
+it("observes project metadata only while namespace search is open", async () => {
+  const path = "remote://voktty-ssh-fixture/srv/project";
+  rememberRemoteProject("voktty-ssh-fixture", {
+    id: "project",
+    name: "Fixture",
+    cwd: "/srv/project",
+  });
+  usePreferencesStore.setState({
+    sshConnections: [{ id: "fixture", name: "Fixture", host: "original.test" }],
+  });
+  const add = vi.spyOn(window, "addEventListener");
+  const remove = vi.spyOn(window, "removeEventListener");
+  await render({ kind: "local" }, path, () => {}, false);
+  expect(
+    add.mock.calls.filter(([event]) => event === REMOTE_PROJECTS_CHANGED),
+  ).toHaveLength(0);
+  await render({ kind: "local" }, path, () => {}, true);
+  expect(
+    add.mock.calls.filter(([event]) => event === REMOTE_PROJECTS_CHANGED),
+  ).toHaveLength(1);
+  await render({ kind: "local" }, path, () => {}, false);
+  expect(
+    remove.mock.calls.filter(([event]) => event === REMOTE_PROJECTS_CHANGED),
+  ).toHaveLength(1);
+  expect(io.acquire).not.toHaveBeenCalled();
 });
 
 it("does not publish a late result from a replaced search root", async () => {
