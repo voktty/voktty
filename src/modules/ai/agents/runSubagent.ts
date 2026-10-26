@@ -21,6 +21,7 @@ type Args = {
   toolContext: ToolContext;
   lmstudioBaseURL?: string;
   onStep?: (label: string) => void;
+  abortSignal?: AbortSignal;
 };
 
 type RunResult = {
@@ -37,6 +38,7 @@ export async function runSubagent({
   toolContext,
   lmstudioBaseURL,
   onStep,
+  abortSignal,
 }: Args): Promise<RunResult> {
   const def = SUBAGENTS[type];
   if (!def) throw new Error(`unknown subagent type: ${type}`);
@@ -49,36 +51,47 @@ export async function runSubagent({
     getFileRootContext: () => structuredClone(boundary),
   };
   inheritFileToolCalls(toolContext, childContext);
-  const readOnly: Record<string, unknown> = {
-    ...buildFsTools(childContext),
-    ...buildSearchTools(childContext),
+  const calls = fileToolCallsFor(childContext);
+  const retire = () => calls.retireAll();
+  const assertCurrent = () => {
+    if (abortSignal?.aborted || !calls.isCurrent())
+      throw new Error("The original subagent run has retired.");
   };
-  const tools: Record<string, unknown> = {};
-  for (const t of def.tools) {
-    if (t in readOnly) tools[t] = readOnly[t];
-  }
-
-  const model = await buildLanguageModel(
-    getModel(modelId as ModelId).provider,
-    keys,
-    getModel(modelId as ModelId).id,
-    { lmstudioBaseURL },
-  );
-
-  const start = Date.now();
+  abortSignal?.addEventListener("abort", retire, { once: true });
   try {
+    assertCurrent();
+    const readOnly: Record<string, unknown> = {
+      ...buildFsTools(childContext),
+      ...buildSearchTools(childContext),
+    };
+    const tools: Record<string, unknown> = {};
+    for (const t of def.tools) {
+      if (t in readOnly) tools[t] = readOnly[t];
+    }
+
+    const model = await buildLanguageModel(
+      getModel(modelId as ModelId).provider,
+      keys,
+      getModel(modelId as ModelId).id,
+      { lmstudioBaseURL },
+    );
+    assertCurrent();
+
+    const start = Date.now();
     const result = await generateText({
       model,
       system: def.systemPrompt,
       prompt,
+      abortSignal,
       tools: tools as Parameters<typeof generateText>[0]["tools"],
       stopWhen: stepCountIs(SUBAGENT_MAX_STEPS),
       onStepFinish: (step) => {
-        if (!onStep) return;
+        if (!onStep || abortSignal?.aborted || !calls.isCurrent()) return;
         const last = step.toolCalls?.[step.toolCalls.length - 1];
         if (last) onStep(`${type}: ${last.toolName}`);
       },
     });
+    assertCurrent();
 
     return {
       summary: result.text || "(no output)",
@@ -86,7 +99,8 @@ export async function runSubagent({
       durationMs: Date.now() - start,
     };
   } finally {
-    fileToolCallsFor(childContext).retireAll();
+    abortSignal?.removeEventListener("abort", retire);
+    retire();
   }
 }
 

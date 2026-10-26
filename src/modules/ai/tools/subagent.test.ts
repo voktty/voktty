@@ -50,6 +50,24 @@ async function run(input: Record<string, unknown>): Promise<Result> {
 beforeEach(() => vi.clearAllMocks());
 
 describe("run_subagent", () => {
+  it("passes the SDK cancellation signal to the original child run", async () => {
+    runSubagentMock.mockResolvedValue({
+      summary: "done",
+      stepCount: 1,
+      durationMs: 1,
+    });
+    const controller = new AbortController();
+    const execute = buildSubagentTools(makeContext()).run_subagent.execute;
+    if (!execute) throw new Error("run_subagent has no execute");
+    await execute(
+      { type: "explore", prompt: "fixture" },
+      { ...toolOptions, abortSignal: controller.signal },
+    );
+    expect(runSubagentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ abortSignal: controller.signal }),
+    );
+  });
+
   it("maps the subagent result fields on success", async () => {
     runSubagentMock.mockResolvedValue({
       summary: "done",

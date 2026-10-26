@@ -1,8 +1,5 @@
 import type { Chat, UIMessage } from "@ai-sdk/react";
-import {
-  forgetChatFileTools,
-  retireChatFileTools,
-} from "@/modules/ai/lib/chatFileTools";
+import { forgetChatFileTools } from "@/modules/ai/lib/chatFileTools";
 import type {
   AiFileContext,
   AiFileRootContext,
@@ -612,7 +609,5 @@ export function getChat(sessionId?: string): Chat<UIMessage> | undefined {
 export function stop(): void {
   const id = useChatStore.getState().activeSessionId;
   if (!id) return;
-  const chat = chats.get(id);
-  if (chat) retireChatFileTools(chat);
   void chats.get(id)?.stop();
 }

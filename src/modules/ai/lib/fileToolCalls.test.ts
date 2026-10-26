@@ -133,6 +133,27 @@ it("cannot revive an old child owner after the chat stops", () => {
   fileToolCallsFor(current).capture("new", "read_file", input(), target());
 });
 
+it("permanently retires a finished child without retiring its parent or siblings", () => {
+  const parent = {};
+  const child = {};
+  const sibling = {};
+  inheritFileToolCalls(parent, child);
+  inheritFileToolCalls(parent, sibling);
+  const calls = fileToolCallsFor(child);
+  calls.capture("call", "read_file", input(), target());
+  const pending = calls.claim("call", "read_file", input());
+  calls.retireAll();
+  expect(calls.isCurrent()).toBe(false);
+  expect(pending.isCurrent()).toBe(false);
+  expect(() => calls.capture("late", "read_file", input(), target())).toThrow("retired");
+  expect(() => inheritFileToolCalls(child, {})).toThrow("retired");
+  pending.release();
+  calls.retireAll();
+  expect(fileToolCallsFor(parent).isCurrent()).toBe(true);
+  expect(fileToolCallsFor(sibling).isCurrent()).toBe(true);
+  fileToolCallsFor(sibling).capture("call", "read_file", input(), target());
+});
+
 it("matches parsed inputs independently of JSON object key order", () => {
   const calls = createFileToolCalls();
   calls.capture("call", "write_file", input(), target());

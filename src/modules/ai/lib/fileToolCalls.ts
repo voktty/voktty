@@ -103,7 +103,9 @@ export function createFileToolCalls(budget?: Budget) {
   };
 
   const ownerEpoch = shared.epoch;
-  const ownerCurrent = () => !budget || shared.epoch === ownerEpoch;
+  let retired = false;
+  const ownerCurrent = () =>
+    !budget || (!retired && shared.epoch === ownerEpoch);
 
   const collect = (id: string, call: Call) => {
     if (calls.get(id) !== call) return;
@@ -259,7 +261,10 @@ export function createFileToolCalls(budget?: Budget) {
       if (!budget) {
         shared.epoch = {};
         for (const retireCaptured of [...shared.retire]) retireCaptured();
-      } else for (const [id, call] of calls) retire(id, call);
+      } else {
+        retired = true;
+        for (const [id, call] of calls) retire(id, call);
+      }
     },
   };
   budgets.set(registry, shared);

@@ -7,7 +7,10 @@ import { getModel, providerNeedsKey, type ModelId } from "../config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { BUILTIN_AGENTS } from "../lib/agents";
 import { isAiRuntimeAvailable } from "../lib/runtimeAvailability";
-import { registerChatFileTools } from "@/modules/ai/lib/chatFileTools";
+import {
+  registerChatFileTools,
+  retireChatFileTools,
+} from "@/modules/ai/lib/chatFileTools";
 import { useAgentsStore } from "./agentsStore";
 import { usePlanStore } from "./planStore";
 import { createContextAwareTransport } from "../lib/transport";
@@ -129,6 +132,11 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     },
   });
   registerChatFileTools(chat, toolContext);
+  const stop = chat.stop;
+  chat.stop = () => {
+    retireChatFileTools(chat);
+    return stop();
+  };
   return chat;
 }
 

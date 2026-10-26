@@ -88,6 +88,8 @@ The six filesystem tools (`read_file`, `list_directory`, `write_file`, `create_d
 
 Each chat and its read-only subagents share limits of 256 unsettled calls and 8 Mi characters of serialized captures. Each input or target is capped at 1 Mi characters, 20,000 nodes and depth 16. Up to 256 preview readers remain admitted until settlement. Cancellation retires authority immediately, while actual reads and writes retain their budget through promise settlement. Subagents have independent provider-call namespaces and snapshot file context before model setup. These are JavaScript ownership and admission guarantees, not native IO cancellation or rollback of an already admitted write. Search, shell and project-memory consumers retain their separate routing contracts.
 
+Every runtime Chat's `stop` retires that exact chat's file-call family synchronously before delegating to SDK cancellation, including direct composer and hook calls. A subagent receives its parent tool's abort signal, retires its own namespace on abort and checks cancellation and family ownership around model setup, step publication and completion. Finishing or cancelling a child permanently seals that child namespace while its parent and siblings remain usable. Its listener is removed on settlement, and already admitted file IO retains the shared budget until it physically settles.
+
 Read-before-edit facts are keyed by the complete captured filesystem. Plan entries retain their original filesystem, mode, session and model even if selection changes while approval is pending. Restored approvals without their original in-memory receipt fail closed.
 
 ## Edit diffs
