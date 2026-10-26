@@ -420,18 +420,24 @@ export async function lspNavigate(
 export async function lspPeek(
   view: EditorView,
   kind: import("./client").LspPeekKind,
+  isCurrent: () => boolean = () => true,
 ): Promise<import("./client").LspPeekResult> {
+  if (!isCurrent()) return { status: "stale" };
   if (sessions.size === 0) return { status: "unsupported" };
   const { lspPeekForView } = await import("./client");
-  return lspPeekForView(view, kind);
+  if (!isCurrent()) return { status: "stale" };
+  return lspPeekForView(view, kind, isCurrent);
 }
 
 export async function lspOpenPeekItem(
   view: EditorView,
   item: import("./client").LspPeekItem,
+  isCurrent: () => boolean = () => true,
 ): Promise<boolean> {
+  if (!isCurrent()) return false;
   if (sessions.size === 0) return false;
   const { lspOpenPeekItemForView } = await import("./client");
+  if (!isCurrent()) return false;
   return lspOpenPeekItemForView(view, item);
 }
 

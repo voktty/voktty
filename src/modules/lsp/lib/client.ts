@@ -582,7 +582,12 @@ export type LspPeekItem = {
 };
 
 export type LspPeekResult =
-  | { status: "ready"; items: LspPeekItem[]; truncated: boolean }
+  | {
+      status: "ready";
+      items: LspPeekItem[];
+      truncated: boolean;
+      isCurrent?: () => boolean;
+    }
   | { status: "empty" | "unsupported" | "error" | "stale" };
 
 type LspNavigationHandler = (
@@ -598,6 +603,7 @@ const lspNavigationHandlers = Facet.define<
 type LspPeekHandler = (
   view: EditorView,
   kind: LspPeekKind,
+  isCurrent: () => boolean,
 ) => Promise<LspPeekResult>;
 
 const lspPeekHandlers = Facet.define<
@@ -623,9 +629,19 @@ export async function lspNavigateForView(
 export async function lspPeekForView(
   view: EditorView,
   kind: LspPeekKind,
+  isCurrent: () => boolean = () => true,
 ): Promise<LspPeekResult> {
+  if (!isCurrent()) return { status: "stale" };
   const handler = view.state.facet(lspPeekHandlers)[0];
-  return handler ? handler(view, kind) : { status: "unsupported" };
+  if (!handler) return { status: "unsupported" };
+  const openHandler = view.state.facet(lspPeekOpenHandlers)[0];
+  const current = () =>
+    isCurrent() &&
+    view.state.facet(lspPeekHandlers)[0] === handler &&
+    view.state.facet(lspPeekOpenHandlers)[0] === openHandler;
+  const result = await handler(view, kind, current);
+  if (!current()) return { status: "stale" };
+  return result.status === "ready" ? { ...result, isCurrent: current } : result;
 }
 
 export function lspOpenPeekItemForView(
@@ -741,7 +757,9 @@ export function lspInteractions(opts: {
     view: EditorView,
     pos: number,
     kind: LspNavigationKind,
+    isCurrent: () => boolean = () => true,
   ): Promise<LocationQueryResult> => {
+    if (!isCurrent()) return { status: "stale" };
     if (!navigationCapability(kind)) return { status: "unsupported" };
     const snapshot = view.state.doc;
     const params = {
@@ -763,12 +781,13 @@ export function lspInteractions(opts: {
         });
       }
     } catch (error) {
+      if (!isCurrent()) return { status: "stale" };
       toast.error(t("editor.navigation.requestFailed"), {
         description: String(error),
       });
       return { status: "error" };
     }
-    if (view.state.doc !== snapshot) return { status: "stale" };
+    if (!isCurrent() || view.state.doc !== snapshot) return { status: "stale" };
     const normalized = normalizeLspLocations(result);
     if (normalized.locations.length === 0) return { status: "empty" };
     return {
@@ -805,11 +824,12 @@ export function lspInteractions(opts: {
   const navigateFromCursor: LspNavigationHandler = (view, kind) =>
     navigateAt(view, view.state.selection.main.head, kind);
 
-  const peekFromCursor: LspPeekHandler = async (view, kind) => {
+  const peekFromCursor: LspPeekHandler = async (view, kind, isCurrent) => {
     const result = await requestLocationsAt(
       view,
       view.state.selection.main.head,
       kind,
+      isCurrent,
     );
     if (result.status !== "ready") return result;
     const maxItems = 500;

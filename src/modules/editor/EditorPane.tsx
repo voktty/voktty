@@ -21,13 +21,10 @@ import { type WorkspaceEnv, workspaceScopeKey } from "@/modules/workspace";
 import {
   lspFormatDocument,
   lspNavigate,
-  lspOpenPeekItem,
   lspOpenCodeActions,
-  lspPeek,
   lspRequestSignatureHelp,
   useLspExtension,
 } from "@/modules/lsp";
-import type { LspPeekItem, LspPeekKind } from "@/modules/lsp/lib/client";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { onKeysChanged } from "@/modules/settings/store";
 import { playVokttySound } from "@/modules/sound";
@@ -95,7 +92,6 @@ import {
 import { toast } from "sonner";
 import { EditorBreadcrumbs } from "./components/EditorBreadcrumbs";
 import type { PreviewDocumentAction } from "@/modules/preview/lib/previewOpeningTarget";
-import type { PeekDocumentState } from "./components/PeekPanel";
 import { InlineAiWidget } from "./components/InlineAiWidget";
 import {
   buildQuickFixPrompt,
@@ -157,8 +153,8 @@ import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
 import { classifyMediaExtension, MediaPreview } from "./MediaPreview";
 import { PeekPanel } from "./PeekPanelLazy";
-import { buildPeekExcerpt, samePeekPath } from "./lib/peekModel";
-import { readPeekFile } from "./lib/peekFile";
+import { samePeekPath } from "./lib/peekModel";
+import { useEditorPeek } from "@/modules/editor/lib/useEditorPeek";
 
 initVimGlobals();
 
@@ -439,16 +435,7 @@ export const EditorPane = memo(
     const [inlineAiPrompt, setInlineAiPrompt] = useState<string | undefined>(
       undefined,
     );
-    const [peekSession, setPeekSession] = useState<{
-      kind: LspPeekKind;
-      items: LspPeekItem[];
-      activeIndex: number;
-    } | null>(null);
-    const [peekDocument, setPeekDocument] = useState<PeekDocumentState>({
-      status: "loading",
-    });
-    const peekRequestRef = useRef(0);
-    const peekFileCacheRef = useRef(new Map<string, string>());
+    const peek = useEditorPeek(path, workspaceEnv, () => cmRef.current?.view);
     const diagCounts = useDiagnosticsStore((s) => s.byPath[path] ?? EMPTY_DIAG);
     const apiKeyRef = useRef<string | null>(null);
     const completionErrorRef = useRef<(error: unknown) => void>(() => {});
@@ -565,7 +552,7 @@ export const EditorPane = memo(
 
     const handleDocChange = useCallback(
       (value: string) => {
-        setPeekSession(null);
+        peek.dismiss();
         onChange(value);
         const view = cmRef.current?.view;
         if (view && initialContentRef.current) {
@@ -576,7 +563,7 @@ export const EditorPane = memo(
           });
         }
       },
-      [onChange],
+      [onChange, peek.dismiss],
     );
 
     const handleReloadFromDisk = useCallback(async () => {
@@ -709,99 +696,7 @@ export const EditorPane = memo(
       [t],
     );
 
-    const closePeek = useCallback(() => {
-      peekRequestRef.current += 1;
-      setPeekSession(null);
-      requestAnimationFrame(() => cmRef.current?.view?.focus());
-    }, []);
-
-    const handleLspPeek = useCallback(
-      async (kind: LspPeekKind) => {
-        const view = cmRef.current?.view;
-        if (!view) return;
-        const request = ++peekRequestRef.current;
-        const result = await lspPeek(view, kind);
-        if (request !== peekRequestRef.current) return;
-        if (result.status !== "ready") {
-          if (result.status === "unsupported") {
-            toast.info(t("editor.navigation.unavailable"));
-          } else if (result.status === "empty") {
-            toast.info(t("editor.navigation.empty"));
-          }
-          return;
-        }
-        if (result.truncated) {
-          toast.warning(t("editor.peek.resultsTruncated"));
-        }
-        setPeekDocument({ status: "loading" });
-        setPeekSession({ kind, items: result.items, activeIndex: 0 });
-      },
-      [t],
-    );
-
-    const openPeekItem = useCallback(
-      (item: LspPeekItem) => {
-        const view = cmRef.current?.view;
-        if (!view) return;
-        void lspOpenPeekItem(view, item).then((opened) => {
-          if (opened) setPeekSession(null);
-          else toast.info(t("editor.navigation.unavailable"));
-        });
-      },
-      [t],
-    );
-
-    const activePeekItem = peekSession?.items[peekSession.activeIndex];
-    useEffect(() => {
-      if (!activePeekItem) return;
-      let cancelled = false;
-      setPeekDocument({ status: "loading" });
-      const load = async () => {
-        let source: string;
-        const samePath = samePeekPath(activePeekItem.path, path);
-        if (samePath) {
-          const view = cmRef.current?.view;
-          if (!view) return;
-          source = view.state.doc.toString();
-        } else {
-          const cached = peekFileCacheRef.current.get(activePeekItem.path);
-          if (cached !== undefined) {
-            source = cached;
-          } else {
-            const result = await readPeekFile(activePeekItem.path);
-            if (cancelled) return;
-            if (result.status !== "ready") {
-              setPeekDocument({ status: result.status });
-              return;
-            }
-            source = result.content;
-            const cache = peekFileCacheRef.current;
-            cache.set(activePeekItem.path, source);
-            while (cache.size > 4) {
-              const oldest = cache.keys().next().value;
-              if (oldest === undefined) break;
-              cache.delete(oldest);
-            }
-          }
-        }
-        if (cancelled) return;
-        const excerpt = buildPeekExcerpt(
-          source,
-          activePeekItem.line,
-          activePeekItem.character,
-        );
-        setPeekDocument(
-          excerpt ? { status: "ready", excerpt } : { status: "invalid" },
-        );
-      };
-      void load().catch(() => {
-        if (!cancelled) setPeekDocument({ status: "error" });
-      });
-      return () => {
-        cancelled = true;
-      };
-    }, [activePeekItem, path]);
-
+    const handleLspPeek = peek.request;
     const handleFormatDocument = formatting.format;
 
     const pendingLineRef = useRef<{
@@ -1771,21 +1666,7 @@ export const EditorPane = memo(
                 searchKeymap: true,
               }}
             />
-            {peekSession && (
-              <PeekPanel
-                kind={peekSession.kind}
-                items={peekSession.items}
-                activeIndex={peekSession.activeIndex}
-                document={peekDocument}
-                onSelect={(activeIndex) =>
-                  setPeekSession((current) =>
-                    current ? { ...current, activeIndex } : current,
-                  )
-                }
-                onOpen={openPeekItem}
-                onClose={closePeek}
-              />
-            )}
+            {peek.panel && <PeekPanel {...peek.panel} />}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-56 z-50">
