@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { usePreviewFileReload } from "@/modules/preview/lib/usePreviewFileReload";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight01Icon,
@@ -122,36 +122,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       };
     }, [url]);
 
-    // Live-reload: automatically refresh the iframe when local files change or are saved
-    useEffect(() => {
-      if (!loaded) return;
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      const triggerReload = () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-          setNonce((n) => n + 1);
-        }, 120);
-      };
-
-      const unlistenWritten = getCurrentWebviewWindow().listen<unknown>(
-        "fs:file-written",
-        triggerReload,
-      );
-      const unlistenChanged = getCurrentWebviewWindow().listen<unknown>(
-        "fs:changed",
-        triggerReload,
-      );
-
-      const handleCustomEvent = () => triggerReload();
-      window.addEventListener("voktty:reload-preview", handleCustomEvent);
-
-      return () => {
-        if (timer) clearTimeout(timer);
-        window.removeEventListener("voktty:reload-preview", handleCustomEvent);
-        unlistenWritten.then((unlisten) => unlisten());
-        unlistenChanged.then((unlisten) => unlisten());
-      };
-    }, [loaded]);
+    usePreviewFileReload(url, loaded, (current) =>
+      setNonce((n) => current() ? n + 1 : n),
+    );
 
     // Custom events from UI for selector navigation
     useEffect(() => {

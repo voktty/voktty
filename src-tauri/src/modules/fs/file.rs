@@ -165,6 +165,48 @@ pub(super) struct FileWrittenEvent {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    filesystem: FileWriteFilesystem,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum FileWriteFilesystem {
+    Local,
+    Wsl { distro: String },
+}
+
+impl FileWrittenEvent {
+    pub(super) fn new(
+        path: String,
+        source: Option<String>,
+        workspace: &WorkspaceEnv,
+    ) -> Option<Self> {
+        if path.is_empty() || path.len() > 32_768 || path.chars().any(char::is_control) {
+            return None;
+        }
+        let normalized = path.replace('\\', "/");
+        let native_path = normalized.starts_with("//")
+            || (normalized.as_bytes().get(1) == Some(&b':')
+                && normalized.as_bytes()[0].is_ascii_alphabetic());
+        let filesystem = match workspace {
+            WorkspaceEnv::Wsl { distro } if !native_path => {
+                if distro.is_empty() || distro.len() > 255 || distro.chars().any(char::is_control) {
+                    return None;
+                }
+                FileWriteFilesystem::Wsl {
+                    distro: distro.clone(),
+                }
+            }
+            _ => FileWriteFilesystem::Local,
+        };
+        Some(Self {
+            path,
+            source: source.filter(|value| {
+                !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
+            }),
+            filesystem,
+        })
+    }
 }
 
 /// Atomic write via O_EXCL tempfile in the target's parent, then rename.
@@ -204,13 +246,9 @@ pub async fn fs_write_file(
         Ok(fs::metadata(&target).map(|m| mtime_millis(&m)).unwrap_or(0))
     })
     .await?;
-    let _ = app.emit(
-        "fs:file-written",
-        FileWrittenEvent {
-            path: path.clone(),
-            source,
-        },
-    );
+    if let Some(event) = FileWrittenEvent::new(path, source, &workspace) {
+        let _ = app.emit("fs:file-written", event);
+    }
 
     Ok(mtime)
 }
@@ -276,6 +314,87 @@ pub async fn fs_stat(path: String, workspace: Option<WorkspaceEnv>) -> Result<Fi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn write_events_serialize_only_the_native_filesystem_scope() {
+        let local = FileWrittenEvent::new(
+            "/work/file.txt".into(),
+            Some("editor".into()),
+            &WorkspaceEnv::Local,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(local).unwrap(),
+            serde_json::json!({
+                "path": "/work/file.txt", "source": "editor", "filesystem": {"kind": "local"}
+            })
+        );
+        for distro in ["first", "second"] {
+            let event = FileWrittenEvent::new(
+                "/work/file.txt".into(),
+                None,
+                &WorkspaceEnv::Wsl {
+                    distro: distro.into(),
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                serde_json::to_value(event).unwrap(),
+                serde_json::json!({
+                    "path": "/work/file.txt", "filesystem": {"kind": "wsl", "distro": distro}
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn write_events_do_not_copy_remote_connection_or_container_fields() {
+        for workspace in [
+            serde_json::json!({"kind":"ssh", "root":"/work", "sessionId":7, "connection":{"host":"example.test", "user":"fixture", "identityFile":"fixture-key"}}),
+            serde_json::json!({"kind":"docker", "containerId":"fixture", "user":"fixture"}),
+        ] {
+            let workspace: WorkspaceEnv = serde_json::from_value(workspace).unwrap();
+            let event = FileWrittenEvent::new("C:/work/file.txt".into(), None, &workspace).unwrap();
+            assert_eq!(
+                serde_json::to_value(event).unwrap(),
+                serde_json::json!({
+                    "path":"C:/work/file.txt", "filesystem":{"kind":"local"}
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn write_events_preserve_native_windows_paths_and_bound_payload_fields() {
+        let workspace = WorkspaceEnv::Wsl {
+            distro: "fixture".into(),
+        };
+        for path in [r"C:\work\file.txt", r"\\server\share\file.txt"] {
+            let event = FileWrittenEvent::new(path.into(), None, &workspace).unwrap();
+            assert_eq!(
+                serde_json::to_value(event).unwrap()["filesystem"],
+                serde_json::json!({"kind":"local"})
+            );
+        }
+        for path in ["".to_string(), "x".repeat(32_769), "bad\0path".into()] {
+            assert!(FileWrittenEvent::new(path, None, &WorkspaceEnv::Local).is_none());
+        }
+        assert!(FileWrittenEvent::new(
+            "/work/file".into(),
+            None,
+            &WorkspaceEnv::Wsl {
+                distro: "x".repeat(256)
+            }
+        )
+        .is_none());
+        let event = FileWrittenEvent::new(
+            "/work/file".into(),
+            Some("x".repeat(129)),
+            &WorkspaceEnv::Local,
+        )
+        .unwrap();
+        assert!(serde_json::to_value(event).unwrap().get("source").is_none());
+    }
 
     #[test]
     fn read_file_classifies_utf8_as_text() {

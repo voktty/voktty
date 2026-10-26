@@ -29,6 +29,11 @@ import { LspInstallDialog } from "@/settings/components/LspInstallDialog";
 import { resolveLspSwitchState } from "@/settings/components/lspSwitchState";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
+  fileWrittenMatches,
+  fileWrittenOnFilesystem,
+  parseFileWritten,
+} from "@/modules/workspace/fileWritten";
+import {
   Cancel01Icon,
   CheckmarkCircle01Icon,
   CodeIcon,
@@ -96,6 +101,7 @@ export function ProjectToolkitPopover({
     skills,
     stackInfo,
     configFilePath,
+    configWorkspace,
     reloadTools,
     reloadSkills,
     editConfig,
@@ -116,27 +122,29 @@ export function ProjectToolkitPopover({
   useEffect(() => {
     if (!open) return;
     let active = true;
-    type FileWrittenPayload = { path: string; source?: string };
     const unlistenPromise =
-      getCurrentWebviewWindow().listen<FileWrittenPayload>(
+      getCurrentWebviewWindow().listen<unknown>(
         "fs:file-written",
         (event) => {
           if (!active) return;
-          if (event.payload.source !== "editor") return;
-          const normalized = event.payload.path
+          const written = parseFileWritten(event.payload);
+          if (written?.source !== "editor") return;
+          const normalized = written.path
             .replace(/\\/g, "/")
             .toLowerCase();
           if (
-            normalized.endsWith("project-tools.json") ||
-            normalized.endsWith(".voktty/tools.json")
+            configFilePath && configWorkspace &&
+            fileWrittenMatches(written, configFilePath, configWorkspace)
           ) {
             void reloadTools();
           }
           if (
-            normalized.includes("skill") ||
+            !skillsDisabledReason &&
+            fileWrittenOnFilesystem(written, cwd ?? written.path, workspace) &&
+            (normalized.includes("skill") ||
             normalized.includes(".agents") ||
             normalized.includes(".claude") ||
-            normalized.includes("prompts")
+            normalized.includes("prompts"))
           ) {
             void reloadSkills();
           }
@@ -146,7 +154,7 @@ export function ProjectToolkitPopover({
       active = false;
       void unlistenPromise.then((un) => un()).catch(() => {});
     };
-  }, [open, reloadTools, reloadSkills]);
+  }, [open, reloadTools, reloadSkills, configFilePath, configWorkspace, skillsDisabledReason, cwd, workspace]);
 
   useEffect(() => {
     if (!copiedId) return;

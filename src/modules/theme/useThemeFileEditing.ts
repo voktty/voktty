@@ -3,7 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { setThemeId as persistThemeId } from "@/modules/settings/store";
 import type { Tab } from "@/modules/tabs";
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import { LOCAL_WORKSPACE } from "@/modules/workspace";
+import {
+  parseFileWritten,
+  fileWrittenOnFilesystem,
+} from "@/modules/workspace/fileWritten";
 import { listCustomThemes, saveCustomTheme } from "./customThemes";
 import {
   isThemeFilePath,
@@ -19,6 +23,8 @@ type Params = {
   openFileTab: (path: string) => void;
 };
 
+let pendingThemeReads = 0;
+
 /**
  * A custom theme is materialized to a real file and edited in the code editor.
  * Saving it re-ingests into the runtime store + applies live; the edit request
@@ -26,35 +32,53 @@ type Params = {
  */
 export function useThemeFileEditing({ tabsRef, openFileTab }: Params) {
   useEffect(() => {
-    type FileWrittenPayload = { path: string; source?: string };
-    const unlistenPromise =
-      getCurrentWebviewWindow().listen<FileWrittenPayload>(
-        "fs:file-written",
-        (event) => {
-          if (event.payload.source !== "editor") return;
-          if (!isThemeFilePath(event.payload.path)) return;
-          void (async () => {
-            try {
-              const res = await invoke<{ kind: string; content?: string }>(
-                "fs_read_file",
-                { path: event.payload.path, workspace: currentWorkspaceEnv() },
-              );
-              if (res.kind !== "text" || typeof res.content !== "string")
-                return;
-              const parsed = parseThemeFile(res.content);
-              if (!parsed.ok) {
-                console.warn("[voktty] theme not applied:", parsed.error);
-                return;
-              }
-              await saveCustomTheme(parsed.theme);
-            } catch (e) {
-              console.warn("[voktty] theme ingest failed:", e);
-            }
-          })();
-        },
-      );
+    let active = true;
+    let tail = Promise.resolve();
+    const latest = new Map<string, object>();
+    const unlistenPromise = getCurrentWebviewWindow()
+      .listen<unknown>("fs:file-written", (event) => {
+        if (!active) return;
+        const written = parseFileWritten(event.payload);
+        if (
+          written?.source !== "editor" ||
+          !fileWrittenOnFilesystem(written, written.path, LOCAL_WORKSPACE) ||
+          !isThemeFilePath(written.path) ||
+          pendingThemeReads >= 256
+        )
+          return;
+        const receipt = {};
+        latest.set(written.path, receipt);
+        const current = () => active && latest.get(written.path) === receipt;
+        pendingThemeReads++;
+        tail = tail.then(async () => {
+          try {
+            if (!current()) return;
+            const res = await invoke<{ kind: string; content?: string }>(
+              "fs_read_file",
+              { path: written.path, workspace: LOCAL_WORKSPACE },
+            );
+            if (
+              !current() ||
+              res.kind !== "text" ||
+              typeof res.content !== "string"
+            )
+              return;
+            const parsed = parseThemeFile(res.content);
+            if (!parsed.ok || !current()) return;
+            await saveCustomTheme(parsed.theme);
+          } catch {
+          } finally {
+            pendingThemeReads--;
+            if (latest.get(written.path) === receipt)
+              latest.delete(written.path);
+          }
+        });
+      })
+      .catch(() => () => {});
     return () => {
-      void unlistenPromise.then((un) => un());
+      active = false;
+      latest.clear();
+      void unlistenPromise.then((un) => un()).catch(() => {});
     };
   }, []);
 

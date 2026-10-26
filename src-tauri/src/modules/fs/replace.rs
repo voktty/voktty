@@ -109,13 +109,13 @@ pub fn fs_replace_apply(
     let outcome = apply_transaction(&mut filesystem, &spec, &targets);
     if matches!(outcome, ApplyOutcome::Applied { .. }) {
         for target in &targets {
-            let _ = app.emit(
-                "fs:file-written",
-                FileWrittenEvent {
-                    path: display_path(&root, &target.path),
-                    source: Some("workspace-replace".to_string()),
-                },
-            );
+            if let Some(event) = FileWrittenEvent::new(
+                display_path(&root, &target.path),
+                Some("workspace-replace".to_string()),
+                &workspace,
+            ) {
+                let _ = app.emit("fs:file-written", event);
+            }
         }
     }
     Ok(outcome)
@@ -158,13 +158,13 @@ pub fn fs_workspace_edit_apply(
     let outcome = apply_text_edits(&mut filesystem, &targets);
     if matches!(outcome, WorkspaceTextEditOutcome::Applied { .. }) {
         for target in &targets {
-            let _ = app.emit(
-                "fs:file-written",
-                FileWrittenEvent {
-                    path: display_path(&root, &target.path),
-                    source: Some("workspace-edit".to_string()),
-                },
-            );
+            if let Some(event) = FileWrittenEvent::new(
+                display_path(&root, &target.path),
+                Some("workspace-edit".to_string()),
+                &workspace,
+            ) {
+                let _ = app.emit("fs:file-written", event);
+            }
         }
     }
     Ok(outcome)

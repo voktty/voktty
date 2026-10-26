@@ -41,6 +41,9 @@ export function useProjectToolkit({
   const [skills, setSkills] = useState<DiscoveredSkill[]>([]);
   const [stackInfo, setStackInfo] = useState<ProjectStackInfo | null>(null);
   const [configFilePath, setConfigFilePath] = useState<string | null>(null);
+  const [configWorkspace, setConfigWorkspace] = useState<WorkspaceEnv | null>(
+    null,
+  );
   const [configLoaded, setConfigLoaded] = useState(false);
   const binding = useMemo(
     () => ({ cwd, workspace, sourceKey, openFile }),
@@ -106,11 +109,13 @@ export function useProjectToolkit({
       if (!current()) return;
       setTools(loaded);
       setConfigFilePath(target.path);
+      setConfigWorkspace(target.workspace);
       setConfigLoaded(true);
     } catch {
       if (current()) {
         setTools(DEFAULT_PROJECT_TOOLS);
         setConfigFilePath(null);
+        setConfigWorkspace(null);
         setConfigLoaded(true);
       }
     } finally {
@@ -147,6 +152,7 @@ export function useProjectToolkit({
     setTools(DEFAULT_PROJECT_TOOLS);
     setSkills([]);
     setConfigFilePath(null);
+    setConfigWorkspace(null);
     setConfigLoaded(false);
     setStackInfo(null);
   }, [binding]);
@@ -222,6 +228,7 @@ export function useProjectToolkit({
     skills,
     stackInfo,
     configFilePath,
+    configWorkspace,
     reloadTools,
     reloadSkills,
     editConfig,

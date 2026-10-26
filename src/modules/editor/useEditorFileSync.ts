@@ -8,10 +8,15 @@ import type { Tab } from "@/modules/tabs";
 import { isRemoteProjectUri } from "@/modules/explorer/lib/remoteProjectDir";
 import {
   type WorkspaceEnv,
+  LOCAL_WORKSPACE,
   workspaceForDocumentPath,
   workspaceScopeKey,
 } from "@/modules/workspace";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import {
+  parseFileWritten,
+  fileWrittenMatches,
+} from "@/modules/workspace/fileWritten";
 import { type RefObject, useEffect, useRef } from "react";
 import type { EditorPaneHandle } from "./EditorPane";
 
@@ -88,26 +93,37 @@ export function useEditorFileSync({
   }, [tabs, editorRefs]);
 
   useEffect(() => {
-    type FileWrittenPayload = { path: string; source?: string };
-    const unlistenPromise =
-      getCurrentWebviewWindow().listen<FileWrittenPayload>(
-        "fs:file-written",
-        (event) => {
-          if (event.payload.source === "editor") return;
-          const normalizedPath = event.payload.path.replace(/\\/g, "/");
-          const currentTabs = tabsRef.current;
-          for (const t of currentTabs) {
-            if (t.kind !== "editor") continue;
-            if (t.path.replace(/\\/g, "/") === normalizedPath) {
-              const handle = editorRefs.current.get(t.id);
-              handle?.notifyExternalChange();
+    let active = true;
+    const unlistenPromise = getCurrentWebviewWindow()
+      .listen<unknown>("fs:file-written", (event) => {
+        if (!active) return;
+        const written = parseFileWritten(event.payload);
+        if (!written || written.source === "editor") return;
+        const currentTabs = tabsRef.current;
+        for (const t of currentTabs) {
+          if (t.kind !== "editor") continue;
+          if (
+            fileWrittenMatches(
+              written,
+              t.path,
+              t.workspaceEnv ?? LOCAL_WORKSPACE,
+            )
+          ) {
+            const handle = editorRefs.current.get(t.id);
+            handle?.notifyExternalChange();
+            if (
+              active &&
+              tabsRef.current.includes(t) &&
+              editorRefs.current.get(t.id) === handle
+            )
               handle?.reload(false);
-            }
           }
-        },
-      );
+        }
+      })
+      .catch(() => () => {});
     return () => {
-      void unlistenPromise.then((un) => un());
+      active = false;
+      void unlistenPromise.then((un) => un()).catch(() => {});
     };
   }, [tabsRef, editorRefs]);
 
