@@ -3427,16 +3427,51 @@ mod retirement_tests {
     fn concurrent_session_close_coalesces_on_captured_process_owner() {
         let resources = Arc::new(resources());
         let kills = resources.child.lock().unwrap().kills.clone();
+        let start = Arc::new(std::sync::Barrier::new(4));
         let handles: Vec<_> = (0..4)
             .map(|_| {
                 let owner = resources.clone();
-                std::thread::spawn(move || owner.close_with_timeout(Duration::ZERO))
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    owner.close_with_timeout(REMOTE_PROCESS_STOP_TIMEOUT)
+                })
             })
             .collect();
         for handle in handles {
             handle.join().unwrap().unwrap();
         }
         assert_eq!(kills.load(Ordering::Relaxed), 1);
+        assert!(resources.child.lock().unwrap().terminal);
+        assert!(resources.ensure_active().is_err());
+    }
+
+    #[test]
+    fn expired_concurrent_close_retains_owner_until_confirmed_retry() {
+        let owner = Arc::new(resources());
+        let sibling = Arc::new(resources());
+        let registry = Mutex::new(HashMap::from([(7, owner.clone()), (8, sibling.clone())]));
+        let close = owner.close_lock.lock().unwrap();
+        let result = close_registered_owner(&registry, 7, Some(owner.clone()), |resource| {
+            resource.close_with_timeout(Duration::ZERO)
+        });
+        assert_eq!(result.unwrap_err(), "remote SSH resource close is pending");
+        assert!(Arc::ptr_eq(&registry.lock().unwrap()[&7], &owner));
+        assert!(owner.ensure_active().is_err());
+        assert!(!owner.child.lock().unwrap().terminal);
+        assert_eq!(owner.child.lock().unwrap().kills.load(Ordering::Relaxed), 0);
+        assert!(sibling.ensure_active().is_ok());
+        drop(close);
+
+        close_registered_owner(&registry, 7, Some(owner.clone()), |resource| {
+            resource.close_with_timeout(Duration::ZERO)
+        })
+        .unwrap();
+        assert!(!registry.lock().unwrap().contains_key(&7));
+        assert!(owner.child.lock().unwrap().terminal);
+        assert_eq!(owner.child.lock().unwrap().kills.load(Ordering::Relaxed), 1);
+        assert!(Arc::ptr_eq(&registry.lock().unwrap()[&8], &sibling));
+        assert!(!sibling.child.lock().unwrap().terminal);
     }
 
     #[test]
