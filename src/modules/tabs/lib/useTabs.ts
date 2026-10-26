@@ -1354,7 +1354,10 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       let targetId: number | null = null;
       setTabs((curr) => {
         const existing = curr.find(
-          (t) => t.kind === "ai-diff" && t.approvalId === captured.approvalId,
+          (t) =>
+            t.kind === "ai-diff" &&
+            t.approvalId === captured.approvalId &&
+            t.approvalSessionId === captured.approvalSessionId,
         );
         if (existing) {
           targetId = existing.id;
@@ -1389,10 +1392,16 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   );
 
   const setAiDiffStatus = useCallback(
-    (approvalId: string, status: AiDiffStatus) => {
+    (
+      approvalId: string,
+      status: AiDiffStatus,
+      approvalSessionId: string | undefined,
+    ) => {
       setTabs((curr) =>
         curr.map((t) =>
-          t.kind === "ai-diff" && t.approvalId === approvalId
+          t.kind === "ai-diff" &&
+          t.approvalId === approvalId &&
+          t.approvalSessionId === approvalSessionId
             ? { ...t, status }
             : t,
         ),
@@ -1401,25 +1410,33 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     [],
   );
 
-  const closeAiDiffTab = useCallback((approvalId: string) => {
-    setTabs((curr) => {
-      const target = curr.find(
-        (t) => t.kind === "ai-diff" && t.approvalId === approvalId,
-      );
-      if (!target) return curr;
-      const fallback = nextActiveInSpace(curr, target.id);
-      if (fallback === null) {
-        return curr.map((t) =>
-          t.kind === "ai-diff" && t.approvalId === approvalId
-            ? { ...t, status: "approved" as AiDiffStatus }
-            : t,
+  const closeAiDiffTab = useCallback(
+    (
+      approvalId: string,
+      approvalSessionId: string | undefined,
+      status: Exclude<AiDiffStatus, "pending">,
+    ) => {
+      setTabs((curr) => {
+        const target = curr.find(
+          (t) =>
+            t.kind === "ai-diff" &&
+            t.approvalId === approvalId &&
+            t.approvalSessionId === approvalSessionId,
         );
-      }
-      const next = curr.filter((t) => t.id !== target.id);
-      setActiveId((active) => (target.id === active ? fallback : active));
-      return next;
-    });
-  }, []);
+        if (!target) return curr;
+        const fallback = nextActiveInSpace(curr, target.id);
+        if (fallback === null) {
+          return curr.map((t) =>
+            t.id === target.id ? { ...t, status } : t,
+          );
+        }
+        const next = curr.filter((t) => t.id !== target.id);
+        setActiveId((active) => (target.id === active ? fallback : active));
+        return next;
+      });
+    },
+    [],
+  );
 
   const newPreviewTab = useCallback(
     (

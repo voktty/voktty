@@ -96,6 +96,8 @@ AI-proposed file edits open in an `ai-diff` tab. The user accepts or rejects per
 
 File review reads the same captured destination under canonical path and workspace checks. Retired, denied and unmounted readers cannot publish a late review; ordinary text streaming does not restart an admitted read. Review tabs retain their filesystem and originating chat session, show the destination beside the path and route approval to that original chat rather than the currently selected session. Missing original runtimes never fall back to another chat. Review labels display connection identity without authentication configuration.
 
+Review deduplication, status updates and completion use both the originating chat session and approval ID. An unqualified legacy review cannot match a session-owned review. Direct tool denial or failure closes only the original review; if it is the sole tab in its workspace, it remains visible with its rejected status instead of being marked approved.
+
 ## Live context bridge
 
 `App.tsx` calls `setLive({ getCwd, getTerminalContext, … })` so tools can read the currently active terminal's cwd and the last 300 lines of buffer. It is lazy by design - tools call for it only when needed rather than pre-snapshotting every turn.

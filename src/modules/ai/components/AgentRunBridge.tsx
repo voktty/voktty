@@ -48,7 +48,11 @@ export type DiffOpenInput = {
 
 export type AgentRunBridgeProps = {
   openAiDiffTab: (input: DiffOpenInput) => number | null;
-  closeAiDiffTab: (approvalId: string) => void;
+  closeAiDiffTab: (
+    approvalId: string,
+    approvalSessionId: string,
+    status: "approved" | "rejected",
+  ) => void;
 };
 
 export function AgentRunBridge(props: AgentRunBridgeProps) {
@@ -149,11 +153,16 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
   // ---- AI diff tab management ----------------------------------------------
   // We track which approvalIds have already opened a tab so re-renders don't
   // open duplicates. Reset when the session changes.
-  const openedRef = useRef<Set<string>>(new Set());
   const previewReads = useMemo(
-    () => ({ chat, reads: new Map<string, { active: boolean }>() }),
-    [chat],
+    () => ({
+      chat,
+      sessionId,
+      opened: new Map<string, { active: boolean }>(),
+      reads: new Map<string, { active: boolean }>(),
+    }),
+    [chat, sessionId],
   );
+  const opened = previewReads.opened;
   useEffect(
     () => () => {
       for (const read of previewReads.reads.values()) read.active = false;
@@ -163,9 +172,9 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
   );
   const fileMutationFingerprintRef = useRef<string>("");
   useEffect(() => {
-    openedRef.current = new Set();
+    opened.clear();
     fileMutationFingerprintRef.current = "";
-  }, [sessionId]);
+  }, [opened]);
 
   // Cheap fingerprint of file-mutation tool parts only. The diff-tab effect
   // is the most expensive thing on the streaming path, so we skip it when
@@ -214,7 +223,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
 
     const pending: Pending[] = [];
     const requested = new Set<string>();
-    const toClose = new Set<string>();
+    const toClose = new Map<string, "approved" | "rejected">();
 
     for (const m of messages) {
       if (m.role !== "assistant") continue;
@@ -225,7 +234,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
         if (!approvalId) continue;
         if (state === "approval-requested") {
           requested.add(approvalId);
-          if (!openedRef.current.has(approvalId)) {
+          if (!opened.has(approvalId)) {
             const toolCallId = "toolCallId" in part ? part.toolCallId : null;
             if (typeof toolCallId !== "string") continue;
             const toolName =
@@ -249,7 +258,13 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
           state === "output-available" ||
           state === "output-error"
         ) {
-          if (openedRef.current.has(approvalId)) toClose.add(approvalId);
+          if (opened.has(approvalId)) {
+            const rejected =
+              state === "output-denied" ||
+              state === "output-error" ||
+              ("approval" in part && part.approval?.approved === false);
+            toClose.set(approvalId, rejected ? "rejected" : "approved");
+          }
         }
       }
     }
@@ -261,9 +276,9 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
       }
     }
 
-    for (const id of toClose) {
-      openedRef.current.delete(id);
-      closeAiDiffTab(id);
+    for (const [id, status] of toClose) {
+      opened.delete(id);
+      closeAiDiffTab(id, sessionId, status);
     }
 
     if (pending.length === 0) return;
@@ -274,7 +289,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
         const read = { active: true };
         previewReads.reads.set(p.approvalId, read);
         // Mark as opened up-front so a re-render mid-await doesn't double-open.
-        openedRef.current.add(p.approvalId);
+        opened.set(p.approvalId, read);
         let observation: ReturnType<typeof previewChatFileTool>;
         try {
           observation = previewChatFileTool(
@@ -316,7 +331,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
             workspaceEnv: observation.target.workspace,
           });
         } catch {
-          openedRef.current.delete(p.approvalId);
+          if (opened.get(p.approvalId) === read) opened.delete(p.approvalId);
         } finally {
           observation.release();
           if (previewReads.reads.get(p.approvalId) === read)
@@ -328,6 +343,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
     chat,
     sessionId,
     previewReads,
+    opened,
     messages,
     fileMutationFingerprint,
     openAiDiffTab,

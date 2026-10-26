@@ -101,6 +101,8 @@ async function render(strict = false) {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
+  fixture.chat = {};
+  fixture.store.activeSessionId = "fixture-chat";
   node = document.createElement("div");
   root = createRoot(node);
   fixture.messages = [pending()];
@@ -195,6 +197,45 @@ it.each(["denied", "unmount"])(
   },
 );
 
+it("does not let a retired chat's preview clear a successor's opening receipt", async () => {
+  capture();
+  await render();
+  const finishOriginal = finish;
+  fixture.chat = {};
+  fixture.store.activeSessionId = "successor-chat";
+  capture();
+  fixture.readFile.mockResolvedValue({
+    kind: "text",
+    content: "successor",
+    size: 9,
+  });
+  fixture.messages = [pending()];
+  await render();
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenLastCalledWith(
+    expect.objectContaining({ approvalSessionId: "successor-chat" }),
+  );
+  await act(async () => finishOriginal());
+  fixture.messages = [
+    {
+      ...pending(),
+      parts: [
+        ...pending().parts,
+        {
+          type: "tool-create_directory",
+          toolCallId: "other-call",
+          state: "output-available",
+          input: { path: "directory" },
+          output: {},
+        },
+      ],
+    },
+  ];
+  await render();
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(fixture.readFile).toHaveBeenCalledTimes(2);
+});
+
 it("retires the discarded StrictMode reader without suppressing the new presentation", async () => {
   capture();
   await render(true);
@@ -237,10 +278,63 @@ it.each([false, true])(
       },
     ];
     await render();
-    expect(close).toHaveBeenCalledExactlyOnceWith("approval");
+    expect(close).toHaveBeenCalledExactlyOnceWith(
+      "approval",
+      "fixture-chat",
+      "rejected",
+    );
     await act(async () => finish());
     expect(open).toHaveBeenCalledTimes(settled ? 1 : 0);
     await render();
     expect(close).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([
+  { state: "approval-responded", approved: false, expected: "rejected" },
+  { state: "approval-responded", approved: true, expected: "approved" },
+  { state: "output-available", approved: true, expected: "approved" },
+  { state: "output-error", approved: true, expected: "rejected" },
+] as const)(
+  "routes $state approved=$approved to the original review with $expected status",
+  async ({ state, approved, expected }) => {
+    capture();
+    await render();
+    await act(async () => finish());
+    const part = {
+      type: "tool-write_file" as const,
+      toolCallId: "call",
+      input,
+      approval: { id: "approval", approved },
+    };
+    fixture.messages = [
+      {
+        id: "assistant",
+        role: "assistant",
+        parts: [
+          state === "output-available"
+            ? {
+                ...part,
+                state,
+                output: {},
+                approval: { id: "approval", approved: true },
+              }
+            : state === "output-error"
+              ? {
+                  ...part,
+                  state,
+                  errorText: "fixture error",
+                  approval: { id: "approval", approved: true },
+                }
+              : { ...part, state },
+        ],
+      },
+    ];
+    await render();
+    expect(close).toHaveBeenCalledExactlyOnceWith(
+      "approval",
+      "fixture-chat",
+      expected,
+    );
   },
 );
