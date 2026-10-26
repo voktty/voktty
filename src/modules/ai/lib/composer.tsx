@@ -98,8 +98,17 @@ export function AiComposerProvider({ children }: ProviderProps) {
     publication: typeof captureOwner;
     frame: number;
   } | null>(null);
+  const voiceFocus = useRef<{
+    publication: typeof captureOwner;
+    frame: number;
+  } | null>(null);
   useEffect(
     () => () => {
+      const voice = voiceFocus.current;
+      if (voice?.publication === captureOwner) {
+        cancelAnimationFrame(voice.frame);
+        voiceFocus.current = null;
+      }
       const pending = submissionFocus.current;
       if (pending?.publication !== captureOwner) return;
       cancelAnimationFrame(pending.frame);
@@ -233,10 +242,27 @@ export function AiComposerProvider({ children }: ProviderProps) {
     });
   }, [pendingSelections, consumeSelections]);
 
+  const captureVoice = useCallback(() => {
+    const owner = captureOwner();
+    return owner ? owner.isCurrent : null;
+  }, [captureOwner]);
   const voice = useWhisperRecording({
+    captureCurrent: captureVoice,
     onResult: (transcript: string) => {
-      setValue((v) => (v ? `${v} ${transcript}` : transcript));
-      requestAnimationFrame(() => textareaRef.current?.focus());
+      const owner = captureOwner();
+      if (!owner) return;
+      setValue((v) =>
+        owner.isCurrent() ? (v ? `${v} ${transcript}` : transcript) : v,
+      );
+      if (voiceFocus.current) cancelAnimationFrame(voiceFocus.current.frame);
+      const focus = {
+        publication: captureOwner,
+        frame: requestAnimationFrame(() => {
+          if (voiceFocus.current === focus) voiceFocus.current = null;
+          if (owner.isCurrent()) textareaRef.current?.focus();
+        }),
+      };
+      voiceFocus.current = focus;
     },
   });
 
