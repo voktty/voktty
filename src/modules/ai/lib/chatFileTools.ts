@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import type { ToolContext } from "@/modules/ai/tools/context";
+import { agentShellSessions } from "@/modules/ai/lib/ownedShellSessions";
 import {
   fileToolCallsFor,
   type FileToolName,
@@ -58,8 +59,12 @@ export function retireChatToolApproval(chat: object, approvalId: string): void {
 }
 
 export function forgetChatFileTools(chat: object): void {
-  retireChatFileTools(chat);
+  const context = contexts.get(chat);
+  if (!context) return;
   contexts.delete(chat);
+  const closing = agentShellSessions.retire(context);
+  void closing.catch(() => {});
+  fileToolCallsFor(context).forget();
 }
 
 export function reconcileChatFileTools(

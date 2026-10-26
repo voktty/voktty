@@ -4,17 +4,12 @@ import { native } from "../lib/native";
 import { checkShellCommand } from "../lib/security";
 import { resolvePath, type ToolContext } from "./context";
 import type { FileToolTarget } from "@/modules/ai/lib/fileToolCalls";
+import { agentShellSessions } from "@/modules/ai/lib/ownedShellSessions";
 import {
   capturedTool,
   fileReadCacheKey,
   type CapturedExecution,
 } from "@/modules/ai/tools/capturedFileTool";
-
-// Persistent cwd state cannot cross chat, filesystem or source boundaries.
-type SessionShell = { opening: Promise<number>; tail: Promise<void> };
-const sessionShells = new Map<string, SessionShell>();
-const shellOwners = new WeakMap<ToolContext, number>();
-let nextOwnerKey = 0;
 
 function runInSessionShell(
   ctx: ToolContext,
@@ -23,51 +18,25 @@ function runInSessionShell(
   timeoutSecs?: number,
 ) {
   captured.assertCurrent();
-  let owner = shellOwners.get(ctx);
-  if (owner === undefined) {
-    owner = ++nextOwnerKey;
-    shellOwners.set(ctx, owner);
-  }
   const key = JSON.stringify([
-    owner,
     captured.sessionId,
     fileReadCacheKey(captured.directory, captured.workspace),
   ]);
-  let entry = sessionShells.get(key);
-  if (!entry) {
-    if (sessionShells.size >= 256)
-      throw new Error("Too many cached agent shells.");
-    const opening = Promise.resolve().then(() => {
-      captured.assertCurrent();
-      return native.shellSessionOpen(captured.directory, captured.workspace);
-    });
-    entry = { opening, tail: Promise.resolve() };
-    sessionShells.set(key, entry);
-    const original = entry;
-    void opening.catch(() => {
-      if (sessionShells.get(key) === original) sessionShells.delete(key);
-    });
-  }
-  const original = entry;
-  const result = original.tail.then(async () => {
-    captured.assertCurrent();
-    const shellId = await original.opening;
-    captured.assertCurrent();
-    return captured.guarded(() =>
-      native.shellSessionRun(
-        shellId,
-        command,
-        captured.directory,
-        timeoutSecs,
-        captured.workspace,
+  return agentShellSessions.run(ctx, key, {
+    assertCurrent: captured.assertCurrent,
+    open: () => native.shellSessionOpen(captured.directory, captured.workspace),
+    close: native.shellSessionClose,
+    execute: (shellId) =>
+      captured.guarded(() =>
+        native.shellSessionRun(
+          shellId,
+          command,
+          captured.directory,
+          timeoutSecs,
+          captured.workspace,
+        ),
       ),
-    );
   });
-  original.tail = result.then(
-    () => {},
-    () => {},
-  );
-  return result;
 }
 
 function captureShellTarget(ctx: ToolContext): FileToolTarget {
