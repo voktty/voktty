@@ -57,6 +57,8 @@ import { fileIconUrl, folderIconUrl } from "./lib/iconResolver";
 import { useIconCatalogVersion } from "./lib/useIconCatalogVersion";
 import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { useExplorerDnd } from "./lib/useExplorerDnd";
+import { useAttachmentSource } from "@/modules/explorer/lib/useAttachmentSource";
+import { canRequestFileAttachment, type FileAttachmentHandler } from "@/modules/ai/lib/fileAttachmentRequest";
 import { useExplorerFileDrop } from "./lib/useExplorerFileDrop";
 import { useFileTree } from "./lib/useFileTree";
 import {
@@ -108,7 +110,7 @@ type Props = {
   onOpenInSourceControl?: (path: string) => void;
   onOpenGitHistory?: (path: string) => void;
   onOpenBlame?: (target: BlameTarget) => void;
-  onAttachToAgent?: (path: string) => void;
+  onAttachToAgent?: FileAttachmentHandler;
   /** Kept for the outer workspace integration. Explorer resource drops do not
    * use it: they target terminal paths or AI context explicitly. */
   onWorkspaceDrop?: (
@@ -490,12 +492,19 @@ export const FileExplorer = memo(
       }
     }, [deleteRequest, tree.deletePath, tree.deletePaths]);
 
+    const revealScope = useMemo(() => ({
+      rootPath, rootSource, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
+    }), [
+      rootPath, rootSource, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
+    ]);
+    const attachments = useAttachmentSource(revealScope, workspaceEnv, onAttachToAgent);
     const dnd = useExplorerDnd({
       rootPath: rootPath ?? "",
       isDir: isDirAt,
       onMove: tree.movePath,
       pathDropTarget,
       selectedPaths,
+      captureSource: attachments.capture,
     });
 
     const fileDrop = useExplorerFileDrop({
@@ -548,11 +557,6 @@ export const FileExplorer = memo(
       },
       [entryIndexByPath, virtualizer],
     );
-    const revealScope = useMemo(() => ({
-      rootPath, rootSource, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
-    }), [
-      rootPath, rootSource, sourceRootPath, navigationKey, workspaceKey, workspaceEnv,
-    ]);
     const reveal = useExplorerReveal({
       scope: revealScope,
       revealTree: tree.reveal,
@@ -589,6 +593,10 @@ export const FileExplorer = memo(
         : !canOpenNativeBlame(menuTarget.path, workspaceEnv)
           ? t("git.unsupportedFilesystem")
           : undefined;
+    const attachDisabledReason = menuTarget?.scope !== revealScope
+      ? t("git.targetChanged")
+      : !canRequestFileAttachment(menuTarget.path, workspaceEnv)
+        ? t("git.unsupportedFilesystem") : undefined;
 
     const handleSelectPath = useCallback(
       (path: string, e?: React.MouseEvent) => {
@@ -993,8 +1001,10 @@ export const FileExplorer = memo(
         </div>
 
         <ExplorerSearch
+          key={JSON.stringify([rootPath, workspaceEnv, navigationKey])}
           ref={searchRef}
           rootPath={rootPath}
+          workspace={workspaceEnv}
           onOpenFile={onOpenFile}
           open={isSearchOpen}
           onRequestClose={() => setIsSearchOpen(false)}
@@ -1002,7 +1012,7 @@ export const FileExplorer = memo(
           onRevealInTerminal={onRevealInTerminal}
           onOpenInSourceControl={onOpenInSourceControl}
           onOpenGitHistory={onOpenGitHistory}
-          onAttachToAgent={onAttachToAgent}
+          onAttachToAgent={onAttachToAgent ? attachments.attach : undefined}
         />
 
         {!isSearchActive ? (
@@ -1177,8 +1187,13 @@ export const FileExplorer = memo(
                         <ContextMenuSeparator />
                         <ContextMenuItem
                           className={COMPACT_ITEM}
+                          disabled={Boolean(attachDisabledReason)}
+                          title={attachDisabledReason}
+                          aria-description={attachDisabledReason}
                           onSelect={() => {
-                            for (const p of selectedPaths) onAttachToAgent(p);
+                            if (attachDisabledReason || menuTargetRef.current !== menuTarget) return;
+                            menuTargetRef.current = null;
+                            for (const p of selectedPaths) attachments.attach(p);
                           }}
                         >
                           {t("explorer.attachMultiple", {
@@ -1361,7 +1376,14 @@ export const FileExplorer = memo(
                     <ContextMenuSeparator />
                     <ContextMenuItem
                       className={COMPACT_ITEM}
-                      onSelect={() => onAttachToAgent?.(menuTarget.path)}
+                      disabled={Boolean(attachDisabledReason)}
+                      title={attachDisabledReason}
+                      aria-description={attachDisabledReason}
+                      onSelect={() => {
+                        if (attachDisabledReason || menuTargetRef.current !== menuTarget) return;
+                        menuTargetRef.current = null;
+                        attachments.attach(menuTarget.path);
+                      }}
                     >
                       {t("ai.composerAttach")}
                     </ContextMenuItem>

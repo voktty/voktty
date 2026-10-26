@@ -8,6 +8,7 @@ vi.mock("@/lib/platform", () => ({
 }));
 
 import { createTerminalPathDropTarget } from "./useTerminalFileDrop";
+import { LOCAL_WORKSPACE } from "@/modules/workspace";
 
 describe("createTerminalPathDropTarget", () => {
   it("tracks the terminal leaf under the pointer", () => {
@@ -69,7 +70,7 @@ describe("createTerminalPathDropTarget", () => {
     expect(setTarget).toHaveBeenCalledWith(null);
 
     expect(target.dropPath("/repo/app.tsx", 600, 100)).toBe(true);
-    expect(attachToAi).toHaveBeenCalledWith("/repo/app.tsx");
+    expect(attachToAi).toHaveBeenCalledWith("/repo/app.tsx", LOCAL_WORKSPACE);
     expect(paste).not.toHaveBeenCalled();
   });
 
@@ -87,13 +88,23 @@ describe("createTerminalPathDropTarget", () => {
       openDroppedPath,
     });
 
-    expect(target.dropExplorerPath("/repo/app.ts", 20, 1)).toBe(true);
+    expect(
+      target.dropExplorerPath("/repo/app.ts", 20, 1, LOCAL_WORKSPACE),
+    ).toBe(true);
     expect(paste).toHaveBeenCalledWith(4, "/repo/app.ts ");
 
-    expect(target.dropExplorerPath("/repo/app.ts", 50, 1)).toBe(true);
-    expect(attachToAi).toHaveBeenCalledWith("/repo/app.ts");
+    expect(
+      target.dropExplorerPath("/repo/app.ts", 50, 1, LOCAL_WORKSPACE),
+    ).toBe(true);
+    expect(attachToAi).toHaveBeenCalledWith(
+      "/repo/app.ts",
+      LOCAL_WORKSPACE,
+      undefined,
+    );
 
-    expect(target.dropExplorerPath("/repo/app.ts", 100, 1)).toBe(false);
+    expect(
+      target.dropExplorerPath("/repo/app.ts", 100, 1, LOCAL_WORKSPACE),
+    ).toBe(false);
     expect(openDroppedPath).not.toHaveBeenCalled();
   });
 

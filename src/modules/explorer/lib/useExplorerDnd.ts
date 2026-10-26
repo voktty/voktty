@@ -1,10 +1,18 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { AttachmentSource } from "@/modules/explorer/lib/useAttachmentSource";
+import type { WorkspaceEnv } from "@/modules/workspace";
 
 export type ExplorerPathDropTarget = {
   updateTarget: (clientX: number, clientY: number) => boolean;
   dropPath: (path: string, clientX: number, clientY: number) => boolean;
-  dropExplorerPath?: (path: string, clientX: number, clientY: number) => boolean;
+  dropExplorerPath?: (
+    path: string,
+    clientX: number,
+    clientY: number,
+    workspace: WorkspaceEnv,
+    isCurrent?: () => boolean,
+  ) => boolean;
   clearTarget: () => void;
 };
 
@@ -14,6 +22,7 @@ type Options = {
   onMove: (from: string, toDir: string) => void;
   pathDropTarget?: ExplorerPathDropTarget;
   selectedPaths?: Set<string>;
+  captureSource: () => AttachmentSource | null;
 };
 
 const THRESHOLD = 5;
@@ -55,7 +64,9 @@ export function finishExplorerDrag(
   pathDropTarget: ExplorerPathDropTarget | undefined,
   onMove: (from: string, toDir: string) => void,
   selectedSources?: Set<string>,
+  sourceContext?: AttachmentSource,
 ): void {
+  if (sourceContext && !sourceContext.isCurrent()) commit = false;
   const sources =
     selectedSources && selectedSources.has(source) && selectedSources.size > 1
       ? Array.from(selectedSources)
@@ -64,8 +75,17 @@ export function finishExplorerDrag(
   if (commit && pathDropTarget) {
     let handled = false;
     for (const src of sources) {
-      const drop = pathDropTarget.dropExplorerPath ?? pathDropTarget.dropPath;
-      if (drop(src, clientX, clientY)) {
+      if (sourceContext && !sourceContext.isCurrent()) break;
+      if (
+        sourceContext &&
+        pathDropTarget.dropExplorerPath?.(
+          src,
+          clientX,
+          clientY,
+          sourceContext.workspace,
+          sourceContext.isCurrent,
+        )
+      ) {
         handled = true;
       }
     }
@@ -77,6 +97,7 @@ export function finishExplorerDrag(
 
   if (commit && moveTarget) {
     for (const src of sources) {
+      if (sourceContext && !sourceContext.isCurrent()) break;
       if (src !== moveTarget && !moveTarget.startsWith(`${src}/`)) {
         onMove(src, moveTarget);
       }
@@ -95,6 +116,7 @@ export function useExplorerDnd({
   onMove,
   pathDropTarget,
   selectedPaths,
+  captureSource,
 }: Options) {
   const [dragLabel, setDragLabel] = useState<string | null>(null);
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
@@ -110,14 +132,18 @@ export function useExplorerDnd({
     onMove,
     pathDropTarget,
     selectedPaths,
+    captureSource,
   });
-  optsRef.current = {
-    rootPath,
-    isDir,
-    onMove,
-    pathDropTarget,
-    selectedPaths,
-  };
+  useLayoutEffect(() => {
+    optsRef.current = {
+      rootPath,
+      isDir,
+      onMove,
+      pathDropTarget,
+      selectedPaths,
+      captureSource,
+    };
+  });
 
   const placeGhost = useCallback((x: number, y: number) => {
     lastPosRef.current = { x, y };
@@ -138,10 +164,18 @@ export function useExplorerDnd({
   const onPointerDown = useCallback(
     (e: ReactPointerEvent) => {
       if (e.button !== 0) return;
-      const el = (e.target as HTMLElement).closest<HTMLElement>("[data-fs-path]");
+      const el = (e.target as HTMLElement).closest<HTMLElement>(
+        "[data-fs-path]",
+      );
       const source = el?.getAttribute("data-fs-path");
       if (!source) return;
-      const { selectedPaths: currentSelected } = optsRef.current;
+      cleanupRef.current?.();
+      const original = optsRef.current;
+      const sourceContext = original.captureSource();
+      if (!sourceContext) return;
+      const currentSelected = original.selectedPaths
+        ? new Set(original.selectedPaths)
+        : undefined;
       const isMulti =
         currentSelected &&
         currentSelected.has(source) &&
@@ -152,8 +186,14 @@ export function useExplorerDnd({
       const sx = e.clientX;
       const sy = e.clientY;
       let active = false;
+      let ended = false;
 
       const move = (ev: PointerEvent) => {
+        if (ended) return;
+        if (!sourceContext.isCurrent()) {
+          end(false);
+          return;
+        }
         if (!active) {
           if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < THRESHOLD) return;
           active = true;
@@ -161,7 +201,7 @@ export function useExplorerDnd({
           setDragLabel(name);
         }
         placeGhost(ev.clientX, ev.clientY);
-        const { rootPath, isDir, pathDropTarget } = optsRef.current;
+        const { rootPath, isDir, pathDropTarget } = original;
         const element = document.elementFromPoint(ev.clientX, ev.clientY);
         const terminalTargeted =
           pathDropTarget?.updateTarget(ev.clientX, ev.clientY) ?? false;
@@ -188,6 +228,8 @@ export function useExplorerDnd({
         cleanupRef.current = null;
       };
       const end = (commit: boolean) => {
+        if (ended) return;
+        ended = true;
         detach();
         if (!active) return;
         const { x, y } = lastPosRef.current;
@@ -197,9 +239,10 @@ export function useExplorerDnd({
           x,
           y,
           dropTargetRef.current,
-          optsRef.current.pathDropTarget,
-          optsRef.current.onMove,
-          optsRef.current.selectedPaths,
+          original.pathDropTarget,
+          original.onMove,
+          currentSelected,
+          sourceContext,
         );
         suppressClickRef.current = true;
         setTimeout(() => {
@@ -214,7 +257,7 @@ export function useExplorerDnd({
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
       window.addEventListener("pointercancel", cancel);
-      cleanupRef.current = detach;
+      cleanupRef.current = () => end(false);
     },
     [placeGhost],
   );
@@ -227,13 +270,13 @@ export function useExplorerDnd({
     }
   }, []);
 
-  useEffect(
-    () => () => {
+  useLayoutEffect(() => {
+    const target = captureSource() ? optsRef.current.pathDropTarget : undefined;
+    return () => {
       cleanupRef.current?.();
-      optsRef.current.pathDropTarget?.clearTarget();
-    },
-    [],
-  );
+      target?.clearTarget();
+    };
+  }, [captureSource]);
 
   return { ghostRef, dragLabel, dropTargetDir, onPointerDown, onClickCapture };
 }

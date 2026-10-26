@@ -15,7 +15,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import { isWindowsNativePath, workspaceForDocumentPath, type WorkspaceEnv } from "@/modules/workspace";
+import { IS_WINDOWS } from "@/lib/platform";
 import {
   forwardRef,
   useEffect,
@@ -43,9 +44,11 @@ type SearchResult = {
 
 const MIN_QUERY_LEN = 2;
 const DEBOUNCE_MS = 300;
+let pendingSearches = 0;
 
 type Props = {
   rootPath: string;
+  workspace: WorkspaceEnv;
   onOpenFile: (path: string) => void;
   open: boolean;
   onRequestClose: () => void;
@@ -63,6 +66,7 @@ export type ExplorerSearchHandle = {
 
 export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function ExplorerSearch({
   rootPath,
+  workspace,
   onOpenFile,
   open,
   onRequestClose,
@@ -76,11 +80,18 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
 ) {
   const { t } = useTranslation();
   const showHidden = usePreferencesStore((s) => s.showHidden);
+  const filesystem = JSON.stringify(workspace);
+  const owner = workspaceForDocumentPath(workspace, rootPath);
+  const available = !rootPath.startsWith("remote://") &&
+    (isWindowsNativePath(rootPath) ||
+      (workspace.kind !== "docker" && workspace.kind !== "serial" &&
+        (owner.kind === "local" || (owner.kind === "wsl" && IS_WINDOWS))));
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searching, setSearching] = useState(false);
   const [truncated, setTruncated] = useState(false);
+  const [failed, setFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastKeyboardNavAt = useRef(0);
@@ -105,37 +116,46 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
 
   useEffect(() => {
     const q = query.trim();
-    if (q.length < MIN_QUERY_LEN) {
+    if (q.length < MIN_QUERY_LEN || !available) {
       setResults([]);
       setSelectedIndex(0);
       setSearching(false);
       setTruncated(false);
+      setFailed(false);
       return;
     }
     setSearching(true);
+    setFailed(false);
     let alive = true;
+    const captured = workspaceForDocumentPath(JSON.parse(filesystem) as WorkspaceEnv, rootPath);
     const handle = setTimeout(async () => {
+      if (pendingSearches >= 16) {
+        if (alive) { setFailed(true); setSearching(false); }
+        return;
+      }
+      pendingSearches++;
       try {
         const res = await invoke<SearchResult>("fs_search", {
           root: rootPath,
           query: q,
           limit: 200,
           showHidden,
-          workspace: currentWorkspaceEnv(),
+          workspace: captured,
         });
         if (alive) {
           setResults(res.hits);
           setTruncated(res.truncated);
           setSelectedIndex(0);
         }
-      } catch (e) {
+      } catch {
         if (alive) {
-          console.error("fs_search failed:", e);
+          setFailed(true);
           setResults([]);
           setTruncated(false);
           setSelectedIndex(0);
         }
       } finally {
+        pendingSearches--;
         if (alive) setSearching(false);
       }
     }, DEBOUNCE_MS);
@@ -144,7 +164,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       alive = false;
       clearTimeout(handle);
     };
-  }, [query, rootPath, showHidden]);
+  }, [query, rootPath, showHidden, filesystem, available]);
 
   useImperativeHandle(
     ref,
@@ -229,7 +249,11 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
       {active ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="py-1" ref={scrollRef}>
-            {searching && results.length === 0 ? (
+            {!available || failed ? (
+              <div role="status" className="px-3 py-2 text-[11px] text-muted-foreground">
+                {t(!available ? "git.unsupportedFilesystem" : "feedback.somethingWentWrong")}
+              </div>
+            ) : searching && results.length === 0 ? (
               <div className="px-3 py-2 text-[11px] text-muted-foreground">
                 {t("explorer.searching")}
               </div>

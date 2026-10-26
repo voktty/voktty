@@ -7,6 +7,7 @@ import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDeskt
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
 import { useDirectoryTerminalOpening } from "@/modules/surfaces/lib/useDirectoryTerminalOpening";
 import { usePathOpening } from "@/modules/surfaces/lib/usePathOpening";
+import { useNativeResourceDrop } from "@/modules/surfaces/lib/useNativeResourceDrop";
 import { useGitHistoryRequests } from "@/modules/source-control/useGitHistoryRequests";
 import type { BlameTarget } from "@/modules/source-control/useBlameOpening";
 import {
@@ -72,6 +73,7 @@ import {
   useSelectionAskAi,
 } from "@/modules/ai";
 import { AiComposerProvider } from "@/modules/ai/lib/composer";
+import { canRequestFileAttachment, requestFileAttachment } from "@/modules/ai/lib/fileAttachmentRequest";
 import { native } from "@/modules/ai/lib/native";
 import {
   GuestConnectDialog,
@@ -177,7 +179,7 @@ import {
 import { planContextualSpaceInsertion } from "@/modules/spaces/lib/contextualInsertion";
 import { planWorkspaceDrop } from "@/modules/spaces/lib/planWorkspaceDrop";
 import { updateSpaceSplitRatio } from "@/modules/spaces/lib/spaceGeometry";
-import type { SlotId } from "@/modules/spaces/lib/spaceLayout";
+import { collectLayoutSlots, type SlotId } from "@/modules/spaces/lib/spaceLayout";
 import {
   projectPaneBudget,
   tabAssignmentPaneBudget,
@@ -1456,20 +1458,22 @@ function DesktopApp() {
   const attachSelection = useChatStore((s) => s.attachSelection);
 
   const handleAttachFileToAgent = useCallback(
-    (path: string) => {
+    (path: string, workspace: WorkspaceEnv, isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return;
+      if (!canRequestFileAttachment(path, workspace)) {
+        toast.info(t("git.unsupportedFilesystem"));
+        return;
+      }
       if (!hasComposer) {
         void openSettingsWindow("models");
         return;
       }
-      // Dispatch a window event the composer listens for. Same pattern as
-      // selections - keeps file-explorer decoupled from the AI module.
-      window.dispatchEvent(
-        new CustomEvent<string>("voktty:ai-attach-file", { detail: path }),
-      );
+      if (!requestFileAttachment(path, workspace, isCurrent) || !isCurrent()) return;
       presentChat();
+      if (!isCurrent()) return;
       focusInput(null);
     },
-    [hasComposer, presentChat, focusInput],
+    [hasComposer, presentChat, focusInput, t],
   );
 
   const [blameTarget, setBlameTarget] = useState<BlameTarget | null>(null);
@@ -3480,7 +3484,8 @@ function DesktopApp() {
   );
 
   const handleWorkspaceDrop = useCallback(
-    async (source: WorkspaceDragSource, target: WorkspaceDropTarget) => {
+    async (source: WorkspaceDragSource, target: WorkspaceDropTarget, isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return;
       const viewState = useSpaces.getState();
       const targetWorkspaceId =
         target.kind === "space" || target.kind === "slot"
@@ -3527,9 +3532,15 @@ function DesktopApp() {
       }
 
       if (plan.operation === "reference-resource") {
+        const filesystem = plan.source.workspaceEnv;
+        if (!filesystem) {
+          toast.error(t("spaces.resourceUnavailable"));
+          return;
+        }
+        const captured = structuredClone(filesystem);
         viewState.openViewSpace(plan.viewSpaceId);
         viewState.focusViewSpaceSlot(plan.viewSpaceId, plan.slotId);
-        handleAttachFileToAgent(plan.source.path);
+        handleAttachFileToAgent(plan.source.path, captured, isCurrent);
         return;
       }
 
@@ -3990,46 +4001,13 @@ function DesktopApp() {
     [activeViewSpace],
   );
 
-  const handleDropInSlot = useCallback(
-    async (slotId: SlotId, event: React.DragEvent<HTMLElement>) => {
-      const viewSpace = activeViewSpace;
-      if (!viewSpace) return;
-      const raw =
-        event.dataTransfer.getData("text/uri-list") ||
-        event.dataTransfer.getData("text/plain");
-      const path = raw
-        .split("\n")
-        .map((value) => value.trim())
-        .find(Boolean)
-        ?.replace(/^file:\/\//, "");
-      if (!path) return;
-      const decodedPath = decodeURIComponent(path);
-      const stat = await invoke<{ kind: "file" | "dir" | "symlink" }>(
-        "fs_stat",
-        { path: decodedPath, workspace: workspaceEnv },
-      ).catch(() => null);
-      const source =
-        stat?.kind === "dir"
-          ? {
-              kind: "directory" as const,
-              path: decodedPath,
-              workspaceEnv,
-            }
-          : stat?.kind === "file" || stat?.kind === "symlink"
-            ? { kind: "file" as const, path: decodedPath, workspaceEnv }
-            : null;
-      if (!source) {
-        toast.error(t("spaces.resourceUnavailable"));
-        return;
-      }
-      await handleWorkspaceDrop(source, {
-        kind: "slot",
-        viewSpaceId: viewSpace.id,
-        slotId,
-      });
-    },
-    [activeViewSpace, handleWorkspaceDrop, t, workspaceEnv],
-  );
+  const reportUnavailableResource = useCallback(() => toast.error(t("spaces.resourceUnavailable")), [t]);
+  const handleDropInSlot = useNativeResourceDrop({
+    viewSpaceId: activeViewSpace?.id,
+    sourceKey: JSON.stringify([activeSpaceId, spaceViewLimit, activeViewSpace ? collectLayoutSlots(activeViewSpace.layout).map(({ id, memberTabKey }) => [id, memberTabKey]) : null]),
+    drop: handleWorkspaceDrop,
+    onUnavailable: reportUnavailableResource,
+  });
 
   const handleReorderVisualTabs = useCallback(
     (fromId: number, toGapIndex: number, visibleIds: number[]) => {

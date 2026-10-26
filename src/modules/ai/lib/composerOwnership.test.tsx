@@ -5,6 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Chat, type UIMessage } from "@ai-sdk/react";
 import { AiComposerProvider, useComposer } from "@/modules/ai/lib/composer";
 import { chats, useChatStore } from "@/modules/ai/store/chatStore";
+import {
+  FILE_ATTACHMENT_EVENT,
+  requestFileAttachment,
+} from "@/modules/ai/lib/fileAttachmentRequest";
 
 const fixture = vi.hoisted(() => ({
   createChat: vi.fn(),
@@ -392,6 +396,51 @@ it("keeps a late explicit native file out of a successor chat", async () => {
     useChatStore.getState().switchSession("selected");
     finish({ kind: "text", content: "retired", size: 7 });
     expect(await pending).toBe(false);
+  });
+  expect(composer.files).toEqual([]);
+});
+
+it("rejects raw and fabricated attachment events without filesystem IO", async () => {
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent(FILE_ATTACHMENT_EVENT, { detail: "/repo/file.ts" }),
+    );
+    window.dispatchEvent(
+      new CustomEvent(FILE_ATTACHMENT_EVENT, {
+        detail: { path: "/repo/file.ts", workspace: { kind: "local" } },
+      }),
+    );
+    await vi.dynamicImportSettled();
+  });
+  expect(fixture.nativeRead).not.toHaveBeenCalled();
+  expect(composer.files).toEqual([]);
+});
+
+it("keeps a retired sender's late text out of the composer", async () => {
+  let current = true;
+  let finish!: (result: {
+    kind: "text";
+    content: string;
+    size: number;
+  }) => void;
+  fixture.nativeRead.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => {
+    expect(
+      requestFileAttachment("/repo/file.ts", { kind: "local" }, () => current),
+    ).toBe(true);
+    await vi.dynamicImportSettled();
+  });
+  await act(async () => {
+    current = false;
+    finish({ kind: "text", content: "retired", size: 7 });
+  });
+  expect(fixture.nativeRead).toHaveBeenCalledExactlyOnceWith("/repo/file.ts", {
+    kind: "local",
   });
   expect(composer.files).toEqual([]);
 });

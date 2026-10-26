@@ -1,6 +1,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { requestPathOpening } from "@/modules/surfaces/lib/pathOpeningRequest";
-import { LOCAL_WORKSPACE } from "@/modules/workspace";
+import { requestFileAttachment } from "@/modules/ai/lib/fileAttachmentRequest";
+import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
 import { useEffect } from "react";
 import { useTerminalDropStore } from "./dropStore";
 import { formatDroppedPaths } from "./quoteShellPath";
@@ -11,7 +12,7 @@ export type TerminalPathDropTarget = {
   dropPath: (path: string, clientX: number, clientY: number) => boolean;
   /** Handles paths dragged from Voktty's explorer. Unlike native drops, a
    * miss does not open a new editor: only a terminal or AI chat is a target. */
-  dropExplorerPath: (path: string, clientX: number, clientY: number) => boolean;
+  dropExplorerPath: (path: string, clientX: number, clientY: number, workspace: WorkspaceEnv, isCurrent?: () => boolean) => boolean;
   clearTarget: () => void;
 };
 
@@ -21,7 +22,7 @@ export type TerminalPathDropDeps = {
   setTarget: (leafId: number | null) => void;
   isAiChatAtPoint?: (clientX: number, clientY: number) => boolean;
   isExplorerAtPoint?: (clientX: number, clientY: number) => boolean;
-  attachToAi?: (path: string) => boolean;
+  attachToAi?: (path: string, workspace: WorkspaceEnv, isCurrent?: () => boolean) => boolean;
   openDroppedPath?: (path: string) => boolean;
 };
 
@@ -109,15 +110,7 @@ export function createTerminalPathDropTarget({
   setTarget,
   isAiChatAtPoint = isAiChatAt,
   isExplorerAtPoint = isExplorerAt,
-  attachToAi = (path: string) => {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("voktty:ai-attach-file", { detail: path }),
-      );
-      return true;
-    }
-    return false;
-  },
+  attachToAi = requestFileAttachment,
   openDroppedPath = (path: string) => {
     if (typeof window !== "undefined") {
       requestPathOpening(path, LOCAL_WORKSPACE, "unknown");
@@ -146,7 +139,7 @@ export function createTerminalPathDropTarget({
       setTarget(null);
       useTerminalDropStore.getState().setWorkspaceHovered(false);
       if (isAiChatAtPoint(clientX, clientY)) {
-        return attachToAi(path);
+        return attachToAi(path, LOCAL_WORKSPACE);
       }
       if (isExplorerAtPoint(clientX, clientY)) {
         return false;
@@ -158,17 +151,19 @@ export function createTerminalPathDropTarget({
       }
       return openDroppedPath(path);
     },
-    dropExplorerPath(path, clientX, clientY) {
+    dropExplorerPath(path, clientX, clientY, workspace, isCurrent) {
+      if (!workspace || (isCurrent && !isCurrent())) return false;
       setTarget(null);
       useTerminalDropStore.getState().setWorkspaceHovered(false);
       if (isAiChatAtPoint(clientX, clientY)) {
-        return attachToAi(path);
+        return attachToAi(path, workspace, isCurrent);
       }
       if (isExplorerAtPoint(clientX, clientY)) {
         return false;
       }
       const leafId = leafIdAtPoint(clientX, clientY);
       if (leafId === null) return false;
+      if (isCurrent && !isCurrent()) return false;
       paste(leafId, formatDroppedPaths([path]));
       return true;
     },
@@ -199,6 +194,7 @@ export function useTerminalFileDrop(): TerminalPathDropTarget {
 
     void getCurrentWebview()
       .onDragDropEvent((e) => {
+        if (disposed) return;
         const p = e.payload;
         if (p.type === "enter" || p.type === "over") {
           const isExp = isExplorerAt(p.position.x, p.position.y);
@@ -224,9 +220,7 @@ export function useTerminalFileDrop(): TerminalPathDropTarget {
           if (!p.paths.length) return;
           if (isAiChatAt(p.position.x, p.position.y)) {
             for (const path of p.paths) {
-              window.dispatchEvent(
-                new CustomEvent("voktty:ai-attach-file", { detail: path }),
-              );
+              requestFileAttachment(path, LOCAL_WORKSPACE, () => !disposed);
             }
             return;
           }

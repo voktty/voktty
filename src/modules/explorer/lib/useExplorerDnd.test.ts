@@ -87,6 +87,10 @@ describe("finishExplorerDrag", () => {
       clearTarget: vi.fn(),
     };
     const onMove = vi.fn();
+    const sourceContext = {
+      workspace: { kind: "local" as const },
+      isCurrent: () => true,
+    };
 
     finishExplorerDrag(
       true,
@@ -96,12 +100,16 @@ describe("finishExplorerDrag", () => {
       null,
       pathDropTarget,
       onMove,
+      undefined,
+      sourceContext,
     );
 
     expect(pathDropTarget.dropExplorerPath).toHaveBeenCalledWith(
       "/repo/file.ts",
       100,
       200,
+      sourceContext.workspace,
+      sourceContext.isCurrent,
     );
     expect(pathDropTarget.clearTarget).toHaveBeenCalledOnce();
     expect(onMove).not.toHaveBeenCalled();

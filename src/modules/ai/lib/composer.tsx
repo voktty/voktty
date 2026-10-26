@@ -1,6 +1,5 @@
-import { currentWorkspaceEnv, type WorkspaceEnv } from "@/modules/workspace";
+import type { WorkspaceEnv } from "@/modules/workspace";
 import { t } from "@/modules/i18n";
-import { invoke } from "@tauri-apps/api/core";
 import {
   createContext,
   useCallback,
@@ -15,6 +14,7 @@ import { useChatStore } from "../store/chatStore";
 import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
 import { readBrowserAttachments } from "@/modules/ai/lib/browserAttachments";
 import { readPathAttachment } from "@/modules/ai/lib/pathAttachments";
+import { FILE_ATTACHMENT_EVENT, takeFileAttachmentRequest } from "@/modules/ai/lib/fileAttachmentRequest";
 export { MAX_TEXT_INLINE } from "@/modules/ai/lib/browserAttachments";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
@@ -52,7 +52,7 @@ type ComposerCtx = {
   addFiles: (list: FileList | null) => Promise<void>;
   attachFileByPath: (
     path: string,
-    workspace?: WorkspaceEnv,
+    workspace: WorkspaceEnv,
     isCurrent?: () => boolean,
   ) => Promise<boolean>;
   attachTextFile: (
@@ -134,54 +134,21 @@ export function AiComposerProvider({ children }: ProviderProps) {
   const attachFileByPath = useCallback(
     async (
       path: string,
-      workspace?: WorkspaceEnv,
+      workspace: WorkspaceEnv,
       isCallerCurrent: () => boolean = () => true,
     ) => {
       const owner = captureOwner();
       const isCurrent = () => Boolean(owner?.isCurrent() && isCallerCurrent());
+      if (!isCurrent() || !workspace) return false;
+      const attachment = await readPathAttachment(path, workspace, isCurrent);
+      if (!attachment || !isCurrent()) return false;
+      setFiles((prev) =>
+        !isCurrent() || prev.some((file) => file.id === attachment.id)
+          ? prev : [...prev, attachment],
+      );
       if (!isCurrent()) return false;
-      if (workspace) {
-        const attachment = await readPathAttachment(path, workspace, isCurrent);
-        if (!attachment || !isCurrent()) return false;
-        setFiles((prev) =>
-          !isCurrent() || prev.some((file) => file.id === attachment.id)
-            ? prev
-            : [...prev, attachment],
-        );
-        if (!isCurrent()) return false;
-        useChatStore.getState().focusInput();
-        return isCurrent();
-      }
-      try {
-        type ReadResult =
-          | { kind: "text"; content: string; size: number }
-          | { kind: "binary"; size: number }
-          | { kind: "toolarge"; size: number; limit: number };
-        const result = await invoke<ReadResult>("fs_read_file", {
-          path,
-          workspace: currentWorkspaceEnv(),
-        });
-        if (!isCurrent() || result.kind !== "text") return false;
-        const name = path.split(/[/\\]/).pop() || path;
-        const id = `path-${path}`;
-        setFiles((prev) => {
-          if (!isCurrent()) return prev;
-          if (prev.some((f) => f.id === id)) return prev;
-          const att: FileAttachment = {
-            id,
-            name,
-            kind: "text",
-            mediaType: "text/plain",
-            text: result.content,
-            size: result.size,
-          };
-          return [...prev, att];
-        });
-        useChatStore.getState().focusInput();
-        return isCurrent();
-      } catch {
-        return false;
-      }
+      useChatStore.getState().focusInput();
+      return isCurrent();
     },
     [captureOwner],
   );
@@ -233,10 +200,9 @@ export function AiComposerProvider({ children }: ProviderProps) {
   // Listen for explorer's "Attach to Agent" event.
   useEffect(() => {
     const onAttach = (e: Event) => {
-      const path = (e as CustomEvent<string>).detail;
-      if (typeof path === "string" && path.length > 0) {
-        void attachFileByPath(path);
-      }
+      if (!captureOwner()) return;
+      const request = takeFileAttachmentRequest((e as CustomEvent).detail);
+      if (request) void attachFileByPath(request.path, request.workspace, request.isCurrent);
     };
     const onInsertPrompt = (e: Event) => {
       const prompt = (e as CustomEvent<{ prompt: string }>).detail?.prompt;
@@ -245,13 +211,13 @@ export function AiComposerProvider({ children }: ProviderProps) {
         requestAnimationFrame(() => textareaRef.current?.focus());
       }
     };
-    window.addEventListener("voktty:ai-attach-file", onAttach);
+    window.addEventListener(FILE_ATTACHMENT_EVENT, onAttach);
     window.addEventListener("voktty:agent:insert-prompt", onInsertPrompt);
     return () => {
-      window.removeEventListener("voktty:ai-attach-file", onAttach);
+      window.removeEventListener(FILE_ATTACHMENT_EVENT, onAttach);
       window.removeEventListener("voktty:agent:insert-prompt", onInsertPrompt);
     };
-  }, [attachFileByPath, setValue, textareaRef]);
+  }, [attachFileByPath, captureOwner, setValue, textareaRef]);
 
   useEffect(() => {
     if (pendingSelections.length === 0) return;
