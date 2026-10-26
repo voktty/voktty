@@ -350,8 +350,11 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  operationInspect: async (path: string): Promise<OperationPathInspection> => {
-    const workspace = currentWorkspaceEnv();
+  operationInspect: async (
+    path: string,
+    explicitWorkspace?: WorkspaceEnv,
+  ): Promise<OperationPathInspection> => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       try {
         const stat = await remoteStat(workspace, path);
@@ -380,8 +383,9 @@ export const native = {
     path: string,
     content: string,
     expectedContent: string | null,
+    explicitWorkspace?: WorkspaceEnv,
   ) => {
-    const workspace = currentWorkspaceEnv();
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       try {
         const current = await remoteReadFile(workspace, path);
@@ -404,8 +408,12 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  operationRemoveFile: async (path: string, expectedContent: string) => {
-    const workspace = currentWorkspaceEnv();
+  operationRemoveFile: async (
+    path: string,
+    expectedContent: string,
+    explicitWorkspace?: WorkspaceEnv,
+  ) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       const current = await remoteReadFile(workspace, path);
       if (current.content !== expectedContent) {
@@ -420,8 +428,11 @@ export const native = {
       workspace: workspaceForNativeFs(workspace, path),
     });
   },
-  operationRemoveEmptyDirectory: async (path: string) => {
-    const workspace = currentWorkspaceEnv();
+  operationRemoveEmptyDirectory: async (
+    path: string,
+    explicitWorkspace?: WorkspaceEnv,
+  ) => {
+    const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       const entries = await remoteReadDir(workspace, path);
       if (entries.length > 0)

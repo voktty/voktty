@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { currentWorkspaceEnv } from "@/modules/workspace";
 import { nativeOperationAdapter } from "../lib/nativeOperationAdapter";
 import {
   applyOperation,
@@ -91,7 +92,11 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   enable: () => set({ active: true, lastError: null }),
   disable: () => set({ active: false, queue: [], lastError: null }),
   enqueue: (edit) => {
-    const queue = [...get().queue, edit];
+    const captured = {
+      ...edit,
+      workspaceEnv: structuredClone(edit.workspaceEnv ?? currentWorkspaceEnv()),
+    };
+    const queue = [...get().queue, captured];
     const error = validateOperationEntries(operationEntries(queue));
     if (error) {
       set({ lastError: error });

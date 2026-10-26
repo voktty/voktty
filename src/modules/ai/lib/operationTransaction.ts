@@ -1,3 +1,5 @@
+import type { WorkspaceEnv } from "@/modules/workspace";
+
 export type OperationEntry = {
   id: string;
   kind: "write_file" | "edit" | "multi_edit" | "create_directory";
@@ -6,6 +8,7 @@ export type OperationEntry = {
   proposedContent: string;
   isNewFile: boolean;
   description?: string;
+  workspaceEnv?: WorkspaceEnv;
 };
 
 export type OperationInspection =
@@ -14,15 +17,26 @@ export type OperationInspection =
   | null;
 
 export type OperationAdapter = {
-  inspect: (path: string) => Promise<OperationInspection>;
+  inspect: (
+    path: string,
+    workspace?: WorkspaceEnv,
+  ) => Promise<OperationInspection>;
   writeFile: (
     path: string,
     content: string,
     expectedContent: string | null,
+    workspace?: WorkspaceEnv,
   ) => Promise<void>;
-  createDirectory: (path: string) => Promise<void>;
-  removeFile: (path: string, expectedContent: string) => Promise<void>;
-  removeEmptyDirectory: (path: string) => Promise<void>;
+  createDirectory: (path: string, workspace?: WorkspaceEnv) => Promise<void>;
+  removeFile: (
+    path: string,
+    expectedContent: string,
+    workspace?: WorkspaceEnv,
+  ) => Promise<void>;
+  removeEmptyDirectory: (
+    path: string,
+    workspace?: WorkspaceEnv,
+  ) => Promise<void>;
 };
 
 export type AppliedOperation = {
@@ -40,6 +54,39 @@ export const OPERATION_LIMITS = {
   totalBytes: 16 * 1024 * 1024,
 } as const;
 
+function operationPathKey(entry: OperationEntry): string {
+  const native = /^[a-zA-Z]:[/\\]|^[/\\]{2}/.test(entry.path);
+  const path = native
+    ? entry.path.replace(/\\/g, "/").toLowerCase()
+    : entry.path;
+  const workspace = entry.workspaceEnv;
+  const scope =
+    native || !workspace || workspace.kind === "local"
+      ? ["local"]
+      : workspace.kind === "wsl"
+        ? ["wsl", workspace.distro]
+        : workspace.kind === "ssh"
+          ? [
+              "ssh",
+              workspace.connection.host,
+              workspace.connection.user ?? "",
+              workspace.connection.port ?? 22,
+              workspace.connection.identityFile ?? "",
+              workspace.connection.extraArgs ?? "",
+            ]
+          : workspace;
+  return JSON.stringify([scope, path]);
+}
+
+function snapshotEntries(entries: readonly OperationEntry[]): OperationEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    ...(entry.workspaceEnv
+      ? { workspaceEnv: structuredClone(entry.workspaceEnv) }
+      : {}),
+  }));
+}
+
 export function validateOperationEntries(
   entries: readonly OperationEntry[],
 ): string | null {
@@ -49,9 +96,10 @@ export function validateOperationEntries(
   const paths = new Set<string>();
   let total = 0;
   for (const entry of entries) {
-    if (paths.has(entry.path))
+    const key = operationPathKey(entry);
+    if (paths.has(key))
       return `operation contains duplicate path: ${entry.path}`;
-    paths.add(entry.path);
+    paths.add(key);
     const size = new TextEncoder().encode(entry.proposedContent).length;
     if (size > OPERATION_LIMITS.fileBytes)
       return `file exceeds operation limit: ${entry.path}`;
@@ -67,7 +115,7 @@ async function preflightApply(
   adapter: OperationAdapter,
 ): Promise<string | null> {
   for (const entry of entries) {
-    const current = await adapter.inspect(entry.path);
+    const current = await adapter.inspect(entry.path, entry.workspaceEnv);
     if (entry.kind === "create_directory" || entry.isNewFile) {
       if (current !== null) return `path already exists: ${entry.path}`;
     } else if (
@@ -85,14 +133,19 @@ async function undoEntry(
   adapter: OperationAdapter,
 ): Promise<void> {
   if (entry.kind === "create_directory") {
-    await adapter.removeEmptyDirectory(entry.path);
+    await adapter.removeEmptyDirectory(entry.path, entry.workspaceEnv);
   } else if (entry.isNewFile) {
-    await adapter.removeFile(entry.path, entry.proposedContent);
+    await adapter.removeFile(
+      entry.path,
+      entry.proposedContent,
+      entry.workspaceEnv,
+    );
   } else {
     await adapter.writeFile(
       entry.path,
       entry.originalContent,
       entry.proposedContent,
+      entry.workspaceEnv,
     );
   }
 }
@@ -102,12 +155,13 @@ async function redoEntry(
   adapter: OperationAdapter,
 ): Promise<void> {
   if (entry.kind === "create_directory")
-    await adapter.createDirectory(entry.path);
+    await adapter.createDirectory(entry.path, entry.workspaceEnv);
   else {
     await adapter.writeFile(
       entry.path,
       entry.proposedContent,
       entry.isNewFile ? null : entry.originalContent,
+      entry.workspaceEnv,
     );
   }
 }
@@ -118,6 +172,7 @@ export async function applyOperation(
 ): Promise<OperationResult> {
   const validation = validateOperationEntries(entries);
   if (validation) return { ok: false, error: validation };
+  entries = snapshotEntries(entries);
   try {
     const conflict = await preflightApply(entries, adapter);
     if (conflict) return { ok: false, error: conflict };
@@ -159,9 +214,12 @@ export async function revertOperation(
   operation: AppliedOperation,
   adapter: OperationAdapter,
 ): Promise<OperationResult> {
+  const validation = validateOperationEntries(operation.entries);
+  if (validation) return { ok: false, error: validation };
+  operation = { ...operation, entries: snapshotEntries(operation.entries) };
   try {
     for (const entry of operation.entries) {
-      const current = await adapter.inspect(entry.path);
+      const current = await adapter.inspect(entry.path, entry.workspaceEnv);
       if (entry.kind === "create_directory") {
         if (current?.kind !== "directory" || !current.empty) {
           return {

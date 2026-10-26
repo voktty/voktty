@@ -9,6 +9,8 @@ const io = vi.hoisted(() => ({
   canonicalize: vi.fn(),
   directory: vi.fn(),
   create: vi.fn(),
+  stat: vi.fn(),
+  remove: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: io.invoke }));
 vi.mock("@/modules/workspace", async (importOriginal) => ({
@@ -22,6 +24,8 @@ vi.mock("@/modules/remote", async (importOriginal) => ({
   remoteCanonicalize: io.canonicalize,
   remoteReadDir: io.directory,
   remoteCreateDir: io.create,
+  remoteStat: io.stat,
+  remoteDelete: io.remove,
 }));
 import { native } from "@/modules/ai/lib/native";
 
@@ -189,4 +193,27 @@ it("preserves hidden-entry filtering for an explicitly owned SSH directory", asy
   expect(await native.readDir("/work", ssh)).toEqual([
     { name: "file.ts", kind: "file", size: 1, mtime: 0, gitignored: false },
   ]);
+});
+
+it("retains the SSH destination through operation preflight, write and removal", async () => {
+  io.current.mockReturnValue(local);
+  io.stat.mockResolvedValue({ kind: "file", size: 7 });
+  io.read.mockImplementation(async () => {
+    io.current.mockReturnValue({ ...ssh, sessionId: 8 });
+    return { content: "fixture", size: 7 };
+  });
+  expect(await native.operationInspect(path, ssh)).toEqual({
+    kind: "file",
+    content: "fixture",
+  });
+  await native.operationWriteFile(path, "next", "fixture", ssh);
+  await native.operationRemoveFile(path, "fixture", ssh);
+  await native.operationRemoveEmptyDirectory("/work/empty", ssh);
+  expect(io.write).toHaveBeenCalledWith(ssh, path, "next");
+  expect(io.remove.mock.calls).toEqual([
+    [ssh, path],
+    [ssh, "/work/empty"],
+  ]);
+  expect(io.current).not.toHaveBeenCalled();
+  expect(io.invoke).not.toHaveBeenCalled();
 });
