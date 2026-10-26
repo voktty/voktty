@@ -245,6 +245,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
           }
         } else if (
           state === "approval-responded" ||
+          state === "output-denied" ||
           state === "output-available" ||
           state === "output-error"
         ) {

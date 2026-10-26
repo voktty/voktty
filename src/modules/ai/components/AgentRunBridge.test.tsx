@@ -211,3 +211,36 @@ it("never reads an ambient file for an approval without its original runtime cap
   expect(fixture.readFile).not.toHaveBeenCalled();
   expect(open).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  "closes a directly denied review with preview settled=%s",
+  async (settled) => {
+    capture();
+    await render();
+    if (settled) {
+      await act(async () => finish());
+      expect(open).toHaveBeenCalledTimes(1);
+    }
+    fixture.messages = [
+      {
+        id: "assistant",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-write_file",
+            toolCallId: "call",
+            state: "output-denied",
+            input,
+            approval: { id: "approval", approved: false },
+          },
+        ],
+      },
+    ];
+    await render();
+    expect(close).toHaveBeenCalledExactlyOnceWith("approval");
+    await act(async () => finish());
+    expect(open).toHaveBeenCalledTimes(settled ? 1 : 0);
+    await render();
+    expect(close).toHaveBeenCalledTimes(1);
+  },
+);
