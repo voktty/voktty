@@ -109,3 +109,68 @@ it("does not retain failed captures and releases original observers idempotently
   queue.clear();
   for (let i = 0; i < 256; i++) queue.capture(owner, String(i), cwd);
 });
+
+it.each(["", "/native\0", "x".repeat(32769), null, 42, {}])(
+  "rejects malformed transferred origin without a native compatibility fallback",
+  (origin) => {
+    const current = typeof origin === "string" ? origin : "/native";
+    expect(() => queue.assertCurrent({}, "message", current, origin)).toThrow(
+      "project changed",
+    );
+    expect(() =>
+      queue.take({}, "message", current, origin)?.assertCurrent(),
+    ).toThrow("project changed");
+  },
+);
+
+it("does not consume a current receipt when a mismatched origin is rejected", () => {
+  const owner = {};
+  queue.capture(owner, "message", "/original");
+  expect(() =>
+    queue.take(owner, "message", "/original", "/other")?.assertCurrent(),
+  ).toThrow("project changed");
+  expect(() =>
+    queue.assertCurrent(owner, "message", "/original", "/original"),
+  ).not.toThrow();
+  expect(
+    queue.take(owner, "message", "/original", "/original"),
+  ).toBeUndefined();
+});
+
+it("claims a native queue without an observer exactly once under its original owner", () => {
+  const owner = {};
+  expect(queue.take(owner, "message", "/native", "/native")).toBeUndefined();
+  expect(() =>
+    queue.assertCurrent(owner, "message", "/native", "/native"),
+  ).toThrow("project changed");
+  expect(() =>
+    queue.take(owner, "message", "/native", "/native")?.assertCurrent(),
+  ).toThrow("project changed");
+  const successor = {};
+  expect(
+    queue.take(successor, "message", "/native", "/native"),
+  ).toBeUndefined();
+  expect(queue.size).toBe(2);
+});
+
+it("bounds imported native claims until their original queued messages are reconciled", () => {
+  const owner = {};
+  for (let i = 0; i < 256; i++)
+    queue.take(owner, String(i), "/native", "/native");
+  expect(queue.size).toBe(256);
+  expect(() =>
+    queue.assertCurrent(owner, "overflow", "/native", "/native"),
+  ).toThrow("capacity");
+  expect(() =>
+    queue.take(owner, "overflow", "/native", "/native")?.assertCurrent(),
+  ).toThrow("project changed");
+  queue.reconcile(
+    new Map([
+      [owner, new Set(Array.from({ length: 255 }, (_, i) => String(i + 1)))],
+    ]),
+  );
+  expect(() =>
+    queue.assertCurrent(owner, "new", "/native", "/native"),
+  ).not.toThrow();
+  expect(queue.take(owner, "new", "/native", "/native")).toBeUndefined();
+});

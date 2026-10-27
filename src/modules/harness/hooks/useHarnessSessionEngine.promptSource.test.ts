@@ -2,6 +2,9 @@
 
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import { createHarnessProjectReservations } from "@/modules/harness/lib/harnessProjectReservations";
+import { collectWindowTransfer } from "@/modules/harness/lib/windowTransfer";
+import { newTab } from "@/modules/harness/lib/layout";
+import { sanitizeSessionForPersist } from "@/modules/harness/lib/sessionStore";
 import type { Session } from "@/modules/harness/lib/session";
 import { act, createElement, StrictMode, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -454,4 +457,251 @@ it("claims a queued steering request only once before React commits its removal"
   });
   expect(mocks.steer).toHaveBeenCalledOnce();
   expect(engine().sessions[0].queuedMessages).toBeUndefined();
+});
+
+it.each(["/project", "C:/project", "//server/share/project"])(
+  "keeps the original queued worktree after a branch reset and window transfer at %s",
+  async (project) => {
+    const source = mount([
+      chat("source", {
+        cwd: project,
+        worktreeCwd: `${project}/worktree`,
+        busy: true,
+      }),
+    ]);
+    await act(async () =>
+      source().onSubmit("source", "original request", [], {
+        followUpBehavior: "queue",
+      }),
+    );
+    await act(async () =>
+      source().updateSession(
+        "source",
+        (session) => ({
+          ...session,
+          busy: false,
+          queueStatus: "paused",
+          worktreeCwd: undefined,
+          branch: undefined,
+          providerSessionId: undefined,
+        }),
+        "immediate",
+      ),
+    );
+    const tab = newTab("source");
+    const payload = collectWindowTransfer(
+      [tab],
+      source().sessions,
+      [tab.id],
+      tab.id,
+      new Set(),
+      project,
+    );
+    if (!payload) throw new Error("Missing transfer payload");
+    const wire = JSON.parse(JSON.stringify(payload)) as typeof payload;
+    const destination = mount(wire.sessions);
+    const message = destination().sessions[0].queuedMessages?.[0];
+    if (!message) throw new Error("Missing transferred queued message");
+    await act(async () => {
+      destination().onSteerQueuedMessage("source", message.id);
+      await vi.dynamicImportSettled();
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.steer).not.toHaveBeenCalled();
+    expect(mocks.prepareAttachments).not.toHaveBeenCalled();
+    expect(destination().sessions[0].queueStatus).toBe("paused");
+    expect(destination().sessions[0].queuedMessages?.[0].text).toBe(
+      "original request",
+    );
+  },
+);
+
+function transferredSessions(sessions: Session[]): Session[] {
+  const tab = newTab(sessions[0].id);
+  const payload = collectWindowTransfer(
+    [tab],
+    sessions,
+    [tab.id],
+    tab.id,
+    new Set(),
+    sessions[0].cwd,
+  );
+  if (!payload) throw new Error("Missing transfer payload");
+  return JSON.parse(JSON.stringify(payload)).sessions;
+}
+
+it.each(["/project", "C:/project", "//server/share/project"])(
+  "sends a healthy transferred native queue through its original worktree at %s",
+  async (project) => {
+    const worktree = `${project}/worktree`;
+    const source = mount([
+      chat("source", { cwd: project, worktreeCwd: worktree, busy: true }),
+    ]);
+    await act(async () =>
+      source().onSubmit("source", "original", [], {
+        followUpBehavior: "queue",
+      }),
+    );
+    await act(async () =>
+      source().updateSession(
+        "source",
+        (session) => ({ ...session, busy: false, queueStatus: "paused" }),
+        "immediate",
+      ),
+    );
+    const destination = mount(transferredSessions(source().sessions));
+    const message = destination().sessions[0].queuedMessages?.[0];
+    if (!message) throw new Error("Missing queued message");
+    expect(message.sourceCwd).toBe(worktree);
+    await act(async () => {
+      destination().onSteerQueuedMessage("source", message.id);
+      await vi.dynamicImportSettled();
+    });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send.mock.calls[0][0].cwd).toBe(worktree);
+    expect(destination().sessions[0].queuedMessages).toBeUndefined();
+  },
+);
+
+it("does not rebind transferred queue origin when its text is edited", async () => {
+  const source = mount([
+    chat("source", {
+      cwd: "/project",
+      worktreeCwd: "/project/old",
+      busy: true,
+    }),
+  ]);
+  await act(async () =>
+    source().onSubmit("source", "original", [], { followUpBehavior: "queue" }),
+  );
+  const destination = mount(
+    transferredSessions([
+      {
+        ...source().sessions[0],
+        busy: false,
+        queueStatus: "paused",
+        worktreeCwd: undefined,
+      },
+    ]),
+  );
+  const message = destination().sessions[0].queuedMessages?.[0];
+  if (!message) throw new Error("Missing queued message");
+  await act(async () =>
+    destination().onEditQueuedMessage("source", message.id, "edited"),
+  );
+  await act(async () =>
+    destination().onSteerQueuedMessage("source", message.id),
+  );
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(destination().sessions[0].queuedMessages?.[0]).toMatchObject({
+    text: "edited",
+    sourceCwd: "/project/old",
+  });
+});
+
+it("pauses automatic dispatch of a transferred queue whose directory changed", async () => {
+  vi.useFakeTimers();
+  const source = mount([
+    chat("source", {
+      cwd: "/project",
+      worktreeCwd: "/project/old",
+      busy: true,
+    }),
+  ]);
+  await act(async () =>
+    source().onSubmit("source", "original", [], { followUpBehavior: "queue" }),
+  );
+  const destination = mount(
+    transferredSessions([
+      { ...source().sessions[0], busy: false, worktreeCwd: undefined },
+    ]),
+  );
+  await act(async () => vi.advanceTimersByTime(0));
+  expect(mocks.prepareAttachments).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(destination().sessions[0].queueStatus).toBe("paused");
+  expect(destination().sessions[0].queuedMessages?.[0].sourceCwd).toBe(
+    "/project/old",
+  );
+});
+
+it("retains native compatibility for transferred queues predating origin tags", async () => {
+  const destination = mount(
+    transferredSessions([
+      chat("source", {
+        cwd: "/project",
+        busy: false,
+        queueStatus: "paused",
+        queuedMessages: [{ id: "legacy", text: "original", attachments: [] }],
+      }),
+    ]),
+  );
+  await act(async () => {
+    destination().onSteerQueuedMessage("source", "legacy");
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.send).toHaveBeenCalledOnce();
+});
+
+it("does not reconstruct a saved SSH receipt from a transferred directory tag", async () => {
+  const source = mount([chat("source", { cwd, busy: true })]);
+  await act(async () =>
+    source().onSubmit("source", "original", [], { followUpBehavior: "queue" }),
+  );
+  const destination = mount(
+    transferredSessions([
+      { ...source().sessions[0], busy: false, queueStatus: "paused" },
+    ]),
+  );
+  const message = destination().sessions[0].queuedMessages?.[0];
+  if (!message) throw new Error("Missing queued message");
+  await act(async () =>
+    destination().onSteerQueuedMessage("source", message.id),
+  );
+  expect(mocks.prepareAttachments).not.toHaveBeenCalled();
+  expect(mocks.index).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(destination().sessions[0].queueStatus).toBe("paused");
+});
+
+it("keeps queued requests and their origin tags out of normal session persistence", async () => {
+  const source = mount([chat("source", { cwd: "/project", busy: true })]);
+  await act(async () =>
+    source().onSubmit("source", "queued private fixture", [], {
+      followUpBehavior: "queue",
+    }),
+  );
+  expect(source().sessions[0].queuedMessages?.[0].sourceCwd).toBe("/project");
+  const saved = JSON.stringify(sanitizeSessionForPersist(source().sessions[0]));
+  expect(saved).not.toContain("queuedMessages");
+  expect(saved).not.toContain("sourceCwd");
+  expect(saved).not.toContain("queued private fixture");
+});
+
+it("claims a transferred native steering request once before React commits", async () => {
+  const source = mount([chat("source", { cwd: "/project", busy: true })]);
+  await act(async () =>
+    source().onSubmit("source", "original", [], { followUpBehavior: "queue" }),
+  );
+  const destination = mount(transferredSessions(source().sessions));
+  const message = destination().sessions[0].queuedMessages?.[0];
+  if (!message) throw new Error("Missing queued message");
+  let finish!: (value: []) => void;
+  mocks.prepareAttachments.mockImplementationOnce(
+    () =>
+      new Promise<[]>((done) => {
+        finish = done;
+      }),
+  );
+  await act(async () => {
+    destination().onSteerQueuedMessage("source", message.id);
+    destination().onSteerQueuedMessage("source", message.id);
+  });
+  const admissions = mocks.prepareAttachments.mock.calls.length;
+  await act(async () => {
+    finish([]);
+    await vi.dynamicImportSettled();
+  });
+  expect(admissions).toBe(1);
+  expect(mocks.steer).toHaveBeenCalledOnce();
 });

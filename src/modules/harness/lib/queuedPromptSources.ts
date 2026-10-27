@@ -22,6 +22,17 @@ function retiredSource(): Source {
   };
 }
 
+function matchesOriginalDirectory(cwd: string, original: unknown): boolean {
+  return (
+    original === undefined ||
+    (typeof original === "string" &&
+      original.length > 0 &&
+      original.length <= 32768 &&
+      !/[\x00-\x1f\x7f]/.test(original) &&
+      original === cwd)
+  );
+}
+
 export function createQueuedPromptSources() {
   const entries = new Set<Entry>();
   const release = (entry: Entry) => {
@@ -45,27 +56,44 @@ export function createQueuedPromptSources() {
       entries.add(entry);
       return () => release(entry);
     },
-    assertCurrent(owner: object, id: string, cwd: string) {
+    assertCurrent(
+      owner: object,
+      id: string,
+      cwd: string,
+      originalCwd?: unknown,
+    ) {
+      if (!matchesOriginalDirectory(cwd, originalCwd))
+        throw new PromptSourceRetiredError();
       const entry = [...entries].find(
         (entry) => entry.owner === owner && entry.id === id,
       );
       if (!entry) {
         if (cwd.startsWith("remote://voktty-ssh-"))
           throw new PromptSourceRetiredError();
+        if (entries.size >= 256)
+          throw new Error("Project message queue capacity exceeded.");
         return;
       }
       if (entry.claimed || entry.cwd !== cwd)
         throw new PromptSourceRetiredError();
       entry.source?.assertCurrent();
     },
-    take(owner: object, id: string, cwd: string): Source {
+    take(
+      owner: object,
+      id: string,
+      cwd: string,
+      originalCwd?: unknown,
+    ): Source {
+      if (!matchesOriginalDirectory(cwd, originalCwd)) return retiredSource();
       const entry = [...entries].find(
         (entry) => entry.owner === owner && entry.id === id,
       );
-      if (!entry)
-        return cwd.startsWith("remote://voktty-ssh-")
-          ? retiredSource()
-          : undefined;
+      if (!entry) {
+        if (cwd.startsWith("remote://voktty-ssh-") || entries.size >= 256)
+          return retiredSource();
+        entries.add({ owner, id, cwd, source: undefined, claimed: true });
+        return undefined;
+      }
       if (entry.claimed || entry.cwd !== cwd) return retiredSource();
       entry.claimed = true;
       const source = entry.source;

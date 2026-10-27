@@ -464,12 +464,15 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           )
         : undefined;
       if (intent === "build" && !approvedPlan?.text.trim()) return;
+      const queuedMessage = options?.queuedMessageId
+        ? queuedMessageForSubmit(
+            current,
+            options.queuedMessageId,
+            options.followUpBehavior === "steer" ? "steer" : "dispatch",
+          )
+        : undefined;
       if (options?.queuedMessageId) {
-        const mode =
-          options.followUpBehavior === "steer" ? "steer" : "dispatch";
-        if (!queuedMessageForSubmit(current, options.queuedMessageId, mode)) {
-          return;
-        }
+        if (!queuedMessage) return;
         const owner = owners.current.get(sessionId);
         if (!owner) return;
         try {
@@ -477,6 +480,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             owner,
             options.queuedMessageId,
             sessionWorkCwd(current),
+            queuedMessage.sourceCwd,
           );
         } catch (error) {
           updateSession(sessionId, (session) =>
@@ -562,6 +566,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           const id = crypto.randomUUID();
           const message = structuredClone({
             id,
+            sourceCwd: workCwd,
             text,
             attachments,
             noteCard,
@@ -624,6 +629,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
                 steerOwner.session,
                 options.queuedMessageId,
                 workCwd,
+                queuedMessage?.sourceCwd,
               )
             : captureRemotePromptSource(workCwd);
         const assertPreparationCurrent = () => {
@@ -702,6 +708,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
               turnOwner.session,
               options.queuedMessageId,
               workCwd,
+              queuedMessage?.sourceCwd,
             )
           : captureRemotePromptSource(workCwd);
       const assertPreparationCurrent = () => {

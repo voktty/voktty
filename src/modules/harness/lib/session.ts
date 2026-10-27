@@ -312,6 +312,7 @@ export const RUNTIME_MODE_HINT: Record<RuntimeMode, string> = {
 
 export type QueuedMessage = {
   id: string;
+  sourceCwd?: string;
   text: string;
   attachments: Attachment[];
   noteCard?: NoteComposerCard;
