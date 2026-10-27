@@ -40,7 +40,6 @@ import {
   saveProjectRailWidth,
 } from "../lib/appearance";
 import {
-  basename,
   listExternalEditors,
   openInExternalEditor,
   revealPath,
@@ -599,7 +598,7 @@ export function ProjectRail({
     } else if (action === "background") {
       setBackgroundProject({
         project: projectKey,
-        name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
+        name: resolveTabGroupLabel(projectKey, groupLabels, projectName(path)),
       });
     } else if (action === "reveal") void revealPath(path);
     else if (action.startsWith("external-editor:")) {
@@ -620,7 +619,7 @@ export function ProjectRail({
     } else if (action === "delete") {
       setRemoving({
         path,
-        name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
+        name: resolveTabGroupLabel(projectKey, groupLabels, projectName(path)),
       });
     }
   };
@@ -876,7 +875,7 @@ export function ProjectRail({
           label={resolveTabGroupLabel(
             projectMenu.projectKey,
             groupLabels,
-            basename(projectMenu.path),
+            projectName(projectMenu.path),
           )}
           colorIndex={resolveTabGroupColorIndex(
             projectMenu.projectKey,
@@ -1660,10 +1659,9 @@ function ProjectCard({
   groupMascots: Record<string, string>;
 }) {
   const { t } = useTranslation();
-  const fallbackName = basename(item.path);
   const key = projectKey(item.path);
   const seed = projectName(item.path);
-  const name = resolveTabGroupLabel(key, groupLabels, fallbackName);
+  const name = resolveTabGroupLabel(key, groupLabels, seed);
   const logoPath = resolveTabGroupLogo(key, groupLogos);
   const color = resolveTabGroupColor(key, groupColors, groupCustomColors, seed);
   const dragging = sortable.draggingId === item.path;

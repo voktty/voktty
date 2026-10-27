@@ -1,13 +1,39 @@
 // @vitest-environment happy-dom
+
+import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
+import {
+  projectKey,
+  setRemoteRootLabelResolver,
+} from "@/modules/harness/lib/paths";
+import { saveTabGroupLabel } from "@/modules/harness/lib/tabGroups";
+import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
-import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
-import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 
 const mocks = vi.hoisted(() => ({
   dialogs: [] as { onOpen: (path: string) => void; onCancel: () => void }[],
+  menus: [] as { label: string; onExtraPick: (action: string) => void }[],
+}));
+vi.mock("@/modules/harness/chrome/TabGroupMenu", () => ({
+  TabGroupMenu: (props: {
+    label: string;
+    onExtraPick: (action: string) => void;
+  }) => {
+    mocks.menus.push(props);
+    return <div data-project-menu>{props.label}</div>;
+  },
+}));
+vi.mock("@/modules/harness/chrome/ProjectBackgroundDialog", () => ({
+  ProjectBackgroundDialog: ({ name }: { name: string }) => (
+    <div data-background>{name}</div>
+  ),
+}));
+vi.mock("@/modules/harness/chrome/RemoveProjectDialog", () => ({
+  RemoveProjectDialog: ({ name }: { name: string }) => (
+    <div data-removing>{name}</div>
+  ),
 }));
 vi.mock("@/modules/connections/ui/AddRemoteProjectDialog", () => ({
   AddRemoteProjectDialog: (props: {
@@ -60,6 +86,8 @@ const cleanups: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   mocks.dialogs = [];
+  mocks.menus = [];
+  setRemoteRootLabelResolver(() => undefined);
   localStorage.clear();
   vi.unstubAllGlobals();
 });
@@ -84,6 +112,7 @@ async function setup() {
             recents={[]}
             onSelectProject={vi.fn()}
             onOpenProject={vi.fn()}
+            onRemoveProject={vi.fn()}
           />
         </HarnessProjectOwner>,
       ),
@@ -149,3 +178,54 @@ it.each(["owner", "project"])(
     expect(f.element.querySelector('[role="dialog"]')).toBeNull();
   },
 );
+
+it.each(["card", "menu", "background", "delete"])(
+  "names the remote root in its %s presentation",
+  async (presentation) => {
+    setRemoteRootLabelResolver((id) =>
+      id === "voktty-ssh-profile" ? "Development server" : undefined,
+    );
+    const f = await setup();
+    await f.render(1, "remote://voktty-ssh-profile/");
+    if (presentation === "card") {
+      expect(
+        f.element
+          .querySelector('button[aria-current="true"]')
+          ?.getAttribute("aria-label"),
+      ).toBe("Development server");
+      return;
+    }
+    await act(async () =>
+      required(
+        f.element.querySelector<HTMLButtonElement>(
+          'button[title="harness.chrome.projectOptions"]',
+        ),
+      ).click(),
+    );
+    const menu = required(mocks.menus[mocks.menus.length - 1]);
+    if (presentation === "menu") expect(menu.label).toBe("Development server");
+    else {
+      await act(async () => menu.onExtraPick(presentation));
+      expect(
+        f.element.querySelector(
+          presentation === "background"
+            ? "[data-background]"
+            : "[data-removing]",
+        )?.textContent,
+      ).toBe("Development server");
+    }
+  },
+);
+
+it("preserves custom project names over a remote connection name", async () => {
+  const path = "remote://voktty-ssh-profile/";
+  setRemoteRootLabelResolver(() => "Development server");
+  saveTabGroupLabel(projectKey(path), "Custom root");
+  const f = await setup();
+  await f.render(1, path);
+  expect(
+    f.element
+      .querySelector('button[aria-current="true"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("Custom root");
+});
