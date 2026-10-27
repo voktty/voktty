@@ -10,9 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/modules/harness/lib/harnessEnvStore", () => ({
-  useHarnessEnvStore: {
+  useHarnessProjectEnvStore: {
     getState: () => ({
-      env: mocks.env,
       connect: mocks.connect,
       disconnectProfiles: mocks.disconnectProfiles,
     }),

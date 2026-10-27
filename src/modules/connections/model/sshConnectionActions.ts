@@ -2,7 +2,7 @@ import type { SshConnection, SshSurface } from "@/modules/ssh/types";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import type { RemoteSessionSnapshot } from "@/modules/remote/sessionPool";
-import { useHarnessEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { registerSshProjectPath } from "./remoteProjectRegistration";
 import { remotePath } from "./remoteProjects";
 import { remoteSshEnvironmentId } from "./remoteSshProfiles";
@@ -106,7 +106,7 @@ export function harnessProjectPath(profileId: string, root: string): string {
 export async function openSshProfileInHarness(
   profile: SshConnection,
 ): Promise<string> {
-  const env = await useHarnessEnvStore.getState().connect(profile);
+  const env = await useHarnessProjectEnvStore.getState().connect(profile);
   if (env.kind !== "ssh") {
     throw new Error("The Harness did not connect to the SSH profile.");
   }
@@ -124,7 +124,7 @@ export async function closeSshProfileSessions(
   relatedIds: ReadonlySet<string> = new Set([profileId]),
 ): Promise<void> {
   const ids = new Set([profileId, ...relatedIds]);
-  await useHarnessEnvStore.getState().disconnectProfiles(ids);
+  await useHarnessProjectEnvStore.getState().disconnectProfiles(ids);
   await Promise.all([...ids].map((id) => remoteSessions.closeProfile(id)));
 }
 

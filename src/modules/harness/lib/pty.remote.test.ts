@@ -49,10 +49,7 @@ import type {
 import type { RemoteSessionInfo } from "@/modules/remote/client";
 import { RemoteSessionConnectionChangedError } from "@/modules/remote/sessionPool";
 import { openSshProfileInHarness } from "@/modules/connections/model/sshConnectionActions";
-import {
-  useHarnessEnvStore,
-  useHarnessProjectEnvStore,
-} from "./harnessEnvStore";
+import { useHarnessProjectEnvStore } from "./harnessEnvStore";
 import { killAllPtys, killPty, spawnPty, subscribePty, writePty } from "./pty";
 
 const projectPath = "remote://voktty-ssh-profile-1/srv/app";
@@ -117,11 +114,6 @@ describe("Harness remote terminals", () => {
     });
     mocks.openPty.mockResolvedValue(fakePty(91));
     useWorkspaceEnvStore.setState({ env: { kind: "local" } });
-    useHarnessEnvStore.setState({
-      env: { kind: "local" },
-      connecting: false,
-      error: null,
-    });
   });
 
   it("opens the Harness PTY through the saved profile's native SSH helper", async () => {
@@ -444,15 +436,17 @@ describe("Harness remote terminals", () => {
     expect(mocks.closeRemoteWorkspace).toHaveBeenCalledExactlyOnceWith(71);
   });
 
-  it("does not borrow a selected Harness environment with the same host but another profile/root", async () => {
-    useHarnessEnvStore.setState({
-      env: {
-        kind: "ssh",
-        connection: { ...profile, id: "other-profile", user: "other-user" },
-        root: "/",
-        sessionId: 42,
-      },
+  it("does not borrow another Harness project's environment with the same host but another profile/root", async () => {
+    mocks.openRemoteWorkspace.mockResolvedValueOnce({
+      session_id: 42,
+      workspace_root: "/",
+      architecture: "x86_64",
+      helper_version: "test",
+      capabilities: [],
     });
+    await useHarnessProjectEnvStore
+      .getState()
+      .connect({ ...profile, id: "other-profile", user: "other-user" }, "/");
     await spawnPty("explicit-project", `${projectPath}/src`, 80, 24);
     expect(mocks.openRemoteWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ user: "dev" }),
@@ -561,22 +555,22 @@ describe("Harness remote terminals", () => {
     expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
   });
 
-  it("does not adopt an ownerless selected environment for an unsaved profile", async () => {
+  it("does not adopt an ownerless pooled environment for an unsaved profile", async () => {
     mocks.sshConnections = [];
-    useHarnessProjectEnvStore.setState({
-      env: {
-        kind: "ssh",
-        connection: profile,
-        root: "/srv/app",
-        sessionId: 42,
-      },
-    });
-    await expect(
-      spawnPty("ownerless-profile", projectPath, 80, 24),
-    ).rejects.toThrow("saved SSH connection for this project is missing");
-    expect(mocks.openRemoteWorkspace).not.toHaveBeenCalled();
-    expect(mocks.openPty).not.toHaveBeenCalled();
-    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
+    const borrowed = await remoteSessions.acquire(
+      { profileId: profile.id, root: "/srv/app" },
+      remoteSshConnectionForProfile(profile),
+    );
+    try {
+      await expect(
+        spawnPty("ownerless-profile", projectPath, 80, 24),
+      ).rejects.toThrow("saved SSH connection for this project is missing");
+      expect(mocks.openRemoteWorkspace).toHaveBeenCalledOnce();
+      expect(mocks.openPty).not.toHaveBeenCalled();
+      expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
+    } finally {
+      borrowed.release();
+    }
   });
 
   it("rejects an owned record whose actual root differs from the registered project root", async () => {

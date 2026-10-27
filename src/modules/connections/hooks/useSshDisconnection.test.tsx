@@ -18,7 +18,7 @@ vi.mock("@/modules/settings/preferences", () => ({ usePreferencesStore: { getSta
 vi.mock("@/modules/workspace", () => ({ LOCAL_WORKSPACE: { kind: "local" }, useWorkspaceEnvStore: { getState: () => ({ env: mocks.env, setEnv: mocks.setEnv }) } }));
 vi.mock("@/modules/spaces", () => ({ useSpaces: { getState: () => ({ activeId: mocks.activeId, setEnv: mocks.setSpaceEnv, setRoot: mocks.setRoot }) } }));
 vi.mock("@/modules/remote/sessionManager", () => ({ closeRemoteSessionById: mocks.closeSession, remoteSessions: {} }));
-vi.mock("@/modules/harness/lib/harnessEnvStore", () => ({ useHarnessEnvStore: { getState: () => ({}) } }));
+vi.mock("@/modules/harness/lib/harnessEnvStore", () => ({ useHarnessProjectEnvStore: { getState: () => ({}) } }));
 vi.mock("@/modules/connections/model/sshConnectionActions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/modules/connections/model/sshConnectionActions")>(),
   closeSshProfileSessions: mocks.closeProfiles,

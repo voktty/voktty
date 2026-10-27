@@ -4129,10 +4129,6 @@ export function HarnessApp({
   );
 
   useEffect(() => {
-    useHarnessProjectEnvStore.getState().selectProject(activeProjectCwd);
-  }, [activeProjectCwd]);
-
-  useEffect(() => {
     if (!activeProjectCwd || !isRemoteProjectPath(activeProjectCwd)) {
       lastAttemptedRemoteProjectRef.current = null;
       return;

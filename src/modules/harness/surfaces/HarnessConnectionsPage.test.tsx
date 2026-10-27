@@ -99,10 +99,6 @@ beforeEach(() => {
   mocks.pool = null;
   useHarnessProjectEnvStore.setState({
     projects: {},
-    projectId: null,
-    env: { kind: "local" },
-    connecting: false,
-    error: null,
   });
   mocks.useSshConnections.mockReturnValue([
     { id: "profile-1", name: "Build host", user: "dev", host: "build-host" },
@@ -125,7 +121,7 @@ async function render(cwd = "~") {
 }
 
 describe("Harness connections settings", () => {
-  it("keeps each view's current project independent of another view's global selection", async () => {
+  it("keeps each view's current project independent across other project updates", async () => {
     const profiles = ["one", "two"].map((id) => ({
       id,
       name: `Host ${id}`,
@@ -137,7 +133,6 @@ describe("Harness connections settings", () => {
     ];
     mocks.useSshConnections.mockReturnValue(profiles);
     useHarnessProjectEnvStore.setState({
-      projectId: "alias-one",
       projects: Object.fromEntries(
         profiles.map((profile, index) => [
           `alias-${profile.id}`,
@@ -182,16 +177,28 @@ describe("Harness connections settings", () => {
     expect(current(0)).toContain("Host one");
     expect(current(1)).toContain("Host two");
     await act(async () =>
-      useHarnessProjectEnvStore.getState().selectProject("alias-two"),
+      useHarnessProjectEnvStore.setState((state) => ({
+        projects: {
+          ...state.projects,
+          "alias-two": {
+            ...state.projects["alias-two"],
+            connecting: false,
+            error: "Connection failed",
+          },
+        },
+      })),
     );
     expect(current(0)).toContain("Host one");
     expect(current(1)).toContain("Host two");
   });
 
   it("does not borrow a connected project's badge for a local settings view", async () => {
-    useHarnessProjectEnvStore.setState({
-      projectId: "remote://voktty-ssh-profile-1/srv/other",
-    });
+    await useHarnessProjectEnvStore
+      .getState()
+      .connect(
+        { id: "profile-1", name: "Build host", host: "build-host" },
+        "/srv/other",
+      );
     await render("/srv/local");
     expect(container.textContent).not.toContain(
       "harness.connections.currentProject",
@@ -293,10 +300,13 @@ describe("Harness connections settings", () => {
       automatic: true,
     });
     useHarnessProjectEnvStore.setState({
-      connecting: true,
-      error: "Unrelated global failure",
-      projectId: null,
       projects: {
+        unrelated: {
+          identity: identity("unrelated"),
+          env: { kind: "local" },
+          connecting: false,
+          error: "Unrelated global failure",
+        },
         ready: {
           identity: identity("ready"),
           env: {
@@ -395,7 +405,6 @@ describe("Harness connections settings", () => {
       host: "build-host",
     };
     await useHarnessProjectEnvStore.getState().connect(connection);
-    act(() => useHarnessProjectEnvStore.getState().selectProject(null));
 
     const onSelectProject = vi.fn();
     window.addEventListener("voktty:harness-select-project", onSelectProject);

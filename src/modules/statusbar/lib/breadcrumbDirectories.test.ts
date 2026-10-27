@@ -39,7 +39,10 @@ vi.mock("@/modules/connections/model/remoteSshProfiles", () => ({
 }));
 
 import { remoteSessions } from "@/modules/remote/sessionManager";
-import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import {
+  useHarnessProjectEnvStore,
+  harnessProjectEnvironmentFor,
+} from "@/modules/harness/lib/harnessEnvStore";
 import {
   terminalRestoreWorkspace,
   terminalRestorePath,
@@ -101,7 +104,7 @@ it.each([
 
 it("adds a temporary lease to a live project and never borrows its supplied native ID", async () => {
   await useHarnessProjectEnvStore.getState().connect(profile as never, "/repo");
-  const selected = useHarnessProjectEnvStore.getState().projectId;
+  const projects = useHarnessProjectEnvStore.getState().projects;
   let finish!: (value: Array<{ name: string; kind: string }>) => void;
   mocks.readDir.mockImplementationOnce(
     () =>
@@ -120,8 +123,13 @@ it("adds a temporary lease to a live project and never borrows its supplied nati
   expect(await reading).toEqual(["child"]);
   expect(remoteSessions.snapshot()[0].leases).toBe(1);
   expect(mocks.close).not.toHaveBeenCalled();
-  expect(useHarnessProjectEnvStore.getState().projectId).toBe(selected);
-  expect(useHarnessProjectEnvStore.getState().env).toMatchObject({
+  expect(useHarnessProjectEnvStore.getState().projects).toEqual(projects);
+  expect(
+    harnessProjectEnvironmentFor(
+      uri("/repo"),
+      useHarnessProjectEnvStore.getState().projects,
+    ).env,
+  ).toMatchObject({
     root: "/repo",
     sessionId: 5,
   });
@@ -139,7 +147,12 @@ it("lists outside a project with a temporary root without resetting the project"
   );
   expect(mocks.close).toHaveBeenCalledWith(6);
   expect(mocks.close).not.toHaveBeenCalledWith(5);
-  expect(useHarnessProjectEnvStore.getState().env).toMatchObject({
+  expect(
+    harnessProjectEnvironmentFor(
+      uri("/repo"),
+      useHarnessProjectEnvStore.getState().projects,
+    ).env,
+  ).toMatchObject({
     root: "/repo",
     sessionId: 5,
   });
@@ -153,7 +166,12 @@ it("releases its temporary helper even when the directory read rejects", async (
   ).rejects.toThrow("denied");
   expect(mocks.close).toHaveBeenCalledTimes(1);
   expect(mocks.close).toHaveBeenCalledWith(5);
-  expect(useHarnessProjectEnvStore.getState().env).toEqual({ kind: "local" });
+  expect(
+    harnessProjectEnvironmentFor(
+      uri("/repo"),
+      useHarnessProjectEnvStore.getState().projects,
+    ).env,
+  ).toEqual({ kind: "local" });
 });
 
 it("keeps the view's actual SSH configuration after a saved same-ID host changes", async () => {
@@ -209,7 +227,12 @@ it("does not borrow a selected unrelated project or ownerless environment", asyn
     expect.objectContaining({ sessionId: 6 }),
     uri("/repo"),
   );
-  expect(useHarnessProjectEnvStore.getState().env).toMatchObject({
+  expect(
+    harnessProjectEnvironmentFor(
+      "remote://voktty-ssh-p2/repo",
+      useHarnessProjectEnvStore.getState().projects,
+    ).env,
+  ).toMatchObject({
     connection: { id: "p2" },
   });
 });
