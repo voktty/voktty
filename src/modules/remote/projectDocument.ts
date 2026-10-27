@@ -22,6 +22,36 @@ let pending = 0;
 const MAX_PENDING = 256;
 type OwnedWorkspace = RemoteWorkspaceEnv & { sessionId: number };
 
+function fileIndex(value: unknown): { files: string[]; truncated: boolean } {
+  const fail = () => new Error("Invalid remote file index.");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw fail();
+  const { hits, truncated } = value as Record<string, unknown>;
+  if (
+    !Array.isArray(hits) ||
+    hits.length > 2000 ||
+    typeof truncated !== "boolean"
+  )
+    throw fail();
+  const files = new Set<string>();
+  let characters = 0;
+  for (const hit of hits) {
+    if (!hit || typeof hit !== "object" || Array.isArray(hit)) throw fail();
+    const relative = (hit as Record<string, unknown>).rel;
+    if (
+      typeof relative !== "string" ||
+      !relative ||
+      relative.length > 32768 ||
+      /[\\:\x00-\x1f\x7f]/.test(relative) ||
+      relative.split("/").some((part) => !part || part === "." || part === "..")
+    )
+      throw fail();
+    characters += relative.length;
+    if (characters > 4 * 1024 * 1024) throw fail();
+    files.add(relative);
+  }
+  return { files: [...files], truncated };
+}
+
 function documentPath(root: string, relative: string): string {
   const windows = /^[a-zA-Z]:[\\/]/.test(root) || root.startsWith("\\\\");
   const normalized = windows ? root.replace(/\\/g, "/") : root;
@@ -103,6 +133,26 @@ export function createProjectDocument(
   }
 
   return {
+    listFiles: (isCurrent: () => boolean) => {
+      if (
+        path.length > 32768 ||
+        /[\\\x00-\x1f\x7f]/.test(path) ||
+        /[\\\x00-\x1f\x7f]/.test(projectRoot) ||
+        !projectRoot.startsWith("/") ||
+        projectRoot.startsWith("//") ||
+        parsed.hostPath.split("/").some((part) => part === "." || part === "..")
+      )
+        return Promise.reject(new Error("Invalid remote file index root."));
+      return run(isCurrent, async (workspace) =>
+        fileIndex(
+          await requestRemoteResult<unknown>(workspace.sessionId, "fs.glob", {
+            cwd: relative,
+            pattern: "**/*",
+            maxResults: 2000,
+          }),
+        ),
+      );
+    },
     searchNames: (
       query: string,
       showHidden: boolean,
