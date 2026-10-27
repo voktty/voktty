@@ -42,12 +42,8 @@ import {
 } from "../lib/drag";
 import { dragPointToClient } from "../lib/dragPoint";
 import type { ContextUsage } from "../lib/contextUsage";
-import {
-  loadProjectFiles,
-  peekProjectFiles,
-  recentOpenedFiles,
-  subscribeProjectFiles,
-} from "../lib/fileIndex";
+import { recentOpenedFiles } from "../lib/fileIndex";
+import { useProjectFileCatalog } from "@/modules/harness/lib/useProjectFileCatalog";
 import {
   buildMentionIndex,
   fileMentionParts,
@@ -55,7 +51,6 @@ import {
   mentionTokenAt,
   rankMentionFiles,
   replaceMentionToken,
-  type MentionIndex,
   type MentionToken,
 } from "../lib/fileMentions";
 import type { ProjectFile } from "../lib/fs";
@@ -226,6 +221,8 @@ type Props = {
   onEditingLastTurnChange?: (editing: boolean) => void;
   children?: ReactNode;
 };
+
+const NO_PROJECT_FILES: ProjectFile[] = [];
 
 function MessageQueue({
   messages,
@@ -504,7 +501,6 @@ export function Composer({
   const consumedQuoteId = useRef<number | null>(null);
   const positionedInitialDraft = useRef(false);
   const slashRef = useRef<SlashToken | null>(null);
-  const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? "");
   // Changing defaultValue rewrites the text node and commits WebKit IME.
   // Later drafts are applied by the existing effect without changing it.
@@ -528,9 +524,8 @@ export function Composer({
   const [creatingSkill, setCreatingSkill] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createBusy, setCreateBusy] = useState(false);
-  const [files, setFiles] = useState<ProjectFile[]>(
-    () => peekProjectFiles(cwd) ?? [],
-  );
+  const fileCatalog = useProjectFileCatalog(cwd, enabled);
+  const files = fileCatalog.isCurrent() ? fileCatalog.files : NO_PROJECT_FILES;
   const notesEnabled = useSyncExternalStore(
     subscribeNotesEnabled,
     loadNotesEnabled,
@@ -549,12 +544,11 @@ export function Composer({
   const projectLogoPath = resolveTabGroupLogo(projectKey(cwd), groupLogos);
 
   slashRef.current = slash;
-  mentionRef.current = mention;
 
   attachmentsRef.current = attachments;
 
   const mentionOpen =
-    mention !== null && (looksLikeProject(cwd) || notesEnabled);
+    enabled && mention !== null && (looksLikeProject(cwd) || notesEnabled);
   const navigationEmpty =
     draft.length === 0 &&
     attachments.length === 0 &&
@@ -677,8 +671,6 @@ export function Composer({
     () => buildMentionIndex(mentionFiles),
     [mentionFiles],
   );
-  const mentionIndexRef = useRef<MentionIndex>(mentionIndex);
-  mentionIndexRef.current = mentionIndex;
   const rankedFiles = useMemo(() => {
     if (!mentionOpen) return [];
     const fileHits = looksLikeProject(cwd)
@@ -703,6 +695,26 @@ export function Composer({
     },
     [inboxCard, noteCard, handoffCard],
   );
+
+  const mentionOwner = useMemo(
+    () => ({
+      enabled,
+      cwd,
+      executionCwd,
+      harness,
+      mention,
+      draft,
+      rankedFiles,
+      current: false,
+    }),
+    [enabled, cwd, executionCwd, harness, mention, draft, rankedFiles],
+  );
+  useLayoutEffect(() => {
+    mentionOwner.current = mentionOwner.enabled;
+    return () => {
+      mentionOwner.current = false;
+    };
+  }, [mentionOwner]);
 
   useEffect(() => {
     syncHasValue(ref.current?.value ?? "", attachmentsRef.current);
@@ -927,26 +939,6 @@ export function Composer({
   }, [rankedSkills.length]);
 
   useEffect(() => {
-    let cancelled = false;
-    const apply = (next: ProjectFile[]) => {
-      if (!cancelled) setFiles(next);
-    };
-    const cached = peekProjectFiles(cwd);
-    if (cached) apply(cached);
-    void loadProjectFiles(cwd, mentionOpen)
-      .then(apply)
-      .catch(() => undefined);
-    const unsub = subscribeProjectFiles(() => {
-      const next = peekProjectFiles(cwd);
-      if (next) apply(next);
-    });
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, [cwd, mentionOpen]);
-
-  useEffect(() => {
     if (!mentionOpen || !notesEnabled) return;
     let cancelled = false;
     void loadNotes().then((next) => {
@@ -1087,15 +1079,27 @@ export function Composer({
 
   const pickMention = useCallback(
     (file: ProjectFile) => {
-      const el = ref.current;
-      const token = mentionRef.current;
-      if (!el || !token) {
-        setMention(null);
+      if (
+        !mentionOwner.current ||
+        !mention ||
+        !rankedFiles.some((entry) => entry === file)
+      )
         return;
-      }
+      if (!isNoteMentionPath(file.path) && !fileCatalog.isCurrent()) return;
+      const el = ref.current;
+      const token = mention;
+      if (!el || el.value !== draft) return;
+      const currentToken = mentionTokenAt(el.value, el.selectionStart);
+      if (
+        !currentToken ||
+        currentToken.start !== token.start ||
+        currentToken.end !== token.end ||
+        currentToken.query !== token.query
+      )
+        return;
       const label = isNoteMentionPath(file.path)
         ? file.relative
-        : mentionLabel(file, mentionIndexRef.current);
+        : mentionLabel(file, mentionIndex);
       const next = replaceMentionToken(el.value, token, label);
       el.value = next;
       resizeComposer(el);
@@ -1107,7 +1111,15 @@ export function Composer({
       setMention(null);
       el.focus();
     },
-    [syncHasValue],
+    [
+      mentionOwner,
+      mention,
+      rankedFiles,
+      fileCatalog,
+      draft,
+      mentionIndex,
+      syncHasValue,
+    ],
   );
 
   useEffect(() => {
@@ -1713,9 +1725,7 @@ export function Composer({
               files={rankedFiles}
               query={mention?.query ?? ""}
               active={mentionActive}
-              loading={
-                looksLikeProject(cwd) && peekProjectFiles(cwd) == null
-              }
+              loading={looksLikeProject(cwd) && fileCatalog.loading}
               includeNotes={notesEnabled}
               onActive={setMentionActive}
               onPick={pickMention}

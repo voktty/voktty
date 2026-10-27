@@ -86,6 +86,8 @@ Quick Open for saved SSH profile projects lists Git workspaces through root-conf
 
 Harness Go to File and Search presentations retain their original project-file source and retire rows and callbacks after a saved SSH profile or project replacement, including a return to the previous configuration. Content searches acquire their own helper lease using that captured binding and map validated root-relative results back to the saved namespace, including canonical-root aliases. Literal queries are limited to 4 KiB of UTF-8, results to 500 matches, previews to 8,192 JavaScript characters and total mapped path and preview data to 4 MiB of JavaScript characters. The shared presentation search budget retains up to 256 unresolved requests, including retired work through actual settlement. Global project and conversation search actions remain independent of file-index availability. These guards do not acknowledge native cancellation or cover every asynchronous file opener.
 
+Composer file-mention rows and highlights observe that same captured source and the current shared catalog. Invalidation withdraws project entries without erasing draft text; cache notifications do not start another scan, and a superseded scan cannot replace the observed catalog. Picking retains its original mounted composer, execution context, menu token and draft text. Inactive composers release their presentation subscriptions, while global note mentions retain independent availability. This selection contract does not capture the later asynchronous prompt-preparation or attachment-submit pipeline.
+
 ### PTY shell integration
 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:
