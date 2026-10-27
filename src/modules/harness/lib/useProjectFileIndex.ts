@@ -1,5 +1,8 @@
 import { useLayoutEffect, useState } from "react";
-import { createProjectFileSourceStore } from "@/modules/remote/projectFileSource";
+import {
+  createProjectFileSourceStore,
+  type ProjectFileSource,
+} from "@/modules/remote/projectFileSource";
 import {
   loadProjectFiles,
   peekProjectFiles,
@@ -12,6 +15,7 @@ type Presentation = {
   loading: boolean;
   error: string | null;
   isCurrent: () => boolean;
+  source: ProjectFileSource | null | undefined;
 };
 
 const EMPTY: Presentation = {
@@ -19,6 +23,7 @@ const EMPTY: Presentation = {
   loading: false,
   error: null,
   isCurrent: () => false,
+  source: undefined,
 };
 
 export function useProjectFileIndex(cwd: string, active: boolean) {
@@ -42,7 +47,13 @@ export function useProjectFileIndex(cwd: string, active: boolean) {
         mounted && current && (!store || Boolean(source?.isCurrent()));
       const files = isCurrent() ? (peekProjectFiles(cwd) ?? []) : [];
       const available = looksLikeProject(cwd) && isCurrent();
-      setPresentation({ files, loading: available, error: null, isCurrent });
+      setPresentation({
+        files,
+        loading: available,
+        error: null,
+        isCurrent,
+        source,
+      });
       if (!available) return;
       // Let every metadata observer retire its cache before replacement IO.
       void Promise.resolve()
@@ -52,7 +63,13 @@ export function useProjectFileIndex(cwd: string, active: boolean) {
             if (!next || !isCurrent()) return;
             setPresentation((previous) =>
               isCurrent()
-                ? { files: next, loading: false, error: null, isCurrent }
+                ? {
+                    files: next,
+                    loading: false,
+                    error: null,
+                    isCurrent,
+                    source,
+                  }
                 : previous,
             );
           },
@@ -66,6 +83,7 @@ export function useProjectFileIndex(cwd: string, active: boolean) {
                     error:
                       error instanceof Error ? error.message : String(error),
                     isCurrent,
+                    source,
                   }
                 : previous,
             );

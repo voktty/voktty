@@ -84,6 +84,8 @@ Projects created directly from a saved SSH profile use `voktty-ssh-<URI-encoded 
 
 Quick Open for saved SSH profile projects lists Git workspaces through root-confined `git ls-files -co --exclude-standard -z`, so Git applies nested ignore rules. The 4 MiB helper output is NUL-delimited; incomplete trailing paths are discarded and results are capped at 20,000 entries. Non-Git folders retain the bounded helper filesystem walk and root-level `.gitignore` fallback.
 
+Harness Go to File and Search presentations retain their original project-file source and retire rows and callbacks after a saved SSH profile or project replacement, including a return to the previous configuration. Content searches acquire their own helper lease using that captured binding and map validated root-relative results back to the saved namespace, including canonical-root aliases. Literal queries are limited to 4 KiB of UTF-8, results to 500 matches, previews to 8,192 JavaScript characters and total mapped path and preview data to 4 MiB of JavaScript characters. The shared presentation search budget retains up to 256 unresolved requests, including retired work through actual settlement. Global project and conversation search actions remain independent of file-index availability. These guards do not acknowledge native cancellation or cover every asynchronous file opener.
+
 ### PTY shell integration
 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:

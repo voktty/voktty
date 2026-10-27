@@ -1,6 +1,7 @@
 import { Folder, LoaderCircle, MessageSquare, Search } from "../chrome/icons";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -28,16 +29,13 @@ import {
   type AppSearchHit,
   type SearchScope,
 } from "../lib/appSearch";
-import {
-  loadProjectFiles,
-  peekProjectFiles,
-  rankProjectFiles,
-  recentOpenedFiles,
-} from "../lib/fileIndex";
+import { rankProjectFiles, recentOpenedFiles } from "../lib/fileIndex";
 import { prettyCwd, projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
-import { searchProject, type OpenFileFn } from "../lib/search";
+import type { OpenFileFn } from "../lib/search";
+import { useProjectFileIndex } from "@/modules/harness/lib/useProjectFileIndex";
+import { useProjectContentSearch } from "@/modules/harness/lib/useProjectContentSearch";
 import type { Session } from "../lib/session";
 import { useTranslation } from "@/modules/i18n";
 import { searchSessions, type SessionSummary } from "../lib/sessionStore";
@@ -86,22 +84,60 @@ export function SearchView({
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
   const [active, setActive] = useState(0);
-  const [files, setFiles] = useState(() => peekProjectFiles(cwd) ?? []);
-  const [contentHits, setContentHits] = useState<AppSearchHit[]>([]);
   const [remoteHits, setRemoteHits] = useState<AppSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const trimmed = query.trim();
+  const index = useProjectFileIndex(cwd, open);
+  const files = index.isCurrent() ? index.files : [];
+  const content = useProjectContentSearch(
+    cwd,
+    trimmed,
+    open && (scope === "all" || scope === "files") && looksLikeProject(cwd),
+    index,
+  );
+  const contentHits = useMemo(
+    () => (content.isCurrent() ? hitsFromContentMatches(content.matches) : []),
+    [content],
+  );
+  const error = content.isCurrent() ? content.error : null;
+  const searching = loading || (content.isCurrent() && content.loading);
+  const owner = useMemo(
+    () => ({
+      open,
+      cwd,
+      trimmed,
+      scope,
+      onOpenFile,
+      onOpenSession,
+      onOpenProject,
+      onClose,
+      current: false,
+    }),
+    [
+      open,
+      cwd,
+      trimmed,
+      scope,
+      onOpenFile,
+      onOpenSession,
+      onOpenProject,
+      onClose,
+    ],
+  );
+  useLayoutEffect(() => {
+    owner.current = owner.open;
+    return () => {
+      owner.current = false;
+    };
+  }, [owner]);
 
   useEffect(() => {
     if (!open) return;
     setQuery("");
     setScope("all");
     setActive(0);
-    setContentHits([]);
     setRemoteHits([]);
-    setError(null);
   }, [open]);
 
   useEffect(() => {
@@ -123,27 +159,6 @@ export function SearchView({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (!looksLikeProject(cwd)) {
-      setFiles([]);
-      return;
-    }
-    const cached = peekProjectFiles(cwd);
-    if (cached) setFiles(cached);
-    let cancelled = false;
-    void loadProjectFiles(cwd)
-      .then((next) => {
-        if (!cancelled) setFiles(next);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [cwd, open]);
 
   const conversationRows = useMemo(
     () => conversationRowsFrom(history, sessions),
@@ -187,9 +202,7 @@ export function SearchView({
   useEffect(() => {
     if (!open || !trimmed) {
       setRemoteHits([]);
-      setContentHits([]);
       setLoading(false);
-      setError(null);
       return;
     }
 
@@ -197,7 +210,6 @@ export function SearchView({
     const timer = window.setTimeout(() => {
       const jobs: Promise<void>[] = [];
       const wantSessions = scope === "all" || scope === "conversations";
-      const wantFiles = scope === "all" || scope === "files";
 
       if (wantSessions) {
         setLoading(true);
@@ -214,27 +226,6 @@ export function SearchView({
         setRemoteHits([]);
       }
 
-      if (wantFiles && looksLikeProject(cwd)) {
-        setLoading(true);
-        jobs.push(
-          searchProject({ cwd, query: trimmed })
-            .then((result) => {
-              if (!cancelled) {
-                setContentHits(hitsFromContentMatches(result.matches));
-                setError(null);
-              }
-            })
-            .catch((err: unknown) => {
-              if (!cancelled) {
-                setContentHits([]);
-                setError(err instanceof Error ? err.message : String(err));
-              }
-            }),
-        );
-      } else {
-        setContentHits([]);
-      }
-
       void Promise.all(jobs).then(() => {
         if (!cancelled) setLoading(false);
       });
@@ -244,7 +235,7 @@ export function SearchView({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [cwd, open, scope, trimmed]);
+  }, [open, scope, trimmed]);
 
   const hits = useMemo(() => {
     if (!trimmed) return [];
@@ -283,7 +274,14 @@ export function SearchView({
   }, [active, hits.length]);
 
   const openHit = (hit: AppSearchHit | null) => {
-    if (!hit) return;
+    if (!hit || !owner.current) return;
+    const sourceCurrent = () =>
+      hit.kind === "file"
+        ? index.isCurrent()
+        : hit.kind === "content"
+          ? content.isCurrent()
+          : true;
+    if (!sourceCurrent()) return;
     if (hit.kind === "file") {
       onOpenFile(hit.path, undefined, { exact: true });
     } else if (hit.kind === "content") {
@@ -295,7 +293,7 @@ export function SearchView({
     } else if (hit.kind === "conversation" || hit.kind === "message") {
       onOpenSession(hit.sessionId);
     } else onOpenProject(hit.path);
-    onClose();
+    if (owner.current && sourceCurrent()) onClose();
   };
 
   const onQueryKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -320,7 +318,7 @@ export function SearchView({
   if (!open) return null;
 
   const empty = !trimmed;
-  const noResults = !empty && hits.length === 0 && !loading;
+  const noResults = !empty && hits.length === 0 && !searching;
 
   return (
     <div
@@ -353,7 +351,7 @@ export function SearchView({
             data-tauri-drag-region="false"
             className="min-w-0 flex-1 bg-transparent text-[13px] text-content outline-none select-text placeholder:text-content/40"
           />
-          {loading ? (
+          {searching ? (
             <LoaderCircle
               className="size-3.5 shrink-0 animate-spin text-content/35"
               strokeWidth={1.75}

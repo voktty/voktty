@@ -2,6 +2,7 @@ import type { RemoteProject } from "@/modules/connections/model/remoteProjects";
 import {
   parseRemotePath,
   relativeWithinProject,
+  remotePath,
 } from "@/modules/connections/model/remoteProjects";
 import {
   findSshProfile,
@@ -17,6 +18,7 @@ import {
   type RemoteWorkspaceEnv,
 } from "@/modules/remote/filesystem";
 import { requestRemoteResult } from "@/modules/remote/client";
+import { parseProjectContentSearch } from "@/modules/remote/projectContentSearch";
 
 let pending = 0;
 const MAX_PENDING = 256;
@@ -133,6 +135,43 @@ export function createProjectDocument(
   }
 
   return {
+    searchContent: (query: string, isCurrent: () => boolean) => {
+      if (
+        !query.trim() ||
+        query.includes("\0") ||
+        new TextEncoder().encode(query).length > 4096 ||
+        path.length > 32768 ||
+        /[\\\x00-\x1f\x7f]/.test(path) ||
+        !projectRoot.startsWith("/") ||
+        projectRoot.startsWith("//") ||
+        parsed.hostPath.split("/").some((part) => part === "." || part === "..")
+      )
+        return Promise.reject(
+          new Error("Invalid remote content search query."),
+        );
+      return run(isCurrent, async (workspace) => {
+        const result = await requestRemoteResult<unknown>(
+          workspace.sessionId,
+          "fs.grep",
+          {
+            cwd: relative,
+            pattern: query.trim(),
+            include: [],
+            exclude: [],
+            caseSensitive: false,
+            wholeWord: false,
+            regex: false,
+            showHidden: true,
+            maxResults: 500,
+          },
+        );
+        assertProjectDocumentCurrent(isCurrent);
+        return parseProjectContentSearch(
+          result,
+          remotePath(parsed.environmentId, projectRoot),
+        );
+      });
+    },
     listFiles: (isCurrent: () => boolean) => {
       if (
         path.length > 32768 ||

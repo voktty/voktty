@@ -109,6 +109,10 @@ export type ProjectFileSource = Readonly<{
   key: string;
   isCurrent: () => boolean;
   retire: () => void;
+  searchContent: (
+    query: string,
+    isCurrent: () => boolean,
+  ) => Promise<import("@/modules/harness/lib/search").ProjectSearchResult>;
   indexFiles: (
     isCurrent: () => boolean,
   ) => Promise<import("@/modules/harness/lib/fs").ProjectFile[]>;
@@ -135,6 +139,26 @@ export function captureProjectFileSource(
     isCurrent,
     retire: () => {
       current = false;
+    },
+    searchContent: async (query: string, callerCurrent: () => boolean) => {
+      const allowed = () => isCurrent() && callerCurrent();
+      assertProjectFileSourceCurrent(allowed);
+      try {
+        const { createProjectDocument } = await import(
+          "@/modules/remote/projectDocument"
+        );
+        assertProjectFileSourceCurrent(allowed);
+        const result = await createProjectDocument(
+          captured.path,
+          captured.project,
+          [captured.profile],
+        ).searchContent(query, allowed);
+        assertProjectFileSourceCurrent(allowed);
+        return result;
+      } catch (error) {
+        assertProjectFileSourceCurrent(allowed);
+        throw error;
+      }
     },
     indexFiles: async (callerCurrent: () => boolean) => {
       const allowed = () => isCurrent() && callerCurrent();
