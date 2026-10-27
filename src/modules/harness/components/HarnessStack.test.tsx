@@ -18,6 +18,8 @@ import type {
   CreateHarnessNavigationView,
   HarnessNavigationView,
 } from "@/modules/harness/lib/harnessWindowNavigation";
+import { requestHarnessProject } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 
 const mounts = vi.hoisted(() => ({
   harness: vi.fn(),
@@ -223,6 +225,29 @@ it("delivers project requests only after the selected outer view commits without
   expect(mounts.requests).toHaveBeenCalledOnce();
 });
 
+it("rejects a raw directed DOM event instead of changing its named view", async () => {
+  const owned = { ...tabs[0], tabKey: asTabKey("tab-owned") };
+  await act(async () => root.render(<HarnessStack tabs={[owned]} activeId={1} />));
+  await act(async () => window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
+    detail: { path: "/injected", target: { ownerId: 1, tabKey: "tab-owned" } },
+  })));
+  expect(mounts.requests).not.toHaveBeenCalled();
+});
+
+it("delivers a typed directed request without broadcasting a DOM event", async () => {
+  const owned = { ...tabs[0], tabKey: asTabKey("tab-owned") };
+  const legacy = vi.fn();
+  window.addEventListener("voktty:harness-select-project", legacy);
+  try {
+    await act(async () => root.render(<HarnessStack tabs={[owned]} activeId={1} />));
+    await act(async () => requestHarnessProject("/typed", { ownerId: 1, tabKey: owned.tabKey }));
+    expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(1, "/typed");
+    expect(legacy).not.toHaveBeenCalled();
+  } finally {
+    window.removeEventListener("voktty:harness-select-project", legacy);
+  }
+});
+
 it("creates a headless view and confirms its live registration under StrictMode", async () => {
   let close = () => {};
   const open = vi.fn(() => 7);
@@ -277,9 +302,7 @@ it("retains a directed request for its original view across a focus change", asy
   ] as HarnessTab[];
   await act(async () => root.render(<HarnessStack tabs={both} activeId={1} />));
   await act(async () => {
-    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-      detail: { path: "remote://machine/project", target: { ownerId: 1, tabKey: "tab-one" } },
-    }));
+    requestHarnessProject("remote://machine/project", { ownerId: 1, tabKey: asTabKey("tab-one") });
     root.render(<HarnessStack tabs={both} activeId={2} />);
   });
   expect(mounts.requests).not.toHaveBeenCalled();
@@ -293,18 +316,14 @@ it("never falls back to another view for malformed or retired directed targets",
   const other = { ...original, id: 2, tabKey: "tab-other" } as HarnessTab;
   await act(async () => root.render(<HarnessStack tabs={[original, other]} activeId={2} />));
   await act(async () => {
-    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-      detail: { path: "/retired", target: { ownerId: 1, tabKey: "tab-original" } },
-    }));
+    requestHarnessProject("/retired", { ownerId: 1, tabKey: asTabKey("tab-original") });
     root.render(<HarnessStack tabs={[replacement, other]} activeId={1} />);
   });
   expect(mounts.requests).not.toHaveBeenCalled();
   await act(async () => root.render(<HarnessStack tabs={[original, other]} activeId={1} />));
   expect(mounts.requests).not.toHaveBeenCalled();
   await act(async () => {
-    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-      detail: { path: "/invalid", target: { ownerId: 2 } },
-    }));
+    Reflect.apply(requestHarnessProject, undefined, ["/invalid", { ownerId: 2 }]);
   });
   expect(mounts.requests).not.toHaveBeenCalled();
 });
@@ -313,9 +332,7 @@ it("delivers a directed request emitted before its cold destination commits", as
   const cold = { ...tabs[0], id: 2, cold: true, tabKey: "tab-cold" } as HarnessTab;
   await act(async () => root.render(<HarnessStack tabs={[...tabs, cold]} activeId={1} />));
   await act(async () => {
-    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-      detail: { path: "C:/project", target: { ownerId: 2, tabKey: "tab-cold" } },
-    }));
+    requestHarnessProject("C:/project", { ownerId: 2, tabKey: asTabKey("tab-cold") });
     root.render(<HarnessStack tabs={[...tabs, { ...cold, cold: false }]} activeId={2} />);
   });
   expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "C:/project");
@@ -325,9 +342,7 @@ it("accepts a newly created destination before its first outer render", async ()
   const created = { ...tabs[0], id: 2, tabKey: "tab-created" } as HarnessTab;
   await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
   await act(async () => {
-    window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-      detail: { path: "/created-project", target: { ownerId: 2, tabKey: "tab-created" } },
-    }));
+    requestHarnessProject("/created-project", { ownerId: 2, tabKey: asTabKey("tab-created") });
     root.render(<HarnessStack tabs={[...tabs, created]} activeId={2} />);
   });
   expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "/created-project");
@@ -338,9 +353,7 @@ it("returns a directed destination from native chat to Harness before consuming 
   await act(async () => root.render(<HarnessStack tabs={[destination]} activeId={1} />));
   await act(async () => container.querySelectorAll<HTMLButtonElement>("button")[1].click());
   expect(container.querySelector("[data-native]")).not.toBeNull();
-  await act(async () => window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-    detail: { path: "/native-destination", target: { ownerId: 1, tabKey: "tab-native" } },
-  })));
+  await act(async () => requestHarnessProject("/native-destination", { ownerId: 1, tabKey: asTabKey("tab-native") }));
   expect(container.querySelector("[data-native]")).toBeNull();
   expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(1, "/native-destination");
 });

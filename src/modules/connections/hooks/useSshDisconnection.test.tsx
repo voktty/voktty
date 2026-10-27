@@ -26,7 +26,7 @@ vi.mock("@/modules/connections/model/sshConnectionActions", async (importOrigina
 
 import { useSshDisconnection } from "@/modules/connections/hooks/useSshDisconnection";
 import { DISCONNECT_SSH_EVENT, harnessProjectPath } from "@/modules/connections/model/sshConnectionActions";
-import { HARNESS_SELECT_PROJECT_EVENT } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 const harness = (id: number, cwd?: string): HarnessTab => ({ id, kind: "harness", title: "Harness", cwd, tabKey: asTabKey(`tab-${id}`), spaceId: "space", workspaceScopeId: "space" as HarnessTab["workspaceScopeId"] });
 const ssh = (): WorkspaceEnv => ({ kind: "ssh", connection: mocks.profiles[0], root: "/project", sessionId: 44 });
@@ -52,7 +52,7 @@ async function setup() {
   });
   const fallback = vi.fn();
   const requests = vi.fn();
-  window.addEventListener(HARNESS_SELECT_PROJECT_EVENT, requests);
+  const unsubscribe = subscribeHarnessProjectRequests(requests);
   function Window() {
     useSshDisconnection({ tabsRef, getTab, getSelectedTab: () => getTab(selected), updateTab: update, setProjectFallback: fallback, localHome: "C:/home", localRoot: "C:/launch" });
     return null;
@@ -62,7 +62,7 @@ async function setup() {
     disconnect: (connectionId?: unknown) => act(async () => window.dispatchEvent(new CustomEvent(DISCONNECT_SSH_EVENT, { detail: { connectionId } }))),
     close: async () => {
       await act(async () => root.unmount());
-      window.removeEventListener(HARNESS_SELECT_PROJECT_EVENT, requests);
+      unsubscribe();
     },
   };
 }
@@ -78,7 +78,7 @@ it("disconnects related profiles, resets only captured Harness projects and dire
     expect(mocks.setEnv).toHaveBeenCalledExactlyOnceWith({ kind: "local" });
     expect(fixture.update.mock.calls).toEqual([[1, { cwd: "C:/home" }], [2, { cwd: "C:/home" }]]);
     expect(fixture.fallback).toHaveBeenCalledExactlyOnceWith("C:/home");
-    expect((fixture.requests.mock.calls[0][0] as CustomEvent).detail).toEqual({ path: "C:/home", target: { ownerId: 1, tabKey: "tab-1" } });
+    expect(fixture.requests.mock.calls[0][0]).toEqual({ path: "C:/home", target: { ownerId: 1, tabKey: "tab-1" } });
   } finally { await fixture.close(); }
 });
 
@@ -101,7 +101,7 @@ it("uses the current SSH workspace when the event omits its profile", async () =
     await fixture.disconnect();
     expect(mocks.closeProfiles).toHaveBeenCalledExactlyOnceWith("one", new Set(["one", "alias"]));
     expect(fixture.update.mock.calls.map(([id]) => id)).toEqual([1, 2, 4]);
-    expect((fixture.requests.mock.calls[0][0] as CustomEvent).detail.target.ownerId).toBe(4);
+    expect(fixture.requests.mock.calls[0][0].target.ownerId).toBe(4);
   } finally { await fixture.close(); }
 });
 

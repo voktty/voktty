@@ -10,7 +10,7 @@ import { useHarnessViewActivation } from "@/modules/harness/hooks/useHarnessView
 import { useHarnessViewCreation } from "@/modules/harness/hooks/useHarnessViewCreation";
 import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
-import { HARNESS_SELECT_PROJECT_EVENT, harnessProjectTargetMatches, parseHarnessProjectRequest, type HarnessProjectRequest } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { HARNESS_SELECT_PROJECT_EVENT, harnessProjectTargetMatches, parseHarnessProjectRequest, subscribeHarnessProjectRequests, type HarnessProjectRequest } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
 
@@ -171,10 +171,11 @@ export function HarnessStack({
   const [projectRequest, setProjectRequest] = useState<HarnessProjectRequest | null>(
     null,
   );
+  useEffect(() => subscribeHarnessProjectRequests(setProjectRequest), []);
   useEffect(() => {
     const select = (event: Event) => {
       const request = parseHarnessProjectRequest((event as CustomEvent<unknown>).detail);
-      if (request) setProjectRequest(request);
+      if (request && !request.target) setProjectRequest(request);
     };
     window.addEventListener(HARNESS_SELECT_PROJECT_EVENT, select);
     return () =>

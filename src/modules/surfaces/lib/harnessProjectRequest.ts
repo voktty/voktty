@@ -5,6 +5,26 @@ export const HARNESS_SELECT_PROJECT_EVENT = "voktty:harness-select-project";
 
 export type HarnessProjectTarget = { ownerId: number; tabKey: TabKey };
 export type HarnessProjectRequest = { path: string; target?: HarnessProjectTarget };
+export type DirectedHarnessProjectRequest = Readonly<{
+  path: string;
+  target: Readonly<HarnessProjectTarget>;
+}>;
+
+const subscribers = new Set<{
+  receive: (request: DirectedHarnessProjectRequest) => void;
+}>();
+
+export function subscribeHarnessProjectRequests(
+  receive: (request: DirectedHarnessProjectRequest) => void,
+): () => void {
+  if (subscribers.size >= 256)
+    throw new Error("Too many Harness project request subscribers.");
+  const entry = { receive };
+  subscribers.add(entry);
+  return () => {
+    subscribers.delete(entry);
+  };
+}
 
 export function parseHarnessProjectRequest(detail: unknown): HarnessProjectRequest | null {
   if (!detail || typeof detail !== "object") return null;
@@ -24,5 +44,12 @@ export function harnessProjectTargetMatches(target: HarnessProjectTarget, tab: T
 
 export function requestHarnessProject(path: string, target: HarnessProjectTarget): void {
   const request = parseHarnessProjectRequest({ path, target });
-  if (request) window.dispatchEvent(new CustomEvent(HARNESS_SELECT_PROJECT_EVENT, { detail: request }));
+  if (!request?.target) return;
+  const directed = Object.freeze({
+    path: request.path,
+    target: Object.freeze(request.target),
+  });
+  for (const entry of [...subscribers]) {
+    if (subscribers.has(entry)) entry.receive(directed);
+  }
 }

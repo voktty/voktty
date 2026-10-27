@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
-import { HARNESS_SELECT_PROJECT_EVENT } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -36,7 +36,7 @@ async function setup(items: Tab[] = [tab(1), tab(2, "two")]) {
   const missing = vi.fn();
   const createWorktree = vi.fn< (root: string, name: string) => Promise<string> >().mockResolvedValue("/worktree");
   const selected = vi.fn();
-  window.addEventListener(HARNESS_SELECT_PROJECT_EVENT, selected);
+  const unsubscribe = subscribeHarnessProjectRequests(selected);
   const getTab = (id: number) => tabsRef.current.find((item) => item.id === id);
   let result!: ReturnType<typeof useHarnessProjectOpening>;
   function Window({ spaceId, selectedKey, localRoot }: { spaceId: string; selectedKey: string; localRoot?: string }) {
@@ -52,7 +52,7 @@ async function setup(items: Tab[] = [tab(1), tab(2, "two")]) {
     current: () => result,
     close: async () => {
       await act(async () => root.unmount());
-      window.removeEventListener(HARNESS_SELECT_PROJECT_EVENT, selected);
+      unsubscribe();
     },
   };
 }
@@ -63,11 +63,11 @@ it("opens profile projects against the returned exact tab, including synchronous
     await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: "remote://machine/root" } })));
     expect(fixture.created).toHaveBeenCalledExactlyOnceWith("one", "remote://machine/root");
     expect(fixture.activate).toHaveBeenCalledExactlyOnceWith(1);
-    expect((fixture.selected.mock.calls[0][0] as CustomEvent).detail).toEqual({ path: "remote://machine/root", target: { ownerId: 1, tabKey: "tab-1" } });
+    expect(fixture.selected.mock.calls[0][0]).toEqual({ path: "remote://machine/root", target: { ownerId: 1, tabKey: "tab-1" } });
     fixture.tabsRef.current = [];
     await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: "//server/share/project" } })));
     expect(fixture.activate).toHaveBeenLastCalledWith(3);
-    expect((fixture.selected.mock.calls[1][0] as CustomEvent).detail.target).toEqual({ ownerId: 3, tabKey: "tab-3" });
+    expect(fixture.selected.mock.calls[1][0].target).toEqual({ ownerId: 3, tabKey: "tab-3" });
     await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: " ", target: null } })));
     expect(fixture.selected).toHaveBeenCalledTimes(2);
   } finally { await fixture.close(); }
@@ -80,7 +80,7 @@ it("selects the captured worktree destination and preserves local launch roots",
     expect(fixture.createWorktree).toHaveBeenCalledExactlyOnceWith("C:/project", expect.any(String));
     expect(fixture.created).not.toHaveBeenCalled();
     expect(fixture.activate).toHaveBeenCalledExactlyOnceWith(1);
-    expect((fixture.selected.mock.calls[0][0] as CustomEvent).detail).toEqual({ path: "/worktree", target: { ownerId: 1, tabKey: "tab-1" } });
+    expect(fixture.selected.mock.calls[0][0]).toEqual({ path: "/worktree", target: { ownerId: 1, tabKey: "tab-1" } });
     await fixture.render("two", "tab-2", "/local-home");
     fixture.current().openNewHarness();
     expect(fixture.created).toHaveBeenCalledExactlyOnceWith("two", "/local-home");
@@ -135,7 +135,7 @@ it("creates a missing Harness in its explicit original workspace after worktree 
     await act(async () => fixture.current().openNewHarnessInWorktree());
     expect(fixture.created).toHaveBeenCalledExactlyOnceWith("one", "/worktree");
     expect(fixture.activate).toHaveBeenCalledExactlyOnceWith(3);
-    expect((fixture.selected.mock.calls[0][0] as CustomEvent).detail.target).toEqual({ ownerId: 3, tabKey: "tab-3" });
+    expect(fixture.selected.mock.calls[0][0].target).toEqual({ ownerId: 3, tabKey: "tab-3" });
   } finally { await fixture.close(); }
 });
 
@@ -179,6 +179,6 @@ it("uses the selected Harness when several views share a workspace", async () =>
     await fixture.render("one", "tab-2");
     await act(async () => fixture.current().openNewHarnessInWorktree());
     expect(fixture.activate).toHaveBeenCalledExactlyOnceWith(2);
-    expect((fixture.selected.mock.calls[0][0] as CustomEvent).detail.target).toEqual({ ownerId: 2, tabKey: "tab-2" });
+    expect(fixture.selected.mock.calls[0][0].target).toEqual({ ownerId: 2, tabKey: "tab-2" });
   } finally { await fixture.close(); }
 });
