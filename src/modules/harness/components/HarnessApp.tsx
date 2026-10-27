@@ -1,5 +1,6 @@
 import { useHarnessWindow } from "@/modules/harness/components/HarnessWindowHost";
 import { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
+import { useHarnessFileOpening } from "@/modules/harness/hooks/useHarnessFileOpening";
 import {
   HarnessTerminalRecovery,
   useHarnessTerminalRecovery,
@@ -95,8 +96,6 @@ import { keepSessionChanges, notifyReviewChanged } from "../lib/checkpoint";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
-  rememberOpenedFile,
-  resolveFileOpenRequest,
 } from "../lib/fileIndex";
 
 
@@ -124,7 +123,6 @@ import {
   type EditorPane,
   type FilePaneTab,
   type FocusDir,
-  type SessionChangesView,
   findSurfacePane,
   firstLeafId,
   focusedFileTab,
@@ -136,13 +134,11 @@ import {
   leafIds,
   movePane,
   neighborLeafId,
-  newFileTab,
   newPlanTab,
   newReleaseNotesWorkspaceTab,
   newTab,
   newTerminalFile,
   openEditorTab,
-  openSessionChangesTab,
   type PaneEdge,
   removePane,
   replaceLeafId,
@@ -215,7 +211,6 @@ import { mergeOrderedSubset, orderByIds } from "../lib/reorder";
 import type {
   EditorNavigationTarget,
   FileOpenOptions,
-  OpenFileFn,
 } from "../lib/search";
 import {
   buildSecondOpinionCard,
@@ -852,8 +847,6 @@ export function HarnessApp({
     !loadedProjects.has(sidebarCwdKey) &&
     !historyFailed;
   const gitCwd = active ? sessionWorkCwd(active) : sidebarCwd;
-  const gitCwdRef = useRef(gitCwd);
-  gitCwdRef.current = gitCwd;
   const projectBranches = useProjectBranches(
     sidebarCwd,
     Boolean(sidebarCwd) && sidebarCwd !== "~",
@@ -2960,60 +2953,41 @@ export function HarnessApp({
     [activeTabId],
   );
 
-  const onOpenDiff = useCallback(
-    (
-      path?: string,
-      session?: { sessionId: string; cwd: string; view?: SessionChangesView },
-      options?: FileOpenOptions,
-    ) => {
-      void (async () => {
-        const diffCwd = session?.cwd ?? gitCwdRef.current;
-        const resolved = path
-          ? await resolveFileOpenRequest(diffCwd, path, options)
-          : undefined;
-        if (resolved) rememberOpenedFile(sidebarCwdRef.current, resolved);
-        setTabs((prev: any) =>
-          prev.map((tab: any) => {
-            if (tab.id !== activeTabId) return tab;
-            if (session) {
-              return openSessionChangesTab(
-                tab,
-                session.cwd,
-                session.sessionId,
-                resolved,
-                session.view,
-              );
-            }
-            const opened = resolved
-              ? openEditorTab(
-                  tab,
-                  newFileTab(
-                    resolved,
-                    options?.repoRoot ||
-                      gitCwdRef.current ||
-                      sidebarCwdRef.current,
-                    true,
-                  ),
-                )
-              : tab;
-            if (deckLayout) return opened;
-            return {
-              ...opened,
-              diffOpen: true,
-              diffFocused: !resolved,
-            };
-          }),
-        );
-        if (deckLayout) {
-          setSidebarOpen(true);
-          saveSidebarOpen(true);
-          setSidebarTab("changes");
-        }
-        setComposerFocused(false);
-      })();
+  const { onOpenFile, onOpenDiff } = useHarnessFileOpening({
+    tabs,
+    activeTabId,
+    cwd: gitCwd,
+    projectCwd: sidebarCwd,
+    enabled: focused && visible,
+    deckLayout,
+    capture: () => {
+      const permit = getPersistenceOwner()?.capture();
+      const sessionCurrent = active
+        ? sessionEngine.captureSessionLifetime(active.id)
+        : () => true;
+      return permit
+        ? { isCurrent: () => permit.isCurrent() && sessionCurrent() }
+        : undefined;
     },
-    [activeTabId, deckLayout],
-  );
+    setTabs,
+    navigate: (path, navigation, isCurrent) => {
+      const token = ++editorNavigationToken.current;
+      setEditorNavigation((previous) =>
+        isCurrent() ? { path, ...navigation, token } : previous,
+      );
+    },
+    showChanges: (isCurrent) => {
+      if (!isCurrent()) return;
+      setSidebarOpen((previous) => (isCurrent() ? true : previous));
+      saveSidebarOpen(true);
+      setSidebarTab((previous) => (isCurrent() ? "changes" : previous));
+    },
+    focusEditor: (isCurrent) =>
+      setComposerFocused((previous) => (isCurrent() ? false : previous)),
+    onError: (error) => {
+      void message(String(error), { title: "Voktty", kind: "error" });
+    },
+  });
 
   const onOpenWorkingTreeDiff = useCallback(
     (path: string, options?: FileOpenOptions) =>
@@ -4306,39 +4280,6 @@ export function HarnessApp({
       return next;
     });
   }, []);
-
-  const onOpenFile = useCallback<OpenFileFn>(
-    (path, navigation, options) => {
-      void (async () => {
-        const resolved = await resolveFileOpenRequest(
-          gitCwdRef.current,
-          path,
-          options,
-        );
-        rememberOpenedFile(sidebarCwdRef.current, resolved);
-        const tab = tabsRef.current.find(
-          (entry: any) => entry.id === activeTabId,
-        );
-        if (!tab) return;
-        const file = newFileTab(resolved, sidebarCwdRef.current);
-        setTabs((prev: any) =>
-          prev.map((entry: any) =>
-            entry.id === tab.id ? openEditorTab(entry, file) : entry,
-          ),
-        );
-        if (navigation) {
-          editorNavigationToken.current += 1;
-          setEditorNavigation({
-            path: resolved,
-            ...navigation,
-            token: editorNavigationToken.current,
-          });
-        }
-        setComposerFocused(false);
-      })();
-    },
-    [activeTabId],
-  );
 
   const onOpenPlan = useCallback(
     (sessionId: string, blockId: string) => {

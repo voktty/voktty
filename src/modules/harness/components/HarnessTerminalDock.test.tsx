@@ -59,6 +59,8 @@ const state = vi.hoisted(() => ({
   admit: vi.fn(),
   stop: vi.fn(),
   remove: vi.fn(),
+  resolveFile: vi.fn(),
+  rememberFile: vi.fn(),
 }));
 vi.mock("@/modules/harness/components/HarnessWindowHost", () => ({
   useHarnessWindow: () => state.runtime,
@@ -161,7 +163,8 @@ vi.mock("@/modules/harness/lib/harness", () => ({
 vi.mock("@/modules/harness/lib/fileIndex", () => ({
   prefetchProjectFiles: () => {},
   invalidateProjectFiles: () => {},
-  rememberOpenedFile: () => {},
+  rememberOpenedFile: state.rememberFile,
+  resolveFileOpenRequest: state.resolveFile,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue([]),
@@ -274,6 +277,9 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   vi.clearAllMocks();
+  state.resolveFile
+    .mockReset()
+    .mockImplementation(async (_cwd: string, path: string) => path);
   state.sidebar = null;
   state.dock = null;
   state.view = null;
@@ -680,3 +686,68 @@ it.each(["button", "shortcut"])(
     expect(state.close).not.toHaveBeenCalled();
   },
 );
+
+it.each(["focus", "project"] as const)(
+  "does not publish a pending file opening after its %s changes",
+  async (reason) => {
+    const file = newFileTab(`${project}/existing.ts`, project);
+    const pane = newEditorPane(file);
+    const tab = { ...newTab(pane.id), editorPanes: [pane] };
+    const resumed: ResumedWorkspace = {
+      tabs: [tab],
+      sessions: [],
+      activeTabId: tab.id,
+      projectCwd: project,
+      projectTerminals: [],
+    };
+    let finish!: (path: string) => void;
+    state.resolveFile.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await act(async () => root.render(<Host resumed={resumed} />));
+    await act(async () => sidebar().onOpenFile?.("pending.ts"));
+    await act(async () =>
+      root.render(
+        <Host
+          resumed={resumed}
+          focused={reason !== "focus"}
+          currentProject={reason === "project" ? "/srv/replacement" : project}
+        />,
+      ),
+    );
+    await act(async () => finish(`${project}/pending.ts`));
+    expect(
+      view().tabs.find((entry) => entry.id === tab.id)?.editorPanes[0].files,
+    ).toEqual([file]);
+    expect(state.rememberFile).not.toHaveBeenCalled();
+  },
+);
+
+it("applies current file navigation through the production App state setters", async () => {
+  const file = newFileTab(`${project}/existing.ts`, project);
+  const pane = newEditorPane(file);
+  const tab = { ...newTab(pane.id), editorPanes: [pane] };
+  const resumed: ResumedWorkspace = {
+    tabs: [tab],
+    sessions: [],
+    activeTabId: tab.id,
+    projectCwd: project,
+    projectTerminals: [],
+  };
+  await act(async () => root.render(<Host resumed={resumed} />));
+  await act(async () =>
+    sidebar().onOpenFile?.(`${project}/new.ts`, { line: 7, column: 2 }),
+  );
+  expect(view().tabs[0].editorPanes[0].files[1]).toMatchObject({
+    path: `${project}/new.ts`,
+    cwd: project,
+  });
+  expect(required(state.pane).editorNavigation).toMatchObject({
+    path: `${project}/new.ts`,
+    line: 7,
+    column: 2,
+  });
+});
