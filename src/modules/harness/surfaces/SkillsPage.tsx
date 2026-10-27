@@ -1,7 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+  type ReactNode,
+} from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "@/modules/i18n";
 import { useSkillCreation } from "@/modules/harness/hooks/useSkillCreation";
+import { useSkillActivity } from "@/modules/harness/hooks/useSkillActivity";
 import {
   Check,
   Copy,
@@ -24,35 +34,59 @@ import {
 
 /** Inspect and manage file skills without modifying provider-owned catalogs. */
 export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
+  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  return (
+    <SkillsPageContent
+      key={cwd}
+      cwd={cwd}
+      adding={adding}
+      setAdding={setAdding}
+      query={query}
+      setQuery={setQuery}
+    />
+  );
+}
+
+function SkillsPageContent({
+  cwd,
+  adding,
+  setAdding,
+  query,
+  setQuery,
+}: {
+  cwd: string;
+  adding: boolean;
+  setAdding: Dispatch<SetStateAction<boolean>>;
+  query: string;
+  setQuery: (value: string) => void;
+}): ReactNode {
   const { t } = useTranslation();
   const [skills, setSkills] = useState<DiscoveredSkill[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [adding, setAdding] = useState(false);
   const [reload, setReload] = useState(0);
   const [disabledPaths, setDisabledPaths] = useState<string[]>(() =>
     loadDisabledSkillPaths(),
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const activity = useSkillActivity();
 
-  useEffect(() => {
-    let cancelled = false;
+  useLayoutEffect(() => {
     setSkills(null);
     setError(null);
-    listSkills(cwd)
-      .then((next) => {
-        if (cancelled) return;
+    activity.run(
+      "catalog",
+      () => listSkills(cwd),
+      (next) => {
         setSkills(next);
         setError(null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
+      },
+      (err) => {
         setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [cwd, reload]);
+      },
+    );
+    return () => activity.retire("catalog");
+  }, [cwd, reload, activity.run, activity.retire]);
 
   useEffect(() => {
     const onChange = (): void => setDisabledPaths(loadDisabledSkillPaths());
@@ -84,24 +118,6 @@ export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
     } catch {
       setActionError(t("skillsPage.savePreferenceError"));
     }
-  };
-
-  const onReveal = (path: string): void => {
-    setActionError(null);
-    void revealItemInDir(path).catch((err: unknown) => {
-      setActionError(
-        t("skillsPage.openFolderError", {
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    });
-  };
-
-  const onCopyPath = (path: string): void => {
-    setActionError(null);
-    void copyText(path).catch(() => {
-      setActionError(t("skillsPage.copyPathError"));
-    });
   };
 
   const creation = useSkillCreation({
@@ -216,12 +232,17 @@ export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
               const disabled = disabledPaths.includes(skill.path);
               return (
                 <SkillRowItem
-                  key={skill.path}
+                  key={JSON.stringify([
+                    reload,
+                    skill.path,
+                    skill.name,
+                    skill.description,
+                    skill.scope,
+                    skill.source,
+                  ])}
                   skill={skill}
                   disabled={disabled}
                   onToggle={onToggle}
-                  onReveal={onReveal}
-                  onCopyPath={onCopyPath}
                 />
               );
             })
@@ -240,14 +261,10 @@ function SkillRowItem({
   skill,
   disabled,
   onToggle,
-  onReveal,
-  onCopyPath,
 }: {
   skill: DiscoveredSkill;
   disabled: boolean;
   onToggle: (path: string, enabled: boolean) => void;
-  onReveal: (path: string) => void;
-  onCopyPath: (path: string) => void;
 }): ReactNode {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -255,9 +272,12 @@ function SkillRowItem({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const copyTimer = useRef<number | null>(null);
+  const activity = useSkillActivity();
+  const previewActivity = useSkillActivity(expanded);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     return () => {
       if (copyTimer.current != null) {
         window.clearTimeout(copyTimer.current);
@@ -266,8 +286,17 @@ function SkillRowItem({
   }, []);
 
   const togglePreview = (): void => {
+    if (!activity.capture()) return;
     const next = !expanded;
     setExpanded(next);
+    if (!next) {
+      activity.retire("preview");
+      previewActivity.retire("copy-content");
+      setLoading(false);
+      setCopied(false);
+      if (copyTimer.current != null) window.clearTimeout(copyTimer.current);
+      return;
+    }
     if (next && content === null && !loading) {
       if (skill.scope === "builtin") {
         setContent(CREATE_SKILL_BODY);
@@ -275,27 +304,62 @@ function SkillRowItem({
       }
       setLoading(true);
       setLoadError(null);
-      readTextFile(skill.path)
-        .then((text) => {
+      activity.run(
+        "preview",
+        () => readTextFile(skill.path),
+        (text) => {
           setContent(text);
           setLoadError(null);
-        })
-        .catch((err: unknown) => {
-          setLoadError(err instanceof Error ? err.message : String(err));
-        })
-        .finally(() => {
           setLoading(false);
-        });
+        },
+        (err) => {
+          setLoadError(err instanceof Error ? err.message : String(err));
+          setLoading(false);
+        },
+      );
     }
   };
 
   const handleCopyContent = (): void => {
-    if (!content) return;
-    void copyText(content).then(() => {
-      setCopied(true);
-      if (copyTimer.current != null) window.clearTimeout(copyTimer.current);
-      copyTimer.current = window.setTimeout(() => setCopied(false), 2000);
-    });
+    if (!content || !expanded) return;
+    const current = previewActivity.capture();
+    if (!current) return;
+    setActionError(null);
+    previewActivity.run(
+      "copy-content",
+      (assertCurrent) => copyText(content, assertCurrent),
+      () => {
+        setCopied(true);
+        if (copyTimer.current != null) window.clearTimeout(copyTimer.current);
+        copyTimer.current = window.setTimeout(() => {
+          if (current()) setCopied(false);
+        }, 2000);
+      },
+      () => setActionError(t("preview.copyError")),
+    );
+  };
+
+  const externalAction = (kind: "copy" | "reveal"): void => {
+    if (!activity.capture()) return;
+    activity.retire("external");
+    setActionError(null);
+    activity.run(
+      "external",
+      (assertCurrent) =>
+        kind === "copy"
+          ? copyText(skill.path, assertCurrent)
+          : revealItemInDir(skill.path),
+      () => {},
+      (error) => {
+        setActionError(
+          kind === "copy"
+            ? t("skillsPage.copyPathError")
+            : t("skillsPage.openFolderError", {
+                error: error instanceof Error ? error.message : String(error),
+              }),
+        );
+      },
+    );
   };
 
   return (
@@ -328,7 +392,9 @@ function SkillRowItem({
             name: skill.name,
           })}
           aria-checked={!disabled}
-          onClick={() => onToggle(skill.path, disabled)}
+          onClick={() => {
+            if (activity.capture()) onToggle(skill.path, disabled);
+          }}
           className={`relative h-5 w-9 shrink-0 rounded-full transition-colors cursor-pointer ${disabled ? "bg-content/20" : "bg-sky-500"}`}
         >
           <span
@@ -376,7 +442,7 @@ function SkillRowItem({
             name: skill.name,
           })}
           title={t("skillsPage.copyPath")}
-          onClick={() => onCopyPath(skill.path)}
+          onClick={() => externalAction("copy")}
           className="grid size-5 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content cursor-pointer"
         >
           <Copy className="size-3" strokeWidth={1.75} />
@@ -387,12 +453,17 @@ function SkillRowItem({
             name: skill.name,
           })}
           title={t("skillsPage.revealInFileManager")}
-          onClick={() => onReveal(skill.path)}
+          onClick={() => externalAction("reveal")}
           className="grid size-5 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content cursor-pointer"
         >
           <FolderOpen className="size-3" strokeWidth={1.75} />
         </button>
       </div>
+      {actionError ? (
+        <p role="alert" className="py-2 text-[11px] text-red-400">
+          {actionError}
+        </p>
+      ) : null}
       {expanded ? (
         <div className="mt-2 rounded-md border border-content/10 bg-content/[0.03] p-2.5">
           <div className="flex items-center justify-between pb-1.5 border-b border-content/5">

@@ -152,20 +152,29 @@ export function messageFilesFromClipboard(
   }
 }
 
-export async function copyText(text: string): Promise<void> {
+export async function copyText(
+  text: string,
+  assertCurrent: () => void = () => {},
+): Promise<void> {
+  assertCurrent();
   try {
     const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+    assertCurrent();
     await writeText(text);
+    assertCurrent();
     return;
   } catch {}
 
+  assertCurrent();
   try {
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
+      assertCurrent();
       return;
     }
   } catch {}
 
+  assertCurrent();
   const el = document.createElement("textarea");
   el.value = text;
   el.style.position = "fixed";

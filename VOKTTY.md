@@ -98,6 +98,8 @@ Skill expansion carries the original prompt-preparation guard through catalog lo
 
 Skill creation captures its original dialog, draft and filesystem source. Closing, cancellation or source replacement retires later stages and UI publication; pending operations retain their budget until settlement. Native creation allocates the skill file exclusively and writes only while it remains empty. Saved-profile SSH creation captures its project and profile before awaiting work and holds one helper lease through parent creation, exclusive file allocation and the guarded write. Personal skills remain on the native home filesystem. Retirement does not acknowledge cancellation of admitted IO or roll back created directories or an empty file. Legacy remote routing retains its existing transport behavior with caller lifetime guards.
 
+The skills settings catalog, row actions and preview-copy feedback retain their original presentation lifetime. Project changes, catalog refreshes and replaced metadata retire old rows; collapsing a preview retires pending preview reads and content-copy delivery. Pending catalog, preview and external actions share a 256-request budget until settlement, including retired work. Clipboard callers may supply a lifetime guard checked before each native, browser or DOM fallback and after asynchronous writes. Retirement prevents later fallbacks and UI acknowledgement without undoing writes already admitted. Native skill discovery remains unchanged.
+
 ### PTY shell integration
 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:
