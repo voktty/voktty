@@ -4,6 +4,8 @@ import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
+import { rememberRemoteProject } from "@/modules/connections/model/remoteProjects";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 
 const { invoke, listen, platform } = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -102,6 +104,43 @@ function attachmentCount() {
   return container.querySelectorAll('button[aria-label^="Remove "]').length;
 }
 
+async function holdDropAndSend(props: Partial<ComposerProps> = {}) {
+  let finish!: () => void;
+  let fail!: () => void;
+  invoke.mockImplementation((command: string) => {
+    if (command === "inspect_paths") {
+      return new Promise((resolve, reject) => {
+        finish = () =>
+          resolve([
+            {
+              path: "/project/image.png",
+              name: "image.png",
+              size: 12,
+              isDir: false,
+            },
+          ]);
+        fail = () => reject(new Error("fixture inspection failed"));
+      });
+    }
+    return Promise.resolve("aW1hZ2U=");
+  });
+  await render({ initialDraft: "original", ...props });
+  await nativeDrop(["/project/image.png"]);
+  await act(async () => {
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+      ?.click();
+  });
+  expect(submitSpy).not.toHaveBeenCalled();
+  return async (failed = false) => {
+    await act(async () => {
+      if (failed) fail();
+      else finish();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  };
+}
+
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   platform.isWin = false;
@@ -142,6 +181,128 @@ afterEach(async () => {
 });
 
 describe("Composer file drops", () => {
+  it("does not send a replacement draft after a pending drop finishes", async () => {
+    const finish = await holdDropAndSend();
+    const textarea = container.querySelector("textarea");
+    if (!textarea) throw new Error("Composer textarea was not rendered");
+    await act(async () => {
+      textarea.value = "replacement";
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await finish();
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("replacement");
+    expect(attachmentCount()).toBe(1);
+  });
+
+  it("keeps a draft roundtrip retired even when input events share one commit", async () => {
+    const finish = await holdDropAndSend();
+    const textarea = container.querySelector("textarea");
+    if (!textarea) throw new Error("Composer textarea was not rendered");
+    await act(async () => {
+      for (const value of ["replacement", "original"]) {
+        textarea.value = value;
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+    await finish();
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("original");
+  });
+
+  it("lets a new context submit without waiting for its predecessor's drop", async () => {
+    const finish = await holdDropAndSend();
+    await render({ initialDraft: "original", executionCwd: "/replacement" });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+        ?.click();
+    });
+    expect(submitSpy).toHaveBeenCalledWith("original", [], undefined);
+    await finish();
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(attachmentCount()).toBe(0);
+  });
+
+  it("does not submit or retain attachments when unmounted during the wait", async () => {
+    const finish = await holdDropAndSend();
+    await act(async () => root.unmount());
+    mounted = false;
+    await finish();
+    expect(submitSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not silently submit without a dropped file whose read fails", async () => {
+    const finish = await holdDropAndSend();
+    await finish(true);
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(container.querySelector("textarea")?.value).toBe("original");
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  it("coalesces repeated Send clicks during the same drop wait", async () => {
+    const finish = await holdDropAndSend();
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+        ?.click();
+    });
+    await finish();
+    expect(submitSpy).toHaveBeenCalledOnce();
+  });
+
+  it("uses the original submission callback after an ordinary rerender", async () => {
+    const finish = await holdDropAndSend();
+    const replacement = vi.fn();
+    await render({ initialDraft: "original", onSubmit: replacement });
+    await finish();
+    expect(replacement).not.toHaveBeenCalled();
+    expect(submitSpy).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { executionCwd: "/replacement" },
+    { cwd: "/replacement" },
+    { enabled: false },
+    { harness: "claude" as const },
+    { model: "replacement" },
+  ])(
+    "retires the pending submission after a context roundtrip: %j",
+    async (changed) => {
+      const finish = await holdDropAndSend();
+      await render({ initialDraft: "original", ...changed });
+      await render({ initialDraft: "original" });
+      await finish();
+      expect(submitSpy).not.toHaveBeenCalled();
+      expect(container.querySelector("textarea")?.value).toBe("original");
+    },
+  );
+
+  it("does not adopt a saved SSH profile after a connection roundtrip", async () => {
+    const cwd = "remote://voktty-ssh-fixture/srv/project";
+    const profile = {
+      id: "fixture",
+      name: "Fixture",
+      host: "original.invalid",
+    };
+    rememberRemoteProject("voktty-ssh-fixture", {
+      id: "project",
+      name: "Project",
+      cwd: "/srv/project",
+    });
+    usePreferencesStore.setState({ sshConnections: [profile] });
+    try {
+      const finish = await holdDropAndSend({ executionCwd: cwd });
+      usePreferencesStore.setState({ sshConnections: [] });
+      usePreferencesStore.setState({ sshConnections: [profile] });
+      await finish();
+      expect(submitSpy).not.toHaveBeenCalled();
+    } finally {
+      usePreferencesStore.setState({ sshConnections: [] });
+      localStorage.clear();
+    }
+  });
+
   it("explains native image drops without paths and accepts the DOM fallback", async () => {
     const session = await render();
 

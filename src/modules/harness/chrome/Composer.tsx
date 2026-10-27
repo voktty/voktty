@@ -44,6 +44,7 @@ import { dragPointToClient } from "../lib/dragPoint";
 import type { ContextUsage } from "../lib/contextUsage";
 import { recentOpenedFiles } from "../lib/fileIndex";
 import { useProjectFileCatalog } from "@/modules/harness/lib/useProjectFileCatalog";
+import { captureRemotePromptSource } from "@/modules/harness/lib/promptSource";
 import {
   buildMentionIndex,
   fileMentionParts,
@@ -223,6 +224,7 @@ type Props = {
 };
 
 const NO_PROJECT_FILES: ProjectFile[] = [];
+const NO_MODEL_SETTINGS: Record<string, string> = {};
 
 function MessageQueue({
   messages,
@@ -429,7 +431,7 @@ export function Composer({
   shell = false,
   harness,
   model,
-  modelSettings = {},
+  modelSettings = NO_MODEL_SETTINGS,
   runtimeMode,
   networkSandbox,
   cwd = "~",
@@ -489,15 +491,19 @@ export function Composer({
   const borrowedAttachmentIdsRef = useRef(new Set<string>());
   const draftRevisionRef = useRef(0);
   const dropReadGenerationRef = useRef(0);
+  const dropReadFailureRevisionRef = useRef(0);
   const dropReadFlightsRef = useRef(new Set<Promise<void>>());
   const dropReadWaitersRef = useRef(new Set<() => void>());
-  const submitWaitingForDropsRef = useRef(false);
-  const submitRef = useRef<((value: string) => void) | undefined>(undefined);
-  const invalidateDropReads = useCallback(() => {
-    dropReadGenerationRef.current += 1;
+  const submitWaitingForDropsRef = useRef<object | null>(null);
+  const wakeDropReadWaiters = useCallback(() => {
     for (const wake of dropReadWaitersRef.current) wake();
     dropReadWaitersRef.current.clear();
   }, []);
+  const invalidateDropReads = useCallback(() => {
+    dropReadGenerationRef.current += 1;
+    dropReadFlightsRef.current.clear();
+    wakeDropReadWaiters();
+  }, [wakeDropReadWaiters]);
   const consumedQuoteId = useRef<number | null>(null);
   const positionedInitialDraft = useRef(false);
   const slashRef = useRef<SlashToken | null>(null);
@@ -564,6 +570,68 @@ export function Composer({
   const [mcpError, setMcpError] = useState("");
   const [selectedMcp, setSelectedMcp] = useState<McpTag[]>([]);
   const mcpInsertAt = useRef<number | null>(null);
+
+  const dropOwner = useMemo(
+    () => ({ enabled, cwd, executionCwd, harness }),
+    [enabled, cwd, executionCwd, harness],
+  );
+  useLayoutEffect(() => {
+    if (!dropOwner.enabled) invalidateDropReads();
+    return invalidateDropReads;
+  }, [dropOwner, invalidateDropReads]);
+
+  const submitOwner = useMemo(
+    () => ({
+      enabled,
+      cwd,
+      executionCwd,
+      harness,
+      model,
+      modelSettings,
+      runtimeMode,
+      networkSandbox,
+      draft,
+      initialDraft,
+      inboxCard,
+      noteCard,
+      handoffCard,
+      question,
+      selectedMcp,
+      selectedComponent,
+      resendEdited,
+      draftSelected,
+      canSaveDraft,
+      current: false,
+    }),
+    [
+      enabled,
+      cwd,
+      executionCwd,
+      harness,
+      model,
+      modelSettings,
+      runtimeMode,
+      networkSandbox,
+      draft,
+      initialDraft,
+      inboxCard,
+      noteCard,
+      handoffCard,
+      question,
+      selectedMcp,
+      selectedComponent,
+      resendEdited,
+      draftSelected,
+      canSaveDraft,
+    ],
+  );
+  useLayoutEffect(() => {
+    submitOwner.current = submitOwner.enabled;
+    return () => {
+      submitOwner.current = false;
+      wakeDropReadWaiters();
+    };
+  }, [submitOwner, wakeDropReadWaiters]);
 
   const pickerOpen = creatingSkill || slash !== null || mcpPickerOpen;
   const skillCatalog = useComposerSkills({
@@ -764,6 +832,7 @@ export function Composer({
             return;
           }
           if (incoming.length === 0) {
+            dropReadFailureRevisionRef.current += 1;
             setDropError(fileDropStateRef.current.errors.failed);
             return;
           }
@@ -771,6 +840,7 @@ export function Composer({
         })
         .catch(() => {
           if (generation === dropReadGenerationRef.current) {
+            dropReadFailureRevisionRef.current += 1;
             setDropError(fileDropStateRef.current.errors.failed);
           }
         });
@@ -1283,36 +1353,57 @@ export function Composer({
     ref.current?.focus();
   }, [focused, question, busy, focusToken]);
 
-  const submit = (value: string) => {
+  const submit = (value: string): void => {
     if (submitWaitingForDropsRef.current) return;
     const pendingDrops = [...dropReadFlightsRef.current];
     if (pendingDrops.length > 0) {
       const generation = dropReadGenerationRef.current;
-      submitWaitingForDropsRef.current = true;
+      const failureRevision = dropReadFailureRevisionRef.current;
+      const revision = draftRevisionRef.current;
+      const textarea = ref.current;
+      const originalAttachments = attachmentsRef.current;
+      const component = useLiveComponentStore.getState().selectedComponent;
+      const source = captureRemotePromptSource(executionCwd);
+      const receipt = {};
+      submitWaitingForDropsRef.current = receipt;
+      const isCurrent = () =>
+        submitOwner.current &&
+        generation === dropReadGenerationRef.current &&
+        failureRevision === dropReadFailureRevisionRef.current &&
+        revision === draftRevisionRef.current &&
+        originalAttachments.every((file) =>
+          attachmentsRef.current.includes(file),
+        ) &&
+        ref.current === textarea &&
+        textarea?.value === value &&
+        component === useLiveComponentStore.getState().selectedComponent &&
+        (!source || source.isCurrent());
       void (async () => {
-        while (
-          generation === dropReadGenerationRef.current &&
-          dropReadFlightsRef.current.size > 0
-        ) {
-          const pending = [...dropReadFlightsRef.current];
-          await new Promise<void>((resolve) => {
-            let settled = false;
-            const wake = () => {
-              if (settled) return;
-              settled = true;
-              dropReadWaitersRef.current.delete(wake);
-              resolve();
-            };
-            dropReadWaitersRef.current.add(wake);
-            void Promise.all(pending).then(wake);
-          });
+        try {
+          while (isCurrent() && dropReadFlightsRef.current.size > 0) {
+            const pending = [...dropReadFlightsRef.current];
+            await new Promise<void>((resolve) => {
+              let settled = false;
+              const wake = () => {
+                if (settled) return;
+                settled = true;
+                dropReadWaitersRef.current.delete(wake);
+                resolve();
+              };
+              dropReadWaitersRef.current.add(wake);
+              void Promise.all(pending).then(wake);
+            });
+          }
+          if (!isCurrent()) return;
+          if (submitWaitingForDropsRef.current === receipt)
+            submitWaitingForDropsRef.current = null;
+          submit(value);
+        } finally {
+          if (submitWaitingForDropsRef.current === receipt)
+            submitWaitingForDropsRef.current = null;
+          source?.release();
         }
-      })().then(() => {
-        submitWaitingForDropsRef.current = false;
-        if (generation !== dropReadGenerationRef.current || !ref.current)
-          return;
-        submitRef.current?.(ref.current.value);
-      });
+      })();
       return;
     }
 
@@ -1437,7 +1528,6 @@ export function Composer({
     setCreateError(null);
     syncHasValue("", []);
   };
-  submitRef.current = submit;
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isImeComposition(e.nativeEvent)) return;
@@ -1873,6 +1963,8 @@ export function Composer({
               onSelect={(e) => syncTokensFromTextarea(e.currentTarget)}
               onInput={(e) => {
                 const el = e.currentTarget;
+                draftRevisionRef.current += 1;
+                wakeDropReadWaiters();
                 resizeComposer(el);
                 setDraft(el.value);
                 setSelectedMcp((current) => {
