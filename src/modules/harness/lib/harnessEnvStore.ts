@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { SshConnection } from "@/modules/ssh";
-import { closeRemoteWorkspace } from "@/modules/remote/client";
 import { remoteSessions } from "@/modules/remote/sessionManager";
 import {
   isRemoteSessionAdmissionError,
@@ -49,7 +48,7 @@ type HarnessEnvState = HarnessProjectEnvironment & {
     targetRoot?: string,
     projectId?: string,
   ) => Promise<HarnessRemoteEnv>;
-  disconnect: (projectId?: string) => Promise<void>;
+  disconnect: (projectId: string) => Promise<void>;
   disconnectProfiles: (profileIds: ReadonlySet<string>) => Promise<void>;
   disconnectAll: () => Promise<void>;
   reconnect: (
@@ -58,7 +57,6 @@ type HarnessEnvState = HarnessProjectEnvironment & {
     projectId?: string,
   ) => Promise<HarnessRemoteEnv>;
   selectProject: (projectId: string | null) => void;
-  setEnv: (env: HarnessRemoteEnv) => void;
 };
 
 const LOCAL_ENV: HarnessRemoteEnv = { kind: "local" };
@@ -329,20 +327,6 @@ async function connectProject(
   return operation ?? consume(source);
 }
 
-async function releaseLegacyEnvironment(env: HarnessRemoteEnv): Promise<void> {
-  const current = useHarnessProjectEnvStore.getState();
-  if (current.projectId === null && current.env === env) {
-    useHarnessProjectEnvStore.getState().selectProject(null);
-  }
-  if (env.kind !== "ssh" || env.sessionId === undefined) return;
-  const sessionId = env.sessionId;
-  if (
-    !remoteSessions.snapshot().some((entry) => entry.sessionId === sessionId)
-  ) {
-    await closeRemoteWorkspace(sessionId);
-  }
-}
-
 async function disconnectOwners(ids: string[]): Promise<void> {
   const owners = new Set(ids);
   const captured = useHarnessProjectEnvStore.getState().projects;
@@ -381,17 +365,17 @@ async function disconnectOwners(ids: string[]): Promise<void> {
   }
 }
 
-async function disconnectProject(projectId?: string): Promise<void> {
-  const selected = useHarnessProjectEnvStore.getState();
-  const id = projectId ?? selected.projectId;
-  if (id !== null) {
-    const owners = projectEnvironmentOwnerIds(id, selected.projects);
-    await disconnectOwners(owners.length ? owners : [id]);
-    return;
+async function disconnectProject(projectId: string): Promise<void> {
+  if (
+    typeof projectId !== "string" ||
+    !projectId.trim() ||
+    projectId.length > 65536
+  ) {
+    throw new Error("The project identity is invalid.");
   }
-  // The breadcrumb still supplies unpooled environments through setEnv until
-  // its lease migration. Never close an id owned by another pooled consumer.
-  await releaseLegacyEnvironment(selected.env);
+  const projects = useHarnessProjectEnvStore.getState().projects;
+  const owners = projectEnvironmentOwnerIds(projectId, projects);
+  await disconnectOwners(owners.length ? owners : [projectId]);
 }
 
 export const useHarnessProjectEnvStore = create<HarnessEnvState>(
@@ -427,38 +411,15 @@ export const useHarnessProjectEnvStore = create<HarnessEnvState>(
         error: report.error,
       });
     },
-    setEnv: (env) => {
-      const managed =
-        env.kind === "ssh"
-          ? Object.entries(get().projects).find(
-              ([, project]) =>
-                project.env.kind === "ssh" &&
-                project.env.sessionId === env.sessionId &&
-                project.env.connection.id === env.connection.id,
-            )?.[0]
-          : undefined;
-      if (managed) get().selectProject(managed);
-      else set({ projectId: null, env, connecting: false, error: null });
-    },
     disconnectProfiles: async (profileIds) => {
       const ids = [...profiles.entries()]
         .filter(([, profile]) => profileIds.has(profile.id))
         .map(([ownerId]) => ownerId);
-      const selected = get();
-      const external =
-        selected.projectId === null &&
-        selected.env.kind === "ssh" &&
-        profileIds.has(selected.env.connection.id);
       await disconnectOwners(ids);
-      if (external) await releaseLegacyEnvironment(selected.env);
     },
     disconnectAll: async () => {
-      const selected = get();
-      const external =
-        selected.projectId === null && selected.env.kind === "ssh";
       const ids = [...profiles.keys()];
       await disconnectOwners(ids);
-      if (external) await releaseLegacyEnvironment(selected.env);
     },
   }),
 );

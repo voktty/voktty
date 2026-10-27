@@ -73,7 +73,9 @@ it("keeps the session open while connected and closes it on disconnect", async (
     async () => undefined,
   );
   expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
-  await useHarnessEnvStore.getState().disconnect();
+  await useHarnessEnvStore
+    .getState()
+    .disconnect(harnessProjectEnvironmentId("p1", "/srv/app"));
   expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(5);
   expect(useHarnessEnvStore.getState().env).toEqual({ kind: "local" });
 });
@@ -103,16 +105,73 @@ it("reports a failed connection without leaving a half-open environment", async 
     error: "auth failed",
   });
 });
-it("closes a session set from outside the pool when disconnecting", async () => {
-  useHarnessEnvStore.getState().setEnv({
-    kind: "ssh",
-    connection: profile as never,
-    root: "/srv/app",
-    sessionId: 42,
+it("cannot close an unowned native session through a project disconnect", async () => {
+  useHarnessEnvStore.setState({
+    env: {
+      kind: "ssh",
+      connection: profile as never,
+      root: "/srv/app",
+      sessionId: 42,
+    },
   });
-  await useHarnessEnvStore.getState().disconnect();
-  expect(mocks.closeRemoteWorkspace).toHaveBeenCalledWith(42);
+  await useHarnessEnvStore
+    .getState()
+    .disconnect(harnessProjectEnvironmentId("p1", "/srv/app"));
+  expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
 });
+
+it.each([undefined, null, 42, "", " ", "a".repeat(65537)])(
+  "rejects an invalid disconnect target without touching live projects (%#)",
+  async (target) => {
+    mocks.openRemoteWorkspace
+      .mockResolvedValueOnce(info(10, "/a"))
+      .mockResolvedValueOnce(info(20, "/b"));
+    await useHarnessEnvStore.getState().connect(profile as never, "/a");
+    await useHarnessEnvStore.getState().connect(profile as never, "/b");
+    const projects = useHarnessEnvStore.getState().projects;
+    const pool = remoteSessions.snapshot();
+    await expect(
+      useHarnessEnvStore.getState().disconnect(target as never),
+    ).rejects.toThrow("The project identity is invalid.");
+    expect(useHarnessEnvStore.getState().projects).toEqual(projects);
+    expect(remoteSessions.snapshot()).toEqual(pool);
+    expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["profile", "all"])(
+  "limits %s cleanup to registered project owners",
+  async (scope) => {
+    await useHarnessEnvStore.getState().connect(profile as never, "/srv/app");
+    mocks.openRemoteWorkspace.mockResolvedValueOnce(info(7, "/borrowed"));
+    const borrowed = await remoteSessions.acquire(
+      { profileId: "other", root: "/borrowed" },
+      { host: "other.test", port: 22 },
+    );
+    try {
+      useHarnessEnvStore.setState({
+        projectId: null,
+        env: {
+          kind: "ssh",
+          connection: profile as never,
+          root: "/unowned",
+          sessionId: 42,
+        },
+      });
+      if (scope === "profile")
+        await useHarnessEnvStore
+          .getState()
+          .disconnectProfiles(new Set([profile.id]));
+      else await useHarnessEnvStore.getState().disconnectAll();
+      expect(mocks.closeRemoteWorkspace).toHaveBeenCalledExactlyOnceWith(5);
+      expect(remoteSessions.snapshot()).toEqual([
+        expect.objectContaining({ sessionId: 7, leases: 1 }),
+      ]);
+    } finally {
+      borrowed.release();
+    }
+  },
+);
 
 it("retains both remote projects and closes only the requested one", async () => {
   mocks.openRemoteWorkspace
@@ -226,7 +285,9 @@ it("reconnects a shared root without releasing another consumer's lease", async 
     await useHarnessEnvStore.getState().reconnect(profile as never, "/srv/app");
     expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
     expect(remoteSessions.snapshot()[0].leases).toBe(2);
-    await useHarnessEnvStore.getState().disconnect();
+    await useHarnessEnvStore
+      .getState()
+      .disconnect(harnessProjectEnvironmentId("p1", "/srv/app"));
     expect(remoteSessions.snapshot()[0].leases).toBe(1);
     expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
   } finally {
@@ -268,7 +329,9 @@ it("never falls back or resurrects a project after disconnect during connect", a
     .connect(profile as never, "/pending");
   const rejected = expect(connecting).rejects.toThrow("cancelled");
   for (let index = 0; index < 8; index += 1) await Promise.resolve();
-  await useHarnessEnvStore.getState().disconnect();
+  await useHarnessEnvStore
+    .getState()
+    .disconnect(harnessProjectEnvironmentId("p1", "/pending"));
   finish(info(12, "/pending"));
   await rejected;
   expect(mocks.openRemoteWorkspace).toHaveBeenCalledTimes(1);
@@ -358,19 +421,23 @@ it("keeps an admitted connection valid when a force replacement exceeds capacity
   );
 });
 
-it("never closes a borrowed pooled id supplied through the legacy setter", async () => {
+it("never closes a borrowed pooled id without a matching project owner", async () => {
   const other = await remoteSessions.acquire(
     { profileId: "p1", root: "/srv/app" },
     { host: "example.test", port: 22 },
   );
   try {
-    useHarnessEnvStore.getState().setEnv({
-      kind: "ssh",
-      connection: profile as never,
-      root: "/srv/app",
-      sessionId: 5,
+    useHarnessEnvStore.setState({
+      env: {
+        kind: "ssh",
+        connection: profile as never,
+        root: "/srv/app",
+        sessionId: 5,
+      },
     });
-    await useHarnessEnvStore.getState().disconnect();
+    await useHarnessEnvStore
+      .getState()
+      .disconnect(harnessProjectEnvironmentId("p1", "/srv/app"));
     expect(mocks.closeRemoteWorkspace).not.toHaveBeenCalled();
     expect(remoteSessions.snapshot()[0].leases).toBe(1);
   } finally {

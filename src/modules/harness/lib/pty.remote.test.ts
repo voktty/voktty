@@ -563,11 +563,13 @@ describe("Harness remote terminals", () => {
 
   it("does not adopt an ownerless selected environment for an unsaved profile", async () => {
     mocks.sshConnections = [];
-    useHarnessProjectEnvStore.getState().setEnv({
-      kind: "ssh",
-      connection: profile,
-      root: "/srv/app",
-      sessionId: 42,
+    useHarnessProjectEnvStore.setState({
+      env: {
+        kind: "ssh",
+        connection: profile,
+        root: "/srv/app",
+        sessionId: 42,
+      },
     });
     await expect(
       spawnPty("ownerless-profile", projectPath, 80, 24),
