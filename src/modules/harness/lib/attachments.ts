@@ -157,8 +157,8 @@ export function mergeAttachments(
         item.id === file.id,
     );
     if (duplicate) continue;
-    next.push(file);
     if (next.length >= MAX_ATTACHMENTS) break;
+    next.push(file);
   }
   return next;
 }
@@ -211,28 +211,77 @@ function dropMacScreenshotTwins(files: File[]): File[] {
   return files.filter((file) => !unnamedTiff(file));
 }
 
-export async function pickAttachments(): Promise<Attachment[]> {
-  const paths = await pickFilePaths();
-  if (!paths?.length) return [];
-  return attachmentsFromPaths(paths);
+let pendingIntakes = 0;
+
+async function runIntake(
+  assertCurrent: () => void,
+  read: () => Promise<Attachment[]>,
+): Promise<Attachment[]> {
+  assertCurrent();
+  if (pendingIntakes >= 256)
+    throw new Error("Attachment intake capacity exceeded.");
+  pendingIntakes++;
+  let files: Attachment[] | undefined;
+  try {
+    files = await read();
+    assertCurrent();
+    return files;
+  } catch (error) {
+    files?.forEach(revokeAttachment);
+    assertCurrent();
+    throw error;
+  } finally {
+    pendingIntakes--;
+  }
+}
+
+export async function pickAttachments(
+  assertCurrent: () => void = () => {},
+): Promise<Attachment[]> {
+  return runIntake(assertCurrent, async () => {
+    const paths = await pickFilePaths("Attach files", assertCurrent);
+    assertCurrent();
+    if (!paths?.length) return [];
+    return readPaths(paths, assertCurrent);
+  });
 }
 
 export async function attachmentsFromPaths(
   paths: string[],
+  assertCurrent: () => void = () => {},
 ): Promise<Attachment[]> {
+  return runIntake(assertCurrent, () => readPaths(paths, assertCurrent));
+}
+
+async function readPaths(
+  paths: string[],
+  assertCurrent: () => void,
+): Promise<Attachment[]> {
+  assertCurrent();
   const unique = [...new Set(paths.filter((path) => path.trim()))];
   if (unique.length === 0) return [];
   const infos = await invoke<PathInfo[]>("inspect_paths", { paths: unique });
+  assertCurrent();
   const out: Attachment[] = [];
   for (const info of infos) {
-    const file = await attachmentFromPath(info);
+    assertCurrent();
+    const file = await attachmentFromPath(info, assertCurrent);
     if (file) out.push(file);
   }
+  assertCurrent();
   return out;
 }
 
 export async function attachmentsFromFiles(
   files: File[],
+  assertCurrent: () => void = () => {},
+): Promise<Attachment[]> {
+  return runIntake(assertCurrent, () => readFiles(files, assertCurrent));
+}
+
+async function readFiles(
+  files: File[],
+  assertCurrent: () => void,
 ): Promise<Attachment[]> {
   const out: Attachment[] = [];
   const pathFiles: string[] = [];
@@ -242,14 +291,20 @@ export async function attachmentsFromFiles(
     if (path) pathFiles.push(path);
     else blobs.push(file);
   }
-  if (pathFiles.length) {
-    out.push(...(await attachmentsFromPaths(pathFiles)));
+  try {
+    if (pathFiles.length)
+      out.push(...(await readPaths(pathFiles, assertCurrent)));
+    for (const file of blobs) {
+      assertCurrent();
+      const item = await attachmentFromBlob(file, assertCurrent);
+      if (item) out.push(item);
+    }
+    assertCurrent();
+    return out;
+  } catch (error) {
+    out.forEach(revokeAttachment);
+    throw error;
   }
-  for (const file of blobs) {
-    const item = await attachmentFromBlob(file);
-    if (item) out.push(item);
-  }
-  return out;
 }
 
 export async function prepareAttachments(
@@ -329,7 +384,11 @@ function contentBlockFor(file: Attachment): PromptContentBlock {
   };
 }
 
-async function attachmentFromPath(info: PathInfo): Promise<Attachment | null> {
+async function attachmentFromPath(
+  info: PathInfo,
+  assertCurrent: () => void,
+): Promise<Attachment | null> {
+  assertCurrent();
   if (skipName(info.name)) return null;
   const mimeType = info.isDir ? FOLDER_MIME : mimeFromName(info.name);
   const kind = kindFromMime(mimeType);
@@ -349,48 +408,60 @@ async function attachmentFromPath(info: PathInfo): Promise<Attachment | null> {
     try {
       file.data = await invoke<string>("read_file_base64", { path: info.path });
     } catch {
+      assertCurrent();
       // Fall back to a resource_link so the agent can still read the file.
     }
   }
+  assertCurrent();
   return file;
 }
 
-async function attachmentFromBlob(file: File): Promise<Attachment | null> {
+async function attachmentFromBlob(
+  file: File,
+  assertCurrent: () => void,
+): Promise<Attachment | null> {
+  assertCurrent();
   if (skipName(file.name) || file.size < 0) return null;
   const mimeType = mimeFromFile(file);
   const kind = kindFromMime(mimeType);
   const name = file.name.trim() || fallbackName(mimeType);
   const previewUrl = kind === "image" ? URL.createObjectURL(file) : undefined;
-  const data = await readBlobBase64(file);
-  if (kind === "image" && isVisionImage(mimeType) && data) {
-    return {
-      id: crypto.randomUUID(),
-      name,
-      mimeType: normalizeImageMime(mimeType),
-      kind,
-      size: file.size,
-      data,
-      previewUrl,
-    };
-  }
-  if (data === null) {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    return null;
-  }
+  let delivered = false;
   try {
-    const path = await invoke<string>("write_attachment", { name, data });
-    return {
-      id: crypto.randomUUID(),
-      name,
-      mimeType,
-      kind,
-      size: file.size,
-      path,
-      previewUrl,
-    };
-  } catch {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    return null;
+    const data = await readBlobBase64(file);
+    assertCurrent();
+    if (kind === "image" && isVisionImage(mimeType) && data) {
+      delivered = true;
+      return {
+        id: crypto.randomUUID(),
+        name,
+        mimeType: normalizeImageMime(mimeType),
+        kind,
+        size: file.size,
+        data,
+        previewUrl,
+      };
+    }
+    if (data === null) return null;
+    try {
+      const path = await invoke<string>("write_attachment", { name, data });
+      assertCurrent();
+      delivered = true;
+      return {
+        id: crypto.randomUUID(),
+        name,
+        mimeType,
+        kind,
+        size: file.size,
+        path,
+        previewUrl,
+      };
+    } catch {
+      assertCurrent();
+      return null;
+    }
+  } finally {
+    if (!delivered && previewUrl) URL.revokeObjectURL(previewUrl);
   }
 }
 

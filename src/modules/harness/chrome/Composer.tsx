@@ -570,12 +570,16 @@ export function Composer({
   const mcpInsertAt = useRef<number | null>(null);
 
   const dropOwner = useMemo(
-    () => ({ enabled, cwd, executionCwd, harness }),
+    () => ({ enabled, cwd, executionCwd, harness, current: false }),
     [enabled, cwd, executionCwd, harness],
   );
   useLayoutEffect(() => {
+    dropOwner.current = dropOwner.enabled;
     if (!dropOwner.enabled) invalidateDropReads();
-    return invalidateDropReads;
+    return () => {
+      dropOwner.current = false;
+      invalidateDropReads();
+    };
   }, [dropOwner, invalidateDropReads]);
 
   const submitOwner = useMemo(
@@ -826,6 +830,9 @@ export function Composer({
     (incoming: Attachment[]) => {
       if (!harnessSupportsAttachments(harness) || incoming.length === 0) return;
       const next = mergeAttachments(attachmentsRef.current, incoming);
+      for (const file of incoming) {
+        if (!next.includes(file)) revokeAttachment(file);
+      }
       attachmentsRef.current = next;
       setAttachments(next);
       setDropError(null);
@@ -836,6 +843,7 @@ export function Composer({
   );
 
   const fileDropStateRef = useRef({
+    owner: dropOwner,
     attachmentsSupported,
     addAttachments,
     errors: {
@@ -844,6 +852,7 @@ export function Composer({
     },
   });
   fileDropStateRef.current = {
+    owner: dropOwner,
     attachmentsSupported,
     addAttachments,
     errors: {
@@ -853,12 +862,26 @@ export function Composer({
   };
 
   const readDroppedAttachments = useCallback(
-    (read: () => Promise<Attachment[]>) => {
+    (
+      read: (assertCurrent: () => void) => Promise<Attachment[]>,
+      allowEmpty = false,
+      owner = fileDropStateRef.current.owner,
+    ) => {
+      if (!owner.current) return;
       const generation = dropReadGenerationRef.current;
+      const assertCurrent = () => {
+        if (
+          !owner.current ||
+          generation !== dropReadGenerationRef.current ||
+          !fileDropStateRef.current.attachmentsSupported
+        )
+          throw new DOMException("Attachment intake was retired.", "AbortError");
+      };
       setDropError(null);
-      const flight = read()
+      const flight = read(assertCurrent)
         .then((incoming) => {
           if (
+            !owner.current ||
             generation !== dropReadGenerationRef.current ||
             !fileDropStateRef.current.attachmentsSupported
           ) {
@@ -866,6 +889,7 @@ export function Composer({
             return;
           }
           if (incoming.length === 0) {
+            if (allowEmpty) return;
             dropReadFailureRevisionRef.current += 1;
             setDropError(fileDropStateRef.current.errors.failed);
             return;
@@ -873,7 +897,7 @@ export function Composer({
           fileDropStateRef.current.addAttachments(incoming);
         })
         .catch(() => {
-          if (generation === dropReadGenerationRef.current) {
+          if (owner.current && generation === dropReadGenerationRef.current) {
             dropReadFailureRevisionRef.current += 1;
             setDropError(fileDropStateRef.current.errors.failed);
           }
@@ -1276,7 +1300,7 @@ export function Composer({
       if (Date.now() - nativeDropAt < 250) return;
       const files = filesFromClipboard(data);
       if (files.length === 0) return;
-      readDroppedAttachments(() => attachmentsFromFiles(files));
+      readDroppedAttachments((guard) => attachmentsFromFiles(files, guard));
     };
 
     const onExplorerFilePointerDrag = (event: Event) => {
@@ -1294,7 +1318,9 @@ export function Composer({
       }
       setFileDrag(false);
       if (!over || !supported) return;
-      readDroppedAttachments(() => attachmentsFromPaths([detail.path]));
+      readDroppedAttachments((guard) =>
+        attachmentsFromPaths([detail.path], guard),
+      );
     };
 
     const root = dropRoot();
@@ -1331,7 +1357,7 @@ export function Composer({
         }
         nativeDropAt = Date.now();
         const paths = event.payload.paths;
-        readDroppedAttachments(() => attachmentsFromPaths(paths));
+        readDroppedAttachments((guard) => attachmentsFromPaths(paths, guard));
       })
       .then((fn) => {
         if (cancelled) fn();
@@ -1670,6 +1696,7 @@ export function Composer({
   };
 
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!dropOwner.current) return;
     const messageFiles = messageFilesFromClipboard(e.clipboardData);
     if (messageFiles) {
       e.preventDefault();
@@ -1681,23 +1708,28 @@ export function Composer({
         "end",
       );
       el.dispatchEvent(new Event("input", { bubbles: true }));
-      if (attachmentsSupported)
-        void attachmentsFromFiles(messageFiles).then(addAttachments);
+      if (attachmentsSupported && messageFiles.length > 0)
+        readDroppedAttachments(
+          (guard) => attachmentsFromFiles(messageFiles, guard),
+          false,
+          dropOwner,
+        );
       return;
     }
     const files = filesFromClipboard(e.clipboardData);
     if (files.length === 0) return;
     e.preventDefault();
     if (!attachmentsSupported) return;
-    void attachmentsFromFiles(files).then(addAttachments);
+    readDroppedAttachments(
+      (guard) => attachmentsFromFiles(files, guard),
+      false,
+      dropOwner,
+    );
   };
 
   const attachFromPicker = () => {
     if (!attachmentsSupported) return;
-    void pickAttachments().then((files) => {
-      addAttachments(files);
-      ref.current?.focus();
-    });
+    readDroppedAttachments((guard) => pickAttachments(guard), true, dropOwner);
   };
 
   return (

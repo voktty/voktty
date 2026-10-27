@@ -427,13 +427,18 @@ export async function pickFolder(title = "Open project"): Promise<string | null>
   }
 }
 
-export async function pickFiles(title = "Attach files"): Promise<string[] | null> {
+export async function pickFiles(
+  title = "Attach files",
+  assertCurrent: () => void = () => {},
+): Promise<string[] | null> {
+  assertCurrent();
   try {
     const selected = await open({
       multiple: true,
       directory: false,
       title,
     });
+    assertCurrent();
     if (Array.isArray(selected)) {
       const paths = selected.filter((path): path is string => Boolean(path));
       if (paths.length > 0) return paths;
@@ -442,10 +447,13 @@ export async function pickFiles(title = "Attach files"): Promise<string[] | null
   } catch {
     // Fallback to Voktty native rust file picker
   }
+  assertCurrent();
   try {
     const fallback = await invoke<string | null>("fs_pick_file", {});
+    assertCurrent();
     return fallback ? [fallback] : null;
   } catch {
+    assertCurrent();
     return null;
   }
 }
