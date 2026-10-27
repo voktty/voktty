@@ -293,3 +293,165 @@ it.each(["send", "steer"] as const)(
     expect(mocks.index.mock.calls[0][2].host).toBe(profile.host);
   },
 );
+
+it.each(["replacement", "roundtrip"] as const)(
+  "does not steer a queued message after a profile %s",
+  async (change) => {
+    const engine = mount([chat("source", { cwd, busy: true })]);
+    await act(async () => {
+      engine().onSubmit("source", "@file.ts", [], {
+        followUpBehavior: "queue",
+      });
+    });
+    const message = engine().sessions[0].queuedMessages?.[0];
+    if (!message) throw new Error("Expected queued message");
+    await act(async () => {
+      usePreferencesStore.setState({
+        sshConnections: [{ ...profile, host: "replacement.invalid" }],
+      });
+      if (change === "roundtrip")
+        usePreferencesStore.setState({ sshConnections: [profile] });
+      engine().onSteerQueuedMessage("source", message.id);
+      await vi.dynamicImportSettled();
+    });
+    expect(mocks.steer).not.toHaveBeenCalled();
+    expect(mocks.index).not.toHaveBeenCalled();
+    expect(engine().sessions[0].queuedMessages?.[0]).toEqual(message);
+    expect(engine().sessions[0].queueStatus).toBe("paused");
+    expect(engine().sessions[0].busy).toBe(true);
+  },
+);
+
+it("pauses automatic dispatch without removing the retired queued head", async () => {
+  vi.useFakeTimers();
+  const engine = mount([chat("source", { cwd, busy: true })]);
+  await act(async () => {
+    engine().onSubmit("source", "@file.ts", [], { followUpBehavior: "queue" });
+    usePreferencesStore.setState({ sshConnections: [] });
+    engine().updateSession("source", (session) => ({
+      ...session,
+      busy: false,
+    }));
+  });
+  await act(async () => vi.advanceTimersByTime(0));
+  expect(engine().sessions[0].queueStatus).toBe("paused");
+  expect(engine().sessions[0].queuedMessages?.[0].text).toBe("@file.ts");
+  expect(mocks.prepareAttachments).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+
+it.each(["dispatch", "steer"] as const)(
+  "preserves a current queued source through %s and later preparation",
+  async (mode) => {
+    let finish!: (value: []) => void;
+    mocks.prepareAttachments.mockImplementationOnce(
+      () =>
+        new Promise<[]>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const engine = mount([chat("source", { cwd, busy: true })]);
+    await act(async () =>
+      engine().onSubmit("source", "@file.ts", [], {
+        followUpBehavior: "queue",
+      }),
+    );
+    const message = engine().sessions[0].queuedMessages?.[0];
+    if (!message) throw new Error("Expected queued message");
+    await act(async () => {
+      if (mode === "dispatch") {
+        engine().updateSession(
+          "source",
+          (session) => ({ ...session, busy: false }),
+          "immediate",
+        );
+        engine().onSubmit("source", message.text, message.attachments, {
+          queuedMessageId: message.id,
+        });
+      } else engine().onSteerQueuedMessage("source", message.id);
+    });
+    expect(mocks.prepareAttachments).toHaveBeenCalledOnce();
+    expect(engine().sessions[0].queuedMessages).toBeUndefined();
+    await act(async () => {
+      usePreferencesStore.setState({ sshConnections: [] });
+      usePreferencesStore.setState({ sshConnections: [profile] });
+      finish([]);
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.steer).not.toHaveBeenCalled();
+  },
+);
+
+it("sends an edited queued message through its original healthy source", async () => {
+  const engine = mount([chat("source", { cwd, busy: true })]);
+  await act(async () =>
+    engine().onSubmit("source", "before", [], { followUpBehavior: "queue" }),
+  );
+  const message = engine().sessions[0].queuedMessages?.[0];
+  if (!message) throw new Error("Expected queued message");
+  await act(async () =>
+    engine().onEditQueuedMessage("source", message.id, "@file.ts"),
+  );
+  await act(async () => {
+    engine().onSteerQueuedMessage("source", message.id);
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.steer).toHaveBeenCalledOnce();
+  expect(mocks.steer.mock.calls[0][0].text).toContain("src/file.ts");
+  expect(mocks.index.mock.calls[0][2].host).toBe(profile.host);
+});
+
+it("does not grant unknown remote queued provenance after session replacement", async () => {
+  const engine = mount([chat("source", { cwd, busy: true })]);
+  await act(async () =>
+    engine().onSubmit("source", "@file.ts", [], { followUpBehavior: "queue" }),
+  );
+  const original = engine().sessions[0];
+  const message = original.queuedMessages?.[0];
+  if (!message) throw new Error("Expected queued message");
+  await act(async () => {
+    engine().removeSession("source", "immediate");
+    engine().admitSession({ ...original }, "immediate");
+  });
+  await act(async () => engine().onSteerQueuedMessage("source", message.id));
+  expect(mocks.steer).not.toHaveBeenCalled();
+  expect(engine().sessions[0].queueStatus).toBe("paused");
+});
+
+it("rejects a cached queue submission after the engine unmounts", async () => {
+  const engine = mount([chat("source", { cwd, busy: true })]);
+  const original = engine();
+  act(() => {
+    for (const root of roots.splice(0)) root.unmount();
+  });
+  original.onSubmit("source", "late", [], { followUpBehavior: "queue" });
+  expect(original.sessionsRef.current[0].queuedMessages).toBeUndefined();
+  expect(mocks.steer).not.toHaveBeenCalled();
+});
+
+it("claims a queued steering request only once before React commits its removal", async () => {
+  let finish!: (value: []) => void;
+  mocks.prepareAttachments.mockImplementationOnce(
+    () =>
+      new Promise<[]>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const engine = mount([chat("source", { cwd, busy: true })]);
+  await act(async () =>
+    engine().onSubmit("source", "hello", [], { followUpBehavior: "queue" }),
+  );
+  const message = engine().sessions[0].queuedMessages?.[0];
+  if (!message) throw new Error("Expected queued message");
+  await act(async () => {
+    engine().onSteerQueuedMessage("source", message.id);
+    engine().onSteerQueuedMessage("source", message.id);
+  });
+  expect(mocks.prepareAttachments).toHaveBeenCalledOnce();
+  await act(async () => {
+    finish([]);
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.steer).toHaveBeenCalledOnce();
+  expect(engine().sessions[0].queuedMessages).toBeUndefined();
+});

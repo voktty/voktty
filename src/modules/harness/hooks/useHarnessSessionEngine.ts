@@ -93,6 +93,7 @@ import {
   planTurnPrompt,
 } from "@/modules/harness/lib/plan";
 import { preparePrompt } from "@/modules/harness/lib/promptPreparation";
+import { createQueuedPromptSources } from "@/modules/harness/lib/queuedPromptSources";
 import {
   captureRemotePromptSource,
   PromptSourceRetiredError,
@@ -168,6 +169,21 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
   }
   const editedResends = useRef(createEditedResendCoordinator()).current;
   const queueDispatchingRef = useRef<Set<string>>(new Set());
+  const [queuedSources] = useState(createQueuedPromptSources);
+  useEffect(() => {
+    if (queuedSources.size === 0) return;
+    const current = new Map<object, ReadonlySet<string>>();
+    for (const session of sessions) {
+      const owner = state.owners.get(session.id);
+      if (owner)
+        current.set(
+          owner,
+          new Set(session.queuedMessages?.map((item) => item.id)),
+        );
+    }
+    queuedSources.reconcile(current);
+  }, [queuedSources, sessions, state.owners]);
+  useEffect(() => () => queuedSources.clear(), [queuedSources]);
 
   const applySessionDeltas = useCallback(
     (
@@ -426,6 +442,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       },
     ) => {
       if (
+        executionLifetime.current === null ||
         inputsRef.current.isRemoving(sessionId) ||
         inputsRef.current.isSwitching(sessionId)
       )
@@ -451,6 +468,32 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         const mode =
           options.followUpBehavior === "steer" ? "steer" : "dispatch";
         if (!queuedMessageForSubmit(current, options.queuedMessageId, mode)) {
+          return;
+        }
+        const owner = owners.current.get(sessionId);
+        if (!owner) return;
+        try {
+          queuedSources.assertCurrent(
+            owner,
+            options.queuedMessageId,
+            sessionWorkCwd(current),
+          );
+        } catch (error) {
+          updateSession(sessionId, (session) =>
+            owners.current.get(sessionId) === owner &&
+            session.queuedMessages?.some(
+              (message) => message.id === options.queuedMessageId,
+            )
+              ? applyHarnessEvent(
+                  { ...session, queueStatus: "paused" },
+                  {
+                    type: "status",
+                    text:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                )
+              : session,
+          );
           return;
         }
       }
@@ -514,27 +557,42 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             ? "queue"
             : (options?.followUpBehavior ?? loadFollowUpBehavior());
         if (followUpBehavior === "queue") {
-          updateSessions([sessionId], (s) =>
-            s.id === sessionId
-              ? {
-                  ...s,
-                  inboxCard: undefined,
-                  noteCard: undefined,
-                  handoffCard: undefined,
-                  queuedMessages: [
-                    ...(s.queuedMessages ?? []),
-                    {
-                      id: crypto.randomUUID(),
-                      text,
-                      attachments,
-                      noteCard,
-                      handoffCard,
-                      intent,
-                    },
-                  ],
-                  queueStatus: s.queueStatus === "paused" ? "paused" : "active",
-                }
-              : s,
+          const owner = owners.current.get(sessionId);
+          if (!owner) return;
+          const id = crypto.randomUUID();
+          const message = structuredClone({
+            id,
+            text,
+            attachments,
+            noteCard,
+            handoffCard,
+            intent,
+          });
+          try {
+            queuedSources.capture(owner, id, workCwd);
+          } catch (error) {
+            enqueueHarnessEvent(sessionId, {
+              type: "status",
+              text: error instanceof Error ? error.message : String(error),
+            });
+            flushHarnessEvents();
+            return;
+          }
+          updateSessions(
+            [sessionId],
+            (s) =>
+              s.id === sessionId
+                ? {
+                    ...s,
+                    inboxCard: undefined,
+                    noteCard: undefined,
+                    handoffCard: undefined,
+                    queuedMessages: [...(s.queuedMessages ?? []), message],
+                    queueStatus:
+                      s.queueStatus === "paused" ? "paused" : "active",
+                  }
+                : s,
+            "immediate",
           );
           return;
         }
@@ -560,7 +618,14 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           executionLifetime.current === steerOwner.lifetime &&
           owners.current.get(sessionId) === steerOwner.session &&
           (turnGen.current.get(sessionId) ?? 0) === steerGeneration;
-        const promptSource = captureRemotePromptSource(workCwd);
+        const promptSource =
+          options?.queuedMessageId && steerOwner.session
+            ? queuedSources.take(
+                steerOwner.session,
+                options.queuedMessageId,
+                workCwd,
+              )
+            : captureRemotePromptSource(workCwd);
         const assertPreparationCurrent = () => {
           if (!steerIsCurrent()) throw new PromptSourceRetiredError();
           promptSource?.assertCurrent();
@@ -631,7 +696,14 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       };
       const gen = (turnGen.current.get(sessionId) ?? 0) + 1;
       turnGen.current.set(sessionId, gen);
-      const promptSource = captureRemotePromptSource(workCwd);
+      const promptSource =
+        options?.queuedMessageId && turnOwner.session
+          ? queuedSources.take(
+              turnOwner.session,
+              options.queuedMessageId,
+              workCwd,
+            )
+          : captureRemotePromptSource(workCwd);
       const assertPreparationCurrent = () => {
         if (!isCurrentTurn(sessionId, gen, turnOwner))
           throw new PromptSourceRetiredError();
@@ -1050,6 +1122,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       isCurrentTurn,
       editedResends.start,
       editedResends.finish,
+      queuedSources,
+      updateSession,
     ],
   );
 
