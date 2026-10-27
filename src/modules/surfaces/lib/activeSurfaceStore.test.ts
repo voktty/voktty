@@ -12,8 +12,6 @@ import {
 afterEach(() => {
   publishActiveSurface(null);
   useHarnessSurfaceStore.setState({
-    projectCwd: null,
-    focusFolder: null,
     reports: {},
   });
 });

@@ -9,7 +9,7 @@ import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDeskt
 import { publishHarnessFocusFolder, publishHarnessProject, useHarnessSurfaceStore } from "@/modules/surfaces/lib/harnessSurfaceStore";
 
 afterEach(() => {
-  useHarnessSurfaceStore.setState({ projectCwd: null, focusFolder: null, reports: {} });
+  useHarnessSurfaceStore.setState({ reports: {} });
   vi.unstubAllGlobals();
 });
 
@@ -59,8 +59,6 @@ it("projects only the selected owner into Explorer and canonical project metadat
     await act(async () => root.render(<StrictMode><Window activeId={3} /></StrictMode>));
     const count = renders;
     await act(async () => {
-      publishHarnessProject("/foreign-legacy");
-      publishHarnessFocusFolder("/foreign-legacy/src");
       publishHarnessFocusFolder("/background", 1);
     });
     expect(renders).toBe(count);
@@ -92,7 +90,7 @@ it("refuses to copy a selected report onto a replacement stable tab key", async 
   }
 });
 
-it("keeps ownerless legacy event cleanup and fallback selection bounded to the mounted adapter", async () => {
+it("keeps explicit project fallback selection after the event adapter is removed", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const root = createRoot(document.createElement("div"));
   let result: ReturnType<typeof useHarnessDesktopContext> | undefined;

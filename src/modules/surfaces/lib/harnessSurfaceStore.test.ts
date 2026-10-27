@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  HARNESS_CWD_CHANGE_EVENT,
-  HARNESS_FOCUS_FOLDER_EVENT,
-  installLegacyHarnessSurfaceEvents,
   publishHarnessFocusFolder,
   publishHarnessProject,
   removeHarnessSurface,
@@ -15,8 +12,6 @@ const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   useHarnessSurfaceStore.setState({
-    projectCwd: null,
-    focusFolder: null,
     reports: {},
   });
 });
@@ -25,10 +20,10 @@ const report = (ownerId: number) =>
   selectHarnessSurface(useHarnessSurfaceStore.getState(), ownerId);
 
 describe("harness surface store", () => {
-  it("stores legacy project and focus folders", () => {
-    publishHarnessProject("C:/repo");
-    publishHarnessFocusFolder("C:/repo/src");
-    expect(useHarnessSurfaceStore.getState()).toMatchObject({
+  it("stores project and focus folders under their explicit owner", () => {
+    publishHarnessProject("C:/repo", 1);
+    publishHarnessFocusFolder("C:/repo/src", 1);
+    expect(report(1)).toEqual({
       projectCwd: "C:/repo",
       focusFolder: "C:/repo/src",
     });
@@ -52,7 +47,7 @@ describe("harness surface store", () => {
       projectCwd: "C:/local",
       focusFolder: "C:/local/src",
     });
-    expect(useHarnessSurfaceStore.getState().projectCwd).toBeNull();
+    expect(useHarnessSurfaceStore.getState()).not.toHaveProperty("projectCwd");
   });
 
   it("restores the other owner's folder on focus switch without a new report", () => {
@@ -75,15 +70,14 @@ describe("harness surface store", () => {
     expect(report(2)).toBe(otherReport);
   });
 
-  it("never lets an owned view adopt an ownerless legacy report", () => {
-    publishHarnessProject("/legacy");
-    expect(report(1).projectCwd).toBeNull();
-    expect(
-      selectHarnessSurface(useHarnessSurfaceStore.getState(), undefined)
-        .projectCwd,
-    ).toBe("/legacy");
+  it("returns no report for an absent owner without borrowing another view", () => {
     publishHarnessProject("/owned", 1);
-    publishHarnessProject("/new-legacy");
+    const state = useHarnessSurfaceStore.getState();
+    for (const ownerId of [undefined, null, -1, Number.NaN])
+      expect(selectHarnessSurface(state, ownerId)).toEqual({
+        projectCwd: null,
+        focusFolder: null,
+      });
     expect(report(1).projectCwd).toBe("/owned");
     removeHarnessSurface(1);
     expect(report(1).projectCwd).toBeNull();
@@ -104,68 +98,4 @@ describe("harness surface store", () => {
       expect(useHarnessSurfaceStore.getState().reports).toEqual({});
     },
   );
-});
-
-describe("legacy event adapter", () => {
-  it("routes incoming events until it is uninstalled", () => {
-    const uninstall = installLegacyHarnessSurfaceEvents();
-    cleanups.push(uninstall);
-    window.dispatchEvent(
-      new CustomEvent(HARNESS_CWD_CHANGE_EVENT, { detail: { cwd: "/a" } }),
-    );
-    window.dispatchEvent(
-      new CustomEvent(HARNESS_FOCUS_FOLDER_EVENT, { detail: { cwd: "/a/b" } }),
-    );
-    expect(useHarnessSurfaceStore.getState()).toMatchObject({
-      projectCwd: "/a",
-      focusFolder: "/a/b",
-    });
-    uninstall();
-    window.dispatchEvent(
-      new CustomEvent(HARNESS_CWD_CHANGE_EVENT, { detail: { cwd: "/z" } }),
-    );
-    expect(useHarnessSurfaceStore.getState().projectCwd).toBe("/a");
-  });
-
-  it("notifies old listeners once without republishing incoming events", () => {
-    cleanups.push(installLegacyHarnessSurfaceEvents());
-    const listener = vi.fn();
-    window.addEventListener(HARNESS_CWD_CHANGE_EVENT, listener);
-    cleanups.push(() =>
-      window.removeEventListener(HARNESS_CWD_CHANGE_EVENT, listener),
-    );
-    const storeListener = vi.fn();
-    cleanups.push(useHarnessSurfaceStore.subscribe(storeListener));
-    publishHarnessProject("/project", 2);
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(storeListener).toHaveBeenCalledTimes(1);
-    expect(report(2).projectCwd).toBe("/project");
-    expect(useHarnessSurfaceStore.getState().projectCwd).toBeNull();
-  });
-
-  it("routes a scoped legacy event only to that owner", () => {
-    cleanups.push(installLegacyHarnessSurfaceEvents());
-    window.dispatchEvent(
-      new CustomEvent(HARNESS_FOCUS_FOLDER_EVENT, {
-        detail: { cwd: "/scoped", ownerId: 2 },
-      }),
-    );
-    expect(report(2).focusFolder).toBe("/scoped");
-    expect(report(1).focusFolder).toBeNull();
-  });
-
-  it("rejects malformed event details and invalid owners", () => {
-    cleanups.push(installLegacyHarnessSurfaceEvents());
-    for (const detail of [
-      { cwd: {} },
-      { cwd: "/bad-owner", ownerId: "2" },
-      undefined,
-    ]) {
-      window.dispatchEvent(
-        new CustomEvent(HARNESS_FOCUS_FOLDER_EVENT, { detail }),
-      );
-    }
-    expect(useHarnessSurfaceStore.getState().focusFolder).toBeNull();
-    expect(useHarnessSurfaceStore.getState().reports).toEqual({});
-  });
 });

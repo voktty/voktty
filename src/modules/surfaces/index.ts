@@ -12,7 +12,6 @@ export {
   useActiveSurfaceStore,
 } from "./lib/activeSurfaceStore";
 export {
-  installLegacyHarnessSurfaceEvents,
   publishHarnessFocusFolder,
   publishHarnessProject,
   removeHarnessSurface,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type RefObject } from "react";
 import type { Tab } from "@/modules/tabs";
 import { coerceCwd } from "@/modules/surfaces/lib/cwd";
 import { resolveActiveSurface } from "@/modules/surfaces/lib/activeSurface";
-import { installLegacyHarnessSurfaceEvents, selectHarnessSurface, useHarnessSurfaceStore } from "@/modules/surfaces/lib/harnessSurfaceStore";
+import { selectHarnessSurface, useHarnessSurfaceStore } from "@/modules/surfaces/lib/harnessSurfaceStore";
 
 type Props = {
   activeTab: Tab | undefined;
@@ -27,7 +27,6 @@ export function useHarnessDesktopContext({ activeTab, tabsRef, updateTab, lastPr
   const workspaceTab = useMemo(() => harness && folder ? { ...harness, cwd: folder } : activeTab,
     [activeTab, harness, folder]);
 
-  useEffect(() => installLegacyHarnessSurfaceEvents(), []);
   useEffect(() => {
     if (ownerId === undefined) return;
     const cwd = coerceCwd(reportedProject);

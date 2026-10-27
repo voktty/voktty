@@ -1,10 +1,4 @@
-/**
- * Minimal imperative bridge exposing mounted harness sessions to the control
- * plane (`voktty.harness.*`). Session state lives in local React state inside
- * `HarnessSessionView`; this module only lets that component register its own
- * read/submit closures so `useControlBridge` can reach them without touching
- * how sessions are stored today.
- */
+/** Control-plane readers use the closures registered by a mounted session owner. */
 import type { Attachment, HarnessId, RuntimeMode, Session } from "./session";
 import { hasPendingApproval } from "./session";
 
