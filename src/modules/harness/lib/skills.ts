@@ -22,6 +22,13 @@ import { PLAN_COMMAND } from "./plan";
 import { ORCHESTRATOR_COMMAND } from "./orchestratorCommand";
 import { DRAFT_COMMAND } from "./draftCommand";
 import { MCP_COMMAND } from "../mcp/mcpCommand";
+import { captureRemotePromptSource } from "@/modules/harness/lib/promptSource";
+import {
+  parseRemotePath,
+  remoteProjectForPath,
+} from "@/modules/connections/model/remoteProjects";
+import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 export {
   CREATE_SKILL_BODY,
   CREATE_SKILL_DESCRIPTION,
@@ -587,26 +594,93 @@ description: ${title}. Use when the user asks to ${words}.
 `;
 }
 
-export async function createBlankSkill(input: {
-  cwd: string;
-  name: string;
-  scope: "project" | "user";
-}): Promise<string> {
-  const name = slugSkillName(input.name);
+let pendingCreations = 0;
+
+export async function createBlankSkill(
+  input: {
+    cwd: string;
+    name: string;
+    scope: "project" | "user";
+  },
+  assertCurrent: () => void = () => {},
+  onCreated?: (path: string) => void,
+): Promise<string> {
+  const captured = { ...input };
+  assertCurrent();
+  const name = slugSkillName(captured.name);
   if (!isValidSkillName(name)) {
     throw new Error("Use a lowercase name with letters, numbers, and hyphens.");
   }
-  const root =
-    input.scope === "user" || !looksLikeProject(input.cwd)
-      ? await homeDir()
-      : input.cwd;
-  const relative = `.agents/skills/${name}`;
-  await createPath(root, relative, true);
-  const path = joinPath(root, `${relative}/SKILL.md`);
-  await writeTextFile(path, blankSkillMarkdown(name));
-  invalidateSkills({ cwd: input.cwd });
-  invalidateProjectFiles(input.cwd);
-  return path;
+  if (pendingCreations >= 256)
+    throw new Error("Skill creation capacity exceeded.");
+  const personal = captured.scope === "user" || !looksLikeProject(captured.cwd);
+  let source: ReturnType<typeof captureRemotePromptSource>;
+  const assertOwned = () => {
+    assertCurrent();
+    source?.assertCurrent();
+  };
+  pendingCreations++;
+  try {
+    source = personal ? undefined : captureRemotePromptSource(captured.cwd);
+    const project =
+      !personal && captured.cwd.startsWith("remote://voktty-ssh-")
+        ? remoteProjectForPath(captured.cwd)
+        : undefined;
+    const savedProject = project ? { ...project } : undefined;
+    const parsed = savedProject ? parseRemotePath(captured.cwd) : undefined;
+    const profile = parsed
+      ? findSshProfile(
+          parsed.environmentId,
+          usePreferencesStore.getState().sshConnections ?? [],
+          { kind: "local" },
+        )
+      : undefined;
+    const savedProfile = profile ? { ...profile } : undefined;
+    assertOwned();
+    const root = personal ? await homeDir() : captured.cwd;
+    assertOwned();
+    const relative = `.agents/skills/${name}/SKILL.md`;
+    const path = joinPath(root, relative);
+    if (source) {
+      const { createProjectDocument } = await import(
+        "@/modules/remote/projectDocument"
+      );
+      assertOwned();
+      const current = () => {
+        try {
+          assertOwned();
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      await createProjectDocument(
+        path,
+        savedProject,
+        savedProfile ? [savedProfile] : [],
+      ).createText(blankSkillMarkdown(name), current);
+    } else {
+      await createPath(root, relative, false);
+      assertOwned();
+      await writeTextFile(path, blankSkillMarkdown(name), "");
+    }
+    assertOwned();
+    invalidateSkills({ cwd: captured.cwd });
+    assertOwned();
+    invalidateProjectFiles(captured.cwd);
+    assertOwned();
+    onCreated?.(path);
+    return path;
+  } catch (error) {
+    assertOwned();
+    throw error;
+  } finally {
+    try {
+      source?.release();
+    } finally {
+      pendingCreations--;
+    }
+  }
 }
 
 function isSpace(ch: string): boolean {

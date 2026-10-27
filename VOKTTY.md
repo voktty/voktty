@@ -96,6 +96,8 @@ Harness file and diff openings share `useHarnessFileOpening`. Each request retai
 
 Skill expansion carries the original prompt-preparation guard through catalog loading, each file-read admission, read failures and completed bodies. A retired caller cannot start later body reads or turn retirement into fallback instructions. Skill metadata is captured before asynchronous reads; current ordinary read errors retain their fallback. Parallel reads already admitted settle together before preparation rejects, preserving their caller's lifetime accounting without acknowledging native cancellation. Existing catalog discovery and native Pi command behavior remain unchanged.
 
+Skill creation captures its original dialog, draft and filesystem source. Closing, cancellation or source replacement retires later stages and UI publication; pending operations retain their budget until settlement. Native creation allocates the skill file exclusively and writes only while it remains empty. Saved-profile SSH creation captures its project and profile before awaiting work and holds one helper lease through parent creation, exclusive file allocation and the guarded write. Personal skills remain on the native home filesystem. Retirement does not acknowledge cancellation of admitted IO or roll back created directories or an empty file. Legacy remote routing retains its existing transport behavior with caller lifetime guards.
+
 ### PTY shell integration
 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "@/modules/i18n";
+import { useSkillCreation } from "@/modules/harness/hooks/useSkillCreation";
 import {
   Check,
   Copy,
@@ -15,7 +16,6 @@ import { copyText } from "../lib/clipboard";
 import { listSkills, readTextFile, type DiscoveredSkill } from "../lib/fs";
 import {
   CREATE_SKILL_BODY,
-  createBlankSkill,
   invalidateSkills,
   loadDisabledSkillPaths,
   saveDisabledSkillPaths,
@@ -29,8 +29,6 @@ export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [disabledPaths, setDisabledPaths] = useState<string[]>(() =>
     loadDisabledSkillPaths(),
@@ -106,21 +104,18 @@ export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
     });
   };
 
-  const onCreate = (name: string, scope: "project" | "user"): void => {
-    setBusy(true);
-    setCreateError(null);
-    void createBlankSkill({ cwd, name, scope })
-      .then(() => {
-        invalidateSkills();
-        window.dispatchEvent(new Event(SKILLS_CHANGE_EVENT));
-        setAdding(false);
-        setReload((value) => value + 1);
-      })
-      .catch((err: unknown) => {
-        setCreateError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => setBusy(false));
-  };
+  const creation = useSkillCreation({
+    cwd,
+    open: adding,
+    onCreated: (_path, isCurrent) => {
+      if (!isCurrent()) return;
+      invalidateSkills();
+      window.dispatchEvent(new Event(SKILLS_CHANGE_EVENT));
+      if (!isCurrent()) return;
+      setAdding((previous) => (isCurrent() ? false : previous));
+      setReload((value) => (isCurrent() ? value + 1 : value));
+    },
+  });
 
   return (
     <>
@@ -166,11 +161,11 @@ export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
                 ? t("skillsPage.closeSkillFormAriaLabel")
                 : t("skillsPage.addSkillAriaLabel")
             }
-            disabled={busy}
+            disabled={creation.busy}
             className="rounded-md border border-content/10 px-2.5 py-1 text-[12px] text-content/70 hover:bg-content/10 disabled:opacity-40 cursor-pointer"
             onClick={() => {
+              if (adding) creation.cancel();
               setAdding((value) => !value);
-              setCreateError(null);
             }}
             title={t("skillsPage.addSkillTooltip")}
           >
@@ -185,13 +180,13 @@ export function SkillsPage({ cwd }: { cwd: string }): ReactNode {
             key={cwd}
             query={query}
             cwd={cwd}
-            error={createError}
-            busy={busy}
+            error={creation.error}
+            busy={creation.busy}
             onCancel={() => {
+              creation.cancel();
               setAdding(false);
-              setCreateError(null);
             }}
-            onCreate={onCreate}
+            onCreate={creation.create}
           />
         </div>
       ) : null}

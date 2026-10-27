@@ -276,7 +276,6 @@ export function CreateSkillForm({
       <div className="flex items-center justify-end gap-1">
         <button
           type="button"
-          disabled={busy}
           onClick={onCancel}
           className="rounded-md px-2 py-1 text-[12px] text-content/50 hover:bg-content/10 hover:text-content"
         >

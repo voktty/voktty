@@ -71,7 +71,6 @@ import type {
 } from "../lib/session";
 import { harnessSupportsAttachments } from "../lib/session";
 import {
-  createBlankSkill,
   rankSkills,
   replaceSlashToken,
   skillTextParts,
@@ -116,6 +115,7 @@ import {
 } from "../lib/notes";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useComposerSkills } from "./useComposerSkills";
+import { useSkillCreation } from "@/modules/harness/hooks/useSkillCreation";
 import {
   LiveComponentBadge,
   useLiveComponentStore,
@@ -528,8 +528,6 @@ export function Composer({
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [skillActive, setSkillActive] = useState(0);
   const [creatingSkill, setCreatingSkill] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [createBusy, setCreateBusy] = useState(false);
   const fileCatalog = useProjectFileCatalog(cwd, enabled);
   const files = fileCatalog.isCurrent() ? fileCatalog.files : NO_PROJECT_FILES;
   const notesEnabled = useSyncExternalStore(
@@ -764,6 +762,42 @@ export function Composer({
     [inboxCard, noteCard, handoffCard],
   );
 
+  const skillCreation = useSkillCreation({
+    cwd,
+    open: creatingSkill && enabled,
+    context: submitOwner,
+    capture: () => {
+      const textarea = ref.current;
+      const value = textarea?.value;
+      const revision = draftRevisionRef.current;
+      return () =>
+        ref.current === textarea &&
+        textarea?.value === value &&
+        draftRevisionRef.current === revision;
+    },
+    onCreated: (path, isCurrent) => {
+      if (!isCurrent()) return;
+      void skillCatalog.refresh({ refresh: true }).catch(() => undefined);
+      onOpenFile?.(path);
+      if (!isCurrent()) return;
+      const el = ref.current;
+      const token = slash;
+      if (el && token) {
+        const rest = el.value.slice(token.end).replace(/^\s/, "");
+        const next = `${el.value.slice(0, token.start)}${rest}`;
+        el.value = next;
+        resizeComposer(el);
+        el.setSelectionRange(token.start, token.start);
+        draftRevisionRef.current += 1;
+        setDraft(next);
+        syncHasValue(next, attachmentsRef.current);
+      }
+      setCreatingSkill(false);
+      setSlash(null);
+      el?.focus();
+    },
+  });
+
   const mentionOwner = useMemo(
     () => ({
       enabled,
@@ -922,7 +956,6 @@ export function Composer({
     setSlash(null);
     setMention(null);
     setCreatingSkill(false);
-    setCreateError(null);
     syncHasValue("", []);
     ref.current?.focus();
   }, [
@@ -1103,7 +1136,6 @@ export function Composer({
       setSlash(null);
       setMention(null);
       setCreatingSkill(false);
-      setCreateError(null);
       el.setSelectionRange(result.draft.length, result.draft.length);
       el.focus();
     }
@@ -1417,7 +1449,6 @@ export function Composer({
       setSlash(null);
       setMention(null);
       setCreatingSkill(false);
-      setCreateError(null);
       syncHasValue("", attachments);
       return;
     }
@@ -1462,7 +1493,6 @@ export function Composer({
       setSlash(null);
       setMention(null);
       setCreatingSkill(false);
-      setCreateError(null);
       syncHasValue("", attachmentsRef.current);
       return;
     }
@@ -1525,7 +1555,6 @@ export function Composer({
     setSlash(null);
     setMention(null);
     setCreatingSkill(false);
-    setCreateError(null);
     syncHasValue("", []);
   };
 
@@ -1759,53 +1788,21 @@ export function Composer({
               active={skillActive}
               creating={creatingSkill}
               cwd={cwd}
-              error={createError}
-              busy={createBusy}
+              error={skillCreation.error}
+              busy={skillCreation.busy}
               onActive={setSkillActive}
               onPick={pickSkill}
               onStartCreate={() => {
                 setCreatingSkill(true);
-                setCreateError(null);
               }}
               onCancelCreate={() => {
+                skillCreation.cancel();
                 setCreatingSkill(false);
-                setCreateError(null);
                 const el = ref.current;
                 if (el) syncTokensFromTextarea(el);
                 el?.focus();
               }}
-              onCreate={(name, scope) => {
-                setCreateBusy(true);
-                setCreateError(null);
-                void createBlankSkill({ cwd, name, scope })
-                  .then((path) => {
-                    const el = ref.current;
-                    const token = slashRef.current;
-                    if (el && token) {
-                      const rest = el.value.slice(token.end).replace(/^\s/, "");
-                      const next = `${el.value.slice(0, token.start)}${rest}`;
-                      el.value = next;
-                      resizeComposer(el);
-                      el.setSelectionRange(token.start, token.start);
-                      setDraft(next);
-                      syncHasValue(next, attachments);
-                    }
-                    setCreatingSkill(false);
-                    setSlash(null);
-                    setCreateError(null);
-                    void skillCatalog
-                      .refresh({ refresh: true })
-                      .catch(() => undefined);
-                    onOpenFile?.(path);
-                    el?.focus();
-                  })
-                  .catch((err: unknown) => {
-                    setCreateError(
-                      err instanceof Error ? err.message : String(err),
-                    );
-                  })
-                  .finally(() => setCreateBusy(false));
-              }}
+              onCreate={skillCreation.create}
             />
           </div>
         ) : null}

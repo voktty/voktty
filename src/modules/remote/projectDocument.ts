@@ -17,7 +17,10 @@ import {
   remoteStat,
   type RemoteWorkspaceEnv,
 } from "@/modules/remote/filesystem";
-import { requestRemoteResult } from "@/modules/remote/client";
+import {
+  RemoteRequestError,
+  requestRemoteResult,
+} from "@/modules/remote/client";
 import { parseProjectContentSearch } from "@/modules/remote/projectContentSearch";
 
 let pending = 0;
@@ -135,6 +138,76 @@ export function createProjectDocument(
   }
 
   return {
+    createText: (content: string, isCurrent: () => boolean) => {
+      if (path.length > 32768 || content.length > 8 * 1024 * 1024)
+        return Promise.reject(
+          new Error("Invalid remote text creation target."),
+        );
+      const parts = relative.split("/");
+      if (
+        relative === "." ||
+        parts.length > 128 ||
+        parts.some(
+          (part) =>
+            !part ||
+            part === "." ||
+            part === ".." ||
+            /[\\\x00-\x1f\x7f]/.test(part),
+        ) ||
+        new TextEncoder().encode(content).length > 8 * 1024 * 1024
+      )
+        return Promise.reject(
+          new Error("Invalid remote text creation target."),
+        );
+      return run(isCurrent, async (workspace) => {
+        let parent = "";
+        for (const part of parts.slice(0, -1)) {
+          parent = parent ? `${parent}/${part}` : part;
+          assertProjectDocumentCurrent(isCurrent);
+          try {
+            const stat = await remoteStat(
+              workspace,
+              documentPath(workspace.root, parent),
+            );
+            assertProjectDocumentCurrent(isCurrent);
+            if (stat.kind !== "dir")
+              throw new Error("A parent path is not a directory.");
+          } catch (error) {
+            assertProjectDocumentCurrent(isCurrent);
+            if (
+              !(error instanceof RemoteRequestError) ||
+              error.code !== "stat_failed"
+            )
+              throw error;
+            try {
+              await requestRemoteResult(workspace.sessionId, "fs.createDir", {
+                path: parent,
+              });
+            } catch (createError) {
+              assertProjectDocumentCurrent(isCurrent);
+              const stat = await remoteStat(
+                workspace,
+                documentPath(workspace.root, parent),
+              ).catch(() => undefined);
+              assertProjectDocumentCurrent(isCurrent);
+              if (stat?.kind !== "dir") throw createError;
+            }
+            assertProjectDocumentCurrent(isCurrent);
+          }
+        }
+        assertProjectDocumentCurrent(isCurrent);
+        await requestRemoteResult(workspace.sessionId, "fs.createFile", {
+          path: relative,
+        });
+        assertProjectDocumentCurrent(isCurrent);
+        await requestRemoteResult(workspace.sessionId, "fs.writeFile", {
+          path: relative,
+          content,
+          expectedContent: "",
+        });
+        assertProjectDocumentCurrent(isCurrent);
+      });
+    },
     searchContent: (query: string, isCurrent: () => boolean) => {
       if (
         !query.trim() ||
