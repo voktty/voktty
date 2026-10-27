@@ -43,8 +43,8 @@ import type { captureLegacyPtyMigration } from "@/modules/harness/lib/pty";
 import type { FilePaneTab } from "@/modules/harness/lib/layout";
 
 const legacy = vi.hoisted(() => vi.fn(() => <div data-legacy="" />));
-vi.mock("@/modules/harness/surfaces/TerminalView", () => ({
-  TerminalView: legacy,
+vi.mock("@xterm/xterm", () => ({
+  Terminal: legacy,
 }));
 const project = "/srv/app";
 let container: HTMLDivElement;

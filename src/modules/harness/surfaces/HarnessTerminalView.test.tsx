@@ -18,8 +18,8 @@ const legacy = vi.hoisted(() =>
     <div data-legacy="" />
   )),
 );
-vi.mock("@/modules/harness/surfaces/TerminalView", () => ({
-  TerminalView: legacy,
+vi.mock("@xterm/xterm", () => ({
+  Terminal: legacy,
 }));
 const file = {
   ...newTerminalFile("/srv/app/src", "build"),
@@ -172,19 +172,22 @@ it("releases exact registrations through StrictMode replay and owner removal", a
   expect(entries).toHaveLength(0);
   expect(legacy).not.toHaveBeenCalled();
 });
-it("preserves the existing legacy renderer for unmigrated terminal files", async () => {
-  const { canonicalTerminal: _reference, ...unmigrated } = file;
-  await act(async () =>
-    root.render(<HarnessTerminalView file={unmigrated} visible active />),
-  );
-  expect(legacy).toHaveBeenCalled();
-  expect(container.querySelector("[data-legacy]")).not.toBeNull();
-  expect(legacy.mock.calls[0]?.[0]).toMatchObject({
-    id: file.id,
-    cwd: file.cwd,
-    active: true,
-  });
-});
+it.each([true, false])(
+  "keeps unmigrated files inert without the canonical host (visible=%s)",
+  async (visible) => {
+    const { canonicalTerminal: _reference, ...unmigrated } = file;
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <HarnessTerminalView file={unmigrated} visible={visible} active />
+        </StrictMode>,
+      ),
+    );
+    expect(legacy).not.toHaveBeenCalled();
+    expect(container.querySelector("[role=status]")).not.toBeNull();
+    expect(container.querySelector("button")?.disabled).toBe(true);
+  },
+);
 
 it("offers explicit recovery for an absent reference without creating on mount or double click", async () => {
   let current: () => boolean = () => false;

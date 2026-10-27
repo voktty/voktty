@@ -8,7 +8,6 @@ import {
 import { TerminalSurface } from "@/modules/terminal/TerminalSurface";
 import type { FilePaneTab } from "@/modules/harness/lib/layout";
 import type { TerminalMetaPatch } from "@/modules/harness/lib/terminalTab";
-import { TerminalView } from "@/modules/harness/surfaces/TerminalView";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
 import { HarnessTerminalRecovery } from "@/modules/harness/hooks/useHarnessTerminalRecovery";
 import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
@@ -22,7 +21,6 @@ export function HarnessTerminalView({
   layoutKey,
   slotKey,
   onFocus,
-  onMetaChange,
 }: {
   file: FilePaneTab;
   visible: boolean;
@@ -148,39 +146,30 @@ export function HarnessTerminalView({
       </TerminalSurface>
     );
   }
-  if (migrations)
-    return (
-      <div
-        className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground"
-        role="status"
-        aria-busy={recovering}
-      >
-        <p>
-          {t(
-            recovering
-              ? "terminal.connection.connecting"
-              : "terminal.connection.failed",
-            { name: file.path },
-          )}
-        </p>
-        <button
-          type="button"
-          className="rounded border border-border px-3 py-1.5 text-foreground hover:bg-accent disabled:opacity-50"
-          disabled={
-            recovering || !recover || !slotKey || !visible || !owner?.visible
-          }
-          onClick={migrate}
-        >
-          {t("terminal.connection.retry")}
-        </button>
-      </div>
-    );
   return (
-    <TerminalView
-      id={file.id}
-      cwd={file.cwd}
-      active={active}
-      onMetaChange={onMetaChange}
-    />
+    <div
+      className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground"
+      role="status"
+      aria-busy={recovering}
+    >
+      <p>
+        {t(
+          recovering
+            ? "terminal.connection.connecting"
+            : "terminal.connection.failed",
+          { name: file.path },
+        )}
+      </p>
+      <button
+        type="button"
+        className="rounded border border-border px-3 py-1.5 text-foreground hover:bg-accent disabled:opacity-50"
+        disabled={
+          recovering || !recover || !slotKey || !visible || !owner?.visible
+        }
+        onClick={migrate}
+      >
+        {t("terminal.connection.retry")}
+      </button>
+    </div>
   );
 }
