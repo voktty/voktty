@@ -133,9 +133,13 @@ export function SearchView({
     const cached = peekProjectFiles(cwd);
     if (cached) setFiles(cached);
     let cancelled = false;
-    void loadProjectFiles(cwd).then((next) => {
-      if (!cancelled) setFiles(next);
-    });
+    void loadProjectFiles(cwd)
+      .then((next) => {
+        if (!cancelled) setFiles(next);
+      })
+      .catch(() => {
+        if (!cancelled) setFiles([]);
+      });
     return () => {
       cancelled = true;
     };

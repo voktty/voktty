@@ -11,6 +11,9 @@ import {
   requestRemoteResult,
 } from "@/modules/remote/client";
 import { remoteSessions } from "@/modules/remote/sessionManager";
+import { assertProjectFileSourceCurrent } from "@/modules/remote/projectFileSource";
+import type { RemoteProject } from "@/modules/connections/model/remoteProjects";
+import type { SshConnection } from "@/modules/ssh/types";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -2403,7 +2406,9 @@ async function listProjectFilesWithHelper(
   environmentId: string,
   root: string,
   cwd: string,
+  isCurrent: () => boolean,
 ): Promise<Array<{ name: string; path: string; relative: string }>> {
+  assertProjectFileSourceCurrent(isCurrent);
   const gitFiles = await runHelperGit(
     sessionId,
     cwd,
@@ -2412,6 +2417,7 @@ async function listProjectFilesWithHelper(
     true,
     true,
   );
+  assertProjectFileSourceCurrent(isCurrent);
   if (gitFiles.exitCode === 0) {
     return projectFilesFromGit(gitFiles, environmentId, root);
   }
@@ -2419,11 +2425,13 @@ async function listProjectFilesWithHelper(
   const exactIgnores = new Set([".git"]);
   const suffixIgnores: string[] = [];
   try {
+    assertProjectFileSourceCurrent(isCurrent);
     const ignoreFile = await requestRemoteResult<{ content: string }>(
       sessionId,
       HELPER_FS.readFile,
       { path: joinRelativePath(cwd, ".gitignore") },
     );
+    assertProjectFileSourceCurrent(isCurrent);
     for (const raw of ignoreFile.content.split(/\r?\n/)) {
       const line = raw.trim();
       if (!line || line.startsWith("#") || line.startsWith("!")) continue;
@@ -2438,6 +2446,7 @@ async function listProjectFilesWithHelper(
   } catch {
     // Projects without a root .gitignore use the built-in skip list only.
   }
+  assertProjectFileSourceCurrent(isCurrent);
 
   const isIgnored = (name: string) =>
     exactIgnores.has(name) ||
@@ -2446,15 +2455,18 @@ async function listProjectFilesWithHelper(
   const pending = ["."];
   let visitedDirectories = 0;
   while (pending.length > 0) {
+    assertProjectFileSourceCurrent(isCurrent);
     const directory = pending.pop()!;
     visitedDirectories += 1;
     if (visitedDirectories > 4000) {
       throw new Error("The remote project contains too many folders to list.");
     }
-    for (const entry of await helperListDirectory(
+    const entries = await helperListDirectory(
       sessionId,
       joinRelativePath(cwd, directory),
-    )) {
+    );
+    assertProjectFileSourceCurrent(isCurrent);
+    for (const entry of entries) {
       if (
         typeof entry.name !== "string" ||
         !entry.name ||
@@ -2488,6 +2500,52 @@ async function listProjectFilesWithHelper(
   return found.sort((left, right) =>
     left.relative.localeCompare(right.relative),
   );
+}
+
+export async function readCapturedProjectIndex(
+  path: string,
+  project: Readonly<RemoteProject>,
+  profile: Readonly<SshConnection>,
+  isCurrent: () => boolean,
+) {
+  assertProjectFileSourceCurrent(isCurrent);
+  const parsed = parseRemotePath(path);
+  const root = normalizeRemoteAbsolute(project.cwd);
+  if (
+    !parsed ||
+    parsed.environmentId !== project.environmentId ||
+    path.includes("\\") ||
+    project.cwd.includes("\\") ||
+    path.includes("\0")
+  )
+    throw new Error("The remote project index path is invalid.");
+  const cwd = relativeToRemoteRoot(root, parsed.hostPath);
+  const resultRoot = normalizeRemoteAbsolute(parsed.hostPath);
+  const environmentId = project.environmentId;
+  const files = await remoteSessions
+    .use(
+      { profileId: profile.id, root },
+      remoteSshConnectionForProfile({ ...profile }),
+      async (session) => {
+        assertProjectFileSourceCurrent(isCurrent);
+        normalizeRemoteAbsolute(session.workspace_root);
+        const files = await listProjectFilesWithHelper(
+          session.session_id,
+          environmentId,
+          resultRoot,
+          cwd,
+          isCurrent,
+        );
+        assertProjectFileSourceCurrent(isCurrent);
+        return files;
+      },
+    )
+    .catch((error) => {
+      assertProjectFileSourceCurrent(isCurrent);
+      throw error;
+    });
+  assertProjectFileSourceCurrent(isCurrent);
+  return files;
 }
 
 /** GitHub is reached from this computer with the stored token, never through the remote host. */
@@ -3215,36 +3273,19 @@ async function runNativeProfileCommand(
   if (normalizedProjectRoot === "/" && project.cwd !== "/") {
     throw new Error("The saved remote project root is invalid.");
   }
-  let indexTarget: { cwd: string; root: string } | undefined;
   if (command === "list_project_files") {
-    const path = requireString(args, "cwd");
-    const parsed = parseRemotePath(path);
-    if (
-      !parsed ||
-      path.includes("\\") ||
-      project.cwd.includes("\\") ||
-      path.includes("\0")
-    ) {
-      throw new Error("The remote project index path is invalid.");
-    }
-    indexTarget = {
-      cwd: relativeToRemoteRoot(normalizedProjectRoot, parsed.hostPath),
-      root: normalizeRemoteAbsolute(parsed.hostPath),
-    };
+    return readCapturedProjectIndex(
+      requireString(args, "cwd"),
+      project,
+      profile,
+      () => true,
+    );
   }
   return remoteSessions.use(
     { profileId: profile.id, root: normalizedProjectRoot },
     remoteSshConnectionForProfile(profile),
     async (session) => {
       const sessionRoot = normalizeRemoteAbsolute(session.workspace_root);
-      if (indexTarget) {
-        return listProjectFilesWithHelper(
-          session.session_id,
-          environmentId,
-          indexTarget.root,
-          indexTarget.cwd,
-        );
-      }
       if (sessionRoot !== normalizedProjectRoot) {
         throw new Error(
           "The native SSH helper did not open the saved project root.",

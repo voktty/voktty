@@ -4,22 +4,85 @@ import { scorePath, type FuzzyHit } from "./fuzzy";
 import { resolveWorkspacePath } from "./paths";
 import { looksLikeProject } from "./recents";
 import { normalizeEditorPath, type FileOpenOptions } from "./search";
+import {
+  assertProjectFileSourceCurrent,
+  createProjectFileSourceStore,
+  ProjectFileSourceRetiredError,
+} from "@/modules/remote/projectFileSource";
 
 const MAX_RECENTS = 30;
 const MAX_RESULTS = 80;
 const REFRESH_MS = 150;
 const CACHE_LIMIT = 8;
+const MAX_SCANS = 256;
 
 type Listener = () => void;
 
 const cache = new Map<string, ProjectFile[]>();
 const inflight = new Map<string, Promise<ProjectFile[]>>();
+type RemoteScope = {
+  store: ReturnType<typeof createProjectFileSourceStore>;
+  stop: () => void;
+  scans: number;
+  initializing: boolean;
+};
+const remoteScopes = new Map<string, RemoteScope>();
+let activeScans = 0;
 let lastCwd: string | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshing = false;
 let refreshAgain = false;
 const listeners = new Set<Listener>();
 const recentsByCwd = new Map<string, string[]>();
+
+function releaseUnusedScope(cwd: string, scope = remoteScopes.get(cwd)) {
+  if (
+    !scope ||
+    scope.scans ||
+    cache.has(cwd) ||
+    remoteScopes.get(cwd) !== scope
+  )
+    return;
+  remoteScopes.delete(cwd);
+  scope.stop();
+}
+
+function captureRemoteScope(cwd: string): RemoteScope {
+  const existing = remoteScopes.get(cwd);
+  if (existing) return existing;
+  if (remoteScopes.size >= MAX_SCANS)
+    throw new Error("Project file index capacity exceeded.");
+  const scope: RemoteScope = {
+    store: createProjectFileSourceStore(cwd),
+    stop: () => {},
+    scans: 0,
+    initializing: true,
+  };
+  remoteScopes.set(cwd, scope);
+  return scope;
+}
+
+function activateRemoteScope(cwd: string, scope: RemoteScope) {
+  if (!scope.initializing) return;
+  try {
+    scope.stop = scope.store.subscribe(() => {
+      if (scope.initializing || remoteScopes.get(cwd) !== scope) return;
+      cache.delete(cwd);
+      inflight.delete(cwd);
+      recentsByCwd.delete(normCwd(cwd));
+      try {
+        notifyProjectFilesChanged();
+      } catch {
+        // A presentation listener cannot interrupt retirement of other sources.
+      } finally {
+        if (lastCwd === cwd) scheduleIndexRefresh();
+        releaseUnusedScope(cwd, scope);
+      }
+    });
+  } finally {
+    scope.initializing = false;
+  }
+}
 
 function normCwd(cwd: string): string {
   return cwd.replace(/\/+$/, "") || "/";
@@ -37,6 +100,11 @@ export function subscribeProjectFiles(listener: Listener): () => void {
 }
 
 export function peekProjectFiles(cwd: string): ProjectFile[] | null {
+  if (
+    cwd.startsWith("remote://voktty-ssh-") &&
+    !remoteScopes.get(cwd)?.store.getSnapshot().source?.isCurrent()
+  )
+    return null;
   return cache.get(cwd) ?? null;
 }
 
@@ -45,9 +113,11 @@ export function invalidateProjectFiles(cwd?: string) {
     if (!cache.has(cwd) && !inflight.has(cwd)) return;
     cache.delete(cwd);
     inflight.delete(cwd);
+    releaseUnusedScope(cwd);
   } else {
     cache.clear();
     inflight.clear();
+    for (const [path, scope] of remoteScopes) releaseUnusedScope(path, scope);
     lastCwd = null;
     if (refreshTimer != null) {
       clearTimeout(refreshTimer);
@@ -104,7 +174,7 @@ export function recentOpenedFiles(cwd: string): string[] {
 
 export function prefetchProjectFiles(cwd: string) {
   if (!looksLikeProject(cwd)) return;
-  void loadProjectFiles(cwd);
+  void loadProjectFiles(cwd).catch(() => undefined);
 }
 
 export function loadProjectFiles(
@@ -113,6 +183,21 @@ export function loadProjectFiles(
 ): Promise<ProjectFile[]> {
   if (!looksLikeProject(cwd)) return Promise.resolve([]);
   lastCwd = cwd;
+  let scope: RemoteScope | undefined;
+  try {
+    if (cwd.startsWith("remote://voktty-ssh-")) scope = captureRemoteScope(cwd);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+  const opening = inflight.get(cwd);
+  if (scope?.initializing && opening) return opening;
+  let source = scope?.store.getSnapshot().source;
+  if (scope && !source?.isCurrent()) {
+    releaseUnusedScope(cwd, scope);
+    return Promise.reject(
+      new Error("Remote project file index is unavailable."),
+    );
+  }
   const cached = cache.get(cwd);
   if (!refresh && cached) {
     cache.delete(cwd);
@@ -121,24 +206,59 @@ export function loadProjectFiles(
   }
   const pending = inflight.get(cwd);
   if (!refresh && pending) return pending;
-
-  const promise = listProjectFiles(cwd)
+  if (activeScans >= MAX_SCANS) {
+    releaseUnusedScope(cwd, scope);
+    return Promise.reject(new Error("Project file index capacity exceeded."));
+  }
+  activeScans++;
+  if (scope) scope.scans++;
+  let accept!: (files: ProjectFile[]) => void;
+  let reject!: (error: unknown) => void;
+  const read = new Promise<ProjectFile[]>((resolve, fail) => {
+    accept = resolve;
+    reject = fail;
+  });
+  const promise = read
     .then((files) => {
+      if (source) assertProjectFileSourceCurrent(source.isCurrent);
       // A refresh or invalidation supersedes only this checkout's scan.
       if (inflight.get(cwd) !== promise) return files;
       cache.delete(cwd);
       cache.set(cwd, files);
       if (cache.size > CACHE_LIMIT) {
         const oldest = cache.keys().next().value;
-        if (oldest !== undefined) cache.delete(oldest);
+        if (oldest !== undefined) {
+          cache.delete(oldest);
+          releaseUnusedScope(oldest);
+        }
       }
       notifyProjectFilesChanged();
+      if (source) assertProjectFileSourceCurrent(source.isCurrent);
       return files;
     })
     .finally(() => {
+      activeScans--;
+      if (scope) scope.scans--;
       if (inflight.get(cwd) === promise) inflight.delete(cwd);
+      releaseUnusedScope(cwd, scope);
     });
   inflight.set(cwd, promise);
+  try {
+    if (scope?.initializing) {
+      const key = source?.key;
+      activateRemoteScope(cwd, scope);
+      source = scope.store.getSnapshot().source;
+      assertProjectFileSourceCurrent(() =>
+        Boolean(source?.isCurrent() && source.key === key),
+      );
+    }
+    const result = source
+      ? source.indexFiles(source.isCurrent)
+      : listProjectFiles(cwd);
+    void Promise.resolve(result).then(accept, reject);
+  } catch (error) {
+    reject(error);
+  }
   return promise;
 }
 
@@ -198,7 +318,8 @@ export async function resolveOpenablePath(
   let files: ProjectFile[];
   try {
     files = await loadProjectFiles(cwd);
-  } catch {
+  } catch (error) {
+    if (error instanceof ProjectFileSourceRetiredError) throw error;
     // The index only disambiguates shortened paths. Let the editor read the
     // direct path and show its own error if that file is unavailable too.
     return direct;

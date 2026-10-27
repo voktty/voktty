@@ -8,6 +8,32 @@ import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { SshConnection } from "@/modules/ssh/types";
 
+let indexClient:
+  | Promise<typeof import("@/modules/connections/model/remoteCommands")>
+  | undefined;
+
+function loadIndexClient() {
+  if (indexClient) return indexClient;
+  const request = import("@/modules/connections/model/remoteCommands").catch(
+    (error) => {
+      if (indexClient === request) indexClient = undefined;
+      throw error;
+    },
+  );
+  indexClient = request;
+  return request;
+}
+
+export class ProjectFileSourceRetiredError extends Error {
+  constructor() {
+    super("Project file index request was retired.");
+  }
+}
+
+export function assertProjectFileSourceCurrent(isCurrent: () => boolean): void {
+  if (!isCurrent()) throw new ProjectFileSourceRetiredError();
+}
+
 type Target = {
   path: string;
   project: Readonly<RemoteProject>;
@@ -83,6 +109,9 @@ export type ProjectFileSource = Readonly<{
   key: string;
   isCurrent: () => boolean;
   retire: () => void;
+  indexFiles: (
+    isCurrent: () => boolean,
+  ) => Promise<import("@/modules/harness/lib/fs").ProjectFile[]>;
   listFiles: (
     isCurrent: () => boolean,
   ) => Promise<{ files: string[]; truncated: boolean }>;
@@ -106,6 +135,25 @@ export function captureProjectFileSource(
     isCurrent,
     retire: () => {
       current = false;
+    },
+    indexFiles: async (callerCurrent: () => boolean) => {
+      const allowed = () => isCurrent() && callerCurrent();
+      assertProjectFileSourceCurrent(allowed);
+      try {
+        const { readCapturedProjectIndex } = await loadIndexClient();
+        assertProjectFileSourceCurrent(allowed);
+        const files = await readCapturedProjectIndex(
+          captured.path,
+          captured.project,
+          captured.profile,
+          allowed,
+        );
+        assertProjectFileSourceCurrent(allowed);
+        return files;
+      } catch (error) {
+        assertProjectFileSourceCurrent(allowed);
+        throw error;
+      }
     },
     listFiles: async (callerCurrent: () => boolean) => {
       const allowed = () => isCurrent() && callerCurrent();

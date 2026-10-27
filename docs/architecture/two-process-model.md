@@ -129,7 +129,19 @@ namespace even when the project root is an alias. Git enumeration keeps its
 20,000-file and 4 MiB output limits; the fallback keeps its 4,000-directory limit
 and reads the requested folder's `.gitignore`. Invalid child names cannot expand
 the walk outside that folder. Other remote Git commands retain their existing
-saved-root validation. Index cache lifetime remains a separate frontend contract.
+saved-root validation.
+
+The Harness index retains at most eight cached folders. Saved-profile SSH
+entries retain exact project and profile captures, observe metadata changes and
+withdraw their cache and pending publication on replacement, including a return
+to an earlier binding. Its shared 256-scan budget includes retired reads until
+physical promise settlement; at most 256 SSH scopes, cached or pending, retain
+metadata observers. Eviction or invalidation releases an observer only after its
+last physical read settles. Lazy loading, helper acquisition and each traversal
+stage revalidate the same captured source, so a changed profile cannot redirect
+later IO. A retired read cannot trigger the optional direct-file fallback.
+Local and legacy Host listings keep their existing routes. View-local file rows
+and delivery callbacks retain their separate presentation contracts.
 
 Unknown projects or saved profiles, unsupported Host-only namespaces, Docker
 and serial filename searches remain unavailable. Native Windows and UNC
