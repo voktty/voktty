@@ -53,10 +53,14 @@ describe("preparePrompt", () => {
     context.cwd = "/replacement";
     files.resolve("files");
     await preparation;
-    expect(mocks.applySkillsToTurn).toHaveBeenCalledWith("files", {
-      harness: "pi",
-      cwd: "/original",
-    });
+    expect(mocks.applySkillsToTurn).toHaveBeenCalledWith(
+      "files",
+      {
+        harness: "pi",
+        cwd: "/original",
+      },
+      expect.any(Function),
+    );
   });
 
   it("rejects a retired caller before starting warmup", async () => {
@@ -86,9 +90,13 @@ describe("preparePrompt", () => {
     files.resolve("with files");
     await expect(preparation).resolves.toBe("prepared");
     expect(mocks.applyNotesToTurn).toHaveBeenCalledWith("with files");
-    expect(mocks.applySkillsToTurn).toHaveBeenCalledWith("with files", {
-      harness: "pi",
-      cwd: "/repo",
-    });
+    expect(mocks.applySkillsToTurn).toHaveBeenCalledWith(
+      "with files",
+      {
+        harness: "pi",
+        cwd: "/repo",
+      },
+      expect.any(Function),
+    );
   });
 });

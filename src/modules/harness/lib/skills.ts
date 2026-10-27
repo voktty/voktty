@@ -493,25 +493,32 @@ export function injectSkillPrompt(
 export async function applySkillsToTurn(
   text: string,
   context: SkillCatalogContext,
+  assertCurrent: () => void = () => {},
 ): Promise<string> {
-  if (context.harness === "pi") return text;
+  const captured = { harness: context.harness, cwd: context.cwd };
+  assertCurrent();
+  if (captured.harness === "pi") return text;
   const names = skillNamesInText(text);
   if (names.length === 0) return text;
-  const catalog = await loadSkills(context);
+  const catalog = await loadSkills(captured);
+  assertCurrent();
   const picked: Array<FileSkill | BuiltinSkill> = [];
   for (const name of names) {
     const skill = catalog.find((item) => item.name === name);
     if (skill?.kind === "file" || skill?.kind === "builtin") {
-      picked.push(skill);
+      picked.push({ ...skill });
     }
   }
   if (picked.length === 0) return text;
   const bodies: Record<string, string> = {};
-  await Promise.all(
+  const outcomes = await Promise.allSettled(
     picked.map(async (skill) => {
-      bodies[skill.name] = await readSkillBody(skill);
+      bodies[skill.name] = await readSkillBody(skill, assertCurrent);
     }),
   );
+  assertCurrent();
+  const failure = outcomes.find((outcome) => outcome.status === "rejected");
+  if (failure) throw failure.reason;
   return injectSkillPrompt(text, picked, bodies);
 }
 
@@ -527,13 +534,20 @@ export function warmPiSkills(
 
 export async function readSkillBody(
   skill: FileSkill | BuiltinSkill,
+  assertCurrent: () => void = () => {},
 ): Promise<string> {
-  if (skill.kind === "builtin") return CREATE_SKILL_BODY;
+  const captured = { ...skill };
+  assertCurrent();
+  if (captured.kind === "builtin") return CREATE_SKILL_BODY;
+  let body: string;
   try {
-    return await readTextFile(skill.path);
+    body = await readTextFile(captured.path);
   } catch {
-    return `Skill "${skill.name}" could not be read from ${skill.path}.`;
+    assertCurrent();
+    return `Skill "${captured.name}" could not be read from ${captured.path}.`;
   }
+  assertCurrent();
+  return body;
 }
 
 export function slugSkillName(raw: string): string {

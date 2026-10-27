@@ -94,6 +94,8 @@ Composer submissions waiting for dropped files retain their original callback, t
 
 Harness file and diff openings share `useHarnessFileOpening`. Each request retains its committed view, original session permit, target pane and layout, resolution directory, project root, navigation and review options before awaiting the file index. Project, selection, visibility or owner changes retire publication, including a context round trip; ordinary metadata rerenders preserve it. The newest admitted request owns selection, while capacity rejection preserves an already admitted request. Up to 256 unresolved openings remain counted through actual settlement, including retired reads. Saved-profile SSH requests observe their original project source through synchronous React publication, including exact indexed paths. Tab updates and associated navigation, recents and focus use the captured context; retired results and errors never select the replacement view. These guards do not cancel native reads or change the opened editor's subsequent filesystem lifetime.
 
+Skill expansion carries the original prompt-preparation guard through catalog loading, each file-read admission, read failures and completed bodies. A retired caller cannot start later body reads or turn retirement into fallback instructions. Skill metadata is captured before asynchronous reads; current ordinary read errors retain their fallback. Parallel reads already admitted settle together before preparation rejects, preserving their caller's lifetime accounting without acknowledging native cancellation. Existing catalog discovery and native Pi command behavior remain unchanged.
+
 ### PTY shell integration
 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:

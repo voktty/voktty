@@ -23,7 +23,7 @@ export async function preparePrompt(
   assertCurrent();
   const withNotes = await applyNotesToTurn(withFiles);
   assertCurrent();
-  const prepared = await applySkillsToTurn(withNotes, captured);
+  const prepared = await applySkillsToTurn(withNotes, captured, assertCurrent);
   assertCurrent();
   return prepared;
 }
