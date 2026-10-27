@@ -37,6 +37,7 @@ pub const METHOD_PTY_OPEN: &str = "pty.open";
 pub const METHOD_PTY_RESIZE: &str = "pty.resize";
 pub const METHOD_PTY_CLOSE: &str = "pty.close";
 pub const METHOD_PTY_GET_CWD: &str = "pty.getCwd";
+pub const METHOD_PTY_GET_ACTIVITY: &str = "pty.getActivity";
 pub const METHOD_GIT_EXEC: &str = "git.exec";
 pub const METHOD_GIT_EXEC_WORKSPACE: &str = "git.execWorkspace";
 pub const METHOD_GIT_EXEC_WORKSPACE_INPUT: &str = "git.execWorkspaceInput";
@@ -92,6 +93,9 @@ pub struct RemoteRequest {
 
 impl RemoteRequest {
     pub fn response_timeout(&self) -> Duration {
+        if self.method == METHOD_PTY_GET_ACTIVITY {
+            return Duration::from_secs(2);
+        }
         let is_git_exec = matches!(
             self.method.as_str(),
             METHOD_GIT_EXEC | METHOD_GIT_EXEC_WORKSPACE | METHOD_GIT_EXEC_WORKSPACE_INPUT
@@ -414,6 +418,11 @@ mod tests {
             params: json!({ "timeoutSecs": 300 }),
         };
         assert_eq!(request.response_timeout(), Duration::from_secs(60));
+        let activity = RemoteRequest {
+            method: METHOD_PTY_GET_ACTIVITY.to_string(),
+            ..request
+        };
+        assert_eq!(activity.response_timeout(), Duration::from_secs(2));
     }
 
     #[test]

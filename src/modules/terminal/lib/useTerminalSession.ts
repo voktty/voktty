@@ -16,7 +16,6 @@ import {
   type WorkspaceEnv,
   workspaceScopeKey,
 } from "@/modules/workspace";
-import { invoke } from "@tauri-apps/api/core";
 import type { SearchAddon } from "@xterm/addon-search";
 import {
   useCallback,
@@ -787,15 +786,7 @@ async function releaseIfIdle(leafId: number, s: Session): Promise<void> {
 }
 
 async function leafHasForegroundJob(leafId: number): Promise<boolean> {
-  if (isGuestPtyTarget(leafId)) return false;
-  const s = sessions.get(leafId);
-  if (!s?.pty || s.shellExited) return false;
-  try {
-    return await invoke<boolean>("pty_has_foreground_job", { id: s.pty.id });
-  } catch (e) {
-    console.error("[voktty] pty_has_foreground_job failed for leaf", leafId, e);
-    return false;
-  }
+  return inspectLeafActivity(leafId, "job");
 }
 
 function onLeafCommandState(
@@ -1541,22 +1532,25 @@ export function cancelSessionConnection(leafId: number): void {
 export async function leafHasForegroundProcess(
   leafId: number,
 ): Promise<boolean> {
+  return inspectLeafActivity(leafId, "process");
+}
+
+async function inspectLeafActivity(leafId: number, kind: "process" | "job"): Promise<boolean> {
   if (isGuestPtyTarget(leafId)) return false;
   const s = sessions.get(leafId);
-  if (!s?.pty || s.shellExited) return false;
+  if (!s || s.disposed || s.shellExited) return false;
+  if (!s.pty) return s.ptyOpening;
+  const pty = s.pty;
+  const attempt = s.connectionState.attempt;
+  let busy = true;
   try {
-    const result = await invoke<boolean>("pty_has_foreground_process", {
-      id: s.pty.id,
-    });
-    return result;
-  } catch (e) {
-    console.error(
-      "[voktty] pty_has_foreground_process failed for leaf",
-      leafId,
-      e,
-    );
-    return false;
+    busy = await (pty.inspectActivity?.(kind) ?? Promise.resolve(true));
+  } catch {}
+  const current = sessions.get(leafId);
+  if (current !== s || s.pty !== pty || s.connectionState.attempt !== attempt || s.disposed || s.shellExited) {
+    return !!current && !current.disposed && !current.shellExited;
   }
+  return busy;
 }
 
 export function disposeSession(leafId: number): void {

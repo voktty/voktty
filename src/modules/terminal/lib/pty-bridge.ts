@@ -6,6 +6,7 @@ import {
 import { consumeSnapshotBarrier } from "@/modules/terminal/lib/snapshotBarrier";
 import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import { reserveRestoredProjectTarget } from "@/modules/terminal/lib/restoreProjectTarget";
+import { requestRemoteResult } from "@/modules/remote/client";
 import {
   currentWorkspaceEnv,
   type WorkspaceEnv,
@@ -15,6 +16,7 @@ import {
 import { Channel, invoke } from "@tauri-apps/api/core";
 
 const textEncoder = new TextEncoder();
+let pendingActivityProbes = 0;
 
 export type PtyHandlers = {
   onData: (bytes: Uint8Array) => void;
@@ -28,6 +30,7 @@ export type PtySession = {
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
   close: () => Promise<void>;
+  inspectActivity?: (kind: "process" | "job") => Promise<boolean>;
 };
 
 export async function openPty(
@@ -126,8 +129,8 @@ async function openNativePty(
 
     onData.onmessage = (buf) => handlers.onData(new Uint8Array(buf));
     onExit.onmessage = (code) => {
-      handlers.onExit?.(code);
       releaseHandlers();
+      handlers.onExit?.(code);
     };
 
     const id = await invoke<number>("serial_open", {
@@ -148,6 +151,7 @@ async function openNativePty(
 
     return {
       id,
+      inspectActivity: async () => false,
       write: (data) =>
         invoke("serial_write", textEncoder.encode(data), { headers }),
       resize: async () => {},
@@ -189,8 +193,8 @@ async function openNativePty(
     handlers.onData(bytes);
   };
   onExit.onmessage = (code) => {
-    handlers.onExit?.(code);
     releaseHandlers();
+    handlers.onExit?.(code);
   };
 
   const sshConnection =
@@ -227,7 +231,9 @@ async function openNativePty(
         });
 
   let closed = false;
+  let activityRetired = false;
   let closing: Promise<void> | undefined;
+  const activityReads = new Map<"process" | "job", Promise<boolean>>();
   const headers: Record<string, string> =
     remoteSessionId === undefined
       ? { "x-pty-id": String(id) }
@@ -238,6 +244,35 @@ async function openNativePty(
 
   return {
     id,
+    inspectActivity: (kind) => {
+      if (activityRetired || released) return Promise.resolve(true);
+      const existing = activityReads.get(kind);
+      if (existing) return existing;
+      if (pendingActivityProbes >= 256) return Promise.resolve(true);
+      pendingActivityProbes++;
+      const pending = (async () => {
+        try {
+          if (remoteSessionId !== undefined) {
+            const result = await requestRemoteResult<{ foregroundJob?: unknown }>(
+              remoteSessionId, "pty.getActivity", { ptyId: id },
+            );
+            return activityRetired || released || typeof result?.foregroundJob !== "boolean"
+              ? true : result.foregroundJob;
+          }
+          const result = await invoke<boolean>(
+            kind === "process" ? "pty_has_foreground_process" : "pty_has_foreground_job", { id },
+          );
+          return activityRetired || released || typeof result !== "boolean" ? true : result;
+        } catch {
+          return true;
+        }
+      })().finally(() => {
+        pendingActivityProbes--;
+        if (activityReads.get(kind) === pending) activityReads.delete(kind);
+      });
+      activityReads.set(kind, pending);
+      return pending;
+    },
     // Raw bytes + id header: no JSON round-trip on the per-keystroke path.
     write: (data) =>
       invoke(
@@ -255,6 +290,7 @@ async function openNativePty(
             rows: r,
           }),
     close: () => {
+      activityRetired = true;
       if (closed) return Promise.resolve();
       if (closing) return closing;
       closing = Promise.resolve().then(async () => {

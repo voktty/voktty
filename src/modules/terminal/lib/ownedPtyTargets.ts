@@ -199,6 +199,11 @@ export function createOwnedPtyTargets(limit = 256) {
         return {
           id: session.id,
           workspace: target?.workspace,
+          inspectActivity: async (kind) => {
+            if (!isCurrent()) return true;
+            const busy = await (session.inspectActivity?.(kind) ?? Promise.resolve(true));
+            return !isCurrent() || busy;
+          },
           write: (data) =>
             isCurrent() ? session.write(data) : Promise.resolve(),
           resize: (cols, rows) =>
