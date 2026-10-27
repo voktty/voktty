@@ -39,10 +39,6 @@ import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harness
 import { createHarnessWindowViews } from "@/modules/harness/lib/harnessWindowViews";
 import { createLegacyTerminalMigrations } from "@/modules/harness/lib/legacyTerminalMigrations";
 import {
-  captureLegacyPtyMigration,
-  hasLegacyPty,
-} from "@/modules/harness/lib/pty";
-import {
   newTerminalFile,
   newTerminalWorkspaceTab,
 } from "@/modules/harness/lib/layout";
@@ -78,9 +74,6 @@ let dockOpen: ReturnType<typeof useHarnessTerminalCreation>["open"];
 let dockReferences: ProjectTerminalReference[];
 let migrationViews: ReturnType<typeof createHarnessWindowViews>;
 let migrationService: ReturnType<typeof createLegacyTerminalMigrations>;
-let migrationConfirm: ReturnType<
-  typeof vi.fn<(file: unknown) => Promise<boolean>>
->;
 function ColdMigrationClient({ projectCwd }: { projectCwd: string }) {
   const [modelTabs, setModelTabs] = useState(() => {
     const one = newTerminalWorkspaceTab(
@@ -303,15 +296,7 @@ beforeEach(() => {
   dockOwner = createPersistenceAdmission().createOwner();
   dockReferences = [];
   migrationViews = createHarnessWindowViews();
-  migrationConfirm = vi
-    .fn<(file: unknown) => Promise<boolean>>()
-    .mockResolvedValue(true);
-  migrationService = createLegacyTerminalMigrations(
-    migrationViews,
-    captureLegacyPtyMigration,
-    migrationConfirm,
-    hasLegacyPty,
-  );
+  migrationService = createLegacyTerminalMigrations(migrationViews);
   source = {
     id: 1,
     ...createTabIdentity("main", () => "owner"),
@@ -973,7 +958,6 @@ it.each(["C:/Work/App", project])(
     expect(tabs.activeId).toBe(source.id);
     expect(mocks.invoke).not.toHaveBeenCalled();
     expect(mocks.resolve).not.toHaveBeenCalled();
-    expect(migrationConfirm).not.toHaveBeenCalled();
     const capture = migrationViews.capture([]);
     const files = [
       ...capture.tabs.flatMap((tab) =>

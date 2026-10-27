@@ -1,7 +1,6 @@
 import type { FilePaneTab } from "@/modules/harness/lib/layout";
 import { sameLegacyTerminal } from "@/modules/harness/lib/legacyTerminalMapping";
 import type { createHarnessWindowViews } from "@/modules/harness/lib/harnessWindowViews";
-import type { captureLegacyPtyMigration } from "@/modules/harness/lib/pty";
 import type { ProjectTerminalReference } from "@/modules/terminal/lib/projectTerminalRequest";
 import { hiddenLegacyTerminals } from "@/modules/harness/lib/legacyTerminalCandidates";
 
@@ -13,9 +12,6 @@ class RetiredTerminalMigration extends Error {
 
 export function createLegacyTerminalMigrations(
   views: ReturnType<typeof createHarnessWindowViews>,
-  capture: typeof captureLegacyPtyMigration,
-  confirm: (file: FilePaneTab) => Promise<boolean>,
-  hasResource: (id: string) => boolean = () => true,
 ) {
   let live = true;
   const entries = new Map<
@@ -31,14 +27,10 @@ export function createLegacyTerminalMigrations(
     views,
     coldCandidates(projectCwd: string) {
       if (!live) return [];
-      return hiddenLegacyTerminals(
-        views.getSnapshot(),
-        projectCwd,
-        true,
-      ).filter((file) => !hasResource(file.id));
+      return hiddenLegacyTerminals(views.getSnapshot(), projectCwd, true);
     },
     canMigrateCold(file: FilePaneTab, projectCwd: string) {
-      if (!live || hasResource(file.id)) return false;
+      if (!live) return false;
       try {
         views.validateTerminalMigration(file, projectCwd);
       } catch {
@@ -87,27 +79,11 @@ export function createLegacyTerminalMigrations(
       const result = Promise.resolve().then(async () => {
         if (!live || !isCurrent()) throw new RetiredTerminalMigration();
         views.validateTerminalMigration(source, projectCwd);
-        if (cold && hasResource(source.id))
-          throw new Error(
-            "A live legacy terminal requires foreground migration.",
-          );
-        const captured = cold ? capture(source.id, true) : capture(source.id);
         try {
-          if (!cold && !(await confirm(source)))
-            throw new Error("Terminal migration was declined.");
+          return await create();
+        } catch (error) {
           if (!live || !isCurrent()) throw new RetiredTerminalMigration();
-          views.validateTerminalMigration(source, projectCwd);
-          await captured.close();
-          if (!live || !isCurrent()) throw new RetiredTerminalMigration();
-          views.validateTerminalMigration(source, projectCwd);
-          try {
-            return await create();
-          } catch (error) {
-            if (!live || !isCurrent()) throw new RetiredTerminalMigration();
-            throw error;
-          }
-        } finally {
-          captured.release();
+          throw error;
         }
       });
       const entry = { source, projectCwd, result, cold };

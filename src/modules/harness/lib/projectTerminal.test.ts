@@ -12,7 +12,6 @@ import {
   mapProjectTerminal,
   nextDockTerminalTitle,
   patchProjectTerminals,
-  projectTerminalFileIds,
   selectDockTerminal,
   splitProjectTerminalsForMove,
   withDockOpen,
@@ -203,19 +202,6 @@ describe("dockGridStyle", () => {
     applyDockGridStyle(el, "left", 300);
     expect(el.style.gridTemplateAreas).toBe('"dock main"');
     expect(el.style.gridTemplateColumns).toBe("300px minmax(0, 1fr)");
-  });
-});
-
-describe("projectTerminalFileIds", () => {
-  it("lists every terminal in every dock", () => {
-    const a = newTerminalFile("/tmp/a");
-    const b = newTerminalFile("/tmp/b");
-    expect(
-      projectTerminalFileIds([
-        createProjectTerminal("/tmp/a", a),
-        createProjectTerminal("/tmp/b", b),
-      ]),
-    ).toEqual([a.id, b.id]);
   });
 });
 

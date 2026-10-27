@@ -39,8 +39,6 @@ import {
   claimProjectTerminalRequest,
   PROJECT_TERMINAL_REQUEST_EVENT,
 } from "@/modules/terminal/lib/projectTerminalRequest";
-import type { captureLegacyPtyMigration } from "@/modules/harness/lib/pty";
-import type { FilePaneTab } from "@/modules/harness/lib/layout";
 
 const legacy = vi.hoisted(() => vi.fn(() => <div data-legacy="" />));
 vi.mock("@xterm/xterm", () => ({
@@ -49,9 +47,6 @@ vi.mock("@xterm/xterm", () => ({
 const project = "/srv/app";
 let container: HTMLDivElement;
 let root: Root;
-let nativeClose: ReturnType<typeof vi.fn<() => Promise<void>>>;
-let capture: ReturnType<typeof vi.fn<typeof captureLegacyPtyMigration>>;
-let confirm: ReturnType<typeof vi.fn<(file: FilePaneTab) => Promise<boolean>>>;
 let service: ReturnType<typeof createLegacyTerminalMigrations>;
 let views: ReturnType<typeof createHarnessWindowViews>;
 let layouts: Map<number, WorkspaceTab[]>;
@@ -267,15 +262,7 @@ beforeEach(() => {
     },
   );
   views = createHarnessWindowViews();
-  nativeClose = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-  capture = vi.fn<typeof captureLegacyPtyMigration>(() => ({
-    close: nativeClose,
-    release: vi.fn(),
-  }));
-  confirm = vi
-    .fn<(file: FilePaneTab) => Promise<boolean>>()
-    .mockResolvedValue(true);
-  service = createLegacyTerminalMigrations(views, capture, confirm);
+  service = createLegacyTerminalMigrations(views);
   layouts = new Map();
   dockLayouts = new Map();
   tickets = [];
@@ -300,8 +287,6 @@ it("migrates through the real creation channel once and updates a sibling withou
     title: "Build",
     projectCwd: project,
   });
-  expect(capture).toHaveBeenCalledExactlyOnceWith(source.id);
-  expect(nativeClose).toHaveBeenCalledOnce();
   expect(errors).not.toHaveBeenCalled();
   const one = layouts.get(1)?.[0].terminalPanes[0].files[0];
   const two = layouts.get(2)?.[0].terminalPanes[0].files[0];
@@ -331,33 +316,12 @@ it("waits for actual request confirmation before changing any layout", async () 
   ).toBe("tab-converted-1");
 });
 
-it("leaves the legacy file retryable after native cleanup failure", async () => {
-  nativeClose.mockRejectedValueOnce(new Error("cleanup pending"));
-  await act(async () => root.render(<Desktop />));
-  expect(tickets).toHaveLength(0);
-  expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
-  const retry = container.querySelector<HTMLButtonElement>("button");
-  expect(retry?.disabled).toBe(false);
-  await act(async () => retry?.click());
+it("does not publish a pending creation after its original view retires", async () => {
+  await act(async () => root.render(<Desktop manualFinish />));
   expect(tickets).toHaveLength(1);
-  expect(nativeClose).toHaveBeenCalledTimes(2);
-  expect(
-    layouts.get(1)?.[0].terminalPanes[0].files[0].canonicalTerminal,
-  ).toBeDefined();
-});
-
-it("does not create a terminal after the original view retires during cleanup", async () => {
-  let resolve!: () => void;
-  nativeClose.mockReturnValueOnce(
-    new Promise<void>((done) => {
-      resolve = done;
-    }),
-  );
-  await act(async () => root.render(<Desktop />));
-  expect(nativeClose).toHaveBeenCalledOnce();
   await act(async () => root.render(<Desktop enabled={false} />));
-  await act(async () => resolve());
-  expect(tickets).toHaveLength(0);
+  await act(async () => tickets[0].finish());
+  expect(tickets).toHaveLength(1);
   expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
 });
 
@@ -409,7 +373,6 @@ it("recovers a missing converted reference across siblings without restoring the
     expect(tabs[0].terminalPanes[0].files[0].canonicalTerminal?.tabKey).toBe(
       "tab-converted-2",
     );
-  expect(nativeClose).toHaveBeenCalledOnce();
 });
 
 it("migrates a project dock through the same channel while preserving its geometry and selection", async () => {

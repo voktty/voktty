@@ -60,12 +60,7 @@ import { createInboxSessionOperations } from "@/modules/harness/lib/inboxSession
 import { createHarnessProjectReservations } from "@/modules/harness/lib/harnessProjectReservations";
 import { useActiveSurfaceStore } from "@/modules/surfaces";
 import { createLegacyTerminalMigrations } from "@/modules/harness/lib/legacyTerminalMigrations";
-import {
-  captureLegacyPtyMigration,
-  hasLegacyPty,
-} from "@/modules/harness/lib/pty";
 import { HarnessTerminalMigrationContext } from "@/modules/harness/hooks/harnessTerminalMigrationContext";
-import { confirmCloseTerminal } from "@/modules/harness/lib/terminalClose";
 import { windowSessionState } from "@/modules/lifecycle/windowSessionState";
 import { collectHarnessWindowState } from "@/modules/harness/lib/harnessWindowSnapshot";
 import type { ResumedWorkspace } from "@/modules/harness/lib/inFlight";
@@ -142,12 +137,7 @@ export function HarnessWindowHost({
   }
   identityKeys.current = currentKeys;
   const [terminalMigrations] = useState(() =>
-    createLegacyTerminalMigrations(
-      views,
-      captureLegacyPtyMigration,
-      confirmCloseTerminal,
-      hasLegacyPty,
-    ),
+    createLegacyTerminalMigrations(views),
   );
   const [removals] = useState(() =>
     createHarnessWindowViewRemoval(views, holds, projects),

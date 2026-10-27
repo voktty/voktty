@@ -18,11 +18,7 @@ import {
   type ResumedWorkspace,
 } from "./inFlight";
 import { leafIds, type WorkspaceTab } from "./layout";
-import { killPty } from "./pty";
-import {
-  projectTerminalFileIds,
-  type ProjectTerminalDock,
-} from "./projectTerminal";
+import type { ProjectTerminalDock } from "./projectTerminal";
 import { sessionWorkCwd, type Session } from "./session";
 import { restoreSessionCheckout } from "./fs";
 import { sessionChildHarnesses } from "./handoff";
@@ -708,8 +704,6 @@ async function confirmQuitAndExit(
 
 export async function reapWindowRuntime(
   sessions: Session[],
-  tabs: WorkspaceTab[],
-  projectTerminals: ProjectTerminalDock[] = [],
 ): Promise<void> {
   await Promise.all(
     sessions.map((session) =>
@@ -720,24 +714,7 @@ export async function reapWindowRuntime(
       ),
     ),
   );
-  await Promise.all(
-    [...terminalFileIds(tabs), ...projectTerminalFileIds(projectTerminals)].map(
-      (id) => killPty(id),
-    ),
-  );
   // Catalog probes, title generators, and usage scrapers are not session
   // children. Drop them so an unused Pi/Codex probe cannot outlive the window.
   await killAllChildren().catch(() => undefined);
-}
-
-function terminalFileIds(tabs: WorkspaceTab[]): string[] {
-  const ids: string[] = [];
-  for (const tab of tabs) {
-    for (const pane of [...tab.editorPanes, ...(tab.terminalPanes ?? [])]) {
-      for (const file of pane.files) {
-        if (file.terminal && !file.canonicalTerminal) ids.push(file.id);
-      }
-    }
-  }
-  return ids;
 }

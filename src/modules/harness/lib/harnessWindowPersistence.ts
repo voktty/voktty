@@ -253,11 +253,7 @@ export function ownHarnessWindowPersistence(
     },
     reap: async (unload) => {
       if (unloadDenied || !unloadPermit?.isCurrent()) return;
-      await reapWindowRuntime(
-        unload.sessions,
-        unload.tabs,
-        unload.projectTerminals,
-      );
+      await reapWindowRuntime(unload.sessions);
     },
   });
 

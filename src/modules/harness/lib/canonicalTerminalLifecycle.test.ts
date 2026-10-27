@@ -1,52 +1,24 @@
 import { expect, it, vi } from "vitest";
-import {
-  newEditorPane,
-  newTerminalFile,
-  newTerminalWorkspaceTab,
-} from "@/modules/harness/lib/layout";
-import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
-import {
-  createProjectTerminal,
-  projectTerminalFileIds,
-} from "@/modules/harness/lib/projectTerminal";
-import {
-  confirmCloseTerminal,
-  confirmCloseTerminals,
-} from "@/modules/harness/lib/terminalClose";
 import { reapWindowRuntime } from "@/modules/harness/lib/appLifecycle";
+import { newSession } from "@/modules/harness/lib/session";
 
-const legacy = vi.hoisted(() => ({
-  status: vi.fn(),
-  kill: vi.fn().mockResolvedValue(undefined),
-  killChildren: vi.fn().mockResolvedValue(undefined),
+const cleanup = vi.hoisted(() => ({
+  forget: vi.fn().mockResolvedValue(undefined),
+  probes: vi.fn().mockResolvedValue(undefined),
+  invoke: vi.fn(),
 }));
-vi.mock("@/modules/harness/lib/pty", () => ({
-  getPtyStatus: legacy.status,
-  killPty: legacy.kill,
+vi.mock("@/modules/harness/lib/harness/registry", () => ({
+  forgetHarnessSession: cleanup.forget,
 }));
 vi.mock("@/modules/harness/lib/harness/child", () => ({
-  killAllChildren: legacy.killChildren,
+  killAllChildren: cleanup.probes,
 }));
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
-const canonical = {
-  ...newTerminalFile("/srv/app"),
-  canonicalTerminal: { tabKey: asTabKey("tab-shell"), projectCwd: "/srv/app" },
-};
-it("never consults the legacy PTY registry for canonical close confirmation", async () => {
-  await expect(confirmCloseTerminal(canonical)).resolves.toBe(true);
-  await expect(confirmCloseTerminals([canonical])).resolves.toBe(true);
-  expect(legacy.status).not.toHaveBeenCalled();
-});
-it("excludes canonical resources from legacy window reaping while preserving legacy cleanup", async () => {
-  const old = newTerminalFile("/srv/app");
-  const tab = newTerminalWorkspaceTab(canonical);
-  const mixed = { ...tab, editorPanes: [newEditorPane(canonical)] };
-  const docks = [
-    createProjectTerminal("/srv/app", canonical),
-    createProjectTerminal("/srv/old", old),
-  ];
-  expect(projectTerminalFileIds(docks)).toEqual([old.id]);
-  await reapWindowRuntime([], [mixed], docks);
-  expect(legacy.kill).toHaveBeenCalledExactlyOnceWith(old.id);
+vi.mock("@tauri-apps/api/core", () => ({ invoke: cleanup.invoke }));
+
+it("reaps Harness sessions and probes without closing canonical terminal resources", async () => {
+  const session = newSession("claude", "/srv/app");
+  await reapWindowRuntime([session]);
+  expect(cleanup.forget).toHaveBeenCalledExactlyOnceWith("claude", session.id);
+  expect(cleanup.probes).toHaveBeenCalledOnce();
+  expect(cleanup.invoke).not.toHaveBeenCalled();
 });

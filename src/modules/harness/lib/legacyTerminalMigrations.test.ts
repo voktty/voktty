@@ -141,92 +141,48 @@ it("checks authority again before publishing and rejects stale canonical replace
   ).toEqual(replacement);
 });
 
-it("coalesces duplicate migrations, confirms before closing, and retains the accepted result for a later owner", async () => {
+it("coalesces canonical creation and retains its accepted result for a later owner", async () => {
   const views = createHarnessWindowViews();
   const { file, input } = fixture();
   views.register(1, input);
-  const confirmation = deferred<boolean>();
-  const cleanup = deferred<void>();
-  const close = vi.fn(() => cleanup.promise);
-  const release = vi.fn();
-  const capture = vi.fn(() => ({ close, release }));
-  const confirm = vi.fn(() => confirmation.promise);
-  const service = createLegacyTerminalMigrations(views, capture, confirm);
-  const create = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
+  const pending = deferred<{ tabKey: typeof reference.tabKey }>();
+  const service = createLegacyTerminalMigrations(views);
+  const create = vi.fn(() => pending.promise);
   const first = service.run(file, input.projectCwd, () => true, create);
   expect(service.run({ ...file }, input.projectCwd, () => true, create)).toBe(
     first,
   );
-  await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
-  expect(close).not.toHaveBeenCalled();
-  confirmation.resolve(true);
-  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
-  expect(create).not.toHaveBeenCalled();
-  cleanup.resolve();
+  await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+  expect(views.capture([]).tabs[0].terminalPanes[0].files[0]).toEqual(file);
+  pending.resolve({ tabKey: reference.tabKey });
   await expect(first).resolves.toEqual({ tabKey: reference.tabKey });
-  expect(release).toHaveBeenCalledOnce();
   expect(service.run(file, input.projectCwd, () => true, create)).toBe(first);
   expect(create).toHaveBeenCalledOnce();
 });
 
-it("preserves the original terminal when confirmation is declined and retries later", async () => {
+it("preserves metadata after failed creation and allows a fresh retry", async () => {
   const views = createHarnessWindowViews();
   const { file, input } = fixture();
   views.register(1, input);
-  const close = vi.fn().mockResolvedValue(undefined);
-  const release = vi.fn();
-  const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
-  const service = createLegacyTerminalMigrations(
-    views,
-    () => ({ close, release }),
-    confirm,
-  );
-  const create = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
+  const service = createLegacyTerminalMigrations(views);
+  const failure = new Error("canonical creation failed");
+  const create = vi
+    .fn()
+    .mockRejectedValueOnce(failure)
+    .mockResolvedValue({ tabKey: reference.tabKey });
+  const first = service.run(file, input.projectCwd, () => true, create, true);
+  const joined = service.run(file, input.projectCwd, () => true, create);
+  await expect(first).rejects.toBe(failure);
+  await expect(joined).rejects.toBe(failure);
+  expect(create).toHaveBeenCalledOnce();
+  expect(views.capture([]).tabs[0].terminalPanes[0].files[0]).toEqual(file);
   await expect(
     service.run(file, input.projectCwd, () => true, create),
-  ).rejects.toThrow("declined");
-  expect(close).not.toHaveBeenCalled();
-  expect(create).not.toHaveBeenCalled();
-  expect(
-    views.capture([]).tabs[0].terminalPanes[0].files[0].canonicalTerminal,
-  ).toBeUndefined();
-  await service.run(file, input.projectCwd, () => true, create);
-  expect(close).toHaveBeenCalledOnce();
-  expect(create).toHaveBeenCalledOnce();
+  ).resolves.toEqual({ tabKey: reference.tabKey });
+  expect(create).toHaveBeenCalledTimes(2);
 });
 
-it("releases the migration fence and preserves layout after failed cleanup or retired authority", async () => {
-  const views = createHarnessWindowViews();
-  const { file, input } = fixture();
-  views.register(1, input);
-  const close = vi
-    .fn()
-    .mockRejectedValueOnce(new Error("native cleanup failed"))
-    .mockResolvedValue(undefined);
-  const release = vi.fn();
-  let live = true;
-  const service = createLegacyTerminalMigrations(
-    views,
-    () => ({ close, release }),
-    async () => true,
-  );
-  const create = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
-  await expect(
-    service.run(file, input.projectCwd, () => live, create),
-  ).rejects.toThrow("native cleanup failed");
-  expect(release).toHaveBeenCalledOnce();
-  expect(create).not.toHaveBeenCalled();
-  close.mockImplementationOnce(async () => {
-    live = false;
-  });
-  await expect(
-    service.run(file, input.projectCwd, () => live, create),
-  ).rejects.toThrow("retired");
-  expect(create).not.toHaveBeenCalled();
-  expect(release).toHaveBeenCalledTimes(2);
-});
-
-it("refuses a conflicting in-flight definition and revalidates project reservations after confirmation", async () => {
+it("refuses conflicting definitions and revalidates project reservations before creation", async () => {
   let reserved = false;
   const views = createHarnessWindowViews(undefined, {
     has: () => reserved,
@@ -234,25 +190,14 @@ it("refuses a conflicting in-flight definition and revalidates project reservati
   });
   const { input, file } = fixture();
   views.register(1, input);
-  const pending = deferred<boolean>();
-  const close = vi.fn();
-  const release = vi.fn();
-  const confirm = vi.fn(() => pending.promise);
-  const service = createLegacyTerminalMigrations(
-    views,
-    () => ({ close, release }),
-    confirm,
-  );
+  const service = createLegacyTerminalMigrations(views);
   const create = vi.fn();
   const result = service.run(file, input.projectCwd, () => true, create);
-  await expect(
+  const conflict = expect(
     service.run(file, "/other-project", () => true, create),
   ).rejects.toThrow("Conflicting");
-  await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
   reserved = true;
-  pending.resolve(true);
-  await expect(result).rejects.toThrow("reserved");
-  expect(close).not.toHaveBeenCalled();
+  await Promise.all([conflict, expect(result).rejects.toThrow("reserved")]);
   expect(create).not.toHaveBeenCalled();
 });
 
@@ -296,12 +241,7 @@ it("publishes the exact shared promise before a reentrant admission callback", a
   const views = createHarnessWindowViews();
   const { file, input } = fixture();
   views.register(1, input);
-  const close = vi.fn().mockResolvedValue(undefined);
-  const service = createLegacyTerminalMigrations(
-    views,
-    () => ({ close, release: vi.fn() }),
-    async () => true,
-  );
+  const service = createLegacyTerminalMigrations(views);
   const create = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
   let reentered: Promise<unknown> | undefined;
   const result = service.run(
@@ -315,7 +255,6 @@ it("publishes the exact shared promise before a reentrant admission callback", a
   );
   await result;
   expect(reentered).toBe(result);
-  expect(close).toHaveBeenCalledOnce();
   expect(create).toHaveBeenCalledOnce();
 });
 
@@ -340,13 +279,7 @@ it.each([
 it("bounds unsettled and accepted mappings without creating a 257th terminal", async () => {
   const views = createHarnessWindowViews();
   const pending = deferred<{ tabKey: typeof reference.tabKey }>();
-  const close = vi.fn().mockResolvedValue(undefined);
-  const capture = vi.fn(() => ({ close, release: vi.fn() }));
-  const service = createLegacyTerminalMigrations(
-    views,
-    capture,
-    async () => true,
-  );
+  const service = createLegacyTerminalMigrations(views);
   const create = vi.fn(() => pending.promise);
   const files = Array.from({ length: 257 }, () =>
     newTerminalFile("/srv/app", "Build"),
@@ -363,66 +296,69 @@ it("bounds unsettled and accepted mappings without creating a 257th terminal", a
   expect(service.run(files[0], "/srv/app", () => true, create)).toBe(
     results[0],
   );
-  expect(capture).toHaveBeenCalledTimes(256);
+  expect(create).toHaveBeenCalledTimes(256);
   service.dispose();
   await expect(
     service.run(files[0], "/srv/app", () => true, create),
   ).rejects.toThrow("retired");
 });
 
-it("creates cold metadata only from an empty capture without querying foreground processes", async () => {
+it("admits hidden metadata without a resource registry and retires candidate delivery on disposal", () => {
   const views = createHarnessWindowViews();
   const { file, input } = fixture();
   views.register(1, input);
-  const capture = vi.fn(() => ({
-    close: vi.fn().mockResolvedValue(undefined),
-    release: vi.fn(),
-  }));
-  const confirm = vi.fn().mockResolvedValue(true);
-  let liveResource = false;
-  const service = createLegacyTerminalMigrations(
-    views,
-    capture,
-    confirm,
-    () => liveResource,
-  );
-  expect(
-    service.coldCandidates(input.projectCwd).map((file) => file.id),
-  ).toEqual([file.id]);
-  liveResource = true;
+  const service = createLegacyTerminalMigrations(views);
+  expect(service.coldCandidates(input.projectCwd)).toEqual([file]);
+  expect(service.canMigrateCold(file, input.projectCwd)).toBe(true);
+  service.dispose();
   expect(service.coldCandidates(input.projectCwd)).toEqual([]);
   expect(service.canMigrateCold(file, input.projectCwd)).toBe(false);
-  const create = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
-  await expect(
-    service.run(file, input.projectCwd, () => true, create, true),
-  ).rejects.toThrow("foreground");
-  expect(capture).not.toHaveBeenCalled();
-  liveResource = false;
-  await service.run(file, input.projectCwd, () => true, create, true);
-  expect(capture).toHaveBeenCalledExactlyOnceWith(file.id, true);
-  expect(create).toHaveBeenCalledOnce();
-  expect(confirm).not.toHaveBeenCalled();
 });
 
-it("lets a current caller replace a retired cold admission after its exact cleanup settles", async () => {
+it("keeps retired pending creations charged until their actual requests settle", async () => {
+  const views = createHarnessWindowViews();
+  const service = createLegacyTerminalMigrations(views);
+  const pending = deferred<void>();
+  let live = true;
+  const create = vi.fn(async () => {
+    await pending.promise;
+    throw new Error("creation cancelled");
+  });
+  const requests = Array.from({ length: 256 }, () =>
+    service.run(newTerminalFile("/srv/app"), "/srv/app", () => live, create),
+  );
+  const outcomes = Promise.allSettled(requests);
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(256));
+  live = false;
+  const next = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
+  await expect(
+    service.run(newTerminalFile("/srv/app"), "/srv/app", () => true, next),
+  ).rejects.toThrow("unavailable");
+  expect(next).not.toHaveBeenCalled();
+  pending.resolve();
+  for (const outcome of await outcomes) {
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected")
+      expect(outcome.reason.message).toBe("Terminal migration was retired.");
+  }
+  await expect(
+    service.run(newTerminalFile("/srv/app"), "/srv/app", () => true, next),
+  ).resolves.toEqual({ tabKey: reference.tabKey });
+  expect(next).toHaveBeenCalledOnce();
+});
+
+it("retries retired cold admission only after its pending canonical creation settles", async () => {
   const views = createHarnessWindowViews();
   const { file, input } = fixture();
   views.register(1, input);
   const pending = deferred<void>();
-  const close = vi
-    .fn()
-    .mockReturnValueOnce(pending.promise)
-    .mockResolvedValue(undefined);
-  const capture = vi.fn(() => ({ close, release: vi.fn() }));
-  const confirm = vi.fn().mockResolvedValue(true);
-  const service = createLegacyTerminalMigrations(
-    views,
-    capture,
-    confirm,
-    () => false,
-  );
+  const service = createLegacyTerminalMigrations(views);
   let original = true;
-  const oldCreate = vi.fn();
+  const oldCreate = vi.fn(() =>
+    pending.promise.then(() => {
+      throw new Error("cancelled");
+    }),
+  );
   const old = service.run(
     file,
     input.projectCwd,
@@ -431,7 +367,7 @@ it("lets a current caller replace a retired cold admission after its exact clean
     true,
   );
   const rejected = expect(old).rejects.toThrow("retired");
-  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(oldCreate).toHaveBeenCalledOnce());
   original = false;
   const nextCreate = vi.fn().mockResolvedValue({ tabKey: reference.tabKey });
   const next = service.run(file, input.projectCwd, () => true, nextCreate);
@@ -439,30 +375,23 @@ it("lets a current caller replace a retired cold admission after its exact clean
   pending.resolve();
   await rejected;
   await expect(next).resolves.toEqual({ tabKey: reference.tabKey });
-  expect(oldCreate).not.toHaveBeenCalled();
+  expect(oldCreate).toHaveBeenCalledOnce();
   expect(nextCreate).toHaveBeenCalledOnce();
-  expect(confirm).toHaveBeenCalledOnce();
-  expect(capture).toHaveBeenCalledTimes(2);
 });
 
-it("does not retry an actual cold cleanup failure through a joined caller", async () => {
-  const views = createHarnessWindowViews();
-  const { file, input } = fixture();
-  views.register(1, input);
-  const failure = new Error("native cleanup failed");
-  const close = vi.fn().mockRejectedValue(failure);
-  const capture = vi.fn(() => ({ close, release: vi.fn() }));
-  const service = createLegacyTerminalMigrations(
-    views,
-    capture,
-    async () => true,
-    () => false,
-  );
-  const create = vi.fn();
-  const old = service.run(file, input.projectCwd, () => true, create, true);
-  const joined = service.run(file, input.projectCwd, () => true, create);
-  await expect(old).rejects.toBe(failure);
-  await expect(joined).rejects.toBe(failure);
-  expect(capture).toHaveBeenCalledOnce();
-  expect(create).not.toHaveBeenCalled();
-});
+it.each(["caller", "service"])(
+  "retires %s admission before invoking canonical creation",
+  async (reason) => {
+    const views = createHarnessWindowViews();
+    const { file, input } = fixture();
+    views.register(1, input);
+    const service = createLegacyTerminalMigrations(views);
+    let live = true;
+    const create = vi.fn();
+    const result = service.run(file, input.projectCwd, () => live, create);
+    if (reason === "caller") live = false;
+    else service.dispose();
+    await expect(result).rejects.toThrow("retired");
+    expect(create).not.toHaveBeenCalled();
+  },
+);

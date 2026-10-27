@@ -250,18 +250,6 @@ export function withDockSize(
   return next === dock.size ? dock : { ...dock, size: next };
 }
 
-export function projectTerminalFileIds(
-  docks: ProjectTerminalDock[],
-): string[] {
-  const ids: string[] = [];
-  for (const dock of docks) {
-    for (const file of dock.pane.files) {
-      if (file.terminal && !file.canonicalTerminal) ids.push(file.id);
-    }
-  }
-  return ids;
-}
-
 export function dockGridStyle(
   side: DockSide | null,
   size: number,

@@ -279,10 +279,6 @@ import {
   tabVisitForward,
 } from "../lib/tabVisitHistory";
 import {
-  confirmCloseTerminal,
-  confirmCloseTerminals,
-} from "../lib/terminalClose";
-import {
   listRunningTerminals,
   newTerminalCwd,
   type TerminalMetaPatch,
@@ -2017,7 +2013,7 @@ export function HarnessApp({
         ),
       );
     };
-    void confirmCloseTerminal(file).then((ok: any) => ok && finishClose());
+    finishClose();
   }, [requestCanonicalTerminalClose]);
 
   const onCloseOtherProjectTerminals = useCallback((fileId: string) => {
@@ -2049,9 +2045,7 @@ export function HarnessApp({
       );
     };
 
-    void confirmCloseTerminals(closingFiles).then(
-      (ok: any) => ok && finishClose(),
-    );
+    finishClose();
   }, [requestCanonicalTerminalCloses]);
 
   const onTerminalMetaChange = useCallback(
@@ -2131,7 +2125,7 @@ export function HarnessApp({
   }, [onOpenTerminal, terminalCwd]);
 
   const onCloseTab = useCallback(
-    (id: string, opts?: { confirmedTerminalIds?: string[] }) => {
+    (id: string) => {
       const current = tabsRef.current;
       const index = current.findIndex((t) => t.id === id);
       if (index < 0) return;
@@ -2183,16 +2177,6 @@ export function HarnessApp({
         void refreshHistory(sidebarCwd);
       };
 
-      const confirmed = new Set(opts?.confirmedTerminalIds ?? []);
-      const terminals = closingFiles.filter(
-        (file: any) => file.terminal && !confirmed.has(file.id),
-      );
-      if (terminals.length > 0) {
-        void confirmCloseTerminals(terminals).then(
-          (ok: any) => ok && finishClose(),
-        );
-        return;
-      }
       finishClose();
     },
     [
@@ -2223,7 +2207,6 @@ export function HarnessApp({
         (file: any) =>
           isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
       );
-      const terminals = closingFiles.filter((file: any) => file.terminal);
 
       const finishClose = () => {
         const sessionIds = new Set(
@@ -2257,16 +2240,11 @@ export function HarnessApp({
           );
           if (!ok) return;
         }
-        if (terminals.length > 0) {
-          const ok = await confirmCloseTerminals(terminals);
-          if (!ok) return;
-        }
         finishClose();
       })();
     },
     [
       activateTab,
-      confirmCloseTerminals,
       confirmDiscardUnsaved,
       persistSession,
       refreshHistory,
@@ -2464,10 +2442,7 @@ export function HarnessApp({
               worktreeOf: tabWorktreeOf,
             });
             if (closePlan.action === "close") {
-              onCloseTab(
-                tab.id,
-                file.terminal ? { confirmedTerminalIds: [fileId] } : undefined,
-              );
+              onCloseTab(tab.id);
               return;
             }
             const seed = sessionsRef.current[0];
@@ -2534,10 +2509,6 @@ export function HarnessApp({
         }
       };
 
-      if (file.terminal) {
-        void confirmCloseTerminal(file).then((ok: any) => ok && finishClose());
-        return;
-      }
       finishClose();
     },
     [activeTabId, dirtyFiles, onCloseTab, projectCwd, tabCloseScope, admitSession, requestCanonicalTerminalClose],
@@ -2562,7 +2533,6 @@ export function HarnessApp({
         (file: any) =>
           isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
       );
-      const terminals = closingFiles.filter((file: any) => file.terminal);
 
       const finishClose = () => {
         setTabs((prev: any) =>
@@ -2601,10 +2571,6 @@ export function HarnessApp({
           const ok = await confirmDiscardUnsaved(
             t("harness.chrome.closeOtherTabsWithUnsavedFiles"),
           );
-          if (!ok) return;
-        }
-        if (terminals.length > 0) {
-          const ok = await confirmCloseTerminals(terminals);
           if (!ok) return;
         }
         finishClose();
@@ -3548,12 +3514,6 @@ export function HarnessApp({
             )
               return false;
             if (!persistencePermit.isCurrent()) return false;
-            const terminals = files.filter((file) => file.terminal);
-            if (
-              terminals.length > 0 &&
-              !(await confirmCloseTerminals(terminals))
-            )
-              return false;
             return admitted.commit();
           },
           stop: async () => {
