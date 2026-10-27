@@ -59,8 +59,7 @@ function tab(id = "t1", sessionId = "s1"): WorkspaceTab {
     id,
     layout: { type: "leaf", id: sessionId },
     focusedId: sessionId,
-    editorPanes: [],
-    terminalPanes: [],
+    filePanes: [],
   };
 }
 
@@ -281,7 +280,7 @@ describe("mergeHarnessWindowWorkspaces", () => {
       },
     },
     {
-      editorPanes: [
+      filePanes: [
         {
           id: "editor",
           activeFileId: "file",
@@ -329,11 +328,15 @@ describe("mergeHarnessWindowWorkspaces", () => {
     collision(() => mergeHarnessWindowWorkspaces([a, b], 1));
   });
 
-  it.each(["editorPanes", "terminalPanes"] as const)(
-    "checks repeated terminal file descriptors across %s and docks",
-    (field) => {
+  it.each(["first", "after document"] as const)(
+    "checks repeated terminal file descriptors %s and in docks",
+    (position) => {
       const a = capture();
-      a.snapshot.tabs[0][field] = [
+      a.snapshot.tabs[0].filePanes = [
+        ...(position === "after document" ? [{
+          id: "document-pane", activeFileId: "document",
+          files: [{ id: "document", path: "/synthetic/file", cwd: "/synthetic" }],
+        }] : []),
         { id: "pane", files: [terminal()], activeFileId: "terminal" },
       ];
       a.snapshot.projectTerminals = [
@@ -345,7 +348,7 @@ describe("mergeHarnessWindowWorkspaces", () => {
 
   it("allows equal terminal file descriptors in distinct containers", () => {
     const a = capture();
-    a.snapshot.tabs[0].terminalPanes = [
+    a.snapshot.tabs[0].filePanes = [
       { id: "pane", files: [terminal()], activeFileId: "terminal" },
     ];
     a.snapshot.projectTerminals = [dock()];
@@ -601,7 +604,7 @@ describe("mergeHarnessWindowWorkspaces", () => {
     workspace.focusedId = a.sessions[0].id;
     const paneId = id("pane", "pane");
     const file = terminal(id("file", "file"));
-    workspace.terminalPanes = [
+    workspace.filePanes = [
       { id: paneId, files: [file], activeFileId: file.id },
     ];
     workspace.layout = {
@@ -621,7 +624,7 @@ describe("mergeHarnessWindowWorkspaces", () => {
   it("allows leaves and selected/return IDs to reference defined resources", () => {
     const a = capture();
     const file = terminal();
-    a.snapshot.tabs[0].terminalPanes = [
+    a.snapshot.tabs[0].filePanes = [
       { id: "pane", files: [file], activeFileId: file.id },
     ];
     a.snapshot.tabs[0].layout = {

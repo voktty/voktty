@@ -28,6 +28,7 @@ import {
   newTerminalFile,
   newTerminalWorkspaceTab,
   splitPane,
+  surfacePanes,
 } from "@/modules/harness/lib/layout";
 import type { ResumedWorkspace } from "@/modules/harness/lib/inFlight";
 type PaneProps = Parameters<
@@ -352,7 +353,7 @@ it.each(["dock", "pane"])(
     await act(async () => root.render(<Host resumed={resumed} />));
     expect(claims).toEqual([]);
     const slotKey =
-      kind === "dock" ? `dock:${project}` : `pane:${tab.terminalPanes[0].id}`;
+      kind === "dock" ? `dock:${project}` : `pane:${tab.filePanes[0].id}`;
     let accepted = false;
     await act(async () => {
       accepted = required(state.recover)(file, slotKey, () => true, vi.fn());
@@ -364,7 +365,7 @@ it.each(["dock", "pane"])(
     const recovered =
       kind === "dock"
         ? view().projectTerminals[0].pane.files[0]
-        : view().tabs[0].terminalPanes[0].files[0];
+        : view().tabs[0].filePanes[0].files[0];
     expect(recovered).toEqual({
       ...file,
       foreground: undefined,
@@ -469,7 +470,7 @@ it("keeps a failed recovery retryable without dropping its original reference", 
 it("creates a canonical terminal beside an editor without mixing its file strip", async () => {
   const file = newFileTab("/srv/app/file.txt", project);
   const pane = newEditorPane(file);
-  const tab = { ...newTab(pane.id), editorPanes: [pane] };
+  const tab = { ...newTab(pane.id), filePanes: [pane] };
   const resumed: ResumedWorkspace = {
     tabs: [tab],
     sessions: [],
@@ -482,8 +483,8 @@ it("creates a canonical terminal beside an editor without mixing its file strip"
     required(required(state.pane).onAddTerminalToPane)(pane.id),
   );
   expect(claims).toHaveLength(1);
-  expect(view().tabs[0].editorPanes[0].files).toEqual([file]);
-  expect(view().tabs[0].terminalPanes[0].files[0].canonicalTerminal).toEqual({
+  expect(view().tabs[0].filePanes[0].files).toEqual([file]);
+  expect(surfacePanes(view().tabs[0], "terminal")[0].files[0].canonicalTerminal).toEqual({
     tabKey: terminal.tabKey,
     projectCwd: project,
   });
@@ -535,7 +536,7 @@ it("prunes closed canonical files from every pane while preserving physical edit
   const mixed = {
     ...first,
     layout: splitPane(first.layout, first.focusedId, "right", editor.id),
-    editorPanes: [editor],
+    filePanes: [...first.filePanes, editor],
   };
   const conversation = newTab(
     required(
@@ -563,8 +564,7 @@ it("prunes closed canonical files from every pane while preserving physical edit
   expect(view().tabs[0]).toMatchObject({
     layout: { type: "leaf", id: editor.id },
     focusedId: editor.id,
-    editorPanes: [editor],
-    terminalPanes: [],
+    filePanes: [editor],
   });
   expect(view().tabs[1]).toBe(conversation);
   expect(view().tabs.some((tab) => tab.id === view().activeTabId)).toBe(true);
@@ -692,7 +692,7 @@ it.each(["focus", "project"] as const)(
   async (reason) => {
     const file = newFileTab(`${project}/existing.ts`, project);
     const pane = newEditorPane(file);
-    const tab = { ...newTab(pane.id), editorPanes: [pane] };
+    const tab = { ...newTab(pane.id), filePanes: [pane] };
     const resumed: ResumedWorkspace = {
       tabs: [tab],
       sessions: [],
@@ -720,7 +720,7 @@ it.each(["focus", "project"] as const)(
     );
     await act(async () => finish(`${project}/pending.ts`));
     expect(
-      view().tabs.find((entry) => entry.id === tab.id)?.editorPanes[0].files,
+      view().tabs.find((entry) => entry.id === tab.id)?.filePanes[0].files,
     ).toEqual([file]);
     expect(state.rememberFile).not.toHaveBeenCalled();
   },
@@ -729,7 +729,7 @@ it.each(["focus", "project"] as const)(
 it("applies current file navigation through the production App state setters", async () => {
   const file = newFileTab(`${project}/existing.ts`, project);
   const pane = newEditorPane(file);
-  const tab = { ...newTab(pane.id), editorPanes: [pane] };
+  const tab = { ...newTab(pane.id), filePanes: [pane] };
   const resumed: ResumedWorkspace = {
     tabs: [tab],
     sessions: [],
@@ -741,7 +741,7 @@ it("applies current file navigation through the production App state setters", a
   await act(async () =>
     sidebar().onOpenFile?.(`${project}/new.ts`, { line: 7, column: 2 }),
   );
-  expect(view().tabs[0].editorPanes[0].files[1]).toMatchObject({
+  expect(view().tabs[0].filePanes[0].files[1]).toMatchObject({
     path: `${project}/new.ts`,
     cwd: project,
   });

@@ -31,7 +31,7 @@ export function hiddenLegacyTerminals(
     const selected = layout.tabs.find((tab) => tab.id === layout.activeTabId);
     const visiblePanes = new Set(selected ? leafIds(selected.layout) : []);
     for (const tab of layout.tabs)
-      for (const pane of [...tab.editorPanes, ...tab.terminalPanes])
+      for (const pane of tab.filePanes)
         for (const file of pane.files) {
           if (!file.terminal) continue;
           if (

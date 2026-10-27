@@ -43,14 +43,7 @@ function paneProjects(
       }
     }
 
-    for (const pane of tab.editorPanes) {
-      const active = pane.files.find((file) => file.id === pane.activeFileId);
-      if (active && active.cwd !== "~") {
-        result.set(pane.id, pathKey(active.cwd));
-      }
-    }
-
-    for (const pane of tab.terminalPanes ?? []) {
+    for (const pane of tab.filePanes) {
       const active = pane.files.find((file) => file.id === pane.activeFileId);
       if (active && active.cwd !== "~") {
         result.set(pane.id, pathKey(active.cwd));
@@ -82,10 +75,7 @@ function paneForProjectInTab(
   for (const paneId of leafIds(tab.layout)) {
     if (paneById.get(paneId) === target) return paneId;
   }
-  for (const pane of tab.editorPanes) {
-    if (paneById.get(pane.id) === target) return pane.id;
-  }
-  for (const pane of tab.terminalPanes ?? []) {
+  for (const pane of tab.filePanes) {
     if (paneById.get(pane.id) === target) return pane.id;
   }
   return undefined;
@@ -94,8 +84,7 @@ function paneForProjectInTab(
 function tabContainsPane(tab: WorkspaceTab, paneId: string): boolean {
   return (
     leafIds(tab.layout).includes(paneId) ||
-    tab.editorPanes.some((pane) => pane.id === paneId) ||
-    (tab.terminalPanes ?? []).some((pane) => pane.id === paneId)
+    tab.filePanes.some((pane) => pane.id === paneId)
   );
 }
 

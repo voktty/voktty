@@ -205,7 +205,7 @@ export function harnessViewSessionReferences(state: ViewState): Set<string> {
     ...state.report.referencedSessionIds,
     ...state.layout.tabs.flatMap((tab) => [
       ...leafIds(tab.layout),
-      ...tab.editorPanes.flatMap((pane) =>
+      ...tab.filePanes.flatMap((pane) =>
         pane.files.flatMap((file) => [
           ...(file.plan ? [file.plan.sessionId] : []),
           ...(file.sessionChanges ? [file.sessionChanges.sessionId] : []),
@@ -371,7 +371,7 @@ export function createHarnessWindowViews(
         const layout = entry.cohort.state.layout;
         const files = [
           ...layout.tabs.flatMap((tab) =>
-            [...tab.editorPanes, ...tab.terminalPanes].flatMap(
+            tab.filePanes.flatMap(
               (pane) => pane.files,
             ),
           ),

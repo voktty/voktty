@@ -44,21 +44,19 @@ export function pruneCanonicalTerminalTabs(
   let changed = false;
   const next = tabs.flatMap((original) => {
     let tab: WorkspaceTab | null = original;
-    for (const kind of ["editorPanes", "terminalPanes"] as const) {
-      const panes: EditorPane[] = [];
-      for (const pane of original[kind]) {
-        const updated = prunePane(pane, removed);
-        if (updated) panes.push(updated);
-        else if (tab) tab = closeLeaf(tab, pane.id);
-        if (updated !== pane) changed = true;
-      }
-      if (
-        tab &&
-        (panes.some((pane, index) => pane !== original[kind][index]) ||
-          panes.length !== original[kind].length)
-      )
-        tab = { ...tab, [kind]: panes };
+    const panes: EditorPane[] = [];
+    for (const pane of original.filePanes) {
+      const updated = prunePane(pane, removed);
+      if (updated) panes.push(updated);
+      else if (tab) tab = closeLeaf(tab, pane.id);
+      if (updated !== pane) changed = true;
     }
+    if (
+      tab &&
+      (panes.some((pane, index) => pane !== original.filePanes[index]) ||
+        panes.length !== original.filePanes.length)
+    )
+      tab = { ...tab, filePanes: panes };
     return tab ? [tab] : [];
   });
   return changed ? next : tabs;

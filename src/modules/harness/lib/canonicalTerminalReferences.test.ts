@@ -6,6 +6,7 @@ import {
   newEditorPane,
   newFileTab,
   splitPane,
+  surfacePanes,
 } from "@/modules/harness/lib/layout";
 import {
   createProjectTerminal,
@@ -42,10 +43,10 @@ it("collapses the emptied terminal pane while preserving physical files and conv
     "down",
     "chat",
   );
-  const mixed = { ...original, layout, editorPanes: [pane], diffOpen: true };
+  const mixed = { ...original, layout, filePanes: [...original.filePanes, pane], diffOpen: true };
   const [result] = pruneCanonicalTerminalTabs([mixed], closed);
-  expect(result.terminalPanes).toEqual([]);
-  expect(result.editorPanes[0]).toBe(pane);
+  expect(surfacePanes(result, "terminal")).toEqual([]);
+  expect(result.filePanes[0]).toBe(pane);
   expect(result.focusedId).toBe(pane.id);
   expect(result.diffOpen).toBe(true);
   expect(result.layout).toMatchObject({
@@ -72,12 +73,12 @@ it("selects the nearest remaining file and preserves the pane when its active re
     ...newTerminalFile(reference.projectCwd),
     canonicalTerminal: { ...reference, tabKey: asTabKey("tab-other") },
   };
-  const pane = { ...tab.terminalPanes[0], files: [before, file, after] };
+  const pane = { ...tab.filePanes[0], files: [before, file, after] };
   const [next] = pruneCanonicalTerminalTabs(
-    [{ ...tab, terminalPanes: [pane] }],
+    [{ ...tab, filePanes: [pane] }],
     closed,
   );
-  expect(next.terminalPanes[0]).toEqual({
+  expect(next.filePanes[0]).toEqual({
     ...pane,
     files: [before, after],
     activeFileId: after.id,
@@ -93,9 +94,9 @@ it("does not delete a replacement reference with the same file id", () => {
     const tabs = [
       {
         ...original,
-        terminalPanes: [
+        filePanes: [
           {
-            ...original.terminalPanes[0],
+            ...original.filePanes[0],
             files: [{ ...file, canonicalTerminal }],
           },
         ],
@@ -129,7 +130,7 @@ it("preserves unseen, legacy and physical files even when their ids are listed",
     newTerminalWorkspaceTab(legacy),
     {
       ...newTab("pane"),
-      editorPanes: [
+      filePanes: [
         { id: "pane", files: [physical], activeFileId: physical.id },
       ],
     },

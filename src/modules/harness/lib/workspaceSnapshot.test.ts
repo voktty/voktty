@@ -148,7 +148,7 @@ describe("session changes workspace tabs", () => {
   it("restores the selected changes or commit view", () => {
     const file = newSessionChangesTab("/repo", "session-a", undefined, "commit");
     const pane = newEditorPane(file);
-    const tab = { ...newTab(pane.id), editorPanes: [pane] };
+    const tab = { ...newTab(pane.id), filePanes: [pane] };
     const snapshot = collectWorkspaceSnapshot(
       [tab],
       [],
@@ -158,7 +158,7 @@ describe("session changes workspace tabs", () => {
     );
 
     const restored = hydrateWorkspaceSnapshot(snapshot, new Map());
-    expect(restored?.tabs[0]?.editorPanes[0]?.files[0]?.sessionChanges).toEqual({
+    expect(restored?.tabs[0]?.filePanes[0]?.files[0]?.sessionChanges).toEqual({
       sessionId: "session-a",
       view: "commit",
     });
@@ -173,7 +173,7 @@ describe("collectWorkspaceSnapshot", () => {
     const tab = {
       ...newTab("s1"),
       id: "t1",
-      editorPanes: [{ id: "e1", files: [file], activeFileId: file.id }],
+      filePanes: [{ id: "e1", files: [file], activeFileId: file.id }],
     };
     const snapshot = collectWorkspaceSnapshot(
       [tab],
@@ -183,7 +183,7 @@ describe("collectWorkspaceSnapshot", () => {
       new Map(),
     );
     expect(snapshot.activeTabId).toBe("t1");
-    expect(snapshot.tabs[0]?.editorPanes[0]?.files[0]?.path).toBe(
+    expect(snapshot.tabs[0]?.filePanes[0]?.files[0]?.path).toBe(
       "/tmp/a/README.md",
     );
     expect(snapshot.sessions).toEqual([
@@ -208,7 +208,7 @@ describe("collectWorkspaceSnapshot", () => {
     );
     const workspace = hydrateWorkspaceSnapshot(snapshot, new Map());
 
-    expect(workspace?.tabs[0]?.editorPanes[0]?.files[0]?.releaseNotes).toEqual({
+    expect(workspace?.tabs[0]?.filePanes[0]?.files[0]?.releaseNotes).toEqual({
       version: "0.1.22",
     });
     expect(workspace?.sessions).toEqual([]);
@@ -281,7 +281,7 @@ describe("parseWorkspaceSnapshot", () => {
       id: "invalid-tab",
       layout: leaf(invalidPaneId),
       focusedId: invalidPaneId,
-      editorPanes: [
+      filePanes: [
         {
           id: invalidPaneId,
           activeFileId: "release-file",
@@ -295,7 +295,7 @@ describe("parseWorkspaceSnapshot", () => {
           ],
         },
       ],
-      terminalPanes: [],
+
     };
 
     const parsed = parseWorkspaceSnapshot({
@@ -329,7 +329,7 @@ describe("hydrateWorkspaceSnapshot", () => {
         sizes: [0.5, 0.5],
       },
       focusedId: "e1",
-      editorPanes: [{ id: "e1", files: [file], activeFileId: file.id }],
+      filePanes: [{ id: "e1", files: [file], activeFileId: file.id }],
     };
     const snapshot = collectWorkspaceSnapshot(
       [tab],
@@ -353,7 +353,7 @@ describe("hydrateWorkspaceSnapshot", () => {
     const workspace = hydrateWorkspaceSnapshot(snapshot, loaded);
     expect(workspace?.tabs).toHaveLength(1);
     expect(workspace?.tabs[0]?.layout).toEqual(tab.layout);
-    expect(workspace?.tabs[0]?.editorPanes[0]?.files[0]?.path).toBe(
+    expect(workspace?.tabs[0]?.filePanes[0]?.files[0]?.path).toBe(
       "/tmp/a/src/lib.rs",
     );
     expect(
@@ -398,8 +398,8 @@ describe("hydrateWorkspaceSnapshot", () => {
       id: "t1",
       layout: leaf("p1"),
       focusedId: "p1",
-      editorPanes: [],
-      terminalPanes: [{ id: "p1", files: [term], activeFileId: term.id }],
+
+      filePanes: [{ id: "p1", files: [term], activeFileId: term.id }],
     };
     const snapshot = collectWorkspaceSnapshot(
       [tab],
@@ -409,7 +409,7 @@ describe("hydrateWorkspaceSnapshot", () => {
       new Map(),
     );
     const workspace = hydrateWorkspaceSnapshot(snapshot, new Map());
-    expect(workspace?.tabs[0]?.terminalPanes[0]?.files[0]?.terminal).toBe(true);
+    expect(workspace?.tabs[0]?.filePanes[0]?.files[0]?.terminal).toBe(true);
   });
 
   it("restores a project terminal dock", () => {

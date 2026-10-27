@@ -32,7 +32,7 @@ export function collectWindowTransfer(
   const movingSessions = sessions.filter((session) => sessionIds.has(session.id));
   const dirtyInTabs = new Set<string>();
   for (const tab of movingTabs) {
-    for (const pane of [...tab.editorPanes, ...(tab.terminalPanes ?? [])]) {
+    for (const pane of tab.filePanes) {
       for (const file of pane.files) {
         if (dirtyFiles.has(file.id)) dirtyInTabs.add(file.id);
       }

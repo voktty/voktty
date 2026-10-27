@@ -51,7 +51,7 @@ type Shared = {
   transcriptPool?: TranscriptPool;
   visible: boolean;
   sessions: Session[];
-  editorPanes: EditorPane[];
+  filePanes: EditorPane[];
   dirtyFileIds: Set<string>;
   fileErrorCounts: Map<string, number>;
   focusedId: string;
@@ -155,7 +155,7 @@ function PaneTreeComponent({
   visible,
   layout,
   sessions,
-  editorPanes,
+  filePanes,
   dirtyFileIds,
   fileErrorCounts,
   focusedId,
@@ -336,7 +336,7 @@ function PaneTreeComponent({
   return (
     <div ref={treeRef} className="relative h-full min-h-0 min-w-0">
       {leaves.map((leaf) => {
-        const editorPane = editorPanes.find((pane) => pane.id === leaf.id);
+        const editorPane = filePanes.find((pane) => pane.id === leaf.id);
         const session = sessions.find((entry) => entry.id === leaf.id);
         const dragging = drop?.fromId === leaf.id;
         const onPaneDragStart = inSplit ? paneDragStartFor(leaf.id) : undefined;

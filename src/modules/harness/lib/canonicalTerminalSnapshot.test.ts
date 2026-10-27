@@ -19,7 +19,7 @@ function saved(projectCwd = "/srv/app") {
     foreground: "vite",
   };
   const pane = newEditorPane(file);
-  const tab = { ...newTab(pane.id), terminalPanes: [pane] };
+  const tab = { ...newTab(pane.id), filePanes: [pane] };
   return collectWorkspaceSnapshot([tab], [], tab.id, projectCwd, new Map(), [
     createProjectTerminal(projectCwd, file),
   ]);
@@ -40,7 +40,7 @@ describe("canonical terminal snapshot references", () => {
         new Map(),
       );
       const expected = { tabKey: "tab-shell", projectCwd };
-      const file = restored?.tabs[0]?.terminalPanes[0]?.files[0];
+      const file = restored?.tabs[0]?.filePanes[0]?.files[0];
       expect(file?.canonicalTerminal).toEqual(expected);
       expect(file?.cwd).toBe(`${projectCwd}/src`);
       expect(file?.path).toBe("build");
@@ -65,11 +65,11 @@ describe("canonical terminal snapshot references", () => {
 
   it("keeps legacy terminals available for explicit migration", () => {
     const snapshot = saved();
-    delete snapshot.tabs[0].terminalPanes[0].files[0].canonicalTerminal;
+    delete snapshot.tabs[0].filePanes[0].files[0].canonicalTerminal;
     const parsed = parseWorkspaceSnapshot(snapshot);
-    expect(parsed?.tabs[0]?.terminalPanes[0]?.files[0]?.terminal).toBe(true);
+    expect(parsed?.tabs[0]?.filePanes[0]?.files[0]?.terminal).toBe(true);
     expect(
-      parsed?.tabs[0]?.terminalPanes[0]?.files[0]?.canonicalTerminal,
+      parsed?.tabs[0]?.filePanes[0]?.files[0]?.canonicalTerminal,
     ).toBeUndefined();
   });
 
@@ -87,7 +87,7 @@ describe("canonical terminal snapshot references", () => {
     (reference) => {
       const snapshot = saved();
       const invalid = JSON.parse(JSON.stringify(snapshot));
-      invalid.tabs[0].terminalPanes[0].files[0].canonicalTerminal = reference;
+      invalid.tabs[0].filePanes[0].files[0].canonicalTerminal = reference;
       invalid.projectTerminals[0].pane.files[0].canonicalTerminal = reference;
       const valid = newTab("conversation");
       invalid.tabs.push(valid);
@@ -106,14 +106,14 @@ describe("canonical terminal snapshot references", () => {
     { sessionChanges: { sessionId: "s" } },
   ])("rejects conflicting surface roles: %j", (extra) => {
     const snapshot = saved();
-    Object.assign(snapshot.tabs[0].terminalPanes[0].files[0], extra);
+    Object.assign(snapshot.tabs[0].filePanes[0].files[0], extra);
     expect(parseWorkspaceSnapshot(snapshot)).toBeNull();
   });
 
   it("copies only stable identity and project metadata from a reference", () => {
     const snapshot = saved();
     const reference =
-      snapshot.tabs[0].terminalPanes[0].files[0].canonicalTerminal;
+      snapshot.tabs[0].filePanes[0].files[0].canonicalTerminal;
     assert(reference);
     Object.assign(reference, {
       sessionId: "native-secret",
@@ -123,7 +123,7 @@ describe("canonical terminal snapshot references", () => {
     });
     const parsed = parseWorkspaceSnapshot(snapshot);
     expect(
-      parsed?.tabs[0]?.terminalPanes[0]?.files[0]?.canonicalTerminal,
+      parsed?.tabs[0]?.filePanes[0]?.files[0]?.canonicalTerminal,
     ).toEqual({
       tabKey: "tab-shell",
       projectCwd: "/srv/app",

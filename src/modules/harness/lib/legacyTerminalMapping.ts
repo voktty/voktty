@@ -44,18 +44,16 @@ export function mapLegacyTerminalLayout(
     const { foreground: _foreground, ...rest } = file;
     return { ...rest, canonicalTerminal: mapping.reference };
   };
-  const mapPane = (pane: WorkspaceTab["editorPanes"][number]) => {
+  const mapPane = (pane: WorkspaceTab["filePanes"][number]) => {
     const files = pane.files.map(mapFile);
     return files.some((file, index) => file !== pane.files[index])
       ? { ...pane, files }
       : pane;
   };
   const nextTabs = tabs.map((tab) => {
-    const editorPanes = tab.editorPanes.map(mapPane);
-    const terminalPanes = tab.terminalPanes.map(mapPane);
-    return editorPanes.some((pane, index) => pane !== tab.editorPanes[index]) ||
-      terminalPanes.some((pane, index) => pane !== tab.terminalPanes[index])
-      ? { ...tab, editorPanes, terminalPanes }
+    const filePanes = tab.filePanes.map(mapPane);
+    return filePanes.some((pane, index) => pane !== tab.filePanes[index])
+      ? { ...tab, filePanes }
       : tab;
   });
   const nextDocks = docks.map((dock) => {

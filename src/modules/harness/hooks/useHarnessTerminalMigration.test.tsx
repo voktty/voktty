@@ -159,12 +159,12 @@ function Workbench({
   );
   const file = dock
     ? docks[0].pane.files[0]
-    : tabs[0].terminalPanes[0].files[0];
+    : tabs[0].filePanes[0].files[0];
   return (
     <HarnessTerminalRecovery value={recover}>
       <HarnessTerminalView
         file={file}
-        slotKey={dock ? `dock:${project}` : `pane:${tab.terminalPanes[0].id}`}
+        slotKey={dock ? `dock:${project}` : `pane:${tab.filePanes[0].id}`}
         visible
         active
       />
@@ -288,8 +288,8 @@ it("migrates through the real creation channel once and updates a sibling withou
     projectCwd: project,
   });
   expect(errors).not.toHaveBeenCalled();
-  const one = layouts.get(1)?.[0].terminalPanes[0].files[0];
-  const two = layouts.get(2)?.[0].terminalPanes[0].files[0];
+  const one = layouts.get(1)?.[0].filePanes[0].files[0];
+  const two = layouts.get(2)?.[0].filePanes[0].files[0];
   expect(one).toMatchObject({
     id: source.id,
     cwd: source.cwd,
@@ -299,20 +299,20 @@ it("migrates through the real creation channel once and updates a sibling withou
   expect(two?.canonicalTerminal).toEqual(one?.canonicalTerminal);
   expect(legacy).not.toHaveBeenCalled();
   expect(
-    views.capture([]).tabs[0].terminalPanes[0].files[0].canonicalTerminal,
+    views.capture([]).tabs[0].filePanes[0].files[0].canonicalTerminal,
   ).toEqual(one?.canonicalTerminal);
 });
 
 it("waits for actual request confirmation before changing any layout", async () => {
   await act(async () => root.render(<Desktop manualFinish />));
   expect(tickets).toHaveLength(1);
-  expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
+  expect(layouts.get(1)?.[0].filePanes[0].files[0]).toBe(source);
   expect(
-    views.capture([]).tabs[0].terminalPanes[0].files[0].canonicalTerminal,
+    views.capture([]).tabs[0].filePanes[0].files[0].canonicalTerminal,
   ).toBeUndefined();
   await act(async () => tickets[0].finish());
   expect(
-    layouts.get(1)?.[0].terminalPanes[0].files[0].canonicalTerminal?.tabKey,
+    layouts.get(1)?.[0].filePanes[0].files[0].canonicalTerminal?.tabKey,
   ).toBe("tab-converted-1");
 });
 
@@ -322,7 +322,7 @@ it("does not publish a pending creation after its original view retires", async 
   await act(async () => root.render(<Desktop enabled={false} />));
   await act(async () => tickets[0].finish());
   expect(tickets).toHaveLength(1);
-  expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
+  expect(layouts.get(1)?.[0].filePanes[0].files[0]).toBe(source);
 });
 
 it("survives StrictMode without duplicate canonical creation", async () => {
@@ -335,7 +335,7 @@ it("survives StrictMode without duplicate canonical creation", async () => {
   );
   expect(tickets).toHaveLength(1);
   expect(
-    layouts.get(1)?.[0].terminalPanes[0].files[0].canonicalTerminal,
+    layouts.get(1)?.[0].filePanes[0].files[0].canonicalTerminal,
   ).toBeDefined();
   expect(legacy).not.toHaveBeenCalled();
 });
@@ -347,9 +347,9 @@ it("keeps failed request confirmation out of the shared layout and allows a retr
     flushSync(() => setDesktopTabs(outers));
     tickets[0].finish();
   });
-  expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
+  expect(layouts.get(1)?.[0].filePanes[0].files[0]).toBe(source);
   expect(
-    views.capture([]).tabs[0].terminalPanes[0].files[0].canonicalTerminal,
+    views.capture([]).tabs[0].filePanes[0].files[0].canonicalTerminal,
   ).toBeUndefined();
   await act(async () =>
     container.querySelector<HTMLButtonElement>("button")?.click(),
@@ -357,7 +357,7 @@ it("keeps failed request confirmation out of the shared layout and allows a retr
   expect(tickets).toHaveLength(2);
   await act(async () => tickets[1].finish());
   expect(
-    layouts.get(1)?.[0].terminalPanes[0].files[0].canonicalTerminal?.tabKey,
+    layouts.get(1)?.[0].filePanes[0].files[0].canonicalTerminal?.tabKey,
   ).toBe("tab-converted-2");
 });
 
@@ -370,7 +370,7 @@ it("recovers a missing converted reference across siblings without restoring the
   expect(tickets).toHaveLength(2);
   expect(errors).not.toHaveBeenCalled();
   for (const tabs of layouts.values())
-    expect(tabs[0].terminalPanes[0].files[0].canonicalTerminal?.tabKey).toBe(
+    expect(tabs[0].filePanes[0].files[0].canonicalTerminal?.tabKey).toBe(
       "tab-converted-2",
     );
 });
@@ -404,14 +404,14 @@ it("reuses an accepted result under a fresh slot reservation after the original 
     tickets[0].finish();
     flushSync(() => root.render(<Desktop enabled={false} />));
   });
-  expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
+  expect(layouts.get(1)?.[0].filePanes[0].files[0]).toBe(source);
   await act(async () => root.render(<Desktop />));
   await act(async () =>
     container.querySelector<HTMLButtonElement>("button")?.click(),
   );
   expect(tickets).toHaveLength(1);
   expect(
-    layouts.get(1)?.[0].terminalPanes[0].files[0].canonicalTerminal?.tabKey,
+    layouts.get(1)?.[0].filePanes[0].files[0].canonicalTerminal?.tabKey,
   ).toBe("tab-converted-1");
 });
 
@@ -425,14 +425,14 @@ it("does not bypass the eight-leaf budget when adopting a cached accepted result
   await act(async () =>
     container.querySelector<HTMLButtonElement>("button")?.click(),
   );
-  expect(layouts.get(1)?.[0].terminalPanes[0].files[0]).toBe(source);
+  expect(layouts.get(1)?.[0].filePanes[0].files[0]).toBe(source);
   expect(tickets).toHaveLength(1);
   await act(async () => root.render(<Desktop />));
   await act(async () =>
     container.querySelector<HTMLButtonElement>("button")?.click(),
   );
   expect(
-    layouts.get(1)?.[0].terminalPanes[0].files[0].canonicalTerminal?.tabKey,
+    layouts.get(1)?.[0].filePanes[0].files[0].canonicalTerminal?.tabKey,
   ).toBe("tab-converted-1");
   expect(tickets).toHaveLength(1);
 });

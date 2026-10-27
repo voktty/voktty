@@ -79,12 +79,12 @@ function ColdMigrationClient({ projectCwd }: { projectCwd: string }) {
     const one = newTerminalWorkspaceTab(
       newTerminalFile(`${projectCwd}/src`, "Hidden build"),
     );
-    one.terminalPanes[0].files.unshift({
+    one.filePanes[0].files.unshift({
       id: "editor",
       cwd: projectCwd,
       path: `${projectCwd}/notes.txt`,
     });
-    one.terminalPanes[0].activeFileId = "editor";
+    one.filePanes[0].activeFileId = "editor";
     return [
       one,
       newTerminalWorkspaceTab(
@@ -961,7 +961,7 @@ it.each(["C:/Work/App", project])(
     const capture = migrationViews.capture([]);
     const files = [
       ...capture.tabs.flatMap((tab) =>
-        tab.terminalPanes.flatMap((pane) => pane.files),
+        tab.filePanes.flatMap((pane) => pane.files),
       ),
       ...capture.projectTerminals.flatMap((dock) => dock.pane.files),
     ].filter((file) => file.terminal);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   closeLeaf,
+  surfacePanes,
   editorTabKey,
   focusedSurfaceCwd,
   isChangesTab,
@@ -101,24 +102,24 @@ describe("editorTabKey", () => {
 describe("newReleaseNotesWorkspaceTab", () => {
   it("creates a projectless editor-only workspace tab", () => {
     const tab = newReleaseNotesWorkspaceTab({ version: "0.1.23" });
-    const file = tab.editorPanes[0]?.files[0];
+    const file = surfacePanes(tab, "editor")[0]?.files[0];
 
     expect(file && isReleaseNotesTab(file)).toBe(true);
     expect(file && editorTabKey(file)).toBe("release-notes:0.1.23");
     expect(file && isReviewTab(file)).toBe(false);
     expect(file && isFilesystemTab(file)).toBe(false);
-    expect(tab.terminalPanes).toEqual([]);
+    expect(surfacePanes(tab, "terminal")).toEqual([]);
     expect(layoutLeaves(tab.layout).map((pane) => pane.id)).toEqual([
-      tab.editorPanes[0]?.id,
+      surfacePanes(tab, "editor")[0]?.id,
     ]);
-    expect(tab.focusedId).toBe(tab.editorPanes[0]?.id);
+    expect(tab.focusedId).toBe(surfacePanes(tab, "editor")[0]?.id);
   });
 
   it("deduplicates release files by version", () => {
     const first = newReleaseNotesWorkspaceTab({ version: "0.1.23" })
-      .editorPanes[0]!.files[0]!;
+      .filePanes[0]!.files[0]!;
     const second = newReleaseNotesWorkspaceTab({ version: "0.1.23" })
-      .editorPanes[0]!.files[0]!;
+      .filePanes[0]!.files[0]!;
     expect(editorTabKey(first)).toBe(editorTabKey(second));
   });
 });
@@ -129,11 +130,11 @@ describe("openTerminalTab", () => {
     const file = newTerminalFile("/repo");
     const next = openTerminalTab(tab, file, "session-a");
     expect(layoutLeaves(next.layout).map((pane) => pane.id)).toEqual([
-      next.terminalPanes[0]?.id,
+      surfacePanes(next, "terminal")[0]?.id,
     ]);
-    expect(next.focusedId).toBe(next.terminalPanes[0]?.id);
-    expect(next.editorPanes).toEqual([]);
-    expect(next.terminalPanes[0]?.files).toEqual([file]);
+    expect(next.focusedId).toBe(surfacePanes(next, "terminal")[0]?.id);
+    expect(surfacePanes(next, "editor")).toEqual([]);
+    expect(surfacePanes(next, "terminal")[0]?.files).toEqual([file]);
   });
 
   it("splits a terminal pane below the session when no terminal pane exists", () => {
@@ -143,12 +144,12 @@ describe("openTerminalTab", () => {
     const leaves = layoutLeaves(next.layout);
     expect(leaves.map((pane) => pane.id)).toEqual([
       "session-a",
-      next.terminalPanes[0]?.id,
+      surfacePanes(next, "terminal")[0]?.id,
     ]);
     expect(leaves[0]?.rect).toEqual({ x: 0, y: 0, w: 1, h: 0.5 });
     expect(leaves[1]?.rect).toEqual({ x: 0, y: 0.5, w: 1, h: 0.5 });
-    expect(next.editorPanes).toEqual([]);
-    expect(next.terminalPanes[0]?.files).toEqual([file]);
+    expect(surfacePanes(next, "editor")).toEqual([]);
+    expect(surfacePanes(next, "terminal")[0]?.files).toEqual([file]);
   });
 
   it("keeps terminals out of the file pane tab strip", () => {
@@ -163,12 +164,12 @@ describe("openTerminalTab", () => {
       nextTerminalTitle(withTerminal, "/repo"),
     );
     const next = openTerminalTab(withTerminal, extra);
-    expect(next.editorPanes).toHaveLength(1);
-    expect(next.editorPanes[0]?.files.map((file) => file.path)).toEqual([
+    expect(surfacePanes(next, "editor")).toHaveLength(1);
+    expect(surfacePanes(next, "editor")[0]?.files.map((file) => file.path)).toEqual([
       "/repo/App.tsx",
     ]);
-    expect(next.terminalPanes).toHaveLength(1);
-    expect(next.terminalPanes[0]?.files.map((file) => file.id)).toEqual([
+    expect(surfacePanes(next, "terminal")).toHaveLength(1);
+    expect(surfacePanes(next, "terminal")[0]?.files.map((file) => file.id)).toEqual([
       first.id,
       extra.id,
     ]);
@@ -189,7 +190,7 @@ describe("focusedSurfaceCwd", () => {
   it("follows the focused terminal instead of the conversation's project", () => {
     const moved = newTerminalFile("remote://voktty-ssh-a/srv/app/pkg");
     const tab = openTerminalTab(newTab("session-a"), moved);
-    expect(tab.focusedId).toBe(tab.terminalPanes[0]?.id);
+    expect(tab.focusedId).toBe(surfacePanes(tab, "terminal")[0]?.id);
     expect(focusedSurfaceCwd(tab, sessions)).toBe(
       "remote://voktty-ssh-a/srv/app/pkg",
     );
@@ -219,10 +220,10 @@ describe("closeLeaf", () => {
     const next = closeLeaf(tab, "session-a");
     expect(next).not.toBeNull();
     expect(layoutLeaves(next!.layout).map((pane) => pane.id)).toEqual([
-      next!.editorPanes[0]?.id,
+      surfacePanes(next!, "editor")[0]?.id,
     ]);
-    expect(next!.focusedId).toBe(next!.editorPanes[0]?.id);
-    expect(next!.editorPanes[0]?.files).toEqual([file]);
+    expect(next!.focusedId).toBe(surfacePanes(next!, "editor")[0]?.id);
+    expect(surfacePanes(next!, "editor")[0]?.files).toEqual([file]);
   });
 
   it("keeps a terminal pane when the last chat is closed", () => {
@@ -231,10 +232,10 @@ describe("closeLeaf", () => {
     const next = closeLeaf(tab, "session-a");
     expect(next).not.toBeNull();
     expect(layoutLeaves(next!.layout).map((pane) => pane.id)).toEqual([
-      next!.terminalPanes[0]?.id,
+      surfacePanes(next!, "terminal")[0]?.id,
     ]);
-    expect(next!.focusedId).toBe(next!.terminalPanes[0]?.id);
-    expect(next!.terminalPanes[0]?.files).toEqual([file]);
+    expect(next!.focusedId).toBe(surfacePanes(next!, "terminal")[0]?.id);
+    expect(surfacePanes(next!, "terminal")[0]?.files).toEqual([file]);
   });
 
   it("returns null when closing the last remaining pane", () => {
@@ -249,8 +250,8 @@ describe("openEditorTab", () => {
       newTerminalFile("/repo"),
     );
     const next = openEditorTab(terminal, newFileTab("/repo/App.tsx", "/repo"));
-    expect(next.terminalPanes[0]?.files.every(isTerminalTab)).toBe(true);
-    expect(next.editorPanes[0]?.files.map((file) => file.path)).toEqual([
+    expect(surfacePanes(next, "terminal")[0]?.files.every(isTerminalTab)).toBe(true);
+    expect(surfacePanes(next, "editor")[0]?.files.map((file) => file.path)).toEqual([
       "/repo/App.tsx",
     ]);
     expect(layoutLeaves(next.layout)).toHaveLength(3);
@@ -262,11 +263,11 @@ describe("newTerminalWorkspaceTab", () => {
     const file = newTerminalFile("/repo");
     const tab = newTerminalWorkspaceTab(file);
     expect(layoutLeaves(tab.layout).map((pane) => pane.id)).toEqual([
-      tab.terminalPanes[0]?.id,
+      surfacePanes(tab, "terminal")[0]?.id,
     ]);
-    expect(tab.focusedId).toBe(tab.terminalPanes[0]?.id);
-    expect(tab.editorPanes).toEqual([]);
-    expect(tab.terminalPanes[0]?.files).toEqual([file]);
+    expect(tab.focusedId).toBe(surfacePanes(tab, "terminal")[0]?.id);
+    expect(surfacePanes(tab, "editor")).toEqual([]);
+    expect(surfacePanes(tab, "terminal")[0]?.files).toEqual([file]);
   });
 });
 
@@ -278,7 +279,7 @@ describe("updateTerminalTab", () => {
       title: "vite",
       foreground: "vite",
     });
-    expect(next.terminalPanes[0]?.files[0]).toMatchObject({
+    expect(surfacePanes(next, "terminal")[0]?.files[0]).toMatchObject({
       path: "vite",
       foreground: "vite",
     });
@@ -291,11 +292,11 @@ describe("isolateTerminalPanes", () => {
     const file = newFileTab("/repo/App.tsx", "/repo");
     const terminal = newTerminalFile("/repo");
     const mixed = openEditorTab(newTab("session-a"), file);
-    const pane = mixed.editorPanes[0];
+    const pane = surfacePanes(mixed, "editor")[0];
     if (!pane) throw new Error("expected editor pane");
     const tab = {
       ...mixed,
-      editorPanes: [
+      filePanes: [
         {
           ...pane,
           files: [file, terminal],
@@ -304,13 +305,13 @@ describe("isolateTerminalPanes", () => {
       ],
     };
     const next = isolateTerminalPanes(tab);
-    expect(next.editorPanes[0]?.files.map((entry) => entry.id)).toEqual([
+    expect(surfacePanes(next, "editor")[0]?.files.map((entry) => entry.id)).toEqual([
       file.id,
     ]);
-    expect(next.terminalPanes[0]?.files.map((entry) => entry.id)).toEqual([
+    expect(surfacePanes(next, "terminal")[0]?.files.map((entry) => entry.id)).toEqual([
       terminal.id,
     ]);
-    expect(next.focusedId).toBe(next.terminalPanes[0]?.id);
+    expect(next.focusedId).toBe(surfacePanes(next, "terminal")[0]?.id);
     expect(layoutLeaves(next.layout)).toHaveLength(3);
   });
 });
@@ -431,7 +432,7 @@ describe("openSessionChangesTab", () => {
       "session-a",
       "/repo/b.ts",
     );
-    const files = second.editorPanes[0]?.files ?? [];
+    const files = surfacePanes(second, "editor")[0]?.files ?? [];
     expect(files.filter(isSessionChangesTab)).toHaveLength(1);
     expect(files.filter(isReviewTab)).toHaveLength(1);
     expect(files.find(isSessionChangesTab)?.path).toBe("/repo/b.ts");
@@ -451,7 +452,7 @@ describe("openSessionChangesTab", () => {
       "session-b",
       "/repo/c.ts",
     );
-    const reviews = second.editorPanes.flatMap((pane) =>
+    const reviews = surfacePanes(second, "editor").flatMap((pane) =>
       pane.files.filter(isSessionChangesTab),
     );
     expect(reviews).toHaveLength(2);
@@ -477,10 +478,10 @@ describe("openSessionChangesTab", () => {
       undefined,
       "changes",
     );
-    const file = changes.editorPanes[0]?.files.find(isSessionChangesTab);
+    const file = surfacePanes(changes, "editor")[0]?.files.find(isSessionChangesTab);
 
     expect(file?.sessionChanges.view).toBe("changes");
-    expect(changes.editorPanes[0]?.files).toHaveLength(1);
+    expect(surfacePanes(changes, "editor")[0]?.files).toHaveLength(1);
   });
 });
 
@@ -489,7 +490,7 @@ describe("openChangesTab", () => {
     const cwd = "/repo";
     const first = openChangesTab(newTab("session-a"), cwd, "/repo/a.ts");
     const second = openChangesTab(first, cwd, "/repo/b.ts");
-    const files = second.editorPanes[0]?.files ?? [];
+    const files = surfacePanes(second, "editor")[0]?.files ?? [];
     expect(files.filter(isChangesTab)).toHaveLength(1);
     expect(files.filter(isReviewTab)).toHaveLength(1);
     expect(files.find(isChangesTab)?.path).toBe("/repo/b.ts");
@@ -506,7 +507,7 @@ describe("openChangesTab", () => {
     const unstaged = openChangesTab(staged, cwd, undefined, "unstaged");
     const all = openChangesTab(unstaged, cwd);
     const kindOf = (tab: typeof staged) =>
-      tab.editorPanes[0]?.files.find(isChangesTab)?.changeKind;
+      surfacePanes(tab, "editor")[0]?.files.find(isChangesTab)?.changeKind;
     expect(kindOf(staged)).toBe("staged");
     expect(kindOf(unstaged)).toBe("unstaged");
     expect(kindOf(all)).toBeUndefined();
@@ -515,7 +516,7 @@ describe("openChangesTab", () => {
   it("opens a Changes tab without a focused file", () => {
     const cwd = "/repo";
     const next = openChangesTab(newTab("session-a"), cwd);
-    expect(next.editorPanes[0]?.files.find(isChangesTab)?.path).toBe(cwd);
+    expect(surfacePanes(next, "editor")[0]?.files.find(isChangesTab)?.path).toBe(cwd);
   });
 });
 

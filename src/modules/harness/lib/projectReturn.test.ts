@@ -97,7 +97,7 @@ describe("project return memory", () => {
     const tab = {
       ...newTab("editor"),
       id: "files",
-      editorPanes: [{ id: "editor", files: [file], activeFileId: file.id }],
+      filePanes: [{ id: "editor", files: [file], activeFileId: file.id }],
     };
     const state = workspace();
     const tabs = [...state.tabs, tab];
@@ -336,7 +336,7 @@ describe("project selection", () => {
     const tab: WorkspaceTab = {
       ...newTab("editor"),
       id: "files",
-      editorPanes: [{ id: "editor", files: [file], activeFileId: file.id }],
+      filePanes: [{ id: "editor", files: [file], activeFileId: file.id }],
     };
     expect(
       planProjectReturn({

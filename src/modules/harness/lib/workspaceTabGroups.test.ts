@@ -54,8 +54,7 @@ describe("focusedWorkspaceTabCwd", () => {
       const mixed: WorkspaceTab = {
         ...tab("mixed", "chat"),
         layout: splitPane(newTab("chat").layout, "chat", "right", pane.id),
-        editorPanes: kind === "editor" ? [pane] : [],
-        terminalPanes: kind === "terminal" ? [pane] : [],
+        filePanes: [pane],
       };
       const decision = planProjectReturn({
         tabs: [mixed],
@@ -357,7 +356,7 @@ describe("openAddToChatSessionPane", () => {
   it("splits the pane to the right when no session pane is present", () => {
     const editorTab: WorkspaceTab = {
       ...tab("t1", "editor-1"),
-      editorPanes: [
+      filePanes: [
         {
           id: "editor-1",
           files: [],

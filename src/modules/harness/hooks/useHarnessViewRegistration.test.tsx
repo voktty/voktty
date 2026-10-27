@@ -48,7 +48,7 @@ async function mount() {
   } as unknown as Parameters<typeof useHarnessViewRegistration>[0]["runtime"];
   const fileTab: WorkspaceTab = {
     ...newTab("editor"),
-    editorPanes: [
+    filePanes: [
       {
         id: "editor",
         activeFileId: "file",
@@ -58,7 +58,7 @@ async function mount() {
   };
   const terminalTab: WorkspaceTab = {
     ...newTab("terminal"),
-    terminalPanes: [
+    filePanes: [
       {
         id: "terminal",
         activeFileId: "pty",

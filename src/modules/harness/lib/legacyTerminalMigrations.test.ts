@@ -52,7 +52,7 @@ it("atomically converts active and retained cohorts before notifying snapshot re
   expect(views.migrateTerminal(file, reference, () => true)).toBe(true);
   expect(snapshots).toHaveLength(1);
   for (const cohort of views.getSnapshot().cohorts) {
-    expect(cohort.state.layout.tabs[0].terminalPanes[0].files[0]).toEqual({
+    expect(cohort.state.layout.tabs[0].filePanes[0].files[0]).toEqual({
       ...file,
       canonicalTerminal: reference,
     });
@@ -61,7 +61,7 @@ it("atomically converts active and retained cohorts before notifying snapshot re
   }
   active.update(input);
   expect(
-    views.capture([]).tabs[0].terminalPanes[0].files[0].canonicalTerminal,
+    views.capture([]).tabs[0].filePanes[0].files[0].canonicalTerminal,
   ).toEqual(reference);
   const cohort = views.getSnapshot().cohorts.find((entry) => !entry.active);
   expect(cohort).toBeDefined();
@@ -69,15 +69,15 @@ it("atomically converts active and retained cohorts before notifying snapshot re
   expect(views.restore(3, cohort)?.isCurrent()).toBe(true);
   views.register(4, input);
   expect(
-    views.capture([]).tabs[0].terminalPanes[0].files[0].canonicalTerminal,
+    views.capture([]).tabs[0].filePanes[0].files[0].canonicalTerminal,
   ).toEqual(reference);
 });
 
 it("converts closed dock files and inactive panes while preserving selection, geometry and unrelated files", () => {
   const { input, file, tab } = fixture();
   const other: FilePaneTab = { id: "editor", cwd: file.cwd, path: "notes.txt" };
-  tab.terminalPanes[0].files.push(other);
-  tab.terminalPanes[0].activeFileId = other.id;
+  tab.filePanes[0].files.push(other);
+  tab.filePanes[0].activeFileId = other.id;
   input.projectTerminals = [
     {
       projectPath: input.projectCwd,
@@ -91,8 +91,8 @@ it("converts closed dock files and inactive panes while preserving selection, ge
   views.register(1, input);
   views.migrateTerminal(file, reference, () => true);
   const mapped = views.normalizeTerminals(input.tabs, input.projectTerminals);
-  expect(mapped.tabs[0].terminalPanes[0].activeFileId).toBe(other.id);
-  expect(mapped.tabs[0].terminalPanes[0].files[1]).toBe(other);
+  expect(mapped.tabs[0].filePanes[0].activeFileId).toBe(other.id);
+  expect(mapped.tabs[0].filePanes[0].files[1]).toBe(other);
   expect(mapped.docks[0]).toMatchObject({
     side: "right",
     size: 350,
@@ -136,7 +136,7 @@ it("checks authority again before publishing and rejects stale canonical replace
     () => true,
   );
   expect(
-    views.normalizeTerminals(input.tabs, []).tabs[0].terminalPanes[0].files[0]
+    views.normalizeTerminals(input.tabs, []).tabs[0].filePanes[0].files[0]
       .canonicalTerminal,
   ).toEqual(replacement);
 });
@@ -153,7 +153,7 @@ it("coalesces canonical creation and retains its accepted result for a later own
     first,
   );
   await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
-  expect(views.capture([]).tabs[0].terminalPanes[0].files[0]).toEqual(file);
+  expect(views.capture([]).tabs[0].filePanes[0].files[0]).toEqual(file);
   pending.resolve({ tabKey: reference.tabKey });
   await expect(first).resolves.toEqual({ tabKey: reference.tabKey });
   expect(service.run(file, input.projectCwd, () => true, create)).toBe(first);
@@ -175,7 +175,7 @@ it("preserves metadata after failed creation and allows a fresh retry", async ()
   await expect(first).rejects.toBe(failure);
   await expect(joined).rejects.toBe(failure);
   expect(create).toHaveBeenCalledOnce();
-  expect(views.capture([]).tabs[0].terminalPanes[0].files[0]).toEqual(file);
+  expect(views.capture([]).tabs[0].filePanes[0].files[0]).toEqual(file);
   await expect(
     service.run(file, input.projectCwd, () => true, create),
   ).resolves.toEqual({ tabKey: reference.tabKey });
@@ -270,7 +270,7 @@ it.each([
   views.register(1, input);
   const target = { ...reference, projectCwd: root };
   views.migrateTerminal(file, target, () => true);
-  expect(views.capture([]).tabs[0].terminalPanes[0].files[0]).toEqual({
+  expect(views.capture([]).tabs[0].filePanes[0].files[0]).toEqual({
     ...file,
     canonicalTerminal: target,
   });

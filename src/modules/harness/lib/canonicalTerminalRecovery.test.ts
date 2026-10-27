@@ -67,7 +67,7 @@ it("preserves the conversation layout and refuses to replace a changed file with
   const target = terminalRecoveryTarget(
     state,
     file.id,
-    `pane:${tab.terminalPanes[0].id}`,
+    `pane:${tab.filePanes[0].id}`,
   );
   assert(target);
   const replacement = {
@@ -77,12 +77,12 @@ it("preserves the conversation layout and refuses to replace a changed file with
   const next = replaceRecoveredTerminalTabs(state.tabs, target, replacement);
   expect(next[0].layout).toBe(tab.layout);
   expect(next[0].focusedId).toBe(tab.focusedId);
-  expect(next[0].terminalPanes[0].files).toEqual([replacement]);
+  expect(next[0].filePanes[0].files).toEqual([replacement]);
   const changed = [
     {
       ...tab,
-      terminalPanes: [
-        { ...tab.terminalPanes[0], files: [{ ...file, cwd: "/another" }] },
+      filePanes: [
+        { ...tab.filePanes[0], files: [{ ...file, cwd: "/another" }] },
       ],
     },
   ];

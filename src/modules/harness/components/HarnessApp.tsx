@@ -433,10 +433,7 @@ function openSessionIds(tabs: WorkspaceTab[]): Set<string> {
 }
 
 function filesInWorkspaceTabs(tabs: readonly WorkspaceTab[]): FilePaneTab[] {
-  return tabs.flatMap((tab) => [
-    ...tab.editorPanes.flatMap((pane) => pane.files),
-    ...(tab.terminalPanes ?? []).flatMap((pane) => pane.files),
-  ]);
+  return tabs.flatMap((tab) => tab.filePanes.flatMap((pane) => pane.files));
 }
 
 /** Native sheet. window.confirm is swallowed when a macOS menu accelerator fires. */
@@ -968,7 +965,7 @@ export function HarnessApp({
     const dock = findProjectTerminal(projectTerminals, projectCwd);
     if (dock) files.push(...dock.pane.files);
     for (const tab of tabs) {
-      for (const pane of tab.terminalPanes ?? []) {
+      for (const pane of surfacePanes(tab, "terminal")) {
         files.push(...pane.files);
       }
     }
@@ -1124,8 +1121,7 @@ export function HarnessApp({
         tab &&
         paneId &&
         (leafIds(tab.layout).includes(paneId) ||
-          tab.editorPanes.some((entry: any) => entry.id === paneId) ||
-          (tab.terminalPanes ?? []).some((entry: any) => entry.id === paneId))
+          tab.filePanes.some((entry: any) => entry.id === paneId))
           ? paneId
           : tab?.focusedId;
 
@@ -1883,7 +1879,7 @@ export function HarnessApp({
       const cwd = active?.cwd ?? projectCwd;
       const sourceTab = tabsRef.current.find((tab) => tab.id === tabId);
       const target = sourceTab && findSurfacePane(sourceTab, paneId);
-      const destination = target?.kind === "terminal" ? target.pane : sourceTab?.terminalPanes[0];
+      const destination = target?.kind === "terminal" ? target.pane : sourceTab && surfacePanes(sourceTab, "terminal")[0];
       createCanonicalTerminal({
         cwd,
         slotKey: `${destination ? "pane" : "editor"}:${destination?.id ?? paneId}`,
@@ -1902,7 +1898,7 @@ export function HarnessApp({
                 return openEditorTab({ ...tab, focusedId: paneId }, file);
               return {
                 ...tab,
-                terminalPanes: tab.terminalPanes.map((pane) =>
+                filePanes: tab.filePanes.map((pane) =>
                   pane.id !== paneId
                     ? pane
                     : {
@@ -2085,7 +2081,7 @@ export function HarnessApp({
         return;
       }
       for (const tab of tabsRef.current) {
-        for (const pane of tab.terminalPanes ?? []) {
+        for (const pane of surfacePanes(tab, "terminal")) {
           if (!pane.files.some((file: any) => file.id === fileId)) continue;
           const showing =
             activeTabIdRef.current === tab.id &&
@@ -2103,7 +2099,7 @@ export function HarnessApp({
               return withSurfacePanes(
                 { ...entry, focusedId: pane.id },
                 "terminal",
-                (entry.terminalPanes ?? []).map((item: any) =>
+                surfacePanes(entry, "terminal").map((item: any) =>
                   item.id === pane.id
                     ? { ...item, activeFileId: fileId }
                     : item,
@@ -2138,10 +2134,7 @@ export function HarnessApp({
       });
       if (closePlan.action === "keep") return;
       const closing = current[index];
-      const closingFiles = [
-        ...closing.editorPanes.flatMap((pane: any) => pane.files),
-        ...(closing.terminalPanes ?? []).flatMap((pane: any) => pane.files),
-      ];
+      const closingFiles = closing.filePanes.flatMap((pane: any) => pane.files);
       const unsaved = closingFiles.filter(
         (file: any) => isFilesystemTab(file) && dirtyFiles.has(file.id),
       );
@@ -2199,10 +2192,7 @@ export function HarnessApp({
       );
       if (!fallback || closing.length === 0) return;
 
-      const closingFiles = closing.flatMap((tab) => [
-        ...tab.editorPanes.flatMap((pane: any) => pane.files),
-        ...(tab.terminalPanes ?? []).flatMap((pane: any) => pane.files),
-      ]);
+      const closingFiles = filesInWorkspaceTabs(closing);
       const unsaved = closingFiles.filter(
         (file: any) =>
           isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
@@ -2461,8 +2451,7 @@ export function HarnessApp({
                       ...entry,
                       layout: leaf(session.id),
                       focusedId: session.id,
-                      editorPanes: [],
-                      terminalPanes: [],
+                      filePanes: [],
                       diffOpen: false,
                       diffFocused: false,
                     }
@@ -2645,10 +2634,7 @@ export function HarnessApp({
       const tab = tabs.find((entry: any) => entry.id === id);
       if (!tab || isBlankWorkspaceTab(tab, sessionsRef.current)) return;
 
-      const closingFiles = [
-        ...tab.editorPanes.flatMap((pane: any) => pane.files),
-        ...(tab.terminalPanes ?? []).flatMap((pane: any) => pane.files),
-      ];
+      const closingFiles = tab.filePanes.flatMap((pane: any) => pane.files);
       const unsaved = closingFiles.filter(
         (file: any) => isFilesystemTab(file) && dirtyFiles.has(file.id),
       );
@@ -2690,8 +2676,7 @@ export function HarnessApp({
                 ...entry,
                 layout: leaf(session.id),
                 focusedId: session.id,
-                editorPanes: [],
-                terminalPanes: [],
+                filePanes: [],
                 diffOpen: false,
                 diffFocused: false,
               }
@@ -4199,7 +4184,7 @@ export function HarnessApp({
       prev.map((tab: any) => {
         return {
           ...tab,
-          editorPanes: tab.editorPanes.map((pane: any) => ({
+          filePanes: tab.filePanes.map((pane: any) => ({
             ...pane,
             files: pane.files.map((file: any) =>
               isFilesystemTab(file)
@@ -4216,7 +4201,7 @@ export function HarnessApp({
     invalidateProjectFiles();
     const dropped = new Set<string>();
     for (const tab of tabsRef.current) {
-      for (const pane of tab.editorPanes) {
+      for (const pane of tab.filePanes) {
         for (const file of pane.files) {
           if (isFilesystemTab(file) && isEqualOrInside(file.path, path)) {
             dropped.add(file.id);
@@ -4831,7 +4816,7 @@ export function HarnessApp({
     const paths: string[] = [];
     const seen = new Set<string>();
     for (const tab of tabs) {
-      for (const pane of tab.editorPanes) {
+      for (const pane of tab.filePanes) {
         for (const file of pane.files) {
           if (!isFilesystemTab(file) || seen.has(file.path)) continue;
           seen.add(file.path);
@@ -5514,10 +5499,7 @@ export function HarnessApp({
                             visible={tab.id === activeTabId}
                             layout={tab.layout}
                             sessions={sessions}
-                            editorPanes={[
-                              ...tab.editorPanes,
-                              ...(tab.terminalPanes ?? []),
-                            ]}
+                            filePanes={tab.filePanes}
                             dirtyFileIds={dirtyFiles}
                             fileErrorCounts={fileErrorCounts}
                             focusedId={
@@ -5821,9 +5803,7 @@ function selectedChangePath(
 }
 
 function isBlankWorkspaceTab(tab: WorkspaceTab, sessions: Session[]): boolean {
-  if (tab.editorPanes.some((pane: any) => pane.files.length > 0)) return false;
-  if ((tab.terminalPanes ?? []).some((pane: any) => pane.files.length > 0))
-    return false;
+  if (tab.filePanes.some((pane: any) => pane.files.length > 0)) return false;
   const ids = leafIds(tab.layout);
   if (ids.length !== 1) return false;
   return isBlankSession(sessions.find((entry: any) => entry.id === ids[0]));
@@ -5845,8 +5825,7 @@ function toTitleTab(
   );
   const fileFocused =
     !sessionFocused &&
-    (tab.editorPanes.some((pane: any) => pane.id === tab.focusedId) ||
-      (tab.terminalPanes ?? []).some((pane: any) => pane.id === tab.focusedId));
+    tab.filePanes.some((pane: any) => pane.id === tab.focusedId);
   const focused =
     sessions.find((session: any) => session.id === tab.focusedId) ??
     tabSessions[0];
@@ -5902,15 +5881,8 @@ function toTitleTab(
             : basename(file.path)),
     );
   };
-  const focusedPane =
-    tab.editorPanes.find((pane: any) => pane.id === tab.focusedId) ??
-    (tab.terminalPanes ?? []).find((pane: any) => pane.id === tab.focusedId);
-  const otherPanes = [
-    ...tab.editorPanes.filter((pane: any) => pane.id !== focusedPane?.id),
-    ...(tab.terminalPanes ?? []).filter(
-      (pane: any) => pane.id !== focusedPane?.id,
-    ),
-  ];
+  const focusedPane = tab.filePanes.find((pane: any) => pane.id === tab.focusedId);
+  const otherPanes = tab.filePanes.filter((pane: any) => pane.id !== focusedPane?.id);
   const panes = focusedPane ? [focusedPane, ...otherPanes] : otherPanes;
   for (const pane of panes) {
     const active = pane.files.find(
@@ -5927,7 +5899,7 @@ function toTitleTab(
     .map(conversationTitle)
     .filter(Boolean);
 
-  const hasTerminal = (tab.terminalPanes ?? []).some((pane: any) =>
+  const hasTerminal = tab.filePanes.some((pane: any) =>
     pane.files.some(isTerminalTab),
   );
   const focusedFile = focusedFileTab(tab);
@@ -5949,7 +5921,7 @@ function toTitleTab(
     multiPane,
     fileFocused,
     blank: isBlankWorkspaceTab(tab, sessions),
-    dirty: tab.editorPanes.some((pane: any) =>
+    dirty: tab.filePanes.some((pane: any) =>
       pane.files.some(
         (file: any) => isFilesystemTab(file) && dirtyFiles.has(file.id),
       ),
@@ -5965,8 +5937,8 @@ function dropOpenFiles(
 ): WorkspaceTab {
   let layout = tab.layout;
   let focusedId = tab.focusedId;
-  const editorPanes: EditorPane[] = [];
-  for (const pane of tab.editorPanes) {
+  const filePanes: EditorPane[] = [];
+  for (const pane of tab.filePanes) {
     const files = pane.files.filter(
       (file) => !isFilesystemTab(file) || !shouldDrop(file.path),
     );
@@ -5980,7 +5952,7 @@ function dropOpenFiles(
       }
       continue;
     }
-    editorPanes.push({
+    filePanes.push({
       ...pane,
       files,
       activeFileId: files.some((file: any) => file.id === pane.activeFileId)
@@ -5988,5 +5960,5 @@ function dropOpenFiles(
         : files[0].id,
     });
   }
-  return { ...tab, layout, focusedId, editorPanes };
+  return { ...tab, layout, focusedId, filePanes };
 }

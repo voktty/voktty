@@ -167,8 +167,7 @@ export function mergeHarnessWindowWorkspaces(
     for (const tab of snapshot.tabs) {
       reference(tab.id, "tab");
       reference(tab.focusedId);
-      bounded(tab.editorPanes, maxReferences);
-      bounded(tab.terminalPanes, maxReferences);
+      bounded(tab.filePanes, maxReferences);
       const nodes = [tab.layout];
       let count = 0;
       while (nodes.length) {
@@ -183,7 +182,7 @@ export function mergeHarnessWindowWorkspaces(
           nodes.push(...node.children);
         }
       }
-      for (const pane of [...tab.editorPanes, ...tab.terminalPanes])
+      for (const pane of tab.filePanes)
         inspectPane(pane);
       insert(tabs, tab.id, tab);
     }

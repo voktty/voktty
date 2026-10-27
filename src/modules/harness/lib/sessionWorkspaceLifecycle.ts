@@ -90,8 +90,7 @@ export function removeSessionFromWorkspace({
       ...tab,
       layout: { type: "leaf", id: replacement.id },
       focusedId: replacement.id,
-      editorPanes: [],
-      terminalPanes: [],
+      filePanes: [],
       diffOpen: false,
       diffFocused: false,
     };
@@ -110,7 +109,7 @@ export function removeSessionDocuments(
   sessionId: string,
 ): WorkspaceTab | null {
   if (
-    !tab.editorPanes.some((pane) =>
+    !tab.filePanes.some((pane) =>
       pane.files.some(
         (file) =>
           file.plan?.sessionId === sessionId ||
@@ -122,9 +121,9 @@ export function removeSessionDocuments(
     return tab;
   let layout = tab.layout;
   let focusedId = tab.focusedId;
-  const editorPanes: EditorPane[] = [];
+  const filePanes: EditorPane[] = [];
 
-  for (const pane of tab.editorPanes) {
+  for (const pane of tab.filePanes) {
     const files = pane.files.filter(
       (file) =>
         file.plan?.sessionId !== sessionId &&
@@ -132,7 +131,7 @@ export function removeSessionDocuments(
           file.sessionChanges.sessionId !== sessionId),
     );
     if (files.length > 0) {
-      editorPanes.push({
+      filePanes.push({
         ...pane,
         files,
         activeFileId: files.some((file) => file.id === pane.activeFileId)
@@ -147,5 +146,5 @@ export function removeSessionDocuments(
     if (focusedId === pane.id) focusedId = firstLeafId(nextLayout);
   }
 
-  return { ...tab, layout, focusedId, editorPanes };
+  return { ...tab, layout, focusedId, filePanes };
 }

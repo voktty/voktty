@@ -12,7 +12,7 @@ function fixture(project: string) {
   const inactive = newTerminalFile(`${project}/other`, "Other tab");
   const dock = newTerminalFile(`${project}/dock`, "Dock");
   const activeTab = newTerminalWorkspaceTab(visible);
-  activeTab.terminalPanes[0].files.push(hidden);
+  activeTab.filePanes[0].files.push(hidden);
   const inactiveTab = newTerminalWorkspaceTab(inactive);
   const views = createHarnessWindowViews();
   const input = {
@@ -76,7 +76,7 @@ it("includes retained cohorts without treating their last selected file as a liv
 
 it("does not infer project ownership for an unrelated folder, escaped folder or remote namespace", () => {
   const f = fixture("remote://voktty-ssh-build/srv/app");
-  const pane = f.input.tabs[0].terminalPanes[0];
+  const pane = f.input.tabs[0].filePanes[0];
   pane.files.push(
     newTerminalFile("remote://voktty-ssh-other/srv/app/x", "Other host"),
     newTerminalFile("remote://voktty-ssh-build/srv/app/../outside", "Outside"),

@@ -594,7 +594,7 @@ describe("window-owned Harness execution host", () => {
       const physical = [
         {
           ...newTab("project-editor"),
-          editorPanes: [
+          filePanes: [
             {
               id: "project-editor",
               activeFileId: "file",
@@ -610,7 +610,7 @@ describe("window-owned Harness execution host", () => {
         },
         {
           ...newTab("project-terminal"),
-          terminalPanes: [
+          filePanes: [
             {
               id: "project-terminal",
               activeFileId: "pty",
@@ -744,7 +744,7 @@ describe("window-owned Harness execution host", () => {
     };
     const tab = {
       ...newTab("physical-editor"),
-      editorPanes: [
+      filePanes: [
         { id: "physical-editor", files: [file], activeFileId: file.id },
       ],
     };
@@ -797,7 +797,7 @@ describe("window-owned Harness execution host", () => {
     const view = required(
       host.views.getSnapshot().cohorts.find((cohort) => cohort.ownerId === 2),
     );
-    expect(view.state.layout.tabs[0].editorPanes[0].files).toEqual([file]);
+    expect(view.state.layout.tabs[0].filePanes[0].files).toEqual([file]);
     expect(view.state.layout.projectTerminals).toEqual([dock]);
     expect(view.state.layout.projectCwd).toBe("~");
     expect(host.engine.readSession(one.session.id)).toBeUndefined();
@@ -998,7 +998,7 @@ describe("window-owned Harness execution host", () => {
     const physical = [
       {
         ...newTab("inbox-editor"),
-        editorPanes: [
+        filePanes: [
           {
             id: "inbox-editor",
             activeFileId: "file",
@@ -1008,7 +1008,7 @@ describe("window-owned Harness execution host", () => {
       },
       {
         ...newTab("inbox-terminal"),
-        terminalPanes: [
+        filePanes: [
           {
             id: "inbox-terminal",
             activeFileId: "pty",
@@ -1072,8 +1072,8 @@ describe("window-owned Harness execution host", () => {
     expect(saved.state.layout.tabs.map((tab) => tab.id)).toEqual(
       physical.map((tab) => tab.id),
     );
-    expect(saved.state.layout.tabs[0].editorPanes[0].files[0].id).toBe("file");
-    expect(saved.state.layout.tabs[1].terminalPanes[0].files[0].id).toBe("pty");
+    expect(saved.state.layout.tabs[0].filePanes[0].files[0].id).toBe("file");
+    expect(saved.state.layout.tabs[1].filePanes[0].files[0].id).toBe("pty");
   });
 
   it("keeps the old Inbox session and original error when cleanup fails, then allows an explicit retry", async () => {

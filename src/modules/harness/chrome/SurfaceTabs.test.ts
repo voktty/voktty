@@ -29,7 +29,7 @@ const t = (key: string, values?: Record<string, string | number>) => {
 describe("surfaceTabPresentation", () => {
   it("labels release notes from their version", () => {
     const file = newReleaseNotesWorkspaceTab({ version: "0.1.23" })
-      .editorPanes[0]?.files[0];
+      .filePanes[0]?.files[0];
     if (!file) throw new Error("expected release-note file");
 
     expect(surfaceTabPresentation(file, t)).toEqual({

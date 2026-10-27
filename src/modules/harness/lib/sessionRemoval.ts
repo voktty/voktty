@@ -89,11 +89,10 @@ export async function runSessionRemoval(options: {
       // never confirmed. Remove the conversation but keep those surfaces open.
       if (
         !before ||
-        before.editorPanes !== tab.editorPanes ||
-        before.terminalPanes !== tab.terminalPanes
+        before.filePanes !== tab.filePanes
       )
         return false;
-      return !tab.editorPanes.some((pane) =>
+      return !tab.filePanes.some((pane) =>
         pane.files.some(
           (file) =>
             isFilesystemTab(file) &&

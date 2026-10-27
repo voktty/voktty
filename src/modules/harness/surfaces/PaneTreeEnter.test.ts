@@ -47,7 +47,7 @@ function render(layout: LayoutNode, ids: string[]) {
     visible: true,
     layout,
     sessions: [],
-    editorPanes: ids.map((id) => ({ id, files: [], activeFileId: "" })),
+    filePanes: ids.map((id) => ({ id, files: [], activeFileId: "" })),
     dirtyFileIds: new Set(),
     fileErrorCounts: new Map(),
     focusedId: ids[0],

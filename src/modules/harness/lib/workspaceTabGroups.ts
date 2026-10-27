@@ -259,8 +259,7 @@ export function applyPlaceSessionOnPane({
       ...tab,
       layout: leaf(replacement.id),
       focusedId: replacement.id,
-      editorPanes: [],
-      terminalPanes: [],
+      filePanes: [],
       diffOpen: false,
       diffFocused: false,
     };

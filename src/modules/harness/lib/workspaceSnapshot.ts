@@ -211,7 +211,7 @@ export function hydrateWorkspaceSnapshot(
 
   const paneIds = new Set<string>();
   for (const tab of parsed.tabs) {
-    for (const pane of [...tab.editorPanes, ...(tab.terminalPanes ?? [])]) {
+    for (const pane of tab.filePanes) {
       paneIds.add(pane.id);
     }
   }
@@ -381,15 +381,18 @@ function sanitizeTab(raw: unknown): WorkspaceTab | null {
   if (typeof value.id !== "string" || !value.id) return null;
   const layout = sanitizeLayout(value.layout);
   if (!layout) return null;
-  const editorResult = sanitizePanes(value.editorPanes);
-  const terminalResult = sanitizePanes(value.terminalPanes);
-  const invalidPaneIds = new Set([
-    ...editorResult.invalidIds,
-    ...terminalResult.invalidIds,
-  ]);
+  if ("filePanes" in value && (
+    !Array.isArray(value.filePanes) ||
+    [value.editorPanes, value.terminalPanes].some((panes) =>
+      panes !== undefined && (!Array.isArray(panes) || panes.length > 0),
+    )
+  )) return null;
+  const paneResults = "filePanes" in value
+    ? [sanitizePanes(value.filePanes)]
+    : [sanitizePanes(value.editorPanes), sanitizePanes(value.terminalPanes)];
+  const invalidPaneIds = new Set(paneResults.flatMap((result) => result.invalidIds));
   if (leafIds(layout).some((id) => invalidPaneIds.has(id))) return null;
-  const editorPanes = editorResult.panes;
-  const terminalPanes = terminalResult.panes;
+  const filePanes = paneResults.flatMap((result) => result.panes);
   const focusedId =
     typeof value.focusedId === "string" && value.focusedId
       ? value.focusedId
@@ -400,8 +403,7 @@ function sanitizeTab(raw: unknown): WorkspaceTab | null {
     id: value.id,
     layout,
     focusedId,
-    editorPanes,
-    terminalPanes,
+    filePanes,
     ...(value.diffOpen === true ? { diffOpen: true } : {}),
     ...(value.diffFocused === true ? { diffFocused: true } : {}),
     ...(typeof value.groupId === "string" && value.groupId

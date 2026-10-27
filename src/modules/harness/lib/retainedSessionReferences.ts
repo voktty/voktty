@@ -28,7 +28,7 @@ export function removeRetainedSessionReferences(
   const tabs: WorkspaceTab[] = [];
   for (const original of state.layout.tabs) {
     if (
-      [...original.editorPanes, ...original.terminalPanes].some(
+      original.filePanes.some(
         (pane) =>
           ids.has(pane.id) &&
           pane.files.some(
@@ -45,7 +45,7 @@ export function removeRetainedSessionReferences(
       const cleaned = removeSessionDocuments(tab, id);
       if (
         !cleaned &&
-        [...tab.editorPanes, ...tab.terminalPanes].some((pane) =>
+        tab.filePanes.some((pane) =>
           pane.files.some(
             (file) =>
               !ids.has(file.plan?.sessionId ?? "") &&
@@ -59,7 +59,7 @@ export function removeRetainedSessionReferences(
       const next = closeLeaf(tab, id);
       if (
         !next &&
-        [...tab.editorPanes, ...tab.terminalPanes].some(
+        tab.filePanes.some(
           (pane) => pane.files.length > 0,
         )
       )

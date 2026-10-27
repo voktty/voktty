@@ -46,10 +46,7 @@ export function terminalRecoveryTarget(
       };
   }
   const tab = state.tabs.find((tab) => tab.id === state.activeTabId);
-  for (const pane of [
-    ...(tab?.editorPanes ?? []),
-    ...(tab?.terminalPanes ?? []),
-  ]) {
+  for (const pane of tab?.filePanes ?? []) {
     if (slotKey !== `pane:${pane.id}` || pane.activeFileId !== fileId) continue;
     const file = pane.files.find((file) => file.id === fileId);
     if (
@@ -72,7 +69,7 @@ export function replaceRecoveredTerminalTabs(
   let changed = false;
   const next = tabs.map((tab) => {
     if (tab.id !== target.tabId) return tab;
-    const update = (panes: WorkspaceTab["editorPanes"]) =>
+    const update = (panes: WorkspaceTab["filePanes"]) =>
       panes.map((pane) => {
         if (
           pane.id !== target.paneId ||
@@ -88,9 +85,8 @@ export function replaceRecoveredTerminalTabs(
           ),
         };
       });
-    const editorPanes = update(tab.editorPanes);
-    const terminalPanes = update(tab.terminalPanes);
-    return changed ? { ...tab, editorPanes, terminalPanes } : tab;
+    const filePanes = update(tab.filePanes);
+    return changed ? { ...tab, filePanes } : tab;
   });
   return changed ? next : tabs;
 }

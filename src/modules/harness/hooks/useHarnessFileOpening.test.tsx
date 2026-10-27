@@ -91,7 +91,7 @@ beforeEach(() => {
   });
   usePreferencesStore.setState({ sshConnections: [profile] });
   const pane = newEditorPane(newFileTab("/project/original.ts", "/project"));
-  original = { ...newTab(pane.id), editorPanes: [pane] };
+  original = { ...newTab(pane.id), filePanes: [pane] };
   permitCurrent = true;
   for (const mock of Object.values(io)) mock.mockReset();
   io.resolve.mockImplementation(async (_cwd: string, path: string) => path);
@@ -119,7 +119,7 @@ it.each(["file", "diff"] as const)(
           repoRoot: "/repo",
         });
     });
-    expect(tabs[0].editorPanes[0].files[1]).toMatchObject({
+    expect(tabs[0].filePanes[0].files[1]).toMatchObject({
       path: "/worktree/new.ts",
       cwd: mode === "file" ? "/project" : "/repo",
       ...(mode === "diff" ? { review: true } : {}),
@@ -174,7 +174,7 @@ it("preserves pending delivery through an ordinary callback and metadata rerende
   await act(async () => opening.onOpenFile("pending.ts"));
   await render({ metadata: true });
   await act(async () => read.resolve("/project/pending.ts"));
-  expect(tabs[0].editorPanes[0].files[1].path).toBe("/project/pending.ts");
+  expect(tabs[0].filePanes[0].files[1].path).toBe("/project/pending.ts");
 });
 
 it("keeps only the newest requested file selection when reads finish out of order", async () => {
@@ -190,7 +190,7 @@ it("keeps only the newest requested file selection when reads finish out of orde
   });
   await act(async () => second.resolve("/project/second.ts"));
   await act(async () => first.resolve("/project/first.ts"));
-  expect(tabs[0].editorPanes[0].files.map((file) => file.path)).toEqual([
+  expect(tabs[0].filePanes[0].files.map((file) => file.path)).toEqual([
     "/project/original.ts",
     "/project/second.ts",
   ]);
@@ -223,7 +223,7 @@ it.each(["file", "diff"] as const)(
 it("publishes a healthy SSH file before releasing its original source observer", async () => {
   await render({ cwd: remote });
   await act(async () => opening.onOpenFile(`${remote}/file.ts`));
-  expect(tabs[0].editorPanes[0].files[1]).toMatchObject({
+  expect(tabs[0].filePanes[0].files[1]).toMatchObject({
     path: `${remote}/file.ts`,
     cwd: remote,
   });
@@ -269,7 +269,7 @@ it("retains all 256 unsettled resolutions after retirement and recovers only on 
     for (let i = 1; i < 256; i++) reads[i].resolve(`/project/old-${i}.ts`);
     reads[256].resolve("/replacement/current.ts");
   });
-  expect(tabs[0].editorPanes[0].files[1].path).toBe("/replacement/current.ts");
+  expect(tabs[0].filePanes[0].files[1].path).toBe("/replacement/current.ts");
 });
 
 it("keeps captured session-review and classic diff behavior", async () => {
@@ -283,7 +283,7 @@ it("keeps captured session-review and classic diff behavior", async () => {
       view: "commit",
     }),
   );
-  expect(tabs[0].editorPanes[0].files[1]).toMatchObject({
+  expect(tabs[0].filePanes[0].files[1]).toMatchObject({
     cwd: "/session",
     sessionChanges: { sessionId: "source", view: "commit" },
   });
@@ -302,5 +302,5 @@ it("preserves the admitted selection when a full-budget request is refused", asy
     reads[255].resolve("/project/admitted.ts");
     for (let i = 0; i < 255; i++) reads[i].resolve(`/project/old-${i}.ts`);
   });
-  expect(tabs[0].editorPanes[0].files[1].path).toBe("/project/admitted.ts");
+  expect(tabs[0].filePanes[0].files[1].path).toBe("/project/admitted.ts");
 });

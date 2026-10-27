@@ -66,8 +66,8 @@ it("preserves unrelated file panes, terminal panes and project docks", () => {
       children: [leaf("one"), leaf("editor"), leaf("terminal")],
       sizes: [0.3, 0.3, 0.4],
     },
-    editorPanes: [{ id: "editor", files: [file], activeFileId: file.id }],
-    terminalPanes: [
+    filePanes: [
+      { id: "editor", files: [file], activeFileId: file.id },
       { id: "terminal", files: [terminal], activeFileId: terminal.id },
     ],
   };
@@ -97,11 +97,8 @@ it("preserves unrelated file panes, terminal panes and project docks", () => {
     "editor",
     "terminal",
   ]);
-  expect(next.state.layout.tabs[0].editorPanes).toEqual(
-    old.state.layout.tabs[0].editorPanes,
-  );
-  expect(next.state.layout.tabs[0].terminalPanes).toEqual(
-    old.state.layout.tabs[0].terminalPanes,
+  expect(next.state.layout.tabs[0].filePanes).toEqual(
+    old.state.layout.tabs[0].filePanes,
   );
   expect(next.state.layout.projectTerminals).toEqual(
     old.state.layout.projectTerminals,
@@ -169,7 +166,7 @@ it("removes session documents while retaining the physical editor in the same pa
     ...f.one,
     layout: leaf("editor"),
     focusedId: "editor",
-    editorPanes: [
+    filePanes: [
       { id: "editor", files: [plan, diff, file], activeFileId: plan.id },
     ],
   };
@@ -177,8 +174,8 @@ it("removes session documents while retaining the physical editor in the same pa
   const old = required(f.views.getSnapshot().cohorts[0]);
   const hold = required(f.holds.acquire("removing", ["one"], () => true));
   const next = required(f.views.pruneRetained(old, ["one"], hold.isCurrent));
-  expect(next.state.layout.tabs[0].editorPanes[0].files).toEqual([file]);
-  expect(next.state.layout.tabs[0].editorPanes[0].activeFileId).toBe(file.id);
+  expect(next.state.layout.tabs[0].filePanes[0].files).toEqual([file]);
+  expect(next.state.layout.tabs[0].filePanes[0].activeFileId).toBe(file.id);
   expect(next.state.layout.tabs[0].focusedId).toBe("editor");
 });
 
@@ -187,7 +184,7 @@ it("fails closed rather than discarding orphaned physical panes", () => {
   const file = newFileTab("/work/file.txt", "/work");
   const tab = {
     ...f.one,
-    editorPanes: [{ id: "editor", files: [file], activeFileId: file.id }],
+    filePanes: [{ id: "editor", files: [file], activeFileId: file.id }],
   };
   f.views.register(1, { ...f.input, tabs: [tab] }).release();
   const old = required(f.views.getSnapshot().cohorts[0]);

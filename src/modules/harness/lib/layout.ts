@@ -75,8 +75,7 @@ export type WorkspaceTab = {
   id: string;
   layout: LayoutNode;
   focusedId: string;
-  editorPanes: EditorPane[];
-  terminalPanes: EditorPane[];
+  filePanes: EditorPane[];
   diffOpen?: boolean;
   diffFocused?: boolean;
   /** Explicit tab group; absent means ungrouped. */
@@ -95,8 +94,7 @@ export function newTab(sessionId: string): WorkspaceTab {
     id: crypto.randomUUID(),
     layout: leaf(sessionId),
     focusedId: sessionId,
-    editorPanes: [],
-    terminalPanes: [],
+    filePanes: [],
   };
 }
 
@@ -172,8 +170,7 @@ export function newReleaseNotesWorkspaceTab(
     id: crypto.randomUUID(),
     layout: leaf(pane.id),
     focusedId: pane.id,
-    editorPanes: [pane],
-    terminalPanes: [],
+    filePanes: [pane],
   };
 }
 
@@ -193,8 +190,7 @@ export function newTerminalWorkspaceTab(file: FilePaneTab): WorkspaceTab {
     id: crypto.randomUUID(),
     layout: leaf(pane.id),
     focusedId: pane.id,
-    editorPanes: [],
-    terminalPanes: [pane],
+    filePanes: [pane],
   };
 }
 
@@ -215,7 +211,7 @@ export function nextTerminalTitleFromFiles(
 
 export function nextTerminalTitle(tab: WorkspaceTab, cwd: string): string {
   return nextTerminalTitleFromFiles(
-    (tab.terminalPanes ?? []).flatMap((pane) => pane.files),
+    surfacePanes(tab, "terminal").flatMap((pane) => pane.files),
     cwd,
   );
 }
@@ -225,7 +221,7 @@ export function updateTerminalTab(
   fileId: string,
   patch: TerminalMetaPatch,
 ): WorkspaceTab {
-  const panes = tab.terminalPanes ?? [];
+  const panes = surfacePanes(tab, "terminal");
   let changed = false;
   const terminalPanes = panes.map((pane) => {
     const files = pane.files.map((file) => {
@@ -244,7 +240,11 @@ export function surfacePanes(
   tab: WorkspaceTab,
   kind: SurfaceKind,
 ): EditorPane[] {
-  return kind === "editor" ? tab.editorPanes : (tab.terminalPanes ?? []);
+  return tab.filePanes.filter((pane) => surfaceKind(pane) === kind);
+}
+
+function surfaceKind(pane: EditorPane): SurfaceKind {
+  return pane.files.some(isTerminalTab) ? "terminal" : "editor";
 }
 
 export function withSurfacePanes(
@@ -252,19 +252,22 @@ export function withSurfacePanes(
   kind: SurfaceKind,
   panes: EditorPane[],
 ): WorkspaceTab {
-  return kind === "editor"
-    ? { ...tab, editorPanes: panes }
-    : { ...tab, terminalPanes: panes };
+  const remaining = new Map(panes.map((pane) => [pane.id, pane]));
+  const filePanes = tab.filePanes.flatMap((pane) => {
+    if (surfaceKind(pane) !== kind) return [pane];
+    const replacement = remaining.get(pane.id);
+    remaining.delete(pane.id);
+    return replacement ? [replacement] : [];
+  });
+  return { ...tab, filePanes: [...filePanes, ...remaining.values()] };
 }
 
 export function findSurfacePane(
   tab: WorkspaceTab,
   paneId: string,
 ): { kind: SurfaceKind; pane: EditorPane } | undefined {
-  const editor = tab.editorPanes.find((pane) => pane.id === paneId);
-  if (editor) return { kind: "editor", pane: editor };
-  const terminal = (tab.terminalPanes ?? []).find((pane) => pane.id === paneId);
-  if (terminal) return { kind: "terminal", pane: terminal };
+  const pane = tab.filePanes.find((pane) => pane.id === paneId);
+  return pane ? { kind: surfaceKind(pane), pane } : undefined;
 }
 
 export function isPlanTab(
@@ -292,9 +295,7 @@ export function isFilesystemTab(file: FilePaneTab): boolean {
 }
 
 export function focusedFileTab(tab: WorkspaceTab): FilePaneTab | undefined {
-  const pane =
-    tab.editorPanes.find((entry) => entry.id === tab.focusedId) ??
-    (tab.terminalPanes ?? []).find((entry) => entry.id === tab.focusedId);
+  const pane = tab.filePanes.find((entry) => entry.id === tab.focusedId);
   return pane?.files.find((file) => file.id === pane.activeFileId);
 }
 
@@ -313,20 +314,19 @@ export function focusedSurfaceCwd(
 
 /** Move terminal tabs out of file panes so the two never share a tab strip. */
 export function isolateTerminalPanes(tab: WorkspaceTab): WorkspaceTab {
-  const existingTerminals = tab.terminalPanes ?? [];
-  const mixed = tab.editorPanes.some((pane) => pane.files.some(isTerminalTab));
-  if (!mixed && tab.terminalPanes) return tab;
+  const mixed = tab.filePanes.some((pane) =>
+    pane.files.some(isTerminalTab) && pane.files.some((file) => !isTerminalTab(file)));
+  if (!mixed) return tab;
 
   let layout = tab.layout;
   let focusedId = tab.focusedId;
-  const editorPanes: EditorPane[] = [];
-  const terminalPanes = [...existingTerminals];
+  const filePanes: EditorPane[] = [];
 
-  for (const pane of tab.editorPanes) {
+  for (const pane of tab.filePanes) {
     const files = pane.files.filter((file) => !isTerminalTab(file));
     const terminals = pane.files.filter(isTerminalTab);
     if (files.length > 0) {
-      editorPanes.push({
+      filePanes.push({
         ...pane,
         files,
         activeFileId: files.some((file) => file.id === pane.activeFileId)
@@ -336,7 +336,7 @@ export function isolateTerminalPanes(tab: WorkspaceTab): WorkspaceTab {
     }
     if (terminals.length === 0) continue;
     if (files.length === 0) {
-      terminalPanes.push({ ...pane, files: terminals });
+      filePanes.push({ ...pane, files: terminals });
       continue;
     }
     const split: EditorPane = {
@@ -346,14 +346,14 @@ export function isolateTerminalPanes(tab: WorkspaceTab): WorkspaceTab {
         ? pane.activeFileId
         : terminals[0].id,
     };
-    terminalPanes.push(split);
+    filePanes.push(split);
     layout = splitPane(layout, pane.id, "down", split.id);
     if (pane.id === tab.focusedId && split.activeFileId === pane.activeFileId) {
       focusedId = split.id;
     }
   }
 
-  return { ...tab, layout, focusedId, editorPanes, terminalPanes };
+  return { ...tab, layout, focusedId, filePanes };
 }
 
 export function isReviewTab(file: FilePaneTab): boolean {
@@ -397,7 +397,7 @@ export function openEditorTab(
   tab = isolateTerminalPanes(tab);
 
   const key = editorTabKey(file);
-  const existingPane = tab.editorPanes.find((pane) =>
+  const existingPane = surfacePanes(tab, "editor").find((pane) =>
     pane.files.some((entry) => editorTabKey(entry) === key),
   );
   const existingFile = existingPane?.files.find(
@@ -408,7 +408,7 @@ export function openEditorTab(
       ...tab,
       focusedId: existingPane.id,
       diffFocused: false,
-      editorPanes: tab.editorPanes.map((pane) =>
+      filePanes: tab.filePanes.map((pane) =>
         pane.id === existingPane.id
           ? { ...pane, activeFileId: existingFile.id }
           : pane,
@@ -416,14 +416,15 @@ export function openEditorTab(
     };
   }
 
-  const focusedPane = tab.editorPanes.find((pane) => pane.id === tab.focusedId);
-  const targetPane = focusedPane ?? tab.editorPanes[0];
+  const editors = surfacePanes(tab, "editor");
+  const focusedPane = editors.find((pane) => pane.id === tab.focusedId);
+  const targetPane = focusedPane ?? editors[0];
   if (targetPane) {
     return {
       ...tab,
       focusedId: targetPane.id,
       diffFocused: false,
-      editorPanes: tab.editorPanes.map((pane) =>
+      filePanes: tab.filePanes.map((pane) =>
         pane.id === targetPane.id
           ? {
               ...pane,
@@ -441,7 +442,7 @@ export function openEditorTab(
     layout: splitPane(tab.layout, tab.focusedId, "right", editorPane.id),
     focusedId: editorPane.id,
     diffFocused: false,
-    editorPanes: [editorPane],
+    filePanes: [...tab.filePanes, editorPane],
   };
 }
 
@@ -454,7 +455,7 @@ export function openChangesTab(
 ): WorkspaceTab {
   const next = newChangesTab(cwd, focusPath, focusKind);
   const key = editorTabKey(next);
-  const existingPane = tab.editorPanes.find((pane) =>
+  const existingPane = tab.filePanes.find((pane) =>
     pane.files.some((file) => editorTabKey(file) === key),
   );
   const existingFile = existingPane?.files.find(
@@ -472,7 +473,7 @@ export function openChangesTab(
     ...tab,
     focusedId: existingPane.id,
     diffFocused: false,
-    editorPanes: tab.editorPanes.map((pane) =>
+    filePanes: tab.filePanes.map((pane) =>
       pane.id === existingPane.id
         ? {
             ...pane,
@@ -496,7 +497,7 @@ export function openSessionChangesTab(
 ): WorkspaceTab {
   const next = newSessionChangesTab(cwd, sessionId, focusPath, view);
   const key = editorTabKey(next);
-  const existingPane = tab.editorPanes.find((pane) =>
+  const existingPane = tab.filePanes.find((pane) =>
     pane.files.some((file) => editorTabKey(file) === key),
   );
   const existingFile = existingPane?.files.find(
@@ -513,7 +514,7 @@ export function openSessionChangesTab(
     ...tab,
     focusedId: existingPane.id,
     diffFocused: false,
-    editorPanes: tab.editorPanes.map((pane) =>
+    filePanes: tab.filePanes.map((pane) =>
       pane.id === existingPane.id
         ? {
             ...pane,
@@ -536,8 +537,7 @@ export function openTerminalTab(
   tab = isolateTerminalPanes(tab);
   const occupying =
     occupyPaneId &&
-    !tab.editorPanes.some((pane) => pane.id === occupyPaneId) &&
-    !tab.terminalPanes.some((pane) => pane.id === occupyPaneId);
+    !tab.filePanes.some((pane) => pane.id === occupyPaneId);
   if (occupying && occupyPaneId) {
     const pane = newEditorPane(file);
     return {
@@ -545,20 +545,21 @@ export function openTerminalTab(
       layout: replaceLeafId(tab.layout, occupyPaneId, pane.id),
       focusedId: pane.id,
       diffFocused: false,
-      terminalPanes: [...tab.terminalPanes, pane],
+      filePanes: [...tab.filePanes, pane],
     };
   }
 
-  const focusedPane = tab.terminalPanes.find(
+  const terminals = surfacePanes(tab, "terminal");
+  const focusedPane = terminals.find(
     (pane) => pane.id === tab.focusedId,
   );
-  const targetPane = focusedPane ?? tab.terminalPanes[0];
+  const targetPane = focusedPane ?? terminals[0];
   if (targetPane) {
     return {
       ...tab,
       focusedId: targetPane.id,
       diffFocused: false,
-      terminalPanes: tab.terminalPanes.map((pane) =>
+      filePanes: tab.filePanes.map((pane) =>
         pane.id === targetPane.id
           ? {
               ...pane,
@@ -576,7 +577,7 @@ export function openTerminalTab(
     layout: splitPane(tab.layout, tab.focusedId, "down", pane.id),
     focusedId: pane.id,
     diffFocused: false,
-    terminalPanes: [pane],
+    filePanes: [...tab.filePanes, pane],
   };
 }
 

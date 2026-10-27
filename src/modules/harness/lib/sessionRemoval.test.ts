@@ -171,7 +171,7 @@ describe.each(["archive", "delete"] as const)("%s lifecycle", (mode) => {
     });
     await f.run();
     expect(f.read().sessions.map((s) => s.id)).not.toContain(f.closing.id);
-    expect(f.read().tabs[0].editorPanes[0].files).toContain(file);
+    expect(f.read().tabs[0].filePanes[0].files).toContain(file);
     expect(leafIds(f.read().tabs[0].layout)).not.toContain(f.closing.id);
     expect(f.commit.mock.calls[0][0].closedTabs).toEqual([]);
   });
@@ -187,7 +187,7 @@ describe.each(["archive", "delete"] as const)("%s lifecycle", (mode) => {
       return true;
     });
     await f.run();
-    expect(f.read().tabs[0].terminalPanes[0].files).toContain(terminal);
+    expect(f.read().tabs[0].filePanes[0].files).toContain(terminal);
     expect(f.commit.mock.calls[0][0].closedTabs).toEqual([]);
   });
 });

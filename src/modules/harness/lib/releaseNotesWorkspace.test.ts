@@ -15,7 +15,7 @@ import {
 
 function tabWithHiddenRelease(): WorkspaceTab {
   const tab = newReleaseNotesWorkspaceTab({ version: "0.1.23" });
-  const releasePane = tab.editorPanes[0];
+  const releasePane = tab.filePanes[0];
   if (!releasePane) throw new Error("expected release pane");
   const activeFile = newFileTab("/repo/App.tsx", "/repo");
   const otherPane = newEditorPane(newFileTab("/repo/Other.tsx", "/repo"));
@@ -28,7 +28,7 @@ function tabWithHiddenRelease(): WorkspaceTab {
       otherPane.id,
     ),
     focusedId: otherPane.id,
-    editorPanes: [
+    filePanes: [
       {
         ...releasePane,
         files: [...releasePane.files, activeFile],
@@ -48,7 +48,7 @@ describe("planReleaseNotesOpen", () => {
 
   it("identifies the exact release tab, pane, and file", () => {
     const tab = tabWithHiddenRelease();
-    const releasePane = tab.editorPanes[0]!;
+    const releasePane = tab.filePanes[0]!;
     const releaseFile = releasePane.files[0]!;
 
     expect(planReleaseNotesOpen([tab], "0.1.23")).toEqual({
@@ -70,9 +70,9 @@ describe("focusReleaseNotesTarget", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.focusedId).toBe(target.paneId);
-    expect(result[0]?.editorPanes[0]?.activeFileId).toBe(target.fileId);
+    expect(result[0]?.filePanes[0]?.activeFileId).toBe(target.fileId);
     expect(
-      result[0]?.editorPanes
+      result[0]?.filePanes
         .flatMap((pane) => pane.files)
         .filter((file) => file.releaseNotes?.version === "0.1.23"),
     ).toHaveLength(1);

@@ -16,7 +16,7 @@ export function planReleaseNotesOpen(
   version: string,
 ): ReleaseNotesOpenPlan {
   for (const tab of tabs) {
-    for (const pane of tab.editorPanes) {
+    for (const pane of tab.filePanes) {
       const file = pane.files.find(
         (entry) =>
           isReleaseNotesTab(entry) && entry.releaseNotes.version === version,
@@ -44,7 +44,7 @@ export function focusReleaseNotesTarget(
           ...tab,
           focusedId: target.paneId,
           diffFocused: false,
-          editorPanes: tab.editorPanes.map((pane) =>
+          filePanes: tab.filePanes.map((pane) =>
             pane.id === target.paneId
               ? { ...pane, activeFileId: target.fileId }
               : pane,

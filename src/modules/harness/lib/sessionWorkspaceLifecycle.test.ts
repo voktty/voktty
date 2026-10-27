@@ -52,7 +52,7 @@ describe("removeSessionFromWorkspace", () => {
         sizes: [0.5, 0.5],
       },
       focusedId: "s1",
-      editorPanes: [{ id: "editor", files: [file], activeFileId: file.id }],
+      filePanes: [{ id: "editor", files: [file], activeFileId: file.id }],
     };
     const result = remove({
       tabs: [closing, tab("other", "s2")],
@@ -91,7 +91,7 @@ describe("removeSessionFromWorkspace", () => {
         sizes: [0.5, 0.5],
       },
       focusedId: "s1",
-      editorPanes: [{ id: "editor", files: [file], activeFileId: file.id }],
+      filePanes: [{ id: "editor", files: [file], activeFileId: file.id }],
     };
     const result = remove({
       tabs: [shared],
@@ -102,7 +102,7 @@ describe("removeSessionFromWorkspace", () => {
 
     expect(result.closedTabs).toEqual([]);
     expect(result.tabs).toHaveLength(1);
-    expect(result.tabs[0]?.editorPanes).toEqual(shared.editorPanes);
+    expect(result.tabs[0]?.filePanes).toEqual(shared.filePanes);
     expect(result.tabs[0]?.layout).toEqual({
       type: "split",
       id: "inner",
@@ -135,7 +135,7 @@ describe("removeSessionFromWorkspace", () => {
         sizes: [1 / 3, 1 / 3, 1 / 3],
       },
       focusedId: "s1",
-      editorPanes: [
+      filePanes: [
         {
           id: "editor",
           files: [sessionChanges, readme],
@@ -150,8 +150,8 @@ describe("removeSessionFromWorkspace", () => {
       activeTabId: "shared",
     });
 
-    expect(result.tabs[0]?.editorPanes[0]?.files).toEqual([readme]);
-    expect(result.tabs[0]?.editorPanes[0]?.activeFileId).toBe(readme.id);
+    expect(result.tabs[0]?.filePanes[0]?.files).toEqual([readme]);
+    expect(result.tabs[0]?.filePanes[0]?.activeFileId).toBe(readme.id);
   });
 
   it("replaces the final project tab with a blank session", () => {
@@ -206,7 +206,7 @@ describe("removeSessionFromWorkspace", () => {
       sessionId: "s1",
       activeTabId: "shared",
     });
-    expect(result.tabs[0].editorPanes[0].files).toEqual([other, readme]);
+    expect(result.tabs[0].filePanes[0].files).toEqual([other, readme]);
     expect(leafIds(result.tabs[0].layout)).not.toContain("s1");
   });
 
@@ -220,7 +220,7 @@ describe("removeSessionFromWorkspace", () => {
       activeTabId: "other",
     });
     expect(result.tabs).toHaveLength(1);
-    expect(result.tabs[0].editorPanes).toEqual([]);
+    expect(result.tabs[0].filePanes).toEqual([]);
     expect(result.tabs[0].focusedId).toBe("s2");
     expect(result.tabs[0].layout).toEqual(leaf("s2"));
   });
@@ -229,7 +229,7 @@ describe("removeSessionFromWorkspace", () => {
     const plan = newPlanTab("s1", "p1", "Plan", "/projects/monocode");
     const only: WorkspaceTab = {
       ...tab("only", "editor"),
-      editorPanes: [{ id: "editor", files: [plan], activeFileId: plan.id }],
+      filePanes: [{ id: "editor", files: [plan], activeFileId: plan.id }],
     };
     const result = remove({
       tabs: [only],
@@ -237,7 +237,7 @@ describe("removeSessionFromWorkspace", () => {
       sessionId: "s1",
       activeTabId: "only",
     });
-    expect(result.tabs[0].editorPanes).toEqual([]);
+    expect(result.tabs[0].filePanes).toEqual([]);
     expect(result.tabs[0].layout).toEqual(leaf("replacement"));
     expect(result.sessions.map((s) => s.id)).toEqual(["replacement"]);
   });
