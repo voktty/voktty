@@ -308,7 +308,7 @@ export function SettingsView({
                 notificationSettingsRequest={notificationSettingsRequest}
               />
             ) : null}
-            {section === "connections" ? <HarnessConnectionsPage /> : null}
+            {section === "connections" ? <HarnessConnectionsPage cwd={cwd} /> : null}
             {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
             {section === "mcp" ? <McpSettings cwd={cwd} /> : null}
             {section === "worktrees" ? (

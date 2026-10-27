@@ -118,11 +118,86 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render() {
-  await act(async () => root.render(createElement(HarnessConnectionsPage)));
+async function render(cwd = "~") {
+  await act(async () =>
+    root.render(createElement(HarnessConnectionsPage, { cwd })),
+  );
 }
 
 describe("Harness connections settings", () => {
+  it("keeps each view's current project independent of another view's global selection", async () => {
+    const profiles = ["one", "two"].map((id) => ({
+      id,
+      name: `Host ${id}`,
+      host: `${id}.test`,
+    }));
+    const paths = [
+      "remote://legacy-one/srv/app",
+      "remote://legacy-two/srv/app",
+    ];
+    mocks.useSshConnections.mockReturnValue(profiles);
+    useHarnessProjectEnvStore.setState({
+      projectId: "alias-one",
+      projects: Object.fromEntries(
+        profiles.map((profile, index) => [
+          `alias-${profile.id}`,
+          {
+            identity: {
+              projectId: paths[index],
+              profileId: profile.id,
+              requestedRoot: ".",
+              resolvedRoot: "/srv/app",
+              automatic: true,
+            },
+            env: { kind: "local" as const },
+            connecting: true,
+            error: null,
+          },
+        ]),
+      ),
+    });
+    await act(async () =>
+      root.render(
+        createElement(
+          "div",
+          null,
+          ...paths.map((cwd, index) =>
+            createElement(
+              "div",
+              { key: cwd, "data-view": index },
+              createElement(HarnessConnectionsPage, { cwd }),
+            ),
+          ),
+        ),
+      ),
+    );
+    const current = (index: number) =>
+      Array.from(
+        container.querySelectorAll(
+          `[data-view='${index}'] section > div.divide-y > div`,
+        ),
+      ).find((row) =>
+        row.textContent?.includes("harness.connections.currentProject"),
+      )?.textContent;
+    expect(current(0)).toContain("Host one");
+    expect(current(1)).toContain("Host two");
+    await act(async () =>
+      useHarnessProjectEnvStore.getState().selectProject("alias-two"),
+    );
+    expect(current(0)).toContain("Host one");
+    expect(current(1)).toContain("Host two");
+  });
+
+  it("does not borrow a connected project's badge for a local settings view", async () => {
+    useHarnessProjectEnvStore.setState({
+      projectId: "remote://voktty-ssh-profile-1/srv/other",
+    });
+    await render("/srv/local");
+    expect(container.textContent).not.toContain(
+      "harness.connections.currentProject",
+    );
+  });
+
   it("opens a remote folder picker for the selected saved SSH profile", async () => {
     await render();
     const open = Array.from(container.querySelectorAll("button")).find(

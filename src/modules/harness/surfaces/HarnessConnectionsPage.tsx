@@ -19,6 +19,7 @@ import {
   workspaceScopeKey,
 } from "@/modules/workspace";
 import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
+import { projectEnvironmentOwnerId } from "@/modules/harness/lib/projectEnvironmentIdentity";
 import { harnessProfileStatus } from "@/modules/connections/model/harnessProfileStatus";
 import { useRemoteSessionSnapshots } from "@/modules/remote/useRemoteSessions";
 import { useState } from "react";
@@ -33,9 +34,8 @@ import {
   RotateCcw,
   Square,
 } from "../chrome/icons";
-import { lastProjectPath } from "../lib/recents";
 
-export function HarnessConnectionsPage() {
+export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
   const { t } = useTranslation();
   const connections = useSshConnections();
   const { pingMap, refreshPings } = useSshPing(connections, true);
@@ -44,15 +44,12 @@ export function HarnessConnectionsPage() {
   const [isRefreshingPings, setIsRefreshingPings] = useState(false);
 
   const projects = useHarnessProjectEnvStore((s) => s.projects);
-  const selectedProjectId = useHarnessProjectEnvStore((s) => s.projectId);
   const pool = useRemoteSessionSnapshots();
   const connectionAttempts = useWorkspaceEnvStore((s) => s.connectionAttempts);
 
-  const currentProjectPath = selectedProjectId ?? lastProjectPath() ?? "";
-  const parsedCurrentProject = parseRemotePath(currentProjectPath);
-  const selectedProject = Object.entries(projects).find(
-    ([ownerId]) => ownerId === selectedProjectId,
-  )?.[1];
+  const parsedCurrentProject = parseRemotePath(cwd);
+  const ownerId = projectEnvironmentOwnerId(cwd, projects);
+  const selectedProject = ownerId === undefined ? undefined : projects[ownerId];
   const currentConnectionId = selectedProject
     ? selectedProject.identity.profileId
     : parsedCurrentProject
