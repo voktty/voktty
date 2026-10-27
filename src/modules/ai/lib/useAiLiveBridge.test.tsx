@@ -292,4 +292,32 @@ describe("useAiLiveBridge", () => {
     expect(liveCapture?.getFileCitationSource()).toEqual({ kind: "local", root: null });
     expect(liveCapture?.getWorkspaceRoot()).toBe("/repo");
   });
+
+  it("publishes a namespace only as a citation source without granting native tool context", () => {
+    const rootPath = "remote://voktty-ssh-fixture/alias/project";
+    renderBridge({
+      strict: true,
+      activeId: 1,
+      tabs: [{ id: 1, kind: "editor", path: `${rootPath}/file.ts` } as Tab],
+      explorerRoot: rootPath,
+      explorerWorkspace: { kind: "local" },
+    });
+    expect(publications[0].getFileCitationSource()).toEqual({
+      kind: "local",
+      root: null,
+    });
+    expect(publications[1].getFileCitationSource()).toEqual({
+      kind: "local",
+      root: rootPath,
+      workspace: { kind: "local" },
+    });
+    expect(publications[1].getFileRootContext?.()).toBeNull();
+    expect(publications[1].getFileContext?.()).toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    expect(publications[1].getFileCitationSource()).toEqual({
+      kind: "local",
+      root: null,
+    });
+  });
 });

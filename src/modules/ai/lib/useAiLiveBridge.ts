@@ -78,15 +78,20 @@ export function useAiLiveBridge(params: Params) {
   );
   const fileContextRef = useRef<AiFileContext | null>(null);
   const fileRootContextRef = useRef<AiFileRootContext | null>(null);
+  const citationRootRef = useRef<AiFileRootContext | null>(null);
   useLayoutEffect(() => {
     fileContextRef.current = resolveAiFileContext(activeTab, terminalWorkspace);
     fileRootContextRef.current = resolveAiFileRootContext(
       params.explorerRoot,
       params.explorerWorkspace,
     );
+    citationRootRef.current = params.explorerRoot?.startsWith("remote://")
+      ? { root: params.explorerRoot, workspace: { kind: "local" } }
+      : fileRootContextRef.current;
     return () => {
       fileContextRef.current = null;
       fileRootContextRef.current = null;
+      citationRootRef.current = null;
     };
   }, [
     activeTab,
@@ -246,7 +251,7 @@ export function useAiLiveBridge(params: Params) {
             available: guestFileCitationsEnabled(tab.activeLeafId),
           };
         }
-        const context = fileRootContextRef.current;
+        const context = citationRootRef.current;
         return context
           ? { kind: "local", ...structuredClone(context) }
           : { kind: "local", root: null };

@@ -2,6 +2,8 @@ import type { FileCitationSource } from "@/modules/ai/store/chatStore";
 import { searchGuestFiles } from "@/modules/collab/lib/guestRuntime";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
+import { useProjectFileSource } from "@/modules/remote/useProjectFileSource";
+import type { ProjectFileSource } from "@/modules/remote/projectFileSource";
 import {
   citationFileTarget,
   createCitationFileIndex,
@@ -16,6 +18,7 @@ export type WorkspaceFilesState = {
   hasWorkspace: boolean;
   remote: boolean;
   error: string | null;
+  projectSource?: ProjectFileSource;
 };
 
 const index = createCitationFileIndex(async ({ root, workspace }) => {
@@ -64,32 +67,43 @@ export function useWorkspaceFiles(
   enabled: boolean,
 ): WorkspaceFilesState {
   const descriptor = JSON.stringify(source);
+  const projectSource = useProjectFileSource(
+    source.kind === "local" ? source.root : null,
+    enabled,
+  );
   const binding = useMemo(() => {
     const captured = JSON.parse(descriptor) as FileCitationSource;
     return {
       target: citationFileTarget(captured),
       guest: captured.kind === "collab" ? captured : null,
+      projectSource,
     };
-  }, [descriptor]);
+  }, [descriptor, projectSource]);
   const searchQuery = source.kind === "collab" ? query : "";
   const [state, setState] = useState<{
     binding: typeof binding;
     value: WorkspaceFilesState;
   } | null>(null);
-  const available = Boolean(binding.target || binding.guest?.available);
+  const available = Boolean(
+    binding.target || binding.projectSource || binding.guest?.available,
+  );
   const remote = Boolean(binding.guest);
 
   useEffect(() => {
     if (!enabled || !available) return;
     let current = true;
+    const allowed = () =>
+      current && (!binding.projectSource || binding.projectSource.isCurrent());
     const publish = (value: WorkspaceFilesState) => {
-      if (current)
-        setState((previous) => (current ? { binding, value } : previous));
+      if (allowed())
+        setState((previous) => (allowed() ? { binding, value } : previous));
     };
     const base = { ...EMPTY_STATE, hasWorkspace: true, remote };
     publish({ ...base, indexing: true });
     const read = async (): Promise<CitationFileIndex> => {
       if (binding.target) return index.load(binding.target);
+      if (binding.projectSource)
+        return binding.projectSource.listFiles(allowed);
       if (!binding.guest || guestSearches >= 16)
         throw new Error("File search is busy");
       guestSearches++;
@@ -107,12 +121,16 @@ export function useWorkspaceFiles(
     };
   }, [available, binding, enabled, remote, searchQuery]);
 
-  return state?.binding === binding
-    ? state.value
-    : {
-        ...EMPTY_STATE,
-        hasWorkspace: available,
-        remote,
-        indexing: enabled && available,
-      };
+  const value =
+    state?.binding === binding
+      ? state.value
+      : {
+          ...EMPTY_STATE,
+          hasWorkspace: available,
+          remote,
+          indexing: enabled && available,
+        };
+  return binding.projectSource
+    ? { ...value, projectSource: binding.projectSource }
+    : value;
 }

@@ -6,6 +6,7 @@ import { readGuestFile } from "@/modules/collab/lib/guestRuntime";
 import { useTranslation } from "@/modules/i18n";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
+import { captureProjectCitation } from "@/modules/ai/lib/projectCitation";
 import {
   citationFileTarget,
   isCitationRelativePath,
@@ -85,13 +86,20 @@ export function AiComposerInput() {
     publication: typeof publication;
     active: boolean;
     frame: number | null;
+    releaseFrame: (() => void) | null;
   } | null>(null);
   useLayoutEffect(() => {
-    const owner = { publication, active: true, frame: null as number | null };
+    const owner = {
+      publication,
+      active: true,
+      frame: null as number | null,
+      releaseFrame: null as (() => void) | null,
+    };
     committed.current = owner;
     return () => {
       owner.active = false;
       if (owner.frame !== null) cancelAnimationFrame(owner.frame);
+      owner.releaseFrame?.();
       if (committed.current === owner) committed.current = null;
     };
   }, [publication]);
@@ -227,23 +235,43 @@ export function AiComposerInput() {
   const onPickFile = async (filePath: string) => {
     const owner = committed.current;
     const chat = captureChat();
-    const isCurrent = () =>
+    const isPresentationCurrent = () =>
       Boolean(
         owner?.active &&
-        owner.publication === publication &&
-        chat?.isCurrent() &&
-        JSON.stringify(useChatStore.getState().live.getFileCitationSource()) ===
-          sourceKey,
+          owner.publication === publication &&
+          chat?.isCurrent() &&
+          JSON.stringify(
+            useChatStore.getState().live.getFileCitationSource(),
+          ) === sourceKey,
       );
-    if (!fileTrigger || !isCurrent() || !isCitationRelativePath(filePath))
+    if (
+      !fileTrigger ||
+      !isPresentationCurrent() ||
+      !isCitationRelativePath(filePath)
+    )
       return;
+    const namespace =
+      fileSource.kind === "local" && fileSource.root?.startsWith("remote://");
+    const project =
+      namespace && fileSource.root && workspaceFiles.projectSource
+        ? captureProjectCitation(
+            fileSource.root,
+            filePath,
+            workspaceFiles.projectSource,
+          )
+        : null;
+    if (namespace && !project) return;
+    const isCurrent = () =>
+      isPresentationCurrent() && (!project || project.isCurrent());
+    let retained = false;
     const before = c.value.slice(0, fileTrigger.start);
     const after = c.value.slice(fileTrigger.end);
-    c.setValue(`${before}${after}`);
-    setFileTrigger(null);
-    setActiveIndex(0);
     let attached = false;
     try {
+      c.setValue(`${before}${after}`);
+      setFileTrigger(null);
+      setActiveIndex(0);
+      if (!isCurrent()) return;
       if (fileSource.kind === "collab") {
         if (!fileSource.available || guestCitations >= 16) return;
         guestCitations++;
@@ -263,6 +291,13 @@ export function AiComposerInput() {
         } finally {
           guestCitations--;
         }
+      } else if (project) {
+        attached = await c.attachFileByPath(
+          project.path,
+          project.workspace,
+          isCurrent,
+          project.projectSource,
+        );
       } else {
         const target = citationFileTarget(fileSource);
         if (!target) return;
@@ -280,19 +315,30 @@ export function AiComposerInput() {
           isCurrent,
         );
       }
+      if (!attached || !isCurrent() || !owner) return;
+      if (owner.frame !== null) cancelAnimationFrame(owner.frame);
+      owner.releaseFrame?.();
+      owner.releaseFrame = project?.release ?? null;
+      owner.frame = requestAnimationFrame(() => {
+        owner.frame = null;
+        try {
+          if (!isCurrent()) return;
+          const el = c.textareaRef.current;
+          if (!el) return;
+          el.focus();
+          el.setSelectionRange(before.length, before.length);
+        } finally {
+          if (owner.releaseFrame === project?.release)
+            owner.releaseFrame = null;
+          project?.release();
+        }
+      });
+      retained = true;
     } catch {
       return;
+    } finally {
+      if (!retained) project?.release();
     }
-    if (!attached || !isCurrent() || !owner) return;
-    if (owner.frame !== null) cancelAnimationFrame(owner.frame);
-    owner.frame = requestAnimationFrame(() => {
-      owner.frame = null;
-      if (!isCurrent()) return;
-      const el = c.textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(before.length, before.length);
-    });
   };
 
   const pickActive = () => {

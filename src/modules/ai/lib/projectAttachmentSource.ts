@@ -1,6 +1,7 @@
 import {
   parseRemotePath,
   remoteProjectForPath,
+  relativeWithinProject,
   type RemoteProject,
 } from "@/modules/connections/model/remoteProjects";
 import { findSshProfile } from "@/modules/connections/model/remoteSshProfiles";
@@ -19,12 +20,14 @@ const capturedSources = new WeakSet<ProjectAttachmentSource>();
 
 export function captureProjectAttachment(
   path: string,
+  owner?: ProjectAttachmentSource,
 ): ProjectAttachmentSource | null {
   try {
+    if (owner && !capturedSources.has(owner)) return null;
     if (path.length > 32768 || /[\x00-\x1f\x7f]/.test(path)) return null;
     const parsed = parseRemotePath(path);
     if (!parsed || !checkReadable(parsed.hostPath).ok) return null;
-    const project = remoteProjectForPath(path);
+    const project = owner?.project ?? remoteProjectForPath(path);
     if (
       !project ||
       typeof project.cwd !== "string" ||
@@ -33,11 +36,18 @@ export function captureProjectAttachment(
       typeof project.projectId !== "string"
     )
       return null;
-    const profile = findSshProfile(
-      parsed.environmentId,
-      usePreferencesStore.getState().sshConnections ?? [],
-      { kind: "local" },
-    );
+    if (
+      project.environmentId !== parsed.environmentId ||
+      relativeWithinProject(project.cwd, parsed.hostPath) === undefined
+    )
+      return null;
+    const profile =
+      owner?.profile ??
+      findSshProfile(
+        parsed.environmentId,
+        usePreferencesStore.getState().sshConnections ?? [],
+        { kind: "local" },
+      );
     if (!profile || JSON.stringify(profile).length > 32768) return null;
     const root = Object.freeze({
       key: project.key,
