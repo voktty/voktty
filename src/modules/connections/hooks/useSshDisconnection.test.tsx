@@ -25,7 +25,7 @@ vi.mock("@/modules/connections/model/sshConnectionActions", async (importOrigina
 }));
 
 import { useSshDisconnection } from "@/modules/connections/hooks/useSshDisconnection";
-import { DISCONNECT_SSH_EVENT, harnessProjectPath } from "@/modules/connections/model/sshConnectionActions";
+import { requestSshDisconnect, harnessProjectPath } from "@/modules/connections/model/sshConnectionActions";
 import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 const harness = (id: number, cwd?: string): HarnessTab => ({ id, kind: "harness", title: "Harness", cwd, tabKey: asTabKey(`tab-${id}`), spaceId: "space", workspaceScopeId: "space" as HarnessTab["workspaceScopeId"] });
@@ -40,6 +40,16 @@ beforeEach(() => {
   mocks.setEnv.mockImplementation((env: WorkspaceEnv) => { mocks.env = env; });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it("ignores raw DOM disconnect requests even when they name a valid profile", async () => {
+  const fixture = await setup();
+  try {
+    await act(async () => window.dispatchEvent(new CustomEvent("voktty:disconnect-ssh", { detail: { connectionId: "one" } })));
+    expect(mocks.closeProfiles).not.toHaveBeenCalled();
+    expect(mocks.closeSession).not.toHaveBeenCalled();
+    expect(fixture.update).not.toHaveBeenCalled();
+  } finally { await fixture.close(); }
+});
 
 async function setup() {
   const root = createRoot(document.createElement("div"));
@@ -59,7 +69,7 @@ async function setup() {
   }
   await act(async () => root.render(<StrictMode><Window /></StrictMode>));
   return { tabsRef, update, fallback, requests, select: (id: number) => { selected = id; },
-    disconnect: (connectionId?: unknown) => act(async () => window.dispatchEvent(new CustomEvent(DISCONNECT_SSH_EVENT, { detail: { connectionId } }))),
+    disconnect: (connectionId?: unknown) => act(async () => { Reflect.apply(requestSshDisconnect, undefined, [connectionId]); }),
     close: async () => {
       await act(async () => root.unmount());
       unsubscribe();
@@ -94,11 +104,23 @@ it("disconnects a background profile without resetting unrelated selected state"
   } finally { await fixture.close(); }
 });
 
-it("uses the current SSH workspace when the event omits its profile", async () => {
+it("requires an explicit profile instead of disconnecting the selected SSH workspace", async () => {
   const fixture = await setup();
   try {
     fixture.select(4);
     await fixture.disconnect();
+    expect(mocks.closeProfiles).not.toHaveBeenCalled();
+    expect(mocks.closeSession).not.toHaveBeenCalled();
+    expect(fixture.update).not.toHaveBeenCalled();
+    expect(fixture.requests).not.toHaveBeenCalled();
+  } finally { await fixture.close(); }
+});
+
+it("preserves the selected Harness fallback for an explicitly disconnected workspace", async () => {
+  const fixture = await setup();
+  try {
+    fixture.select(4);
+    await fixture.disconnect("one");
     expect(mocks.closeProfiles).toHaveBeenCalledExactlyOnceWith("one", new Set(["one", "alias"]));
     expect(fixture.update.mock.calls.map(([id]) => id)).toEqual([1, 2, 4]);
     expect(fixture.requests.mock.calls[0][0].target.ownerId).toBe(4);
@@ -157,7 +179,7 @@ it("does not overwrite a successor workspace and observes cleanup failures", asy
   } finally { await fixture.close(); }
 });
 
-it("releases its listener on unmount under StrictMode", async () => {
+it("releases its subscription on unmount under StrictMode", async () => {
   const fixture = await setup();
   await fixture.close();
   await fixture.disconnect("one");

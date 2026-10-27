@@ -11,7 +11,7 @@ import { captureHarnessProjectOpening } from "@/modules/surfaces/lib/harnessProj
 /** Where a connected profile is shown: a terminal or the Harness GUI. */
 export type ConnectionSurface = SshSurface;
 
-export const DISCONNECT_SSH_EVENT = "voktty:disconnect-ssh";
+export { requestSshDisconnect } from "@/modules/connections/model/sshDisconnectRequest";
 
 export function surfaceOf(profile: {
   defaultSurface?: ConnectionSurface;
@@ -126,13 +126,4 @@ export async function closeSshProfileSessions(
   const ids = new Set([profileId, ...relatedIds]);
   await useHarnessProjectEnvStore.getState().disconnectProfiles(ids);
   await Promise.all([...ids].map((id) => remoteSessions.closeProfile(id)));
-}
-
-/** Asks the app to disconnect a profile: workspace terminals, Harness and pool. */
-export function requestSshDisconnect(profileId: string): void {
-  window.dispatchEvent(
-    new CustomEvent(DISCONNECT_SSH_EVENT, {
-      detail: { connectionId: profileId },
-    }),
-  );
 }

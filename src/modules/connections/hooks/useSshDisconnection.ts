@@ -6,7 +6,8 @@ import { useSpaces } from "@/modules/spaces";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { LOCAL_WORKSPACE, useWorkspaceEnvStore } from "@/modules/workspace";
 import { closeRemoteSessionById } from "@/modules/remote/sessionManager";
-import { closeSshProfileSessions, DISCONNECT_SSH_EVENT, relatedProfileIds } from "@/modules/connections/model/sshConnectionActions";
+import { closeSshProfileSessions, relatedProfileIds } from "@/modules/connections/model/sshConnectionActions";
+import { subscribeSshDisconnectRequests } from "@/modules/connections/model/sshDisconnectRequest";
 import { isHarnessDisconnectTarget, planHarnessDisconnect } from "@/modules/connections/model/harnessDisconnect";
 import { requestHarnessProject } from "@/modules/surfaces/lib/harnessProjectRequest";
 
@@ -24,18 +25,16 @@ export function useSshDisconnection({ tabsRef, getTab, getSelectedTab, updateTab
   const { t } = useTranslation();
   useEffect(() => {
     let current = true;
-    const disconnect = (event: Event) => {
+    const disconnect = (profileId: string) => {
       if (!current) return;
-      const requested = (event as CustomEvent<{ connectionId?: unknown }>).detail?.connectionId;
       const env = useWorkspaceEnvStore.getState().env;
-      const profileId = typeof requested === "string" && requested ? requested : env.kind === "ssh" ? env.connection.id : null;
-      const ids = profileId === null ? new Set<string>() : relatedProfileIds(
+      const ids = relatedProfileIds(
         profileId, usePreferencesStore.getState().sshConnections ?? [], env.kind === "ssh" ? [env.connection] : [],
       );
       const workspaceAffected = env.kind === "ssh" && ids.has(env.connection.id);
       const spaceId = useSpaces.getState().activeId;
       const targets = planHarnessDisconnect(tabsRef.current, getSelectedTab(), ids, workspaceAffected);
-      if (profileId) void closeSshProfileSessions(profileId, ids).catch(() => {});
+      void closeSshProfileSessions(profileId, ids).catch(() => {});
       if (workspaceAffected && env.kind === "ssh" && env.sessionId !== undefined) {
         void closeRemoteSessionById("workspace", env.sessionId).catch(() => {});
       }
@@ -62,10 +61,10 @@ export function useSshDisconnection({ tabsRef, getTab, getSelectedTab, updateTab
       }
       if (current) toast.success(t("harness.connections.disconnected"));
     };
-    window.addEventListener(DISCONNECT_SSH_EVENT, disconnect);
+    const unsubscribe = subscribeSshDisconnectRequests(disconnect);
     return () => {
       current = false;
-      window.removeEventListener(DISCONNECT_SSH_EVENT, disconnect);
+      unsubscribe();
     };
   }, [tabsRef, getTab, getSelectedTab, updateTab, setProjectFallback, localHome, localRoot, t]);
 }
