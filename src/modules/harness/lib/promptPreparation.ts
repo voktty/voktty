@@ -2,16 +2,28 @@ import { applyFileMentionsToTurn } from "./fileMentions";
 import { applyNotesToTurn } from "./notes";
 import {
   applySkillsToTurn,
-  warmPiSkills,
   type SkillCatalogContext,
+  warmPiSkills,
 } from "./skills";
 
 export async function preparePrompt(
   text: string,
   context: SkillCatalogContext,
+  assertCurrent: () => void = () => {},
 ): Promise<string> {
-  warmPiSkills(context);
-  const withFiles = await applyFileMentionsToTurn(text, context.cwd);
+  const captured = { harness: context.harness, cwd: context.cwd };
+  assertCurrent();
+  warmPiSkills(captured);
+  assertCurrent();
+  const withFiles = await applyFileMentionsToTurn(
+    text,
+    captured.cwd,
+    assertCurrent,
+  );
+  assertCurrent();
   const withNotes = await applyNotesToTurn(withFiles);
-  return applySkillsToTurn(withNotes, context);
+  assertCurrent();
+  const prepared = await applySkillsToTurn(withNotes, captured);
+  assertCurrent();
+  return prepared;
 }

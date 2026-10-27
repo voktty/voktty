@@ -88,6 +88,8 @@ Harness Go to File and Search presentations retain their original project-file s
 
 Composer file-mention rows and highlights observe that same captured source and the current shared catalog. Invalidation withdraws project entries without erasing draft text; cache notifications do not start another scan, and a superseded scan cannot replace the observed catalog. Picking retains its original mounted composer, execution context, menu token and draft text. Inactive composers release their presentation subscriptions, while global note mentions retain independent availability. This selection contract does not capture the later asynchronous prompt-preparation or attachment-submit pipeline.
 
+At turn dispatch, the session engine captures the saved SSH project source before asynchronous preparation for normal sends and steering. Source changes permanently retire that preparation, including a profile round trip. The engine checks turn ownership and source validity between preparation phases and before invoking the provider adapter. Prompt expansion copies its context before awaiting files, notes and skills; a retired file index propagates failure instead of silently sending unannotated text. Up to 256 pending source receipts remain counted until their preparation settles or enters the adapter, with idempotent observer cleanup. This boundary does not retain provenance when a message is first queued or while the composer waits for dropped files, and does not replace provider transport ownership.
+
 ### PTY shell integration
 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:

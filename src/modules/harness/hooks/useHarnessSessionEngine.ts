@@ -94,6 +94,10 @@ import {
 } from "@/modules/harness/lib/plan";
 import { preparePrompt } from "@/modules/harness/lib/promptPreparation";
 import {
+  captureRemotePromptSource,
+  PromptSourceRetiredError,
+} from "@/modules/harness/lib/promptSource";
+import {
   providerAccountExists,
   selectedProviderAccountId,
   supportsProviderAccounts,
@@ -556,6 +560,11 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           executionLifetime.current === steerOwner.lifetime &&
           owners.current.get(sessionId) === steerOwner.session &&
           (turnGen.current.get(sessionId) ?? 0) === steerGeneration;
+        const promptSource = captureRemotePromptSource(workCwd);
+        const assertPreparationCurrent = () => {
+          if (!steerIsCurrent()) throw new PromptSourceRetiredError();
+          promptSource?.assertCurrent();
+        };
         const visible = displayAttachments(attachments);
         const cards = userTurnCards(noteCard);
         updateSessions([sessionId], (s) => {
@@ -573,16 +582,20 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         });
         void (async () => {
           try {
+            assertPreparationCurrent();
             const prepared = await prepareAttachments(attachments);
+            assertPreparationCurrent();
             const prompt = await preparePrompt(
               inboxAskPrompt(current.inboxAsk, harnessText),
               {
                 harness: current.harness,
                 cwd: workCwd,
               },
+              assertPreparationCurrent,
             );
             if (!steerIsCurrent()) return;
-            await steerHarnessTurn({
+            assertPreparationCurrent();
+            const turn = steerHarnessTurn({
               harness: current.harness,
               sessionId,
               cwd: workCwd,
@@ -592,6 +605,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
               text: prompt,
               attachments: prepared,
             });
+            promptSource?.release();
+            await turn;
           } catch (error: unknown) {
             if (!steerIsCurrent()) return;
             const message =
@@ -603,6 +618,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
               message,
             });
             flushHarnessEvents();
+          } finally {
+            promptSource?.release();
           }
         })();
         return;
@@ -614,6 +631,12 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       };
       const gen = (turnGen.current.get(sessionId) ?? 0) + 1;
       turnGen.current.set(sessionId, gen);
+      const promptSource = captureRemotePromptSource(workCwd);
+      const assertPreparationCurrent = () => {
+        if (!isCurrentTurn(sessionId, gen, turnOwner))
+          throw new PromptSourceRetiredError();
+        promptSource?.assertCurrent();
+      };
       const initialBlocks = editedResend ? editedResend.blocks : current.blocks;
       const isFirstTurn = initialBlocks.length === 0;
       const placeholderTitle = canReplaceSessionTitle(
@@ -734,7 +757,13 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         );
       }
 
-      if (isFirstTurn && live && placeholderTitle && !current.inboxAsk) {
+      if (
+        isFirstTurn &&
+        live &&
+        placeholderTitle &&
+        !current.inboxAsk &&
+        (!promptSource || promptSource.isCurrent())
+      ) {
         void generateHarnessTitle(current.harness, {
           sessionId,
           cwd: workCwd,
@@ -760,6 +789,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       }
 
       if (!live) {
+        promptSource?.release();
         if (pendingSwitch) {
           void forgetHarnessSession(pendingSwitch.from, sessionId);
         }
@@ -842,6 +872,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
 
         let buildSucceeded = false;
         try {
+          assertPreparationCurrent();
           if (editedResend && canRewindHarnessLastTurn(current.harness)) {
             await rewindHarnessLastTurn({
               harness: current.harness,
@@ -855,11 +886,13 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
               onEvent: routeTurnEvent,
             });
             editedResend.markProviderRewound();
+            assertPreparationCurrent();
           }
 
           if (pendingSwitch) {
             if (current.busy) {
               await cancelHarnessTurn(pendingSwitch.from, sessionId);
+              assertPreparationCurrent();
             }
             let agentText = "";
             if (
@@ -877,6 +910,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
               });
             }
             if (!isCurrentTurn(sessionId, gen, turnOwner)) return;
+            assertPreparationCurrent();
             const latest = sessionsRef.current.find((s) => s.id === sessionId);
             const brief = chooseHandoffBrief(
               agentText,
@@ -884,6 +918,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             );
             await forgetHarnessSession(pendingSwitch.from, sessionId);
             if (!isCurrentTurn(sessionId, gen, turnOwner)) return;
+            assertPreparationCurrent();
             wrap = {
               from: pendingSwitch.from,
               to: current.harness,
@@ -895,7 +930,9 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
           }
           if (!isCurrentTurn(sessionId, gen, turnOwner)) return;
+          assertPreparationCurrent();
           const prepared = await prepareAttachments(attachments);
+          assertPreparationCurrent();
           const prompt =
             intent === "build" && approvedPlan
               ? buildPlanPrompt(approvedPlan.text)
@@ -905,14 +942,16 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
                     harness: current.harness,
                     cwd: workCwd,
                   },
+                  assertPreparationCurrent,
                 );
           if (!isCurrentTurn(sessionId, gen, turnOwner)) return;
+          assertPreparationCurrent();
           const turnPrompt =
             intent === "plan" ? planTurnPrompt(prompt) : prompt;
           const earlier = queuedHandoff
             ? userMessagesAfterHandoff(current)
             : [];
-          await sendHarnessTurn({
+          const turn = sendHarnessTurn({
             harness: current.harness,
             sessionId,
             cwd: workCwd,
@@ -933,6 +972,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             onAccepted: acceptEditedResend,
             onEvent: routeTurnEvent,
           });
+          promptSource?.release();
+          await turn;
           if (!isCurrentTurn(sessionId, gen, turnOwner)) return;
           if (wrap) {
             const completedBrief = wrap.text;
@@ -965,6 +1006,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             message,
           });
         } finally {
+          promptSource?.release();
           if (editedResend) {
             editedResends.finish(sessionId);
           }

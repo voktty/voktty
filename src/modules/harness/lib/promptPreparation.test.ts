@@ -44,6 +44,31 @@ beforeEach(() => {
 });
 
 describe("preparePrompt", () => {
+  it("copies the context before awaiting expansion", async () => {
+    const files = deferred<string>();
+    mocks.applyFileMentionsToTurn.mockReturnValue(files.promise);
+    mocks.applySkillsToTurn.mockResolvedValue("prepared");
+    const context = { harness: "pi" as const, cwd: "/original" };
+    const preparation = preparePrompt("hello", context);
+    context.cwd = "/replacement";
+    files.resolve("files");
+    await preparation;
+    expect(mocks.applySkillsToTurn).toHaveBeenCalledWith("files", {
+      harness: "pi",
+      cwd: "/original",
+    });
+  });
+
+  it("rejects a retired caller before starting warmup", async () => {
+    await expect(
+      preparePrompt("hello", { harness: "pi", cwd: "/repo" }, () => {
+        throw new Error("retired");
+      }),
+    ).rejects.toThrow("retired");
+    expect(mocks.warmPiSkills).not.toHaveBeenCalled();
+    expect(mocks.applyFileMentionsToTurn).not.toHaveBeenCalled();
+  });
+
   it("starts warmup before awaiting file mentions", async () => {
     const files = deferred<string>();
     mocks.applyFileMentionsToTurn.mockImplementation(() => {

@@ -1,6 +1,7 @@
 import { loadProjectFiles, rankProjectFiles, type RankedFile } from "./fileIndex";
 import type { ProjectFile } from "./fs";
 import { isMarkdownBlockquotePosition } from "./quoteDraft";
+import { ProjectFileSourceRetiredError } from "@/modules/remote/projectFileSource";
 
 export type MentionToken = {
   start: number;
@@ -202,9 +203,16 @@ export function fileMentionsInText(
 export async function applyFileMentionsToTurn(
   text: string,
   cwd: string,
+  assertCurrent: () => void = () => {},
 ): Promise<string> {
+  assertCurrent();
   if (!looksMentioned(text)) return text;
-  const files = await loadProjectFiles(cwd).catch(() => []);
+  const files = await loadProjectFiles(cwd).catch((error: unknown) => {
+    assertCurrent();
+    if (error instanceof ProjectFileSourceRetiredError) throw error;
+    return [];
+  });
+  assertCurrent();
   if (files.length === 0) return text;
 
   const index = buildMentionIndex(files);
