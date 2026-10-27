@@ -122,6 +122,15 @@ saving a result through a saved root alias preserves its namespace and saved
 project binding. Text, binary, metadata and SFTP reads use that accepted root;
 writes retain the helper's relative-path and expected-content checks.
 
+Harness project file listings capture their requested subfolder relative to the
+saved project before helper acquisition. Git enumeration and the non-Git walk
+run beneath that folder on the accepted helper, while results retain the saved
+namespace even when the project root is an alias. Git enumeration keeps its
+20,000-file and 4 MiB output limits; the fallback keeps its 4,000-directory limit
+and reads the requested folder's `.gitignore`. Invalid child names cannot expand
+the walk outside that folder. Other remote Git commands retain their existing
+saved-root validation. Index cache lifetime remains a separate frontend contract.
+
 Unknown projects or saved profiles, unsupported Host-only namespaces, Docker
 and serial filename searches remain unavailable. Native Windows and UNC
 paths retain their explicit local interpretation. The existing namespace

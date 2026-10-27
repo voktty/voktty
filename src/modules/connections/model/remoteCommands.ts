@@ -2402,10 +2402,11 @@ async function listProjectFilesWithHelper(
   sessionId: number,
   environmentId: string,
   root: string,
+  cwd: string,
 ): Promise<Array<{ name: string; path: string; relative: string }>> {
   const gitFiles = await runHelperGit(
     sessionId,
-    ".",
+    cwd,
     ["ls-files", "-co", "--exclude-standard", "-z"],
     MAX_GIT_OUTPUT_BYTES,
     true,
@@ -2421,7 +2422,7 @@ async function listProjectFilesWithHelper(
     const ignoreFile = await requestRemoteResult<{ content: string }>(
       sessionId,
       HELPER_FS.readFile,
-      { path: ".gitignore" },
+      { path: joinRelativePath(cwd, ".gitignore") },
     );
     for (const raw of ignoreFile.content.split(/\r?\n/)) {
       const line = raw.trim();
@@ -2450,7 +2451,20 @@ async function listProjectFilesWithHelper(
     if (visitedDirectories > 4000) {
       throw new Error("The remote project contains too many folders to list.");
     }
-    for (const entry of await helperListDirectory(sessionId, directory)) {
+    for (const entry of await helperListDirectory(
+      sessionId,
+      joinRelativePath(cwd, directory),
+    )) {
+      if (
+        typeof entry.name !== "string" ||
+        !entry.name ||
+        entry.name === "." ||
+        entry.name === ".." ||
+        entry.name.includes("/") ||
+        entry.name.includes("\0")
+      )
+        throw new Error("The remote helper returned an invalid project entry.");
+      if (entry.name.includes("\\")) continue;
       if (entry.name === ".DS_Store" || isIgnored(entry.name)) continue;
       const relative = joinRelativePath(directory, entry.name);
       if (entry.kind === "directory") {
@@ -2928,9 +2942,6 @@ async function runProfileFileCommand(
             .localeCompare(right.name.toLocaleLowerCase("en-US")),
       );
   }
-  if (command === "list_project_files") {
-    return listProjectFilesWithHelper(sessionId, environmentId, root);
-  }
   if (command === "search_project") {
     const options = args.options;
     if (!options || typeof options !== "object" || Array.isArray(options)) {
@@ -3204,11 +3215,36 @@ async function runNativeProfileCommand(
   if (normalizedProjectRoot === "/" && project.cwd !== "/") {
     throw new Error("The saved remote project root is invalid.");
   }
+  let indexTarget: { cwd: string; root: string } | undefined;
+  if (command === "list_project_files") {
+    const path = requireString(args, "cwd");
+    const parsed = parseRemotePath(path);
+    if (
+      !parsed ||
+      path.includes("\\") ||
+      project.cwd.includes("\\") ||
+      path.includes("\0")
+    ) {
+      throw new Error("The remote project index path is invalid.");
+    }
+    indexTarget = {
+      cwd: relativeToRemoteRoot(normalizedProjectRoot, parsed.hostPath),
+      root: normalizeRemoteAbsolute(parsed.hostPath),
+    };
+  }
   return remoteSessions.use(
     { profileId: profile.id, root: normalizedProjectRoot },
     remoteSshConnectionForProfile(profile),
     async (session) => {
       const sessionRoot = normalizeRemoteAbsolute(session.workspace_root);
+      if (indexTarget) {
+        return listProjectFilesWithHelper(
+          session.session_id,
+          environmentId,
+          indexTarget.root,
+          indexTarget.cwd,
+        );
+      }
       if (sessionRoot !== normalizedProjectRoot) {
         throw new Error(
           "The native SSH helper did not open the saved project root.",
