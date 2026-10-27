@@ -44,6 +44,7 @@ export function normalizeProjectPath(path: string): string {
   if (!path) return "";
   let p = path.trim().replace(/^\\\\\?\\/, "");
   p = p.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (/^remote:\/\/[^/]+$/.test(p)) return `${p}/`;
   if (/^[a-zA-Z]:\//.test(p)) {
     p = p.charAt(0).toLowerCase() + p.slice(1);
   }

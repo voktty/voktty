@@ -38,6 +38,25 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+it.each(["/", "C:/", "//server/share"])(
+  "finds and forgets a saved remote root %s",
+  (cwd) => {
+    const project = rememberRemoteProject("env", {
+      id: "root",
+      cwd,
+      name: "Root",
+    });
+    const path = remotePath("env", cwd);
+    expect(remoteProjectFor(path)).toEqual(project);
+    expect(remoteProjectFor(remotePath("other", cwd))).toBeUndefined();
+    expect(
+      remoteProjectFor(remotePath("env", `${cwd.replace(/\/$/, "")}/child`)),
+    ).toBeUndefined();
+    forgetRemoteProject(path);
+    expect(remoteProjectFor(path)).toBeUndefined();
+  },
+);
+
 it("finds a saved UNC project through its corrected remote path", () => {
   const legacyKey = "remote://env/server/share/repo";
   const project = {

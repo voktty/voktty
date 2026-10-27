@@ -1,9 +1,15 @@
+import { normalizeProjectPath } from "@/modules/harness/lib/recents";
+import { segmentsFromCwd } from "@/modules/statusbar/lib/pathUtils";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   registerSshProjectPath,
   sshProjectId,
 } from "./remoteProjectRegistration";
-import { remotePath, remoteProjectForPath } from "./remoteProjects";
+import {
+  parseRemotePath,
+  remotePath,
+  remoteProjectForPath,
+} from "./remoteProjects";
 import { remoteSshEnvironmentId } from "./remoteSshProfiles";
 
 const profiles = [{ id: "ssh-1", name: "prod" }];
@@ -35,6 +41,44 @@ beforeEach(() => {
 });
 
 describe("registerSshProjectPath", () => {
+  it("keeps the connection breadcrumb root usable after project selection", () => {
+    const first = segmentsFromCwd(
+      remotePath(env, "/srv/app"),
+      null,
+      profiles,
+    )[0];
+    const selected = normalizeProjectPath(first.fullPath);
+    expect(parseRemotePath(selected)).toEqual({
+      environmentId: env,
+      hostPath: "/",
+    });
+    expect(registerSshProjectPath(selected, profiles)).toMatchObject({
+      environmentId: env,
+      cwd: "/",
+    });
+  });
+
+  it.each(["", "/", "///"])(
+    "normalizes a saved connection root with suffix %j",
+    (suffix) => {
+      const selected = normalizeProjectPath(`remote://${env}${suffix}`);
+      expect(selected).toBe(`remote://${env}/`);
+      expect(normalizeProjectPath(selected)).toBe(selected);
+      expect(parseRemotePath(selected)?.hostPath).toBe("/");
+    },
+  );
+
+  it.each(["/srv/app", "C:/Work/App", "//server/share/app"])(
+    "preserves the remote host path %s",
+    (hostPath) => {
+      const selected = normalizeProjectPath(`${remotePath(env, hostPath)}/`);
+      expect(parseRemotePath(selected)).toEqual({
+        environmentId: env,
+        hostPath,
+      });
+    },
+  );
+
   it("registers an unknown folder of a saved profile so file commands accept it", () => {
     const path = remotePath(env, "/srv/app");
     expect(remoteProjectForPath(path)).toBeUndefined();

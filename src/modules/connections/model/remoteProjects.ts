@@ -134,7 +134,11 @@ export function remoteProjectFor(path: string): RemoteProject | undefined {
   return (
     projects[key] ??
     Object.values(projects).find(
-      (project) => remoteProjectKey(project.environmentId, project.cwd) === key,
+      (project) =>
+        remoteProjectKey(project.environmentId, project.cwd).replace(
+          /\/+$/,
+          "",
+        ) === key,
     )
   );
 }
