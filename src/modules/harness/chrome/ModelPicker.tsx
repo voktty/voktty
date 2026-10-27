@@ -386,17 +386,9 @@ export function ModelPicker({
       dismiss(true);
     };
 
-    const onMenu = () => {
-      if (!hotkeys) return;
-      if (inBlockingUi(document.activeElement)) return;
-      toggleFromHotkey();
-    };
-
     window.addEventListener("keydown", onKey, true);
-    window.addEventListener("open_model_picker", onMenu);
     return () => {
       window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("open_model_picker", onMenu);
     };
   }, [hotkeys]);
 

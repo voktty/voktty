@@ -1409,8 +1409,9 @@ describe("window-owned Harness execution host", () => {
     await act(async () => close.cancel());
   });
 
-  it("routes keyboard and native actions only to the focused real App and retires cached listeners", async () => {
+  it("routes keyboard actions only to the focused real App and retires cached listeners without legacy menu subscriptions", async () => {
     const now = vi.spyOn(performance, "now").mockReturnValue(1000);
+    const subscribe = vi.spyOn(window, "addEventListener");
     const one = fixture("one", "/work/one");
     const two = fixture("two", "/work/two");
     await render(
@@ -1443,19 +1444,26 @@ describe("window-owned Harness execution host", () => {
     );
     expect(required(runtime).engine.sessions).toHaveLength(3);
     expect(required(runtime).engine.sessions[2].cwd).toBe("/work/two");
-    const listeners = [...(native.listeners.get("new_tab") ?? [])];
+    expect(native.listeners.has("new_tab")).toBe(false);
+    const listeners = subscribe.mock.calls.flatMap(([name, handler, options]) =>
+      name === "keydown" && options === true && typeof handler === "function"
+        ? [handler]
+        : [],
+    );
     expect(listeners).toHaveLength(2);
     now.mockReturnValue(1200);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(100);
-      for (const listener of listeners) listener();
+      for (const listener of listeners)
+        listener(new KeyboardEvent("keydown", { key: "t", ctrlKey: true }));
     });
     expect(required(runtime).engine.sessions).toHaveLength(4);
     expect(required(runtime).engine.sessions[3].cwd).toBe("/work/two");
     await render([], []);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(100);
-      for (const listener of listeners) listener();
+      for (const listener of listeners)
+        listener(new KeyboardEvent("keydown", { key: "t", ctrlKey: true }));
     });
     expect(required(runtime).engine.sessions).toHaveLength(4);
     expect(sends).toHaveLength(0);

@@ -20,7 +20,6 @@ import { useInitialHarnessSession } from "@/modules/harness/hooks/useInitialHarn
 import type { PersistencePermit } from "@/modules/harness/lib/persistenceAdmission";
 import { openSessionNavigation } from "@/modules/harness/lib/sessionNavigation";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import {
@@ -285,7 +284,6 @@ import {
   terminalTabLabel,
 } from "../lib/terminalTab";
 import type { InstalledUpdate } from "../lib/updateNotice";
-import { runUpdateFlow } from "../lib/updater";
 import {
   collectWindowTransfer,
   type WindowTransferPayload,
@@ -317,10 +315,7 @@ import {
   reconcileProjectReturn,
   type ProjectReturnMemory,
 } from "../lib/projectReturn";
-import {
-  handleEditorFindKey,
-  openFindInActiveEditor,
-} from "../surfaces/editorSearchBridge";
+import { handleEditorFindKey } from "../surfaces/editorSearchBridge";
 import type { InboxSessionPortal } from "../surfaces/InboxDiscussionPanel";
 import { markHarnessOpenPhase } from "../lib/openTiming";
 import { PaneTree } from "../surfaces/PaneTree";
@@ -5109,95 +5104,6 @@ export function HarnessApp({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [
-    run,
-    getPersistenceOwner,
-  ]);
-
-  useEffect(() => {
-    let active = true;
-    const ownedListen = (event: string, callback: () => void) => listen(event, () => {
-      if (active && focusedRef.current && getPersistenceOwner()?.capture()) callback();
-    });
-    const unlisten: Array<Promise<() => void>> = [
-      ownedListen("new_tab", () =>
-        run("new", actions.current.onNewFocusedTarget),
-      ),
-      ownedListen("close_other_tabs", () =>
-        run("close-others", actions.current.onCloseOtherTabs),
-      ),
-      ownedListen("close_tab", () =>
-        run("close", actions.current.onCloseFocusedTarget),
-      ),
-      ownedListen("next_tab", () => run("next", actions.current.onNext)),
-      ownedListen("prev_tab", () => run("prev", actions.current.onPrev)),
-      ownedListen("back_tab", () => run("back", actions.current.onVisitBack)),
-      ownedListen("forward_tab", () =>
-        run("forward", actions.current.onVisitForward),
-      ),
-      ownedListen("split_right", () =>
-        run("split-right", () => actions.current.onSplit("right")),
-      ),
-      ownedListen("split_down", () =>
-        run("split-down", () => actions.current.onSplit("down")),
-      ),
-      ownedListen("new_terminal", () =>
-        run("new-terminal", actions.current.onNewTerminal),
-      ),
-      ownedListen("new_terminal_tab", () =>
-        run("new-terminal-tab", actions.current.onNewTerminalTab),
-      ),
-      ownedListen("toggle_terminal", () =>
-        run("toggle-terminal", actions.current.onToggleProjectTerminal),
-      ),
-      ownedListen("focus_left", () =>
-        run("focus-left", () => actions.current.onFocusDir("left")),
-      ),
-      ownedListen("focus_right", () =>
-        run("focus-right", () => actions.current.onFocusDir("right")),
-      ),
-      ownedListen("focus_up", () =>
-        run("focus-up", () => actions.current.onFocusDir("up")),
-      ),
-      ownedListen("focus_down", () =>
-        run("focus-down", () => actions.current.onFocusDir("down")),
-      ),
-      ownedListen("toggle_sidebar", () =>
-        run("toggle_sidebar", actions.current.onToggleSidebar),
-      ),
-      ownedListen("toggle_zen", () =>
-        run("toggle_zen", () => toggleTranscriptZen()),
-      ),
-      ownedListen("open_project", () => {
-        void actions.current.pickProject();
-      }),
-      ownedListen("go_to_file", () => actions.current.onGoToFile()),
-      ownedListen("open_command_palette", () =>
-        run("open_command_palette", actions.current.onOpenCommandPalette),
-      ),
-      ownedListen("reload", () => run("reload", actions.current.onReload)),
-      ownedListen("open_search", () => actions.current.onOpenSearch()),
-      ownedListen("open_inbox", () => actions.current.onOpenInbox()),
-      ownedListen("open_notes", () => actions.current.onOpenNotes()),
-      ownedListen("open_settings", () => actions.current.openSettings()),
-      ownedListen("check_for_updates", () => {
-        void runUpdateFlow(true);
-      }),
-      ownedListen("sidebar_opacity", () => {
-        actions.current.openSettings("appearance");
-      }),
-      ownedListen("find_in_project", () => actions.current.onFindInProject()),
-      ownedListen("find", () => {
-        openFindInActiveEditor();
-      }),
-      ownedListen("open_model_picker", () => {
-        window.dispatchEvent(new Event("open_model_picker"));
-      }),
-    ];
-    return () => {
-      active = false;
-      void Promise.allSettled(unlisten).then((results) => { for (const result of results) if (result.status === "fulfilled") result.value(); });
-    };
   }, [
     run,
     getPersistenceOwner,

@@ -62,6 +62,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  vi.restoreAllMocks();
   container.remove();
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -74,6 +75,34 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
   }
+});
+
+it("opens recent models through its active hotkey without accepting the retired menu event", async () => {
+  vi.spyOn(performance, "now").mockReturnValue(1000);
+  const props = {
+    harness: "cursor" as const,
+    model: "cursor:composer-2.5",
+    values: {},
+    hotkeys: true,
+    onChange: vi.fn(),
+    onSettingsChange: vi.fn(),
+  };
+  await act(async () => root.render(createElement(ModelPicker, props)));
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="menu"]',
+  );
+  expect(trigger).not.toBeNull();
+  await act(async () => window.dispatchEvent(new Event("open_model_picker")));
+  expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+  await act(async () =>
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: ".", ctrlKey: true }),
+    ),
+  );
+  expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+  expect(
+    document.querySelector('[aria-label="harness.modelPicker.recentlyUsed"]'),
+  ).not.toBeNull();
 });
 
 it("focuses the model search after its flyout appears", async () => {
