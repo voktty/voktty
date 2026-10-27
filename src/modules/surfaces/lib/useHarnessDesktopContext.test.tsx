@@ -7,6 +7,7 @@ import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { useWorkspaceCwd } from "@/modules/tabs/lib/useWorkspaceCwd";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
 import { publishHarnessFocusFolder, publishHarnessProject, useHarnessSurfaceStore } from "@/modules/surfaces/lib/harnessSurfaceStore";
+import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 afterEach(() => {
   useHarnessSurfaceStore.setState({ reports: {} });
@@ -106,4 +107,90 @@ it("keeps explicit project fallback selection after the event adapter is removed
   await act(async () => root.unmount());
   window.dispatchEvent(new CustomEvent("voktty:harness-focus-folder", { detail: { cwd: "/after-close", ownerId: 1 } }));
   expect(useHarnessSurfaceStore.getState().reports[1]).toBeUndefined();
+});
+
+it.each(["//server/share/project", "remote://machine/project", "C:/project"])("directs chrome project navigation to its stable owner (%s)", async (path) => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const tab = harness(1);
+  const receive = vi.fn();
+  const legacy = vi.fn();
+  const release = subscribeHarnessProjectRequests(receive);
+  window.addEventListener("voktty:harness-select-project", legacy);
+  let result: ReturnType<typeof useHarnessDesktopContext> | undefined;
+  function Chrome() {
+    result = useHarnessDesktopContext({ activeTab: tab, tabsRef: { current: [tab] }, updateTab: vi.fn(), lastProjectPath: () => "/recent" });
+    return null;
+  }
+  try {
+    await act(async () => root.render(<StrictMode><Chrome /></StrictMode>));
+    await act(async () => result?.selectProject(path));
+    expect(receive).toHaveBeenCalledExactlyOnceWith({ path, target: { ownerId: 1, tabKey: "tab-1" } });
+    expect(result?.projectCwd).toBe(path);
+    expect(legacy).not.toHaveBeenCalled();
+  } finally {
+    release();
+    window.removeEventListener("voktty:harness-select-project", legacy);
+    await act(async () => root.unmount());
+  }
+});
+
+it("retires chrome navigation on selection, project, stable identity and mounted-owner changes", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const original = harness(1);
+  const tabsRef = { current: [original] };
+  const receive = vi.fn();
+  const release = subscribeHarnessProjectRequests(receive);
+  let result: ReturnType<typeof useHarnessDesktopContext> | undefined;
+  function Chrome({ tab }: { tab: Tab }) {
+    result = useHarnessDesktopContext({ activeTab: tab, tabsRef, updateTab: vi.fn(), lastProjectPath: () => "/recent" });
+    return null;
+  }
+  try {
+    for (const replacement of [harness(2), harness(1, "/new-project"), { ...original, tabKey: asTabKey("tab-replaced") }]) {
+      tabsRef.current = [original];
+      await act(async () => root.render(<Chrome tab={original} />));
+      const stale = result?.selectProject;
+      tabsRef.current = [replacement];
+      await act(async () => root.render(<Chrome tab={replacement} />));
+      tabsRef.current = [original];
+      await act(async () => root.render(<Chrome tab={original} />));
+      await act(async () => stale?.("/stale"));
+    }
+    const departed = result?.selectProject;
+    await act(async () => root.render(null));
+    departed?.("/unmounted");
+    expect(receive).not.toHaveBeenCalled();
+    await act(async () => root.render(<Chrome tab={original} />));
+    tabsRef.current = [{ ...original, tabKey: asTabKey("tab-before-commit") }];
+    await act(async () => result?.selectProject("/replaced-before-render"));
+    expect(receive).not.toHaveBeenCalled();
+  } finally {
+    release();
+    await act(async () => root.unmount());
+  }
+});
+
+it("does not update the project fallback after reentrant owner retirement", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const tab = harness(1);
+  const tabsRef = { current: [tab] };
+  let result: ReturnType<typeof useHarnessDesktopContext> | undefined;
+  const release = subscribeHarnessProjectRequests(() => { tabsRef.current = [harness(2)]; });
+  function Chrome() {
+    result = useHarnessDesktopContext({ activeTab: tab, tabsRef, updateTab: vi.fn(), lastProjectPath: () => "/recent" });
+    return null;
+  }
+  try {
+    await act(async () => root.render(<Chrome />));
+    await act(async () => result?.selectProject(" "));
+    expect(result?.projectCwd).toBe("/recent");
+    await act(async () => result?.selectProject("/retired"));
+    expect(result?.projectCwd).toBe("/recent");
+  } finally {
+    release();
+    await act(async () => root.unmount());
+  }
 });

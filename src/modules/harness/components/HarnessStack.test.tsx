@@ -212,18 +212,14 @@ it("does not start the runtime for empty or cold-only tabs", async () => {
   expect(mounts.harness).not.toHaveBeenCalled();
 });
 
-it("delivers project requests only after the selected outer view commits without replay", async () => {
-  const both = [...tabs, { ...tabs[0], id: 2, cwd: "/other" }];
+it("delivers directed project requests only after the selected outer view commits without replay", async () => {
+  const both = [...tabs, { ...tabs[0], id: 2, tabKey: asTabKey("tab-other"), cwd: "/other" }];
   await act(async () =>
     root.render(createElement(HarnessStack, { tabs: both, activeId: 1 })),
   );
   await act(async () => {
     root.render(createElement(HarnessStack, { tabs: both, activeId: 2 }));
-    window.dispatchEvent(
-      new CustomEvent("voktty:harness-select-project", {
-        detail: { path: "/target" },
-      }),
-    );
+    requestHarnessProject("/target", { ownerId: 2, tabKey: asTabKey("tab-other") });
   });
   expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "/target");
   await act(async () =>
@@ -232,11 +228,11 @@ it("delivers project requests only after the selected outer view commits without
   expect(mounts.requests).toHaveBeenCalledOnce();
 });
 
-it("rejects a raw directed DOM event instead of changing its named view", async () => {
+it.each([undefined, { ownerId: 1, tabKey: "tab-owned" }])("rejects raw DOM selection instead of changing any view (%j)", async (target) => {
   const owned = { ...tabs[0], tabKey: asTabKey("tab-owned") };
   await act(async () => root.render(<HarnessStack tabs={[owned]} activeId={1} />));
   await act(async () => window.dispatchEvent(new CustomEvent("voktty:harness-select-project", {
-    detail: { path: "/injected", target: { ownerId: 1, tabKey: "tab-owned" } },
+    detail: target ? { path: "/injected", target } : { path: "/injected" },
   })));
   expect(mounts.requests).not.toHaveBeenCalled();
 });

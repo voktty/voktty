@@ -11,7 +11,7 @@ import { useHarnessViewCreation } from "@/modules/harness/hooks/useHarnessViewCr
 import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
 import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
-import { HARNESS_SELECT_PROJECT_EVENT, harnessProjectTargetMatches, parseHarnessProjectRequest, subscribeHarnessProjectRequests, type HarnessProjectRequest } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { harnessProjectTargetMatches, subscribeHarnessProjectRequests, type DirectedHarnessProjectRequest } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
 
@@ -171,19 +171,10 @@ export function HarnessStack({
   );
 
   const [activated, setActivated] = useState(false);
-  const [projectRequest, setProjectRequest] = useState<HarnessProjectRequest | null>(
+  const [projectRequest, setProjectRequest] = useState<DirectedHarnessProjectRequest | null>(
     null,
   );
   useEffect(() => subscribeHarnessProjectRequests(setProjectRequest), []);
-  useEffect(() => {
-    const select = (event: Event) => {
-      const request = parseHarnessProjectRequest((event as CustomEvent<unknown>).detail);
-      if (request && !request.target) setProjectRequest(request);
-    };
-    window.addEventListener(HARNESS_SELECT_PROJECT_EVENT, select);
-    return () =>
-      window.removeEventListener(HARNESS_SELECT_PROJECT_EVENT, select);
-  }, []);
   useLayoutEffect(() => {
     const target = projectRequest?.target;
     if (target && !tabs.some((tab) => harnessProjectTargetMatches(target, tab))) {
@@ -272,7 +263,7 @@ export function HarnessStack({
                       }}
                       projectRequest={
                         visible && tab.id === activeId &&
-                        (!projectRequest?.target || harnessProjectTargetMatches(projectRequest.target, tab))
+                        projectRequest && harnessProjectTargetMatches(projectRequest.target, tab)
                           ? (projectRequest ?? undefined)
                           : undefined
                       }

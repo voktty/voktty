@@ -1,8 +1,6 @@
 import type { Tab } from "@/modules/tabs";
 import { isTabKey, type TabKey } from "@/modules/tabs/lib/tabIdentity";
 
-export const HARNESS_SELECT_PROJECT_EVENT = "voktty:harness-select-project";
-
 export type HarnessProjectTarget = { ownerId: number; tabKey: TabKey };
 export type HarnessProjectRequest = { path: string; target?: HarnessProjectTarget };
 export type DirectedHarnessProjectRequest = Readonly<{

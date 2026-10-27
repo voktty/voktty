@@ -3340,18 +3340,7 @@ function DesktopApp() {
   });
   const localWorkspaceRoot = localHome;
 
-  const selectProjectFromChrome = useCallback(
-    (path: string) => {
-      window.dispatchEvent(
-        new CustomEvent("voktty:harness-select-project", {
-          detail: { path },
-        }),
-      );
-      setHarnessCwd(path);
-    },
-    [setHarnessCwd],
-  );
-  const handleStatusBarCd = useSurfaceDirectoryNavigation(activeTab?.id, selectProjectFromChrome, sendCd);
+  const handleStatusBarCd = useSurfaceDirectoryNavigation(activeTab?.id, harnessContext.selectProject, sendCd);
 
   const handleNewSpace = useCallback(() => {
     const { spaces, create, ensureViewSpace, openViewSpace, setActive } =
