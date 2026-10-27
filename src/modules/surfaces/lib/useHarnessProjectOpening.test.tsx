@@ -4,10 +4,19 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
-import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { captureHarnessProjectOpening, subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
 import { useHarnessProjectOpening } from "@/modules/surfaces/lib/useHarnessProjectOpening";
 
 afterEach(() => vi.unstubAllGlobals());
+
+it("does not accept unqualified DOM project openings", async () => {
+  const fixture = await setup();
+  try {
+    await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: "/fabricated" } })));
+    expect(fixture.created).not.toHaveBeenCalled();
+    expect(fixture.activate).not.toHaveBeenCalled();
+  } finally { await fixture.close(); }
+});
 
 const tab = (id: number, spaceId = "one"): HarnessTab => ({
   id, spaceId, tabKey: asTabKey(`tab-${id}`), kind: "harness", title: "Harness",
@@ -42,7 +51,7 @@ async function setup(items: Tab[] = [tab(1), tab(2, "two")]) {
   function Window({ spaceId, selectedKey, localRoot }: { spaceId: string; selectedKey: string; localRoot?: string }) {
     result = useHarnessProjectOpening({ spaceId, selectedTabKey: selectedKey, localRoot, tabsRef,
       getTab, newHarnessTab: created, activateTab: activate, createWorktree, onError: error,
-      onMissingProject: missing, openEventName: "voktty:open-harness" });
+      onMissingProject: missing });
     return null;
   }
   const render = (spaceId = "one", selectedKey = "tab-1", localRoot: string | undefined = "C:/project") =>
@@ -60,15 +69,15 @@ async function setup(items: Tab[] = [tab(1), tab(2, "two")]) {
 it("opens profile projects against the returned exact tab, including synchronous new creation", async () => {
   const fixture = await setup();
   try {
-    await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: "remote://machine/root" } })));
+    await act(async () => captureHarnessProjectOpening()("remote://machine/root"));
     expect(fixture.created).toHaveBeenCalledExactlyOnceWith("one", "remote://machine/root");
     expect(fixture.activate).toHaveBeenCalledExactlyOnceWith(1);
     expect(fixture.selected.mock.calls[0][0]).toEqual({ path: "remote://machine/root", target: { ownerId: 1, tabKey: "tab-1" } });
     fixture.tabsRef.current = [];
-    await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: "//server/share/project" } })));
+    await act(async () => captureHarnessProjectOpening()("//server/share/project"));
     expect(fixture.activate).toHaveBeenLastCalledWith(3);
     expect(fixture.selected.mock.calls[1][0].target).toEqual({ ownerId: 3, tabKey: "tab-3" });
-    await act(async () => window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: " ", target: null } })));
+    await act(async () => captureHarnessProjectOpening()(" "));
     expect(fixture.selected).toHaveBeenCalledTimes(2);
   } finally { await fixture.close(); }
 });
@@ -161,16 +170,46 @@ it("keeps retired worktree requests charged until settlement and releases their 
   } finally { await fixture.close(); }
 });
 
-it("retires its event listener and current callbacks on unmount", async () => {
+it("retires its captured opener and current callbacks on unmount", async () => {
   const fixture = await setup();
   const callbacks = fixture.current();
+  const open = captureHarnessProjectOpening();
   await fixture.close();
-  window.dispatchEvent(new CustomEvent("voktty:open-harness", { detail: { path: "/after-unmount" } }));
+  open("/after-unmount");
   callbacks.openNewHarness();
   await callbacks.openNewHarnessInWorktree();
   expect(fixture.created).not.toHaveBeenCalled();
   expect(fixture.createWorktree).not.toHaveBeenCalled();
   expect(fixture.activate).not.toHaveBeenCalled();
+});
+
+it.each(["space", "selection", "root"] as const)("never redirects a captured profile opening after a %s round trip", async (change) => {
+  const fixture = await setup();
+  const open = captureHarnessProjectOpening();
+  try {
+    if (change === "space") await fixture.render("two", "tab-2");
+    if (change === "selection") await fixture.render("one", "tab-2");
+    if (change === "root") await fixture.render("one", "tab-1", "/changed");
+    await fixture.render();
+    await act(async () => open("remote://machine/late"));
+    expect(fixture.created).not.toHaveBeenCalled();
+    expect(fixture.activate).not.toHaveBeenCalled();
+    expect(fixture.selected).not.toHaveBeenCalled();
+    await act(async () => captureHarnessProjectOpening()("remote://machine/current"));
+    expect(fixture.selected).toHaveBeenCalledExactlyOnceWith({ path: "remote://machine/current", target: { ownerId: 1, tabKey: "tab-1" } });
+  } finally { await fixture.close(); }
+});
+
+it("rejects destination replacement during activation", async () => {
+  const fixture = await setup();
+  try {
+    fixture.activate.mockImplementationOnce(() => {
+      fixture.tabsRef.current = [{ ...tab(1), tabKey: asTabKey("tab-replaced") }];
+    });
+    await act(async () => captureHarnessProjectOpening()("/original"));
+    expect(fixture.activate).toHaveBeenCalledExactlyOnceWith(1);
+    expect(fixture.selected).not.toHaveBeenCalled();
+  } finally { await fixture.close(); }
 });
 
 it("uses the selected Harness when several views share a workspace", async () => {

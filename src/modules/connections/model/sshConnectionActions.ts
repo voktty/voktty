@@ -6,11 +6,11 @@ import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore
 import { registerSshProjectPath } from "./remoteProjectRegistration";
 import { remotePath } from "./remoteProjects";
 import { remoteSshEnvironmentId } from "./remoteSshProfiles";
+import { captureHarnessProjectOpening } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 /** Where a connected profile is shown: a terminal or the Harness GUI. */
 export type ConnectionSurface = SshSurface;
 
-export const OPEN_HARNESS_EVENT = "voktty:open-harness";
 export const DISCONNECT_SSH_EVENT = "voktty:disconnect-ssh";
 
 export function surfaceOf(profile: {
@@ -107,16 +107,14 @@ export async function openSshProfileInHarness(
   profile: SshConnection,
   onOpen?: (path: string) => void,
 ): Promise<string> {
+  const open = onOpen ?? captureHarnessProjectOpening();
   const env = await useHarnessProjectEnvStore.getState().connect(profile);
   if (env.kind !== "ssh") {
     throw new Error("The Harness did not connect to the SSH profile.");
   }
   const path = harnessProjectPath(profile.id, env.root);
   registerSshProjectPath(path, [profile]);
-  if (onOpen) onOpen(path);
-  else window.dispatchEvent(
-    new CustomEvent(OPEN_HARNESS_EVENT, { detail: { path } }),
-  );
+  open(path);
   return path;
 }
 

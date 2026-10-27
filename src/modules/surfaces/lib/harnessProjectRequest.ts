@@ -12,6 +12,32 @@ const subscribers = new Set<{
   receive: (request: DirectedHarnessProjectRequest) => void;
 }>();
 
+const openingSubscribers = new Set<{
+  open: (path: string) => void;
+}>();
+
+export function subscribeHarnessProjectOpenings(open: (path: string) => void): () => void {
+  if (openingSubscribers.size >= 256)
+    throw new Error("Too many Harness project opening subscribers.");
+  const entry = { open };
+  openingSubscribers.add(entry);
+  return () => { openingSubscribers.delete(entry); };
+}
+
+export function captureHarnessProjectOpening(): (path: string) => void {
+  const entries = [...openingSubscribers];
+  let consumed = false;
+  return (path) => {
+    if (consumed) return;
+    consumed = true;
+    const request = parseHarnessProjectRequest({ path });
+    if (!request) return;
+    for (const entry of entries) {
+      if (openingSubscribers.has(entry)) entry.open(request.path);
+    }
+  };
+}
+
 export function subscribeHarnessProjectRequests(
   receive: (request: DirectedHarnessProjectRequest) => void,
 ): () => void {

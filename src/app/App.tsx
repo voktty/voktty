@@ -83,7 +83,6 @@ import {
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
-import { OPEN_HARNESS_EVENT } from "@/modules/connections/model/sshConnectionActions";
 import { useSshDisconnection } from "@/modules/connections/hooks/useSshDisconnection";
 import {
   createLauncherItems,
@@ -2276,7 +2275,6 @@ function DesktopApp() {
     createWorktree: createLocalHarnessWorktree,
     onError: reportHarnessOpeningError,
     onMissingProject: reportMissingHarnessProject,
-    openEventName: OPEN_HARNESS_EVENT,
   });
 
   const pickAndOpenProjectInHarness = useCallback(async () => {

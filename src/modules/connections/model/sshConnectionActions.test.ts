@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { subscribeHarnessProjectOpenings } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -26,7 +27,6 @@ import {
   closeSshProfileSessions,
   harnessProjectPath,
   isProfileConnected,
-  OPEN_HARNESS_EVENT,
   openSshProfileInHarness,
   otherSurface,
   profileLinks,
@@ -63,8 +63,14 @@ globalThis.window = {
 
 const profile: SshConnection = { id: "p1", name: "prod", host: "example.test" };
 const local = { kind: "local" } as const;
+const opened = vi.fn();
+let unsubscribe: () => void;
+
+afterEach(() => unsubscribe());
 
 beforeEach(() => {
+  opened.mockReset();
+  unsubscribe = subscribeHarnessProjectOpenings(opened);
   localStorage.clear();
   dispatched.length = 0;
   mocks.connect.mockReset();
@@ -143,7 +149,8 @@ describe("openSshProfileInHarness", () => {
     const selected = vi.fn();
     const path = await openSshProfileInHarness(profile, selected);
     expect(selected).toHaveBeenCalledExactlyOnceWith(path);
-    expect(dispatched.filter((event) => event.type === OPEN_HARNESS_EVENT)).toHaveLength(0);
+    expect(opened).not.toHaveBeenCalled();
+    expect(dispatched.filter((event) => event.type === "voktty:open-harness")).toHaveLength(0);
     expect(remoteProjectForPath(path)).toMatchObject({ environmentId: remoteSshEnvironmentId(profile.id), cwd: "/srv/project" });
   });
   it("connects, registers the project root and asks the app to show it", async () => {
@@ -159,9 +166,8 @@ describe("openSshProfileInHarness", () => {
       environmentId: remoteSshEnvironmentId("p1"),
       cwd: "/home/dev",
     });
-    const opened = dispatched.filter((e) => e.type === OPEN_HARNESS_EVENT);
-    expect(opened).toHaveLength(1);
-    expect((opened[0] as CustomEvent).detail).toEqual({ path });
+    expect(opened).toHaveBeenCalledExactlyOnceWith(path);
+    expect(dispatched.filter((event) => event.type === "voktty:open-harness")).toHaveLength(0);
   });
 
   it("does not open the Harness when the connection fails", async () => {
@@ -169,9 +175,22 @@ describe("openSshProfileInHarness", () => {
     await expect(openSshProfileInHarness(profile)).rejects.toThrow(
       "auth failed",
     );
-    expect(
-      dispatched.filter((e) => e.type === OPEN_HARNESS_EVENT),
-    ).toHaveLength(0);
+    expect(opened).not.toHaveBeenCalled();
+    expect(dispatched.filter((event) => event.type === "voktty:open-harness")).toHaveLength(0);
+  });
+
+  it("captures the desktop opener before connecting and never delivers to a replacement", async () => {
+    let resolve!: (value: unknown) => void;
+    mocks.connect.mockReturnValueOnce(new Promise((yes) => { resolve = yes; }));
+    const pending = openSshProfileInHarness(profile);
+    unsubscribe();
+    const replacement = vi.fn();
+    unsubscribe = subscribeHarnessProjectOpenings(replacement);
+    resolve({ kind: "ssh", connection: profile, root: "/late", sessionId: 3 });
+    await pending;
+    expect(opened).not.toHaveBeenCalled();
+    expect(replacement).not.toHaveBeenCalled();
+    expect(dispatched.filter((event) => event.type === "voktty:open-harness")).toHaveLength(0);
   });
 });
 
