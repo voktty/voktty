@@ -15,6 +15,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { VaultTarget } from "@/modules/notes-board/lib/vaultFilesystem";
+import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
 import type { TabSummary } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
 import {
@@ -85,10 +86,7 @@ export function FloatingWorkspaceWidget({
         requestNewNote();
         return;
       }
-      if (
-        (event.altKey && event.key.toLowerCase() === "d") ||
-        (event.ctrlKey && event.altKey && event.key.toLowerCase() === "d")
-      ) {
+      if (isReviewShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
         setTab("review");

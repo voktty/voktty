@@ -38,6 +38,7 @@ import { useArcadeStore } from "./arcadeStore";
 import { PacmanIcon } from "./components/PacmanIcon";
 import Note01Icon from "@hugeicons/core-free-icons/Note01Icon";
 import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore";
+import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
 
 const LazyFloatingArcadeWidget = lazy(() =>
   import("./components/FloatingArcadeWidget").then((m) => ({
@@ -145,10 +146,7 @@ export function StatusBar({
         useNotesBoardStore.getState().requestNewNote();
         return;
       }
-      if (
-        (event.altKey && event.key.toLowerCase() === "d") ||
-        (event.ctrlKey && event.altKey && event.key.toLowerCase() === "d")
-      ) {
+      if (isReviewShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
         useNotesBoardStore.getState().openReview();
