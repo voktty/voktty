@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   openSettingsWindow: vi.fn(),
   useSshConnections: vi.fn(),
   pool: null as unknown[] | null,
+  dialogs: [] as { onOpen: (path: string) => void; onCancel: () => void }[],
 }));
 
 vi.mock("@/modules/i18n", () => ({
@@ -58,11 +59,14 @@ vi.mock("@/modules/connections", () => ({
   AddRemoteProjectDialog: ({
     initialConnectionId,
     onOpen,
+    onCancel,
   }: {
     initialConnectionId?: string;
     onOpen: (path: string) => void;
-  }) =>
-    createElement(
+    onCancel: () => void;
+  }) => {
+    mocks.dialogs.push({ onOpen, onCancel });
+    return createElement(
       "div",
       {
         role: "dialog",
@@ -77,7 +81,8 @@ vi.mock("@/modules/connections", () => ({
         },
         "Choose project",
       ),
-    ),
+    );
+  },
 }));
 
 vi.mock("@/modules/remote/useRemoteSessions", async () => {
@@ -89,6 +94,15 @@ vi.mock("@/modules/remote/useRemoteSessions", async () => {
 
 import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { HarnessConnectionsPage } from "./HarnessConnectionsPage";
+import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
+import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
+import * as sshActions from "@/modules/connections/model/sshConnectionActions";
+
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error("Missing project selection fixture");
+  return value;
+}
 
 let container: HTMLDivElement;
 let root: Root;
@@ -97,6 +111,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.openSettingsWindow.mockReset();
   mocks.pool = null;
+  mocks.dialogs = [];
   useHarnessProjectEnvStore.setState({
     projects: {},
   });
@@ -112,15 +127,113 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
-async function render(cwd = "~") {
+async function render(cwd = "~", owner = { ownerId: 1, tabKey: asTabKey("tab-one") }) {
   await act(async () =>
-    root.render(createElement(HarnessConnectionsPage, { cwd })),
+    root.render(createElement(HarnessProjectOwner, { value: owner }, createElement(HarnessConnectionsPage, { cwd }))),
   );
 }
 
 describe("Harness connections settings", () => {
+  it("does not redirect a delayed connection after its originating view changes", async () => {
+    let finish!: (value: { kind: "ssh"; connection: { id: string; name: string; host: string }; root: string; sessionId: number }) => void;
+    const connecting = new Promise<Parameters<typeof finish>[0]>((resolve) => { finish = resolve; });
+    vi.spyOn(useHarnessProjectEnvStore.getState(), "connect").mockReturnValueOnce(connecting);
+    const selected = vi.fn();
+    const legacy = vi.fn();
+    const release = subscribeHarnessProjectRequests(selected);
+    window.addEventListener("voktty:open-harness", legacy);
+    try {
+      await render();
+      await act(async () => required(container.querySelector<HTMLButtonElement>('button[title="Connect"]')).click());
+      await render("~", { ownerId: 2, tabKey: asTabKey("tab-two") });
+      await act(async () => {
+        finish({ kind: "ssh", connection: { id: "profile-1", name: "Build host", host: "build-host" }, root: "/original", sessionId: 4 });
+        await connecting;
+      });
+      expect(selected).not.toHaveBeenCalled();
+      expect(legacy).not.toHaveBeenCalled();
+    } finally {
+      release();
+      window.removeEventListener("voktty:open-harness", legacy);
+    }
+  });
+
+  it("retires a cancelled picker without closing or adopting its replacement", async () => {
+    const selected = vi.fn();
+    const release = subscribeHarnessProjectRequests(selected);
+    try {
+      await render();
+      const open = () => required(container.querySelector<HTMLButtonElement>('button[title="Open folder"]')).click();
+      await act(async () => open());
+      const original = required(mocks.dialogs[mocks.dialogs.length - 1]);
+      await act(async () => original.onCancel());
+      await act(async () => open());
+      const replacement = required(mocks.dialogs[mocks.dialogs.length - 1]);
+      await act(async () => original.onOpen("/late"));
+      expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(selected).not.toHaveBeenCalled();
+      await act(async () => replacement.onOpen("//server/share/project"));
+      expect(selected).toHaveBeenCalledExactlyOnceWith({ path: "//server/share/project", target: { ownerId: 1, tabKey: "tab-one" } });
+    } finally { release(); }
+  });
+
+  it.each(["owner", "project", "unmount"])("rejects a folder result after its %s retires", async (change) => {
+    const selected = vi.fn();
+    const release = subscribeHarnessProjectRequests(selected);
+    try {
+      await render();
+      await act(async () => required(container.querySelector<HTMLButtonElement>('button[title="Open folder"]')).click());
+      const original = required(mocks.dialogs[mocks.dialogs.length - 1]);
+      if (change === "owner") await render("~", { ownerId: 2, tabKey: asTabKey("tab-two") });
+      else if (change === "project") await render("/other");
+      else await act(async () => root.render(null));
+      await act(async () => original.onOpen("/late"));
+      expect(selected).not.toHaveBeenCalled();
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+    } finally { release(); }
+  });
+
+  it.each(["Disconnect", "Reconnect"])("retires delayed %s navigation before a successor view can receive it", async (action) => {
+    let finish!: () => void;
+    const closing = new Promise<void>((resolve) => { finish = resolve; });
+    const close = vi.spyOn(sshActions, "closeSshProfileSessions").mockReturnValueOnce(closing);
+    const connect = vi.spyOn(sshActions, "openSshProfileInHarness");
+    await useHarnessProjectEnvStore.getState().connect({ id: "profile-1", name: "Build host", user: "dev", host: "build-host" });
+    const selected = vi.fn();
+    const release = subscribeHarnessProjectRequests(selected);
+    try {
+      await render();
+      await act(async () => required(container.querySelector<HTMLButtonElement>(`button[title="${action}"]`)).click());
+      expect(close).toHaveBeenCalledExactlyOnceWith("profile-1");
+      await render("~", { ownerId: 2, tabKey: asTabKey("tab-two") });
+      await act(async () => { finish(); await closing; });
+      expect(selected).not.toHaveBeenCalled();
+      expect(connect).not.toHaveBeenCalled();
+    } finally {
+      finish();
+      release();
+      await act(async () => useHarnessProjectEnvStore.getState().disconnectAll());
+    }
+  });
+  it("delivers a folder selection through the typed channel without broadcasting a DOM event", async () => {
+    const selected = vi.fn();
+    const legacy = vi.fn();
+    const release = subscribeHarnessProjectRequests(selected);
+    window.addEventListener("voktty:harness-select-project", legacy);
+    try {
+      await render();
+      await act(async () => required(container.querySelector<HTMLButtonElement>('button[title="Open folder"]')).click());
+      await act(async () => required(container.querySelector<HTMLButtonElement>('[role="dialog"] button')).click());
+      expect(selected).toHaveBeenCalledExactlyOnceWith({ path: "remote://voktty-ssh-profile-1/srv/app", target: { ownerId: 1, tabKey: "tab-one" } });
+      expect(legacy).not.toHaveBeenCalled();
+    } finally {
+      release();
+      window.removeEventListener("voktty:harness-select-project", legacy);
+    }
+  });
   it("keeps each view's current project independent across other project updates", async () => {
     const profiles = ["one", "two"].map((id) => ({
       id,
@@ -237,7 +350,7 @@ describe("Harness connections settings", () => {
 
   it("returns the selected remote project to Harness", async () => {
     const selected = vi.fn();
-    window.addEventListener("voktty:harness-select-project", selected);
+    const release = subscribeHarnessProjectRequests(selected);
     try {
       await render();
       const open = Array.from(container.querySelectorAll("button")).find(
@@ -253,19 +366,16 @@ describe("Harness connections settings", () => {
       await act(async () => choose.click());
 
       expect(selected).toHaveBeenCalledOnce();
-      const event = selected.mock.calls[0]?.[0] as CustomEvent<{
-        path: string;
-      }>;
-      expect(event.detail.path).toBe("remote://voktty-ssh-profile-1/srv/app");
+      expect(selected.mock.calls[0][0]).toEqual({ path: "remote://voktty-ssh-profile-1/srv/app", target: { ownerId: 1, tabKey: "tab-one" } });
       expect(container.querySelector('[role="dialog"]')).toBeNull();
     } finally {
-      window.removeEventListener("voktty:harness-select-project", selected);
+      release();
     }
   });
 
   it("selects remote project in Harness when Connect is clicked", async () => {
     const onSelectProject = vi.fn();
-    window.addEventListener("voktty:open-harness", onSelectProject);
+    const release = subscribeHarnessProjectRequests(onSelectProject);
     try {
       await render();
       const connectBtn = Array.from(container.querySelectorAll("button")).find(
@@ -276,12 +386,9 @@ describe("Harness connections settings", () => {
       await act(async () => connectBtn.click());
 
       expect(onSelectProject).toHaveBeenCalledOnce();
-      const event = onSelectProject.mock.calls[0]?.[0] as CustomEvent<{
-        path: string;
-      }>;
-      expect(event.detail.path).toBe("remote://voktty-ssh-profile-1/home/dev");
+      expect(onSelectProject.mock.calls[0][0]).toEqual({ path: "remote://voktty-ssh-profile-1/home/dev", target: { ownerId: 1, tabKey: "tab-one" } });
     } finally {
-      window.removeEventListener("voktty:open-harness", onSelectProject);
+      release();
     }
   });
 
@@ -407,7 +514,7 @@ describe("Harness connections settings", () => {
     await useHarnessProjectEnvStore.getState().connect(connection);
 
     const onSelectProject = vi.fn();
-    window.addEventListener("voktty:harness-select-project", onSelectProject);
+    const release = subscribeHarnessProjectRequests(onSelectProject);
     try {
       await render();
       const disconnectBtn = Array.from(
@@ -417,15 +524,9 @@ describe("Harness connections settings", () => {
 
       await act(async () => disconnectBtn.click());
       expect(onSelectProject).toHaveBeenCalledOnce();
-      const event = onSelectProject.mock.calls[0]?.[0] as CustomEvent<{
-        path: string;
-      }>;
-      expect(event.detail.path).toBe("~");
+      expect(onSelectProject.mock.calls[0][0]).toEqual({ path: "~", target: { ownerId: 1, tabKey: "tab-one" } });
     } finally {
-      window.removeEventListener(
-        "voktty:harness-select-project",
-        onSelectProject,
-      );
+      release();
       await act(async () =>
         useHarnessProjectEnvStore.getState().disconnectAll(),
       );

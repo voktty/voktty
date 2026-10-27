@@ -105,6 +105,7 @@ export function harnessProjectPath(profileId: string, root: string): string {
 /** Connects the profile for the Harness and asks the app to show its project. */
 export async function openSshProfileInHarness(
   profile: SshConnection,
+  onOpen?: (path: string) => void,
 ): Promise<string> {
   const env = await useHarnessProjectEnvStore.getState().connect(profile);
   if (env.kind !== "ssh") {
@@ -112,7 +113,8 @@ export async function openSshProfileInHarness(
   }
   const path = harnessProjectPath(profile.id, env.root);
   registerSshProjectPath(path, [profile]);
-  window.dispatchEvent(
+  if (onOpen) onOpen(path);
+  else window.dispatchEvent(
     new CustomEvent(OPEN_HARNESS_EVENT, { detail: { path } }),
   );
   return path;

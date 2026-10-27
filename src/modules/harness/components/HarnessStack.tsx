@@ -10,6 +10,7 @@ import { useHarnessViewActivation } from "@/modules/harness/hooks/useHarnessView
 import { useHarnessViewCreation } from "@/modules/harness/hooks/useHarnessViewCreation";
 import type { HarnessNavigationView } from "@/modules/harness/lib/harnessWindowNavigation";
 import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
+import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
 import { HARNESS_SELECT_PROJECT_EVENT, harnessProjectTargetMatches, parseHarnessProjectRequest, subscribeHarnessProjectRequests, type HarnessProjectRequest } from "@/modules/surfaces/lib/harnessProjectRequest";
 
 import { markHarnessOpenPhase } from "../lib/openTiming";
@@ -108,6 +109,7 @@ function HarnessWorkbench({
         ))}
       </div>
       <div className="min-h-0 flex-1" hidden={view !== "harness"}>
+        <HarnessProjectOwner value={{ ownerId: tab.id, tabKey: tab.tabKey }}>
         <HarnessTerminalOwner
           value={{
             tabKey: tab.tabKey,
@@ -132,6 +134,7 @@ function HarnessWorkbench({
             onRegistered={onRegistered}
           />
         </HarnessTerminalOwner>
+        </HarnessProjectOwner>
       </div>
       {view === "native" && (
         <div className="min-h-0 flex-1">

@@ -21,8 +21,9 @@ import {
 import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { projectEnvironmentOwnerId } from "@/modules/harness/lib/projectEnvironmentIdentity";
 import { harnessProfileStatus } from "@/modules/connections/model/harnessProfileStatus";
+import { useHarnessProjectSelection } from "@/modules/harness/hooks/useHarnessProjectSelection";
 import { useRemoteSessionSnapshots } from "@/modules/remote/useRemoteSessions";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import {
   Check,
   CircleAlert,
@@ -39,7 +40,11 @@ export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
   const { t } = useTranslation();
   const connections = useSshConnections();
   const { pingMap, refreshPings } = useSshPing(connections, true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const captureProject = useHarnessProjectSelection(cwd);
+  const [projectSelection, setProjectSelection] = useState<ReturnType<typeof captureProject>>(null);
+  useLayoutEffect(() => {
+    if (projectSelection && !projectSelection.isCurrent()) setProjectSelection(null);
+  });
   const [connectionId, setConnectionId] = useState<string>();
   const [isRefreshingPings, setIsRefreshingPings] = useState(false);
 
@@ -60,30 +65,40 @@ export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
       : undefined;
 
   const openFolder = (id?: string) => {
+    const selection = captureProject();
+    if (!selection) return;
+    projectSelection?.retire();
     setConnectionId(id);
-    setDialogOpen(true);
+    setProjectSelection(selection);
   };
 
   const handleConnect = async (conn: SshConnection) => {
+    const selection = captureProject();
+    if (!selection) return;
     try {
-      await openSshProfileInHarness(conn);
+      await openSshProfileInHarness(conn, selection.select);
     } catch (err) {
-      console.error("[harness] Failed to connect:", err);
+      if (selection.isCurrent()) console.error("[harness] Failed to connect:", err);
     }
   };
 
   const handleDisconnect = async (conn: SshConnection) => {
+    const selection = captureProject();
+    if (!selection) return;
     await closeSshProfileSessions(conn.id);
-    window.dispatchEvent(
-      new CustomEvent("voktty:harness-select-project", {
-        detail: { path: "~" },
-      }),
-    );
+    selection.select("~");
   };
 
   const handleReconnect = async (conn: SshConnection) => {
+    const selection = captureProject();
+    if (!selection) return;
     await closeSshProfileSessions(conn.id);
-    await handleConnect(conn);
+    if (!selection.isCurrent()) return;
+    try {
+      await openSshProfileInHarness(conn, selection.select);
+    } catch (err) {
+      if (selection.isCurrent()) console.error("[harness] Failed to connect:", err);
+    }
   };
   const onRefreshPingsClick = async () => {
     setIsRefreshingPings(true);
@@ -342,17 +357,18 @@ export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
         )}
       </section>
 
-      {dialogOpen ? (
+      {projectSelection ? (
         <AddRemoteProjectDialog
           initialConnectionId={connectionId}
-          onCancel={() => setDialogOpen(false)}
+          onCancel={() => {
+            if (!projectSelection.isCurrent()) return;
+            projectSelection.retire();
+            setProjectSelection(null);
+          }}
           onOpen={(path) => {
-            setDialogOpen(false);
-            window.dispatchEvent(
-              new CustomEvent("voktty:harness-select-project", {
-                detail: { path },
-              }),
-            );
+            if (!projectSelection.isCurrent()) return;
+            setProjectSelection(null);
+            projectSelection.select(path);
           }}
         />
       ) : null}

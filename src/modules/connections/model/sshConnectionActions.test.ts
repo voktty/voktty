@@ -138,6 +138,14 @@ describe("profile links and row actions", () => {
 });
 
 describe("openSshProfileInHarness", () => {
+  it("uses an explicit destination callback instead of opening against later app selection", async () => {
+    mocks.connect.mockResolvedValue({ kind: "ssh", connection: profile, root: "/srv/project", sessionId: 3 });
+    const selected = vi.fn();
+    const path = await openSshProfileInHarness(profile, selected);
+    expect(selected).toHaveBeenCalledExactlyOnceWith(path);
+    expect(dispatched.filter((event) => event.type === OPEN_HARNESS_EVENT)).toHaveLength(0);
+    expect(remoteProjectForPath(path)).toMatchObject({ environmentId: remoteSshEnvironmentId(profile.id), cwd: "/srv/project" });
+  });
   it("connects, registers the project root and asks the app to show it", async () => {
     mocks.connect.mockResolvedValue({
       kind: "ssh",

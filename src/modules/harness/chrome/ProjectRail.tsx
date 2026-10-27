@@ -1,4 +1,5 @@
 import { AddRemoteProjectDialog } from "@/modules/connections/ui/AddRemoteProjectDialog";
+import { useHarnessProjectSelection } from "@/modules/harness/hooks/useHarnessProjectSelection";
 import {
   AppWindow,
   Archive,
@@ -23,7 +24,7 @@ import {
   Trash2,
   Zap,
 } from "./icons";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { t, useTranslation } from "@/modules/i18n";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -310,7 +311,11 @@ export function ProjectRail({
     project: string;
     name: string;
   } | null>(null);
-  const [remoteProjectDialogOpen, setRemoteProjectDialogOpen] = useState(false);
+  const captureProject = useHarnessProjectSelection(cwd);
+  const [remoteProjectSelection, setRemoteProjectSelection] = useState<ReturnType<typeof captureProject>>(null);
+  useLayoutEffect(() => {
+    if (remoteProjectSelection && !remoteProjectSelection.isCurrent()) setRemoteProjectSelection(null);
+  });
   const [removingUnavailable, setRemovingUnavailable] = useState(false);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -808,7 +813,12 @@ export function ProjectRail({
                   : undefined
               }
               onAdd={onOpenProject}
-              onOpenRemoteProject={() => setRemoteProjectDialogOpen(true)}
+              onOpenRemoteProject={() => {
+                const selection = captureProject();
+                if (!selection) return;
+                remoteProjectSelection?.retire();
+                setRemoteProjectSelection(selection);
+              }}
               onAddGroup={projectGroups.length === 0 ? createGroup : undefined}
               unavailableCount={
                 onRemoveProject ? removableUnavailable.length : 0
@@ -975,16 +985,17 @@ export function ProjectRail({
           onClose={() => setBackgroundProject(null)}
         />
       ) : null}
-      {remoteProjectDialogOpen ? (
+      {remoteProjectSelection ? (
         <AddRemoteProjectDialog
-          onCancel={() => setRemoteProjectDialogOpen(false)}
+          onCancel={() => {
+            if (!remoteProjectSelection.isCurrent()) return;
+            remoteProjectSelection.retire();
+            setRemoteProjectSelection(null);
+          }}
           onOpen={(path) => {
-            setRemoteProjectDialogOpen(false);
-            window.dispatchEvent(
-              new CustomEvent("voktty:harness-select-project", {
-                detail: { path },
-              }),
-            );
+            if (!remoteProjectSelection.isCurrent()) return;
+            setRemoteProjectSelection(null);
+            remoteProjectSelection.select(path);
           }}
         />
       ) : null}

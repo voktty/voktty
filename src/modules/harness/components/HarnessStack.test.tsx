@@ -20,6 +20,7 @@ import type {
 } from "@/modules/harness/lib/harnessWindowNavigation";
 import { requestHarnessProject } from "@/modules/surfaces/lib/harnessProjectRequest";
 import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
+import { useHarnessProjectSelection } from "@/modules/harness/hooks/useHarnessProjectSelection";
 
 const mounts = vi.hoisted(() => ({
   harness: vi.fn(),
@@ -71,6 +72,7 @@ vi.mock("./HarnessApp", () => ({
     onProjectRequestHandled?: (request: { path: string }) => void;
     onRegistered?: (view: HarnessNavigationView) => void;
   }) => {
+    const captureProject = useHarnessProjectSelection("/project");
     useLayoutEffect(() => {
       if (mounts.failedOwnerId === surfaceOwnerId)
         throw new Error("Harness reference is reserved");
@@ -95,7 +97,7 @@ vi.mock("./HarnessApp", () => ({
         onProjectRequestHandled?.(projectRequest);
       }
     }, [focused, projectRequest, onProjectRequestHandled, surfaceOwnerId]);
-    return createElement("div", { "data-harness": true }, "Harness");
+    return createElement("div", { "data-harness": true }, "Harness", createElement("button", { type: "button", "data-project-owner": surfaceOwnerId, onClick: () => captureProject()?.select("/owned-project") }, "Select project"));
   },
 }));
 vi.mock("./HarnessNativeAiView", () => ({
@@ -107,6 +109,11 @@ vi.mock("./HarnessNativeAiView", () => ({
     return createElement("div", { "data-native": true }, "Native AI");
   },
 }));
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error("Missing project selection fixture");
+  return value;
+}
+
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const tabs = [{ id: 1, kind: "harness", cwd: "/project" }] as HarnessTab[];
@@ -232,6 +239,15 @@ it("rejects a raw directed DOM event instead of changing its named view", async 
     detail: { path: "/injected", target: { ownerId: 1, tabKey: "tab-owned" } },
   })));
   expect(mounts.requests).not.toHaveBeenCalled();
+});
+
+it("binds a nested project action to its own view while another view is focused", async () => {
+  const both = [{ ...tabs[0], tabKey: asTabKey("tab-one") }, { ...tabs[0], id: 2, tabKey: asTabKey("tab-two") }];
+  await act(async () => root.render(<HarnessStack tabs={both} activeId={1} />));
+  await act(async () => required(container.querySelector<HTMLButtonElement>('button[data-project-owner="2"]')).click());
+  expect(mounts.requests).not.toHaveBeenCalled();
+  await act(async () => root.render(<HarnessStack tabs={both} activeId={2} />));
+  expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "/owned-project");
 });
 
 it("delivers a typed directed request without broadcasting a DOM event", async () => {
