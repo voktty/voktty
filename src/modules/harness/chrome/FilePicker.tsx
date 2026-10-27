@@ -1,6 +1,7 @@
 import { RefreshCw, Search } from "./icons";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,12 +11,11 @@ import {
 import { createPortal } from "react-dom";
 import { t, useTranslation } from "@/modules/i18n";
 import {
-  loadProjectFiles,
-  peekProjectFiles,
   rankProjectFiles,
   recentOpenedFiles,
   type RankedFile,
 } from "../lib/fileIndex";
+import { useProjectFileIndex } from "@/modules/harness/lib/useProjectFileIndex";
 import { fuzzyMatch } from "../lib/fuzzy";
 import { LAYER } from "../lib/layers";
 import { MOD, SHIFT } from "../lib/platform";
@@ -68,11 +68,22 @@ export function FilePicker({
   onCloseRef.current = onClose;
   const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
-  const [files, setFiles] = useState(() => peekProjectFiles(cwd) ?? []);
-  const [loading, setLoading] = useState(() => peekProjectFiles(cwd) == null);
-  const [error, setError] = useState<string | null>(null);
+  const index = useProjectFileIndex(cwd, open);
+  const files = index.isCurrent() ? index.files : [];
+  const { loading, error } = index;
+  const owner = useMemo(
+    () => ({ open, cwd, onOpenFile, onRunAction, onClose, current: false }),
+    [open, cwd, onOpenFile, onRunAction, onClose],
+  );
+  useLayoutEffect(() => {
+    owner.current = owner.open;
+    return () => {
+      owner.current = false;
+    };
+  }, [owner]);
 
   const recents = useMemo(() => {
+    if (!open || !index.isCurrent()) return [];
     const out: string[] = [];
     const seen = new Set<string>();
     for (const path of [...recentOpenedFiles(cwd), ...openPaths]) {
@@ -81,7 +92,7 @@ export function FilePicker({
       out.push(path);
     }
     return out;
-  }, [cwd, openPaths, open]);
+  }, [cwd, openPaths, open, index]);
 
   const paletteMode = query.trim().startsWith(">");
   const actionQuery = paletteMode ? query.trim().slice(1).trim() : "";
@@ -110,35 +121,7 @@ export function FilePicker({
     if (!open) return;
     setQuery(initialQuery);
     setActive(0);
-    setError(null);
-    const cached = peekProjectFiles(cwd);
-    if (cached) {
-      setFiles(cached);
-      setLoading(false);
-    } else {
-      setFiles([]);
-      setLoading(looksLikeProject(cwd));
-    }
-    if (!looksLikeProject(cwd)) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    void loadProjectFiles(cwd, true)
-      .then((next) => {
-        if (cancelled) return;
-        setFiles(next);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, cwd, initialQuery]);
+  }, [open, initialQuery]);
 
   useEffect(() => {
     setActive((index) =>
@@ -166,11 +149,15 @@ export function FilePicker({
   if (!open) return null;
 
   const pick = (file: RankedFile) => {
+    if (!owner.current || !index.isCurrent()) return;
     onOpenFile(file.path);
+    if (!owner.current || !index.isCurrent()) return;
     onClose();
   };
   const runAction = (action: RankedAction) => {
+    if (!owner.current) return;
     onRunAction?.(action.id);
+    if (!owner.current) return;
     onClose();
   };
 
