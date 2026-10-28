@@ -1,8 +1,8 @@
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{self, Read};
-use std::mem::size_of;
-use std::os::windows::ffi::OsStrExt;
+use std::mem::{offset_of, size_of};
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::{Component, Path, PathBuf, Prefix};
 use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
@@ -13,14 +13,17 @@ use windows_sys::Wdk::Storage::FileSystem::{
 use windows_sys::Win32::Foundation::{RtlNtStatusToDosError, OBJ_CASE_INSENSITIVE, UNICODE_STRING};
 use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
 
+use crate::discovery::{DirectoryEntry, DirectoryListing, EntryKind};
 use crate::reader::{MemoryReadAccess, ReadControl, ReadError};
 use voktty_workspace_kit::PathFact;
 use windows_sys::Win32::Storage::FileSystem::{
-    FileBasicInfo, FileCaseSensitiveInfo, FileIdInfo, FileStandardInfo, GetDriveTypeW,
-    GetFileInformationByHandleEx, GetFileType, GetFinalPathNameByHandleW,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_CASE_SENSITIVE_INFO, FILE_ID_INFO,
-    FILE_INFO_BY_HANDLE_CLASS, FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_SHARE_READ,
-    FILE_STANDARD_INFO, FILE_TRAVERSE, FILE_TYPE_DISK, SYNCHRONIZE,
+    FileBasicInfo, FileCaseSensitiveInfo, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
+    FileIdInfo, FileStandardInfo, GetDriveTypeW, GetFileInformationByHandleEx, GetFileType,
+    GetFinalPathNameByHandleW, FILE_ATTRIBUTE_DEVICE, FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_CASE_SENSITIVE_INFO, FILE_ID_BOTH_DIR_INFO,
+    FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES,
+    FILE_READ_DATA, FILE_SHARE_READ, FILE_STANDARD_INFO, FILE_TRAVERSE, FILE_TYPE_DISK,
+    SYNCHRONIZE,
 };
 
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
@@ -128,7 +131,14 @@ fn final_path(file: &File) -> Result<PathBuf, ReadError> {
     Ok(PathBuf::from(text))
 }
 
-fn open(parent: Option<&File>, name: &OsStr, directory: bool) -> io::Result<(File, FileState)> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OpenKind {
+    Directory,
+    Enumerate,
+    File,
+    Metadata,
+}
+fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<(File, FileState)> {
     let mut wide: Vec<_> = name.encode_wide().collect();
     if wide.is_empty() || wide.len() > 32767 || wide.contains(&0) {
         return Err(io::ErrorKind::InvalidInput.into());
@@ -161,17 +171,18 @@ fn open(parent: Option<&File>, name: &OsStr, directory: bool) -> io::Result<(Fil
     let mut handle = std::ptr::null_mut();
     let desired = FILE_READ_ATTRIBUTES
         | SYNCHRONIZE
-        | if directory {
-            FILE_TRAVERSE
-        } else {
-            FILE_READ_DATA
+        | match kind {
+            OpenKind::Directory => FILE_TRAVERSE,
+            OpenKind::Enumerate => FILE_TRAVERSE | FILE_LIST_DIRECTORY,
+            OpenKind::File => FILE_READ_DATA,
+            OpenKind::Metadata => 0,
         };
     let options = FILE_OPEN_REPARSE_POINT
         | FILE_SYNCHRONOUS_IO_NONALERT
-        | if directory {
-            FILE_DIRECTORY_FILE
-        } else {
-            FILE_NON_DIRECTORY_FILE
+        | match kind {
+            OpenKind::Directory | OpenKind::Enumerate => FILE_DIRECTORY_FILE,
+            OpenKind::File => FILE_NON_DIRECTORY_FILE,
+            OpenKind::Metadata => 0,
         };
     // Relative calls carry exactly one component. FILE_OPEN_REPARSE_POINT opens
     // that entry itself; no absolute prefix can be reinterpreted after validation.
@@ -203,13 +214,25 @@ fn open(parent: Option<&File>, name: &OsStr, directory: bool) -> io::Result<(Fil
         return Err(io::ErrorKind::Other.into());
     }
     let metadata = state(&file)?;
-    if metadata.directory != directory
-        || metadata.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    if (kind != OpenKind::Metadata
+        && (metadata.directory != matches!(kind, OpenKind::Directory | OpenKind::Enumerate)
+            || metadata.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0))
         || metadata.delete_pending
     {
         return Err(io::ErrorKind::InvalidInput.into());
     }
     Ok((file, metadata))
+}
+fn open(parent: Option<&File>, name: &OsStr, directory: bool) -> io::Result<(File, FileState)> {
+    open_kind(
+        parent,
+        name,
+        if directory {
+            OpenKind::Directory
+        } else {
+            OpenKind::File
+        },
+    )
 }
 
 pub(crate) struct Directory {
@@ -221,6 +244,163 @@ pub(crate) struct Directory {
 }
 
 impl Directory {
+    pub(crate) fn probe(&self, name: &OsStr) -> io::Result<Option<EntryKind>> {
+        let parent = self.ancestors.last().ok_or(io::ErrorKind::InvalidInput)?;
+        match open_kind(Some(parent), name, OpenKind::Metadata) {
+            Ok((_, state)) => Ok(Some(
+                if state.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                    EntryKind::Link
+                } else if state.directory {
+                    EntryKind::Directory
+                } else if state.attributes & FILE_ATTRIBUTE_DEVICE != 0 {
+                    EntryKind::Other
+                } else {
+                    EntryKind::File
+                },
+            )),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    pub(crate) fn open_child(
+        &self,
+        name: &OsStr,
+        path: &Path,
+        control: &ReadControl,
+    ) -> Result<Self, ReadError> {
+        control.check()?;
+        let (file, state) = open(self.ancestors.last(), name, true).map_err(|_| ReadError::Io)?;
+        control.check()?;
+        Ok(Self {
+            ancestors: vec![file],
+            path: path.to_path_buf(),
+            state,
+        })
+    }
+    pub(crate) fn revision(&self) -> io::Result<(i64, i64, i64, i64)> {
+        let state = state(self.ancestors.last().ok_or(io::ErrorKind::InvalidInput)?)?;
+        Ok((state.written, 0, state.changed, 0))
+    }
+    pub(crate) fn entries(
+        &self,
+        path: &Path,
+        access: &dyn MemoryReadAccess,
+        control: &ReadControl,
+        limit: usize,
+    ) -> Result<DirectoryListing, ReadError> {
+        control.check()?;
+        if !access.allows_enumeration(path) {
+            return Err(ReadError::Denied);
+        }
+        let (file, state) = open_kind(self.ancestors.last(), OsStr::new("."), OpenKind::Enumerate)
+            .map_err(|_| ReadError::Io)?;
+        if (state.volume, state.id) != self.identity() {
+            return Err(ReadError::StaleRoot);
+        }
+        let mut storage = vec![0u64; 8192];
+        let capacity = storage.len() * 8;
+        let mut entries = Vec::new();
+        let mut restart = true;
+        while entries.len() < limit {
+            control.check()?;
+            storage.fill(0);
+            let class = if restart {
+                FileIdBothDirectoryRestartInfo
+            } else {
+                FileIdBothDirectoryInfo
+            };
+            restart = false;
+            if unsafe {
+                GetFileInformationByHandleEx(
+                    file.as_raw_handle(),
+                    class,
+                    storage.as_mut_ptr().cast(),
+                    capacity as u32,
+                )
+            } == 0
+            {
+                let error = io::Error::last_os_error();
+                return if error.raw_os_error() == Some(18) {
+                    Ok(DirectoryListing {
+                        entries,
+                        complete: true,
+                    })
+                } else {
+                    Err(ReadError::Io)
+                };
+            }
+            let mut offset = 0;
+            loop {
+                if capacity - offset < size_of::<FILE_ID_BOTH_DIR_INFO>() {
+                    return Err(ReadError::Io);
+                }
+                let base = unsafe { storage.as_ptr().cast::<u8>().add(offset) };
+                let record =
+                    unsafe { std::ptr::read_unaligned(base.cast::<FILE_ID_BOTH_DIR_INFO>()) };
+                let end = if record.NextEntryOffset == 0 {
+                    capacity
+                } else {
+                    let next = record.NextEntryOffset as usize;
+                    if !next.is_multiple_of(8)
+                        || next < size_of::<FILE_ID_BOTH_DIR_INFO>()
+                        || next > capacity - offset
+                    {
+                        return Err(ReadError::Io);
+                    }
+                    offset + next
+                };
+                let start = offset + offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
+                let length = record.FileNameLength as usize;
+                if length == 0 || !length.is_multiple_of(2) || length > end.saturating_sub(start) {
+                    return Err(ReadError::Io);
+                }
+                let units = unsafe {
+                    std::slice::from_raw_parts(
+                        storage.as_ptr().cast::<u8>().add(start).cast::<u16>(),
+                        length / 2,
+                    )
+                };
+                let name = OsString::from_wide(units);
+                if name != "." && name != ".." {
+                    if Path::new(&name).components().count() != 1
+                        || !matches!(
+                            Path::new(&name).components().next(),
+                            Some(Component::Normal(_))
+                        )
+                    {
+                        return Err(ReadError::InvalidInput);
+                    }
+                    if !access.allows_metadata(&path.join(&name)) {
+                        return Err(ReadError::Denied);
+                    }
+                    let kind = if record.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                        EntryKind::Link
+                    } else if record.FileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+                        EntryKind::Directory
+                    } else if record.FileAttributes & FILE_ATTRIBUTE_DEVICE != 0 {
+                        EntryKind::Other
+                    } else {
+                        EntryKind::File
+                    };
+                    entries.push(DirectoryEntry { name, kind });
+                    if entries.len() == limit {
+                        return Ok(DirectoryListing {
+                            entries,
+                            complete: false,
+                        });
+                    }
+                }
+                if record.NextEntryOffset == 0 {
+                    break;
+                }
+                offset = end;
+            }
+        }
+        Ok(DirectoryListing {
+            entries,
+            complete: false,
+        })
+    }
     pub(crate) fn open_root(path: &Path, control: &ReadControl) -> Result<Self, ReadError> {
         validate_requested_root(path)?;
         let volume_root = drive(path)?;

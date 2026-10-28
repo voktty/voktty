@@ -64,6 +64,9 @@ impl std::error::Error for ReadError {}
 pub trait MemoryReadAccess: Send + Sync {
     fn allows_metadata(&self, path: &Path) -> bool;
     fn allows_read(&self, path: &Path) -> bool;
+    fn allows_enumeration(&self, _path: &Path) -> bool {
+        false
+    }
 }
 
 #[derive(Clone)]
@@ -80,6 +83,13 @@ impl Default for ReadControl {
 }
 
 impl ReadControl {
+    pub(crate) fn phase(cancelled: Arc<AtomicBool>, timeout: Duration) -> Self {
+        Self {
+            cancelled,
+            started: Instant::now(),
+            timeout,
+        }
+    }
     pub fn new(timeout: Duration) -> Self {
         Self {
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -156,6 +166,36 @@ pub struct LocalMemoryWorkspace<'a> {
 }
 
 impl<'a> LocalMemoryWorkspace<'a> {
+    pub fn observe_scope(
+        &self,
+        purpose: crate::DiscoveryPurpose,
+        control: &crate::DiscoveryControl,
+    ) -> Result<crate::NativeScopeObservation, ReadError> {
+        let phase = control.phase(Duration::from_secs(5));
+        let _permit = ReadPermit::acquire(&phase)?;
+        self.checked_root(&phase)?;
+        let local = self.store.load().map_err(ReadError::Store)?;
+        if self.identity["machineId"] != local.installation_id() {
+            return Err(ReadError::StaleInstallation);
+        }
+        let observation = crate::discovery::gather(
+            &self.root,
+            local.installation_id(),
+            self.access,
+            purpose,
+            control,
+        )?;
+        self.checked_root(&control.phase(Duration::from_secs(5)))?;
+        let current = self.store.load().map_err(ReadError::Store)?;
+        if current.installation_id() != local.installation_id() {
+            return Err(ReadError::StaleInstallation);
+        }
+        if current.revision() != local.revision() {
+            return Err(ReadError::Store(StoreError::Conflict));
+        }
+        control.phase(Duration::from_secs(5)).check()?;
+        Ok(observation)
+    }
     pub fn open(
         store: &'a LocalMemoryStore,
         requested: &Path,

@@ -108,7 +108,7 @@ unqualified network filesystem. It holds no directory handles between batches.
 Observations are bounded point-in-time facts, not a transaction over the tree or
 proof of freshness at later delivery/publication. Revalidate current instruction
 bytes, scope, consent and destination under the appropriate native exclusion.
-Ancestry/descendant gathering, publication, App/CLI integration and transport
+Publication, App/CLI integration and transport
 ownership factories remain pending. Other platforms explicitly return
 `Unsupported` without doing project IO. Linux behavior is tested; Windows,
 macOS and Android runtime qualification remains pending.
@@ -160,3 +160,65 @@ They cross-compile on Linux; that is not evidence of Windows runtime behavior.
 Run them on native Windows before claiming platform qualification. The junction
 fixture operates only on its own temporary directories and requires local
 filesystem support for mount-point reparse data.
+
+## Native scope discovery
+
+`observe_scope` collects real observations and invokes the shared scope resolver.
+`Discover` inspects the requested directory and its authorized ancestors, without
+walking project children. `Initialize` and `Manage` additionally scan descendants
+of the captured execution root. This is an explicit operation, with no watcher,
+automatic deployment, provider call or session activation.
+
+Metadata, content reads and directory enumeration have distinct native authority.
+`MemoryReadAccess::allows_enumeration` defaults to false; metadata permission
+alone never grants listing. Each entry also requires metadata authorization.
+Only bounded `kit.json` configuration text is read for classification; factual
+documents, root agent rules, session/task contents and unknown file data are not
+loaded. A schema-valid configuration marker identifies a kit for scope discovery;
+instruction/layout integrity remains a separate requirement for context use.
+Absent markers with only the known runtime entries are reserved, other unmarked
+kit data is partial, and malformed, denied or unavailable markers block use.
+The unmarked kit-directory classification inspects at most 128 entries.
+
+Ancestors stay within the observed filesystem, at most 128 directories and five
+seconds including final verification. An authorized parent with a different
+native device/volume establishes the filesystem boundary; its metadata identity
+is rechecked without reading its kit. Missing authorization cannot establish
+that boundary or prove absence. Candidate keys come from actual directory
+metadata and the local installation identity, with no synthetic key for a link
+or inaccessible directory. Diagnostic blocked paths are inspection hints.
+
+Explicit descendant scans visit at most 20,000 metadata entries, depth 64 and
+1,024 findings, within ten seconds. Symlinks/reparse points, repeated directory
+identities, cross-volume subtrees, denied entries, errors and exhausted budgets
+make the scan incomplete. Entries observed while classifying kit directories
+also consume the entry budget. Reaching a limit stops without silently dropping
+findings and declaring completion. Configuration text has a separate 1 MiB
+successful-phase budget, with at most one 256 KiB bounded read before a byte-limit
+failure is detected. The full request shares a fifteen-second response budget
+and the reader's four-operation process limit; kernel-call limitations still apply.
+
+Unix uses `fdopendir`/`readdir` on owned descriptors and non-following `fstatat`.
+Windows reopens a captured directory object with listing rights, then parses
+bounded, aligned
+[`FILE_ID_BOTH_DIR_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info)
+records with checked offsets and name lengths. Neither backend enumerates by
+reconstructing an unpinned absolute prefix. No ignore file affects discovery.
+Classified kit-data folders are pruned; Git and dependency directories are not
+pruned by name. Large or linked trees can therefore remain unverified until a
+native owner can prove an exclusion or a narrower execution root is selected.
+
+Directory changes during traversal invalidate the scan. The starting root's
+classification must agree across phases, and ancestor identities/classifications
+are rechecked before returning verified absence or a usable parent. A kit created
+between ancestry and descendant phases cannot yield clear initialization.
+The final workspace binding and installation/preferences are checked again.
+Cancellation, expired requests and replaced bindings never return a usable scope.
+These are point-in-time checks: publication must repeat discovery under native
+destination exclusion, and external writers can still change the tree afterward.
+The core's `clear` classification remains separate from write authorization.
+
+Linux tests exercise real scopes, sibling/nested kits, reserved and invalid
+states, explicit enumeration permission, phase races, links, cancellation and all
+scan budgets. Windows tests cross-compile; native Windows, macOS and Android
+qualification remains pending. Authenticated remote discovery is not wired yet.

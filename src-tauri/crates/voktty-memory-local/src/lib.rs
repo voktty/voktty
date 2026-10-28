@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+mod discovery;
 mod reader;
+pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;
 #[cfg(unix)]

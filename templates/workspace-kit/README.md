@@ -380,7 +380,16 @@ no findings can yield `clear`. `clear` only classifies the observed scope. It
 does not accept a preview, authorize writes, detect later changes or serialize
 another machine. Publication must check both the originating cwd and chosen
 destination, then revalidate under native destination exclusion. Native readers,
-publication and transport/platform qualification remain pending.
+application integration, publication and transport/platform qualification remain pending.
+
+The native local reader now gathers ancestor and explicit descendant observations
+from directory handles and runs this resolver. Enumeration requires its own native
+permission, defaults to denied, and never inherits from metadata permission.
+Limits, unreadable markers, links and directory changes block initialization;
+root/ancestor classifications are rechecked across phases. Only configuration
+metadata is read, with reserved data preserved. Directory identity and ancestry
+are scoped to the actual filesystem. Native Windows discovery cross-compiles;
+runtime qualification and authenticated remote readers remain pending.
 
 `conformance/memory-identity.json` contains fixed framing/hash vectors, including
 Windows, UNC, Unicode, machine, host and worktree distinctions. The scope corpus
