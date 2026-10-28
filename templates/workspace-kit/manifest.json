@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "files": [
     { "source": "dot-voktty/.gitignore", "kind": "base" },
     { "source": "dot-voktty/INIT.md", "kind": "base" },
@@ -10,6 +10,7 @@
     { "source": "dot-voktty/PROJECT.md", "kind": "content" },
     { "source": "dot-voktty/CONTEXT.md", "kind": "content" },
     { "source": "dot-voktty/kit.json", "kind": "content" },
+    { "source": "dot-voktty/kit.schema.json", "kind": "base" },
     { "source": "dot-voktty/plans/README.md", "kind": "base" },
     { "source": "dot-voktty/plans/INDEX.md", "kind": "content" },
     { "source": "dot-voktty/plans/TRACKING.md", "kind": "content" },

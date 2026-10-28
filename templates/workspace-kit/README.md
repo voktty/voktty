@@ -83,6 +83,7 @@ Inside `dot-voktty/` (that is, `.voktty/` once deployed):
 | `PROJECT.md` | What the project is, map, verification, project rules, traps | content |
 | `CONTEXT.md` | One page of current context: priorities, risks, decisions | content |
 | `kit.json` | Kit settings: version, project language, capture triggers, size limits, archiving | content |
+| `kit.schema.json` | Structural configuration contract; local consent is never stored here | base |
 | `team/agents.json` | Agent roster: who exists, which runtime, which folders they own | content |
 | `team/agents.schema.json` | JSON Schema for the roster | base |
 | `team/MESSAGING.md` | How agents talk to each other and to the owner | base |
@@ -175,6 +176,20 @@ the inventory and renders placeholders, including JSON string escaping.
 Its deployment preview requires explicit path observations and preserves
 conflicting files; it does not write files, grant trust or enable memory.
 Native deployment and CLI packaging remain pending.
+
+The core validates configuration and rosters against the shipped JSON
+schemas, then checks matching placeholder values, effective runtimes and
+lexical ownership overlap. Callers supply the filesystem's case policy;
+this does not resolve symlinks or authorize paths. A `generic` command or
+an external read path remains configuration, not permission to execute or
+read it. A memory-only configuration can omit the roster.
+
+Template version 1.1.0 adds the configuration schema and stores deployment
+placeholder values in `kit.json`. Schema 1 configurations without those
+values remain readable; an updater must ask for missing values rather than
+guessing them. `conformance/validation.json` records rendered-template cases
+for structural and semantic checks. Native execution of that corpus remains
+pending with the Rust implementation.
 
 `kit.json` records the kit version a project was created from. When a newer
 kit is available, the planned integration offers a reviewable update that

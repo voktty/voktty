@@ -133,7 +133,7 @@
           "pattern": "^roles/[a-z0-9-]+\\.md$"
         },
         "start": {
-          "description": "'always' opens with the project; 'on-demand' opens when the orchestrator delegates to it.",
+          "description": "Within a separately enabled team, 'always' requests opening with the project and 'on-demand' requests opening on delegation. Installing or reading the roster does not enable a team or authorize a launch.",
           "enum": ["always", "on-demand"]
         },
         "description": { "type": "string", "maxLength": 300 },

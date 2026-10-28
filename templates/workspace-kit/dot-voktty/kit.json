@@ -1,4 +1,5 @@
 {
+  "$schema": "./kit.schema.json",
   "kit": "voktty-workspace-kit",
   "kitVersion": "{kit_version}",
   "schema": 1,
@@ -7,6 +8,18 @@
   "createdAt": "{created_at}",
   "init": "INIT.md",
   "roster": "team/agents.json",
+  "values": {
+    "project_name": "{project_name}",
+    "project_summary": "{project_summary}",
+    "owner_title": "{owner_title}",
+    "primary_branch": "{primary_branch}",
+    "verify_commands": "{verify_commands}",
+    "language": "{language}",
+    "created_at": "{created_at}",
+    "kit_version": "{kit_version}",
+    "default_runtime": "{default_runtime}",
+    "default_model": "{default_model}"
+  },
   "capture": {
     "onSessionEnd": true,
     "beforeCompaction": true,

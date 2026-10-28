@@ -29,7 +29,7 @@ function emptyFacts() {
 
 it("requires known absence, opts out root edits and places kit publication last", () => {
   const plan = planKitDeployment(files, emptyFacts());
-  expect(plan.entries).toHaveLength(35);
+  expect(plan.entries).toHaveLength(36);
   expect(plan.entries.every((entry) => entry.action === "create")).toBe(true);
   expect(plan.entries.some((entry) => !entry.path.startsWith(".voktty/"))).toBe(
     false,

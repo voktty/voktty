@@ -7,7 +7,7 @@ folder; it does not depend on any agent's memory.
 
 - **Base files** come from the kit, stay in English and are not edited by the
   project: `INIT.md`, `RULES.md`, this index, every `README.md` and
-  `_TEMPLATE.md`, `team/MESSAGING.md`, `team/agents.schema.json`, the bundled
+  `_TEMPLATE.md`, `kit.schema.json`, `team/MESSAGING.md`, `team/agents.schema.json`, the bundled
   roles and `capture/`. A kit update replaces them only if the project never
   changed them.
 - **Content** belongs to the project, is written in the project language and

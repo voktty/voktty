@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:voktty:workspace-kit:kit:1",
+  "title": "Voktty Workspace Kit configuration",
+  "description": "Shared configuration and capture defaults. Installation, context permission, trust and capture consent remain local and are never granted by this file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kit", "kitVersion", "schema", "project", "language", "createdAt", "init", "capture", "limits", "archive", "runtimeDirs"],
+  "properties": {
+    "$schema": { "const": "./kit.schema.json" },
+    "kit": { "const": "voktty-workspace-kit" },
+    "kitVersion": { "type": "string", "maxLength": 32, "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "schema": { "const": 1 },
+    "project": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "language": { "type": "string", "maxLength": 64, "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" },
+    "createdAt": { "type": "string", "format": "date" },
+    "init": { "const": "INIT.md" },
+    "roster": { "const": "team/agents.json" },
+    "values": { "$ref": "#/$defs/values" },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["onSessionEnd", "beforeCompaction", "compactionThresholdPercent", "every", "staleAfterCommits"],
+      "properties": {
+        "onSessionEnd": { "type": "boolean" },
+        "beforeCompaction": { "type": "boolean" },
+        "compactionThresholdPercent": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "every": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["turns", "minutes", "commits"],
+          "properties": {
+            "turns": { "$ref": "#/$defs/cadence" },
+            "minutes": { "$ref": "#/$defs/cadence" },
+            "commits": { "$ref": "#/$defs/cadence" }
+          }
+        },
+        "staleAfterCommits": { "$ref": "#/$defs/cadence" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "CONTEXT.md": { "$ref": "#/$defs/textLimit" },
+        "PROJECT.md": { "$ref": "#/$defs/textLimit" },
+        "plans/TRACKING.md": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxChars", "maxUpNext"],
+          "properties": {
+            "maxChars": { "$ref": "#/$defs/textSize" },
+            "maxUpNext": { "type": "integer", "minimum": 1, "maximum": 1000 }
+          }
+        },
+        "plans/INDEX.md": { "$ref": "#/$defs/textLimit" },
+        "continuity/CHANGELOG.md": { "$ref": "#/$defs/textLimit" },
+        "continuity/handoffs/": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxFiles", "maxAgeDays"],
+          "properties": {
+            "maxFiles": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "maxAgeDays": { "$ref": "#/$defs/days" }
+          }
+        }
+      }
+    },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "afterDays", "ritual"],
+      "properties": {
+        "dir": { "const": "archive" },
+        "afterDays": { "$ref": "#/$defs/days" },
+        "ritual": { "const": "weekly" }
+      }
+    },
+    "runtimeDirs": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [{ "const": "state" }, { "const": "mailbox" }, { "const": "locks" }, { "const": "sessions" }],
+      "items": false
+    }
+  },
+  "$defs": {
+    "cadence": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "days": { "type": "integer", "minimum": 1, "maximum": 36500 },
+    "textSize": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+    "textLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxChars"],
+      "properties": { "maxChars": { "$ref": "#/$defs/textSize" } }
+    },
+    "value": { "type": "string", "maxLength": 16384 },
+    "values": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_name", "project_summary", "owner_title", "primary_branch", "verify_commands", "language", "created_at", "kit_version", "default_runtime", "default_model"],
+      "properties": {
+        "project_name": { "$ref": "#/$defs/value" },
+        "project_summary": { "$ref": "#/$defs/value" },
+        "owner_title": { "$ref": "#/$defs/value" },
+        "primary_branch": { "$ref": "#/$defs/value" },
+        "verify_commands": { "$ref": "#/$defs/value" },
+        "language": { "$ref": "#/$defs/value" },
+        "created_at": { "$ref": "#/$defs/value" },
+        "kit_version": { "$ref": "#/$defs/value" },
+        "default_runtime": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Known adapter id from team/agents.schema.json, checked by the kit's semantic validator." },
+        "default_model": { "type": "string", "maxLength": 128 }
+      }
+    }
+  }
+}

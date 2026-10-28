@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  parseAgentRoster,
+  parseKitConfig,
+} from "@/modules/workspace-kit/lib/validation";
 
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TEMPLATE_BYTES = 1024 * 1024;
@@ -172,7 +176,9 @@ export function renderKitTemplate(
     const value =
       entry.name === "kit_version"
         ? template.version
-        : (supplied ?? entry.default);
+        : supplied === undefined
+          ? entry.default
+          : supplied;
     if (
       entry.name === "kit_version" &&
       supplied !== undefined &&
@@ -192,7 +198,7 @@ export function renderKitTemplate(
     values.set(entry.name, value);
   }
   let totalBytes = 0;
-  return Object.freeze(
+  const rendered = Object.freeze(
     template.files.map((file) => {
       const json = file.path.endsWith(".json");
       const text = file.text.replace(
@@ -213,4 +219,15 @@ export function renderKitTemplate(
       return Object.freeze({ ...file, text });
     }),
   );
+  const configFile = rendered.find((file) => file.path === ".voktty/kit.json");
+  if (!configFile) throw new Error("Missing rendered kit configuration");
+  const config = parseKitConfig(configFile.text);
+  if (config.roster) {
+    const rosterFile = rendered.find(
+      (file) => file.path === `.voktty/${config.roster}`,
+    );
+    if (!rosterFile) throw new Error("Missing rendered kit roster");
+    parseAgentRoster(rosterFile.text, "insensitive");
+  }
+  return rendered;
 }

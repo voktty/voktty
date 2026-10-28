@@ -31,7 +31,7 @@ describe("kit template resources", () => {
   it("loads every manifest resource lazily from the same source, including the private ignore", async () => {
     const template = await loadKitTemplate();
     expect(template).toEqual(parseKitTemplate(resources));
-    expect(template.files).toHaveLength(37);
+    expect(template.files).toHaveLength(38);
     expect(
       template.files.find((file) => file.path === ".voktty/.gitignore")?.kind,
     ).toBe("base");
@@ -53,6 +53,10 @@ describe("kit template resources", () => {
     expect(config.project).toBe(project_name);
     expect(config.kitVersion).toBe(template.version);
     expect(config.language).toBe("es");
+    expect(config.values.project_name).toBe(project_name);
+    expect(Object.keys(config.values).sort()).toEqual(
+      template.placeholders.map((entry) => entry.name).sort(),
+    );
     expect(files.some((file) => /\{[a-z][a-z0-9_]*\}/.test(file.text))).toBe(
       false,
     );
@@ -72,6 +76,12 @@ describe("kit template resources", () => {
     { created_at: undefined },
     { kit_version: "99.0.0" },
     { unexpected: "value" },
+    { default_runtime: "unknown" },
+    { default_runtime: "generic" },
+    { default_runtime: null },
+    { language: null },
+    { language: "not a tag" },
+    { created_at: "2026-02-30" },
   ])(
     "rejects missing, oversized, unresolved or unknown values: %j",
     (overrides) => {
