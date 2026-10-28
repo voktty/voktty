@@ -102,6 +102,10 @@ impl ReadControl {
         self.cancelled.store(true, Ordering::Release);
     }
 
+    pub(crate) fn deadline(&self) -> Instant {
+        self.started + self.timeout
+    }
+
     pub(crate) fn check(&self) -> Result<(), ReadError> {
         if self.cancelled.load(Ordering::Acquire) {
             Err(ReadError::Cancelled)

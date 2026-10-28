@@ -13,11 +13,13 @@ use uuid::Uuid;
 mod discovery;
 mod publication;
 mod reader;
+mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, PublicationError, PublicationFailure,
     PublicationReport, RecoveryFile,
 };
+pub use workers::{MemoryJob, MemoryWorkError, MemoryWorkers};
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;
 #[cfg(unix)]

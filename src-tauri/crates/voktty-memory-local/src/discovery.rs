@@ -54,6 +54,9 @@ impl DiscoveryControl {
         self.cancelled
             .store(true, std::sync::atomic::Ordering::Release);
     }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.started + self.timeout
+    }
     pub(crate) fn phase(&self, max: Duration) -> ReadControl {
         ReadControl::phase(
             self.cancelled.clone(),

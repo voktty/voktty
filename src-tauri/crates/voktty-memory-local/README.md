@@ -103,7 +103,7 @@ At most four native batches run concurrently per process; excess work returns
 operations and after reads. A kernel filesystem call cannot be interrupted by
 this synchronous API: native integration must use bounded owned workers and an
 outer response deadline, and a stalled call must retain its permit until it exits.
-No workers are spawned here. The reader must not run on the UI thread or on an
+The synchronous reader starts no workers. It must not run on the UI thread or on an
 unqualified network filesystem. It holds no directory handles between batches.
 
 Observations are bounded point-in-time facts, not a transaction over the tree or
@@ -113,6 +113,48 @@ App/CLI integration and transport
 ownership factories remain pending. Platforms without a reader explicitly return
 `Unsupported` without doing project IO. Linux behavior is tested; Windows,
 macOS and Android runtime qualification remains pending.
+
+## Bounded observation workers
+
+`MemoryWorkers::scope` and `context` run the existing native readers through the
+caller's Tokio blocking executor. They require an entered runtime with its timer
+driver enabled; they never create a runtime. All instances and clones share four
+process-wide slots. Construction starts no tasks or threads. Admission never waits
+for a slot and returns `Read(Busy)` when capacity is occupied. Request paths and
+role payload sizes are checked before scheduling; filesystem validation remains
+inside the owned blocking worker. No arbitrary task closure is exposed publicly.
+
+Each job captures its private local store, requested directory, native read
+authority, optional role and original cancellation/deadline control by ownership.
+The native caller must first qualify its local filesystem and transport; this is
+not a factory for permissions, a remote adapter or an IPC command. An observation
+neither initializes the store nor changes policy, trust, files or session consent.
+Workspace-registry and secret-path authorization factories remain pending.
+
+`MemoryJob::finish` observes the original absolute deadline, including time spent
+waiting in Tokio's blocking queue and time before the caller starts awaiting it.
+Context controls cap that lifetime at five seconds, discovery controls at fifteen.
+The worker checks cancellation and expiry before entering the reader and before
+returning. The consumer rechecks both around delivery, so an already queued result
+cannot become usable after expiry. Missing runtime and missing worker replies
+return distinct errors; native reader errors retain their existing classification.
+
+Dropping the job or its unfinished `finish` future retires its consumer and signals
+cooperative cancellation. It does not abort or acknowledge an admitted filesystem
+call. Queued or blocked work retains its slot and captured authority through
+settlement, even after the consumer has timed out or disappeared. Completed but
+unconsumed results also retain their slots, bounding abandoned ready payloads.
+Receiving or discarding the result releases that slot. These are observation
+workers, not a publication executor, OS-thread join or resource-cleanup receipt.
+Normal settlement does not cancel a shared control, so later phases can still
+use that request's original remaining lifetime.
+
+Native tests cover detached and queued work, abandoned results, deadline delivery,
+cancelled consumers, panicking workers and capacity recovery. Linux integration
+tests exercise actual disk discovery and context on blocking threads, project
+isolation, fresh instruction fingerprints and denied requests without writes.
+Windows cross-compilation does not qualify its runtime behavior. App/CLI wiring,
+selection ownership and authenticated remote execution are still pending.
 
 ## Windows handle reader
 
