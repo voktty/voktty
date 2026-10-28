@@ -63,6 +63,10 @@ impl std::error::Error for ReadError {}
 /// protection. Repository data and IPC booleans must not implement this authority.
 pub trait MemoryReadAccess: Send + Sync {
     fn allows_metadata(&self, path: &Path) -> bool;
+    /// Separates a readable workspace root from metadata-only discovery grants.
+    fn allows_workspace_root(&self, path: &Path) -> bool {
+        self.allows_metadata(path)
+    }
     fn allows_read(&self, path: &Path) -> bool;
     fn allows_enumeration(&self, _path: &Path) -> bool {
         false
@@ -220,13 +224,13 @@ impl<'a> LocalMemoryWorkspace<'a> {
         if !requested.is_absolute() {
             return Err(ReadError::InvalidInput);
         }
-        if !access.allows_metadata(requested) {
+        if !access.allows_workspace_root(requested) {
             return Err(ReadError::Denied);
         }
         platform::validate_requested_root(requested)?;
         let root = std::fs::canonicalize(requested).map_err(|_| ReadError::Io)?;
         control.check()?;
-        if !access.allows_metadata(&root) {
+        if !access.allows_workspace_root(&root) {
             return Err(ReadError::Denied);
         }
         if root.components().count() > 128
@@ -356,7 +360,7 @@ impl<'a> LocalMemoryWorkspace<'a> {
         control: &ReadControl,
     ) -> Result<platform::Directory, ReadError> {
         control.check()?;
-        if !self.access.allows_metadata(&self.root) {
+        if !self.access.allows_workspace_root(&self.root) {
             return Err(ReadError::Denied);
         }
         let directory =

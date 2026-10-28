@@ -110,7 +110,8 @@ Observations are bounded point-in-time facts, not a transaction over the tree or
 proof of freshness at later delivery/publication. Revalidate current instruction
 bytes, scope, consent and destination under the appropriate native exclusion.
 App/CLI integration and transport
-ownership factories remain pending. Platforms without a reader explicitly return
+ownership qualification remain pending. The app's Rust-only authority factory is
+documented in `src-tauri/src/modules/project_memory/README.md`. Platforms without a reader explicitly return
 `Unsupported` without doing project IO. Linux behavior is tested; Windows,
 macOS and Android runtime qualification remains pending.
 
@@ -129,7 +130,9 @@ authority, optional role and original cancellation/deadline control by ownership
 The native caller must first qualify its local filesystem and transport; this is
 not a factory for permissions, a remote adapter or an IPC command. An observation
 neither initializes the store nor changes policy, trust, files or session consent.
-Workspace-registry and secret-path authorization factories remain pending.
+The app's Rust-only `modules/project_memory` factory captures actual workspace
+registry grants and shared secret-path rules. Startup, IPC and CLI wiring remain
+pending; callers must still qualify filesystem and transport ownership.
 
 `MemoryJob::finish` observes the original absolute deadline, including time spent
 waiting in Tokio's blocking queue and time before the caller starts awaiting it.

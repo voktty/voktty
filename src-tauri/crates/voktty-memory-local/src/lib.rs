@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 mod discovery;
+pub mod path_policy;
 mod publication;
 mod reader;
 mod workers;

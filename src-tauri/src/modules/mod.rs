@@ -20,6 +20,7 @@ pub mod mcp;
 pub mod net;
 pub mod net_proxy;
 pub mod proc;
+pub mod project_memory;
 pub mod pty;
 pub mod quick_composer;
 pub mod quota;

@@ -24,7 +24,34 @@ pub struct WorkspaceRegistry {
     canonical_cache: Mutex<HashMap<PathBuf, CanonicalEntry>>,
 }
 
+pub(crate) enum RegistrySnapshotError {
+    Unavailable,
+    Limit,
+}
+
 impl WorkspaceRegistry {
+    pub(crate) fn snapshot_authorized_roots(
+        &self,
+        max_roots: usize,
+        max_bytes: usize,
+    ) -> Result<Vec<PathBuf>, RegistrySnapshotError> {
+        let roots = self
+            .roots
+            .lock()
+            .map_err(|_| RegistrySnapshotError::Unavailable)?;
+        if roots.len() > max_roots {
+            return Err(RegistrySnapshotError::Limit);
+        }
+        let mut bytes = 0usize;
+        for root in roots.iter() {
+            bytes = bytes
+                .checked_add(root.as_os_str().as_encoded_bytes().len())
+                .filter(|bytes| *bytes <= max_bytes)
+                .ok_or(RegistrySnapshotError::Limit)?;
+        }
+        Ok(roots.iter().cloned().collect())
+    }
+
     pub fn authorize<P: AsRef<Path>>(&self, path: P) -> std::io::Result<PathBuf> {
         let canonical = std::fs::canonicalize(path.as_ref())?;
         let mut set = self.roots.lock().expect("workspace registry poisoned");

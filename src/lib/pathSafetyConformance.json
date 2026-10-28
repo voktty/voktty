@@ -1,0 +1,227 @@
+[
+  {
+    "path": "/work/project/.voktty/INIT.md",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/AGENTS.md",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "C:/Projects/caf\u00e9/.voktty/PROJECT.md",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/.ssh-copy/file",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/credentials-guide.md",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/.envexample",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/id_rsaxyz.txt",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/readme.keynote",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "//host/share/project/CONTEXT.md",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/server.pem\u0085",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/project/server\u2028.pem",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/\u0000file",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/.env",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/.env.local",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "C:\\Projects\\demo\\.env::$DATA",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/server.PEM",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/id_ed25519-backup",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/credentials",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/secrets.yaml",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/service-account-test.json",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/.ssh/config",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/.SSH. /config",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/.ssh\ufeff/config",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/.aws/file",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/.config/gh/hosts.yml",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/.git/config",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/etc/file",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/proc/self/status",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/private/var/root/file",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "C:/Users/example/AppData/Local/Microsoft/Credentials/file",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/.env\u00a0",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/work/project/server.pem\ufeff",
+    "readable": false,
+    "writable": false
+  },
+  {
+    "path": "/usr/bin/program",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "/system/file",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "/library/launchagents/agent.plist",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "C:\\Windows\\System32\\file",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "C:/Program Files/App/file",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "C:/ProgramData/file",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "\\\\?\\C:\\Windows\\System32\\file",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "//?/D:/Program Files/App/file",
+    "readable": true,
+    "writable": false
+  },
+  {
+    "path": "/usr/binary/file",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "/work/system/file",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "C:/Windows-copy/file",
+    "readable": true,
+    "writable": true
+  },
+  {
+    "path": "\\\\?\\C:\\Projects\\demo\\file",
+    "readable": true,
+    "writable": true
+  }
+]
