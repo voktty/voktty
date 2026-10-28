@@ -1,7 +1,7 @@
 # Index
 
-`INIT.md` is the only entry point. This index maps the folder; it does not
-depend on any agent's memory.
+`INIT.md` is the entry point when memory use is enabled. This index maps the
+folder; it does not depend on any agent's memory.
 
 ## Base and content
 
@@ -22,7 +22,7 @@ depend on any agent's memory.
 | `RULES.md` | working rules and their reasons | every session |
 | `PROJECT.md` | what the project is, map, verification, project rules, traps | every session |
 | `CONTEXT.md` | one page: priorities, risks, active decisions | every session |
-| `team/` | roster, roles, messaging protocol | at start, and when delegating |
+| `team/` | optional roster, roles, messaging protocol | when assigned a team role or explicitly delegating |
 | `plans/` | plan guide, plan index, tracking board | when planning, resuming or asked "what is left" |
 | `continuity/` | handoffs and impact changelog | when starting and closing a session |
 | `capture/` | what to write at each trigger: setup, milestone, handoff, refresh, compaction | when the trigger fires |

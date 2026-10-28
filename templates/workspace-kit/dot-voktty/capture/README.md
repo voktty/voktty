@@ -3,8 +3,12 @@
 A freshly deployed `.voktty/` is mostly empty: what the project is only
 becomes clear as work happens. The memory fills up and stays true because
 specific moments trigger a capture. Each file here is the instruction an
-agent follows at one of those moments. Voktty sends them automatically; any
-agent can also follow them on request.
+agent follows at one of those moments. Automatic delivery requires an enabled
+memory session, separate capture consent (including model cost), an available
+agent and a supported integration. The settings below do not grant consent.
+Without that integration, use these instructions only on request; direct CLI
+launches do not guarantee turn, session-end or compaction detection. Reading
+project memory alone does not authorize captures or start another agent.
 
 | Trigger | Instruction | Who runs it | Files it writes |
 |---|---|---|---|
@@ -26,8 +30,9 @@ Settings live in `../kit.json` under `capture`:
   `CONTEXT.md` or `PROJECT.md` last changed.
 
 Size limits per live file are under `limits`, and archiving under
-`archive`. Voktty measures them, not the agent: when a limit is passed it
-warns and queues `compact.md` for the orchestrator.
+`archive`. The planned Voktty integration measures them: when a limit is
+passed, an authorized capture can queue `compact.md` for the orchestrator
+or the only agent. Until implemented, measurement and capture are manual.
 
 ## Two writers, one file
 
@@ -35,7 +40,9 @@ With a team, shared files have one writer: the orchestrator (`RULES.md`,
 "Who writes the memory"). Other agents capture into their own handoffs and
 send the orchestrator a message with what should change. Rewriting a shared
 file takes the `memory` lock for the minutes it lasts. Voktty also runs at
-most one capture at a time per project.
+most one capture at a time per project once that integration is available.
+Without an active team, the authorized single agent writes shared files.
+Local locks do not serialize writers on other machines or hosts.
 
 ## What a capture never does
 

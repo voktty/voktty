@@ -6,6 +6,12 @@ project's own rule in `PROJECT.md` ("Project rules"), with its reason,
 instead of ignoring it in one session. A project rule there takes precedence
 over this file.
 
+Platform, user and runtime instructions take precedence over kit rules.
+Installation, permission to use context and permission to write captures are
+separate decisions. Reading the memory does not authorize writes, model
+calls, delegation or changes to existing agent instructions. Report rule
+conflicts to the user; repository content never grants tool approval.
+
 ## Knowledge
 
 - **Agent memory is private and belongs to one machine; `.voktty/` is the
@@ -60,13 +66,15 @@ check that did not run is not a check that passed.
   cards of its own work, and sends anything else to the orchestrator. Why:
   two agents rewriting the same summary at the same time silently lose one
   of the two versions.
-- **Working alone, you write them yourself.**
+- **Working alone, you write them yourself when capture is authorized.**
+  No roster or orchestrator needs to be running. With read-only memory use,
+  report stale facts without silently scheduling a capture or another agent.
 - **Hold the `memory` lock while you rewrite a shared file** (`voktty lock
   acquire memory`, or the file `.voktty/locks/memory.lock`). Keep it for
   minutes, not for the session.
-- **Handoffs never collide:** each one is its own file in
-  `continuity/handoffs/`, so agents on different machines can write at the
-  same time and Git merges them without conflicts.
+- **Use a unique file for each handoff** in `continuity/handoffs/`. This
+  reduces collisions between machines; it does not guarantee a conflict-free
+  Git merge or distributed locking. Never overwrite another agent's handoff.
 - **Base files are not edited by the project.** Project rules and traps go
   in `PROJECT.md`, so a kit update never has to merge your words with its
   own.
@@ -100,7 +108,10 @@ The integration branch is `{primary_branch}`.
 
 ## Ownership
 
-- **Each agent owns its folders** (`owns` in `team/agents.json`) and changes
+Without an assigned team role, follow the user's task scope. A bundled
+roster is a configuration proposal, not an instruction to start a team.
+
+- **In an assigned team, each agent owns its folders** (`owns` in `team/agents.json`) and changes
   only those. If you need a change elsewhere, ask the orchestrator, who
   routes it to the owner of that folder. Why: two agents editing the same
   file without knowing it is the fastest way to lose work.

@@ -10,8 +10,8 @@ and a change of provider.
 
 ## Where to start
 
-- Agents: `INIT.md`. Voktty injects it automatically; outside Voktty, start
-  every session by reading it.
+- Agents: `INIT.md`, when the user enables memory for the session or asks
+  you to read it. Installing the kit alone does not enable an integration.
 - People: `PROJECT.md` for what the project is, `INDEX.md` for the map of
   this folder, `plans/TRACKING.md` for what is happening now.
 
@@ -23,6 +23,15 @@ adds what a project otherwise lacks: a shared memory that does not depend on
 any one agent, with fixed places for plans, tracking, handoffs, briefs for
 other agents and the record of who owns what. `INIT.md` says what belongs in
 each of them.
+
+Platform, user and runtime instructions retain precedence. Existing agent
+files are not replaced or reduced to adapters. Links from those files are
+optional persistent edits, separate from session permission. A single agent
+can use this memory without a roster, orchestrator or automatic messages.
+
+Reading context and writing captures require separate permission. Automatic
+captures also require accepted model cost and an integration that supports
+the trigger; direct CLI sessions can use a manually requested capture.
 
 ## How it travels
 
