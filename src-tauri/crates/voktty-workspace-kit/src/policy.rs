@@ -52,6 +52,9 @@ pub fn evaluate_memory_use(text: &str) -> KitResult<MemoryUseDecision> {
     };
     let unavailable = match state {
         "absent" => Some("KIT_MEMORY_ABSENT"),
+        "reserved" => Some("KIT_MEMORY_RESERVED"),
+        "partial" => Some("KIT_MEMORY_PARTIAL"),
+        "denied" => Some("KIT_MEMORY_DENIED"),
         "invalid" => Some("KIT_MEMORY_INVALID"),
         "ambiguous" => Some("KIT_MEMORY_AMBIGUOUS"),
         "incomplete" => Some("KIT_MEMORY_INCOMPLETE"),

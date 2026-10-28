@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "kind", "machineId", "filesystemId", "canonicalRoot"],
+  "properties": {
+    "schema": { "const": 1 },
+    "kind": { "enum": ["local", "wsl", "ssh", "docker"] },
+    "machineId": { "$ref": "#/$defs/identity" },
+    "filesystemId": { "$ref": "#/$defs/identity" },
+    "canonicalRoot": { "$ref": "#/$defs/identity" }
+  },
+  "$defs": {
+    "identity": {
+      "type": "string", "minLength": 1, "maxLength": 4096,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+(?![\\s\\S])"
+    }
+  }
+}

@@ -1,0 +1,1389 @@
+{
+  "schema": 1,
+  "baseline": {
+    "schema": 1,
+    "purpose": "discover",
+    "ancestors": [
+      {
+        "directoryKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parentKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "state": "absent"
+      },
+      {
+        "directoryKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parentKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "state": "absent"
+      },
+      {
+        "directoryKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "parentKey": null,
+        "state": "absent"
+      }
+    ],
+    "stop": "root",
+    "elapsedMs": 0,
+    "descendants": null
+  },
+  "expected": {
+    "schema": 1,
+    "state": "absent",
+    "rootKey": null,
+    "ancestorKits": [],
+    "descendantKits": [],
+    "blockedKeys": [],
+    "ancestryComplete": true,
+    "descendantsComplete": null,
+    "initialization": "not_requested"
+  },
+  "cases": [
+    {
+      "name": "verified absence",
+      "changes": [],
+      "expected": {}
+    },
+    {
+      "name": "reserved directory is not a kit",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "reserved"
+        }
+      ],
+      "expected": {
+        "state": "reserved"
+      }
+    },
+    {
+      "name": "ancestor kit",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            1,
+            "state"
+          ],
+          "value": "valid"
+        }
+      ],
+      "expected": {
+        "state": "ready",
+        "rootKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ancestorKits": [
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ]
+      }
+    },
+    {
+      "name": "nearest kit stays inspectable in nested conflict",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "valid"
+        },
+        {
+          "path": [
+            "ancestors",
+            1,
+            "state"
+          ],
+          "value": "valid"
+        }
+      ],
+      "expected": {
+        "state": "ambiguous",
+        "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ancestorKits": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ]
+      }
+    },
+    {
+      "name": "ancestor invalid",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "invalid"
+        }
+      ],
+      "expected": {
+        "state": "invalid",
+        "blockedKeys": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "ancestryComplete": true
+      }
+    },
+    {
+      "name": "ancestor partial",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "partial"
+        }
+      ],
+      "expected": {
+        "state": "partial",
+        "blockedKeys": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "ancestryComplete": true
+      }
+    },
+    {
+      "name": "ancestor denied",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "denied"
+        }
+      ],
+      "expected": {
+        "state": "denied",
+        "blockedKeys": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "ancestor unavailable",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "unavailable"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "blockedKeys": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "stopped at authorization",
+      "changes": [
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "authorization"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "stopped at depth",
+      "changes": [
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "depth"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "stopped at timeout",
+      "changes": [
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "timeout"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "stopped at cancelled",
+      "changes": [
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "cancelled"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "stopped at error",
+      "changes": [
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "error"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "exact ancestor deadline",
+      "changes": [
+        {
+          "path": [
+            "elapsedMs"
+          ],
+          "value": 5000
+        }
+      ],
+      "expected": {}
+    },
+    {
+      "name": "expired ancestor deadline",
+      "changes": [
+        {
+          "path": [
+            "elapsedMs"
+          ],
+          "value": 5001
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "incomplete with visible kit",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            1,
+            "state"
+          ],
+          "value": "valid"
+        },
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "authorization"
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "rootKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ancestorKits": [
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "ancestryComplete": false
+      }
+    },
+    {
+      "name": "init requires descendant scan",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        }
+      ],
+      "expected": {
+        "initialization": "not_checked"
+      }
+    },
+    {
+      "name": "init clear is only a classification",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": true,
+        "initialization": "clear"
+      }
+    },
+    {
+      "name": "reserved may initialize after scan",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "reserved"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "state": "reserved",
+        "descendantsComplete": true,
+        "initialization": "clear"
+      }
+    },
+    {
+      "name": "existing ancestor prevents init",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "ancestors",
+            1,
+            "state"
+          ],
+          "value": "valid"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "state": "ready",
+        "rootKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ancestorKits": [
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "descendantsComplete": true,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "parent enclosing child prevented",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "valid"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "descendantKits": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": true,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "existing parent and child conflict",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "manage"
+        },
+        {
+          "path": [
+            "ancestors",
+            1,
+            "state"
+          ],
+          "value": "valid"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "valid"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "state": "ambiguous",
+        "rootKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ancestorKits": [
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "descendantKits": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": true
+      }
+    },
+    {
+      "name": "descendant invalid blocks init",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "invalid"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": true,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant partial blocks init",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "partial"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": true,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant denied blocks init",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "denied"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant unavailable blocks init",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "unavailable"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant unverified_link blocks init",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 1,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "unverified_link"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop authorization",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "authorization",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop depth",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "depth",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop entry_limit",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "entry_limit",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop timeout",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "timeout",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop cancelled",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "cancelled",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop error",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "error",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "descendant stop link",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "link",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "exact descendant budgets",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 20000,
+            "depth": 64,
+            "elapsedMs": 10000,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": true,
+        "initialization": "clear"
+      }
+    },
+    {
+      "name": "expired descendant deadline",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 10001,
+            "findings": []
+          }
+        }
+      ],
+      "expected": {
+        "descendantsComplete": false,
+        "initialization": "blocked"
+      }
+    },
+    {
+      "name": "manage partial child fences existing kit",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "manage"
+        },
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "valid"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "partial"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "state": "partial",
+        "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ancestorKits": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": true
+      }
+    },
+    {
+      "name": "manage unverified link fences existing kit",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "manage"
+        },
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "valid"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "unverified_link"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "state": "incomplete",
+        "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ancestorKits": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "blockedKeys": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "descendantsComplete": false
+      }
+    },
+    {
+      "name": "discover cannot carry recursive scan",
+      "changes": [
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "error": "KIT_SCOPE_SCAN_UNEXPECTED"
+    },
+    {
+      "name": "different scan target",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "error": "KIT_SCOPE_TARGET_MISMATCH"
+    },
+    {
+      "name": "missing chain link",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "parentKey"
+          ],
+          "value": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "error": "KIT_SCOPE_CHAIN_INVALID"
+    },
+    {
+      "name": "root termination mismatch",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            2,
+            "parentKey"
+          ],
+          "value": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "error": "KIT_SCOPE_CHAIN_INVALID"
+    },
+    {
+      "name": "cycle",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            1,
+            "parentKey"
+          ],
+          "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "error": "KIT_SCOPE_CHAIN_INVALID"
+    },
+    {
+      "name": "duplicate ancestor",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            1,
+            "directoryKey"
+          ],
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "error": "KIT_SCOPE_CHAIN_INVALID"
+    },
+    {
+      "name": "ancestor reported as descendant",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 1,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "state": "valid"
+              }
+            ]
+          }
+        }
+      ],
+      "error": "KIT_SCOPE_FINDING_INVALID"
+    },
+    {
+      "name": "duplicate finding",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 2,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "valid"
+              },
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "valid"
+              }
+            ]
+          }
+        }
+      ],
+      "error": "KIT_SCOPE_FINDING_INVALID"
+    },
+    {
+      "name": "findings exceed entries",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": [
+              {
+                "directoryKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "state": "valid"
+              }
+            ]
+          }
+        }
+      ],
+      "error": "KIT_SCOPE_FINDING_INVALID"
+    },
+    {
+      "name": "unknown version",
+      "changes": [
+        {
+          "path": [
+            "schema"
+          ],
+          "value": 2
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "unknown fact",
+      "changes": [
+        {
+          "path": [
+            "ancestors",
+            0,
+            "state"
+          ],
+          "value": "ignored"
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "unknown field",
+      "changes": [
+        {
+          "path": [
+            "authorized"
+          ],
+          "value": true
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "empty ancestry",
+      "changes": [
+        {
+          "path": [
+            "ancestors"
+          ],
+          "value": []
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "unsafe clock",
+      "changes": [
+        {
+          "path": [
+            "elapsedMs"
+          ],
+          "value": 9007199254740992
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "nonintegral clock",
+      "changes": [
+        {
+          "path": [
+            "elapsedMs"
+          ],
+          "value": 0.5
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "entry limit",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 20001,
+            "depth": 0,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "depth limit",
+      "changes": [
+        {
+          "path": [
+            "purpose"
+          ],
+          "value": "initialize"
+        },
+        {
+          "path": [
+            "descendants"
+          ],
+          "value": {
+            "rootKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "stop": "complete",
+            "entries": 0,
+            "depth": 65,
+            "elapsedMs": 0,
+            "findings": []
+          }
+        }
+      ],
+      "invalid": true
+    },
+    {
+      "name": "cycle past last observed parent",
+      "changes": [
+        {
+          "path": [
+            "stop"
+          ],
+          "value": "depth"
+        },
+        {
+          "path": [
+            "ancestors",
+            2,
+            "parentKey"
+          ],
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "error": "KIT_SCOPE_CHAIN_INVALID"
+    }
+  ]
+}

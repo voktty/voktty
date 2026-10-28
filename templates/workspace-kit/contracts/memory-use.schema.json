@@ -7,7 +7,7 @@
     "schema": { "const": 1 },
     "projectKey": { "$ref": "#/$defs/digest" },
     "sessionId": { "$ref": "#/$defs/sessionId" },
-    "kitState": { "enum": ["ready", "absent", "invalid", "ambiguous", "incomplete"] },
+    "kitState": { "enum": ["ready", "absent", "reserved", "invalid", "partial", "denied", "ambiguous", "incomplete"] },
     "instructionDigest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
     "localPolicy": {
       "anyOf": [

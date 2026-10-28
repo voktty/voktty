@@ -242,6 +242,74 @@ at most 256 bytes. Names cannot contain separators or NUL. Results are point
 in time facts, not authorization, a compaction verdict or archive selection.
 Native readers, snapshot comparison and CLI/UI integration remain pending.
 
+## Memory scope and project identity
+
+`memoryProjectKey` and `memory_project_key` hash trusted native identity facts
+using `contracts/memory-identity.schema.json`. The SHA-256 input starts with
+the UTF-8 bytes of `voktty-memory-project-v1` followed by NUL. Four fields
+follow in order: `kind`, `machineId`, `filesystemId`, `canonicalRoot`. Each is
+framed by its UTF-8 byte length as an unsigned 32-bit big-endian integer.
+The result is 64 lowercase hexadecimal characters. Input JSON is capped at
+16 KiB and each field at 4 KiB UTF-8. Blank machine/filesystem identities and
+control characters are rejected. The root must have an absolute POSIX,
+Windows drive or UNC form; unresolved remote namespaces are rejected.
+
+The native adapter must supply a local installation identity, its stable
+filesystem/connection identity and an authorized canonical execution root.
+These APIs do not discover those facts, normalize case or separators, resolve
+symlinks, or prove filesystem authorization. POSIX backslashes and Unicode
+normalization distinctions are preserved. A native Windows adapter should use
+the existing canonical-to-display conversion after native resolution. SSH
+identity must include the captured profile and actual connection binding;
+WSL must distinguish distributions, and Docker must distinguish engine,
+container and user. Presentation scope keys alone are insufficient. Adapter
+factories and installation-ID storage remain pending; repository files must
+never supply these local identities. The same framing works independently of
+object-property order and cannot confuse adjacent field boundaries.
+
+`resolveMemoryScope` and `resolve_memory_scope` consume the shared
+`contracts/memory-scope.schema.json` observations. Ancestors start at the
+requested directory and follow exact parent keys toward the filesystem root.
+Keys use the identity function above. Duplicates, cycles, missing links and
+false root termination are rejected. The pure core cannot prove that a supplied
+parent really exists; authorized native readers must collect that evidence.
+An authorization boundary, cancellation, error, unfinished traversal or more
+than five seconds cannot establish absence. At most 128 ancestors are accepted.
+
+The resolver distinguishes absent, reserved-only, valid, invalid, partial,
+denied, ambiguous and incomplete scopes. A unique valid ancestor is usable
+only after a complete ancestry check without blockers; nested valid kits
+remain ambiguous. `rootKey` is the nearest valid kit for inspection, even
+when use is blocked. It is never an automatic selection or permission grant.
+The policy API accepts all resolver states and denies every state except
+`ready`, before checking consent and instruction trust.
+
+`discover` rejects descendant scans. Only explicit `initialize` or `manage`
+facts may carry one, bound to the original requested directory. The reader
+must enumerate metadata without following directory links or using ignore
+files to infer absence. The core accepts at most 20,000 entries, depth 64,
+ten seconds and 1,024 reported findings, within its 256 KiB JSON/node budget.
+Reaching an output limit must stop the reader with an incomplete result rather
+than discard findings. These are observation limits, not a native timer or
+cancellation implementation; the future reader must enforce them while running
+and keep its concurrency at most four.
+
+Any discovered descendant kit or uncertain finding blocks initialization.
+A known parent plus valid child is ambiguous; a partial child or incomplete
+management scan blocks use of that parent. Independent children below an empty
+container remain listed without selecting or merging their memory. Missing
+descendant observations yield `not_checked`; an explicit completed scan with
+no findings can yield `clear`. `clear` only classifies the observed scope. It
+does not accept a preview, authorize writes, detect later changes or serialize
+another machine. Publication must check both the originating cwd and chosen
+destination, then revalidate under native destination exclusion. Native readers,
+publication and transport/platform qualification remain pending.
+
+`conformance/memory-identity.json` contains fixed framing/hash vectors, including
+Windows, UNC, Unicode, machine, host and worktree distinctions. The scope corpus
+checks full results for nested kits, reserved state, scan binding, interrupted
+traversal, budgets and malformed evidence. Both cores run the same cases.
+
 ## Pure memory-use decision
 
 `evaluateMemoryUse` and `evaluate_memory_use` evaluate the same versioned

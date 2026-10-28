@@ -9,6 +9,9 @@ export type {
 } from "@/modules/workspace-kit/lib/template";
 export { planKitDeployment } from "@/modules/workspace-kit/lib/deployment";
 export { prepareKitDeployment } from "@/modules/workspace-kit/lib/lock";
+export { memoryProjectKey } from "@/modules/workspace-kit/lib/identity";
+export { resolveMemoryScope } from "@/modules/workspace-kit/lib/scope";
+export type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
 export { evaluateMemoryUse } from "@/modules/workspace-kit/lib/policy";
 export type {
   MemoryUsePolicy,

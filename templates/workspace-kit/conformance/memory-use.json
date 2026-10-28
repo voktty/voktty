@@ -45,7 +45,7 @@
     { "name": "ready without digest", "changes": { "instructionDigest": null }, "error": "KIT_MEMORY_DIGEST_REQUIRED" },
     { "name": "unknown version", "changes": { "schema": 2 }, "invalid": true },
     { "name": "unknown field", "changes": { "approved": true }, "invalid": true },
-    { "name": "unknown kit state", "changes": { "kitState": "reserved" }, "invalid": true },
+    { "name": "unknown kit state", "changes": { "kitState": "unsupported" }, "invalid": true },
     { "name": "uppercase digest", "changes": { "projectKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, "invalid": true },
     { "name": "digest newline", "changes": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" }, "invalid": true },
     { "name": "session newline", "changes": { "sessionId": "session-1\n" }, "invalid": true },
@@ -54,6 +54,9 @@
     { "name": "always cannot borrow another project capture consent", "changes": { "session": { "projectKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "sessionId": "session-1", "context": "enabled", "captures": true }, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
     { "name": "foreign session disable is not inherited", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-2", "context": "disabled", "captures": true }, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
     { "name": "legacy ask retains explicit session consent", "changes": { "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "ask" } }, "policy": "manual", "reason": "KIT_MEMORY_READY", "context": true, "capture": true },
-    { "name": "unknown session permission", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-1", "context": "enabled", "captures": true, "approval": true } }, "invalid": true }
+    { "name": "unknown session permission", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-1", "context": "enabled", "captures": true, "approval": true } }, "invalid": true },
+    {"name": "reserved scope never permits delivery", "changes": {"kitState": "reserved"}, "policy": "manual", "reason": "KIT_MEMORY_RESERVED", "context": false, "capture": false},
+    {"name": "partial scope never permits delivery", "changes": {"kitState": "partial"}, "policy": "manual", "reason": "KIT_MEMORY_PARTIAL", "context": false, "capture": false},
+    {"name": "denied scope never permits delivery", "changes": {"kitState": "denied"}, "policy": "manual", "reason": "KIT_MEMORY_DENIED", "context": false, "capture": false}
   ]
 }

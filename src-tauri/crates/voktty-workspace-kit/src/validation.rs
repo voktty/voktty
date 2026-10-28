@@ -34,6 +34,8 @@ pub(crate) enum Contract {
     Adapter,
     Lock,
     MemoryUse,
+    MemoryIdentity,
+    MemoryScope,
 }
 
 fn validator(contract: Contract) -> KitResult<&'static Validator> {
@@ -42,12 +44,16 @@ fn validator(contract: Contract) -> KitResult<&'static Validator> {
     static ADAPTER: OnceLock<Result<Validator, ()>> = OnceLock::new();
     static LOCK: OnceLock<Result<Validator, ()>> = OnceLock::new();
     static MEMORY_USE: OnceLock<Result<Validator, ()>> = OnceLock::new();
+    static MEMORY_IDENTITY: OnceLock<Result<Validator, ()>> = OnceLock::new();
+    static MEMORY_SCOPE: OnceLock<Result<Validator, ()>> = OnceLock::new();
     let cache = match contract {
         Contract::Kit => &KIT,
         Contract::Roster => &ROSTER,
         Contract::Adapter => &ADAPTER,
         Contract::Lock => &LOCK,
         Contract::MemoryUse => &MEMORY_USE,
+        Contract::MemoryIdentity => &MEMORY_IDENTITY,
+        Contract::MemoryScope => &MEMORY_SCOPE,
     };
     cache
         .get_or_init(|| {
@@ -61,6 +67,12 @@ fn validator(contract: Contract) -> KitResult<&'static Validator> {
                 ),
                 Contract::MemoryUse => include_str!(
                     "../../../../templates/workspace-kit/contracts/memory-use.schema.json"
+                ),
+                Contract::MemoryIdentity => include_str!(
+                    "../../../../templates/workspace-kit/contracts/memory-identity.schema.json"
+                ),
+                Contract::MemoryScope => include_str!(
+                    "../../../../templates/workspace-kit/contracts/memory-scope.schema.json"
                 ),
             };
             let mut schema: Value = serde_json::from_str(text).map_err(|_| ())?;

@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "baseline": {
+    "schema": 1,
+    "kind": "local",
+    "machineId": "installation-1",
+    "filesystemId": "volume-1",
+    "canonicalRoot": "/work/project"
+  },
+  "cases": [
+    {
+      "name": "local",
+      "changes": {},
+      "expected": "6a8e6d6b5f277411202bc52b8e78c0ec280eec8aae7be2c9f4a80c016b26ae85"
+    },
+    {
+      "name": "different machine",
+      "changes": {
+        "machineId": "installation-2"
+      },
+      "expected": "7010b75227817f60b0461a5aa854a0df6f17d37eb2e23293f5e1c710c888d601"
+    },
+    {
+      "name": "different filesystem",
+      "changes": {
+        "filesystemId": "volume-2"
+      },
+      "expected": "a309aecfef56f1dd33283460e6755ef459afea57fa30ac4f99d548babf89f259"
+    },
+    {
+      "name": "SSH host",
+      "changes": {
+        "kind": "ssh",
+        "filesystemId": "profile-1/host-a/user/22"
+      },
+      "expected": "d2324dbf01a00029e7fe1540fceb747dc20157a07aa83e8de3d871e0e1a5e631"
+    },
+    {
+      "name": "SSH other host",
+      "changes": {
+        "kind": "ssh",
+        "filesystemId": "profile-1/host-b/user/22"
+      },
+      "expected": "1173d1a3cb05d92a546840c5541b6f3c489c408d27b42b877779805d76ea0df2"
+    },
+    {
+      "name": "WSL",
+      "changes": {
+        "kind": "wsl",
+        "filesystemId": "Ubuntu"
+      },
+      "expected": "ac00c81d15ce70b4cf5403e19a47a39013660378e49f387a941e6152774213cf"
+    },
+    {
+      "name": "Docker",
+      "changes": {
+        "kind": "docker",
+        "filesystemId": "engine-1/container-1/user"
+      },
+      "expected": "86b853894ed12da9649a5dc6bbe4f204b766e074ce9ed90959904dad11a17f66"
+    },
+    {
+      "name": "worktree",
+      "changes": {
+        "canonicalRoot": "/work/project-branch"
+      },
+      "expected": "2395765388e26b24180844de2a87a6b454c0f676a37ab22c276b3ad6ebc13acd"
+    },
+    {
+      "name": "Windows drive",
+      "changes": {
+        "canonicalRoot": "C:/Work/Project"
+      },
+      "expected": "21c7a0b8dd1113d9a001f1f3a9cb063206cf8f0d221a3fd25c8d0d89944ae080"
+    },
+    {
+      "name": "UNC",
+      "changes": {
+        "canonicalRoot": "//server/share/project"
+      },
+      "expected": "1768f9cfd9a5f1c5a92da0ad4ead41f23c11918df83c280f7ad85fba8c0c2b5f"
+    },
+    {
+      "name": "Unicode",
+      "changes": {
+        "canonicalRoot": "/work/\u00e9/\u9879\u76ee/\ud83d\ude00"
+      },
+      "expected": "4cfd776490c5a55f1f960ac6928277875f3142f6d302740e87c2f08c30961832"
+    },
+    {
+      "name": "Unix backslash",
+      "changes": {
+        "canonicalRoot": "/work/a\\b"
+      },
+      "expected": "032431ae87380e8ecab7035caa9e93b3febc7c44e5981eb0acbbfe96031eb793"
+    },
+    {
+      "name": "case preserved",
+      "changes": {
+        "canonicalRoot": "/work/Project"
+      },
+      "expected": "1d8e0edef69ab07929fc885f1cf4ace044a29e6af065ab0625d846bc2c891509"
+    },
+    {
+      "name": "composed Unicode",
+      "changes": {
+        "canonicalRoot": "/work/\u00e9"
+      },
+      "expected": "1cb8aa69c3267bd19570bd5b313bbc3211acceb90f4dd7f9cdff09bbf1c1a91b"
+    },
+    {
+      "name": "decomposed Unicode",
+      "changes": {
+        "canonicalRoot": "/work/e\u0301"
+      },
+      "expected": "009ff247df63712757b319a04ca436b2445213121017e27549e8d77c8eed6149"
+    },
+    {
+      "name": "framing first field",
+      "changes": {
+        "machineId": "a",
+        "filesystemId": "bc"
+      },
+      "expected": "1e3f3ae03fdf147ac268de3312020a0a53c58cfa2e9e9937b0f0d43bfc030a2c"
+    },
+    {
+      "name": "framing second field",
+      "changes": {
+        "machineId": "ab",
+        "filesystemId": "c"
+      },
+      "expected": "d15555f53c4427c75707152afd6be675733eee0e8e90a538018a4338506e383b"
+    },
+    {
+      "name": "unknown version",
+      "changes": {
+        "schema": 2
+      },
+      "invalid": true
+    },
+    {
+      "name": "unknown field",
+      "changes": {
+        "trusted": true
+      },
+      "invalid": true
+    },
+    {
+      "name": "relative root",
+      "changes": {
+        "canonicalRoot": "work/project"
+      },
+      "invalid": true
+    },
+    {
+      "name": "namespace is not canonical root",
+      "changes": {
+        "canonicalRoot": "remote://profile/work"
+      },
+      "invalid": true
+    },
+    {
+      "name": "control character",
+      "changes": {
+        "filesystemId": "host\n"
+      },
+      "invalid": true
+    },
+    {
+      "name": "drive relative",
+      "changes": {
+        "canonicalRoot": "C:project"
+      },
+      "invalid": true
+    },
+    {
+      "name": "unknown transport",
+      "changes": {
+        "kind": "serial"
+      },
+      "invalid": true
+    },
+    {
+      "name": "blank identity",
+      "changes": {
+        "machineId": ""
+      },
+      "invalid": true
+    },
+    {
+      "name": "whitespace installation identity",
+      "changes": {
+        "machineId": " \u00a0\ufeff "
+      },
+      "invalid": true
+    },
+    {
+      "name": "whitespace filesystem identity",
+      "changes": {
+        "filesystemId": "   "
+      },
+      "invalid": true
+    }
+  ]
+}

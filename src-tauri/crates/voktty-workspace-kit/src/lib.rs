@@ -1,8 +1,10 @@
 mod deployment;
 mod document;
+mod identity;
 mod lock;
 mod memory;
 mod policy;
+mod scope;
 mod template;
 mod validation;
 
@@ -36,11 +38,13 @@ pub use deployment::{
     plan_deployment, DeploymentAction, DeploymentEntry, DeploymentPlan, DeploymentReason, PathFact,
     RootLinks,
 };
+pub use identity::memory_project_key;
 pub use lock::{parse_kit_lock, prepare_deployment, BaseIntegrity, KitLock, PreparedDeployment};
 pub use memory::{
     inspect_memory_text, measure_memory, HandoffFile, HandoffInventory, ItemOccurrence,
     MemoryMeasurement, MemoryMeasurements, MemoryText, MilestoneOccurrence,
 };
 pub use policy::{evaluate_memory_use, MemoryUseDecision};
+pub use scope::{resolve_memory_scope, MemoryScope};
 pub use template::{render_template, FileKind, RenderedFile};
 pub use validation::{parse_agent_roster, parse_kit_config, PathCase};

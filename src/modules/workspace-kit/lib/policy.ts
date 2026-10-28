@@ -16,6 +16,9 @@ export type MemoryUseDecision = Readonly<{
   reason:
     | "KIT_MEMORY_READY"
     | "KIT_MEMORY_ABSENT"
+    | "KIT_MEMORY_RESERVED"
+    | "KIT_MEMORY_PARTIAL"
+    | "KIT_MEMORY_DENIED"
     | "KIT_MEMORY_INVALID"
     | "KIT_MEMORY_AMBIGUOUS"
     | "KIT_MEMORY_INCOMPLETE"
@@ -31,7 +34,15 @@ type MemoryUseFacts = {
   schema: 1;
   projectKey: string;
   sessionId: string;
-  kitState: "ready" | "absent" | "invalid" | "ambiguous" | "incomplete";
+  kitState:
+    | "ready"
+    | "absent"
+    | "reserved"
+    | "invalid"
+    | "partial"
+    | "denied"
+    | "ambiguous"
+    | "incomplete";
   instructionDigest: string | null;
   localPolicy: {
     projectKey: string;
@@ -79,6 +90,9 @@ export function evaluateMemoryUse(text: string): MemoryUseDecision {
   if (facts.kitState !== "ready") {
     const reasons = {
       absent: "KIT_MEMORY_ABSENT",
+      reserved: "KIT_MEMORY_RESERVED",
+      partial: "KIT_MEMORY_PARTIAL",
+      denied: "KIT_MEMORY_DENIED",
       invalid: "KIT_MEMORY_INVALID",
       ambiguous: "KIT_MEMORY_AMBIGUOUS",
       incomplete: "KIT_MEMORY_INCOMPLETE",

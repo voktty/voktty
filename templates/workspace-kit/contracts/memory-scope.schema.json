@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "purpose", "ancestors", "stop", "elapsedMs", "descendants"],
+  "properties": {
+    "schema": { "const": 1 },
+    "purpose": { "enum": ["discover", "initialize", "manage"] },
+    "ancestors": {
+      "type": "array", "minItems": 1, "maxItems": 128,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["directoryKey", "parentKey", "state"],
+        "properties": {
+          "directoryKey": { "$ref": "#/$defs/key" },
+          "parentKey": { "anyOf": [{ "$ref": "#/$defs/key" }, { "type": "null" }] },
+          "state": { "enum": ["absent", "reserved", "valid", "invalid", "partial", "denied", "unavailable"] }
+        }
+      }
+    },
+    "stop": { "enum": ["root", "authorization", "depth", "timeout", "cancelled", "error"] },
+    "elapsedMs": { "$ref": "#/$defs/time" },
+    "descendants": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["rootKey", "stop", "entries", "depth", "elapsedMs", "findings"],
+          "properties": {
+            "rootKey": { "$ref": "#/$defs/key" },
+            "stop": { "enum": ["complete", "authorization", "depth", "entry_limit", "timeout", "cancelled", "error", "link"] },
+            "entries": { "type": "integer", "minimum": 0, "maximum": 20000 },
+            "depth": { "type": "integer", "minimum": 0, "maximum": 64 },
+            "elapsedMs": { "$ref": "#/$defs/time" },
+            "findings": {
+              "type": "array", "maxItems": 1024,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["directoryKey", "state"],
+                "properties": {
+                  "directoryKey": { "$ref": "#/$defs/key" },
+                  "state": { "enum": ["valid", "invalid", "partial", "denied", "unavailable", "unverified_link"] }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "key": { "type": "string", "pattern": "^[a-f0-9]{64}(?![\\s\\S])" },
+    "time": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+  }
+}
