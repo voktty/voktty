@@ -222,3 +222,35 @@ Linux tests exercise real scopes, sibling/nested kits, reserved and invalid
 states, explicit enumeration permission, phase races, links, cancellation and all
 scan budgets. Windows tests cross-compile; native Windows, macOS and Android
 qualification remains pending. Authenticated remote discovery is not wired yet.
+
+## Publication exclusion
+
+`LocalMemoryStore::try_lock_deployment` returns an opaque owned OS lock or
+immediately fails with `Busy`. It uses one stable `memory-deployment.lock` in
+the private application directory, covering all cooperating publishers in this
+installation. Serializing all destinations also excludes overlapping parent and
+child initialization; a lock keyed only by the chosen path would not do that.
+No repository path, environment identity string or caller-provided lock name
+selects this lock. The file is neither truncated nor removed. Handle close and
+process exit release exclusion without a stale PID lease or an expiry that
+could allow two live writers.
+
+The deployment lock is separate from the preferences lock: native discovery,
+preference reads and revocation can still run while publication is excluded.
+Acquiring it does not initialize an installation UUID, capture a preference
+revision, authorize any project access or attest to a preview. The publisher
+must revalidate current preferences, originating cwd, destination scopes,
+native write permission and accepted bytes after acquisition and immediately
+before writing. It must not hold the lock during user review. An owned worker
+must retain it until every filesystem operation settles, including after an
+outer response timeout. The synchronous lock attempt does not wait for another
+holder, but opening the lock still has the local-filesystem syscall limitations
+described above.
+
+This is coordination within one application state directory, not protection
+against another installation, an external editor, another host or an owner
+replacing application state. It is not the repository's `kit.lock.json` integrity
+record or the future shared-memory capture lock. Linux tests exercise separate
+process contention, abrupt exit, killing only an owned holder, stable lock bytes
+and Unix unsafe entries. Windows tests cross-compile; runtime qualification and
+the actual publication writer remain pending.

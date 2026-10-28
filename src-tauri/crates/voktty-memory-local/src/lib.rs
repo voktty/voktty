@@ -26,6 +26,7 @@ pub use reader::{
 
 const STORE: &str = "memory-local.json";
 const LOCK: &str = "memory-local.lock";
+const DEPLOYMENT_LOCK: &str = "memory-deployment.lock";
 const MAX_BYTES: u64 = 256 * 1024;
 const MAX_PROJECTS: usize = 256;
 
@@ -134,6 +135,15 @@ pub struct LocalMemoryStore {
     directory: PathBuf,
 }
 
+/// Serializes cooperating publishers in this native installation, including
+/// overlapping parent/child destinations. It grants no workspace write access.
+/// Keep this owned by the worker until all publication IO has settled.
+#[must_use = "dropping the deployment lock releases publication exclusion"]
+pub struct LocalDeploymentLock<'a> {
+    _store: &'a LocalMemoryStore,
+    _file: File,
+}
+
 impl LocalMemoryStore {
     pub fn open(directory: &Path) -> Result<Self, StoreError> {
         if !directory.is_absolute() {
@@ -149,6 +159,16 @@ impl LocalMemoryStore {
         }
         let directory = fs::canonicalize(directory).map_err(|_| StoreError::Io)?;
         Ok(Self { directory })
+    }
+
+    /// Acquires publication exclusion without waiting or initializing identity.
+    /// Scope, destination, preferences and accepted bytes must be revalidated
+    /// after acquiring it. Do not hold it while waiting for user acceptance.
+    pub fn try_lock_deployment(&self) -> Result<LocalDeploymentLock<'_>, StoreError> {
+        Ok(LocalDeploymentLock {
+            _store: self,
+            _file: self.lock_named(DEPLOYMENT_LOCK)?,
+        })
     }
 
     /// Explicitly creates an installation identity only if the store is absent.
@@ -251,7 +271,11 @@ impl LocalMemoryStore {
     }
 
     fn lock(&self) -> Result<File, StoreError> {
-        let file = regular_file(&self.directory.join(LOCK), true, true)?;
+        self.lock_named(LOCK)
+    }
+
+    fn lock_named(&self, name: &str) -> Result<File, StoreError> {
+        let file = regular_file(&self.directory.join(name), true, true)?;
         match file.try_lock() {
             Ok(()) => Ok(file),
             Err(TryLockError::WouldBlock) => Err(StoreError::Busy),
