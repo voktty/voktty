@@ -22,22 +22,7 @@ impl LocalMemoryStore {
         control: &ReadControl,
         create: bool,
     ) -> Result<Self, ReadError> {
-        control.check()?;
-        let text = parent.to_str().ok_or(ReadError::InvalidInput)?;
-        if text.starts_with("//") || (text.starts_with(r"\\") && !text.starts_with(r"\\?\")) {
-            return Err(ReadError::Unsupported);
-        }
-        if !parent.is_absolute()
-            || text.chars().any(|c| c <= '\u{001f}')
-            || parent
-                .components()
-                .any(|part| matches!(part, Component::ParentDir))
-        {
-            return Err(ReadError::InvalidInput);
-        }
-        if text.len() > 4096 || parent.components().count() > 128 {
-            return Err(ReadError::Limit);
-        }
+        validate_parent(parent, control)?;
         #[cfg(unix)]
         use crate::reader_unix::Directory;
         #[cfg(windows)]
@@ -65,4 +50,24 @@ impl LocalMemoryStore {
         #[cfg(not(any(unix, windows)))]
         Err(ReadError::Unsupported)
     }
+}
+
+pub(crate) fn validate_parent(parent: &Path, control: &ReadControl) -> Result<(), ReadError> {
+    control.check()?;
+    let text = parent.to_str().ok_or(ReadError::InvalidInput)?;
+    if text.starts_with("//") || (text.starts_with(r"\\") && !text.starts_with(r"\\?\")) {
+        return Err(ReadError::Unsupported);
+    }
+    if !parent.is_absolute()
+        || text.chars().any(|c| c <= '\u{001f}')
+        || parent
+            .components()
+            .any(|part| matches!(part, Component::ParentDir))
+    {
+        return Err(ReadError::InvalidInput);
+    }
+    if text.len() > 4096 || parent.components().count() > 128 {
+        return Err(ReadError::Limit);
+    }
+    Ok(())
 }

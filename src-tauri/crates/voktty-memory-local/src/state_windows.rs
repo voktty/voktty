@@ -1,6 +1,9 @@
 use super::*;
 use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, GENERIC_ALL, GENERIC_WRITE, HANDLE};
-use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo,
+    SDDL_REVISION_1, SE_FILE_OBJECT,
+};
 use windows_sys::Win32::Security::{
     EqualSid, GetAce, GetTokenInformation, IsValidAcl, IsValidSid, IsWellKnownSid, TokenUser,
     WinBuiltinAdministratorsSid, WinLocalSystemSid, ACCESS_ALLOWED_ACE, ACE_HEADER, ACL,
@@ -18,7 +21,7 @@ impl Drop for Token {
         unsafe { CloseHandle(self.0) };
     }
 }
-struct Descriptor(PSECURITY_DESCRIPTOR);
+pub(super) struct Descriptor(pub(super) PSECURITY_DESCRIPTOR);
 impl Drop for Descriptor {
     fn drop(&mut self) {
         unsafe { LocalFree(self.0) };
@@ -61,9 +64,82 @@ fn trusted(sid: PSID, user: PSID) -> bool {
     }
 }
 
+pub(super) fn creation_descriptor() -> Result<Descriptor, ReadError> {
+    let storage = user()?;
+    let current = unsafe { (*(storage.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+    let mut text = std::ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(current, &mut text) } == 0 || text.is_null() {
+        return Err(ReadError::Denied);
+    }
+    let _text = Descriptor(text.cast());
+    let mut length = 0;
+    while length < 256 && unsafe { *text.add(length) } != 0 {
+        length += 1;
+    }
+    if length == 256 {
+        return Err(ReadError::Limit);
+    }
+    let sid = String::from_utf16(unsafe { std::slice::from_raw_parts(text, length) })
+        .map_err(|_| ReadError::InvalidInput)?;
+    let sddl = format!("O:{sid}D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)");
+    let wide = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+    let mut descriptor = std::ptr::null_mut();
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            wide.as_ptr(),
+            SDDL_REVISION_1,
+            &mut descriptor,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(ReadError::Denied);
+    }
+    Ok(Descriptor(descriptor))
+}
+
+fn installer_sid() -> Result<Vec<u64>, ReadError> {
+    let mut name = "TRUSTEDINSTALLER".encode_utf16().collect::<Vec<_>>();
+    let name = UNICODE_STRING {
+        Length: (name.len() * 2) as u16,
+        MaximumLength: (name.len() * 2) as u16,
+        Buffer: name.as_mut_ptr(),
+    };
+    let mut storage = vec![0u64; 16];
+    let mut bytes = (storage.len() * 8) as u32;
+    if unsafe {
+        windows_sys::Wdk::Storage::FileSystem::RtlCreateServiceSid(
+            &name,
+            storage.as_mut_ptr().cast(),
+            &mut bytes,
+        )
+    } != 0
+        || bytes as usize > storage.len() * 8
+        || unsafe { IsValidSid(storage.as_mut_ptr().cast()) } == 0
+    {
+        return Err(ReadError::Denied);
+    }
+    Ok(storage)
+}
+
 pub(super) fn qualify(file: &File, private: bool) -> Result<(), ReadError> {
+    qualify_access(file, private, false)
+}
+
+fn qualify_access(file: &File, private: bool, ancestor: bool) -> Result<(), ReadError> {
     let user_storage = user()?;
     let current = unsafe { (*(user_storage.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+    let installer = if ancestor {
+        Some(installer_sid()?)
+    } else {
+        None
+    };
+    let allowed = |sid| {
+        trusted(sid, current)
+            || installer.as_ref().is_some_and(|installer| unsafe {
+                IsValidSid(sid) != 0 && EqualSid(sid, installer.as_ptr().cast_mut().cast()) != 0
+            })
+    };
     let mut owner = std::ptr::null_mut();
     let mut acl: *mut ACL = std::ptr::null_mut();
     let mut descriptor = std::ptr::null_mut();
@@ -84,7 +160,13 @@ pub(super) fn qualify(file: &File, private: bool) -> Result<(), ReadError> {
         || owner.is_null()
         || acl.is_null()
         || unsafe {
-            IsValidSid(owner) == 0 || EqualSid(owner, current) == 0 || IsValidAcl(acl) == 0
+            IsValidSid(owner) == 0
+                || (if ancestor {
+                    !allowed(owner)
+                } else {
+                    EqualSid(owner, current) == 0
+                })
+                || IsValidAcl(acl) == 0
         }
     {
         return Err(ReadError::Denied);
@@ -116,7 +198,7 @@ pub(super) fn qualify(file: &File, private: bool) -> Result<(), ReadError> {
         }
         let ace = unsafe { &*pointer.cast::<ACCESS_ALLOWED_ACE>() };
         let sid = (&ace.SidStart as *const u32).cast_mut().cast();
-        if !trusted(sid, current) && (private && ace.Mask != 0 || ace.Mask & destructive != 0) {
+        if !allowed(sid) && (private && ace.Mask != 0 || ace.Mask & destructive != 0) {
             return Err(ReadError::Denied);
         }
     }
@@ -124,6 +206,19 @@ pub(super) fn qualify(file: &File, private: bool) -> Result<(), ReadError> {
 }
 
 impl Directory {
+    pub(crate) fn qualify_ancestor(&self, control: &ReadControl) -> Result<(), ReadError> {
+        control.check()?;
+        let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
+        let (file, observed) = open_kind(Some(parent), OsStr::new("."), OpenKind::PrivateDirectory)
+            .map_err(|_| ReadError::Denied)?;
+        if (observed.volume, observed.id) != self.identity() {
+            return Err(ReadError::StaleRoot);
+        }
+        validate_requested_root(&final_path(&file)?)?;
+        qualify_access(&file, false, true)?;
+        control.check()
+    }
+
     pub(crate) fn qualify_state(
         &self,
         private: bool,
@@ -268,5 +363,41 @@ mod tests {
                 before
             );
         }
+    }
+
+    #[test]
+    fn application_suffixes_get_private_acls_without_inheriting_broad_parent_reads() {
+        let parent = tempfile::tempdir().unwrap();
+        private_acl(parent.path(), "(A;OICI;GR;;;WD)");
+        let application = parent.path().join("data/application");
+        crate::LocalMemoryStore::prepare_application_parent(&application, &ReadControl::default())
+            .unwrap();
+        let directory = Directory::open_root(&application, &ReadControl::default()).unwrap();
+        directory
+            .qualify_state(true, &ReadControl::default())
+            .unwrap();
+        assert!(std::fs::read_dir(&application).unwrap().next().is_none());
+        let store =
+            crate::LocalMemoryStore::create_private(&application, &ReadControl::default()).unwrap();
+        store.initialize().unwrap();
+    }
+
+    #[test]
+    fn an_unsafe_existing_ancestor_blocks_preparation_before_creating_descendants() {
+        let parent = tempfile::tempdir().unwrap();
+        private_acl(parent.path(), "");
+        let shared = parent.path().join("shared");
+        let leaf = shared.join("private");
+        std::fs::create_dir_all(&leaf).unwrap();
+        private_acl(&shared, "(A;;FA;;;WD)");
+        private_acl(&leaf, "");
+        assert!(matches!(
+            crate::LocalMemoryStore::prepare_application_parent(
+                &leaf.join("new"),
+                &ReadControl::default()
+            ),
+            Err(ReadError::Denied)
+        ));
+        assert!(!leaf.join("new").exists());
     }
 }

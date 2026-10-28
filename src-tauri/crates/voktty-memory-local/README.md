@@ -29,8 +29,10 @@ The helper uses the existing no-follow directory handles. Unix uses `mkdirat`
 with mode `0700`, requires current-user ownership and no shared write access on
 the parent, and refuses group/other permissions on an existing child. It never
 repairs permissions or deletes an existing file or directory. Windows creates
-relative to its captured parent with `NtCreateFile` and inherits the parent's
-ACL. A separate handle requests `READ_CONTROL` and checks actual ownership and
+relative to its captured parent with `NtCreateFile`. Newly created private
+directories receive a protected DACL for the current user, Local System and
+Administrators, with the current user as owner. Existing ACLs are never replaced.
+A separate handle requests `READ_CONTROL` and checks actual ownership and
 DACLs without expanding the project reader's access rights. The owner must be
 the current token user. Parent grants to other principals cannot allow destructive
 control; child grants to other principals cannot allow access. Local System and
@@ -57,11 +59,44 @@ only cross-compiled until native execution qualifies this path.
 directory or identity. The private state helpers also inspect the opened native
 filesystem: Linux/Android admit ext-family, Btrfs, tmpfs, XFS, overlayfs, ZFS and
 F2FS magic values; unknown, network and userspace filesystems are unavailable.
-Apple requires the native `MNT_LOCAL` flag. Windows requires a local disk drive
+Apple requires APFS or HFS with the native `MNT_LOCAL` flag. Windows requires a local disk drive
 for the requested and opened-handle paths. These OS-reported classifications
 do not prove physical backing storage, durability, or support for arbitrary
 third-party filesystems. Ancestors must still remain application-controlled;
-the helper is not an ACL or ownership audit of the complete ancestor chain.
+these low-level helpers do not audit the complete ancestor chain.
+
+`prepare_application_parent` prepares the native application origin before
+initializing its memory child. It checks an absolute path bounded to 4 KiB and
+128 components, opens existing components without following links, and creates
+only missing suffix directories relative to captured parent handles. Each
+ancestor must report a recognized local filesystem and controlled permissions.
+Unix permits root or current-user ownership, refuses shared writes except for
+traversing sticky directories, and never creates directly under a shared-writable
+parent. Apple also checks descriptor-based extended ACLs: absent or deny-only
+ACLs are accepted, additional allow entries and failed queries are unsupported.
+The same Apple check protects private directories, records and lock files.
+Custom allow ACLs require a future verified effective-permission policy; mode
+bits alone never establish their safety.
+The descriptor API and its entry constants follow the
+[Apple ACL header](https://github.com/apple-oss-distributions/Libc/blob/main/include/sys/acl.h);
+absence and end-of-iteration behavior are checked against Apple's Libc sources.
+
+Windows ancestor checks additionally recognize the OS TrustedInstaller principal,
+whose SID is derived locally from the fixed service name. This exception applies
+only to ancestor inspection, not private state ownership or instruction trust.
+New suffixes use the private descriptor above instead of inheriting broad grants.
+The final application parent must belong to the current user. A captured chain
+is rechecked before each creation and at return; identities or permissions that
+change invalidate the operation. `check_application_parent` performs the same
+inspection without creating directories. Neither method initializes identity,
+repairs existing permissions, modifies a project or authorizes workspace roots.
+Failures preserve completed directory creation; they never blindly roll it back.
+These are point-in-time checks, not protection against later privileged changes.
+
+The native storage worker uses these methods for both modes, so explicit
+initialization works when its app-directory suffix does not yet exist. Ordinary
+open remains noncreating. Windows and Apple runtime qualification remains pending;
+cross-compiling the new ACL and suffix tests does not execute them.
 
 `open` validates the directory; `load` never creates an installation identity.
 Only explicit `initialize` creates schema 1 `memory-local.json` if absent.
@@ -173,8 +208,9 @@ already admitted initialization may complete after caller retirement; timeout
 does not roll it back. A queued retired initialization never starts its IO.
 The app's `NativeMemoryStorage` captures the parent solely from Tauri's native
 `app_local_data_dir` resolver without performing IO or using a project fallback.
-The parent must already exist; its creation and presentation/IPC wiring remain
-pending. Opening existing storage never creates that directory or identity,
+Initialization prepares missing app-directory suffixes through the checked
+native chain above; presentation/IPC wiring remains pending.
+Opening existing storage never creates that directory or identity,
 although loading existing state retains the normal private lock-file behavior.
 
 `MemoryWorkers::scope` and `context` run the existing native readers through the

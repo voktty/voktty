@@ -143,6 +143,14 @@ impl MemoryWorkers {
     ) -> Result<MemoryJob<Arc<LocalMemoryStore>>, MemoryWorkError> {
         validate_path(&parent)?;
         self.spawn(Control::Read(control.clone()), move || {
+            match mode {
+                MemoryStoreMode::OpenExisting => {
+                    LocalMemoryStore::check_application_parent(&parent, &control)
+                }
+                MemoryStoreMode::Initialize => {
+                    LocalMemoryStore::prepare_application_parent(&parent, &control)
+                }
+            }?;
             let store = match mode {
                 MemoryStoreMode::OpenExisting => LocalMemoryStore::open_private(&parent, &control)?,
                 MemoryStoreMode::Initialize => LocalMemoryStore::create_private(&parent, &control)?,

@@ -50,12 +50,27 @@ fn open_at(parent: &File, name: &OsStr, directory: bool) -> io::Result<File> {
 
 impl Directory {
     pub(crate) fn create_private_state(&self, control: &ReadControl) -> Result<Self, ReadError> {
+        self.create_state_child(OsStr::new(crate::bootstrap::PRIVATE_DIRECTORY), control)
+    }
+
+    pub(crate) fn create_state_child(
+        &self,
+        name: &OsStr,
+        control: &ReadControl,
+    ) -> Result<Self, ReadError> {
+        if Path::new(name).components().count() != 1
+            || !matches!(
+                Path::new(name).components().next(),
+                Some(Component::Normal(_))
+            )
+        {
+            return Err(ReadError::InvalidInput);
+        }
         control.check()?;
         let parent = self.file.metadata().map_err(|_| ReadError::Io)?;
         if !crate::owned_and_not_shared_writable(&parent) {
             return Err(ReadError::Denied);
         }
-        let name = OsStr::new(crate::bootstrap::PRIVATE_DIRECTORY);
         let file = match open_at(&self.file, name, true) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {

@@ -56,10 +56,14 @@ Unix requires native ownership, no shared writes, a private child and a recogniz
 local filesystem. Windows uses a separate `READ_CONTROL` handle to inspect owner
 and DACLs without expanding project-read access. Broader or unavailable grants
 fail without permission repair. The complete rules and platform limits live in
-`src-tauri/crates/voktty-memory-local/README.md`. Ancestors must remain controlled
-by the application; these checks do not audit their complete ownership/ACL chain.
+`src-tauri/crates/voktty-memory-local/README.md`. The worker checks its application
+ancestor chain through captured handles, including controlled ownership and
+permissions. Apple extended allow ACLs remain unsupported instead of being
+mistaken for private mode bits. Permission checks are point-in-time observations.
 
-The native app parent must already exist. Creating that origin, owning the
-service in the application, presentation/IPC wiring, narrow ancestor consent,
+Explicit initialization can create missing native app-directory suffixes after
+verifying that chain. It never overwrites existing entries or repairs permissions.
+Ordinary open stays noncreating. Owning the service in the application,
+presentation/IPC wiring, narrow project-ancestor consent,
 publication workers and platform runtime qualification remain pending. This
 module still starts no work automatically.

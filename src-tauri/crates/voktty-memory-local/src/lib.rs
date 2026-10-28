@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod apple_acl;
+mod application;
 mod bootstrap;
 mod discovery;
 pub mod path_policy;
@@ -361,6 +364,8 @@ fn regular_file(path: &Path, write: bool, create: bool) -> Result<File, StoreErr
     }
     #[cfg(windows)]
     reader_windows::qualify_state_file(&file).map_err(|_| StoreError::InvalidStore)?;
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    apple_acl::restrictive_only(&file).map_err(|_| StoreError::InvalidStore)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;

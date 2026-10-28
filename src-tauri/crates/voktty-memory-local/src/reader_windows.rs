@@ -149,6 +149,7 @@ enum OpenKind {
     File,
     Metadata,
     CreateDirectory,
+    CreatePrivateDirectory,
     CreateFile,
 }
 
@@ -156,12 +157,19 @@ impl OpenKind {
     fn directory(self) -> bool {
         matches!(
             self,
-            Self::Directory | Self::PrivateDirectory | Self::Enumerate | Self::CreateDirectory
+            Self::Directory
+                | Self::PrivateDirectory
+                | Self::Enumerate
+                | Self::CreateDirectory
+                | Self::CreatePrivateDirectory
         )
     }
 
     fn create(self) -> bool {
-        matches!(self, Self::CreateDirectory | Self::CreateFile)
+        matches!(
+            self,
+            Self::CreateDirectory | Self::CreatePrivateDirectory | Self::CreateFile
+        )
     }
 }
 fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<(File, FileState)> {
@@ -186,11 +194,22 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
         MaximumLength: (wide.len() * 2) as u16,
         Buffer: wide.as_mut_ptr(),
     };
+    let security = if kind == OpenKind::CreatePrivateDirectory {
+        Some(
+            state_security::creation_descriptor()
+                .map_err(|_| io::Error::from(io::ErrorKind::PermissionDenied))?,
+        )
+    } else {
+        None
+    };
     let attributes = OBJECT_ATTRIBUTES {
         Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
         RootDirectory: parent.map_or(std::ptr::null_mut(), |p| p.as_raw_handle()),
         ObjectName: &unicode,
         Attributes: if insensitive { OBJ_CASE_INSENSITIVE } else { 0 },
+        SecurityDescriptor: security
+            .as_ref()
+            .map_or(std::ptr::null(), |security| security.0.cast()),
         ..Default::default()
     };
     let mut status_block = IO_STATUS_BLOCK::default();
@@ -199,7 +218,7 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
         | SYNCHRONIZE
         | match kind {
             OpenKind::Directory | OpenKind::CreateDirectory => FILE_TRAVERSE,
-            OpenKind::PrivateDirectory => {
+            OpenKind::PrivateDirectory | OpenKind::CreatePrivateDirectory => {
                 FILE_TRAVERSE | windows_sys::Win32::Storage::FileSystem::READ_CONTROL
             }
             OpenKind::Enumerate => FILE_TRAVERSE | FILE_LIST_DIRECTORY,
@@ -213,6 +232,7 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
             OpenKind::Directory
             | OpenKind::PrivateDirectory
             | OpenKind::Enumerate
+            | OpenKind::CreatePrivateDirectory
             | OpenKind::CreateDirectory => FILE_DIRECTORY_FILE,
             OpenKind::File | OpenKind::CreateFile => FILE_NON_DIRECTORY_FILE,
             OpenKind::Metadata => 0,
@@ -282,14 +302,29 @@ pub(crate) struct Directory {
 
 impl Directory {
     pub(crate) fn create_private_state(&self, control: &ReadControl) -> Result<Self, ReadError> {
+        self.create_state_child(OsStr::new(crate::bootstrap::PRIVATE_DIRECTORY), control)
+    }
+
+    pub(crate) fn create_state_child(
+        &self,
+        name: &OsStr,
+        control: &ReadControl,
+    ) -> Result<Self, ReadError> {
+        if Path::new(name).components().count() != 1
+            || !matches!(
+                Path::new(name).components().next(),
+                Some(Component::Normal(_))
+            )
+        {
+            return Err(ReadError::InvalidInput);
+        }
         control.check()?;
         let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
-        let name = OsStr::new(crate::bootstrap::PRIVATE_DIRECTORY);
         let (file, state) = match open_kind(Some(parent), name, OpenKind::Directory) {
             Ok(found) => found,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 control.check()?;
-                match open_kind(Some(parent), name, OpenKind::CreateDirectory) {
+                match open_kind(Some(parent), name, OpenKind::CreatePrivateDirectory) {
                     Ok(created) => created,
                     Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                         open_kind(Some(parent), name, OpenKind::Directory)

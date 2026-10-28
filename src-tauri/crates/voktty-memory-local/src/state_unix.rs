@@ -9,6 +9,17 @@ fn known_local_filesystem(kind: u32) -> bool {
 }
 
 impl Directory {
+    pub(crate) fn qualify_ancestor(&self, control: &ReadControl) -> Result<(), ReadError> {
+        control.check()?;
+        let metadata = self.file.metadata().map_err(|_| ReadError::Io)?;
+        if (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
+            || (metadata.mode() & 0o022 != 0 && metadata.mode() & 0o1000 == 0)
+        {
+            return Err(ReadError::Denied);
+        }
+        self.qualify_filesystem(control)
+    }
+
     pub(crate) fn qualify_state(
         &self,
         private: bool,
@@ -21,6 +32,11 @@ impl Directory {
         {
             return Err(ReadError::Denied);
         }
+        self.qualify_filesystem(control)
+    }
+
+    fn qualify_filesystem(&self, control: &ReadControl) -> Result<(), ReadError> {
+        control.check()?;
         let mut filesystem = std::mem::MaybeUninit::<libc::statfs>::uninit();
         if unsafe { libc::fstatfs(self.file.as_raw_fd(), filesystem.as_mut_ptr()) } != 0 {
             return Err(ReadError::Io);
@@ -29,7 +45,15 @@ impl Directory {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         let local = known_local_filesystem(filesystem.f_type as u32);
         #[cfg(any(target_os = "macos", target_os = "ios"))]
-        let local = filesystem.f_flags & libc::MNT_LOCAL as u32 != 0;
+        let local = {
+            let name = filesystem.f_fstypename.map(|byte| byte as u8);
+            let end = name
+                .iter()
+                .position(|byte| *byte == 0)
+                .ok_or(ReadError::Unsupported)?;
+            filesystem.f_flags & libc::MNT_LOCAL as u32 != 0
+                && matches!(&name[..end], b"apfs" | b"hfs")
+        };
         #[cfg(not(any(
             target_os = "linux",
             target_os = "android",
@@ -39,6 +63,11 @@ impl Directory {
         let local = false;
         control.check()?;
         if local {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            {
+                crate::apple_acl::restrictive_only(&self.file)?;
+                control.check()?;
+            }
             Ok(())
         } else {
             Err(ReadError::Unsupported)
