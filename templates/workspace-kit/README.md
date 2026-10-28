@@ -67,6 +67,7 @@ reader, and local lock files do not coordinate different machines.
 templates/workspace-kit/
   README.md            this file
   placeholders.json    every {placeholder} used by the template, with defaults
+  manifest.json        versioned resource list and base/content/link roles
   dot-voktty/          deployed as <project>/.voktty/
   root/                optional pointers deployed at the project root
 ```
@@ -166,6 +167,14 @@ them with its meaning and default. A deployment that leaves an unknown or
 required placeholder unfilled is an error, not a silent gap.
 
 ## Versioning
+
+`manifest.json` is the source inventory: schema version 1, template version
+and the exact files shipped, classified as base, project content or optional
+root links. The frontend core loads these resources on request, validates
+the inventory and renders placeholders, including JSON string escaping.
+Its deployment preview requires explicit path observations and preserves
+conflicting files; it does not write files, grant trust or enable memory.
+Native deployment and CLI packaging remain pending.
 
 `kit.json` records the kit version a project was created from. When a newer
 kit is available, the planned integration offers a reviewable update that
