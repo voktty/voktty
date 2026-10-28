@@ -28,6 +28,13 @@ export type KitValidationCode =
   | "KIT_SCOPE_SCAN_UNEXPECTED"
   | "KIT_SCOPE_TARGET_MISMATCH"
   | "KIT_SCOPE_FINDING_INVALID"
+  | "KIT_INSTRUCTION_INVENTORY"
+  | "KIT_INSTRUCTION_UNAVAILABLE"
+  | "KIT_CONTEXT_TEXT_INVALID"
+  | "KIT_CONTEXT_TEXT_TOO_LARGE"
+  | "KIT_CONTEXT_DOCUMENT_UNAVAILABLE"
+  | "KIT_CONTEXT_PROJECT_MISMATCH"
+  | "KIT_CONTEXT_BUDGET"
   | "KIT_PROJECT_BLANK"
   | "KIT_PROJECT_INVALID"
   | "KIT_ADAPTER_UNKNOWN"
@@ -67,10 +74,20 @@ export function isUnicodeScalarText(text: string): boolean {
 }
 
 export function parseDocument(text: string): unknown {
+  return parseDocumentWithinLimit(text, MAX_JSON_BYTES);
+}
+
+export function parseDocumentWithinLimit(
+  text: string,
+  maxBytes: number,
+): unknown {
   if (
-    text.length > MAX_JSON_BYTES ||
-    encoder.encode(text).byteLength > MAX_JSON_BYTES
-  ) {
+    !Number.isSafeInteger(maxBytes) ||
+    maxBytes < 1 ||
+    maxBytes > 4 * 1024 * 1024
+  )
+    throw new z.ZodError([makeIssue("KIT_DOCUMENT_TOO_LARGE", [])]);
+  if (text.length > maxBytes || encoder.encode(text).byteLength > maxBytes) {
     throw new z.ZodError([makeIssue("KIT_DOCUMENT_TOO_LARGE", [])]);
   }
   let document: unknown;

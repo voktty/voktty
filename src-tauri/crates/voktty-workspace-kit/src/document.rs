@@ -45,7 +45,11 @@ fn invalid_surrogates(text: &str) -> Vec<usize> {
 }
 
 pub(crate) fn parse_document(text: &str) -> KitResult<Value> {
-    if text.len() > 256 * 1024 {
+    parse_document_with_limit(text, 256 * 1024)
+}
+
+pub(crate) fn parse_document_with_limit(text: &str, max_bytes: usize) -> KitResult<Value> {
+    if max_bytes == 0 || max_bytes > 4 * 1024 * 1024 || text.len() > max_bytes {
         return Err(vec![Issue::new("KIT_DOCUMENT_TOO_LARGE", vec![])]);
     }
     let invalid = invalid_surrogates(text);

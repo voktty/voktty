@@ -36,6 +36,8 @@ pub(crate) enum Contract {
     MemoryUse,
     MemoryIdentity,
     MemoryScope,
+    MemoryInstructions,
+    MemoryContext,
 }
 
 fn validator(contract: Contract) -> KitResult<&'static Validator> {
@@ -46,6 +48,8 @@ fn validator(contract: Contract) -> KitResult<&'static Validator> {
     static MEMORY_USE: OnceLock<Result<Validator, ()>> = OnceLock::new();
     static MEMORY_IDENTITY: OnceLock<Result<Validator, ()>> = OnceLock::new();
     static MEMORY_SCOPE: OnceLock<Result<Validator, ()>> = OnceLock::new();
+    static MEMORY_INSTRUCTIONS: OnceLock<Result<Validator, ()>> = OnceLock::new();
+    static MEMORY_CONTEXT: OnceLock<Result<Validator, ()>> = OnceLock::new();
     let cache = match contract {
         Contract::Kit => &KIT,
         Contract::Roster => &ROSTER,
@@ -54,6 +58,8 @@ fn validator(contract: Contract) -> KitResult<&'static Validator> {
         Contract::MemoryUse => &MEMORY_USE,
         Contract::MemoryIdentity => &MEMORY_IDENTITY,
         Contract::MemoryScope => &MEMORY_SCOPE,
+        Contract::MemoryInstructions => &MEMORY_INSTRUCTIONS,
+        Contract::MemoryContext => &MEMORY_CONTEXT,
     };
     cache
         .get_or_init(|| {
@@ -74,10 +80,16 @@ fn validator(contract: Contract) -> KitResult<&'static Validator> {
                 Contract::MemoryScope => include_str!(
                     "../../../../templates/workspace-kit/contracts/memory-scope.schema.json"
                 ),
+                Contract::MemoryInstructions | Contract::MemoryContext => include_str!(
+                    "../../../../templates/workspace-kit/contracts/memory-context.schema.json"
+                ),
             };
             let mut schema: Value = serde_json::from_str(text).map_err(|_| ())?;
             if matches!(contract, Contract::Adapter) {
                 schema = schema["$defs"]["adapter"].clone();
+            }
+            if matches!(contract, Contract::MemoryInstructions) {
+                schema = serde_json::json!({"$ref":"#/$defs/instructions","$defs":schema["$defs"]});
             }
             jsonschema::options()
                 .with_draft(Draft::Draft202012)

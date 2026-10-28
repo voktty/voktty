@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "identity", "use", "config", "instructions", "project", "context", "activePlan"],
+  "properties": {
+    "schema": { "const": 1 },
+    "identity": { "type": "object" },
+    "use": { "type": "object" },
+    "config": { "type": "object" },
+    "instructions": { "$ref": "#/$defs/instructions" },
+    "project": { "$ref": "#/$defs/fact" },
+    "context": { "$ref": "#/$defs/fact" },
+    "activePlan": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "kind"],
+          "properties": {
+            "path": { "type": "string", "maxLength": 256, "pattern": "^\\.voktty/plans/[A-Za-z0-9][A-Za-z0-9_.-]*\\.md(?![\\s\\S])" },
+            "kind": { "enum": ["file", "absent", "blocked"] }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "fact": {
+      "anyOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "text"], "properties": { "kind": { "const": "file" }, "text": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "enum": ["absent", "blocked"] } } }
+      ]
+    },
+    "instructions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "role", "files"],
+      "properties": {
+        "schema": { "const": 1 },
+        "role": { "anyOf": [{ "type": "null" }, { "type": "string", "maxLength": 256, "pattern": "^\\.voktty/team/roles/[a-z0-9-]+\\.md(?![\\s\\S])" }] },
+        "files": {
+          "type": "array", "maxItems": 128,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["path", "fact"],
+            "properties": {
+              "path": { "type": "string", "maxLength": 256 },
+              "fact": { "$ref": "#/$defs/fact" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

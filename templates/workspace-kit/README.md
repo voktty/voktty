@@ -242,6 +242,78 @@ at most 256 bytes. Names cannot contain separators or NUL. Results are point
 in time facts, not authorization, a compaction verdict or archive selection.
 Native readers, snapshot comparison and CLI/UI integration remain pending.
 
+## Instruction fingerprints and context packets
+
+`instructionFingerprint` and `instruction_fingerprint` consume schema 1
+instruction snapshots defined in `contracts/memory-context.schema.json`.
+Every current manifest base, both root files (`AGENTS.md`, `CLAUDE.md`) and
+the explicitly assigned role need an observation. Root files may be absent;
+bases and the assigned role must be readable files. Blocked, omitted,
+duplicated and unexpected paths fail. A custom role is allowed only under
+`.voktty/team/roles/` with the roster's role-name convention. Unassigned
+custom roles and factual project documents do not enter this inventory.
+The current manifest defines the inventory; other template inventories need
+explicit migration or version support rather than an inferred file list.
+
+Hashes cover actual observed UTF-8 bytes without newline normalization, not
+hashes declared by `kit.lock.json`. Each file is capped at 256 KiB and the
+aggregate at 1 MiB; NUL and invalid Unicode are rejected. Snapshots are capped
+at 2 MiB of serialized JSON and 128 observations. Missing bases cannot silently
+produce a trusted partial fingerprint. Native gathering must authorize and
+canonicalize every path before reading; these pure functions cannot prove
+where an observation came from or whether a symlink remains unchanged.
+
+The aggregate SHA-256 input begins with `voktty-memory-instructions-v1` and
+NUL. Fields use the project-identity framing: unsigned 32-bit big-endian UTF-8
+byte length followed by the bytes. Fields are the assigned role path (empty
+when absent), decimal record count, then path, kind and file SHA-256 (empty
+for an absent root file) for each record in ASCII path order. The returned
+record list uses `file` or `absent` and a lowercase SHA-256 or null. Role
+assignment and root-link presence affect trust even when other files match.
+Concurrent Web Crypto hashes settle together before a failure is propagated.
+
+`buildMemoryContext` and `build_memory_context` accept schema 1 identity,
+policy, configuration, instruction observations, PROJECT/CONTEXT observations
+and an optional plan metadata observation. Identity, use and configuration
+are validated by their existing contracts when needed. A disabled session
+does not hash or construct a packet. Eligible preparation derives its project
+key, checks the requested binding, recomputes the actual instruction digest
+and applies policy again. A caller's claimed digest cannot hide changed
+instructions. Denial returns no packet. This is a pure preparation decision,
+not native authorization, provider startup or a delivery acknowledgement.
+
+The delivered text starts with the shared hierarchy statement in
+`contracts/memory-context-header.txt`, followed by one JSON object. It contains
+the root, project identity, language, instruction digest, optional role,
+content state, explicit pointers and three or four sections. Full INIT text
+has a 12 KiB serialized-string cap, an assigned role 4 KiB, and PROJECT and
+CONTEXT 3 KiB each. An instruction that does not fit becomes a pointer, never
+a partial instruction or an unmeasured full-text fallback. Factual sections
+may use explicitly labeled prefixes. These are extractive context, not AI
+summaries or proof of analysis. Pointers do not grant permission to read files.
+
+Every section also fits the remaining total budget. The complete header,
+metadata, JSON escaping and text together stay within 24 KiB UTF-8; clipping
+preserves Unicode scalars. A digest covers the exact delivered bytes. Missing
+or blocked PROJECT/CONTEXT reads fail. Empty or matching current seed content
+is `initial`; other text is `available` only relative to known current seeds,
+or `unknown` when the seed version/values cannot be established. None of these
+states means that an agent understands the project. An unavailable optional
+plan is omitted with `KIT_CONTEXT_PLAN_UNAVAILABLE`.
+
+Context input JSON is capped at 4 MiB, with the existing 16,384-node and Unicode
+guards; PROJECT/CONTEXT each retain the 256 KiB text cap. Existing parsers keep
+their previous default document limits. Instruction verification may inspect
+the bounded base inventory, but only the selected sections enter model context.
+The packet contains no roster, archive, mailbox, task or session contents.
+Native readers, freshness/lifetime guards, local consent storage, adapter
+delivery and resume/compaction receipts remain pending. Existing VOKTTY.md
+memory loading and approvals remain unchanged.
+
+`conformance/memory-context.json` fixes shared fingerprints and packet byte
+hashes for both cores, including initial seeds, role changes, 100 KiB INIT,
+oversized roles, escaped Unicode, explicit plan pointers and denied use.
+
 ## Memory scope and project identity
 
 `memoryProjectKey` and `memory_project_key` hash trusted native identity facts
