@@ -311,7 +311,7 @@ guards; PROJECT/CONTEXT each retain the 256 KiB text cap. Existing parsers keep
 their previous default document limits. Instruction verification may inspect
 the bounded base inventory, but only the selected sections enter model context.
 The packet contains no roster, archive, mailbox, task or session contents.
-Native readers, freshness/lifetime guards, local consent storage, adapter
+Native readers, freshness/lifetime guards, local consent-store wiring, adapter
 delivery and resume/compaction receipts remain pending. Existing VOKTTY.md
 memory loading and approvals remain unchanged.
 
@@ -340,7 +340,7 @@ the existing canonical-to-display conversion after native resolution. SSH
 identity must include the captured profile and actual connection binding;
 WSL must distinguish distributions, and Docker must distinguish engine,
 container and user. Presentation scope keys alone are insufficient. Adapter
-factories and installation-ID storage remain pending; repository files must
+factories and installation-ID integration remain pending; repository files must
 never supply these local identities. The same framing works independently of
 object-property order and cannot confuse adjacent field boundaries.
 
@@ -428,8 +428,16 @@ uses the core's Unicode and document-node guards. Session IDs contain at most
 256 ASCII letters, digits, dots, underscores, colons or hyphens. Digests contain
 exactly 64 lowercase hexadecimal characters. Output schema 1 contains the
 effective policy, context/capture booleans and a stable `KIT_MEMORY_*` reason.
-Native resolution, policy storage, instruction hashing and UI/CLI delivery
+Native resolution, policy-store wiring, instruction gathering and UI/CLI delivery
 remain pending; callers must construct facts from their owned native sources.
+
+The separate `voktty-memory-local` native library now provides bounded local
+installation-ID, policy and instruction-trust storage with OS file exclusion,
+atomic JSON replacement and revision checks. Its caller must own a private local
+application directory; no repository chooses that location. No session or capture
+grant is persisted. Store failures block use rather than reset preferences.
+See its crate README for the format, filesystem requirements and platform limits.
+Application/CLI wiring and native identity factories remain pending.
 
 ## Base integrity record
 
