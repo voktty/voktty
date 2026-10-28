@@ -269,6 +269,36 @@ pub(crate) struct Directory {
 }
 
 impl Directory {
+    pub(crate) fn create_private_state(&self, control: &ReadControl) -> Result<Self, ReadError> {
+        control.check()?;
+        let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
+        let name = OsStr::new(crate::bootstrap::PRIVATE_DIRECTORY);
+        let (file, state) = match open_kind(Some(parent), name, OpenKind::Directory) {
+            Ok(found) => found,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                control.check()?;
+                match open_kind(Some(parent), name, OpenKind::CreateDirectory) {
+                    Ok(created) => created,
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                        open_kind(Some(parent), name, OpenKind::Directory)
+                            .map_err(|_| ReadError::Io)?
+                    }
+                    Err(_) => return Err(ReadError::Io),
+                }
+            }
+            Err(_) => return Err(ReadError::Io),
+        };
+        if state.volume != self.state.volume {
+            return Err(ReadError::Unsupported);
+        }
+        control.check()?;
+        Ok(Self {
+            ancestors: vec![file],
+            path: self.path.join(name),
+            state,
+        })
+    }
+
     pub(crate) fn probe(&self, name: &OsStr) -> io::Result<Option<EntryKind>> {
         let parent = self.ancestors.last().ok_or(io::ErrorKind::InvalidInput)?;
         match open_kind(Some(parent), name, OpenKind::Metadata) {

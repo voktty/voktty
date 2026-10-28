@@ -17,6 +17,34 @@ relies on the application's private directory ACL. Links/reparse points at the
 selected directory and file entries are rejected; Unix also rejects hard-linked
 files and opens without following links or blocking on FIFOs.
 
+`create_private(parent, control)` explicitly creates or reopens only the fixed
+`project-memory` child of an existing native-owned application directory. The
+parent is supplied by the native application, never workspace configuration or
+an IPC path. It has the same local-filesystem and controlled-ancestor preconditions
+as `open`. Missing parents fail; it never recursively creates ancestor paths.
+Input is bounded to 4 KiB UTF-8 and 128 components. Relative paths, control bytes,
+parent traversal and unqualified network namespaces are refused before creation.
+
+The helper uses the existing no-follow directory handles. Unix uses `mkdirat`
+with mode `0700`, requires current-user ownership and no shared write access on
+the parent, and refuses group/other permissions on an existing child. It never
+repairs permissions or deletes an existing file or directory. Windows creates
+relative to its captured parent with `NtCreateFile` and inherits the parent's
+ACL; the native caller must qualify that private ACL and any existing child ACL.
+The helper is not a Windows ACL auditor. Both backends reject links/reparse
+points and cross-device/volume children, and compare the parent and child
+identities again before returning the store. Existing corrupt preferences stay
+untouched. Opening the directory never initializes identity or preferences.
+
+This synchronous helper checks cancellation and the original read deadline
+between operations; a kernel call is not interruptible. Errors can leave its
+created empty directory in place and never trigger a blind rollback. A future
+application bootstrap must resolve the native app directory and retain bounded
+worker ownership through settlement. It is not yet wired to startup, IPC or CLI.
+Linux tests cover creation, repeated and concurrent opens, explicit identity,
+corrupt records, failed inputs, links and permission refusal. Windows tests are
+only cross-compiled until native execution qualifies this path.
+
 `open` validates the directory; `load` never creates an installation identity.
 Only explicit `initialize` creates schema 1 `memory-local.json` if absent.
 Repeated initialization preserves the UUID. A new installation gets a different

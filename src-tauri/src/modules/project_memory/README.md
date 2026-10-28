@@ -42,5 +42,9 @@ returned observation; successful `finish` only validates its own delivery point.
 Selection mutation is synchronous and requires exclusive owner access, with no
 lock held across worker awaits. No native presentation is wired to this owner yet.
 
-Private-state bootstrap, narrow ancestor consent, publication workers and platform
-runtime qualification remain pending.
+The local storage crate now provides `LocalMemoryStore::create_private` for the
+fixed memory child of an existing, qualified native application directory. It
+does not initialize identity or choose that parent. Resolving the native app
+directory, qualifying its filesystem and ACLs, and owning bootstrap work remain
+application integration tasks. Narrow ancestor consent, publication workers and
+platform runtime qualification also remain pending.

@@ -46,6 +46,40 @@ fn open_at(parent: &File, name: &OsStr, directory: bool) -> io::Result<File> {
 }
 
 impl Directory {
+    pub(crate) fn create_private_state(&self, control: &ReadControl) -> Result<Self, ReadError> {
+        control.check()?;
+        let parent = self.file.metadata().map_err(|_| ReadError::Io)?;
+        if !crate::owned_and_not_shared_writable(&parent) {
+            return Err(ReadError::Denied);
+        }
+        let name = OsStr::new(crate::bootstrap::PRIVATE_DIRECTORY);
+        let file = match open_at(&self.file, name, true) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let name = CString::new(name.as_bytes()).map_err(|_| ReadError::InvalidInput)?;
+                control.check()?;
+                if unsafe { libc::mkdirat(self.file.as_raw_fd(), name.as_ptr(), 0o700) } != 0
+                    && io::Error::last_os_error().kind() != io::ErrorKind::AlreadyExists
+                {
+                    return Err(ReadError::Io);
+                }
+                self.file.sync_all().map_err(|_| ReadError::Io)?;
+                open_at(&self.file, OsStr::from_bytes(name.as_bytes()), true)
+                    .map_err(|_| ReadError::Io)?
+            }
+            Err(_) => return Err(ReadError::Io),
+        };
+        let metadata = file.metadata().map_err(|_| ReadError::Io)?;
+        if !crate::owned_and_not_shared_writable(&metadata) || metadata.mode() & 0o077 != 0 {
+            return Err(ReadError::Denied);
+        }
+        if metadata.dev() != self.metadata.dev() {
+            return Err(ReadError::Unsupported);
+        }
+        control.check()?;
+        Ok(Self { file, metadata })
+    }
+
     pub(crate) fn create_text(
         &self,
         root: &Path,

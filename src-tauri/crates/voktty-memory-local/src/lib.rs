@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+mod bootstrap;
 mod discovery;
 pub mod path_policy;
 mod publication;
