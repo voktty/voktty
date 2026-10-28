@@ -1,0 +1,994 @@
+{
+  "schema": 1,
+  "text": [
+    {
+      "name": "unicode separator in heading",
+      "text": "## A B\n- One",
+      "heading": "A B",
+      "expected": {
+        "bytes": 14,
+        "chars": 12,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": 1,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "unicode separator in fence info",
+      "text": "```a b\n[T-9]\n```\n[T-1]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 24,
+        "chars": 22,
+        "ids": [
+          {
+            "id": "T-1",
+            "state": "open",
+            "line": 4
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "title and list are not closure metadata",
+      "text": "# Plan: closed\n1.\tState: closed\n- State: closed",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 47,
+        "chars": 47,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "empty",
+      "text": "",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 0,
+        "chars": 0,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "unicode scalars and CRLF",
+      "text": "é😀\r\n",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 8,
+        "chars": 4,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "item occurrences remain conservative",
+      "text": "- [T-1] Work [Q-2 done]\n[D-3]\n[T-1 done]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 40,
+        "chars": 40,
+        "ids": [
+          {
+            "id": "T-1",
+            "state": "open",
+            "line": 1
+          },
+          {
+            "id": "Q-2",
+            "state": "done",
+            "line": 1
+          },
+          {
+            "id": "D-3",
+            "state": "open",
+            "line": 2
+          },
+          {
+            "id": "T-1",
+            "state": "done",
+            "line": 3
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "fenced examples ignored",
+      "text": "```md\n[T-99]\n### M1: example · done\n```\n[T-2]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 46,
+        "chars": 45,
+        "ids": [
+          {
+            "id": "T-2",
+            "state": "open",
+            "line": 5
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "longer fence needs full closing",
+      "text": "````\n[T-99]\n```\n[T-98]\n````\n[Q-1]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 33,
+        "chars": 33,
+        "ids": [
+          {
+            "id": "Q-1",
+            "state": "open",
+            "line": 6
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "tilde fence",
+      "text": "~~~\n[T-9]\n~~~\n[D-1 done]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 24,
+        "chars": 24,
+        "ids": [
+          {
+            "id": "D-1",
+            "state": "done",
+            "line": 4
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "inline code and comments",
+      "text": "`[T-9]` [T-1] <!-- [Q-9] -->\n<!--\n[D-9]\n--> [D-2]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 49,
+        "chars": 49,
+        "ids": [
+          {
+            "id": "T-1",
+            "state": "open",
+            "line": 1
+          },
+          {
+            "id": "D-2",
+            "state": "open",
+            "line": 4
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "different backtick lengths",
+      "text": "``[T-9] ` x`` [T-2]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 19,
+        "chars": 19,
+        "ids": [
+          {
+            "id": "T-2",
+            "state": "open",
+            "line": 1
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "unclosed fence",
+      "text": "## Up next\n- [T-1] work\n```\n[T-9]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 33,
+        "chars": 33,
+        "ids": [
+          {
+            "id": "T-1",
+            "state": "open",
+            "line": 2
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": 1,
+        "warnings": [
+          "unclosed-fence"
+        ],
+        "complete": false
+      }
+    },
+    {
+      "name": "unclosed comment",
+      "text": "[T-1] <!--\n[Q-2]",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 16,
+        "chars": 16,
+        "ids": [
+          {
+            "id": "T-1",
+            "state": "open",
+            "line": 1
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [
+          "unclosed-comment"
+        ],
+        "complete": false
+      }
+    },
+    {
+      "name": "next root list",
+      "text": "## Up next\n- [T-1] work\n  - nested\n1. Other\n## Waiting\n- Waiting",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 64,
+        "chars": 64,
+        "ids": [
+          {
+            "id": "T-1",
+            "state": "open",
+            "line": 2
+          }
+        ],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": 2,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "localized heading",
+      "text": "## Siguiente ##\n- Trabajo\n## Otra\n- No",
+      "heading": "Siguiente",
+      "expected": {
+        "bytes": 38,
+        "chars": 38,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": 1,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "missing localized heading",
+      "text": "## Siguiente\n- Trabajo",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 22,
+        "chars": 22,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "duplicate next sections",
+      "text": "## Up next\n- One\n## Up next\n- Two",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 33,
+        "chars": 33,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [
+          "duplicate-up-next"
+        ],
+        "complete": false
+      }
+    },
+    {
+      "name": "plan state in localized metadata",
+      "text": "# Plan: tema\nFecha: 2026-10-28 · Estado: **waiting**\n## Objetivo\nTexto",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 71,
+        "chars": 70,
+        "ids": [],
+        "planState": "waiting",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "explicit closure only",
+      "text": "# Plan\nState: closed 2026-10-28\n## Work\n### M1: first · done\n### M2: second · in progress · ~1h",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 98,
+        "chars": 95,
+        "ids": [],
+        "planState": "closed",
+        "milestones": [
+          {
+            "id": "M1",
+            "state": "done",
+            "line": 4
+          },
+          {
+            "id": "M2",
+            "state": "in progress",
+            "line": 5
+          }
+        ],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "dated milestone",
+      "text": "# Plan\nState: open\n## Work\n### M1: first · done 2026-10-28",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 59,
+        "chars": 58,
+        "ids": [],
+        "planState": "open",
+        "milestones": [
+          {
+            "id": "M1",
+            "state": "done",
+            "line": 4
+          }
+        ],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "prose is not plan metadata",
+      "text": "# Plan\n## Goal\nState: closed\n> State: closed",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 44,
+        "chars": 44,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "conflicting states",
+      "text": "# Plan\nState: open\nEstado: **closed**",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 37,
+        "chars": 37,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [
+          "conflicting-plan-state"
+        ],
+        "complete": false
+      }
+    },
+    {
+      "name": "quoted state is not metadata",
+      "text": "# Plan\n> State: closed",
+      "heading": "Up next",
+      "expected": {
+        "bytes": 22,
+        "chars": 22,
+        "ids": [],
+        "planState": "unknown",
+        "milestones": [],
+        "upNext": null,
+        "warnings": [],
+        "complete": true
+      }
+    }
+  ],
+  "measurement": [
+    {
+      "name": "disabled limits",
+      "limits": {},
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [],
+        "complete": true,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "unicode exact limit",
+      "limits": {
+        "CONTEXT.md": {
+          "maxChars": 2
+        }
+      },
+      "documents": {
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "😀é"
+        }
+      },
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "CONTEXT.md",
+            "metric": "chars",
+            "value": 2,
+            "limit": 2,
+            "status": "ok"
+          }
+        ],
+        "complete": true,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "overflow preserves raw CRLF",
+      "limits": {
+        "CONTEXT.md": {
+          "maxChars": 2
+        }
+      },
+      "documents": {
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "é\r\n"
+        }
+      },
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "CONTEXT.md",
+            "metric": "chars",
+            "value": 3,
+            "limit": 2,
+            "status": "exceeded"
+          }
+        ],
+        "complete": true,
+        "exceeded": true
+      }
+    },
+    {
+      "name": "absence is unknown",
+      "limits": {
+        "CONTEXT.md": {
+          "maxChars": 2
+        }
+      },
+      "documents": {
+        "CONTEXT.md": {
+          "kind": "absent"
+        }
+      },
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "CONTEXT.md",
+            "metric": "chars",
+            "value": null,
+            "limit": 2,
+            "status": "unknown"
+          }
+        ],
+        "complete": false,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "blocked read is unknown",
+      "limits": {
+        "PROJECT.md": {
+          "maxChars": 2
+        }
+      },
+      "documents": {
+        "PROJECT.md": {
+          "kind": "blocked"
+        }
+      },
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "PROJECT.md",
+            "metric": "chars",
+            "value": null,
+            "limit": 2,
+            "status": "unknown"
+          }
+        ],
+        "complete": false,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "up next exceeds",
+      "limits": {
+        "plans/TRACKING.md": {
+          "maxChars": 100,
+          "maxUpNext": 1
+        }
+      },
+      "documents": {
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": "## Up next\n- One\n- Two"
+        }
+      },
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "plans/TRACKING.md",
+            "metric": "chars",
+            "value": 22,
+            "limit": 100,
+            "status": "ok"
+          },
+          {
+            "path": "plans/TRACKING.md",
+            "metric": "up-next",
+            "value": 2,
+            "limit": 1,
+            "status": "exceeded"
+          }
+        ],
+        "complete": true,
+        "exceeded": true
+      }
+    },
+    {
+      "name": "unknown section cannot pass",
+      "limits": {
+        "plans/TRACKING.md": {
+          "maxChars": 100,
+          "maxUpNext": 1
+        }
+      },
+      "documents": {
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": "## Otra\n- Trabajo"
+        }
+      },
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "plans/TRACKING.md",
+            "metric": "chars",
+            "value": 17,
+            "limit": 100,
+            "status": "ok"
+          },
+          {
+            "path": "plans/TRACKING.md",
+            "metric": "up-next",
+            "value": null,
+            "limit": 1,
+            "status": "unknown"
+          }
+        ],
+        "complete": false,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "empty handoffs exclude guides",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "README.md",
+            "createdAtMs": null
+          },
+          {
+            "name": ".gitkeep",
+            "createdAtMs": null
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "continuity/handoffs/",
+            "metric": "files",
+            "value": 0,
+            "limit": 1,
+            "status": "ok"
+          },
+          {
+            "path": "continuity/handoffs/",
+            "metric": "age-ms",
+            "value": 0,
+            "limit": 86400000,
+            "status": "ok"
+          }
+        ],
+        "complete": true,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "exact age cutoff",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "a.md",
+            "createdAtMs": 8553600000
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "continuity/handoffs/",
+            "metric": "files",
+            "value": 1,
+            "limit": 1,
+            "status": "ok"
+          },
+          {
+            "path": "continuity/handoffs/",
+            "metric": "age-ms",
+            "value": 86400000,
+            "limit": 86400000,
+            "status": "ok"
+          }
+        ],
+        "complete": true,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "strict age and count overflow",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "a.md",
+            "createdAtMs": 8553599999
+          },
+          {
+            "name": "b.MD",
+            "createdAtMs": 8640000000
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "continuity/handoffs/",
+            "metric": "files",
+            "value": 2,
+            "limit": 1,
+            "status": "exceeded"
+          },
+          {
+            "path": "continuity/handoffs/",
+            "metric": "age-ms",
+            "value": 86400001,
+            "limit": 86400000,
+            "status": "exceeded"
+          }
+        ],
+        "complete": true,
+        "exceeded": true
+      }
+    },
+    {
+      "name": "unknown time",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "a.md",
+            "createdAtMs": null
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "continuity/handoffs/",
+            "metric": "files",
+            "value": 1,
+            "limit": 1,
+            "status": "ok"
+          },
+          {
+            "path": "continuity/handoffs/",
+            "metric": "age-ms",
+            "value": null,
+            "limit": 86400000,
+            "status": "unknown"
+          }
+        ],
+        "complete": false,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "future time",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "a.md",
+            "createdAtMs": 8640000001
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "continuity/handoffs/",
+            "metric": "files",
+            "value": 1,
+            "limit": 1,
+            "status": "ok"
+          },
+          {
+            "path": "continuity/handoffs/",
+            "metric": "age-ms",
+            "value": null,
+            "limit": 86400000,
+            "status": "unknown"
+          }
+        ],
+        "complete": false,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "incomplete enumeration",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": false,
+        "files": []
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "expected": {
+        "measurements": [
+          {
+            "path": "continuity/handoffs/",
+            "metric": "files",
+            "value": null,
+            "limit": 1,
+            "status": "unknown"
+          },
+          {
+            "path": "continuity/handoffs/",
+            "metric": "age-ms",
+            "value": null,
+            "limit": 86400000,
+            "status": "unknown"
+          }
+        ],
+        "complete": false,
+        "exceeded": false
+      }
+    },
+    {
+      "name": "duplicate inventory",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "a.md",
+            "createdAtMs": 0
+          },
+          {
+            "name": "a.md",
+            "createdAtMs": 0
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "error": "KIT_MEMORY_INVENTORY_INVALID"
+    },
+    {
+      "name": "inventory name is not a path",
+      "limits": {
+        "continuity/handoffs/": {
+          "maxFiles": 1,
+          "maxAgeDays": 1
+        }
+      },
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": [
+          {
+            "name": "../a.md",
+            "createdAtMs": 0
+          }
+        ]
+      },
+      "nowMs": 8640000000,
+      "heading": "Up next",
+      "error": "KIT_MEMORY_INVENTORY_INVALID"
+    },
+    {
+      "name": "invalid clock",
+      "limits": {},
+      "documents": {},
+      "handoffs": {
+        "complete": true,
+        "files": []
+      },
+      "nowMs": 8640000000000001,
+      "heading": "Up next",
+      "error": "KIT_MEMORY_TIME_INVALID"
+    }
+  ]
+}

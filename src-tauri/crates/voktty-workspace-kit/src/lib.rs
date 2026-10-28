@@ -1,6 +1,7 @@
 mod deployment;
 mod document;
 mod lock;
+mod memory;
 mod template;
 mod validation;
 
@@ -35,5 +36,9 @@ pub use deployment::{
     RootLinks,
 };
 pub use lock::{parse_kit_lock, prepare_deployment, BaseIntegrity, KitLock, PreparedDeployment};
+pub use memory::{
+    inspect_memory_text, measure_memory, HandoffFile, HandoffInventory, ItemOccurrence,
+    MemoryMeasurement, MemoryMeasurements, MemoryText, MilestoneOccurrence,
+};
 pub use template::{render_template, FileKind, RenderedFile};
 pub use validation::{parse_agent_roster, parse_kit_config, PathCase};

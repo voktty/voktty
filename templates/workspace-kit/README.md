@@ -205,6 +205,43 @@ kit is available, the planned integration offers a reviewable update that
 only touches base files the project never changed. Content is never touched
 by an update.
 
+## Pure memory inspection and measurement
+
+Both cores inspect bounded text without filesystem access. Character counts
+use Unicode scalar values; bytes use UTF-8. CR and LF are counted separately.
+The scanner records each visible `[T-n]`, `[D-n]` and `[Q-n]` occurrence with
+its line and explicit `done` suffix. References remain conservative open
+occurrences; a later done mention does not erase an earlier open one. Fenced
+code, same-line inline code spans and HTML comments are excluded. This is a
+scanner for the kit conventions, not a general CommonMark parser or a semantic
+judgment about whether work is finished.
+
+Plan state comes only from labeled metadata before the first section, not
+from titles, list items, quotes, milestone completion or prose in later
+sections. Missing or conflicting metadata yields `unknown`. Milestone headings
+use `### M<n>: ... · pending|in progress|done`, with an optional ISO date after
+the state. Unclosed fences/comments and duplicate Up next sections are
+reported as warnings. Consumers must refuse semantic checks on incomplete
+inspection and treat unknown plan state conservatively.
+
+Measurement takes validated configuration, explicit document observations,
+handoff metadata and a supplied clock. Missing or blocked reads and incomplete
+inventories yield unknown values, never zero. Only configured limits are
+measured. The Up next heading is an explicit argument (default `Up next`), so
+translated headings must be supplied; an absent heading remains unknown.
+Its item count uses the least-indented unquoted list items in that section.
+Character measurement remains exact even when document structure is unknown.
+
+Handoff counts exclude README and non-Markdown files. Age compares the oldest
+reported timestamp against `maxAgeDays` in exact milliseconds, with no date
+rounding. Missing or future timestamps leave age unknown. Gathering code must
+report the timestamp source and enumeration completeness; this core does not
+infer them from Git or filesystem modification times. Text is capped at
+256 KiB, headings at 128 UTF-8 bytes and inventories at 20,000 unique names of
+at most 256 bytes. Names cannot contain separators or NUL. Results are point
+in time facts, not authorization, a compaction verdict or archive selection.
+Native readers, snapshot comparison and CLI/UI integration remain pending.
+
 ## Base integrity record
 
 The pure preparation API adds `.voktty/kit.lock.json` to the preview before

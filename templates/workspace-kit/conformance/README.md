@@ -59,3 +59,12 @@ Equivalent JSON number spellings for schema 1 are accepted. The lock contract
 also bounds paths and versions and rejects unknown properties, reserved paths,
 case aliases, malformed Unicode and unsupported schema versions. These tests
 do not make the record a source of filesystem authority or local trust.
+
+`memory.json` compares complete text-inspection and measurement outputs in both
+cores. Text cases supply `text`, an explicit `heading` and the complete expected
+result. Measurement cases render the baseline configuration, replace `limits`,
+and pass `documents`, `handoffs`, `nowMs` and `heading`; compare `expected` or
+the rejection `error`. Counts preserve Unicode scalars and raw newlines. Missing
+facts, incomplete inventories, future or absent timestamps, ambiguous sections
+and unknown plan states must not become successful absence checks. The corpus
+does not prove a filesystem scan complete or authorize compaction and archive.

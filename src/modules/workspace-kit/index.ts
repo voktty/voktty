@@ -9,6 +9,15 @@ export type {
 } from "@/modules/workspace-kit/lib/template";
 export { planKitDeployment } from "@/modules/workspace-kit/lib/deployment";
 export { prepareKitDeployment } from "@/modules/workspace-kit/lib/lock";
+export {
+  inspectMemoryText,
+  measureMemory,
+} from "@/modules/workspace-kit/lib/memory";
+export type {
+  MemoryText,
+  MemoryMeasurement,
+  HandoffInventory,
+} from "@/modules/workspace-kit/lib/memory";
 export type {
   KitPathFact,
   KitDeploymentEntry,
