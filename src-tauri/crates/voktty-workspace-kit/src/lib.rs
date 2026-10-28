@@ -1,3 +1,4 @@
+mod deployment;
 mod document;
 mod template;
 mod validation;
@@ -28,5 +29,9 @@ pub fn resource(source: &str) -> Option<&'static str> {
         .map(|(_, text)| *text)
 }
 
+pub use deployment::{
+    plan_deployment, DeploymentAction, DeploymentEntry, DeploymentPlan, DeploymentReason, PathFact,
+    RootLinks,
+};
 pub use template::{render_template, FileKind, RenderedFile};
 pub use validation::{parse_agent_roster, parse_kit_config, PathCase};

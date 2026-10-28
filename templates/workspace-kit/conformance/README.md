@@ -38,3 +38,13 @@ optional root links. Each valid case must match its complete ordered file
 list, roles and byte hashes; a changed template requires a reviewed fixture
 update. These checks do not certify native deployment, filesystem authority
 or process launching.
+
+`deployment.json` describes complete pure deployment previews against explicit
+path facts (`absent`, readable `file`, or `blocked`). Both cores compare every
+ordered entry, expected and proposed text, action, reason and publication flag.
+Root links require separate opt-ins. Missing facts reject the preview, while
+blocked paths and ambiguous marked blocks remain conflicts. The fixtures cover
+UTF-8 and CRLF preservation and migration of a wildcard ignore to an allowlist.
+These observations do not authorize writes or certify that a filesystem has
+remained unchanged. A native writer must revalidate them under its destination
+exclusion before publishing the kit marker.

@@ -178,6 +178,10 @@ conflicting files; it does not write files, grant trust or enable memory.
 The reusable `voktty-workspace-kit` Rust crate embeds the same manifest and
 source files at build time, without a webview or runtime filesystem reads.
 Native deployment and CLI command integration remain pending.
+The native pure deployment preview now uses the same explicit observations,
+root-link choices and conflict rules as the frontend. Both cores run the full
+expected previews in `conformance/deployment.json`. A publishable preview is
+not an IO authorization or proof of exclusive access to the destination.
 
 The core validates configuration and rosters against the shipped JSON
 schemas, then checks matching placeholder values, effective runtimes and

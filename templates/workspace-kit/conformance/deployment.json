@@ -1,0 +1,1563 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": ".voktty/kit.json",
+      "kind": "content",
+      "text": "{\"schema\":1}\n"
+    },
+    {
+      "path": ".voktty/INIT.md",
+      "kind": "base",
+      "text": "Read rules.\n"
+    },
+    {
+      "path": ".voktty/.gitignore",
+      "kind": "base",
+      "text": "state/\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "link",
+      "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "link",
+      "text": "@AGENTS.md\n"
+    }
+  ],
+  "cases": [
+    {
+      "name": "empty directory opts out of root edits",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "both root links are explicit opt ins",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": true
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": "CLAUDE.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "@AGENTS.md\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "missing observation",
+      "facts": {},
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "error": "KIT_DEPLOYMENT_OBSERVATION_MISSING"
+    },
+    {
+      "name": "blocked observation",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "blocked"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "conflict",
+            "reason": "unavailable",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "changed content remains conflict",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "file",
+          "text": "User context"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "User context",
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "identical files skip",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "file",
+          "text": "Read rules.\n"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "skip",
+            "reason": "identical",
+            "expected": "Read rules.\n",
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "wildcard migrates to exact allowlist",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "file",
+          "text": "﻿ * \r\n"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "migrate",
+            "reason": "private-ignore",
+            "expected": "﻿ * \r\n",
+            "proposed": "# Preserve privacy of existing and unknown .voktty data.\n*\n!/.gitignore\n!/INIT.md\n!/kit.json\n!/kit.lock.json\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "migrated ignore is stable",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "file",
+          "text": "# Preserve privacy of existing and unknown .voktty data.\n*\n!/.gitignore\n!/INIT.md\n!/kit.json\n!/kit.lock.json\n"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "skip",
+            "reason": "identical",
+            "expected": "# Preserve privacy of existing and unknown .voktty data.\n*\n!/.gitignore\n!/INIT.md\n!/kit.json\n!/kit.lock.json\n",
+            "proposed": "# Preserve privacy of existing and unknown .voktty data.\n*\n!/.gitignore\n!/INIT.md\n!/kit.json\n!/kit.lock.json\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "custom ignore is conflict",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "file",
+          "text": "private/\n"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "private/\n",
+            "proposed": "state/\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "marked block preserves surrounding UTF8 and CRLF",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "# Own rules\r\nKeep é 😀.\r\n\r\n<!-- voktty-workspace-kit:start -->\nOld\n<!-- voktty-workspace-kit:end -->\r\nTail"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "migrate",
+            "reason": "root-link",
+            "expected": "# Own rules\r\nKeep é 😀.\r\n\r\n<!-- voktty-workspace-kit:start -->\nOld\n<!-- voktty-workspace-kit:end -->\r\nTail",
+            "proposed": "# Own rules\r\nKeep é 😀.\r\n\r\n<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\r\nTail"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "existing instructions append once",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "Own rules"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "migrate",
+            "reason": "root-link",
+            "expected": "Own rules",
+            "proposed": "Own rules\n\n<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "ambiguous markers 0",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "Quoted <!-- voktty-workspace-kit:start -->\n<!-- voktty-workspace-kit:end -->"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "Quoted <!-- voktty-workspace-kit:start -->\n<!-- voktty-workspace-kit:end -->",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "ambiguous markers 1",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "<!-- voktty-workspace-kit:start -->\n<!-- voktty-workspace-kit:end --> trailing"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "<!-- voktty-workspace-kit:start -->\n<!-- voktty-workspace-kit:end --> trailing",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "ambiguous markers 2",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "<!-- voktty-workspace-kit:start -->"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "<!-- voktty-workspace-kit:start -->",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "ambiguous markers 3",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "<!-- voktty-workspace-kit:end -->"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "<!-- voktty-workspace-kit:end -->",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "ambiguous markers 4",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "<!-- voktty-workspace-kit:end -->\n<!-- voktty-workspace-kit:start -->"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "<!-- voktty-workspace-kit:end -->\n<!-- voktty-workspace-kit:start -->",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "ambiguous markers 5",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "<!-- voktty-workspace-kit:start -->\n<!-- voktty-workspace-kit:end -->\n<!-- voktty-workspace-kit:start -->"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "conflict",
+            "reason": "different",
+            "expected": "<!-- voktty-workspace-kit:start -->\n<!-- voktty-workspace-kit:end -->\n<!-- voktty-workspace-kit:start -->",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "identical marked block skips",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": false
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "skip",
+            "reason": "identical",
+            "expected": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n",
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "dangling claude link blocks",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": true
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "CLAUDE.md",
+            "action": "conflict",
+            "reason": "missing-link-target",
+            "expected": null,
+            "proposed": "@AGENTS.md\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": false
+      }
+    },
+    {
+      "name": "existing agents permits claude link",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "Own"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": true
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "CLAUDE.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "@AGENTS.md\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "existing claude pointer # Rules\n@AGENTS.md\n",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "file",
+          "text": "# Rules\n@AGENTS.md\n"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": true
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "CLAUDE.md",
+            "action": "skip",
+            "reason": "identical",
+            "expected": "# Rules\n@AGENTS.md\n",
+            "proposed": "# Rules\n@AGENTS.md\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "existing claude pointer See .voktty/INIT.md.",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "file",
+          "text": "See .voktty/INIT.md."
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": true
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "CLAUDE.md",
+            "action": "skip",
+            "reason": "identical",
+            "expected": "See .voktty/INIT.md.",
+            "proposed": "See .voktty/INIT.md."
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "claude append retains original bytes",
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "file",
+          "text": "Own\r\n"
+        }
+      },
+      "rootLinks": {
+        "agents": true,
+        "claude": true
+      },
+      "expected": {
+        "entries": [
+          {
+            "path": ".voktty/INIT.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "Read rules.\n"
+          },
+          {
+            "path": ".voktty/.gitignore",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "state/\n"
+          },
+          {
+            "path": "AGENTS.md",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+          },
+          {
+            "path": "CLAUDE.md",
+            "action": "migrate",
+            "reason": "root-link",
+            "expected": "Own\r\n",
+            "proposed": "Own\r\n\n@AGENTS.md\n"
+          },
+          {
+            "path": ".voktty/kit.json",
+            "action": "create",
+            "reason": "missing",
+            "expected": null,
+            "proposed": "{\"schema\":1}\n"
+          }
+        ],
+        "canPublish": true
+      }
+    },
+    {
+      "name": "invalid or duplicate path .voktty/Sessions/id.json",
+      "files": [
+        {
+          "path": ".voktty/kit.json",
+          "kind": "content",
+          "text": "{\"schema\":1}\n"
+        },
+        {
+          "path": ".voktty/INIT.md",
+          "kind": "base",
+          "text": "Read rules.\n"
+        },
+        {
+          "path": ".voktty/.gitignore",
+          "kind": "base",
+          "text": "state/\n"
+        },
+        {
+          "path": "AGENTS.md",
+          "kind": "link",
+          "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+        },
+        {
+          "path": "CLAUDE.md",
+          "kind": "link",
+          "text": "@AGENTS.md\n"
+        },
+        {
+          "path": ".voktty/Sessions/id.json",
+          "kind": "content",
+          "text": ""
+        }
+      ],
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "error": "KIT_DEPLOYMENT_PATH_INVALID"
+    },
+    {
+      "name": "invalid or duplicate path .voktty/../outside",
+      "files": [
+        {
+          "path": ".voktty/kit.json",
+          "kind": "content",
+          "text": "{\"schema\":1}\n"
+        },
+        {
+          "path": ".voktty/INIT.md",
+          "kind": "base",
+          "text": "Read rules.\n"
+        },
+        {
+          "path": ".voktty/.gitignore",
+          "kind": "base",
+          "text": "state/\n"
+        },
+        {
+          "path": "AGENTS.md",
+          "kind": "link",
+          "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+        },
+        {
+          "path": "CLAUDE.md",
+          "kind": "link",
+          "text": "@AGENTS.md\n"
+        },
+        {
+          "path": ".voktty/../outside",
+          "kind": "content",
+          "text": ""
+        }
+      ],
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "error": "KIT_DEPLOYMENT_PATH_INVALID"
+    },
+    {
+      "name": "invalid or duplicate path C:/outside",
+      "files": [
+        {
+          "path": ".voktty/kit.json",
+          "kind": "content",
+          "text": "{\"schema\":1}\n"
+        },
+        {
+          "path": ".voktty/INIT.md",
+          "kind": "base",
+          "text": "Read rules.\n"
+        },
+        {
+          "path": ".voktty/.gitignore",
+          "kind": "base",
+          "text": "state/\n"
+        },
+        {
+          "path": "AGENTS.md",
+          "kind": "link",
+          "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+        },
+        {
+          "path": "CLAUDE.md",
+          "kind": "link",
+          "text": "@AGENTS.md\n"
+        },
+        {
+          "path": "C:/outside",
+          "kind": "content",
+          "text": ""
+        }
+      ],
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "error": "KIT_DEPLOYMENT_PATH_INVALID"
+    },
+    {
+      "name": "invalid or duplicate path .voktty/a\\b",
+      "files": [
+        {
+          "path": ".voktty/kit.json",
+          "kind": "content",
+          "text": "{\"schema\":1}\n"
+        },
+        {
+          "path": ".voktty/INIT.md",
+          "kind": "base",
+          "text": "Read rules.\n"
+        },
+        {
+          "path": ".voktty/.gitignore",
+          "kind": "base",
+          "text": "state/\n"
+        },
+        {
+          "path": "AGENTS.md",
+          "kind": "link",
+          "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+        },
+        {
+          "path": "CLAUDE.md",
+          "kind": "link",
+          "text": "@AGENTS.md\n"
+        },
+        {
+          "path": ".voktty/a\\b",
+          "kind": "content",
+          "text": ""
+        }
+      ],
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "error": "KIT_DEPLOYMENT_PATH_INVALID"
+    },
+    {
+      "name": "invalid or duplicate path .voktty/init.md",
+      "files": [
+        {
+          "path": ".voktty/kit.json",
+          "kind": "content",
+          "text": "{\"schema\":1}\n"
+        },
+        {
+          "path": ".voktty/INIT.md",
+          "kind": "base",
+          "text": "Read rules.\n"
+        },
+        {
+          "path": ".voktty/.gitignore",
+          "kind": "base",
+          "text": "state/\n"
+        },
+        {
+          "path": "AGENTS.md",
+          "kind": "link",
+          "text": "<!-- voktty-workspace-kit:start -->\nRead .voktty/INIT.md.\n<!-- voktty-workspace-kit:end -->\n"
+        },
+        {
+          "path": "CLAUDE.md",
+          "kind": "link",
+          "text": "@AGENTS.md\n"
+        },
+        {
+          "path": ".voktty/init.md",
+          "kind": "content",
+          "text": ""
+        }
+      ],
+      "facts": {
+        ".voktty/kit.json": {
+          "kind": "absent"
+        },
+        ".voktty/INIT.md": {
+          "kind": "absent"
+        },
+        ".voktty/.gitignore": {
+          "kind": "absent"
+        },
+        "AGENTS.md": {
+          "kind": "absent"
+        },
+        "CLAUDE.md": {
+          "kind": "absent"
+        }
+      },
+      "rootLinks": {
+        "agents": false,
+        "claude": false
+      },
+      "error": "KIT_DEPLOYMENT_PATH_INVALID"
+    }
+  ]
+}
