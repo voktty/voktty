@@ -6,6 +6,7 @@ fn application() -> NativeMemoryApplication {
     NativeMemoryApplication {
         storage: Err(ReadError::Unavailable.into()),
         owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
+        bindings: Mutex::new(HashMap::new()),
     }
 }
 
@@ -29,6 +30,49 @@ fn native_resource_lookup_and_close_preserve_exact_window_ownership() {
     let replacement = app.register_window("main").unwrap();
     drop(owner);
     assert!(app.open_presentation(&replacement).is_ok());
+}
+
+#[test]
+fn native_window_binding_checks_resource_identity_even_when_labels_and_ids_match() {
+    let app = application();
+    let original = app.register_window("main").unwrap();
+    let mut original_table = ResourceTable::default();
+    let id = original_table.add_arc(original.clone());
+    assert!(app
+        .resolve_binding(&original_table, id, &Arc::downgrade(&original))
+        .is_ok());
+    let replacement = app.register_window("main").unwrap();
+    assert!(app
+        .resolve_binding(&original_table, id, &Arc::downgrade(&original))
+        .is_err());
+    assert!(app
+        .resolve_binding(&original_table, id, &Arc::downgrade(&replacement))
+        .is_err());
+    let mut replacement_table = ResourceTable::default();
+    let replacement_id = replacement_table.add_arc(replacement.clone());
+    assert!(app
+        .resolve_binding(
+            &replacement_table,
+            replacement_id,
+            &Arc::downgrade(&replacement)
+        )
+        .is_ok());
+    original_table.close(id).unwrap();
+    assert!(app
+        .resolve_binding(
+            &replacement_table,
+            replacement_id,
+            &Arc::downgrade(&replacement)
+        )
+        .is_ok());
+    replacement_table.close(replacement_id).unwrap();
+    assert!(app
+        .resolve_binding(
+            &replacement_table,
+            replacement_id,
+            &Arc::downgrade(&replacement)
+        )
+        .is_err());
 }
 
 #[test]

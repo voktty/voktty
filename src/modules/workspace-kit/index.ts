@@ -19,6 +19,11 @@ export type {
   MemoryContextResult,
 } from "@/modules/workspace-kit/lib/context";
 export { memoryProjectKey } from "@/modules/workspace-kit/lib/identity";
+export { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
+export type {
+  NativeMemorySelection,
+  NativeMemoryScope,
+} from "@/modules/workspace-kit/lib/nativeMemory";
 export { resolveMemoryScope } from "@/modules/workspace-kit/lib/scope";
 export type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
 export { evaluateMemoryUse } from "@/modules/workspace-kit/lib/policy";

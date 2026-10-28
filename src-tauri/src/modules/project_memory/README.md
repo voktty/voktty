@@ -22,8 +22,7 @@ them. Captured grants never widen when the registry changes. Retirement is
 cooperative and does not acknowledge cancellation of a blocked OS call.
 
 This Rust-only foundation grants no writes, instruction trust or session consent.
-Project observation is not started at startup or exposed through IPC, CLI or the
-common memory panel. Its owner must
+Project observation is not started at startup. Its owner must
 qualify the local filesystem and retire sources when selection changes; a local
 environment descriptor alone does not prove filesystem or transport ownership.
 Ancestor discovery outside captured roots remains incomplete until an explicit
@@ -41,7 +40,7 @@ until actual settlement. Receipts do not retain registry snapshots or sources.
 Callers must recheck `is_current` immediately before publishing a previously
 returned observation; successful `finish` only validates its own delivery point.
 Selection mutation is synchronous and requires exclusive owner access, with no
-lock held across worker awaits. No native presentation is wired to this owner yet.
+lock held across worker awaits. IPC presentations delegate to this owner.
 
 `NativeMemoryStorage::capture` obtains only Tauri's native `app_local_data_dir`
 path, without IO or a project/cwd fallback. Its `open` and explicit `initialize`
@@ -64,7 +63,7 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
-Ordinary open stays noncreating. Presentation/IPC wiring, narrow project-ancestor consent,
+Ordinary open stays noncreating. Panel wiring, narrow project-ancestor consent,
 publication workers and platform runtime qualification remain pending. This
 module still starts no filesystem work automatically.
 
@@ -100,6 +99,51 @@ Retirement suppresses delivery without rolling back admitted writes or releasing
 the native worker budget early. Native selection and discovery delegate to the
 existing authority checks. Window attachment belongs to native window creation,
 once per instance; future windows must attach their own resource. Settings and
-quick-composer windows are not memory presentations. No memory commands are
-registered for IPC yet, no resource IDs are delivered to JavaScript, and the
-common panel, initialization publication and CLI remain pending.
+quick-composer windows are not memory presentations. The common panel,
+initialization publication and CLI remain pending.
+
+## Observation IPC
+
+`project_memory_open` resolves the calling window's typed native resource and
+compares its exact identity with the native binding, rather than accepting a
+window label or filesystem grant from JavaScript. Bindings are pruned on native
+attachment and remain bounded by the 64-window registry. It returns a presentation
+handle containing a window-local resource ID and UUID token. Every command uses
+the caller's own resource table and validates that token; a closed or reused ID
+cannot authorize access or remove its replacement. Closing the resource retires
+its presentation even while an admitted command retains an Arc. The combined
+presentation registry remains capped at 256; retired workers retain their own
+four-slot budget through physical settlement.
+
+`project_memory_select` accepts that handle, a path, an explicit workspace
+environment and a monotonically increasing revision from 1 through JavaScript's
+maximum safe integer. A stale or repeated revision leaves the current selection
+intact. A fresh admitted revision retires the previous selection even if the
+destination fails validation. Only native-local environments are currently
+supported; other environments never fall back to local IO. The returned UUID is
+an ephemeral selection receipt. Selection does not authorize paths, initialize
+state or trust instructions.
+
+`project_memory_discover` requires the current selection receipt, opens existing
+private state without creating it, rechecks selection, and runs read-only scope
+discovery with the existing five-second ascending budget. Its schema-1 reply
+contains `scope`, the resolved `root` if available and `blockedCount`; raw facts,
+blocked paths, local preferences, installation identity and instructions remain
+native. Missing or invalid state is an error, never evidence of an absent kit.
+Errors contain a redacted `code`, not observed content or paths.
+
+`project_memory_initialize_local_state` is a separate explicit action under the
+same current selection. It prepares only the application's private state, never
+project files or a kit. Selection retirement before later stages prevents their
+admission; retirement after an admitted write suppresses delivery without
+promising rollback. Both operations revalidate before returning.
+
+The typed client in `workspace-kit/lib/nativeMemory.ts` starts no IPC until an
+explicit selection, captures its environment and maintains those revisions.
+Receipts belong to the exact client and selection; replacement, round trips and
+close suppress late results and errors. Late opening is closed by its original
+owner, cleanup is coalesced and failed cleanup remains retryable. A native result
+is an observation, not consent or proof that a model read the kit. Consumers must
+recheck `isCurrent` immediately before publishing an already returned result.
+No component,
+startup hook or agent invokes this client yet.

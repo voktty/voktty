@@ -351,6 +351,11 @@ pub fn run() {
         .manage(harness::remote_connections::RemoteConnections::default())
         .invoke_handler(tauri::generate_handler![
             bootstrap_status,
+            project_memory::commands::project_memory_open,
+            project_memory::commands::project_memory_close,
+            project_memory::commands::project_memory_select,
+            project_memory::commands::project_memory_discover,
+            project_memory::commands::project_memory_initialize_local_state,
             launch::launch_bootstrap,
             launch::launch_frontend_ready,
             launch::launch_acknowledge,

@@ -81,6 +81,7 @@ voktty-tool-policy = { path = "crates/voktty-tool-policy" }
 voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
 voktty-paths = { path = "crates/voktty-paths" }
 voktty-memory-local = { path = "crates/voktty-memory-local" }
+voktty-workspace-kit = { path = "crates/voktty-workspace-kit" }
 wake-core = { path = "crates/wake-core" }
 dirs = "7"
 log = "0.4"
@@ -140,7 +141,6 @@ russh = "0.54"
 russh-sftp = "2.4.0"
 
 [dev-dependencies]
-voktty-workspace-kit = { path = "crates/voktty-workspace-kit" }
 proptest = "1"
 tempfile = "3"
 http-body-util = "0.1"
