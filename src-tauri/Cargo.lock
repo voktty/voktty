@@ -9243,6 +9243,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "voktty-workspace-kit"
+version = "1.0.19"
+dependencies = [
+ "hex",
+ "jsonschema",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

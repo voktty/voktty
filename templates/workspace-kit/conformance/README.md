@@ -22,8 +22,9 @@ context, not guess it from a path.
 
 Custom validation issues carry stable `KIT_*` codes in their `message` field;
 presentation translates those codes. An optional `customCode` identifies an
-expected custom issue code in the corpus. Structural failures retain Zod's
-issue codes and field paths. Document-level failures do not echo the input
+expected custom issue code in the corpus. TypeScript structural failures retain
+Zod's issue codes; Rust uses `KIT_SCHEMA_VALIDATION`. Both retain field paths.
+Document-level failures do not echo the input
 text or a JSON parser's source excerpt.
 
 Structural JSON Schema checks alone cannot enforce all these cases. Names,
@@ -31,5 +32,9 @@ inherited runtime constraints, matching stored values, ownership overlap
 and Unicode scalar validity also require semantic checks. Lexical ownership
 does not resolve symlinks, grant filesystem access or approve a command.
 
-The TypeScript consumer runs this corpus. Rust must run the same cases when
-its implementation is added; native parity has not yet been verified.
+Both TypeScript and Rust run this corpus. `rendering.json` adds valid and
+invalid rendering inputs and SHA-256 hashes of every rendered file, including
+optional root links. Each valid case must match its complete ordered file
+list, roles and byte hashes; a changed template requires a reviewed fixture
+update. These checks do not certify native deployment, filesystem authority
+or process launching.

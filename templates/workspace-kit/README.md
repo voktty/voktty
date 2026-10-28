@@ -175,7 +175,9 @@ root links. The frontend core loads these resources on request, validates
 the inventory and renders placeholders, including JSON string escaping.
 Its deployment preview requires explicit path observations and preserves
 conflicting files; it does not write files, grant trust or enable memory.
-Native deployment and CLI packaging remain pending.
+The reusable `voktty-workspace-kit` Rust crate embeds the same manifest and
+source files at build time, without a webview or runtime filesystem reads.
+Native deployment and CLI command integration remain pending.
 
 The core validates configuration and rosters against the shipped JSON
 schemas, then checks matching placeholder values, effective runtimes and
@@ -188,8 +190,10 @@ Template version 1.1.0 adds the configuration schema and stores deployment
 placeholder values in `kit.json`. Schema 1 configurations without those
 values remain readable; an updater must ask for missing values rather than
 guessing them. `conformance/validation.json` records rendered-template cases
-for structural and semantic checks. Native execution of that corpus remains
-pending with the Rust implementation.
+for structural and semantic checks. Both cores execute that corpus and the
+whole-file hashes in `conformance/rendering.json`. Rust uses the existing
+JSON Schema engine with formats enabled and external retrieval disabled;
+project-provided schema links are never loaded.
 
 `kit.json` records the kit version a project was created from. When a newer
 kit is available, the planned integration offers a reviewable update that

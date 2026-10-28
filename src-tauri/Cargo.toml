@@ -18,6 +18,7 @@ members = [
 	"crates/voktty-remote",
 	"crates/voktty-tool-policy",
 	"crates/voktty-workspace-edit",
+	"crates/voktty-workspace-kit",
 	"crates/wake-core",
 ]
 default-members = [
@@ -31,6 +32,7 @@ default-members = [
 	"crates/voktty-remote",
 	"crates/voktty-tool-policy",
 	"crates/voktty-workspace-edit",
+	"crates/voktty-workspace-kit",
 	"crates/wake-core",
 ]
 resolver = "2"
