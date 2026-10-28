@@ -10,10 +10,12 @@ use voktty_workspace_kit::{
     InstructionFingerprint, Issue, PathFact, RootLinks,
 };
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 use crate::reader_unavailable as platform;
 #[cfg(unix)]
 use crate::reader_unix as platform;
+#[cfg(windows)]
+use crate::reader_windows as platform;
 use crate::{LocalMemorySnapshot, LocalMemoryStore, StoreError};
 
 static ACTIVE_READS: AtomicUsize = AtomicUsize::new(0);
@@ -146,7 +148,7 @@ pub struct NativeContextObservation {
 /// Keep remote/WSL/Docker selection in its native transport; never fall back here.
 pub struct LocalMemoryWorkspace<'a> {
     root: PathBuf,
-    root_id: (u64, u64),
+    root_id: (u64, u128),
     identity: Value,
     project_key: String,
     store: &'a LocalMemoryStore,
@@ -168,20 +170,29 @@ impl<'a> LocalMemoryWorkspace<'a> {
         if !access.allows_metadata(requested) {
             return Err(ReadError::Denied);
         }
+        platform::validate_requested_root(requested)?;
         let root = std::fs::canonicalize(requested).map_err(|_| ReadError::Io)?;
         control.check()?;
         if !access.allows_metadata(&root) {
             return Err(ReadError::Denied);
         }
+        if root.components().count() > 128
+            || root.to_str().ok_or(ReadError::InvalidInput)?.len() > 4096
+        {
+            return Err(ReadError::Limit);
+        }
         let directory = platform::Directory::open_root(&root, control)?;
         let local = store.load().map_err(ReadError::Store)?;
         control.check()?;
-        let canonical_root = root.to_str().ok_or(ReadError::InvalidInput)?;
+        let resolved = directory.canonical_root(&root)?;
+        resolved.to_str().ok_or(ReadError::InvalidInput)?;
+        let canonical_root = voktty_paths::canonical_display_path(&resolved);
         let identity = json!({
             "schema":1, "kind":"local", "machineId":local.installation_id(),
             "filesystemId":directory.filesystem_id(), "canonicalRoot":canonical_root,
         });
         let project_key = memory_project_key(&identity.to_string()).map_err(ReadError::Contract)?;
+        control.check()?;
         Ok(Self {
             root,
             root_id: directory.identity(),
@@ -285,7 +296,11 @@ impl<'a> LocalMemoryWorkspace<'a> {
                 ReadError::Cancelled | ReadError::Timeout => error,
                 _ => ReadError::StaleRoot,
             })?;
-        if directory.identity() != self.root_id {
+        let resolved = directory.canonical_root(&self.root)?;
+        control.check()?;
+        if directory.identity() != self.root_id
+            || voktty_paths::canonical_display_path(&resolved) != self.identity["canonicalRoot"]
+        {
             return Err(ReadError::StaleRoot);
         }
         Ok(directory)

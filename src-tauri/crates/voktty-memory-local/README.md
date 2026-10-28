@@ -3,7 +3,7 @@
 This native library stores an installation UUID, per-project use policy and
 accepted instruction digests outside repositories. It is separate from workspace
 filesystem authorization and the pure `voktty-workspace-kit` decision core.
-The initial Unix reader gathers exact project bytes through native authority.
+The local readers gather exact project bytes through native authority.
 No application startup, IPC command, CLI, provider or capture is wired to it yet.
 
 The native caller supplies an existing application state directory on a local
@@ -68,8 +68,8 @@ replacement and local locking do not claim network filesystem support.
 native `MemoryReadAccess` implementation. It does not initialize preferences or
 authorize a directory. Metadata authorization is checked before resolving the
 requested path and again for the canonical root. Identity comes from the stored
-installation UUID, the actual Unix device and the canonical execution root,
-using the shared project-key framing. The directory inode binds the reader's
+installation UUID, the actual Unix device or Windows volume and canonical root,
+using the shared project-key framing. The directory file identity binds the reader's
 lifetime; replacement of the root invalidates observations. Installation changes,
 store failures or preference revisions that change during a batch also invalidate
 the batch. Callers must capture transport ownership before choosing this API;
@@ -109,6 +109,54 @@ Observations are bounded point-in-time facts, not a transaction over the tree or
 proof of freshness at later delivery/publication. Revalidate current instruction
 bytes, scope, consent and destination under the appropriate native exclusion.
 Ancestry/descendant gathering, publication, App/CLI integration and transport
-ownership factories remain pending. Non-Unix readers explicitly return
-`Unsupported` without doing project IO; the Windows handle backend is still
-required. Linux behavior is tested; macOS and Android runtime checks are pending.
+ownership factories remain pending. Other platforms explicitly return
+`Unsupported` without doing project IO. Linux behavior is tested; Windows,
+macOS and Android runtime qualification remains pending.
+
+## Windows handle reader
+
+The Windows backend accepts absolute local disk paths, including verbatim disk
+paths. It rejects UNC, device/pipe namespaces, alternate data-stream root names
+and mapped network drives before canonicalizing project paths. The final path
+reported by the captured root handle must also name a local disk. These checks
+do not qualify network filesystems or grant transport ownership.
+
+The reader uses documented directory-relative
+[`NtCreateFile`](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)
+opens with exactly one component and `FILE_OPEN_REPARSE_POINT`, checking each
+returned entry for a reparse attribute before proceeding. It does not rely on
+absolute prefix checks or `OBJ_DONT_REPARSE`. The root drive is opened through
+its native DOS device name; subsequent lookup stays relative to captured handles.
+Directories request metadata/traverse access, files request read access, all
+handles are noninheritable, and none allow write/delete sharing. The objects stay
+owned until the batch ends. Sharing flags alone are not a no-reparse guarantee:
+attribute-only operations may bypass write sharing, so child lookup must remain
+relative to handles rather than reconstructing an absolute path.
+
+`FileCaseSensitiveInfo` selects native name-lookup case behavior per directory;
+unknown flags or unavailable queries fail, without guessing a case policy.
+[`FILE_ID_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
+provides the actual volume serial and full 128-bit file ID; legacy 64-bit IDs
+are not substituted. File type, link count, size, reparse/delete flags and
+creation/write/change timestamps are checked around reads. Both the requested
+path and the normalized opened-handle path need native read authorization before
+content is read and again afterward, including when names resolve through a case
+alias. Unsupported metadata
+queries fail rather than weaken identity or freshness checks. This requires
+a local Windows filesystem/version that implements these queries; older Windows,
+FAT, redirectors and third-party filesystems are not qualified.
+
+`GetFinalPathNameByHandleW` supplies normalized native root spelling. The shared
+dependency-free `voktty-paths` utility applies the app's existing display rules
+without changing case: Windows verbatim prefix removal and slash conversion,
+with literal backslashes preserved on Unix. `fs::to_canon` delegates to this same
+utility. Changing the captured root spelling invalidates the binding.
+Canonical roots are capped at 128 components and 4 KiB UTF-8.
+
+Nine Windows regression tests cover real identity/context bytes, preview,
+junctions/hardlinks, invalid text and size, authorization, root replacement,
+rename refusal while handles are owned, namespace refusal and cancellation.
+They cross-compile on Linux; that is not evidence of Windows runtime behavior.
+Run them on native Windows before claiming platform qualification. The junction
+fixture operates only on its own temporary directories and requires local
+filesystem support for mount-point reparse data.

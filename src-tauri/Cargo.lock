@@ -9132,6 +9132,7 @@ dependencies = [
  "voktty-collab-protocol",
  "voktty-companion-protocol",
  "voktty-control-protocol",
+ "voktty-paths",
  "voktty-remote-protocol",
  "voktty-tool-policy",
  "voktty-workspace-edit",
@@ -9202,9 +9203,14 @@ dependencies = [
  "serde_json",
  "tempfile",
  "uuid",
+ "voktty-paths",
  "voktty-workspace-kit",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "voktty-paths"
+version = "1.0.19"
 
 [[package]]
 name = "voktty-remote"

@@ -4,12 +4,16 @@ use std::io::{self, Read};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use crate::reader::{MemoryReadAccess, ReadControl, ReadError};
 use voktty_workspace_kit::PathFact;
 
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
+    Ok(())
+}
+
+pub(crate) fn validate_requested_root(_: &Path) -> Result<(), ReadError> {
     Ok(())
 }
 
@@ -58,8 +62,11 @@ impl Directory {
         Ok(Self { file, metadata })
     }
 
-    pub(crate) fn identity(&self) -> (u64, u64) {
-        (self.metadata.dev(), self.metadata.ino())
+    pub(crate) fn identity(&self) -> (u64, u128) {
+        (self.metadata.dev(), self.metadata.ino().into())
+    }
+    pub(crate) fn canonical_root(&self, root: &Path) -> Result<PathBuf, ReadError> {
+        Ok(root.to_path_buf())
     }
     pub(crate) fn filesystem_id(&self) -> String {
         format!("unix-device:{}", self.metadata.dev())

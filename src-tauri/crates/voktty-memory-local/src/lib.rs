@@ -11,10 +11,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 mod reader;
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 mod reader_unavailable;
 #[cfg(unix)]
 mod reader_unix;
+#[cfg(windows)]
+mod reader_windows;
 
 pub use reader::{
     LocalMemoryWorkspace, MemoryReadAccess, NativeContextObservation, ReadControl, ReadError,

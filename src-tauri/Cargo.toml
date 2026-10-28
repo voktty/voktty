@@ -20,6 +20,7 @@ members = [
 	"crates/voktty-workspace-edit",
 	"crates/voktty-workspace-kit",
 	"crates/voktty-memory-local",
+	"crates/voktty-paths",
 	"crates/wake-core",
 ]
 default-members = [
@@ -35,6 +36,7 @@ default-members = [
 	"crates/voktty-workspace-edit",
 	"crates/voktty-workspace-kit",
 	"crates/voktty-memory-local",
+	"crates/voktty-paths",
 	"crates/wake-core",
 ]
 resolver = "2"
@@ -77,6 +79,7 @@ voktty-companion-protocol = { path = "crates/voktty-companion-protocol" }
 voktty-remote-protocol = { path = "crates/voktty-remote-protocol" }
 voktty-tool-policy = { path = "crates/voktty-tool-policy" }
 voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
+voktty-paths = { path = "crates/voktty-paths" }
 wake-core = { path = "crates/wake-core" }
 dirs = "7"
 log = "0.4"

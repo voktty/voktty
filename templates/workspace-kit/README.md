@@ -444,7 +444,11 @@ and the stored installation UUID, and gathers bounded deployment/context facts
 using directory descriptors without following symlinks. It requires native read
 and metadata authority, rejects stale roots/preferences and invokes the shared
 fingerprint/configuration core. It does not resolve scope or publish a kit.
-Windows, authenticated remote readers and application integration remain pending.
+A Windows backend now opens one component relative to captured native handles,
+checks reparse attributes, full file IDs, volume identity and per-directory case
+behavior, and shares the app's canonical display conversion. Its regression tests
+cross-compile on Linux; native Windows runtime qualification remains pending.
+Authenticated remote readers and application integration remain pending.
 
 ## Base integrity record
 

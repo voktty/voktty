@@ -66,30 +66,11 @@ pub(super) fn is_network_path(_path: &Path) -> bool {
 /// The single canonical-to-display conversion: forward slashes, Windows
 /// verbatim `\\?\` prefix stripped. Route every such conversion through here.
 pub fn to_canon(p: impl AsRef<Path>) -> String {
-    let s = p.as_ref().to_string_lossy();
-    #[cfg(windows)]
-    {
-        strip_verbatim(&s)
-    }
-    #[cfg(not(windows))]
-    {
-        // Backslashes are legal in Unix filenames; never rewrite them.
-        s.into_owned()
-    }
+    voktty_paths::canonical_display_path(p)
 }
 
-// Pure so it stays unit-testable on any host. `\\?\C:\x` -> `C:/x`.
-#[cfg_attr(not(windows), allow(dead_code))]
-fn strip_verbatim(s: &str) -> String {
-    let stripped = if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{rest}")
-    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
-        rest.to_string()
-    } else {
-        s.to_string()
-    };
-    stripped.replace('\\', "/")
-}
+#[cfg(test)]
+use voktty_paths::windows_display_path as strip_verbatim;
 
 #[cfg(test)]
 mod tests {
