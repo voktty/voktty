@@ -1,5 +1,5 @@
-//! Native local consent storage. The caller owns a private application directory;
-//! repository paths and remote filesystems must never select this directory.
+//! Native local memory storage and bounded observations. Store callers own a
+//! private application directory, never selected by repository data or transports.
 //! Successful reads are observations, not permission to deliver context or do IO.
 
 use std::collections::HashSet;
@@ -9,6 +9,16 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+mod reader;
+#[cfg(not(unix))]
+mod reader_unavailable;
+#[cfg(unix)]
+mod reader_unix;
+
+pub use reader::{
+    LocalMemoryWorkspace, MemoryReadAccess, NativeContextObservation, ReadControl, ReadError,
+};
 
 const STORE: &str = "memory-local.json";
 const LOCK: &str = "memory-local.lock";

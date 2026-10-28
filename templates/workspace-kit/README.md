@@ -264,8 +264,8 @@ Hashes cover actual observed UTF-8 bytes without newline normalization, not
 hashes declared by `kit.lock.json`. Each file is capped at 256 KiB and the
 aggregate at 1 MiB; NUL and invalid Unicode are rejected. Snapshots are capped
 at 2 MiB of serialized JSON and 128 observations. Missing bases cannot silently
-produce a trusted partial fingerprint. Native gathering must authorize and
-canonicalize every path before reading; these pure functions cannot prove
+produce a trusted partial fingerprint. Native gathering must authorize every
+path and bind reads to a verified canonical root; these pure functions cannot prove
 where an observation came from or whether a symlink remains unchanged.
 
 The aggregate SHA-256 input begins with `voktty-memory-instructions-v1` and
@@ -311,7 +311,7 @@ guards; PROJECT/CONTEXT each retain the 256 KiB text cap. Existing parsers keep
 their previous default document limits. Instruction verification may inspect
 the bounded base inventory, but only the selected sections enter model context.
 The packet contains no roster, archive, mailbox, task or session contents.
-Native readers, freshness/lifetime guards, local consent-store wiring, adapter
+Native reader integration, freshness/lifetime guards, local consent-store wiring, adapter
 delivery and resume/compaction receipts remain pending. Existing VOKTTY.md
 memory loading and approvals remain unchanged.
 
@@ -438,6 +438,13 @@ application directory; no repository chooses that location. No session or captur
 grant is persisted. Store failures block use rather than reset preferences.
 See its crate README for the format, filesystem requirements and platform limits.
 Application/CLI wiring and native identity factories remain pending.
+
+Its initial Unix reader now derives local identity from native directory metadata
+and the stored installation UUID, and gathers bounded deployment/context facts
+using directory descriptors without following symlinks. It requires native read
+and metadata authority, rejects stale roots/preferences and invokes the shared
+fingerprint/configuration core. It does not resolve scope or publish a kit.
+Windows, authenticated remote readers and application integration remain pending.
 
 ## Base integrity record
 
