@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const ptBase = mergeLocale(en, {
+  projectMemory: {
+    title: "Memória do projeto", description: "Consulte o contexto compartilhado em .voktty/ e a raiz do projeto.",
+    directory: "Diretório de trabalho", environment: "Ambiente", local: "Este computador", remote: "Remoto",
+    root: "Raiz da memória", noTarget: "Selecione um terminal ou projeto para consultar sua memória.",
+    unsupported: "A memória do projeto ainda não está disponível neste ambiente.", checking: "Verificando a memória do projeto...",
+    found: "Memória do projeto encontrada", absent: "Nenhuma memória do projeto encontrada.",
+    incomplete: "Algumas pastas superiores não puderam ser verificadas. A criação de memória aninhada está bloqueada.",
+    review: "Este escopo de memória precisa de revisão.", error: "A memória do projeto está indisponível. Tente novamente ou verifique o acesso à pasta.",
+    prepare: "Preparar configurações locais", prepareDescription: "Cria configurações privadas de memória do projeto neste computador. Os arquivos do projeto e as permissões dos agentes são preservados.",
+  },
   common: {
     textCopied: "Texto copiado para a área de transferência",
     textPasted: "Texto colado",

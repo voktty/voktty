@@ -1,4 +1,16 @@
 export const en = {
+  projectMemory: {
+    title: "Project memory",
+    description: "Inspect the shared context in .voktty/ and its project root.",
+    directory: "Working directory", environment: "Environment", local: "This computer", remote: "Remote",
+    root: "Memory root", noTarget: "Select a terminal or project to inspect its memory.",
+    unsupported: "Project memory is not available for this environment yet.",
+    checking: "Checking project memory...", found: "Project memory found", absent: "No project memory found.",
+    incomplete: "Some parent folders could not be checked. Creating nested memory is blocked.",
+    review: "This memory scope needs review.", error: "Project memory is unavailable. Try again or check access to this folder.",
+    prepare: "Prepare local settings",
+    prepareDescription: "Creates private project-memory settings on this computer. Project files and agent permissions stay unchanged.",
+  },
   common: {
     textCopied: "Text copied to clipboard",
     textPasted: "Text pasted",

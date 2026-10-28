@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const itBase = mergeLocale(en, {
+  projectMemory: {
+    title: "Memoria del progetto", description: "Consulta il contesto condiviso in .voktty/ e la radice del progetto.",
+    directory: "Cartella di lavoro", environment: "Ambiente", local: "Questo computer", remote: "Remoto",
+    root: "Radice della memoria", noTarget: "Seleziona un terminale o progetto per consultarne la memoria.",
+    unsupported: "La memoria del progetto non è ancora disponibile in questo ambiente.", checking: "Verifica della memoria del progetto...",
+    found: "Memoria del progetto trovata", absent: "Nessuna memoria del progetto trovata.",
+    incomplete: "Alcune cartelle superiori non sono state verificate. La creazione di memoria annidata è bloccata.",
+    review: "Questo ambito di memoria richiede una verifica.", error: "La memoria del progetto non è disponibile. Riprova o verifica l'accesso alla cartella.",
+    prepare: "Prepara impostazioni locali", prepareDescription: "Crea impostazioni private per la memoria del progetto su questo computer. I file del progetto e i permessi degli agenti restano invariati.",
+  },
   common: {
     textCopied: "Testo copiato negli appunti",
     textPasted: "Testo incollato",

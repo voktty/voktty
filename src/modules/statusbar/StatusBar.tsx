@@ -39,6 +39,7 @@ import { PacmanIcon } from "./components/PacmanIcon";
 import Note01Icon from "@hugeicons/core-free-icons/Note01Icon";
 import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore";
 import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
+import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
 
 const LazyFloatingArcadeWidget = lazy(() =>
   import("./components/FloatingArcadeWidget").then((m) => ({
@@ -134,6 +135,7 @@ export function StatusBar({
   const notesBoardOpen = useNotesBoardStore((s) => s.isOpen);
   const toggleNotesBoard = useNotesBoardStore((s) => s.toggle);
   const closeNotesBoard = useNotesBoardStore((s) => s.close);
+  const memoryTerminal = tabs?.find(tab => tab.tabKey === toolkitSourceKey);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -216,6 +218,11 @@ export function StatusBar({
           onGotoLine={onEditorGotoLine ?? (() => {})}
         />
         <SearchInline ref={searchRef} target={searchTarget} />
+        <ProjectMemoryButton target={memoryTerminal?.kind === "terminal" && !memoryTerminal.collaboration && memoryTerminal.activeLeafId === activeLeafId && toolkitTarget && activeLeafId !== undefined && cwd && activeWorkspaceEnv ? {
+          path: cwd,
+          environment: activeWorkspaceEnv,
+          source: `terminal:${toolkitSourceKey ?? ""}:${activeLeafId}`,
+        } : null} />
         <ProjectToolkitPopover
           cwd={toolkitTarget === undefined ? cwd : toolkitTarget?.path}
           workspace={toolkitTarget?.workspace}

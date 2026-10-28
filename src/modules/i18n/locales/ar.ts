@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const arLocaleBatch: TranslationSchema = mergeLocale(en, {
+  projectMemory: {
+    title: "ذاكرة المشروع", description: "اطّلع على السياق المشترك في .voktty/ والمجلد الجذر للمشروع.",
+    directory: "مجلد العمل", environment: "البيئة", local: "هذا الكمبيوتر", remote: "بعيد",
+    root: "جذر الذاكرة", noTarget: "اختر طرفية أو مشروعًا للاطلاع على ذاكرته.",
+    unsupported: "ذاكرة المشروع غير متاحة في هذه البيئة بعد.", checking: "جارٍ التحقق من ذاكرة المشروع...",
+    found: "تم العثور على ذاكرة المشروع", absent: "لم يتم العثور على ذاكرة للمشروع.",
+    incomplete: "تعذر التحقق من بعض المجلدات الأعلى. تم حظر إنشاء ذاكرة متداخلة.",
+    review: "يحتاج نطاق الذاكرة هذا إلى مراجعة.", error: "ذاكرة المشروع غير متاحة. أعد المحاولة أو تحقق من الوصول إلى المجلد.",
+    prepare: "إعداد التفضيلات المحلية", prepareDescription: "ينشئ إعدادات خاصة لذاكرة المشروع على هذا الكمبيوتر. تبقى ملفات المشروع وأذونات الوكلاء كما هي.",
+  },
   common: {
     textCopied: "تم نسخ النص إلى الحافظة",
     textPasted: "تم لصق النص",

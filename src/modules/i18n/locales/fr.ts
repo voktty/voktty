@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const frBase = mergeLocale(en, {
+  projectMemory: {
+    title: "Mémoire du projet", description: "Consultez le contexte partagé dans .voktty/ et la racine du projet.",
+    directory: "Dossier de travail", environment: "Environnement", local: "Cet ordinateur", remote: "Distant",
+    root: "Racine de la mémoire", noTarget: "Sélectionnez un terminal ou un projet pour consulter sa mémoire.",
+    unsupported: "La mémoire du projet n'est pas encore disponible dans cet environnement.", checking: "Vérification de la mémoire du projet...",
+    found: "Mémoire du projet trouvée", absent: "Aucune mémoire du projet trouvée.",
+    incomplete: "Certains dossiers parents n'ont pas pu être vérifiés. La création de mémoire imbriquée est bloquée.",
+    review: "Ce périmètre de mémoire doit être vérifié.", error: "La mémoire du projet est indisponible. Réessayez ou vérifiez l'accès au dossier.",
+    prepare: "Préparer les réglages locaux", prepareDescription: "Crée des réglages privés de mémoire du projet sur cet ordinateur. Les fichiers du projet et les autorisations des agents sont conservés.",
+  },
   common: {
     textCopied: "Texte copié dans le presse-papiers",
     textPasted: "Texte collé",

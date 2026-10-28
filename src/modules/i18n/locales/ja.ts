@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const jaBase = mergeLocale(en, {
+  projectMemory: {
+    title: "プロジェクトメモリ", description: ".voktty/ の共有コンテキストとプロジェクトのルートを確認します。",
+    directory: "作業ディレクトリ", environment: "環境", local: "このコンピューター", remote: "リモート",
+    root: "メモリのルート", noTarget: "メモリを確認するターミナルまたはプロジェクトを選択してください。",
+    unsupported: "この環境ではプロジェクトメモリをまだ利用できません。", checking: "プロジェクトメモリを確認中...",
+    found: "プロジェクトメモリが見つかりました", absent: "プロジェクトメモリは見つかりませんでした。",
+    incomplete: "一部の親フォルダーを確認できませんでした。メモリの入れ子作成はブロックされています。",
+    review: "このメモリの範囲を確認する必要があります。", error: "プロジェクトメモリを利用できません。再試行するか、このフォルダーへのアクセスを確認してください。",
+    prepare: "ローカル設定を準備", prepareDescription: "このコンピューターにプロジェクトメモリの非公開設定を作成します。プロジェクトファイルとエージェントの権限は変更されません。",
+  },
   common: {
     textCopied: "クリップボードにコピーしました",
     textPasted: "テキストを貼り付けました",

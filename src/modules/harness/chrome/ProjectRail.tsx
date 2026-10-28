@@ -103,6 +103,7 @@ import { Shimmer } from "../surfaces/Shimmer";
 import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
 import { TerminalSpinner } from "./TerminalSpinner";
 import type { SettingsSectionId } from "../lib/settings";
+import { HarnessProjectMemoryButton } from "@/modules/harness/chrome/HarnessProjectMemoryButton";
 
 function projectMenuExtraItems(
   pinned: boolean,
@@ -855,6 +856,7 @@ export function ProjectRail({
             groupMascots={groupMascots}
           />
           <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
+            <HarnessProjectMemoryButton cwd={cwd} />
             <RailAction
               label={t("harness.chrome.settings")}
               icon={Settings}

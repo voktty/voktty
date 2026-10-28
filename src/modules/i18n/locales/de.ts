@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const deBase = mergeLocale(en, {
+  projectMemory: {
+    title: "Projektgedächtnis", description: "Prüfen Sie den gemeinsamen Kontext in .voktty/ und den Projektstamm.",
+    directory: "Arbeitsverzeichnis", environment: "Umgebung", local: "Dieser Computer", remote: "Remote",
+    root: "Stamm des Projektgedächtnisses", noTarget: "Wählen Sie ein Terminal oder Projekt, um dessen Gedächtnis zu prüfen.",
+    unsupported: "Das Projektgedächtnis ist in dieser Umgebung noch nicht verfügbar.", checking: "Projektgedächtnis wird geprüft...",
+    found: "Projektgedächtnis gefunden", absent: "Kein Projektgedächtnis gefunden.",
+    incomplete: "Einige übergeordnete Ordner konnten nicht geprüft werden. Verschachtelte Projektgedächtnisse sind gesperrt.",
+    review: "Dieser Gedächtnisbereich muss geprüft werden.", error: "Das Projektgedächtnis ist nicht verfügbar. Versuchen Sie es erneut oder prüfen Sie den Ordnerzugriff.",
+    prepare: "Lokale Einstellungen vorbereiten", prepareDescription: "Erstellt private Einstellungen für das Projektgedächtnis auf diesem Computer. Projektdateien und Agentenberechtigungen bleiben erhalten.",
+  },
   common: {
     textCopied: "Text in die Zwischenablage kopiert",
     textPasted: "Text eingefügt",

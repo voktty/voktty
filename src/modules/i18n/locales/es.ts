@@ -1,6 +1,18 @@
 import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
+  projectMemory: {
+    title: "Memoria del proyecto",
+    description: "Consulta el contexto compartido en .voktty/ y la raíz de su proyecto.",
+    directory: "Directorio de trabajo", environment: "Entorno", local: "Este equipo", remote: "Remoto",
+    root: "Raíz de la memoria", noTarget: "Selecciona un terminal o proyecto para consultar su memoria.",
+    unsupported: "La memoria del proyecto aún no está disponible en este entorno.",
+    checking: "Comprobando la memoria del proyecto...", found: "Memoria del proyecto encontrada", absent: "No se encontró memoria del proyecto.",
+    incomplete: "No se pudieron comprobar algunas carpetas superiores. Se bloquea crear memoria anidada.",
+    review: "Es necesario revisar este ámbito de memoria.", error: "La memoria del proyecto no está disponible. Reintenta o comprueba el acceso a esta carpeta.",
+    prepare: "Preparar ajustes locales",
+    prepareDescription: "Crea ajustes privados de memoria del proyecto en este equipo. Los archivos del proyecto y los permisos de los agentes se conservan.",
+  },
   common: {
     textCopied: "Texto copiado al portapapeles",
     textPasted: "Texto pegado",

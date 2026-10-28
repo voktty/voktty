@@ -63,11 +63,11 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
-Ordinary open stays noncreating. Panel wiring, narrow project-ancestor consent,
+Ordinary open stays noncreating. Kit deployment UI, narrow project-ancestor consent,
 publication workers and platform runtime qualification remain pending. This
 module still starts no filesystem work automatically.
 
-`NativeMemoryOwners` provides the native lifecycle registry for future panel
+`NativeMemoryOwners` provides the native lifecycle registry for panel
 integration. It retains at most 64 windows and 256 presentations across those
 windows. Native-only weak receipts bind both levels by identity; labels are
 bounded to 128 ASCII bytes. Registering a replacement window retires every old
@@ -99,8 +99,8 @@ Retirement suppresses delivery without rolling back admitted writes or releasing
 the native worker budget early. Native selection and discovery delegate to the
 existing authority checks. Window attachment belongs to native window creation,
 once per instance; future windows must attach their own resource. Settings and
-quick-composer windows are not memory presentations. The common panel,
-initialization publication and CLI remain pending.
+quick-composer windows are not memory presentations. Initialization publication
+and CLI remain pending.
 
 ## Observation IPC
 
@@ -145,5 +145,21 @@ close suppress late results and errors. Late opening is closed by its original
 owner, cleanup is coalesced and failed cleanup remains retryable. A native result
 is an observation, not consent or proof that a model read the kit. Consumers must
 recheck `isCurrent` immediately before publishing an already returned result.
-No component,
-startup hook or agent invokes this client yet.
+The shared lazy inspection dialog opens from the terminal status bar and the
+Harness project rail only after a user action. Terminal selection requires the
+selected canonical terminal, its own leaf and explicit filesystem; collaboration
+guests and ambient nonterminal directories cannot lend a target. Harness uses
+its outer view identity, matching active folder and own project environment.
+Hidden views withdraw their target, and standalone views never borrow another
+view's folder. Source replacement closes the original dialog instead of adopting
+the successor. Unsupported environments show a restriction without native work.
+
+Panel controllers capture targets, coalesce actions and revalidate after awaits
+and before state publication. At most 256 JavaScript presentations are retained,
+including retired entries until their exact resource-close acknowledgement.
+Failed cleanup remains counted and is retried on a later panel opening without
+background polling. Native workers retain their separate physical budget.
+Private-state preparation requires its own explicit action under a retained
+selection; inspection starts no agent and grants no instruction trust or session
+consent. Scope lookup failures never imply absence. Kit deployment, policy and
+capture controls remain separate pending integrations.

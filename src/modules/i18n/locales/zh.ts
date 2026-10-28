@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const zhBase = mergeLocale(en, {
+  projectMemory: {
+    title: "项目记忆", description: "查看 .voktty/ 中的共享上下文及其项目根目录。",
+    directory: "工作目录", environment: "环境", local: "本机", remote: "远程",
+    root: "记忆根目录", noTarget: "选择终端或项目以查看其记忆。",
+    unsupported: "此环境暂不支持项目记忆。", checking: "正在检查项目记忆...",
+    found: "已找到项目记忆", absent: "未找到项目记忆。",
+    incomplete: "部分上级目录无法检查，已禁止创建嵌套记忆。",
+    review: "需要检查此记忆范围。", error: "项目记忆不可用。请重试或检查此目录的访问权限。",
+    prepare: "准备本地设置", prepareDescription: "在本机创建项目记忆的私有设置。项目文件和代理权限保持不变。",
+  },
   common: {
     textCopied: "已复制到剪贴板",
     textPasted: "已粘贴文本",

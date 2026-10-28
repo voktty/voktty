@@ -1,6 +1,16 @@
 import { en, mergeLocale, type DeepPartial, type TranslationSchema } from "./en";
 
 const koBase = mergeLocale(en, {
+  projectMemory: {
+    title: "프로젝트 메모리", description: ".voktty/의 공유 컨텍스트와 프로젝트 루트를 확인합니다.",
+    directory: "작업 디렉터리", environment: "환경", local: "이 컴퓨터", remote: "원격",
+    root: "메모리 루트", noTarget: "메모리를 확인할 터미널이나 프로젝트를 선택하세요.",
+    unsupported: "이 환경에서는 아직 프로젝트 메모리를 사용할 수 없습니다.", checking: "프로젝트 메모리 확인 중...",
+    found: "프로젝트 메모리를 찾았습니다", absent: "프로젝트 메모리를 찾지 못했습니다.",
+    incomplete: "일부 상위 폴더를 확인할 수 없어 중첩 메모리 생성이 차단되었습니다.",
+    review: "이 메모리 범위를 검토해야 합니다.", error: "프로젝트 메모리를 사용할 수 없습니다. 다시 시도하거나 폴더 접근 권한을 확인하세요.",
+    prepare: "로컬 설정 준비", prepareDescription: "이 컴퓨터에 프로젝트 메모리의 비공개 설정을 만듭니다. 프로젝트 파일과 에이전트 권한은 유지됩니다.",
+  },
   common: {
     textCopied: "클립보드에 복사되었습니다",
     textPasted: "텍스트가 붙여넣어졌습니다",
