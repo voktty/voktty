@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "baseline": {
+    "schema": 1,
+    "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sessionId": "session-1",
+    "kitState": "ready",
+    "instructionDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "localPolicy": null,
+    "trust": {
+      "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "instructionDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "session": {
+      "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sessionId": "session-1",
+      "context": "enabled",
+      "captures": true
+    },
+    "capabilities": { "context": true, "capture": true }
+  },
+  "cases": [
+    { "name": "explicit session", "changes": {}, "policy": "manual", "reason": "KIT_MEMORY_READY", "context": true, "capture": true },
+    { "name": "installation and trust are not consent", "changes": { "session": null }, "policy": "manual", "reason": "KIT_MEMORY_CONSENT_REQUIRED", "context": false, "capture": false },
+    { "name": "missing trust", "changes": { "trust": null }, "policy": "manual", "reason": "KIT_MEMORY_TRUST_REQUIRED", "context": false, "capture": false },
+    { "name": "changed instructions", "changes": { "instructionDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "policy": "manual", "reason": "KIT_MEMORY_INSTRUCTIONS_CHANGED", "context": false, "capture": false },
+    { "name": "clone or different host", "changes": { "projectKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "policy": "manual", "reason": "KIT_MEMORY_CONSENT_REQUIRED", "context": false, "capture": false },
+    { "name": "different session", "changes": { "sessionId": "session-2" }, "policy": "manual", "reason": "KIT_MEMORY_CONSENT_REQUIRED", "context": false, "capture": false },
+    { "name": "absent kit", "changes": { "kitState": "absent", "instructionDigest": null }, "policy": "manual", "reason": "KIT_MEMORY_ABSENT", "context": false, "capture": false },
+    { "name": "invalid kit", "changes": { "kitState": "invalid" }, "policy": "manual", "reason": "KIT_MEMORY_INVALID", "context": false, "capture": false },
+    { "name": "nested kits", "changes": { "kitState": "ambiguous" }, "policy": "manual", "reason": "KIT_MEMORY_AMBIGUOUS", "context": false, "capture": false },
+    { "name": "incomplete discovery", "changes": { "kitState": "incomplete" }, "policy": "manual", "reason": "KIT_MEMORY_INCOMPLETE", "context": false, "capture": false },
+    { "name": "unsupported delivery", "changes": { "capabilities": { "context": false, "capture": true } }, "policy": "manual", "reason": "KIT_MEMORY_CONTEXT_UNSUPPORTED", "context": false, "capture": false },
+    { "name": "capture unsupported", "changes": { "capabilities": { "context": true, "capture": false } }, "policy": "manual", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
+    { "name": "policy never revokes session", "changes": { "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "never" } }, "policy": "never", "reason": "KIT_MEMORY_POLICY_NEVER", "context": false, "capture": false },
+    { "name": "always for new session does not authorize capture cost", "changes": { "session": null, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
+    { "name": "always with missing trust", "changes": { "trust": null, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_TRUST_REQUIRED", "context": false, "capture": false },
+    { "name": "always with changed instructions", "changes": { "instructionDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_INSTRUCTIONS_CHANGED", "context": false, "capture": false },
+    { "name": "foreign policy cannot enable", "changes": { "session": null, "localPolicy": { "projectKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "mode": "always" } }, "policy": "manual", "reason": "KIT_MEMORY_CONSENT_REQUIRED", "context": false, "capture": false },
+    { "name": "foreign policy cannot revoke", "changes": { "localPolicy": { "projectKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "mode": "never" } }, "policy": "manual", "reason": "KIT_MEMORY_READY", "context": true, "capture": true },
+    { "name": "foreign trust", "changes": { "trust": { "projectKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "instructionDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } }, "policy": "manual", "reason": "KIT_MEMORY_TRUST_REQUIRED", "context": false, "capture": false },
+    { "name": "session disabled overrides always", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-1", "context": "disabled", "captures": true }, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_SESSION_DISABLED", "context": false, "capture": false },
+    { "name": "read without capture permission", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-1", "context": "enabled", "captures": false } }, "policy": "manual", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
+    { "name": "legacy ask becomes manual without prompt", "changes": { "session": null, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "ask" } }, "policy": "manual", "reason": "KIT_MEMORY_CONSENT_REQUIRED", "context": false, "capture": false },
+    { "name": "ready without digest", "changes": { "instructionDigest": null }, "error": "KIT_MEMORY_DIGEST_REQUIRED" },
+    { "name": "unknown version", "changes": { "schema": 2 }, "invalid": true },
+    { "name": "unknown field", "changes": { "approved": true }, "invalid": true },
+    { "name": "unknown kit state", "changes": { "kitState": "reserved" }, "invalid": true },
+    { "name": "uppercase digest", "changes": { "projectKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, "invalid": true },
+    { "name": "digest newline", "changes": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" }, "invalid": true },
+    { "name": "session newline", "changes": { "sessionId": "session-1\n" }, "invalid": true },
+    { "name": "null capability", "changes": { "capabilities": { "context": null, "capture": true } }, "invalid": true },
+    { "name": "always cannot borrow another session capture consent", "changes": { "sessionId": "session-2", "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
+    { "name": "always cannot borrow another project capture consent", "changes": { "session": { "projectKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "sessionId": "session-1", "context": "enabled", "captures": true }, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
+    { "name": "foreign session disable is not inherited", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-2", "context": "disabled", "captures": true }, "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "always" } }, "policy": "always", "reason": "KIT_MEMORY_READY", "context": true, "capture": false },
+    { "name": "legacy ask retains explicit session consent", "changes": { "localPolicy": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mode": "ask" } }, "policy": "manual", "reason": "KIT_MEMORY_READY", "context": true, "capture": true },
+    { "name": "unknown session permission", "changes": { "session": { "projectKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionId": "session-1", "context": "enabled", "captures": true, "approval": true } }, "invalid": true }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "projectKey", "sessionId", "kitState", "instructionDigest", "localPolicy", "trust", "session", "capabilities"],
+  "properties": {
+    "schema": { "const": 1 },
+    "projectKey": { "$ref": "#/$defs/digest" },
+    "sessionId": { "$ref": "#/$defs/sessionId" },
+    "kitState": { "enum": ["ready", "absent", "invalid", "ambiguous", "incomplete"] },
+    "instructionDigest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+    "localPolicy": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["projectKey", "mode"],
+          "properties": {
+            "projectKey": { "$ref": "#/$defs/digest" },
+            "mode": { "enum": ["manual", "ask", "always", "never"] }
+          }
+        }
+      ]
+    },
+    "trust": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["projectKey", "instructionDigest"],
+          "properties": {
+            "projectKey": { "$ref": "#/$defs/digest" },
+            "instructionDigest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "session": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["projectKey", "sessionId", "context", "captures"],
+          "properties": {
+            "projectKey": { "$ref": "#/$defs/digest" },
+            "sessionId": { "$ref": "#/$defs/sessionId" },
+            "context": { "enum": ["enabled", "disabled"] },
+            "captures": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context", "capture"],
+      "properties": {
+        "context": { "type": "boolean" },
+        "capture": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}(?![\\s\\S])" },
+    "sessionId": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9._:-]+(?![\\s\\S])" }
+  }
+}

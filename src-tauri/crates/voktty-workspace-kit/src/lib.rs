@@ -2,6 +2,7 @@ mod deployment;
 mod document;
 mod lock;
 mod memory;
+mod policy;
 mod template;
 mod validation;
 
@@ -40,5 +41,6 @@ pub use memory::{
     inspect_memory_text, measure_memory, HandoffFile, HandoffInventory, ItemOccurrence,
     MemoryMeasurement, MemoryMeasurements, MemoryText, MilestoneOccurrence,
 };
+pub use policy::{evaluate_memory_use, MemoryUseDecision};
 pub use template::{render_template, FileKind, RenderedFile};
 pub use validation::{parse_agent_roster, parse_kit_config, PathCase};

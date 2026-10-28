@@ -242,6 +242,50 @@ at most 256 bytes. Names cannot contain separators or NUL. Results are point
 in time facts, not authorization, a compaction verdict or archive selection.
 Native readers, snapshot comparison and CLI/UI integration remain pending.
 
+## Pure memory-use decision
+
+`evaluateMemoryUse` and `evaluate_memory_use` evaluate the same versioned
+`contracts/memory-use.schema.json` input. The shared conformance corpus covers
+consent, local policy, trust, scope changes and transport capabilities. These
+APIs perform no IO, persist no policy and never start a provider or a capture.
+
+Inputs belong to the trusted caller, not `kit.json` or other repository data.
+The project key is an opaque lowercase SHA-256 identity supplied by the future
+native resolver for its canonical filesystem, host/profile and execution root.
+These APIs compare that identity exactly; they do not derive or canonicalize it.
+Clones, worktrees and different hosts must receive distinct keys. Session grants
+also require the exact session ID. Foreign records are ignored rather than
+copied to a new scope. Captured caller lifetimes still need separate guards;
+serialized identities cannot prove that an asynchronous request remains current.
+
+The instruction digest must cover the current accepted instruction surface,
+including bases, assigned role and startup links. The future reader owns its
+bounded inventory and digest construction. Missing local trust or a changed
+digest prevents delivery, including under `always`. A ready kit without an
+instruction digest is invalid input. Absent, invalid, ambiguous and incompletely
+discovered kits cannot deliver context or enable captures.
+
+Policy defaults to `manual`. Legacy `ask` is interpreted as `manual` without
+prompting; persistence migration remains the local store's responsibility.
+`never` overrides a session grant, and an explicit session disable overrides
+`always`. Otherwise either an enabled matching session or `always` is required.
+Trust and installation alone cannot enable use. Context delivery must also be
+supported by the captured adapter and transport.
+
+Capture requires all context conditions plus a matching session's separate
+capture consent and capture capability. `always` by itself never authorizes
+capture cost. The decision reports eligibility, not delivery, comprehension,
+native filesystem authorization, tool approval or permission to initialize.
+Revocation prevents future delivery; it cannot erase context already sent.
+
+Input JSON is capped at 16 KiB UTF-8, rejects unknown fields and versions, and
+uses the core's Unicode and document-node guards. Session IDs contain at most
+256 ASCII letters, digits, dots, underscores, colons or hyphens. Digests contain
+exactly 64 lowercase hexadecimal characters. Output schema 1 contains the
+effective policy, context/capture booleans and a stable `KIT_MEMORY_*` reason.
+Native resolution, policy storage, instruction hashing and UI/CLI delivery
+remain pending; callers must construct facts from their owned native sources.
+
 ## Base integrity record
 
 The pure preparation API adds `.voktty/kit.lock.json` to the preview before

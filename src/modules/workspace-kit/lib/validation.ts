@@ -20,6 +20,7 @@ export type KitValidationCode =
   | "KIT_DOCUMENT_INVALID_JSON"
   | "KIT_DOCUMENT_NODE_LIMIT"
   | "KIT_DOCUMENT_INVALID_UNICODE"
+  | "KIT_MEMORY_DIGEST_REQUIRED"
   | "KIT_PROJECT_BLANK"
   | "KIT_PROJECT_INVALID"
   | "KIT_ADAPTER_UNKNOWN"
@@ -39,7 +40,10 @@ export type KitValidationCode =
 
 type Issue = { code: "custom"; path: (string | number)[]; message: string };
 
-function makeIssue(code: KitValidationCode, path: (string | number)[]): Issue {
+export function makeIssue(
+  code: KitValidationCode,
+  path: (string | number)[],
+): Issue {
   return { code: "custom", path, message: code };
 }
 
@@ -55,7 +59,7 @@ export function isUnicodeScalarText(text: string): boolean {
   return true;
 }
 
-function parseDocument(text: string): unknown {
+export function parseDocument(text: string): unknown {
   if (
     text.length > MAX_JSON_BYTES ||
     encoder.encode(text).byteLength > MAX_JSON_BYTES
