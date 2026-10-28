@@ -28,29 +28,36 @@ impl Retrieve for NoExternalReferences {
 }
 
 #[derive(Clone, Copy)]
-enum Contract {
+pub(crate) enum Contract {
     Kit,
     Roster,
     Adapter,
+    Lock,
 }
 
 fn validator(contract: Contract) -> KitResult<&'static Validator> {
     static KIT: OnceLock<Result<Validator, ()>> = OnceLock::new();
     static ROSTER: OnceLock<Result<Validator, ()>> = OnceLock::new();
     static ADAPTER: OnceLock<Result<Validator, ()>> = OnceLock::new();
+    static LOCK: OnceLock<Result<Validator, ()>> = OnceLock::new();
     let cache = match contract {
         Contract::Kit => &KIT,
         Contract::Roster => &ROSTER,
         Contract::Adapter => &ADAPTER,
+        Contract::Lock => &LOCK,
     };
     cache
         .get_or_init(|| {
-            let source = match contract {
-                Contract::Kit => "dot-voktty/kit.schema.json",
-                Contract::Roster | Contract::Adapter => "dot-voktty/team/agents.schema.json",
+            let text = match contract {
+                Contract::Kit => resource("dot-voktty/kit.schema.json").ok_or(())?,
+                Contract::Roster | Contract::Adapter => {
+                    resource("dot-voktty/team/agents.schema.json").ok_or(())?
+                }
+                Contract::Lock => include_str!(
+                    "../../../../templates/workspace-kit/contracts/kit-lock.schema.json"
+                ),
             };
-            let mut schema: Value =
-                serde_json::from_str(resource(source).ok_or(())?).map_err(|_| ())?;
+            let mut schema: Value = serde_json::from_str(text).map_err(|_| ())?;
             if matches!(contract, Contract::Adapter) {
                 schema = schema["$defs"]["adapter"].clone();
             }
@@ -65,7 +72,7 @@ fn validator(contract: Contract) -> KitResult<&'static Validator> {
         .map_err(|_| vec![Issue::new("KIT_SCHEMA_INVALID", vec![])])
 }
 
-fn validate_structure(value: &Value, contract: Contract) -> KitResult<()> {
+pub(crate) fn validate_structure(value: &Value, contract: Contract) -> KitResult<()> {
     let issues: Vec<_> = validator(contract)?
         .iter_errors(value)
         .take(256)

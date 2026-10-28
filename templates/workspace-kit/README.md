@@ -68,6 +68,7 @@ templates/workspace-kit/
   README.md            this file
   placeholders.json    every {placeholder} used by the template, with defaults
   manifest.json        versioned resource list and base/content/link roles
+  contracts/           shared core schemas, not deployed project documents
   dot-voktty/          deployed as <project>/.voktty/
   root/                optional pointers deployed at the project root
 ```
@@ -203,6 +204,39 @@ project-provided schema links are never loaded.
 kit is available, the planned integration offers a reviewable update that
 only touches base files the project never changed. Content is never touched
 by an update.
+
+## Base integrity record
+
+The pure preparation API adds `.voktty/kit.lock.json` to the preview before
+`kit.json`. It requires an explicit observation of the lock file itself:
+absent files can be created, identical bytes are skipped, and blocked or
+different files remain conflicts. It performs no filesystem writes. A base
+conflict leaves the candidate lock unavailable; a lock-file conflict retains
+the candidate for inspection but prevents publication.
+
+The schema 1 record has a `bases` array. Each entry contains a project-relative
+`path`, template `version` and lowercase hexadecimal `sha256`. Only manifest
+base files are included, sorted by path. Hashes cover exact proposed UTF-8
+bytes, including rendered values and the migrated private `.gitignore`, with
+no newline normalization. Content, optional root links and the lock itself
+are excluded. Canonical lock text uses two-space JSON indentation and one
+final LF. Per-base versions allow a future update to preserve unapplied entries.
+
+`contracts/kit-lock.schema.json` is compiled into both cores without runtime
+schema retrieval. Parsing also rejects dot segments, reserved runtime paths
+and duplicate paths regardless of case. Locks are limited to 64 KiB and 128
+entries; preparation limits each source or selected observed file to 256 KiB,
+each inventory to 1 MiB, and rejects invalid Unicode or NUL. Unselected root
+observations do not affect preparation. The TypeScript core
+uses Web Crypto SHA-256 and reports digest failures without a successful plan.
+The Rust core uses the already available SHA-256 implementation.
+
+A parsed lock is untrusted project data. Its path list does not establish
+base ownership, authorize reads or deletes, grant local trust, or coordinate
+writers. Update and removal code must intersect it with the known base
+inventory, authorize the destination and recheck current bytes under native
+exclusion. Initial deployment still needs that native writer; CLI, update
+and removal integration remain pending.
 
 ## License
 

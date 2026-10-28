@@ -8,6 +8,7 @@ export type {
   KitTemplate,
 } from "@/modules/workspace-kit/lib/template";
 export { planKitDeployment } from "@/modules/workspace-kit/lib/deployment";
+export { prepareKitDeployment } from "@/modules/workspace-kit/lib/lock";
 export type {
   KitPathFact,
   KitDeploymentEntry,
@@ -15,6 +16,7 @@ export type {
 export {
   parseAgentRoster,
   parseKitConfig,
+  parseKitLock,
 } from "@/modules/workspace-kit/lib/validation";
 export type { KitValidationCode } from "@/modules/workspace-kit/lib/validation";
 export type {
@@ -22,5 +24,6 @@ export type {
   AgentRoster,
   AgentRuntime,
   KitConfig,
+  KitLock,
   KitValues,
 } from "@/modules/workspace-kit/lib/configTypes";

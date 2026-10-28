@@ -1,13 +1,16 @@
 import { z } from "zod";
 import kitSchemaText from "@/../templates/workspace-kit/dot-voktty/kit.schema.json?raw";
 import rosterSchemaText from "@/../templates/workspace-kit/dot-voktty/team/agents.schema.json?raw";
+import lockSchemaText from "@/../templates/workspace-kit/contracts/kit-lock.schema.json?raw";
 import type {
   AgentRoster,
   KitConfig,
+  KitLock,
 } from "@/modules/workspace-kit/lib/configTypes";
 
 const kitSchema = z.fromJSONSchema(JSON.parse(kitSchemaText));
 const rosterContract = JSON.parse(rosterSchemaText);
+const lockSchema = z.fromJSONSchema(JSON.parse(lockSchemaText));
 const rosterSchema = z.fromJSONSchema(rosterContract);
 const adapterSchema = z.fromJSONSchema(rosterContract.$defs.adapter);
 const encoder = new TextEncoder();
@@ -30,7 +33,9 @@ export type KitValidationCode =
   | "KIT_RUNTIME_CONTROL_CHAR"
   | "KIT_PATH_CONTROL_CHAR"
   | "KIT_OWNERSHIP_OVERLAP"
-  | "KIT_MESSAGES_DUPLICATE";
+  | "KIT_MESSAGES_DUPLICATE"
+  | "KIT_LOCK_PATH_INVALID"
+  | "KIT_LOCK_PATH_DUPLICATE";
 
 type Issue = { code: "custom"; path: (string | number)[]; message: string };
 
@@ -38,7 +43,7 @@ function makeIssue(code: KitValidationCode, path: (string | number)[]): Issue {
   return { code: "custom", path, message: code };
 }
 
-function isUnicodeScalarText(text: string): boolean {
+export function isUnicodeScalarText(text: string): boolean {
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index);
     if (code >= 0xd800 && code <= 0xdbff) {
@@ -128,6 +133,30 @@ export function parseKitConfig(text: string): KitConfig {
   }
   if (issues.length) throw new z.ZodError(issues);
   return freezeJson(config);
+}
+
+export function parseKitLock(text: string): KitLock {
+  if (encoder.encode(text).byteLength > 64 * 1024)
+    throw new z.ZodError([makeIssue("KIT_DOCUMENT_TOO_LARGE", [])]);
+  const lock = lockSchema.parse(parseDocument(text)) as KitLock;
+  const seen = new Set<string>();
+  const issues: Issue[] = [];
+  for (const [index, base] of lock.bases.entries()) {
+    const parts = base.path.split("/");
+    const path = ["bases", index, "path"];
+    if (
+      parts.some((part) => part === "." || part === "..") ||
+      /^(?:state|mailbox|locks|sessions|tasks|tasks\.json|tools\.json|kit\.lock\.json)$/i.test(
+        parts[1],
+      )
+    )
+      issues.push(makeIssue("KIT_LOCK_PATH_INVALID", path));
+    const key = base.path.toLowerCase();
+    if (seen.has(key)) issues.push(makeIssue("KIT_LOCK_PATH_DUPLICATE", path));
+    seen.add(key);
+  }
+  if (issues.length) throw new z.ZodError(issues);
+  return freezeJson(lock);
 }
 
 function ownershipKey(

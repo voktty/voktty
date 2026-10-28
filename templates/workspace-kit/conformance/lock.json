@@ -1,0 +1,559 @@
+{
+  "schema": 1,
+  "version": "1.1.0",
+  "preparation": [
+    {
+      "name": "empty directory opts out of root edits",
+      "previewCase": "empty directory opts out of root edits",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "absent"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "create",
+        "reason": "missing",
+        "expected": null,
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": true
+    },
+    {
+      "name": "both root links are explicit opt ins",
+      "previewCase": "both root links are explicit opt ins",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "absent"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "create",
+        "reason": "missing",
+        "expected": null,
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": true
+    },
+    {
+      "name": "wildcard migrates to exact allowlist",
+      "previewCase": "wildcard migrates to exact allowlist",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "absent"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "create",
+        "reason": "missing",
+        "expected": null,
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": true
+    },
+    {
+      "name": "migrated ignore is stable",
+      "previewCase": "migrated ignore is stable",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "absent"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "create",
+        "reason": "missing",
+        "expected": null,
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": true
+    },
+    {
+      "name": "changed content remains conflict",
+      "previewCase": "changed content remains conflict",
+      "expectedLock": null,
+      "lockFact": {
+        "kind": "absent"
+      },
+      "expectedLockEntry": null,
+      "expectedCanPublish": false
+    },
+    {
+      "name": "dangling claude link blocks",
+      "previewCase": "dangling claude link blocks",
+      "expectedLock": null,
+      "lockFact": {
+        "kind": "absent"
+      },
+      "expectedLockEntry": null,
+      "expectedCanPublish": false
+    },
+    {
+      "name": "repeated lock is identical",
+      "previewCase": "migrated ignore is stable",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "file",
+        "text": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "skip",
+        "reason": "identical",
+        "expected": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n",
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"5e77fe234504079ab205ed8d24866d8d8d476fb2688d4861f12b1108ac7fbc61\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": true
+    },
+    {
+      "name": "changed lock is conflict",
+      "previewCase": "empty directory opts out of root edits",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "file",
+        "text": "Own record\n"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "conflict",
+        "reason": "different",
+        "expected": "Own record\n",
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": false
+    },
+    {
+      "name": "blocked lock is conflict",
+      "previewCase": "empty directory opts out of root edits",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "blocked"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "conflict",
+        "reason": "unavailable",
+        "expected": null,
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": false
+    },
+    {
+      "name": "different lock formatting is conflict",
+      "previewCase": "empty directory opts out of root edits",
+      "expectedLock": {
+        "schema": 1,
+        "bases": [
+          {
+            "path": ".voktty/.gitignore",
+            "version": "1.1.0",
+            "sha256": "14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6"
+          },
+          {
+            "path": ".voktty/INIT.md",
+            "version": "1.1.0",
+            "sha256": "e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6"
+          }
+        ]
+      },
+      "lockFact": {
+        "kind": "file",
+        "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/.gitignore\",\"version\":\"1.1.0\",\"sha256\":\"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}"
+      },
+      "expectedLockEntry": {
+        "path": ".voktty/kit.lock.json",
+        "action": "conflict",
+        "reason": "different",
+        "expected": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/.gitignore\",\"version\":\"1.1.0\",\"sha256\":\"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+        "proposed": "{\n  \"schema\": 1,\n  \"bases\": [\n    {\n      \"path\": \".voktty/.gitignore\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"14188a31de4a645fd035797f1b2e904c60b2f1428ae555ed2a281e2431b3f2d6\"\n    },\n    {\n      \"path\": \".voktty/INIT.md\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"\n    }\n  ]\n}\n"
+      },
+      "expectedCanPublish": false
+    }
+  ],
+  "parsing": [
+    {
+      "name": "equivalent decimal schema",
+      "text": "{\"schema\":1.0,\"bases\":[]}",
+      "valid": true
+    },
+    {
+      "name": "equivalent exponent schema",
+      "text": "{\"schema\":1e0,\"bases\":[]}",
+      "valid": true
+    },
+    {
+      "name": "prototype property remains rejected data",
+      "text": "{\"schema\":1,\"bases\":[],\"__proto__\":{\"approved\":true}}",
+      "valid": false
+    },
+    {
+      "name": "valid base record",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": true
+    },
+    {
+      "name": "empty ledger",
+      "text": "{\"schema\":1,\"bases\":[]}",
+      "valid": true
+    },
+    {
+      "name": "mixed versions remain per base",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/RULES.md\",\"version\":\"2.0.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": true
+    },
+    {
+      "name": "future schema",
+      "text": "{\"schema\":2,\"bases\":[]}",
+      "valid": false,
+      "issue": [
+        "schema"
+      ]
+    },
+    {
+      "name": "unknown top property",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}],\"always\":true}",
+      "valid": false
+    },
+    {
+      "name": "missing bases",
+      "text": "{\"schema\":1}",
+      "valid": false,
+      "issue": [
+        "bases"
+      ]
+    },
+    {
+      "name": "invalid path 'AGENTS.md'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\"AGENTS.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ]
+    },
+    {
+      "name": "invalid path '.voktty/../escape'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/../escape\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ]
+    },
+    {
+      "name": "invalid path '.voktty/a\\\\b'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/a\\\\b\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ]
+    },
+    {
+      "name": "invalid path '.voktty/C:/file'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/C:/file\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ]
+    },
+    {
+      "name": "invalid path '.voktty/INIT.md\\n'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\\n\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ]
+    },
+    {
+      "name": "invalid version '1.1.0\\n'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\\n\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "version"
+      ]
+    },
+    {
+      "name": "invalid version 'next'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"next\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "version"
+      ]
+    },
+    {
+      "name": "invalid sha256 'E914EAB8E689C6D9A1A0E46D83FB8429B3B390052875A4AC3E7FDA08008D82D6'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"E914EAB8E689C6D9A1A0E46D83FB8429B3B390052875A4AC3E7FDA08008D82D6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "sha256"
+      ]
+    },
+    {
+      "name": "invalid sha256 'e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\\n'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\\n\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "sha256"
+      ]
+    },
+    {
+      "name": "invalid sha256 '000000000000000000000000000000000000000000000000000000000000000'",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"000000000000000000000000000000000000000000000000000000000000000\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "sha256"
+      ]
+    },
+    {
+      "name": "reserved .voktty/State/a.json",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/State/a.json\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/mailbox/a",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/mailbox/a\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/locks/a",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/locks/a\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/sessions/a",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/sessions/a\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/tasks/a",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/tasks/a\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/tasks.json",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/tasks.json\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/tools.json",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/tools.json\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "reserved .voktty/kit.lock.json",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/kit.lock.json\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        0,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_INVALID"
+    },
+    {
+      "name": "same path different case",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/init.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        1,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_DUPLICATE"
+    },
+    {
+      "name": "duplicate exact path",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases",
+        1,
+        "path"
+      ],
+      "customCode": "KIT_LOCK_PATH_DUPLICATE"
+    },
+    {
+      "name": "entry cannot carry permissions",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\",\"approved\":true}]}",
+      "valid": false
+    },
+    {
+      "name": "too many bases",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"},{\"path\":\".voktty/INIT.md\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [
+        "bases"
+      ]
+    },
+    {
+      "name": "invalid Unicode",
+      "text": "{\"schema\":1,\"bases\":[{\"path\":\".voktty/\\ud800\",\"version\":\"1.1.0\",\"sha256\":\"e914eab8e689c6d9a1a0e46d83fb8429b3b390052875a4ac3e7fda08008d82d6\"}]}",
+      "valid": false,
+      "issue": [],
+      "customCode": "KIT_DOCUMENT_INVALID_UNICODE"
+    },
+    {
+      "name": "invalid JSON without excerpt",
+      "text": "{private content",
+      "valid": false,
+      "issue": [],
+      "customCode": "KIT_DOCUMENT_INVALID_JSON"
+    }
+  ]
+}

@@ -11,6 +11,15 @@ export type KitValues = Readonly<{
   default_model: string;
 }>;
 
+export type KitLock = Readonly<{
+  schema: 1;
+  bases: readonly Readonly<{
+    path: string;
+    version: string;
+    sha256: string;
+  }>[];
+}>;
+
 export type KitConfig = Readonly<{
   $schema?: "./kit.schema.json";
   kit: "voktty-workspace-kit";

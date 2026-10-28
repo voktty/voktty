@@ -48,3 +48,14 @@ UTF-8 and CRLF preservation and migration of a wildcard ignore to an allowlist.
 These observations do not authorize writes or certify that a filesystem has
 remained unchanged. A native writer must revalidate them under its destination
 exclusion before publishing the kit marker.
+
+`lock.json` shares parser cases and expected prepared base hashes. Preparation
+cases reference `deployment.json` by `previewCase` and add an explicit
+`lockFact`. Consumers compare the candidate record, the complete lock preview
+entry including its canonical text, and `expectedCanPublish`. Existing base
+preview entries remain unchanged and `kit.json` stays last. Parser cases use
+raw `text`, `valid`, and optional field `issue` or semantic `customCode`.
+Equivalent JSON number spellings for schema 1 are accepted. The lock contract
+also bounds paths and versions and rejects unknown properties, reserved paths,
+case aliases, malformed Unicode and unsupported schema versions. These tests
+do not make the record a source of filesystem authority or local trust.
