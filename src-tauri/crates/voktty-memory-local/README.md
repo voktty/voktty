@@ -108,8 +108,8 @@ unqualified network filesystem. It holds no directory handles between batches.
 Observations are bounded point-in-time facts, not a transaction over the tree or
 proof of freshness at later delivery/publication. Revalidate current instruction
 bytes, scope, consent and destination under the appropriate native exclusion.
-Publication, App/CLI integration and transport
-ownership factories remain pending. Other platforms explicitly return
+App/CLI integration and transport
+ownership factories remain pending. Platforms without a reader explicitly return
 `Unsupported` without doing project IO. Linux behavior is tested; Windows,
 macOS and Android runtime qualification remains pending.
 
@@ -253,4 +253,69 @@ replacing application state. It is not the repository's `kit.lock.json` integrit
 record or the future shared-memory capture lock. Linux tests exercise separate
 process contention, abrupt exit, killing only an owned holder, stable lock bytes
 and Unix unsafe entries. Windows tests cross-compile; runtime qualification and
-the actual publication writer remain pending.
+the Windows publication writer remain pending.
+
+## Initial native publication
+
+`InitializationPreview::prepare` captures an existing native originating cwd and
+chosen destination, renders the embedded template and prepares the shared plan
+from actual bytes. Both workspaces must use the same private application state
+directory. Under publication exclusion it checks both ancestor scopes and scans
+destination descendants. The preview is an opaque native object with immutable
+plan access, not a deserializable webview plan. It expires after two minutes and
+is consumed by `publish`; changing cwd/transport selection must also retire the
+owner's request. Integration still needs that native selection/worker lifecycle.
+The lock is released before user review and reacquired for publication.
+
+Publication rechecks both native directory identities, installation UUID,
+preference revision, scopes and exact expected bytes. `MemoryWriteAccess` is an
+independent native authority for creating files and directories, including secret
+paths; metadata/read grants do not imply writes. Files are written only at paths
+from the native rendered plan. The initial Unix writer supports `create` and
+`skip`. `publication_blocker` exposes unsupported migrations and `publish`
+rejects them before project writes. Windows publication returns `Unsupported`;
+its reader remains available. Existing root-rule appends and the known private
+ignore migration must wait for the native replacement backend.
+
+Unix creates missing directories relative to owned descriptors without following
+links and refuses cross-device parents. A unique exclusive temporary file in the
+target directory receives complete, synced bytes. `linkat` then publishes it
+without replacing any existing file, link or special entry; a racing target wins
+and the operation fails. Root and parent identities are checked again before
+publication. Normal staging cleanup checks the owned entry identity and never
+rolls back a published project target. The directory is synced after creation.
+Root-rule files are selected only by their explicit opt-ins. Reserved runtime
+files and unknown files are not overwritten or deleted.
+
+Before the first project change, a bounded, private `memory-deployment.json`
+records schema 1, native cwd/destination keys and file identities, and the exact
+proposed inventory. The record is exclusively published and synced under the
+deployment lock. It is not workspace authority or a stored acceptance. A retry
+requires a fresh native preview with exactly matching intent and current bytes;
+only that intent can admit its own partial root. Foreign partial layouts remain
+blocked. Unknown versions/fields, malformed or oversized records fail without
+reset. One pending intent blocks unrelated publication in that installation;
+explicit abandonment/export UI remains pending. The size limit is 2 MiB,
+including JSON escaping, at most 128 files. Project file and observation limits
+still apply. Recovery records can contain project text and stay in private state.
+
+The writer rescans scopes and verifies all other selected files before publishing
+`kit.json` last. It verifies the completed inventory and scopes again before
+removing its private intent. Skipped files are never rewritten. Failures preserve
+all published targets and foreign changes; no blind rollback removes them. The
+failure's `created` list contains acknowledged publications, not proof that an
+IO failure left no additional file. An error can occur after marker publication
+or state cleanup; reload before retrying. A crash can leave staging entries;
+they are preserved as unknown files, with automatic cleanup/recovery UI pending.
+
+Checks are point-in-time observations under local cooperating-writer exclusion,
+not a transaction against an external editor or host. External changes after a
+check can invalidate the result; final checks report conflicts without deleting
+those changes. Native integration must retain the worker/lock through settled IO,
+provide an outer response deadline and avoid unqualified network filesystems.
+Linux tests cover exact bytes, idempotence, restart of native objects, partial
+recovery, reserved bytes, fresh write authority, preference changes, cancellation,
+root/installation replacement, scope races, competing targets, links and corrupt
+intent. They use a real local device boundary for complete ancestry without
+reading host kit contents. Windows compilation does not qualify runtime behavior;
+Unix platforms other than Linux also require runtime validation.

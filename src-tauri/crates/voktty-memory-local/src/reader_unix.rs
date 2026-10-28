@@ -1,6 +1,6 @@
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::MetadataExt;
@@ -42,6 +42,173 @@ fn open_at(parent: &File, name: &OsStr, directory: bool) -> io::Result<File> {
 }
 
 impl Directory {
+    pub(crate) fn create_text(
+        &self,
+        root: &Path,
+        relative: &str,
+        text: &str,
+        reads: &dyn MemoryReadAccess,
+        writes: &dyn crate::MemoryWriteAccess,
+        control: &ReadControl,
+    ) -> Result<(), ReadError> {
+        let parts: Vec<_> = Path::new(relative).components().collect();
+        if parts.is_empty()
+            || parts.len() > 64
+            || text.len() > 256 * 1024
+            || parts
+                .iter()
+                .any(|part| !matches!(part, Component::Normal(_)))
+        {
+            return Err(ReadError::InvalidInput);
+        }
+        let mut parent = self.file.try_clone().map_err(|_| ReadError::Io)?;
+        let mut parent_path = root.to_path_buf();
+        for part in &parts[..parts.len() - 1] {
+            control.check()?;
+            let Component::Normal(name) = part else {
+                return Err(ReadError::InvalidInput);
+            };
+            let path = parent_path.join(name);
+            if !reads.allows_metadata(&path) {
+                return Err(ReadError::Denied);
+            }
+            let child = match open_at(&parent, name, true) {
+                Ok(file) => file,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    if !writes.allows_create(&path) {
+                        return Err(ReadError::Denied);
+                    }
+                    let name =
+                        CString::new(name.as_bytes()).map_err(|_| ReadError::InvalidInput)?;
+                    if unsafe { libc::mkdirat(parent.as_raw_fd(), name.as_ptr(), 0o755) } != 0 {
+                        let error = io::Error::last_os_error();
+                        if error.kind() != io::ErrorKind::AlreadyExists {
+                            return Err(ReadError::Io);
+                        }
+                    }
+                    parent.sync_all().map_err(|_| ReadError::Io)?;
+                    open_at(&parent, OsStr::from_bytes(name.as_bytes()), true)
+                        .map_err(|_| ReadError::StaleRoot)?
+                }
+                Err(_) => return Err(ReadError::StaleRoot),
+            };
+            if child.metadata().map_err(|_| ReadError::Io)?.dev() != self.metadata.dev() {
+                return Err(ReadError::Unsupported);
+            }
+            parent = child;
+            parent_path = path;
+        }
+        let target_path = root.join(relative);
+        let staging_name = format!(".voktty-stage-{}", uuid::Uuid::new_v4());
+        let staging_path = parent_path.join(&staging_name);
+        if !writes.allows_create(&target_path)
+            || !writes.allows_create(&staging_path)
+            || !reads.allows_metadata(&staging_path)
+            || !reads.allows_metadata(&target_path)
+        {
+            return Err(ReadError::Denied);
+        }
+        control.check()?;
+        let staging_name = CString::new(staging_name).map_err(|_| ReadError::InvalidInput)?;
+        let staging_parent = parent.try_clone().map_err(|_| ReadError::Io)?;
+        let descriptor = unsafe {
+            libc::openat(
+                parent.as_raw_fd(),
+                staging_name.as_ptr(),
+                libc::O_WRONLY
+                    | libc::O_CREAT
+                    | libc::O_EXCL
+                    | libc::O_NOFOLLOW
+                    | libc::O_CLOEXEC
+                    | libc::O_NONBLOCK,
+                0o644,
+            )
+        };
+        if descriptor < 0 {
+            return Err(ReadError::Io);
+        }
+        struct Staging {
+            parent: File,
+            name: CString,
+            file: File,
+        }
+        impl Drop for Staging {
+            fn drop(&mut self) {
+                let Ok(owned) = self.file.metadata() else {
+                    return;
+                };
+                let mut actual = std::mem::MaybeUninit::<libc::stat>::uninit();
+                if unsafe {
+                    libc::fstatat(
+                        self.parent.as_raw_fd(),
+                        self.name.as_ptr(),
+                        actual.as_mut_ptr(),
+                        libc::AT_SYMLINK_NOFOLLOW,
+                    )
+                } == 0
+                {
+                    let actual = unsafe { actual.assume_init() };
+                    // libc stat field widths differ across Unix targets.
+                    #[allow(clippy::unnecessary_cast)]
+                    if actual.st_dev as u64 == owned.dev() && actual.st_ino as u64 == owned.ino() {
+                        unsafe { libc::unlinkat(self.parent.as_raw_fd(), self.name.as_ptr(), 0) };
+                    }
+                }
+            }
+        }
+        let mut staging = Staging {
+            parent: staging_parent,
+            name: staging_name,
+            file: unsafe { File::from_raw_fd(descriptor) },
+        };
+        staging
+            .file
+            .write_all(text.as_bytes())
+            .map_err(|_| ReadError::Io)?;
+        staging.file.sync_all().map_err(|_| ReadError::Io)?;
+        control.check()?;
+        if !writes.allows_create(&target_path)
+            || !reads.allows_read(&target_path)
+            || !reads.allows_metadata(&target_path)
+        {
+            return Err(ReadError::Denied);
+        }
+        let current_root = Self::open_root(root, control)?;
+        let current_parent = Self::open_root(&parent_path, control)?;
+        let held = parent.metadata().map_err(|_| ReadError::Io)?;
+        if current_root.identity() != self.identity()
+            || current_parent.identity() != (held.dev(), held.ino().into())
+        {
+            return Err(ReadError::StaleRoot);
+        }
+        let Component::Normal(target) = parts[parts.len() - 1] else {
+            return Err(ReadError::InvalidInput);
+        };
+        let target = CString::new(target.as_bytes()).map_err(|_| ReadError::InvalidInput)?;
+        // linkat publishes complete bytes atomically and cannot replace a racing
+        // file, link or special entry. No rollback ever removes a project target.
+        if unsafe {
+            libc::linkat(
+                parent.as_raw_fd(),
+                staging.name.as_ptr(),
+                parent.as_raw_fd(),
+                target.as_ptr(),
+                0,
+            )
+        } != 0
+        {
+            return Err(match io::Error::last_os_error().kind() {
+                io::ErrorKind::AlreadyExists => ReadError::Unavailable,
+                io::ErrorKind::PermissionDenied => ReadError::Denied,
+                _ => ReadError::Io,
+            });
+        }
+        drop(staging);
+        parent.sync_all().map_err(|_| ReadError::Io)?;
+        control.check()?;
+        Ok(())
+    }
+
     pub(crate) fn probe(&self, name: &OsStr) -> io::Result<Option<EntryKind>> {
         let name = CString::new(name.as_bytes())
             .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;

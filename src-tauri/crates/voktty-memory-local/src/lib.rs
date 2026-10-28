@@ -11,8 +11,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 mod discovery;
+mod publication;
 mod reader;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
+pub use publication::{
+    InitializationPreview, MemoryWriteAccess, PublicationError, PublicationFailure,
+    PublicationReport,
+};
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;
 #[cfg(unix)]

@@ -166,6 +166,15 @@ pub struct LocalMemoryWorkspace<'a> {
 }
 
 impl<'a> LocalMemoryWorkspace<'a> {
+    pub(crate) fn store(&self) -> &LocalMemoryStore {
+        self.store
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn access(&self) -> &dyn MemoryReadAccess {
+        self.access
+    }
+
     pub fn observe_scope(
         &self,
         purpose: crate::DiscoveryPurpose,
@@ -326,7 +335,10 @@ impl<'a> LocalMemoryWorkspace<'a> {
         })
     }
 
-    fn checked_root(&self, control: &ReadControl) -> Result<platform::Directory, ReadError> {
+    pub(crate) fn checked_root(
+        &self,
+        control: &ReadControl,
+    ) -> Result<platform::Directory, ReadError> {
         control.check()?;
         if !self.access.allows_metadata(&self.root) {
             return Err(ReadError::Denied);
