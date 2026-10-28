@@ -9,6 +9,19 @@ impl LocalMemoryStore {
     /// keep it and its ancestors application-controlled, including Windows ACLs.
     /// This never initializes identity, policy, trust or project files.
     pub fn create_private(parent: &Path, control: &ReadControl) -> Result<Self, ReadError> {
+        Self::private_directory(parent, control, true)
+    }
+
+    /// Opens existing application state without creating a directory or identity.
+    pub fn open_private(parent: &Path, control: &ReadControl) -> Result<Self, ReadError> {
+        Self::private_directory(parent, control, false)
+    }
+
+    fn private_directory(
+        parent: &Path,
+        control: &ReadControl,
+        create: bool,
+    ) -> Result<Self, ReadError> {
         control.check()?;
         let text = parent.to_str().ok_or(ReadError::InvalidInput)?;
         if text.starts_with("//") || (text.starts_with(r"\\") && !text.starts_with(r"\\?\")) {
@@ -32,8 +45,14 @@ impl LocalMemoryStore {
         #[cfg(any(unix, windows))]
         {
             let directory = Directory::open_root(parent, control)?;
-            let child = directory.create_private_state(control)?;
+            directory.qualify_state(false, control)?;
             let path = parent.join(PRIVATE_DIRECTORY);
+            let child = if create {
+                directory.create_private_state(control)?
+            } else {
+                directory.open_child(std::ffi::OsStr::new(PRIVATE_DIRECTORY), &path, control)?
+            };
+            child.qualify_state(true, control)?;
             let store = Self::open(&path).map_err(ReadError::Store)?;
             if Directory::open_root(parent, control)?.identity() != directory.identity()
                 || Directory::open_root(&path, control)?.identity() != child.identity()

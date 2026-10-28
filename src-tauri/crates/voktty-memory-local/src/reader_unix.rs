@@ -14,6 +14,9 @@ use voktty_workspace_kit::PathFact;
 #[path = "migration_unix.rs"]
 mod migration;
 
+#[path = "state_unix.rs"]
+mod state;
+
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
     Ok(())
 }

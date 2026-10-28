@@ -305,6 +305,79 @@ fn cancelled_and_expired_requests_do_not_admit_work() {
 }
 
 #[test]
+fn store_initialization_shares_capacity_with_running_observations() {
+    let runtime = runtime();
+    let workers = workers();
+    let directory = tempfile::tempdir().unwrap();
+    let gate = Arc::new(Gate::new());
+    let release = Release(gate.clone());
+    runtime.block_on(async {
+        let mut jobs = Vec::new();
+        for _ in 0..CAPACITY {
+            let gate = gate.clone();
+            jobs.push(
+                workers
+                    .spawn(Control::Read(ReadControl::default()), move || {
+                        gate.wait();
+                        Ok(())
+                    })
+                    .unwrap(),
+            );
+        }
+        assert!(matches!(
+            workers.store(
+                directory.path().to_path_buf(),
+                MemoryStoreMode::Initialize,
+                ReadControl::default()
+            ),
+            Err(MemoryWorkError::Read(ReadError::Busy))
+        ));
+        assert!(!directory.path().join("project-memory").exists());
+        drop(release);
+        for job in jobs {
+            job.finish().await.unwrap();
+        }
+    });
+}
+
+#[test]
+fn a_queued_initialization_times_out_without_creating_private_state() {
+    let runtime = Builder::new_current_thread()
+        .enable_time()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    let workers = workers();
+    let directory = tempfile::tempdir().unwrap();
+    let gate = Arc::new(Gate::new());
+    let release = Release(gate.clone());
+    let (started, observed) = mpsc::channel();
+    let occupied = runtime.spawn_blocking(move || {
+        started.send(()).unwrap();
+        gate.wait();
+    });
+    observed.recv_timeout(Duration::from_secs(3)).unwrap();
+    runtime.block_on(async {
+        let job = workers
+            .store(
+                directory.path().to_path_buf(),
+                MemoryStoreMode::Initialize,
+                ReadControl::new(Duration::from_millis(40)),
+            )
+            .unwrap();
+        assert!(matches!(
+            job.finish().await,
+            Err(MemoryWorkError::Read(ReadError::Timeout))
+        ));
+        assert_eq!(workers.active.load(Ordering::Acquire), 1);
+        drop(release);
+        occupied.await.unwrap();
+        drain(&workers).await;
+    });
+    assert!(!directory.path().join("project-memory").exists());
+}
+
+#[test]
 fn finishing_without_an_entered_runtime_returns_an_error_and_retires_the_consumer() {
     use std::future::Future;
     use std::task::{Context, Poll, Waker};

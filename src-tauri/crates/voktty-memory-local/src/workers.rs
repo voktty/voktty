@@ -12,6 +12,12 @@ use tokio::sync::oneshot;
 const CAPACITY: usize = 4;
 static ACTIVE: OnceLock<Arc<AtomicUsize>> = OnceLock::new();
 
+#[derive(Clone, Copy)]
+pub enum MemoryStoreMode {
+    OpenExisting,
+    Initialize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryWorkError {
     Read(ReadError),
@@ -127,6 +133,31 @@ fn validate_path(path: &Path) -> Result<(), ReadError> {
 }
 
 impl MemoryWorkers {
+    /// `parent` must come from the native application's directory resolver.
+    /// Neither repository data nor webview paths may select private state.
+    pub fn store(
+        &self,
+        parent: PathBuf,
+        mode: MemoryStoreMode,
+        control: ReadControl,
+    ) -> Result<MemoryJob<Arc<LocalMemoryStore>>, MemoryWorkError> {
+        validate_path(&parent)?;
+        self.spawn(Control::Read(control.clone()), move || {
+            let store = match mode {
+                MemoryStoreMode::OpenExisting => LocalMemoryStore::open_private(&parent, &control)?,
+                MemoryStoreMode::Initialize => LocalMemoryStore::create_private(&parent, &control)?,
+            };
+            control.check()?;
+            match mode {
+                MemoryStoreMode::OpenExisting => store.load(),
+                MemoryStoreMode::Initialize => store.initialize(),
+            }
+            .map_err(ReadError::Store)?;
+            control.check()?;
+            Ok(Arc::new(store))
+        })
+    }
+
     /// The native caller must capture and qualify the local filesystem and its
     /// authority first. This API never selects a transport or authorizes a root.
     pub fn scope(

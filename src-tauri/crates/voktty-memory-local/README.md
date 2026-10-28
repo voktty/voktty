@@ -30,8 +30,16 @@ with mode `0700`, requires current-user ownership and no shared write access on
 the parent, and refuses group/other permissions on an existing child. It never
 repairs permissions or deletes an existing file or directory. Windows creates
 relative to its captured parent with `NtCreateFile` and inherits the parent's
-ACL; the native caller must qualify that private ACL and any existing child ACL.
-The helper is not a Windows ACL auditor. Both backends reject links/reparse
+ACL. A separate handle requests `READ_CONTROL` and checks actual ownership and
+DACLs without expanding the project reader's access rights. The owner must be
+the current token user. Parent grants to other principals cannot allow destructive
+control; child grants to other principals cannot allow access. Local System and
+the built-in Administrators group remain trusted OS principals. Null DACLs,
+unavailable queries and unknown or object-specific grant entries fail closed.
+Deny entries do not excuse a broad allow entry. No ACL is repaired automatically.
+Every Windows preferences or lock-file open also checks its actual owner and
+private DACL; directory permissions alone cannot establish file access policy.
+Both backends reject links/reparse
 points and cross-device/volume children, and compare the parent and child
 identities again before returning the store. Existing corrupt preferences stay
 untouched. Opening the directory never initializes identity or preferences.
@@ -39,11 +47,21 @@ untouched. Opening the directory never initializes identity or preferences.
 This synchronous helper checks cancellation and the original read deadline
 between operations; a kernel call is not interruptible. Errors can leave its
 created empty directory in place and never trigger a blind rollback. A future
-application bootstrap must resolve the native app directory and retain bounded
-worker ownership through settlement. It is not yet wired to startup, IPC or CLI.
+application bootstrap must retain bounded worker ownership through settlement.
+It is not yet wired to startup, IPC or CLI.
 Linux tests cover creation, repeated and concurrent opens, explicit identity,
 corrupt records, failed inputs, links and permission refusal. Windows tests are
 only cross-compiled until native execution qualifies this path.
+
+`open_private` applies the same checks to an existing child without creating a
+directory or identity. The private state helpers also inspect the opened native
+filesystem: Linux/Android admit ext-family, Btrfs, tmpfs, XFS, overlayfs, ZFS and
+F2FS magic values; unknown, network and userspace filesystems are unavailable.
+Apple requires the native `MNT_LOCAL` flag. Windows requires a local disk drive
+for the requested and opened-handle paths. These OS-reported classifications
+do not prove physical backing storage, durability, or support for arbitrary
+third-party filesystems. Ancestors must still remain application-controlled;
+the helper is not an ACL or ownership audit of the complete ancestor chain.
 
 `open` validates the directory; `load` never creates an installation identity.
 Only explicit `initialize` creates schema 1 `memory-local.json` if absent.
@@ -144,6 +162,20 @@ documented in `src-tauri/src/modules/project_memory/README.md`. Platforms withou
 macOS and Android runtime qualification remains pending.
 
 ## Bounded observation workers
+
+`MemoryWorkers::store` opens the private state directory and validates existing
+preferences, or explicitly creates the child and initializes identity under
+`MemoryStoreMode::Initialize`. The native application supplies the parent path.
+It shares the four-operation budget and the same cancellation, original deadline,
+queue and settlement ownership as observations. Initialization never resets
+corruption, grants workspace access, trusts instructions or creates a kit. An
+already admitted initialization may complete after caller retirement; timeout
+does not roll it back. A queued retired initialization never starts its IO.
+The app's `NativeMemoryStorage` captures the parent solely from Tauri's native
+`app_local_data_dir` resolver without performing IO or using a project fallback.
+The parent must already exist; its creation and presentation/IPC wiring remain
+pending. Opening existing storage never creates that directory or identity,
+although loading existing state retains the normal private lock-file behavior.
 
 `MemoryWorkers::scope` and `context` run the existing native readers through the
 caller's Tokio blocking executor. They require an entered runtime with its timer

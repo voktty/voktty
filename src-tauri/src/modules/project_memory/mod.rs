@@ -169,3 +169,6 @@ mod tests;
 
 mod selection;
 pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
+
+mod storage;
+pub use storage::NativeMemoryStorage;

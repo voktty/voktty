@@ -21,7 +21,7 @@ pub use publication::{
     InitializationPreview, MemoryWriteAccess, PublicationError, PublicationFailure,
     PublicationReport, RecoveryFile,
 };
-pub use workers::{MemoryJob, MemoryWorkError, MemoryWorkers};
+pub use workers::{MemoryJob, MemoryStoreMode, MemoryWorkError, MemoryWorkers};
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;
 #[cfg(unix)]
@@ -359,6 +359,8 @@ fn regular_file(path: &Path, write: bool, create: bool) -> Result<File, StoreErr
     if !metadata.is_file() || is_link(&metadata) {
         return Err(StoreError::InvalidStore);
     }
+    #[cfg(windows)]
+    reader_windows::qualify_state_file(&file).map_err(|_| StoreError::InvalidStore)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;

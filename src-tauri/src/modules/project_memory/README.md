@@ -42,9 +42,24 @@ returned observation; successful `finish` only validates its own delivery point.
 Selection mutation is synchronous and requires exclusive owner access, with no
 lock held across worker awaits. No native presentation is wired to this owner yet.
 
-The local storage crate now provides `LocalMemoryStore::create_private` for the
-fixed memory child of an existing, qualified native application directory. It
-does not initialize identity or choose that parent. Resolving the native app
-directory, qualifying its filesystem and ACLs, and owning bootstrap work remain
-application integration tasks. Narrow ancestor consent, publication workers and
-platform runtime qualification also remain pending.
+`NativeMemoryStorage::capture` obtains only Tauri's native `app_local_data_dir`
+path, without IO or a project/cwd fallback. Its `open` and explicit `initialize`
+operations run through `MemoryWorkers::store`, sharing the four-slot budget and
+the original deadline through actual settlement. Opening existing state creates
+neither directory nor identity. Initialization creates the fixed private child
+and UUID, never a kit or workspace, instruction or session grant. Corrupt state
+is preserved. Retirement can suppress delivery without rolling back an already
+admitted initialization. A queued cancelled operation cannot start its IO.
+
+The private directory helpers inspect actual filesystem metadata and permissions.
+Unix requires native ownership, no shared writes, a private child and a recognized
+local filesystem. Windows uses a separate `READ_CONTROL` handle to inspect owner
+and DACLs without expanding project-read access. Broader or unavailable grants
+fail without permission repair. The complete rules and platform limits live in
+`src-tauri/crates/voktty-memory-local/README.md`. Ancestors must remain controlled
+by the application; these checks do not audit their complete ownership/ACL chain.
+
+The native app parent must already exist. Creating that origin, owning the
+service in the application, presentation/IPC wiring, narrow ancestor consent,
+publication workers and platform runtime qualification remain pending. This
+module still starts no work automatically.

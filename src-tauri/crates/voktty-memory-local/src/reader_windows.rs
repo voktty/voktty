@@ -29,6 +29,13 @@ use windows_sys::Win32::Storage::FileSystem::{
 #[path = "publication_windows.rs"]
 mod publication;
 
+#[path = "state_windows.rs"]
+mod state_security;
+
+pub(crate) fn qualify_state_file(file: &File) -> Result<(), ReadError> {
+    state_security::qualify(file, true)
+}
+
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
     Ok(())
 }
@@ -137,6 +144,7 @@ fn final_path(file: &File) -> Result<PathBuf, ReadError> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum OpenKind {
     Directory,
+    PrivateDirectory,
     Enumerate,
     File,
     Metadata,
@@ -148,7 +156,7 @@ impl OpenKind {
     fn directory(self) -> bool {
         matches!(
             self,
-            Self::Directory | Self::Enumerate | Self::CreateDirectory
+            Self::Directory | Self::PrivateDirectory | Self::Enumerate | Self::CreateDirectory
         )
     }
 
@@ -191,6 +199,9 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
         | SYNCHRONIZE
         | match kind {
             OpenKind::Directory | OpenKind::CreateDirectory => FILE_TRAVERSE,
+            OpenKind::PrivateDirectory => {
+                FILE_TRAVERSE | windows_sys::Win32::Storage::FileSystem::READ_CONTROL
+            }
             OpenKind::Enumerate => FILE_TRAVERSE | FILE_LIST_DIRECTORY,
             OpenKind::File => FILE_READ_DATA,
             OpenKind::Metadata => 0,
@@ -199,9 +210,10 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
     let options = FILE_OPEN_REPARSE_POINT
         | FILE_SYNCHRONOUS_IO_NONALERT
         | match kind {
-            OpenKind::Directory | OpenKind::Enumerate | OpenKind::CreateDirectory => {
-                FILE_DIRECTORY_FILE
-            }
+            OpenKind::Directory
+            | OpenKind::PrivateDirectory
+            | OpenKind::Enumerate
+            | OpenKind::CreateDirectory => FILE_DIRECTORY_FILE,
             OpenKind::File | OpenKind::CreateFile => FILE_NON_DIRECTORY_FILE,
             OpenKind::Metadata => 0,
         };
