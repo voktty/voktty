@@ -271,7 +271,7 @@ impl<'a> LocalMemoryWorkspace<'a> {
     ) -> Result<BTreeMap<String, PathFact>, ReadError> {
         let mut paths = inventory(false);
         paths.insert(".voktty/kit.lock.json".into());
-        if links.agents {
+        if links.agents || links.claude {
             paths.insert("AGENTS.md".into());
         }
         if links.claude {
@@ -279,6 +279,18 @@ impl<'a> LocalMemoryWorkspace<'a> {
         }
         self.collect(&paths, 1024 * 1024, control)
             .map(|(facts, _)| facts)
+    }
+
+    pub(crate) fn read_publication_artifact(
+        &self,
+        path: &str,
+        control: &ReadControl,
+    ) -> Result<PathFact, ReadError> {
+        let _permit = ReadPermit::acquire(control)?;
+        let directory = self.checked_root(control)?;
+        let fact = directory.read_text(&self.root, path, self.access, control)?;
+        self.checked_root(control)?;
+        Ok(fact)
     }
 
     pub fn observe_context(

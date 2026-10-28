@@ -16,7 +16,7 @@ mod reader;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, PublicationError, PublicationFailure,
-    PublicationReport,
+    PublicationReport, RecoveryFile,
 };
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;

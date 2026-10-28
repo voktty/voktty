@@ -76,7 +76,7 @@ the batch. Callers must capture transport ownership before choosing this API;
 serialized environment facts never prove that a remote path is local.
 
 The Unix backend opens each directory component relative to an owned directory
-descriptor with `O_NOFOLLOW`. All file opens are read-only, close-on-exec and
+descriptor with `O_NOFOLLOW`. Content-read opens are read-only, close-on-exec and
 nonblocking. This prevents symlinks, including replaced intermediate directories,
 from redirecting a content read outside the captured tree. Regular files require
 a single hard link, valid UTF-8, no NUL and at most 256 KiB. Size, inode and change
@@ -88,7 +88,8 @@ Failures never become an empty readable file. The authority trait must be
 implemented from real native authorization, not caller-supplied IPC booleans.
 
 Deployment observations cover only current manifest targets, `kit.lock.json` and
-explicitly selected root links, at most 128 paths and 1 MiB of text. They do not
+explicitly selected root links and the AGENTS target dependency of an enabled
+CLAUDE link, at most 128 paths and 1 MiB of text. They do not
 enumerate or read reserved sessions, tasks or unknown content. Context observations
 cover manifest bases, both root rule files, an explicitly assigned bounded role,
 configuration and PROJECT/CONTEXT (2 MiB total). The actual instruction snapshot
@@ -271,11 +272,11 @@ Publication rechecks both native directory identities, installation UUID,
 preference revision, scopes and exact expected bytes. `MemoryWriteAccess` is an
 independent native authority for creating files and directories, including secret
 paths; metadata/read grants do not imply writes. Files are written only at paths
-from the native rendered plan. The initial Unix writer supports `create` and
-`skip`. `publication_blocker` exposes unsupported migrations and `publish`
-rejects them before project writes. Windows publication returns `Unsupported`;
-its reader remains available. Existing root-rule appends and the known private
-ignore migration must wait for the native replacement backend.
+from the native rendered plan. The Unix writer supports `create` and `skip`.
+Linux/Android also implement the known private-ignore and root-rule migrations
+described below. Other Unix targets expose `MigrationUnsupported` through
+`publication_blocker` and reject migrations before project writes. Windows
+publication returns `Unsupported`; its reader remains available.
 
 Unix creates missing directories relative to owned descriptors without following
 links and refuses cross-device parents. A unique exclusive temporary file in the
@@ -288,8 +289,10 @@ Root-rule files are selected only by their explicit opt-ins. Reserved runtime
 files and unknown files are not overwritten or deleted.
 
 Before the first project change, a bounded, private `memory-deployment.json`
-records schema 1, native cwd/destination keys and file identities, and the exact
-proposed inventory. The record is exclusively published and synced under the
+records native cwd/destination keys and file identities, and the exact proposed
+inventory. Schema 1 creation-only records remain supported. Schema 2 records
+migrations with their original bytes and a validated UUID v4 transaction identity;
+schema/version mismatches fail without reset. The record is exclusively published and synced under the
 deployment lock. It is not workspace authority or a stored acceptance. A retry
 requires a fresh native preview with exactly matching intent and current bytes;
 only that intent can admit its own partial root. Foreign partial layouts remain
@@ -303,8 +306,8 @@ The writer rescans scopes and verifies all other selected files before publishin
 `kit.json` last. It verifies the completed inventory and scopes again before
 removing its private intent. Skipped files are never rewritten. Failures preserve
 all published targets and foreign changes; no blind rollback removes them. The
-failure's `created` list contains acknowledged publications, not proof that an
-IO failure left no additional file. An error can occur after marker publication
+failure's `created` and `migrated` lists contain acknowledged operations, not proof
+that an IO failure left no additional file. An error can occur after marker publication
 or state cleanup; reload before retrying. A crash can leave staging entries;
 they are preserved as unknown files, with automatic cleanup/recovery UI pending.
 
@@ -319,3 +322,51 @@ root/installation replacement, scope races, competing targets, links and corrupt
 intent. They use a real local device boundary for complete ancestry without
 reading host kit contents. Windows compilation does not qualify runtime behavior;
 Unix platforms other than Linux also require runtime validation.
+
+## Known native migrations
+
+Only `.voktty/.gitignore`, `AGENTS.md` and `CLAUDE.md` can be replaced through this
+API, using proposals and exact expected bytes from the shared native preview.
+`MemoryWriteAccess::allows_replace` and `allows_remove_staging` both default to
+false; creation permission never grants either operation. An opt-in CLAUDE link
+can observe an existing AGENTS dependency without selecting it for modification.
+
+Linux/Android stage complete synced bytes and use directory-relative
+[`renameat2(RENAME_EXCHANGE)`](https://man7.org/linux/man-pages/man2/rename.2.html).
+The actual displaced entry stays at a recovery name derived from the recorded
+transaction and native inventory index. There is no fallback to an overwriting
+rename when exchange is unsupported. The writer checks regular-file identity,
+single link, expected text, root/parent binding and authorization before exchange,
+then verifies the displaced and published entries afterward. A late replacement
+or in-place edit is retained at the recorded recovery path. The target can already
+contain the proposed version when that race is detected; the operation reports
+recovery and does not blindly exchange it back or delete the displaced version.
+
+Ownership, group and ordinary mode bits are preserved. The native backend copies
+visible extended attributes, including readable ACL attributes, and verifies them
+before and after publication. Attribute names and values share a 64 KiB budget,
+with at most 128 attributes. Privileged mode bits, file capabilities, unavailable
+attribute queries or metadata that cannot be reproduced fail before exchange.
+The kernel can omit inaccessible attributes from
+[`flistxattr`](https://man7.org/linux/man-pages/man2/flistxattr.2.html); this does
+not qualify filesystems with hidden mandatory metadata or claim a full security
+descriptor clone. Native platform/filesystem qualification remains required.
+
+Migration recovery entries are recorded before the first project change. A fresh
+preview exposes existing known artifacts through `recovery_files`, containing
+their relative paths and actual text. Only a complete staged proposal or the
+recorded original is eligible for explicit native staging cleanup. Foreign,
+linked, unreadable or changed recovery entries yield `RecoveryRequired` and are
+preserved. `possible_recovery_files` on failure lists candidate names, not proof
+that each exists. Cleanup rechecks bytes, object identity, root/parent binding and
+its distinct removal grant; it never rolls back a project target. A stopped
+operation can resume from a recorded proposal before exchange or a displaced
+original after exchange with a new concrete preview. Unrecognized creation-stage
+leftovers and explicit conflict export/abandonment UI remain pending.
+
+Linux tests exercise the three real migrations, CRLF/Unicode outside root blocks,
+reserved binary data, mode/owner/group and user attributes, idempotence, recovery
+before/after exchange, invalid transaction IDs, cleanup denial/edits and late
+foreign replacements/in-place writes. Android shares the implementation but has
+not been compiled or run here. Other Unix replacement backends and native Windows
+publication remain pending.

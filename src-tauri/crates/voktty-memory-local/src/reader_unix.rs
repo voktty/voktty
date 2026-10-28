@@ -10,6 +10,10 @@ use crate::discovery::{DirectoryEntry, DirectoryListing, EntryKind};
 use crate::reader::{MemoryReadAccess, ReadControl, ReadError};
 use voktty_workspace_kit::PathFact;
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[path = "migration_unix.rs"]
+mod migration;
+
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
     Ok(())
 }
