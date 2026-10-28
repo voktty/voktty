@@ -170,6 +170,11 @@ required placeholder unfilled is an error, not a silent gap.
 
 ## Versioning
 
+The source-only `.gitattributes` keeps bundled Markdown, JSON, text and
+`.gitignore` resources in LF across Git checkout settings, preserving shared
+rendering hashes. It is not deployed into projects. Observed project files
+retain their exact bytes, including CRLF, when inspected or fingerprinted.
+
 `manifest.json` is the source inventory: schema version 1, template version
 and the exact files shipped, classified as base, project content or optional
 root links. The frontend core loads these resources on request, validates
