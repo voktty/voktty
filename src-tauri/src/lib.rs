@@ -4,8 +4,9 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions,
-    fs, git, git_review, harness, history, lsp, mcp, net, pty, quick_composer, quota, rdp, remote,
-    secrets, serial, shell, ssh_native, tray, tunnel, vibrancy, web_server, workspace,
+    fs, git, git_review, harness, history, lsp, mcp, net, project_memory, pty, quick_composer,
+    quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel, vibrancy, web_server,
+    workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -230,6 +231,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(move |_app| {
+            _app.manage(project_memory::NativeMemoryApplication::capture(
+                _app.handle(),
+            ));
             if cfg!(debug_assertions) {
                 log::debug!(
                     "startup setup reached in {} ms",
@@ -258,6 +262,13 @@ pub fn run() {
             }
             // Tie settings lifecycle to the main window so settings closes when main closes.
             if let Some(main) = _app.get_webview_window("main") {
+                if _app
+                    .state::<project_memory::NativeMemoryApplication>()
+                    .attach_window(&main)
+                    .is_err()
+                {
+                    log::warn!("could not bind native project memory window ownership");
+                }
                 #[cfg(target_os = "windows")]
                 {
                     let _ = vibrancy::apply_rounded_corners(&main.as_ref().window());
@@ -847,6 +858,10 @@ pub fn run() {
                 // Servers exit on stdin EOF, but destructors are not guaranteed
                 // on process exit; kill explicitly.
                 tauri::RunEvent::Exit => {
+                    if let Some(state) = app.try_state::<project_memory::NativeMemoryApplication>()
+                    {
+                        state.shutdown();
+                    }
                     if let Some(state) = app.try_state::<harness::host::HarnessHost>() {
                         state.kill_all();
                     }

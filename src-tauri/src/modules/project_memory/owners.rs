@@ -82,6 +82,10 @@ impl NativeMemoryOwners {
         true
     }
 
+    pub fn is_window_current(&self, receipt: &NativeMemoryWindowReceipt) -> bool {
+        self.window(receipt).is_some()
+    }
+
     pub fn open_presentation(
         &mut self,
         window: &NativeMemoryWindowReceipt,

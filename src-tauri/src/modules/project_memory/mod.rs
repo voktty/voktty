@@ -175,3 +175,6 @@ pub use storage::NativeMemoryStorage;
 
 mod owners;
 pub use owners::{NativeMemoryOwners, NativeMemoryPresentationReceipt, NativeMemoryWindowReceipt};
+
+mod application;
+pub use application::{NativeMemoryApplication, NativeMemoryWindow};

@@ -22,7 +22,8 @@ them. Captured grants never widen when the registry changes. Retirement is
 cooperative and does not acknowledge cancellation of a blocked OS call.
 
 This Rust-only foundation grants no writes, instruction trust or session consent.
-It is not wired to startup, IPC, CLI or the common memory panel. Its owner must
+Project observation is not started at startup or exposed through IPC, CLI or the
+common memory panel. Its owner must
 qualify the local filesystem and retire sources when selection changes; a local
 environment descriptor alone does not prove filesystem or transport ownership.
 Ancestor discovery outside captured roots remains incomplete until an explicit
@@ -63,10 +64,9 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
-Ordinary open stays noncreating. Owning the service in the application,
-presentation/IPC wiring, narrow project-ancestor consent,
+Ordinary open stays noncreating. Presentation/IPC wiring, narrow project-ancestor consent,
 publication workers and platform runtime qualification remain pending. This
-module still starts no work automatically.
+module still starts no filesystem work automatically.
 
 `NativeMemoryOwners` provides the native lifecycle registry for future panel
 integration. It retains at most 64 windows and 256 presentations across those
@@ -79,6 +79,27 @@ Capacity rejection never evicts another owner. Removing an owner releases its
 registry slot, while admitted workers retain their separate global budget until
 actual settlement. Read-only selection access cannot transfer or mutate ownership.
 The caller must retain the original native window receipt for destruction and
-recheck the selected receipt immediately before publication. This registry is not
-yet managed by Tauri and does not authenticate IPC caller identities, grant IO,
-create storage, or start discovery.
+recheck the selected receipt immediately before publication. The registry does
+not authenticate IPC caller identities, grant IO, create storage or start discovery.
+
+`NativeMemoryApplication` is managed during Tauri setup and captures the native
+storage origin without filesystem IO. The main window receives a typed
+`NativeMemoryWindow` resource in its own resource table. That table's identity
+matters: Tauri's window equality compares labels only. The native destruction
+listener retains the original resource; only `Destroyed` retires its authority,
+so close requests, hide-to-tray and cancelled close retain their presentations.
+Resource close and final drop also retire that exact owner. Application exit
+permanently shuts down its registry before other subsystem cleanup. Foreign
+application resources and stale window receipts cannot admit work. Cleanup
+recovers a poisoned ownership lock to retire existing authority, while ordinary
+admission rejects poisoned locks. No ownership lock spans an await.
+
+Explicit storage operations validate the captured window before worker admission
+and after settlement, preserving noncreating open and explicit initialization.
+Retirement suppresses delivery without rolling back admitted writes or releasing
+the native worker budget early. Native selection and discovery delegate to the
+existing authority checks. Window attachment belongs to native window creation,
+once per instance; future windows must attach their own resource. Settings and
+quick-composer windows are not memory presentations. No memory commands are
+registered for IPC yet, no resource IDs are delivered to JavaScript, and the
+common panel, initialization publication and CLI remain pending.

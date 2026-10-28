@@ -10,10 +10,10 @@ mod selection_tests;
 #[path = "owners_tests.rs"]
 mod owners_tests;
 
-fn runtime() -> Runtime {
+pub(super) fn runtime() -> Runtime {
     Builder::new_current_thread().enable_time().build().unwrap()
 }
-fn project() -> tempfile::TempDir {
+pub(super) fn project() -> tempfile::TempDir {
     #[cfg(target_os = "linux")]
     {
         tempfile::tempdir_in("/dev/shm").unwrap()
@@ -23,7 +23,7 @@ fn project() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
     }
 }
-fn store() -> (tempfile::TempDir, Arc<LocalMemoryStore>) {
+pub(super) fn store() -> (tempfile::TempDir, Arc<LocalMemoryStore>) {
     let dir = tempfile::tempdir().unwrap();
     #[cfg(unix)]
     {
@@ -34,7 +34,7 @@ fn store() -> (tempfile::TempDir, Arc<LocalMemoryStore>) {
     store.initialize().unwrap();
     (dir, store)
 }
-fn populate(root: &Path) {
+pub(super) fn populate(root: &Path) {
     for file in render_template(
         json!({"project_name":"Native authority","created_at":"2026-10-28"})
             .as_object()

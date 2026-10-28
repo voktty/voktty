@@ -16,6 +16,11 @@ pub struct NativeMemoryStorage {
 mod tests;
 
 impl NativeMemoryStorage {
+    #[cfg(test)]
+    pub(super) fn test_origin(parent: PathBuf) -> Self {
+        Self { parent }
+    }
+
     pub fn capture<R: Runtime>(app: &AppHandle<R>) -> Result<Self, MemoryWorkError> {
         Ok(Self {
             parent: app
