@@ -170,7 +170,7 @@ impl<'a> LocalMemoryWorkspace<'a> {
         self.store
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     pub(crate) fn access(&self) -> &dyn MemoryReadAccess {
         self.access
     }

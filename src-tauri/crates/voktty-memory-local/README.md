@@ -276,7 +276,8 @@ from the native rendered plan. The Unix writer supports `create` and `skip`.
 Linux/Android also implement the known private-ignore and root-rule migrations
 described below. Other Unix targets expose `MigrationUnsupported` through
 `publication_blocker` and reject migrations before project writes. Windows
-publication returns `Unsupported`; its reader remains available.
+supports `create` and `skip`; its migrations still return `MigrationUnsupported`
+before project writes. Windows runtime qualification remains pending.
 
 Unix creates missing directories relative to owned descriptors without following
 links and refuses cross-device parents. A unique exclusive temporary file in the
@@ -287,6 +288,27 @@ publication. Normal staging cleanup checks the owned entry identity and never
 rolls back a published project target. The directory is synced after creation.
 Root-rule files are selected only by their explicit opt-ins. Reserved runtime
 files and unknown files are not overwritten or deleted.
+
+The Windows creator opens missing directories and exclusive staging files with
+directory-relative `NtCreateFile`, retaining ancestor and parent handles without
+write/delete sharing. It checks both requested and normalized handle-parent
+paths against native authority, rejects reparse points and cross-volume parents,
+and flushes complete staging bytes before publication.
+[`NtSetInformationFile`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile)
+with `FileRenameInformation` renames that owned staging object relative to the
+captured parent, with replacement disabled. A racing target, case alias or link
+is preserved. Before rename, it rechecks root/parent identities, staging metadata,
+authority and cancellation. Normal failure cleanup requests disposition only on
+the exclusively created staging handle; it never deletes a re-looked-up path or
+an already published target. Files are flushed again after rename; no Windows
+directory-flush or power-loss durability guarantee is claimed. A crash or failed
+staging disposition can leave an unknown staging entry for explicit recovery.
+
+Windows-specific regression sources cover exact publication and idempotence,
+partial intent recovery, racing files/case aliases/hardlinks, parent rename
+refusal, late permission denial and rejection of unsupported migrations before
+writes. Cross-compilation is not execution of those tests or native platform
+qualification. The writer remains unwired to application, IPC and CLI consumers.
 
 Before the first project change, a bounded, private `memory-deployment.json`
 records native cwd/destination keys and file identities, and the exact proposed
@@ -369,4 +391,4 @@ reserved binary data, mode/owner/group and user attributes, idempotence, recover
 before/after exchange, invalid transaction IDs, cleanup denial/edits and late
 foreign replacements/in-place writes. Android shares the implementation but has
 not been compiled or run here. Other Unix replacement backends and native Windows
-publication remain pending.
+migrations remain pending.

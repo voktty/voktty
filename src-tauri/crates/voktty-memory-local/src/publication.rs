@@ -182,7 +182,7 @@ pub struct InitializationPreview<'w, 'store> {
 }
 
 fn supported() -> Result<(), PublicationError> {
-    if cfg!(unix) {
+    if cfg!(any(unix, windows)) {
         Ok(())
     } else {
         Err(PublicationError::Unsupported)
@@ -741,7 +741,7 @@ fn create(
     access: &dyn MemoryWriteAccess,
     control: &DiscoveryControl,
 ) -> Result<(), PublicationError> {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         workspace
             .checked_root(&phase(control))?
@@ -762,7 +762,7 @@ fn create(
             })?;
         Ok(())
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = (workspace, path, text, access, control);
         Err(PublicationError::Unsupported)

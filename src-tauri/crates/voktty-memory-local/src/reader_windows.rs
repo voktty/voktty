@@ -7,8 +7,8 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::{Component, Path, PathBuf, Prefix};
 use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
 use windows_sys::Wdk::Storage::FileSystem::{
-    NtCreateFile, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN, FILE_OPEN_REPARSE_POINT,
-    FILE_SYNCHRONOUS_IO_NONALERT,
+    NtCreateFile, FILE_CREATE, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN,
+    FILE_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT,
 };
 use windows_sys::Win32::Foundation::{RtlNtStatusToDosError, OBJ_CASE_INSENSITIVE, UNICODE_STRING};
 use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
@@ -19,12 +19,15 @@ use voktty_workspace_kit::PathFact;
 use windows_sys::Win32::Storage::FileSystem::{
     FileBasicInfo, FileCaseSensitiveInfo, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
     FileIdInfo, FileStandardInfo, GetDriveTypeW, GetFileInformationByHandleEx, GetFileType,
-    GetFinalPathNameByHandleW, FILE_ATTRIBUTE_DEVICE, FILE_ATTRIBUTE_DIRECTORY,
+    GetFinalPathNameByHandleW, DELETE, FILE_ATTRIBUTE_DEVICE, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_CASE_SENSITIVE_INFO, FILE_ID_BOTH_DIR_INFO,
     FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES,
     FILE_READ_DATA, FILE_SHARE_READ, FILE_STANDARD_INFO, FILE_TRAVERSE, FILE_TYPE_DISK,
-    SYNCHRONIZE,
+    FILE_WRITE_DATA, SYNCHRONIZE,
 };
+
+#[path = "publication_windows.rs"]
+mod publication;
 
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
     Ok(())
@@ -137,6 +140,21 @@ enum OpenKind {
     Enumerate,
     File,
     Metadata,
+    CreateDirectory,
+    CreateFile,
+}
+
+impl OpenKind {
+    fn directory(self) -> bool {
+        matches!(
+            self,
+            Self::Directory | Self::Enumerate | Self::CreateDirectory
+        )
+    }
+
+    fn create(self) -> bool {
+        matches!(self, Self::CreateDirectory | Self::CreateFile)
+    }
 }
 fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<(File, FileState)> {
     let mut wide: Vec<_> = name.encode_wide().collect();
@@ -172,16 +190,19 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
     let desired = FILE_READ_ATTRIBUTES
         | SYNCHRONIZE
         | match kind {
-            OpenKind::Directory => FILE_TRAVERSE,
+            OpenKind::Directory | OpenKind::CreateDirectory => FILE_TRAVERSE,
             OpenKind::Enumerate => FILE_TRAVERSE | FILE_LIST_DIRECTORY,
             OpenKind::File => FILE_READ_DATA,
             OpenKind::Metadata => 0,
+            OpenKind::CreateFile => FILE_READ_DATA | FILE_WRITE_DATA | DELETE,
         };
     let options = FILE_OPEN_REPARSE_POINT
         | FILE_SYNCHRONOUS_IO_NONALERT
         | match kind {
-            OpenKind::Directory | OpenKind::Enumerate => FILE_DIRECTORY_FILE,
-            OpenKind::File => FILE_NON_DIRECTORY_FILE,
+            OpenKind::Directory | OpenKind::Enumerate | OpenKind::CreateDirectory => {
+                FILE_DIRECTORY_FILE
+            }
+            OpenKind::File | OpenKind::CreateFile => FILE_NON_DIRECTORY_FILE,
             OpenKind::Metadata => 0,
         };
     // Relative calls carry exactly one component. FILE_OPEN_REPARSE_POINT opens
@@ -195,7 +216,11 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
             std::ptr::null(),
             0,
             FILE_SHARE_READ,
-            FILE_OPEN,
+            if kind.create() {
+                FILE_CREATE
+            } else {
+                FILE_OPEN
+            },
             options,
             std::ptr::null(),
             0,
@@ -215,7 +240,7 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
     }
     let metadata = state(&file)?;
     if (kind != OpenKind::Metadata
-        && (metadata.directory != matches!(kind, OpenKind::Directory | OpenKind::Enumerate)
+        && (metadata.directory != kind.directory()
             || metadata.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0))
         || metadata.delete_pending
     {
