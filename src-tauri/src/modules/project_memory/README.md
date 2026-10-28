@@ -28,5 +28,19 @@ environment descriptor alone does not prove filesystem or transport ownership.
 Ancestor discovery outside captured roots remains incomplete until an explicit
 native grant exists. Never automatically authorize the filesystem root to make
 initialization succeed. Future registry revocation must retire captured sources.
-Private-state bootstrap, narrow ancestor consent, selection receipts, publication
-workers and platform runtime qualification remain pending.
+
+`NativeMemorySelection` owns one source per native presentation. Each explicit
+selection replaces its authority before capturing the new destination, including
+failed or unsupported selections. Native-only weak receipts identify the exact
+selection, not its path. Returning to the same path cannot revive a receipt, and
+another presentation cannot borrow or clear it. Exact receipt checks precede
+worker admission; replacement, clearing or owner disposal retires admitted reads
+through the source's existing settlement guard. Worker capacity remains charged
+until actual settlement. Receipts do not retain registry snapshots or sources.
+Callers must recheck `is_current` immediately before publishing a previously
+returned observation; successful `finish` only validates its own delivery point.
+Selection mutation is synchronous and requires exclusive owner access, with no
+lock held across worker awaits. No native presentation is wired to this owner yet.
+
+Private-state bootstrap, narrow ancestor consent, publication workers and platform
+runtime qualification remain pending.

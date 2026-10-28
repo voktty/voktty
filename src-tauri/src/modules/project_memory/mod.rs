@@ -166,3 +166,6 @@ impl Drop for NativeMemorySource {
 
 #[cfg(test)]
 mod tests;
+
+mod selection;
+pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};

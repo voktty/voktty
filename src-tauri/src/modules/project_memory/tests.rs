@@ -4,6 +4,9 @@ use std::fs;
 use tokio::runtime::{Builder, Runtime};
 use voktty_workspace_kit::{render_template, PathFact};
 
+#[path = "selection_tests.rs"]
+mod selection_tests;
+
 fn runtime() -> Runtime {
     Builder::new_current_thread().enable_time().build().unwrap()
 }
