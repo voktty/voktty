@@ -383,7 +383,12 @@ preserved. `possible_recovery_files` on failure lists candidate names, not proof
 that each exists. Cleanup rechecks bytes, object identity, root/parent binding and
 its distinct removal grant; it never rolls back a project target. A stopped
 operation can resume from a recorded proposal before exchange or a displaced
-original after exchange with a new concrete preview. Unrecognized creation-stage
+original after exchange with a new concrete preview. On retry, a displaced
+original remains at its recovery path until the complete inventory and scopes
+verify, including across another interrupted attempt. Only a recorded proposal
+stage is removed before publication. An original whose target is no longer the
+recorded proposal requires explicit recovery; neither copy is deleted or
+automatically migrated again. Unrecognized creation-stage
 leftovers and explicit conflict export/abandonment UI remain pending.
 
 Linux tests exercise the three real migrations, CRLF/Unicode outside root blocks,

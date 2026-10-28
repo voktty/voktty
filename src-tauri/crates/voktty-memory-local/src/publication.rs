@@ -571,8 +571,10 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
         self.check_scopes(self.resuming, control)?;
         for file in &self.recovery {
             self.revalidate(control)?;
-            cleanup(self.destination, file, access, control)?;
-            report.cleaned.push(file.path.clone());
+            if self.cleanup_before_publication(file)? {
+                cleanup(self.destination, file, access, control)?;
+                report.cleaned.push(file.path.clone());
+            }
         }
         let mut intent_saved = self.resuming;
         for (index, entry) in self.prepared.plan.entries.iter().enumerate() {
@@ -629,6 +631,28 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
             sync_state(store)?;
         }
         Ok(())
+    }
+
+    fn cleanup_before_publication(
+        &self,
+        artifact: &RecoveryFile,
+    ) -> Result<bool, PublicationError> {
+        let index = (0..self.intent.files.len())
+            .find(|index| self.intent.backup(*index).as_deref() == Some(&artifact.path))
+            .ok_or(PublicationError::InvalidIntent)?;
+        let file = &self.intent.files[index];
+        if file.original.as_deref() != Some(&artifact.text) {
+            return Ok(true);
+        }
+        let entry = &self.prepared.plan.entries[index];
+        if entry.action != DeploymentAction::Skip
+            || entry.expected.as_deref() != Some(&file.proposed)
+        {
+            return Err(PublicationError::RecoveryRequired(vec![artifact
+                .path
+                .clone()]));
+        }
+        Ok(false)
     }
 }
 
