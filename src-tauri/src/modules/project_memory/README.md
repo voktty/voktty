@@ -67,3 +67,18 @@ Ordinary open stays noncreating. Owning the service in the application,
 presentation/IPC wiring, narrow project-ancestor consent,
 publication workers and platform runtime qualification remain pending. This
 module still starts no work automatically.
+
+`NativeMemoryOwners` provides the native lifecycle registry for future panel
+integration. It retains at most 64 windows and 256 presentations across those
+windows. Native-only weak receipts bind both levels by identity; labels are
+bounded to 128 ASCII bytes. Registering a replacement window retires every old
+presentation, and stale cleanup cannot remove its successor. Presentations cannot
+be accessed through a different window or registry. Closing a presentation,
+retiring its window or dropping the registry retires its selected read authority.
+Capacity rejection never evicts another owner. Removing an owner releases its
+registry slot, while admitted workers retain their separate global budget until
+actual settlement. Read-only selection access cannot transfer or mutate ownership.
+The caller must retain the original native window receipt for destruction and
+recheck the selected receipt immediately before publication. This registry is not
+yet managed by Tauri and does not authenticate IPC caller identities, grant IO,
+create storage, or start discovery.

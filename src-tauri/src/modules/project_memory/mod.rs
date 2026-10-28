@@ -172,3 +172,6 @@ pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
 
 mod storage;
 pub use storage::NativeMemoryStorage;
+
+mod owners;
+pub use owners::{NativeMemoryOwners, NativeMemoryPresentationReceipt, NativeMemoryWindowReceipt};
