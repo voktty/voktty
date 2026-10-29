@@ -1,5 +1,12 @@
 export const en = {
   projectMemory: {
+    reviewTrust: "Review instruction trust", trustTitle: "Trust project instructions",
+    trustDescription: "Review the configuration and every instruction file before trusting them on this computer. This saves instruction trust only; use policy, session choices and capture permissions stay unchanged.",
+    trustAccept: "I reviewed these instructions and trust this exact version on this computer.",
+    trustConfirm: "Trust these instructions", trustSaving: "Saving instruction trust...", trustSaved: "Instruction trust saved.",
+    trustFailed: "The instruction review could not be completed. Refresh and review again before trying to confirm.",
+    trustConfiguration: "Project memory configuration", trustUnchanged: "These instructions match the previously accepted version.",
+    trustChanged: "These instructions differ from the previously accepted version. Review the current files in full before accepting.",
     inspectAncestors: "Inspect parent folders",
     inspectDescription: "Allow this panel to check parent folder metadata and .voktty/kit.json markers, and list immediate .voktty entries. It will not read instructions or sessions, authorize parent workspaces, or save this permission.",
     initialize: "Initialize memory", preview: "Preview files", previewing: "Preparing the file review...",

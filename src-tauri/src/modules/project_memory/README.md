@@ -386,9 +386,45 @@ admitted filesystem work keeps the existing four-slot native worker budget until
 settlement. Cancelled delivery does not roll back an admitted preferences write.
 All result and error paths recheck their original command, native reservation,
 source and owning window. No ownership or command-state mutex spans an await.
-These commands do not yet have a typed trust client or panel controls, and do not
-inject context into Harness, CLI or internal AI. Authenticated remote trust and
+The typed client and manual panel below expose these commands without injecting
+context into Harness, CLI or internal AI. Authenticated remote trust and
 additional native platform runtime qualification remain pending.
+
+## Manual instruction trust panel
+
+The shared terminal and Harness memory panel offers instruction review only for
+a ready scope with complete ancestry, a resolved root and no blocked paths.
+Opening the panel still performs metadata discovery only. Reading instructions
+requires the separate review action; it never initializes private state or a kit.
+The panel presents the native canonical root, configuration and all instruction
+files as literal text. Repository markup is not executed. A changed digest is
+described as a changed version, without inventing an unavailable historical diff.
+
+`nativeMemoryTrust.ts` retains each review's UUID and revision privately, bound
+to its exact selection and receipt object. Display snapshots contain only known
+fields, are cloned and deeply frozen, and cannot be returned as an accepted plan.
+The client checks wire shape and UTF-8 display limits, including 128 files,
+256 KiB per instruction and 2 MiB total. Configuration traversal is bounded to
+16 levels, 8,192 nodes and 256 KiB of strings and keys. These checks do not compute
+trust or replace native schema, scope, authority and fingerprint validation.
+
+Trust and deployment share the existing 256 unsettled-request limit, including
+replaced calls until their actual IPC settlement. Confirmation and cancellation
+coalesce; failed cleanup remains retryable. Selection replacement or close retires
+trust results and errors synchronously, without borrowing a successor's identity.
+Confirmation sends only the retained native UUID and consumes acceptance on either
+success or failure. A malformed acceptance reply is not reported as success and
+does not permit automatic retry. Native admitted writes retain their existing
+settlement and no-rollback semantics.
+
+An unchecked checkbox accepts only the displayed review object. Returning retires
+that review before showing the observation again; a later review requires another
+acceptance. Controller guards recheck selection after awaits and state observers,
+including before reading instructions or confirming trust. Closing never confirms
+trust. Success records instruction trust only, preserving use policy, session and
+capture choices. It starts no agent. Policy/session controls and actual delivery
+remain pending. English and Spanish trust copy is provided; other supported
+locales currently use the established English fallback for these new controls.
 
 ## Narrow ancestor inspection
 

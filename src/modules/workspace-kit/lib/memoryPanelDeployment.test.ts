@@ -53,6 +53,10 @@ function fixture() {
     })),
     cancelPreview: vi.fn(async () => true),
     isReviewCurrent: vi.fn(() => true),
+    reviewTrust: vi.fn(),
+    confirmTrust: vi.fn(),
+    cancelTrust: vi.fn(),
+    isTrustReviewCurrent: vi.fn(() => true),
   };
   const states: MemoryPanelState[] = [];
   const publish = vi.fn((state: MemoryPanelState) => {

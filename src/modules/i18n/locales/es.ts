@@ -2,6 +2,13 @@ import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   projectMemory: {
+    reviewTrust: "Revisar confianza en instrucciones", trustTitle: "Confiar en las instrucciones del proyecto",
+    trustDescription: "Revisa la configuración y cada archivo de instrucciones antes de confiar en ellos en este equipo. Solo se guarda la confianza; la política de uso, las decisiones de sesión y los permisos de captura se conservan.",
+    trustAccept: "He revisado estas instrucciones y confío en esta versión exacta en este equipo.",
+    trustConfirm: "Confiar en estas instrucciones", trustSaving: "Guardando la confianza en instrucciones...", trustSaved: "Confianza en instrucciones guardada.",
+    trustFailed: "No se pudo completar la revisión de instrucciones. Actualiza y vuelve a revisar antes de intentar confirmar.",
+    trustConfiguration: "Configuración de la memoria del proyecto", trustUnchanged: "Estas instrucciones coinciden con la versión aceptada anteriormente.",
+    trustChanged: "Estas instrucciones difieren de la versión aceptada anteriormente. Revisa los archivos actuales completos antes de aceptar.",
     inspectAncestors: "Inspeccionar carpetas superiores",
     inspectDescription: "Permite a este panel comprobar metadatos de las carpetas superiores y sus marcadores .voktty/kit.json, y listar las entradas inmediatas de .voktty. No leerá instrucciones ni sesiones, autorizará proyectos superiores ni guardará este permiso.",
     initialize: "Inicializar memoria", preview: "Vista previa de archivos", previewing: "Preparando la revisión de archivos...",

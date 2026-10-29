@@ -7,13 +7,27 @@ import {
   type NativeMemoryPublication,
   type NativeMemoryDeploymentError,
 } from "@/modules/workspace-kit/lib/nativeMemory";
+import type {
+  NativeMemoryTrustReview,
+  NativeMemoryTrustAccepted,
+} from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 
 export type MemoryPanelTarget = Readonly<{
   path: string;
   environment: WorkspaceEnv;
   source: string;
 }>;
+export type MemoryTrustState =
+  | { status: "trustLoading" }
+  | {
+      status: "trustReview";
+      review: NativeMemoryTrustReview;
+    }
+  | { status: "trustAccepting"; review: NativeMemoryTrustReview }
+  | { status: "trustAccepted"; root: string; report: NativeMemoryTrustAccepted }
+  | { status: "trustError"; code: string };
 export type MemoryPanelState =
+  | MemoryTrustState
   | { status: "loading" }
   | { status: "ready"; observation: NativeMemoryScope }
   | { status: "error"; code: string; canPrepare: boolean }
@@ -33,6 +47,10 @@ type Client = Pick<
   | "confirmPreview"
   | "cancelPreview"
   | "isReviewCurrent"
+  | "reviewTrust"
+  | "confirmTrust"
+  | "cancelTrust"
+  | "isTrustReviewCurrent"
 >;
 type Entry = {
   client: Client;
@@ -139,7 +157,10 @@ export function createMemoryPanelController(
       });
     return pending;
   }
-  function deploy(work: (receipt: NativeMemorySelection) => Promise<void>) {
+  function deploy(
+    work: (receipt: NativeMemorySelection) => Promise<void>,
+    trust = false,
+  ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
     const receipt = selected;
@@ -157,7 +178,11 @@ export function createMemoryPanelController(
             typeof error.code === "string"
               ? (error as NativeMemoryDeploymentError)
               : { code: "unavailable" };
-          notify({ status: "deploymentError", error: failure });
+          notify(
+            trust
+              ? { status: "trustError", code: failure.code }
+              : { status: "deploymentError", error: failure },
+          );
         }
       })
       .finally(() => {
@@ -167,6 +192,52 @@ export function createMemoryPanelController(
   }
   return {
     load: () => run(false),
+    reviewTrust() {
+      if (state.status !== "ready" || !canReviewMemoryTrust(state.observation))
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "trustLoading" });
+        if (!current()) return;
+        const review = await entry.client.reviewTrust(receipt);
+        if (current() && entry.client.isTrustReviewCurrent(receipt, review))
+          notify({ status: "trustReview", review });
+      }, true);
+    },
+    confirmTrust(accepted: NativeMemoryTrustReview) {
+      if (
+        state.status !== "trustReview" ||
+        state.review !== accepted ||
+        !selected ||
+        !entry.client.isTrustReviewCurrent(selected, accepted)
+      )
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "trustAccepting", review: accepted });
+        if (!current()) return;
+        const report = await entry.client.confirmTrust(receipt, accepted);
+        if (current())
+          notify({
+            status: "trustAccepted",
+            root: accepted.snapshot.root,
+            report,
+          });
+      }, true);
+    },
+    backTrust() {
+      if (pending || !current() || !observation) return Promise.resolve();
+      if (state.status === "trustAccepted") {
+        notify({ status: "ready", observation });
+        return Promise.resolve();
+      }
+      if (state.status !== "trustReview" && state.status !== "trustError")
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "trustLoading" });
+        if (!current()) return;
+        await entry.client.cancelTrust(receipt);
+        if (current() && observation) notify({ status: "ready", observation });
+      }, true);
+    },
     prepare: () => run(true),
     inspectAncestors() {
       if (
@@ -253,6 +324,16 @@ export function canInitializeMemory(observation: NativeMemoryScope) {
     !observation.root &&
     (observation.scope.state === "absent" ||
       observation.scope.state === "reserved")
+  );
+}
+
+export function canReviewMemoryTrust(observation: NativeMemoryScope) {
+  return (
+    observation.scope?.state === "ready" &&
+    observation.scope.ancestryComplete === true &&
+    observation.blockedCount === 0 &&
+    typeof observation.root === "string" &&
+    observation.root.length > 0
   );
 }
 

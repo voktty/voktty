@@ -3,6 +3,7 @@ import type { WorkspaceEnv } from "@/modules/workspace/env";
 import type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
 import type { KitDeploymentEntry } from "@/modules/workspace-kit/lib/deployment";
 import type { KitLock } from "@/modules/workspace-kit/lib/configTypes";
+import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 
 type Handle = Readonly<{ id: number; token: string }>;
 const selectionBrand = Symbol("native-memory-selection");
@@ -112,8 +113,8 @@ export function createNativeMemoryPresentation() {
     if (review !== expected || expected.phase === "consumed") cancelled();
   }
 
-  function deploymentRequest<T>(
-    expected: Review,
+  function reviewRequest<T>(
+    receipt: NativeMemorySelection,
     command: string,
     args: Record<string, unknown>,
     check: () => void,
@@ -126,7 +127,7 @@ export function createNativeMemoryPresentation() {
     return (async () => {
       try {
         check();
-        const selected = capture(expected.selection);
+        const selected = capture(receipt);
         const owner = await handle();
         check();
         const result = await invoke<T>(command, {
@@ -162,7 +163,15 @@ export function createNativeMemoryPresentation() {
     }
   }
 
+  const trust = createNativeMemoryTrustClient({
+    checkSelection: (receipt) => {
+      capture(receipt);
+    },
+    canRequest: () => unsettled < 256,
+    request: reviewRequest,
+  });
   return {
+    ...trust.api,
     async select(
       path: string,
       environment: WorkspaceEnv,
@@ -171,6 +180,7 @@ export function createNativeMemoryPresentation() {
       if (closed) cancelled();
       current = null;
       review = null;
+      trust.retire();
       const requested = ++revision;
       if (!Number.isSafeInteger(requested)) cancelled();
       const capturedEnvironment = nativeEnvironment(environment);
@@ -226,8 +236,8 @@ export function createNativeMemoryPresentation() {
       };
       review = expected;
       try {
-        const reply = await deploymentRequest<PreviewReply>(
-          expected,
+        const reply = await reviewRequest<PreviewReply>(
+          expected.selection,
           "project_memory_preview",
           {
             request: {
@@ -280,8 +290,8 @@ export function createNativeMemoryPresentation() {
           return expected.confirmation;
         if (expected.phase !== "ready" || !expected.token) cancelled();
         expected.phase = "publishing";
-        expected.confirmation = deploymentRequest<NativeMemoryPublication>(
-          expected,
+        expected.confirmation = reviewRequest<NativeMemoryPublication>(
+          expected.selection,
           "project_memory_confirm_preview",
           { review: expected.token },
           () => checkReview(expected),
@@ -305,8 +315,8 @@ export function createNativeMemoryPresentation() {
           return Promise.resolve(false);
         if (expected.cancellation) return expected.cancellation;
         expected.phase = "consumed";
-        expected.cancellation = deploymentRequest<boolean>(
-          expected,
+        expected.cancellation = reviewRequest<boolean>(
+          expected.selection,
           "project_memory_cancel_preview",
           { revision: expected.revision },
           () => {
@@ -342,6 +352,7 @@ export function createNativeMemoryPresentation() {
       closed = true;
       current = null;
       review = null;
+      trust.retire();
       closing = (async () => {
         if (!opening) return;
         let owner: Handle;

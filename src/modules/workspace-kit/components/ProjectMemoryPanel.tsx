@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { useTranslation } from "@/modules/i18n";
 import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
+import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
 import {
   createMemoryPanelController,
   canInitializeMemory,
+  canReviewMemoryTrust,
   supportedMemoryPanelTarget,
   type MemoryPanelState,
   type MemoryPanelTarget,
@@ -97,6 +99,39 @@ function MemoryObservation({
       };
     }
   }, [target]);
+  if (
+    state.status === "trustLoading" ||
+    state.status === "trustReview" ||
+    state.status === "trustAccepting" ||
+    state.status === "trustAccepted" ||
+    state.status === "trustError"
+  )
+    return (
+      <>
+        <MemoryTrust
+          state={state}
+          onConfirm={(review) => {
+            void controller.current?.confirmTrust(review);
+          }}
+          onBack={() => {
+            void controller.current?.backTrust();
+          }}
+        />
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={
+              state.status === "trustLoading" ||
+              state.status === "trustAccepting"
+            }
+            onClick={onReload}
+          >
+            {t("common.refresh")}
+          </Button>
+        </DialogFooter>
+      </>
+    );
   if (
     state.status !== "loading" &&
     state.status !== "ready" &&
@@ -197,6 +232,17 @@ function MemoryObservation({
         {state.status === "ready" && canInitializeMemory(state.observation) ? (
           <Button size="sm" onClick={() => controller.current?.configure()}>
             {t("projectMemory.initialize")}
+          </Button>
+        ) : null}
+        {state.status === "ready" && canReviewMemoryTrust(state.observation) ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void controller.current?.reviewTrust();
+            }}
+          >
+            {t("projectMemory.reviewTrust")}
           </Button>
         ) : null}
       </div>

@@ -35,6 +35,10 @@ function client() {
     confirmPreview: vi.fn(),
     cancelPreview: vi.fn(),
     isReviewCurrent: vi.fn(() => true),
+    reviewTrust: vi.fn(),
+    confirmTrust: vi.fn(),
+    cancelTrust: vi.fn(),
+    isTrustReviewCurrent: vi.fn(() => true),
   };
 }
 

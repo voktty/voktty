@@ -3,12 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/modules/i18n";
-import type { MemoryPanelState } from "@/modules/workspace-kit/lib/memoryPanel";
+import type {
+  MemoryPanelState,
+  MemoryTrustState,
+} from "@/modules/workspace-kit/lib/memoryPanel";
 import type { NativeMemoryReview } from "@/modules/workspace-kit/lib/nativeMemory";
 
 type InitializationState = Exclude<
   MemoryPanelState,
-  { status: "loading" | "ready" | "error" }
+  { status: "loading" | "ready" | "error" } | MemoryTrustState
 >;
 export function MemoryInitialization({
   state,
