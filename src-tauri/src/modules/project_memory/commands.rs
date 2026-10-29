@@ -49,6 +49,7 @@ struct Selected {
     token: String,
     receipt: NativeMemorySelectionReceipt,
     reviews: deployment::CommandReviews,
+    trust: trust::CommandTrust,
 }
 
 #[derive(Default)]
@@ -68,6 +69,10 @@ struct PresentationResource {
 impl PresentationResource {
     fn retire(&self) {
         self.live.store(false, Ordering::Release);
+        self.selected
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .selected = None;
         self.window.close_presentation(&self.receipt);
     }
 
@@ -146,6 +151,7 @@ impl PresentationResource {
             token: token.clone(),
             receipt,
             reviews: deployment::CommandReviews::default(),
+            trust: trust::CommandTrust::default(),
         });
         Ok(token)
     }
@@ -358,6 +364,9 @@ pub async fn project_memory_initialize_local_state(
 
 #[path = "commands_deployment.rs"]
 pub mod deployment;
+
+#[path = "commands_trust.rs"]
+pub mod trust;
 
 #[cfg(test)]
 #[path = "commands_tests.rs"]

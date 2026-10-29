@@ -215,6 +215,12 @@ mod ancestor_inspection_tests;
 mod selection;
 pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
 
+mod trust;
+pub use trust::{
+    NativeMemoryTrustRead, NativeMemoryTrustReservation, NativeMemoryTrustReview,
+    NativeMemoryTrustSnapshot, NativeMemoryTrustWrite,
+};
+
 mod deployment;
 mod write_authority;
 pub use deployment::{

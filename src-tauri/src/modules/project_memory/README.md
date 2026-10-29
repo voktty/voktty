@@ -336,6 +336,60 @@ requests per presentation remain counted through actual settlement, including
 superseded requests. These JavaScript guards neither grant native authority nor
 prove filesystem cancellation. Panel deployment follows the explicit review UI below.
 
+## Instruction trust IPC
+
+`project_memory_review_trust` requires the calling presentation, current selection
+token and a strict request with an increasing safe-integer `revision` and optional
+`role`. Role input is bounded to 256 bytes before private state IO; the native
+reader validates the assigned role path before collecting instructions. Unknown
+request fields, client roots, hashes, policies and instruction snapshots are not
+accepted. The command opens existing application state and never initializes it.
+It resolves the memory root through complete, unambiguous native ancestor
+discovery, then requires ordinary content-read authority for that root. Explicit
+ancestor-marker inspection cannot grant instruction trust on an unreadable parent.
+
+One review is retained per selection. Native reservation occurs before awaiting
+private state, sharing the original discovery cancellation and deadline. Its
+weak identity is distinct from both the selected path and the command UUID.
+Replacing a review retires its native reservation, including completed artifacts
+from the same source. An old request cannot borrow a successor's reservation or
+deadline. Native artifacts also retain the exact source authority allocation;
+another presentation, window or application cannot accept them. Selection changes,
+native owner disposal and application shutdown retire the reservation and cancel
+its current IO phase. The command pairs reservation retirement with cancellation
+of its captured phase control; a weak receipt alone is not an IO acknowledgement.
+
+The schema-1 reply contains the review UUID, request revision, resolved `root`,
+`projectKey`, validated `config`, actual `instructions`, their `fingerprint` and
+only that project's nullable `preference`. It excludes the installation identity,
+all other projects' preferences and factual PROJECT/CONTEXT documents. Display
+data cannot replace the immutable native review. The reader's existing per-file,
+aggregate and path limits still apply. No trust history or accepted-byte diff is
+implied: the local store currently retains only accepted digests.
+
+`project_memory_confirm_trust` accepts only the current selection and ready review
+UUID. It consumes the original artifact before worker admission and starts a new
+bounded acceptance phase without renewing the review's two-minute lifetime.
+The worker repeats scope, root, instruction, configuration and preference checks,
+then stores the exact reviewed digest by revision compare-and-swap. The reply
+contains schema 1 and the current project's accepted `preference`. Trusting
+instructions preserves policy, including `never`, and grants no session, capture,
+tool or context-delivery consent. No repository file is written. Errors are
+redacted codes; changed reviews or preference conflicts require a fresh review.
+Failed admission or confirmation never restores the consumed acceptance.
+
+`project_memory_cancel_trust` uses the selection and request revision. Newer
+cancellation records a tombstone so it can arrive before its review command;
+stale cancellation and failure cleanup cannot retire a successor. Opening,
+ready and accepting phases all retire synchronously at their owner. Already
+admitted filesystem work keeps the existing four-slot native worker budget until
+settlement. Cancelled delivery does not roll back an admitted preferences write.
+All result and error paths recheck their original command, native reservation,
+source and owning window. No ownership or command-state mutex spans an await.
+These commands do not yet have a typed trust client or panel controls, and do not
+inject context into Harness, CLI or internal AI. Authenticated remote trust and
+additional native platform runtime qualification remain pending.
+
 ## Narrow ancestor inspection
 
 `project_memory_select` accepts an optional `inspectAncestors` boolean, false

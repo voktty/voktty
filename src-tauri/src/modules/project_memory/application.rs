@@ -298,3 +298,6 @@ mod tests;
 
 #[path = "application_reviews.rs"]
 mod reviews;
+
+#[path = "application_trust.rs"]
+mod trust;

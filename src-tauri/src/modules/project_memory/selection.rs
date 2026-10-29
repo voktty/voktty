@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::Weak;
 use voktty_memory_local::{
-    MemoryDeploymentWorkError, MemoryWriteAccess, OwnedInitializationPreview,
+    MemoryDeploymentWorkError, MemoryTrustError, MemoryWriteAccess, OwnedInitializationPreview,
 };
 
 /// One native presentation's selected source. Changing selection retires the
@@ -10,6 +10,7 @@ use voktty_memory_local::{
 pub struct NativeMemorySelection {
     source: Option<NativeMemorySource>,
     deployment: deployment::NativeMemoryDeployment,
+    trust_control: Option<trust::TrustControl>,
 }
 
 /// Native-only identity, never a filesystem, instruction or session grant.
@@ -36,6 +37,7 @@ impl NativeMemorySelection {
         inspect_ancestors: bool,
     ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
         self.deployment.clear();
+        self.trust_control = None;
         self.source = None;
         let inspection = inspect_ancestors
             .then(|| native_spelling(&requested))
@@ -65,6 +67,7 @@ impl NativeMemorySelection {
             return false;
         }
         self.deployment.clear();
+        self.trust_control = None;
         self.source = None;
         true
     }
@@ -97,6 +100,49 @@ impl NativeMemorySelection {
         control: ReadControl,
     ) -> Result<NativeMemoryRead<NativeContextObservation>, MemoryWorkError> {
         self.current(receipt)?.context(store, role, control)
+    }
+
+    pub fn review_trust(
+        &self,
+        receipt: &NativeMemorySelectionReceipt,
+        reservation: &NativeMemoryTrustReservation,
+        store: Arc<LocalMemoryStore>,
+        role: Option<String>,
+    ) -> Result<NativeMemoryTrustRead, MemoryTrustError> {
+        let control = self
+            .trust_control
+            .as_ref()
+            .filter(|control| control.matches_reservation(reservation))
+            .ok_or(ReadError::Cancelled)?;
+        self.current(receipt)?.review_trust(store, role, control)
+    }
+
+    pub fn reserve_trust(
+        &mut self,
+        receipt: &NativeMemorySelectionReceipt,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryTrustReservation, MemoryWorkError> {
+        self.current(receipt)?;
+        let control = trust::TrustControl::new(control);
+        let receipt = control.receipt();
+        self.trust_control = Some(control);
+        Ok(receipt)
+    }
+
+    pub fn accept_trust(
+        &mut self,
+        receipt: &NativeMemorySelectionReceipt,
+        review: NativeMemoryTrustReview,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryTrustWrite, MemoryTrustError> {
+        self.current(receipt)?.validate_trust(&review)?;
+        let reservation = self
+            .trust_control
+            .as_mut()
+            .filter(|reservation| reservation.matches(&review))
+            .ok_or(ReadError::Cancelled)?;
+        reservation.accepting(control.clone());
+        self.current(receipt)?.accept_trust(review, control)
     }
 
     pub fn prepare_preview(
