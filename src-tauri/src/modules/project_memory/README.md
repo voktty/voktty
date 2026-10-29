@@ -213,7 +213,7 @@ also retires that acceptance, rather than falling back to read grants. Window an
 application forwarding retain their existing exact ownership checks. Linux tests
 cover real publication, three opted-in migrations, reserved content, recovery,
 canonical aliases, denied or oversized grant snapshots and foreign owners.
-Client and panel confirmation, ancestor consent and other native runtime
+Panel confirmation, ancestor consent and other native runtime
 qualification remain pending.
 
 ## Observation IPC
@@ -318,5 +318,22 @@ stale cancellation leaves a successor intact. Cleanup after an asynchronous
 failure also matches the original token. Selection changes, resource close and
 native owner retirement suppress late results and errors. No ownership or
 command-state lock spans an await. Physical workers retain their own capacity
-and publication exclusion until IO settles. The typed deployment client, panel
-flow, narrow ancestor consent and remote transports remain pending.
+and publication exclusion until IO settles. Panel flow, narrow ancestor consent
+and remote transports remain pending.
+
+The typed deployment client captures destination, environment, string inputs and
+link choices before awaiting. Preview revisions increase within its presentation.
+Each returned review has a private object identity bound to its original selection;
+copied, foreign, replaced and closed reviews cannot confirm. Its display snapshot
+is never sent back as a publication plan. Confirmation sends only the native token,
+coalesces duplicate submissions through actual settlement and consumes acceptance
+on success or failure. Current publication failures retain native partial-change
+reports. Retired results and errors are suppressed without promising rollback.
+
+Cancellation retires delivery synchronously and sends the original revision even
+before a token exists. Duplicate cancellation coalesces, failed cancellation can
+be retried, and a successor cannot be cancelled by old cleanup. Up to 256 deployment
+requests per presentation remain counted through actual settlement, including
+superseded requests. These JavaScript guards neither grant native authority nor
+prove filesystem cancellation. The panel still exposes inspection and explicit
+private-state preparation only; deploying a kit requires a separate review UI.

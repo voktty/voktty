@@ -14,7 +14,10 @@ export type MemoryPanelState =
   | { status: "loading" }
   | { status: "ready"; observation: NativeMemoryScope }
   | { status: "error"; code: string; canPrepare: boolean };
-type Client = ReturnType<typeof createNativeMemoryPresentation>;
+type Client = Pick<
+  ReturnType<typeof createNativeMemoryPresentation>,
+  "select" | "isCurrent" | "discover" | "initializeLocalState" | "close"
+>;
 type Entry = {
   client: Client;
   retired: boolean;

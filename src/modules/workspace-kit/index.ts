@@ -23,6 +23,11 @@ export { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nati
 export type {
   NativeMemorySelection,
   NativeMemoryScope,
+  NativeMemoryPreviewInput,
+  NativeMemoryPreviewSnapshot,
+  NativeMemoryReview,
+  NativeMemoryPublication,
+  NativeMemoryDeploymentError,
 } from "@/modules/workspace-kit/lib/nativeMemory";
 export { resolveMemoryScope } from "@/modules/workspace-kit/lib/scope";
 export type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
