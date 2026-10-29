@@ -11,6 +11,11 @@ import type {
   NativeMemoryTrustReview,
   NativeMemoryTrustAccepted,
 } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import type {
+  NativeMemoryPolicy,
+  NativeMemoryPolicyReview,
+  NativeMemoryPolicyAccepted,
+} from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
 
 export type MemoryPanelTarget = Readonly<{
   path: string;
@@ -27,6 +32,7 @@ export type MemoryTrustState =
   | { status: "trustAccepted"; root: string; report: NativeMemoryTrustAccepted }
   | { status: "trustError"; code: string };
 export type MemoryPanelState =
+  | MemoryPolicyState
   | MemoryTrustState
   | { status: "loading" }
   | { status: "ready"; observation: NativeMemoryScope }
@@ -36,6 +42,17 @@ export type MemoryPanelState =
   | { status: "review" | "publishing"; review: NativeMemoryReview }
   | { status: "published"; root: string; report: NativeMemoryPublication }
   | { status: "deploymentError"; error: NativeMemoryDeploymentError };
+export type MemoryPolicyState =
+  | { status: "policyConfiguring" }
+  | { status: "policyLoading" }
+  | { status: "policyReview"; review: NativeMemoryPolicyReview }
+  | { status: "policyAccepting"; review: NativeMemoryPolicyReview }
+  | {
+      status: "policyAccepted";
+      root: string;
+      report: NativeMemoryPolicyAccepted;
+    }
+  | { status: "policyError"; code: string };
 type Client = Pick<
   ReturnType<typeof createNativeMemoryPresentation>,
   | "select"
@@ -51,6 +68,10 @@ type Client = Pick<
   | "confirmTrust"
   | "cancelTrust"
   | "isTrustReviewCurrent"
+  | "reviewPolicy"
+  | "confirmPolicy"
+  | "cancelPolicy"
+  | "isPolicyReviewCurrent"
 >;
 type Entry = {
   client: Client;
@@ -159,7 +180,7 @@ export function createMemoryPanelController(
   }
   function deploy(
     work: (receipt: NativeMemorySelection) => Promise<void>,
-    trust = false,
+    operation: "deployment" | "trust" | "policy" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
@@ -179,9 +200,11 @@ export function createMemoryPanelController(
               ? (error as NativeMemoryDeploymentError)
               : { code: "unavailable" };
           notify(
-            trust
+            operation === "trust"
               ? { status: "trustError", code: failure.code }
-              : { status: "deploymentError", error: failure },
+              : operation === "policy"
+                ? { status: "policyError", code: failure.code }
+                : { status: "deploymentError", error: failure },
           );
         }
       })
@@ -192,6 +215,67 @@ export function createMemoryPanelController(
   }
   return {
     load: () => run(false),
+    configurePolicy() {
+      if (
+        !pending &&
+        current() &&
+        state.status === "ready" &&
+        canReviewMemoryPolicy(state.observation)
+      )
+        notify({ status: "policyConfiguring" });
+    },
+    reviewPolicy(choice: NativeMemoryPolicy) {
+      if (state.status !== "policyConfiguring") return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "policyLoading" });
+        if (!current()) return;
+        const review = await entry.client.reviewPolicy(receipt, choice);
+        if (current() && entry.client.isPolicyReviewCurrent(receipt, review))
+          notify({ status: "policyReview", review });
+      }, "policy");
+    },
+    confirmPolicy(accepted: NativeMemoryPolicyReview) {
+      if (
+        state.status !== "policyReview" ||
+        state.review !== accepted ||
+        !selected ||
+        !entry.client.isPolicyReviewCurrent(selected, accepted)
+      )
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "policyAccepting", review: accepted });
+        if (
+          !current() ||
+          !entry.client.isPolicyReviewCurrent(receipt, accepted)
+        )
+          return;
+        const report = await entry.client.confirmPolicy(receipt, accepted);
+        if (current())
+          notify({
+            status: "policyAccepted",
+            root: accepted.snapshot.root,
+            report,
+          });
+      }, "policy");
+    },
+    backPolicy() {
+      if (pending || !current() || !observation) return Promise.resolve();
+      if (
+        state.status === "policyConfiguring" ||
+        state.status === "policyAccepted"
+      ) {
+        notify({ status: "ready", observation });
+        return Promise.resolve();
+      }
+      if (state.status !== "policyReview" && state.status !== "policyError")
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "policyLoading" });
+        if (!current()) return;
+        await entry.client.cancelPolicy(receipt);
+        if (current()) notify({ status: "policyConfiguring" });
+      }, "policy");
+    },
     reviewTrust() {
       if (state.status !== "ready" || !canReviewMemoryTrust(state.observation))
         return Promise.resolve();
@@ -201,7 +285,7 @@ export function createMemoryPanelController(
         const review = await entry.client.reviewTrust(receipt);
         if (current() && entry.client.isTrustReviewCurrent(receipt, review))
           notify({ status: "trustReview", review });
-      }, true);
+      }, "trust");
     },
     confirmTrust(accepted: NativeMemoryTrustReview) {
       if (
@@ -221,7 +305,7 @@ export function createMemoryPanelController(
             root: accepted.snapshot.root,
             report,
           });
-      }, true);
+      }, "trust");
     },
     backTrust() {
       if (pending || !current() || !observation) return Promise.resolve();
@@ -236,7 +320,7 @@ export function createMemoryPanelController(
         if (!current()) return;
         await entry.client.cancelTrust(receipt);
         if (current() && observation) notify({ status: "ready", observation });
-      }, true);
+      }, "trust");
     },
     prepare: () => run(true),
     inspectAncestors() {
@@ -335,6 +419,10 @@ export function canReviewMemoryTrust(observation: NativeMemoryScope) {
     typeof observation.root === "string" &&
     observation.root.length > 0
   );
+}
+
+export function canReviewMemoryPolicy(observation: NativeMemoryScope) {
+  return canReviewMemoryTrust(observation);
 }
 
 export function supportedMemoryPanelTarget(target: MemoryPanelTarget) {

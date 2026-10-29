@@ -1,5 +1,16 @@
 export const en = {
   projectMemory: {
+    policyConfigure: "Configure memory use", policyTitle: "Local memory use policy",
+    policyDescription: "Saved on this computer for this project until you change it. Project files, instruction trust and capture permissions stay unchanged.",
+    policyDeliveryPending: "Memory delivery to agents is not connected yet. Saving a policy does not enable a session.",
+    policyChoice: "Choose a policy", policyManual: "Manual for each session", policyAlways: "Always in this project", policyNever: "Never in this project",
+    policyManualDescription: "Require an explicit choice in each managed session. Opening Voktty or this panel never asks or enables memory.",
+    policyAlwaysDescription: "Allow trusted memory in future managed sessions here when the runtime supports it.",
+    policyNeverDescription: "Disable Voktty memory integration here until changed manually. Agents may still read existing rule files.",
+    policyReview: "Review policy change", policyCurrent: "Current local policy", policyRequested: "New local policy",
+    policySaveEffects: "Save only the reviewed local policy. Closing during saving may leave this policy changed.",
+    policySaved: "Local policy saved: {policy}.", policyFailed: "The policy change could not be confirmed. Refresh and review the current setting before trying again.",
+    policySaving: "Saving local policy...", policyConfirm: "Save local policy",
     reviewTrust: "Review instruction trust", trustTitle: "Trust project instructions",
     trustDescription: "Review the configuration and every instruction file before trusting them on this computer. This saves instruction trust only; use policy, session choices and capture permissions stay unchanged.",
     trustAccept: "I reviewed these instructions and trust this exact version on this computer.",

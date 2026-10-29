@@ -4,10 +4,12 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { useTranslation } from "@/modules/i18n";
 import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
 import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
+import { MemoryPolicy } from "@/modules/workspace-kit/components/MemoryPolicy";
 import {
   createMemoryPanelController,
   canInitializeMemory,
   canReviewMemoryTrust,
+  canReviewMemoryPolicy,
   supportedMemoryPanelTarget,
   type MemoryPanelState,
   type MemoryPanelTarget,
@@ -99,6 +101,44 @@ function MemoryObservation({
       };
     }
   }, [target]);
+  if (
+    state.status === "policyConfiguring" ||
+    state.status === "policyLoading" ||
+    state.status === "policyReview" ||
+    state.status === "policyAccepting" ||
+    state.status === "policyAccepted" ||
+    state.status === "policyError"
+  )
+    return (
+      <>
+        <MemoryPolicy
+          key={state.status === "policyConfiguring" ? "configure" : "operation"}
+          state={state}
+          onReview={(choice) => {
+            void controller.current?.reviewPolicy(choice);
+          }}
+          onConfirm={(review) => {
+            void controller.current?.confirmPolicy(review);
+          }}
+          onBack={() => {
+            void controller.current?.backPolicy();
+          }}
+        />
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={
+              state.status === "policyLoading" ||
+              state.status === "policyAccepting"
+            }
+            onClick={onReload}
+          >
+            {t("common.refresh")}
+          </Button>
+        </DialogFooter>
+      </>
+    );
   if (
     state.status === "trustLoading" ||
     state.status === "trustReview" ||
@@ -243,6 +283,16 @@ function MemoryObservation({
             }}
           >
             {t("projectMemory.reviewTrust")}
+          </Button>
+        ) : null}
+        {state.status === "ready" &&
+        canReviewMemoryPolicy(state.observation) ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => controller.current?.configurePolicy()}
+          >
+            {t("projectMemory.policyConfigure")}
           </Button>
         ) : null}
       </div>

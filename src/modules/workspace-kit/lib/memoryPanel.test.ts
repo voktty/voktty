@@ -39,6 +39,10 @@ function client() {
     confirmTrust: vi.fn(),
     cancelTrust: vi.fn(),
     isTrustReviewCurrent: vi.fn(() => true),
+    reviewPolicy: vi.fn(),
+    confirmPolicy: vi.fn(),
+    cancelPolicy: vi.fn(),
+    isPolicyReviewCurrent: vi.fn(() => true),
   };
 }
 

@@ -2,6 +2,17 @@ import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   projectMemory: {
+    policyConfigure: "Configurar uso de memoria", policyTitle: "Política local de uso de memoria",
+    policyDescription: "Se guarda en este equipo para este proyecto hasta que la cambies. Los archivos del proyecto, la confianza en instrucciones y los permisos de captura se conservan.",
+    policyDeliveryPending: "La entrega de memoria a agentes aún no está conectada. Guardar una política no habilita una sesión.",
+    policyChoice: "Elige una política", policyManual: "Manual para cada sesión", policyAlways: "Siempre en este proyecto", policyNever: "Nunca en este proyecto",
+    policyManualDescription: "Requiere una elección explícita en cada sesión gestionada. Abrir Voktty o este panel no pregunta ni habilita memoria.",
+    policyAlwaysDescription: "Permite memoria de confianza en futuras sesiones gestionadas aquí cuando el runtime la admita.",
+    policyNeverDescription: "Desactiva la integración de memoria de Voktty aquí hasta cambiarla manualmente. Los agentes aún pueden leer los archivos de reglas existentes.",
+    policyReview: "Revisar cambio de política", policyCurrent: "Política local actual", policyRequested: "Nueva política local",
+    policySaveEffects: "Guarda solo la política local revisada. Cerrar durante el guardado puede dejar esta política cambiada.",
+    policySaved: "Política local guardada: {policy}.", policyFailed: "No se pudo confirmar el cambio de política. Actualiza y revisa el ajuste actual antes de reintentar.",
+    policySaving: "Guardando política local...", policyConfirm: "Guardar política local",
     reviewTrust: "Revisar confianza en instrucciones", trustTitle: "Confiar en las instrucciones del proyecto",
     trustDescription: "Revisa la configuración y cada archivo de instrucciones antes de confiar en ellos en este equipo. Solo se guarda la confianza; la política de uso, las decisiones de sesión y los permisos de captura se conservan.",
     trustAccept: "He revisado estas instrucciones y confío en esta versión exacta en este equipo.",

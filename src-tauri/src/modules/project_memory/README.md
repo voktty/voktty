@@ -365,8 +365,8 @@ writes are not rolled back by retirement.
 The existing window, presentation and physical worker budgets remain unchanged.
 Linux tests exercise replacement, exact cleanup, foreign ownership, selection
 round trips, native retirement and queued cancellation. The policy IPC below
-exposes these operations; client and panel controls, exact session permissions
-and context delivery remain pending.
+exposes these operations through the typed client and manual panel below.
+Exact session permissions and context delivery remain pending.
 Remote policy operations and other native runtimes are not yet qualified.
 
 ## Local policy IPC
@@ -401,7 +401,7 @@ Source, presentation, window and application retirement reject late results and
 errors. The original review lifetime is never renewed, no mutex spans an await,
 and admitted work retains its physical budget until settlement. Retired delivery
 does not roll back an admitted policy write. Errors contain only redacted codes.
-The typed client below exposes these commands; panel controls, session grants
+The typed client and manual panel below expose these commands; session grants
 and context consumers remain pending.
 
 ## Typed policy client
@@ -427,7 +427,37 @@ including retired operations until their actual IPC settlement. A full budget
 refuses new admission without replacing an admitted review. These JavaScript
 receipts do not acknowledge physical cancellation or roll back native writes.
 Construction starts no IPC, preference mutation, agent or session. The manual
-panel, exact session grants and context delivery remain separate integrations.
+panel below provides manual policy choices; exact session grants and context
+delivery remain separate integrations.
+
+## Manual local policy panel
+
+The shared terminal and Harness memory panel offers policy management only for
+a complete, unambiguous ready scope with a resolved root and no blocked paths.
+Opening the panel still performs metadata discovery only. Opening policy choices
+does no additional IO and selects no value implicitly. The three choices are
+manual per session, always in this project and never in this project. Copy
+explains their local duration, independent instruction trust and capture consent,
+and the fact that context delivery is not connected yet.
+
+Review requires an explicit choice and reads the native policy artifact. It
+shows the resolved root, current effective policy and exact requested policy.
+Saving requires a separate action on that same review object. Back cancels the
+original review before returning to choices and resets the radio selection.
+The success view reports only the persisted local policy, never a session enable
+or model delivery. Never does not remove rule files that an external agent may
+still read. Closing during an admitted save does not imply rollback.
+
+Controller guards retain the original selection across awaits and synchronous
+state observers, including immediately before confirmation. Duplicate actions
+coalesce; errors cannot automatically retry a consumed review. Policy errors stay
+separate from trust and deployment. Refresh, target retirement and close retire
+the original presentation and suppress late results and errors. Busy review and
+save states disable duplicate save, back and refresh controls. The existing
+presentation and request limits remain unchanged. English and Spanish copy is
+provided; other locales use the established English fallback for these controls.
+Exact session permissions, persistent policy indicators outside management,
+context delivery and native runtime smoke qualification remain pending.
 
 ## Instruction trust IPC
 
@@ -519,8 +549,8 @@ that review before showing the observation again; a later review requires anothe
 acceptance. Controller guards recheck selection after awaits and state observers,
 including before reading instructions or confirming trust. Closing never confirms
 trust. Success records instruction trust only, preserving use policy, session and
-capture choices. It starts no agent. Policy/session controls and actual delivery
-remain pending. English and Spanish trust copy is provided; other supported
+capture choices. It starts no agent. Policy has its separate manual controls;
+session controls and actual delivery remain pending. English and Spanish trust copy is provided; other supported
 locales currently use the established English fallback for these new controls.
 
 ## Narrow ancestor inspection

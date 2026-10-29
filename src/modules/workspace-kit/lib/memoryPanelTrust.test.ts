@@ -46,6 +46,10 @@ function fixture() {
     confirmTrust: vi.fn(async () => trustAccepted),
     cancelTrust: vi.fn(async () => true),
     isTrustReviewCurrent: vi.fn(() => true),
+    reviewPolicy: vi.fn(),
+    confirmPolicy: vi.fn(),
+    cancelPolicy: vi.fn(),
+    isPolicyReviewCurrent: vi.fn(() => true),
   };
   const states: MemoryPanelState[] = [];
   const publish = vi.fn((state: MemoryPanelState) => {

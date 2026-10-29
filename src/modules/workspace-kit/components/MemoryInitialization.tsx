@@ -6,12 +6,15 @@ import { useTranslation } from "@/modules/i18n";
 import type {
   MemoryPanelState,
   MemoryTrustState,
+  MemoryPolicyState,
 } from "@/modules/workspace-kit/lib/memoryPanel";
 import type { NativeMemoryReview } from "@/modules/workspace-kit/lib/nativeMemory";
 
 type InitializationState = Exclude<
   MemoryPanelState,
-  { status: "loading" | "ready" | "error" } | MemoryTrustState
+  | { status: "loading" | "ready" | "error" }
+  | MemoryTrustState
+  | MemoryPolicyState
 >;
 export function MemoryInitialization({
   state,
