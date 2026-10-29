@@ -327,6 +327,21 @@ impl<'a> LocalMemoryWorkspace<'a> {
         &self.project_key
     }
 
+    pub(crate) fn observe_preference(
+        &self,
+        control: &ReadControl,
+    ) -> Result<(LocalMemorySnapshot, Option<ProjectPreference>), ReadError> {
+        let _permit = ReadPermit::acquire(control)?;
+        self.checked_root(control)?;
+        let snapshot = self.store.load().map_err(ReadError::Store)?;
+        if self.identity["machineId"] != snapshot.installation_id() {
+            return Err(ReadError::StaleInstallation);
+        }
+        let preference = snapshot.project_for_root(&self.project_key, self.root_instance.as_ref());
+        self.checked_root(control)?;
+        Ok((snapshot, preference))
+    }
+
     /// Records an explicit local choice without accepting instructions or enabling
     /// a session. The caller must retain its original native owner until settlement.
     pub fn set_policy(

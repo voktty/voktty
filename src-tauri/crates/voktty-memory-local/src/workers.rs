@@ -141,6 +141,27 @@ fn validate_path(path: &Path) -> Result<(), ReadError> {
     Ok(())
 }
 
+fn resolve_ready_memory(
+    origin: &LocalMemoryWorkspace<'_>,
+    control: &DiscoveryControl,
+) -> Result<Option<(PathBuf, String)>, ReadError> {
+    let observed = origin.observe_scope(DiscoveryPurpose::Discover, control)?;
+    if observed.scope.state != "ready"
+        || !observed.scope.ancestry_complete
+        || !observed.blocked_paths.is_empty()
+    {
+        return Ok(None);
+    }
+    let Some(key) = observed.scope.root_key else {
+        return Ok(None);
+    };
+    Ok(observed
+        .directories
+        .into_iter()
+        .find(|directory| directory.directory_key == key && directory.state == "valid")
+        .map(|directory| (directory.path, key)))
+}
+
 impl MemoryWorkers {
     /// `parent` must come from the native application's directory resolver.
     /// Neither repository data nor webview paths may select private state.
@@ -276,6 +297,10 @@ pub use deployment::{MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPrevi
 #[path = "trust_workers.rs"]
 mod trust;
 pub use trust::{MemoryTrustError, MemoryTrustJob, MemoryTrustReview};
+
+#[path = "policy_workers.rs"]
+mod policy;
+pub use policy::{MemoryPolicyError, MemoryPolicyJob, MemoryPolicyReview};
 
 #[cfg(test)]
 #[path = "workers_tests.rs"]

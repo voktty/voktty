@@ -26,9 +26,9 @@ pub use publication::{
     PublicationFailure, PublicationReport, PublicationWriteRequirements, RecoveryFile,
 };
 pub use workers::{
-    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryJob, MemoryPreviewRequest,
-    MemoryStoreMode, MemoryTrustError, MemoryTrustJob, MemoryTrustReview, MemoryWorkError,
-    MemoryWorkers,
+    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryJob, MemoryPolicyError, MemoryPolicyJob,
+    MemoryPolicyReview, MemoryPreviewRequest, MemoryStoreMode, MemoryTrustError, MemoryTrustJob,
+    MemoryTrustReview, MemoryWorkError, MemoryWorkers,
 };
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;

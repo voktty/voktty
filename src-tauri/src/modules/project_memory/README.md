@@ -336,6 +336,38 @@ requests per presentation remain counted through actual settlement, including
 superseded requests. These JavaScript guards neither grant native authority nor
 prove filesystem cancellation. Panel deployment follows the explicit review UI below.
 
+## Native policy ownership
+
+`NativeMemorySelection` reserves one policy operation before private-state IO.
+Its weak native identity differs from the source and path. A replacement retires
+the original reservation and cancels its current phase. Review starts only once;
+failed admission does not permit reusing that reservation. Exact cancellation
+cannot retire a successor or another selection. Selection replacement, including
+failed capture, presentation close, window retirement and application shutdown
+retire contained policy work.
+
+`NativeMemoryOwners` and `NativeMemoryApplication` forward reservation, review,
+acceptance and cancellation under their original native receipts. No ownership
+mutex spans an await. `open_policy_store` uses only existing application state,
+checks the still-unstarted reservation before and after reading, and preserves
+its original remaining deadline and cancellation. It never initializes identity
+or uses a project as private storage.
+
+The native review retains its exact source authority allocation. Its detached
+snapshot contains the resolved root, project key, immutable requested policy and
+only that project's effective preference. Edited display values cannot replace
+the artifact. Foreign, replaced and retired artifacts cannot accept. Acceptance
+consumes the artifact and transfers the reservation to its new bounded phase
+without renewing the review lifetime. Results and errors check the original
+source and reservation after worker settlement. Already admitted preference
+writes are not rolled back by retirement.
+
+The existing window, presentation and physical worker budgets remain unchanged.
+Linux tests exercise replacement, exact cleanup, foreign ownership, selection
+round trips, native retirement and queued cancellation. Policy IPC, client and
+panel controls, exact session permissions and context delivery remain pending.
+Remote policy operations and other native runtimes are not yet qualified.
+
 ## Instruction trust IPC
 
 `project_memory_review_trust` requires the calling presentation, current selection

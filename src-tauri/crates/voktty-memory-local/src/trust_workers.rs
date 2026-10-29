@@ -1,8 +1,8 @@
 use super::{validate_path, Control, Job, MemoryWorkError, MemoryWorkers};
 use crate::reader::OwnedMemoryWorkspace;
 use crate::{
-    DiscoveryControl, DiscoveryPurpose, LocalMemorySnapshot, LocalMemoryStore,
-    LocalMemoryWorkspace, MemoryReadAccess, NativeContextObservation, ReadError,
+    DiscoveryControl, LocalMemorySnapshot, LocalMemoryStore, LocalMemoryWorkspace,
+    MemoryReadAccess, NativeContextObservation, ReadError,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -103,23 +103,7 @@ fn resolve(
     origin: &LocalMemoryWorkspace<'_>,
     control: &DiscoveryControl,
 ) -> Result<(PathBuf, String), MemoryTrustError> {
-    let observed = origin.observe_scope(DiscoveryPurpose::Discover, control)?;
-    if observed.scope.state != "ready"
-        || !observed.scope.ancestry_complete
-        || !observed.blocked_paths.is_empty()
-    {
-        return Err(MemoryTrustError::ScopeUnavailable);
-    }
-    let key = observed
-        .scope
-        .root_key
-        .ok_or(MemoryTrustError::ScopeUnavailable)?;
-    let directory = observed
-        .directories
-        .into_iter()
-        .find(|directory| directory.directory_key == key && directory.state == "valid")
-        .ok_or(MemoryTrustError::ScopeUnavailable)?;
-    Ok((directory.path, key))
+    super::resolve_ready_memory(origin, control)?.ok_or(MemoryTrustError::ScopeUnavailable)
 }
 
 #[must_use = "finish or drop the trust job to retire its consumer"]

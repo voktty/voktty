@@ -221,6 +221,12 @@ pub use trust::{
     NativeMemoryTrustSnapshot, NativeMemoryTrustWrite,
 };
 
+mod policy;
+pub use policy::{
+    NativeMemoryPolicyRead, NativeMemoryPolicyReservation, NativeMemoryPolicyReview,
+    NativeMemoryPolicySnapshot, NativeMemoryPolicyWrite,
+};
+
 mod deployment;
 mod write_authority;
 pub use deployment::{

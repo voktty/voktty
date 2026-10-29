@@ -333,6 +333,35 @@ pending. Linux tests exercise mixed capacity, queued cancellation, blocked
 publication through timeout, partial recovery and completed-but-retired delivery;
 other native runtime qualification remains pending.
 
+## Native policy reviews
+
+`MemoryWorkers::review_policy` resolves one ready, unambiguous memory root from
+the captured execution directory. It uses the same ancestor resolver as trust
+review and requires ordinary native root authority, not just marker inspection.
+It reads metadata, configuration markers and existing private preferences, never
+instruction or factual document contents. Preparation changes no preferences.
+
+The non-cloneable `MemoryPolicyReview` retains the original execution and memory
+root identities, store and authority allocations, exact requested policy,
+effective project preference and full private snapshot for concurrency checks.
+Only root, project key, choice and that project's effective preference are
+available for display. The two-minute review lifetime cannot be renewed.
+
+`accept_policy` consumes the original review before worker admission. It repeats
+scope discovery around preference validation, checks both captured roots and
+compares the original snapshot before the root-bound revision/installation CAS.
+Another preference write requires a fresh review. Acceptance changes policy
+only: current-root trust is preserved, legacy or replaced-root trust cannot be
+adopted, and no session or capture permission is created. This does not attest
+to current instruction bytes or authorize delivery.
+
+Both operations share the existing four-slot worker budget, original discovery
+deadline and cancellation through physical settlement. Queued cancellation
+prevents IO; retirement after a write suppresses delivery without rollback.
+Linux tests cover parent resolution without instruction reads, policy/trust
+separation, concurrent changes, stale identities and scope, expiry, cancellation,
+capacity and noncreating errors. Other native runtime qualification is pending.
+
 ## Native instruction trust reviews
 
 `MemoryWorkers::review_trust` resolves the memory root from a captured execution

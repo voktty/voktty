@@ -11,6 +11,7 @@ pub struct NativeMemorySelection {
     source: Option<NativeMemorySource>,
     deployment: deployment::NativeMemoryDeployment,
     trust_control: Option<trust::TrustControl>,
+    pub(super) policy_control: Option<policy::PolicyControl>,
 }
 
 /// Native-only identity, never a filesystem, instruction or session grant.
@@ -38,6 +39,7 @@ impl NativeMemorySelection {
     ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
         self.deployment.clear();
         self.trust_control = None;
+        self.policy_control = None;
         self.source = None;
         let inspection = inspect_ancestors
             .then(|| native_spelling(&requested))
@@ -68,11 +70,12 @@ impl NativeMemorySelection {
         }
         self.deployment.clear();
         self.trust_control = None;
+        self.policy_control = None;
         self.source = None;
         true
     }
 
-    fn current(
+    pub(super) fn current(
         &self,
         receipt: &NativeMemorySelectionReceipt,
     ) -> Result<&NativeMemorySource, MemoryWorkError> {
