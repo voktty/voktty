@@ -156,6 +156,18 @@ store failures or preference revisions that change during a batch also invalidat
 the batch. Callers must capture transport ownership before choosing this API;
 serialized environment facts never prove that a remote path is local.
 
+Unix checks the opened project-root descriptor with `fstatfs` before loading
+preferences or reading project content and on every root revalidation. It uses
+the same recognized local filesystem set as private storage: Linux/Android
+ext-family, Btrfs, tmpfs, XFS, overlayfs, ZFS and F2FS; Apple APFS/HFS with
+`MNT_LOCAL`. Unknown, network and userspace filesystems fail with `Unsupported`.
+Project qualification does not impose private-state ownership, mode or ACL rules
+on an authorized workspace. Private-state checks retain those separate rules.
+Windows continues to check both requested and opened-handle paths for local disk
+drives. Classification describes OS-reported filesystem properties, not physical
+backing storage, arbitrary third-party support or platform runtime qualification.
+Blocking metadata calls still require the bounded worker and settlement rules.
+
 The Unix backend opens each directory component relative to an owned directory
 descriptor with `O_NOFOLLOW`. Content-read opens are read-only, close-on-exec and
 nonblocking. This prevents symlinks, including replaced intermediate directories,

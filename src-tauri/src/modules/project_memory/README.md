@@ -23,8 +23,12 @@ cooperative and does not acknowledge cancellation of a blocked OS call.
 
 Capturing a read source grants no writes, instruction trust or session consent.
 Project observation is not started at startup. Its owner must
-qualify the local filesystem and retire sources when selection changes; a local
+qualify the local transport and retire sources when selection changes; a local
 environment descriptor alone does not prove filesystem or transport ownership.
+The worker checks the actual project-root filesystem through its native handle,
+including when revalidating an existing binding. Unix uses the recognized local
+filesystem policy documented by the reader; Windows checks local disk paths.
+This OS-reported classification does not attest to physical backing storage.
 Ancestor discovery outside captured roots remains incomplete until an explicit
 native grant exists. Never automatically authorize the filesystem root to make
 initialization succeed. Future registry revocation must retire captured sources.
@@ -92,7 +96,7 @@ can still identify its in-flight result but cannot publish again. Exact
 `cancel_preview` cleanup can release it afterward without touching a replacement.
 No mutation lock spans an await. Registry limits still bound containing owners;
 there is no review history, background timer, implicit deployment or AI launch.
-IPC and narrow ancestor consent remain pending.
+Narrow ancestor consent remains pending.
 Linux tests exercise the real native workers and filesystem. Other native runtime
 qualification remains pending.
 
@@ -118,7 +122,7 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
 Ordinary open stays noncreating. Kit deployment UI, narrow project-ancestor consent,
-publication commands and platform runtime qualification remain pending. This
+and platform runtime qualification remain pending. This
 module still starts no filesystem work automatically.
 
 `NativeMemoryOwners` provides the native lifecycle registry for panel
@@ -181,8 +185,8 @@ native artifact. It holds no mutation lock after returning and cannot replace
 the accepted plan. Editing a snapshot's proposed bytes does not change what
 publication writes. Callers still revalidate `is_preview_current` before delivery.
 No ownership mutex spans an await. Publication continues to require separate
-qualified native write authority. Native
-IPC tokens and command ordering remain pending.
+qualified native write authority. The deployment IPC below retains native
+receipts behind ordered, opaque command tokens.
 
 ## Purpose-bound publication authority
 
@@ -209,8 +213,8 @@ also retires that acceptance, rather than falling back to read grants. Window an
 application forwarding retain their existing exact ownership checks. Linux tests
 cover real publication, three opted-in migrations, reserved content, recovery,
 canonical aliases, denied or oversized grant snapshots and foreign owners.
-IPC confirmation, ancestor consent and other native runtime qualification remain
-pending.
+Client and panel confirmation, ancestor consent and other native runtime
+qualification remain pending.
 
 ## Observation IPC
 
@@ -273,3 +277,46 @@ Private-state preparation requires its own explicit action under a retained
 selection; inspection starts no agent and grants no instruction trust or session
 consent. Scope lookup failures never imply absence. Kit deployment, policy and
 capture controls remain separate pending integrations.
+
+## Deployment IPC
+
+`project_memory_preview` requires the calling presentation handle, current
+selection token and a strict request containing `revision`, `destination`,
+`environment`, string `inputs` and explicit `links` flags. Revisions increase
+from 1 through JavaScript's maximum safe integer within each selection. Stale
+or repeated revisions cannot replace a review. A fresh revision retires the
+previous review even if destination validation fails. Inputs are checked before
+private storage IO against the worker's 32-value, 64-byte-key, 16-KiB-value and
+256-KiB-total limits. Nested input values, client plans, authorities, storage
+origins and unknown request or link fields are rejected.
+
+The command reserves native ownership before awaiting noncreating private-state
+open, then prepares and adopts only that exact review. It never initializes
+missing state, grants roots, starts an agent or changes use policy. Its schema-1
+reply contains an opaque review UUID, revision, detached deployment display data,
+recovery display files, resume status and a redacted platform blocker. Expected
+and proposed project bytes are deliberately included for explicit review; private
+preferences, installation identity and authorization objects are not. Editing
+the returned data cannot change the retained native publication plan.
+
+`project_memory_confirm_preview` accepts only that selection and ready review
+token. It marks acceptance consumed before admission, captures purpose-bound
+write authority and publishes the original artifact once. Duplicate, foreign,
+opening and retired tokens cannot publish or cancel a successor. Admission or
+publication failure never restores acceptance. Success returns schema 1 and
+the acknowledged `created`, `skipped`, `migrated` and `cleaned` relative paths.
+Deployment errors contain a redacted `code`; a current native publication failure
+also includes `changes` with acknowledged operations and `possibleRecoveryFiles`.
+Missing changes, timeout or cancelled delivery never proves an absence of writes.
+No diagnostic text, project contents or private state is embedded in errors.
+
+`project_memory_cancel_preview` uses the selection and request revision, allowing
+cancellation while preparation is opening and before a review token is returned.
+Exact cancellation retires only that review. A newer cancel records its revision
+and retires older work, so a delayed preview cannot start after its cancellation;
+stale cancellation leaves a successor intact. Cleanup after an asynchronous
+failure also matches the original token. Selection changes, resource close and
+native owner retirement suppress late results and errors. No ownership or
+command-state lock spans an await. Physical workers retain their own capacity
+and publication exclusion until IO settles. The typed deployment client, panel
+flow, narrow ancestor consent and remote transports remain pending.

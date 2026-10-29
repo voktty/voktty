@@ -1,7 +1,7 @@
 use super::*;
 use crate::modules::project_memory::tests::{populate, project, runtime};
 
-fn fixture() -> (
+pub(super) fn fixture() -> (
     tempfile::TempDir,
     NativeMemoryApplication,
     Arc<PresentationResource>,

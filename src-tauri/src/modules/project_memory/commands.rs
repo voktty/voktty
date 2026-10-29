@@ -48,6 +48,7 @@ fn cancelled() -> MemoryCommandError {
 struct Selected {
     token: String,
     receipt: NativeMemorySelectionReceipt,
+    reviews: deployment::CommandReviews,
 }
 
 #[derive(Default)]
@@ -128,6 +129,7 @@ impl PresentationResource {
         selected.selected = Some(Selected {
             token: token.clone(),
             receipt,
+            reviews: deployment::CommandReviews::default(),
         });
         Ok(token)
     }
@@ -330,6 +332,9 @@ pub async fn project_memory_initialize_local_state(
     result?;
     Ok(())
 }
+
+#[path = "commands_deployment.rs"]
+pub mod deployment;
 
 #[cfg(test)]
 #[path = "commands_tests.rs"]

@@ -285,6 +285,8 @@ impl<'a> LocalMemoryWorkspace<'a> {
             return Err(ReadError::Limit);
         }
         let directory = platform::Directory::open_root(&root, control)?;
+        #[cfg(unix)]
+        directory.qualify_project_filesystem(control)?;
         let local = store.load().map_err(ReadError::Store)?;
         control.check()?;
         let resolved = directory.canonical_root(&root)?;
@@ -414,6 +416,8 @@ impl<'a> LocalMemoryWorkspace<'a> {
                 ReadError::Cancelled | ReadError::Timeout => error,
                 _ => ReadError::StaleRoot,
             })?;
+        #[cfg(unix)]
+        directory.qualify_project_filesystem(control)?;
         let resolved = directory.canonical_root(&self.root)?;
         control.check()?;
         if directory.identity() != self.root_id

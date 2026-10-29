@@ -36,6 +36,19 @@ impl Directory {
     }
 
     fn qualify_filesystem(&self, control: &ReadControl) -> Result<(), ReadError> {
+        self.qualify_project_filesystem(control)?;
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            crate::apple_acl::restrictive_only(&self.file)?;
+            control.check()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn qualify_project_filesystem(
+        &self,
+        control: &ReadControl,
+    ) -> Result<(), ReadError> {
         control.check()?;
         let mut filesystem = std::mem::MaybeUninit::<libc::statfs>::uninit();
         if unsafe { libc::fstatfs(self.file.as_raw_fd(), filesystem.as_mut_ptr()) } != 0 {
@@ -63,11 +76,6 @@ impl Directory {
         let local = false;
         control.check()?;
         if local {
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
-            {
-                crate::apple_acl::restrictive_only(&self.file)?;
-                control.check()?;
-            }
             Ok(())
         } else {
             Err(ReadError::Unsupported)
