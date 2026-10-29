@@ -282,3 +282,6 @@ impl NativeMemoryApplication {
 #[cfg(test)]
 #[path = "application_tests.rs"]
 mod tests;
+
+#[path = "application_reviews.rs"]
+mod reviews;

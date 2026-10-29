@@ -139,15 +139,23 @@ impl NativeMemoryOwners {
         requested: PathBuf,
         environment: &WorkspaceEnv,
     ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
+        self.selection_mut(window, receipt)?
+            .select(registry, requested, environment)
+    }
+
+    fn selection_mut(
+        &mut self,
+        window: &NativeMemoryWindowReceipt,
+        receipt: &NativeMemoryPresentationReceipt,
+    ) -> Result<&mut NativeMemorySelection, MemoryWorkError> {
         self.window_mut(window)
             .and_then(|window| {
                 window.presentations.iter_mut().find(|presentation| {
                     Weak::ptr_eq(&receipt.identity, &Arc::downgrade(&presentation.identity))
                 })
             })
-            .ok_or(ReadError::Cancelled)?
-            .selection
-            .select(registry, requested, environment)
+            .map(|presentation| &mut presentation.selection)
+            .ok_or_else(|| ReadError::Cancelled.into())
     }
 
     pub fn selection(
@@ -165,3 +173,6 @@ impl NativeMemoryOwners {
             .ok_or_else(|| ReadError::Cancelled.into())
     }
 }
+
+#[path = "owner_reviews.rs"]
+mod reviews;

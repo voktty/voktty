@@ -3,9 +3,41 @@ use serde_json::{Map, Value};
 use std::sync::Weak;
 use voktty_memory_local::{
     MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPreviewRequest, MemoryWriteAccess,
-    OwnedInitializationPreview, PublicationReport,
+    OwnedInitializationPreview, PublicationError, PublicationReport, RecoveryFile,
 };
-use voktty_workspace_kit::RootLinks;
+use voktty_workspace_kit::{PreparedDeployment, RootLinks};
+
+pub struct NativeMemoryPreviewTarget {
+    pub destination: PathBuf,
+    pub environment: WorkspaceEnv,
+    pub control: DiscoveryControl,
+}
+
+pub struct NativeMemoryPreviewValues {
+    pub store: Arc<LocalMemoryStore>,
+    pub inputs: Map<String, Value>,
+    pub links: RootLinks,
+}
+
+/// Detached display data, never a plan accepted for publication.
+#[derive(Debug)]
+pub struct NativeMemoryPreviewSnapshot {
+    pub deployment: PreparedDeployment,
+    pub is_resuming: bool,
+    pub recovery_files: Vec<RecoveryFile>,
+    pub publication_blocker: Option<PublicationError>,
+}
+
+impl NativeMemoryPreviewSnapshot {
+    pub(super) fn capture(preview: &OwnedInitializationPreview) -> Self {
+        Self {
+            deployment: preview.deployment().clone(),
+            is_resuming: preview.is_resuming(),
+            recovery_files: preview.recovery_files().to_vec(),
+            publication_blocker: preview.publication_blocker(),
+        }
+    }
+}
 
 /// Explicit native review inputs. The selected origin is never caller supplied.
 pub struct NativeMemoryPreviewRequest {
@@ -30,6 +62,7 @@ struct Review {
 }
 
 enum ReviewState {
+    Reserved,
     Opening,
     Ready(Box<OwnedInitializationPreview>),
     Publishing,
@@ -110,45 +143,66 @@ impl NativeMemoryDeployment {
         self.review = None;
     }
 
-    pub(super) fn prepare(
+    pub(super) fn reserve(
         &mut self,
-        source: &NativeMemorySource,
         destination: NativeMemorySource,
-        store: Arc<LocalMemoryStore>,
-        inputs: Map<String, Value>,
-        links: RootLinks,
         control: DiscoveryControl,
-    ) -> Result<NativeMemoryPreviewRead, MemoryDeploymentWorkError> {
+    ) -> NativeMemoryPreviewReceipt {
         self.clear();
         let review = Review {
             live: Arc::new(AtomicBool::new(true)),
             destination,
-            control: control.clone(),
-            state: ReviewState::Opening,
+            control,
+            state: ReviewState::Reserved,
         };
         let receipt = NativeMemoryPreviewReceipt {
             live: Arc::downgrade(&review.live),
         };
+        self.review = Some(review);
+        receipt
+    }
+
+    pub(super) fn prepare_reserved(
+        &mut self,
+        source: &NativeMemorySource,
+        receipt: &NativeMemoryPreviewReceipt,
+        values: NativeMemoryPreviewValues,
+    ) -> Result<NativeMemoryPreviewRead, MemoryDeploymentWorkError> {
+        if !self.is_current(receipt) {
+            return Err(cancelled());
+        }
+        let review = self.review.as_mut().ok_or_else(cancelled)?;
+        if !matches!(review.state, ReviewState::Reserved) {
+            return Err(cancelled());
+        }
+        review.state = ReviewState::Opening;
         let job = MemoryWorkers::default().preview(
             MemoryPreviewRequest {
-                store,
+                store: values.store,
                 origin: source.requested.clone(),
                 origin_access: source.access.clone(),
                 destination: review.destination.requested.clone(),
                 destination_access: review.destination.access.clone(),
-                inputs,
-                links,
+                inputs: values.inputs,
+                links: values.links,
             },
-            control,
-        )?;
-        let operation = ReviewOperation {
-            job,
-            live: review.live.clone(),
-            origin: source.access.clone(),
-            destination: review.destination.access.clone(),
-        };
-        self.review = Some(review);
-        Ok(NativeMemoryPreviewRead { operation, receipt })
+            review.control.clone(),
+        );
+        match job {
+            Ok(job) => Ok(NativeMemoryPreviewRead {
+                operation: ReviewOperation {
+                    job,
+                    live: review.live.clone(),
+                    origin: source.access.clone(),
+                    destination: review.destination.access.clone(),
+                },
+                receipt: receipt.clone(),
+            }),
+            Err(error) => {
+                self.clear();
+                Err(error)
+            }
+        }
     }
 
     pub(super) fn is_current(&self, receipt: &NativeMemoryPreviewReceipt) -> bool {
@@ -156,6 +210,20 @@ impl NativeMemoryDeployment {
             Weak::ptr_eq(&receipt.live, &Arc::downgrade(&review.live))
                 && review.live.load(Ordering::Acquire)
         })
+    }
+
+    pub(super) fn store_control(
+        &self,
+        receipt: &NativeMemoryPreviewReceipt,
+    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
+        if !self.is_current(receipt) {
+            return Err(cancelled());
+        }
+        let review = self.review.as_ref().ok_or_else(cancelled)?;
+        if !matches!(review.state, ReviewState::Reserved) {
+            return Err(cancelled());
+        }
+        Ok(review.control.read_control()?)
     }
 
     pub(super) fn accept(

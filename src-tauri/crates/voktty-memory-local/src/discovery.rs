@@ -54,6 +54,13 @@ impl DiscoveryControl {
         self.cancelled
             .store(true, std::sync::atomic::Ordering::Release);
     }
+    /// A five-second phase sharing this request's cancellation and remaining
+    /// lifetime, suitable for opening private native state before discovery.
+    pub fn read_control(&self) -> Result<ReadControl, ReadError> {
+        let control = self.phase(Duration::from_secs(5));
+        control.check()?;
+        Ok(control)
+    }
     pub(crate) fn deadline(&self) -> Instant {
         self.started + self.timeout
     }
@@ -62,6 +69,35 @@ impl DiscoveryControl {
             self.cancelled.clone(),
             max.min(self.timeout.saturating_sub(self.started.elapsed())),
         )
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+
+    #[test]
+    fn private_state_phase_rejects_original_expiry_and_cancellation() {
+        let expired = DiscoveryControl::new(Duration::ZERO);
+        assert!(matches!(expired.read_control(), Err(ReadError::Timeout)));
+        let cancelled = DiscoveryControl::default();
+        cancelled.cancel();
+        assert!(matches!(
+            cancelled.read_control(),
+            Err(ReadError::Cancelled)
+        ));
+    }
+
+    #[test]
+    fn private_state_phase_shares_bidirectional_request_cancellation() {
+        let request = DiscoveryControl::default();
+        let phase = request.read_control().unwrap();
+        phase.cancel();
+        assert!(matches!(request.read_control(), Err(ReadError::Cancelled)));
+        let request = DiscoveryControl::default();
+        let phase = request.read_control().unwrap();
+        request.cancel();
+        assert_eq!(phase.check(), Err(ReadError::Cancelled));
     }
 }
 

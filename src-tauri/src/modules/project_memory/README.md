@@ -44,14 +44,23 @@ lock held across worker awaits. IPC presentations delegate to this owner.
 
 ## Selection-owned deployment reviews
 
-Each `NativeMemorySelection` retains at most one opening, ready or consumed
-review. `prepare_preview` uses the current selection as its origin and captures
+Each `NativeMemorySelection` retains at most one reserved, opening, ready or
+consumed review. `prepare_preview` uses the current selection as its origin and captures
 the explicit destination's local read authority from the actual registry. It
 never registers paths or accepts a caller-supplied origin. A new review retires
 the previous one before destination validation or worker admission, including
 unsupported destinations and invalid inputs. A stale selection cannot retire
 another selection's review. Preparation uses the shared four-slot native worker
 budget and returns a noncloneable prepared artifact with its original identity.
+
+`reserve_preview` separates ownership admission from filesystem work. It captures
+the destination, native read authority and original request control and retires
+the previous review before opening private state. `start_preview` accepts only
+that exact reservation once, together with the captured values and native store;
+it cannot replace the destination, authorization snapshot or deadline after an
+await. The existing `prepare_preview` convenience method performs both phases
+when the caller already owns its store. Reservations grant neither a ready plan
+nor publication permission, and expired requests cannot renew their deadline.
 
 `NativeMemoryPreviewRead::receipt` exposes only a weak native identity, so an
 opening request can be cancelled without borrowing a later review. Opening
@@ -83,7 +92,7 @@ can still identify its in-flight result but cannot publish again. Exact
 `cancel_preview` cleanup can release it afterward without touching a replacement.
 No mutation lock spans an await. Registry limits still bound containing owners;
 there is no review history, background timer, implicit deployment or AI launch.
-Window/application forwarding, IPC and narrow ancestor consent remain pending.
+IPC and narrow ancestor consent remain pending.
 Linux tests exercise the real native workers and filesystem. Other native runtime
 qualification remains pending.
 
@@ -109,7 +118,7 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
 Ordinary open stays noncreating. Kit deployment UI, narrow project-ancestor consent,
-application publication wiring and platform runtime qualification remain pending. This
+publication commands and platform runtime qualification remain pending. This
 module still starts no filesystem work automatically.
 
 `NativeMemoryOwners` provides the native lifecycle registry for panel
@@ -144,8 +153,36 @@ Retirement suppresses delivery without rolling back admitted writes or releasing
 the native worker budget early. Native selection and discovery delegate to the
 existing authority checks. Window attachment belongs to native window creation,
 once per instance; future windows must attach their own resource. Settings and
-quick-composer windows are not memory presentations. Initialization publication
-and CLI remain pending.
+quick-composer windows are not memory presentations. User-facing initialization
+publication and CLI remain pending.
+
+## Window-owned review operations
+
+`NativeMemoryOwners` and `NativeMemoryApplication` forward review reservation,
+preparation, adoption, inspection, cancellation and publication only under their
+exact window, presentation, selection and review receipts. Application identity
+is also checked; matching window labels or resource numbers cannot borrow a
+foreign application's owner. Stale cleanup cannot retire a replacement. Native
+resource close, window destruction and application shutdown retire contained
+reviews through the same ownership tree, including requests already in flight.
+The existing 64-window, 256-presentation and four-worker limits still apply.
+
+`open_preview_store` is a noncreating read of this application's existing private
+state. The caller reserves the review before awaiting it. Its five-second read
+phase comes from `DiscoveryControl::read_control`, sharing the reservation's
+original remaining lifetime and cancellation. Both entry and delivery require
+the original selection and a still-reserved review; later preparation cannot
+adopt an old store response. Cancellation propagates to queued native IO, while
+admitted workers retain capacity until settlement. Missing or invalid state is
+an error, never implicit initialization or a project-directory fallback.
+
+`preview_snapshot` returns detached, bounded display data cloned from the ready
+native artifact. It holds no mutation lock after returning and cannot replace
+the accepted plan. Editing a snapshot's proposed bytes does not change what
+publication writes. Callers still revalidate `is_preview_current` before delivery.
+No ownership mutex spans an await. Publication continues to require separate
+qualified native write authority; these forwarding methods grant none. Native
+IPC tokens, command ordering and the purpose-bound write factory remain pending.
 
 ## Observation IPC
 

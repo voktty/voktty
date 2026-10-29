@@ -173,7 +173,8 @@ pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
 mod deployment;
 pub use deployment::{
     NativeMemoryPreparedPreview, NativeMemoryPreviewRead, NativeMemoryPreviewReceipt,
-    NativeMemoryPreviewRequest, NativeMemoryPublication,
+    NativeMemoryPreviewRequest, NativeMemoryPreviewSnapshot, NativeMemoryPreviewTarget,
+    NativeMemoryPreviewValues, NativeMemoryPublication,
 };
 
 mod storage;

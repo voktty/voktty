@@ -87,18 +87,60 @@ impl NativeMemorySelection {
         registry: &WorkspaceRegistry,
         request: NativeMemoryPreviewRequest,
     ) -> Result<NativeMemoryPreviewRead, MemoryDeploymentWorkError> {
+        let reserved = self.reserve_preview(
+            receipt,
+            registry,
+            NativeMemoryPreviewTarget {
+                destination: request.destination,
+                environment: request.environment,
+                control: request.control,
+            },
+        )?;
+        self.start_preview(
+            receipt,
+            &reserved,
+            NativeMemoryPreviewValues {
+                store: request.store,
+                inputs: request.inputs,
+                links: request.links,
+            },
+        )
+    }
+
+    pub fn reserve_preview(
+        &mut self,
+        receipt: &NativeMemorySelectionReceipt,
+        registry: &WorkspaceRegistry,
+        target: NativeMemoryPreviewTarget,
+    ) -> Result<NativeMemoryPreviewReceipt, MemoryDeploymentWorkError> {
         self.current(receipt)?;
         self.deployment.clear();
         let destination =
-            NativeMemorySource::capture(registry, request.destination, &request.environment)?;
-        self.deployment.prepare(
+            NativeMemorySource::capture(registry, target.destination, &target.environment)?;
+        Ok(self.deployment.reserve(destination, target.control))
+    }
+
+    pub fn start_preview(
+        &mut self,
+        selection: &NativeMemorySelectionReceipt,
+        reserved: &NativeMemoryPreviewReceipt,
+        values: NativeMemoryPreviewValues,
+    ) -> Result<NativeMemoryPreviewRead, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.prepare_reserved(
             self.source.as_ref().ok_or(ReadError::Cancelled)?,
-            destination,
-            request.store,
-            request.inputs,
-            request.links,
-            request.control,
+            reserved,
+            values,
         )
+    }
+
+    pub(super) fn preview_store_control(
+        &self,
+        selection: &NativeMemorySelectionReceipt,
+        reserved: &NativeMemoryPreviewReceipt,
+    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.store_control(reserved)
     }
 
     pub fn accept_preview(
