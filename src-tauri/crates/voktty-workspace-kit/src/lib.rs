@@ -1,6 +1,7 @@
 mod context;
 mod deployment;
 mod document;
+mod git_exclude;
 mod identity;
 mod lock;
 mod memory;
@@ -43,6 +44,7 @@ pub use deployment::{
     plan_deployment, DeploymentAction, DeploymentEntry, DeploymentPlan, DeploymentReason, PathFact,
     RootLinks,
 };
+pub use git_exclude::{plan_git_memory_exclusion, GitMemoryExcludePlan};
 pub use identity::memory_project_key;
 pub use lock::{parse_kit_lock, prepare_deployment, BaseIntegrity, KitLock, PreparedDeployment};
 pub use memory::{

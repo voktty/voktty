@@ -492,6 +492,45 @@ inventory, authorize the destination and recheck current bytes under native
 exclusion. Initial deployment still needs that native writer; CLI, update
 and removal integration remain pending.
 
+## Machine-local Git exclusion proposals
+
+The Rust core exports `plan_git_memory_exclusion` for the planned machine-local
+installation mode. It accepts literal project-directory components relative to
+the Git worktree root and an explicit absent or UTF-8 exclude-file observation.
+An empty component list produces `/.voktty/`; nested projects get an anchored
+pattern for their own folder. Git glob characters, spaces and literal POSIX
+backslashes are escaped rather than interpreted as patterns or native paths.
+Dot segments, empty or slash-bearing components and control characters fail.
+The relative path is bounded to 128 components and 4 KiB of UTF-8.
+
+The proposal contains create, migrate or skip, the exact original observation,
+the escaped pattern and the proposed text. Existing bytes are preserved without
+normalization or removal. Appended lines use the first existing newline's style,
+or LF for a file without one. A last active rule exactly matching the target
+pattern is unchanged; otherwise a final marked rule is appended, including
+after a later negation. Trailing comments do not require a duplicate rule.
+Both observed and proposed excludes are capped at 64 KiB; NUL and proposals
+that exceed the cap fail rather than truncating the owner's content.
+
+This is display data, not authorization, a native file location, proof of privacy
+or an accepted publication artifact. The general secret-path policy still blocks
+`.git`; the memory filesystem reader must not acquire a bypass. The native Git
+owner must separately resolve and qualify the actual repository and common Git
+directory, retain exact file identities and expected bytes, bind them to the
+original review, and preserve concurrent edits during conditional publication.
+Linked worktrees can share a common exclude file, so its effect is not limited
+to one checkout. Root-rule links outside `.voktty/` are not hidden by this rule.
+
+Real Git tests verify root and nested patterns, metacharacters, CRLF preservation,
+idempotence and shared worktree effects. They also prove why a textual proposal
+alone cannot claim success: tracked files remain tracked, and higher-priority
+`.gitignore` rules can override `info/exclude`. Native confirmation must verify
+actual Git visibility, report acknowledged partial changes and avoid installing
+kit files when exclusion fails. Git is required for these bounded integration
+tests; they use isolated temporary repositories and no network operations.
+Native conditional mutation, recovery, UI selection and CLI integration for this
+mode remain pending. The panel continues to offer Git-ready shared installation.
+
 ## License
 
 The kit is part of the Voktty repository and is distributed under the same
