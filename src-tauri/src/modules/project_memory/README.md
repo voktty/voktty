@@ -401,7 +401,33 @@ Source, presentation, window and application retirement reject late results and
 errors. The original review lifetime is never renewed, no mutex spans an await,
 and admitted work retains its physical budget until settlement. Retired delivery
 does not roll back an admitted policy write. Errors contain only redacted codes.
-The IPC has no frontend controls, session grants or context consumers yet.
+The typed client below exposes these commands; panel controls, session grants
+and context consumers remain pending.
+
+## Typed policy client
+
+`nativeMemoryPolicy.ts` binds each policy review to its original presentation,
+selection and private receipt object. It captures the requested choice before
+awaiting and retains the native token separately from display data. Known reply
+fields are copied into frozen snapshots; unrelated fields are discarded. Root
+text must be valid Unicode within 4 KiB UTF-8, with no ASCII control characters. UUIDs,
+project keys, digests, revisions, choices and effective preferences are checked.
+These display checks grant no native authority or instruction trust.
+
+Confirmation sends only the retained UUID, coalesces duplicate calls through
+settlement and consumes acceptance on success or failure. A reply must match
+the reviewed project, exact requested policy and unchanged effective trust digest
+before the client reports success. Cancellation retires delivery synchronously,
+sends the original revision and permits cleanup retry after failure. Its boolean
+reply is validated under the original owner. Superseded responses and errors
+cannot affect a successor; selection replacement and close retire policy work.
+
+Policy, trust and deployment share the existing 256 unsettled-request budget,
+including retired operations until their actual IPC settlement. A full budget
+refuses new admission without replacing an admitted review. These JavaScript
+receipts do not acknowledge physical cancellation or roll back native writes.
+Construction starts no IPC, preference mutation, agent or session. The manual
+panel, exact session grants and context delivery remain separate integrations.
 
 ## Instruction trust IPC
 

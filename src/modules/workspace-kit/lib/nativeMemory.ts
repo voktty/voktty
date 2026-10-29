@@ -4,6 +4,7 @@ import type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
 import type { KitDeploymentEntry } from "@/modules/workspace-kit/lib/deployment";
 import type { KitLock } from "@/modules/workspace-kit/lib/configTypes";
 import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import { createNativeMemoryPolicyClient } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
 
 type Handle = Readonly<{ id: number; token: string }>;
 const selectionBrand = Symbol("native-memory-selection");
@@ -170,8 +171,16 @@ export function createNativeMemoryPresentation() {
     canRequest: () => unsettled < 256,
     request: reviewRequest,
   });
+  const policy = createNativeMemoryPolicyClient({
+    checkSelection: (receipt) => {
+      capture(receipt);
+    },
+    canRequest: () => unsettled < 256,
+    request: reviewRequest,
+  });
   return {
     ...trust.api,
+    ...policy.api,
     async select(
       path: string,
       environment: WorkspaceEnv,
@@ -181,6 +190,7 @@ export function createNativeMemoryPresentation() {
       current = null;
       review = null;
       trust.retire();
+      policy.retire();
       const requested = ++revision;
       if (!Number.isSafeInteger(requested)) cancelled();
       const capturedEnvironment = nativeEnvironment(environment);
@@ -353,6 +363,7 @@ export function createNativeMemoryPresentation() {
       current = null;
       review = null;
       trust.retire();
+      policy.retire();
       closing = (async () => {
         if (!opening) return;
         let owner: Handle;
