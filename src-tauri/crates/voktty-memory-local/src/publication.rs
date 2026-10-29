@@ -4,6 +4,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,7 @@ use voktty_workspace_kit::{
 };
 
 use crate::{
-    DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace,
+    DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace, MemoryReadAccess,
     NativeScopeObservation, ReadError, StoreError,
 };
 
@@ -181,6 +182,72 @@ pub struct InitializationPreview<'w, 'store> {
     recovery: Vec<RecoveryFile>,
 }
 
+/// Single-use review retained across native calls without reopening its roots or
+/// replacing its original read authorities. The presentation must still retire
+/// this artifact when its selection changes; this type grants no write access.
+pub struct OwnedInitializationPreview {
+    origin: crate::reader::OwnedMemoryWorkspace,
+    destination: crate::reader::OwnedMemoryWorkspace,
+    prepared: PreparedDeployment,
+    links: RootLinks,
+    revision: u64,
+    created_at: Instant,
+    intent: Intent,
+    resuming: bool,
+    recovery: Vec<RecoveryFile>,
+}
+
+impl OwnedInitializationPreview {
+    pub fn deployment(&self) -> &PreparedDeployment {
+        &self.prepared
+    }
+
+    pub fn is_resuming(&self) -> bool {
+        self.resuming
+    }
+
+    pub fn recovery_files(&self) -> &[RecoveryFile] {
+        &self.recovery
+    }
+
+    pub fn publication_blocker(&self) -> Option<PublicationError> {
+        publication_blocker(&self.prepared)
+    }
+
+    pub fn publish(
+        self,
+        access: &dyn MemoryWriteAccess,
+        control: &DiscoveryControl,
+    ) -> Result<PublicationReport, Box<PublicationFailure>> {
+        let origin = self.origin.borrow();
+        let destination = self.destination.borrow();
+        InitializationPreview {
+            origin: &origin,
+            destination: &destination,
+            prepared: self.prepared,
+            links: self.links,
+            revision: self.revision,
+            created_at: self.created_at,
+            intent: self.intent,
+            resuming: self.resuming,
+            recovery: self.recovery,
+        }
+        .publish(access, control)
+    }
+}
+
+fn publication_blocker(prepared: &PreparedDeployment) -> Option<PublicationError> {
+    prepared
+        .plan
+        .entries
+        .iter()
+        .any(|entry| {
+            entry.action == DeploymentAction::Migrate
+                && !cfg!(any(target_os = "linux", target_os = "android"))
+        })
+        .then_some(PublicationError::MigrationUnsupported)
+}
+
 fn supported() -> Result<(), PublicationError> {
     if cfg!(any(unix, windows)) {
         Ok(())
@@ -325,6 +392,29 @@ fn scopes_allow(
 }
 
 impl<'w, 'store> InitializationPreview<'w, 'store> {
+    /// Only the exact Arc allocations borrowed during preparation can retain a
+    /// review. Equivalent paths, grants or newly opened stores are insufficient.
+    pub fn into_owned(
+        self,
+        store: Arc<LocalMemoryStore>,
+        origin_access: Arc<dyn MemoryReadAccess>,
+        destination_access: Arc<dyn MemoryReadAccess>,
+    ) -> Result<OwnedInitializationPreview, PublicationError> {
+        let origin = self.origin.retain(store.clone(), origin_access)?;
+        let destination = self.destination.retain(store, destination_access)?;
+        Ok(OwnedInitializationPreview {
+            origin,
+            destination,
+            prepared: self.prepared,
+            links: self.links,
+            revision: self.revision,
+            created_at: self.created_at,
+            intent: self.intent,
+            resuming: self.resuming,
+            recovery: self.recovery,
+        })
+    }
+
     pub fn prepare(
         origin: &'w LocalMemoryWorkspace<'store>,
         destination: &'w LocalMemoryWorkspace<'store>,
@@ -447,15 +537,7 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
     }
 
     pub fn publication_blocker(&self) -> Option<PublicationError> {
-        self.prepared
-            .plan
-            .entries
-            .iter()
-            .any(|entry| {
-                entry.action == DeploymentAction::Migrate
-                    && !cfg!(any(target_os = "linux", target_os = "android"))
-            })
-            .then_some(PublicationError::MigrationUnsupported)
+        publication_blocker(&self.prepared)
     }
 
     pub fn publish(
@@ -655,6 +737,10 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
         Ok(false)
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "publication_owned_tests.rs"]
+mod owned_tests;
 
 fn read_recovery(
     workspace: &LocalMemoryWorkspace<'_>,

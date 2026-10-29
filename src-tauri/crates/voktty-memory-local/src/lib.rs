@@ -21,8 +21,8 @@ mod reader;
 mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
-    InitializationPreview, MemoryWriteAccess, PublicationError, PublicationFailure,
-    PublicationReport, RecoveryFile,
+    InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, PublicationError,
+    PublicationFailure, PublicationReport, RecoveryFile,
 };
 pub use workers::{MemoryJob, MemoryStoreMode, MemoryWorkError, MemoryWorkers};
 #[cfg(not(any(unix, windows)))]

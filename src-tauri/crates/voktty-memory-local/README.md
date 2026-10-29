@@ -409,6 +409,19 @@ is consumed by `publish`; changing cwd/transport selection must also retire the
 owner's request. Integration still needs that native selection/worker lifecycle.
 The lock is released before user review and reacquired for publication.
 
+`InitializationPreview::into_owned` retains that exact review for later native
+confirmation. It requires the original `Arc` allocations for the store and each
+read authority; reopening the same store or supplying equivalent grants is
+rejected. `OwnedInitializationPreview` preserves the captured native root
+identities, preference revision, proposed bytes, recovery artifacts and original
+two-minute deadline without reopening, rerendering or renewing acceptance. It is
+neither cloneable nor deserializable. Its consuming `publish` delegates to the
+same validation and writer below, using the retained read authorities and a
+separate native write authority. Authority retirement still prevents publication.
+The owning presentation must discard its review on selection retirement; retaining
+it alone is not a session permit or a publication worker. IPC and bounded worker
+integration remain pending.
+
 Publication rechecks both native directory identities, installation UUID,
 preference revision, scopes and exact expected bytes. `MemoryWriteAccess` is an
 independent native authority for creating files and directories, including secret

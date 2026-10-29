@@ -173,7 +173,49 @@ pub struct LocalMemoryWorkspace<'a> {
     access: &'a dyn MemoryReadAccess,
 }
 
+pub(crate) struct OwnedMemoryWorkspace {
+    root: PathBuf,
+    root_id: (u64, u128),
+    identity: Value,
+    project_key: String,
+    store: Arc<LocalMemoryStore>,
+    access: Arc<dyn MemoryReadAccess>,
+}
+
+impl OwnedMemoryWorkspace {
+    pub(crate) fn borrow(&self) -> LocalMemoryWorkspace<'_> {
+        LocalMemoryWorkspace {
+            root: self.root.clone(),
+            root_id: self.root_id,
+            identity: self.identity.clone(),
+            project_key: self.project_key.clone(),
+            store: &self.store,
+            access: self.access.as_ref(),
+        }
+    }
+}
+
 impl<'a> LocalMemoryWorkspace<'a> {
+    pub(crate) fn retain(
+        &self,
+        store: Arc<LocalMemoryStore>,
+        access: Arc<dyn MemoryReadAccess>,
+    ) -> Result<OwnedMemoryWorkspace, ReadError> {
+        if !std::ptr::eq(self.store, store.as_ref())
+            || !std::ptr::addr_eq(self.access, access.as_ref())
+        {
+            return Err(ReadError::Denied);
+        }
+        Ok(OwnedMemoryWorkspace {
+            root: self.root.clone(),
+            root_id: self.root_id,
+            identity: self.identity.clone(),
+            project_key: self.project_key.clone(),
+            store,
+            access,
+        })
+    }
+
     pub(crate) fn store(&self) -> &LocalMemoryStore {
         self.store
     }
