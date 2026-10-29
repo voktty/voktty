@@ -131,6 +131,136 @@ fn unavailable_or_empty_birth_information_is_never_a_persisted_root_identity() {
 }
 
 #[test]
+fn explicit_policy_binds_only_the_current_root_and_never_accepts_legacy_instructions() {
+    let (dir, store) = store();
+    store.trust_instructions(0, KEY, HASH).unwrap();
+    store.set_policy(1, OTHER, MemoryPolicy::Never).unwrap();
+    let original = store.load().unwrap();
+    let changed = store
+        .policy_for_root(
+            2,
+            original.installation_id(),
+            KEY,
+            &instance(1),
+            MemoryPolicy::Always,
+        )
+        .unwrap();
+    assert_eq!(changed.schema, 2);
+    assert_eq!(changed.revision(), 3);
+    assert_eq!(changed.project(OTHER), original.project(OTHER));
+    let current = changed.project_for_root(KEY, Some(&instance(1))).unwrap();
+    assert_eq!(current.policy, MemoryPolicy::Always);
+    assert_eq!(current.instruction_digest, None);
+    assert_eq!(
+        LocalMemoryStore::open(dir.path()).unwrap().load().unwrap(),
+        changed
+    );
+    let replaced = changed.project_for_root(KEY, Some(&instance(2))).unwrap();
+    assert_eq!(replaced.policy, MemoryPolicy::Manual);
+    assert_eq!(replaced.instruction_digest, None);
+}
+
+#[test]
+fn changing_policy_preserves_current_trust_but_cannot_rebind_old_trust_to_a_replacement() {
+    let (_dir, store) = store();
+    let initial = store.load().unwrap();
+    store
+        .trust_for_root(0, initial.installation_id(), KEY, &instance(1), HASH)
+        .unwrap();
+    for (revision, policy) in [
+        (1, MemoryPolicy::Never),
+        (2, MemoryPolicy::Manual),
+        (3, MemoryPolicy::Always),
+    ] {
+        let result = store
+            .policy_for_root(
+                revision,
+                initial.installation_id(),
+                KEY,
+                &instance(1),
+                policy,
+            )
+            .unwrap();
+        let current = result.project_for_root(KEY, Some(&instance(1))).unwrap();
+        assert_eq!(current.policy, policy);
+        assert_eq!(current.instruction_digest.as_deref(), Some(HASH));
+    }
+    let replaced = store
+        .policy_for_root(
+            4,
+            initial.installation_id(),
+            KEY,
+            &instance(2),
+            MemoryPolicy::Always,
+        )
+        .unwrap();
+    assert_eq!(replaced.project(KEY).unwrap().instruction_digest, None);
+    assert_eq!(
+        replaced
+            .project_for_root(KEY, Some(&instance(1)))
+            .unwrap()
+            .policy,
+        MemoryPolicy::Manual
+    );
+}
+
+#[test]
+fn native_policy_rejects_cancelled_stale_root_revision_and_installation_without_writing() {
+    let (state, store) = store();
+    let project = tempfile::tempdir_in("/dev/shm").unwrap();
+    let root = project.path().join("current");
+    fs::create_dir(&root).unwrap();
+    let access = Access(root.clone());
+    let workspace =
+        LocalMemoryWorkspace::open(&store, &root, &access, &ReadControl::default()).unwrap();
+    let path = state.path().join(STORE);
+    let before = fs::read(&path).unwrap();
+    let cancelled = ReadControl::default();
+    cancelled.cancel();
+    assert_eq!(
+        workspace.set_policy(0, MemoryPolicy::Always, &cancelled),
+        Err(ReadError::Cancelled)
+    );
+    assert_eq!(
+        workspace.set_policy(1, MemoryPolicy::Always, &ReadControl::default()),
+        Err(ReadError::Store(StoreError::Conflict))
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let enabled = workspace
+        .set_policy(0, MemoryPolicy::Always, &ReadControl::default())
+        .unwrap();
+    assert_eq!(
+        enabled.project(workspace.project_key()).unwrap().policy,
+        MemoryPolicy::Always
+    );
+    assert_eq!(
+        enabled
+            .project(workspace.project_key())
+            .unwrap()
+            .instruction_digest,
+        None
+    );
+    fs::rename(&root, project.path().join("previous")).unwrap();
+    fs::create_dir(&root).unwrap();
+    let before = fs::read(&path).unwrap();
+    assert_eq!(
+        workspace.set_policy(1, MemoryPolicy::Never, &ReadControl::default()),
+        Err(ReadError::StaleRoot)
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let fresh =
+        LocalMemoryWorkspace::open(&store, &root, &access, &ReadControl::default()).unwrap();
+    fs::remove_file(&path).unwrap();
+    store.initialize().unwrap();
+    let before = fs::read(&path).unwrap();
+    assert_eq!(
+        fresh.set_policy(0, MemoryPolicy::Always, &ReadControl::default()),
+        Err(ReadError::Store(StoreError::Conflict))
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+}
+
+#[test]
 fn schema_binding_corruption_and_mixed_versions_are_never_repaired() {
     let (dir, store) = store();
     let initial = store.load().unwrap();

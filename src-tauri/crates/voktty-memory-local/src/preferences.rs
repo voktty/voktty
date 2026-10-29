@@ -135,6 +135,28 @@ impl LocalMemorySnapshot {
 }
 
 impl LocalMemoryStore {
+    pub(crate) fn policy_for_root(
+        &self,
+        revision: u64,
+        installation: &str,
+        key: &str,
+        root: &RootInstance,
+        policy: MemoryPolicy,
+    ) -> Result<LocalMemorySnapshot, StoreError> {
+        if !RootInstance::valid(&root.0) {
+            return Err(StoreError::InvalidInput);
+        }
+        self.update_snapshot(revision, key, Some(installation), |snapshot, index| {
+            let effective = snapshot
+                .project_for_root(key, Some(root))
+                .expect("current entry");
+            snapshot.projects[index].instruction_digest = effective.instruction_digest;
+            snapshot.projects[index].policy = policy;
+            snapshot.bindings.bind(key, root);
+            snapshot.schema = 2;
+        })
+    }
+
     pub(crate) fn trust_for_root(
         &self,
         revision: u64,

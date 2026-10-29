@@ -131,11 +131,23 @@ restoring the entire private state and filesystem identity. Native Windows and
 Apple runtime qualification remains pending. Bindings never enter the IPC reply.
 
 Policy and trust are separate mutations. Native trust acceptance preserves the
-effective policy; changing policy preserves the trusted digest; revocation
-clears only trust.
+effective policy; changing policy preserves the current root's trusted digest;
+revocation clears only trust.
 Session enables/disables and capture permissions are never persisted here.
 The decision core must still check current native scope, actual instruction
 bytes, the exact session grant and adapter/transport capabilities before use.
+
+`LocalMemoryWorkspace::set_policy` records an explicit choice against the captured
+native project key, installation and root instance. It checks root authority,
+identity and cancellation before mutation and again before returning, retaining
+the reader's four-slot budget until settlement. The store compares revision and
+installation under its existing lock and promotes the binding to schema 2.
+Legacy or replaced-root trust is cleared rather than adopted by the new binding;
+unrelated project records are preserved. Missing creation time blocks mutation.
+This synchronous primitive does not initialize state, resolve memory scope,
+accept instructions, enable a session or deliver context. An error after mutation
+does not undo the recorded choice. Bounded asynchronous workers, presentation
+ownership and manual policy controls still need integration.
 
 Every read or mutation acquires an exclusive OS file lock on a stable
 `memory-local.lock`. Lock contention immediately returns `Busy`; unsupported

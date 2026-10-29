@@ -327,6 +327,34 @@ impl<'a> LocalMemoryWorkspace<'a> {
         &self.project_key
     }
 
+    /// Records an explicit local choice without accepting instructions or enabling
+    /// a session. The caller must retain its original native owner until settlement.
+    pub fn set_policy(
+        &self,
+        revision: u64,
+        policy: crate::MemoryPolicy,
+        control: &ReadControl,
+    ) -> Result<LocalMemorySnapshot, ReadError> {
+        let _permit = ReadPermit::acquire(control)?;
+        self.checked_root(control)?;
+        let root = self.root_instance.as_ref().ok_or(ReadError::Unsupported)?;
+        control.check()?;
+        let result = self
+            .store
+            .policy_for_root(
+                revision,
+                self.identity["machineId"]
+                    .as_str()
+                    .ok_or(ReadError::InvalidInput)?,
+                &self.project_key,
+                root,
+                policy,
+            )
+            .map_err(ReadError::Store)?;
+        self.checked_root(control)?;
+        Ok(result)
+    }
+
     pub fn observe_deployment(
         &self,
         links: RootLinks,
