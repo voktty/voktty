@@ -22,6 +22,7 @@ pub struct NativeMemoryPreviewValues {
 /// Detached display data, never a plan accepted for publication.
 #[derive(Debug)]
 pub struct NativeMemoryPreviewSnapshot {
+    pub root: PathBuf,
     pub deployment: PreparedDeployment,
     pub is_resuming: bool,
     pub recovery_files: Vec<RecoveryFile>,
@@ -31,6 +32,7 @@ pub struct NativeMemoryPreviewSnapshot {
 impl NativeMemoryPreviewSnapshot {
     pub(super) fn capture(preview: &OwnedInitializationPreview) -> Self {
         Self {
+            root: preview.write_requirements().root,
             deployment: preview.deployment().clone(),
             is_resuming: preview.is_resuming(),
             recovery_files: preview.recovery_files().to_vec(),

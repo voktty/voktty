@@ -31,6 +31,10 @@ function client() {
     discover: vi.fn(async () => observation),
     initializeLocalState: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
+    preview: vi.fn(),
+    confirmPreview: vi.fn(),
+    cancelPreview: vi.fn(),
+    isReviewCurrent: vi.fn(() => true),
   };
 }
 

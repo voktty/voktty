@@ -121,8 +121,8 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
-Ordinary open stays noncreating. Kit deployment UI, narrow project-ancestor consent,
-and platform runtime qualification remain pending. This
+Ordinary open stays noncreating. Platform runtime qualification and additional
+deployment modes remain pending. This
 module still starts no filesystem work automatically.
 
 `NativeMemoryOwners` provides the native lifecycle registry for panel
@@ -157,8 +157,8 @@ Retirement suppresses delivery without rolling back admitted writes or releasing
 the native worker budget early. Native selection and discovery delegate to the
 existing authority checks. Window attachment belongs to native window creation,
 once per instance; future windows must attach their own resource. Settings and
-quick-composer windows are not memory presentations. User-facing initialization
-publication and CLI remain pending.
+quick-composer windows are not memory presentations. CLI integration remains
+pending; user-facing publication uses the review flow below.
 
 ## Window-owned review operations
 
@@ -213,8 +213,7 @@ also retires that acceptance, rather than falling back to read grants. Window an
 application forwarding retain their existing exact ownership checks. Linux tests
 cover real publication, three opted-in migrations, reserved content, recovery,
 canonical aliases, denied or oversized grant snapshots and foreign owners.
-Panel confirmation, ancestor consent and other native runtime
-qualification remain pending.
+Other native runtime qualification remains pending.
 
 ## Observation IPC
 
@@ -275,8 +274,8 @@ Failed cleanup remains counted and is retried on a later panel opening without
 background polling. Native workers retain their separate physical budget.
 Private-state preparation requires its own explicit action under a retained
 selection; inspection starts no agent and grants no instruction trust or session
-consent. Scope lookup failures never imply absence. Kit deployment, policy and
-capture controls remain separate pending integrations.
+consent. Scope lookup failures never imply absence. Policy and capture controls
+remain separate pending integrations.
 
 ## Deployment IPC
 
@@ -293,7 +292,8 @@ origins and unknown request or link fields are rejected.
 The command reserves native ownership before awaiting noncreating private-state
 open, then prepares and adopts only that exact review. It never initializes
 missing state, grants roots, starts an agent or changes use policy. Its schema-1
-reply contains an opaque review UUID, revision, detached deployment display data,
+reply contains an opaque review UUID, revision, the owned canonical destination
+`root`, detached deployment display data,
 recovery display files, resume status and a redacted platform blocker. Expected
 and proposed project bytes are deliberately included for explicit review; private
 preferences, installation identity and authorization objects are not. Editing
@@ -318,8 +318,7 @@ stale cancellation leaves a successor intact. Cleanup after an asynchronous
 failure also matches the original token. Selection changes, resource close and
 native owner retirement suppress late results and errors. No ownership or
 command-state lock spans an await. Physical workers retain their own capacity
-and publication exclusion until IO settles. Panel flow, ancestor-consent controls
-and remote transports remain pending.
+and publication exclusion until IO settles. Remote transports remain pending.
 
 The typed deployment client captures destination, environment, string inputs and
 link choices before awaiting. Preview revisions increase within its presentation.
@@ -335,8 +334,7 @@ before a token exists. Duplicate cancellation coalesces, failed cancellation can
 be retried, and a successor cannot be cancelled by old cleanup. Up to 256 deployment
 requests per presentation remain counted through actual settlement, including
 superseded requests. These JavaScript guards neither grant native authority nor
-prove filesystem cancellation. The panel still exposes inspection and explicit
-private-state preparation only; deploying a kit requires a separate review UI.
+prove filesystem cancellation. Panel deployment follows the explicit review UI below.
 
 ## Narrow ancestor inspection
 
@@ -346,7 +344,7 @@ creates a new selection and retires its predecessor, including already admitted
 reads and reviews; it never widens a retained source. Consent is local to that
 exact presentation and selection and is neither persisted nor inherited by later
 selections. The client captures the option before awaiting native opening.
-The current inspection panel does not yet expose this consent control.
+The panel offers this separate consent after incomplete ancestor discovery.
 
 The source retains the original validated native path as an immutable inspection
 anchor. In addition to the ordinary captured registry grants, it allows metadata
@@ -368,5 +366,31 @@ scope and uses its independent purpose-bound write authority. Selecting an
 unregistered parent as a destination still fails. No IO occurs while capturing
 this grant; canonical aliases outside its exact spelling remain incomplete rather
 than acquiring inferred permissions. Linux tests cover real discovery and
-publication without granting parents. Other native runtime qualification and
-the user-facing inspection consent remain pending.
+publication without granting parents. Other native runtime qualification remains
+pending.
+
+## Manual initialization panel
+
+The shared terminal and Harness panel offers initialization only for an absent
+or reserved scope with complete ancestry, no blocked paths and no existing memory
+root. Setup captures its own presentation's directory and environment. A detected
+parent kit can be displayed but is never promoted to an authorized workspace.
+Refresh opens a new presentation and does not inherit ancestor inspection consent.
+
+Setup collects project details, explains Git-ready shared files and public-repository
+effects, and leaves both persistent root-rule links unchecked. Native preview
+performs descendant checks and displays the exact current and proposed bytes for
+every entry, recovery artifacts and the canonical destination from the retained
+native artifact. Conflicts and platform blockers disable publication. A separate
+checkbox accepts the displayed review before its token-only, single-use confirmation.
+Returning to setup cancels that review; closing retires the whole presentation.
+Duplicate submissions coalesce through actual settlement. Callbacks recheck the
+original selection after awaits and after state observers, including before writes.
+
+Installation reports acknowledged paths, preserves native partial-failure reports
+and never implies rollback after cancellation or failure. Retry requires another
+manual preview. It starts no agent, delivers no instructions and grants no trust,
+use policy or paid captures. The Git-ready mode is currently implemented; machine-only
+Git exclusion, manifest-based setup suggestions, provider-context defaults, initial
+AI capture, broader recovery controls and remote deployment remain pending. Input
+and review components are lazy-loaded with the existing management dialog.

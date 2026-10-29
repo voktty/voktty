@@ -24,6 +24,7 @@ export type NativeMemoryPreviewInput = Readonly<{
 }>;
 export type NativeMemoryPreviewSnapshot = Readonly<{
   schema: 1;
+  root: string;
   deployment: Readonly<{
     entries: readonly KitDeploymentEntry[];
     canPublish: boolean;
@@ -240,6 +241,10 @@ export function createNativeMemoryPresentation() {
         checkReview(expected);
         if (
           reply.schema !== 1 ||
+          typeof reply.root !== "string" ||
+          !reply.root ||
+          reply.root.length > 4096 ||
+          /[\x00-\x1f\x7f]/.test(reply.root) ||
           reply.revision !== requested ||
           typeof reply.review !== "string"
         )

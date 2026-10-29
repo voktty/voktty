@@ -66,7 +66,11 @@ fn preview_reply_is_display_only_and_confirmation_publishes_the_original_once() 
         let mut wire = serde_json::to_value(reply).unwrap();
         assert_eq!(wire["schema"], 1);
         assert_eq!(wire["revision"], 1);
-        assert_eq!(wire.as_object().unwrap().len(), 7);
+        assert_eq!(wire.as_object().unwrap().len(), 8);
+        assert_eq!(
+            wire["root"],
+            json!(fs::canonicalize(project.path()).unwrap())
+        );
         for field in [
             "installationId",
             "preferences",
@@ -77,6 +81,7 @@ fn preview_reply_is_display_only_and_confirmation_publishes_the_original_once() 
             assert!(wire.get(field).is_none());
         }
         wire["deployment"]["entries"][0]["proposed"] = "changed display".into();
+        wire["root"] = "changed destination".into();
         let report = confirm(&app, &registry, &resource, &selection, &token)
             .await
             .unwrap();
@@ -558,4 +563,34 @@ fn wire_contracts_reject_client_plans_and_never_serialize_native_error_details()
         serde_json::to_value(error).unwrap(),
         json!({"code":"unavailable"})
     );
+}
+
+#[test]
+fn preview_reports_the_owned_canonical_root_for_an_explicit_destination_alias() {
+    let (_state, app, resource) = fixture();
+    let project = project();
+    let actual = project.path().join("actual");
+    let alias = project.path().join("picked");
+    fs::create_dir(&actual).unwrap();
+    std::os::unix::fs::symlink(&actual, &alias).unwrap();
+    let registry = WorkspaceRegistry::default();
+    registry.authorize(project.path()).unwrap();
+    registry.authorize("/dev").unwrap();
+    let selected = resource
+        .select(&app, &registry, actual.clone(), &WorkspaceEnv::Local, 1)
+        .unwrap();
+    runtime().block_on(async {
+        initialize(&app, &resource).await;
+        let prepared = preview(&app, &registry, &resource, &selected, request(&alias, 1))
+            .await
+            .unwrap();
+        assert_eq!(prepared.root, fs::canonicalize(&actual).unwrap());
+        assert_ne!(prepared.root, alias);
+        assert!(!actual.join(".voktty").exists());
+        confirm(&app, &registry, &resource, &selected, &prepared.review)
+            .await
+            .unwrap();
+        assert!(actual.join(".voktty/kit.json").exists());
+        assert!(!project.path().join(".voktty").exists());
+    });
 }

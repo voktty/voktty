@@ -2,8 +2,10 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { useTranslation } from "@/modules/i18n";
+import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
 import {
   createMemoryPanelController,
+  canInitializeMemory,
   supportedMemoryPanelTarget,
   type MemoryPanelState,
   type MemoryPanelTarget,
@@ -95,6 +97,40 @@ function MemoryObservation({
       };
     }
   }, [target]);
+  if (
+    state.status !== "loading" &&
+    state.status !== "ready" &&
+    state.status !== "error"
+  )
+    return (
+      <>
+        <MemoryInitialization
+          state={state}
+          directory={target.path}
+          onPreview={(values, links) => {
+            void controller.current?.preview(values, links);
+          }}
+          onConfirm={(review) => {
+            void controller.current?.confirm(review);
+          }}
+          onBack={() => {
+            void controller.current?.back();
+          }}
+        />
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={
+              state.status === "previewing" || state.status === "publishing"
+            }
+            onClick={onReload}
+          >
+            {t("common.refresh")}
+          </Button>
+        </DialogFooter>
+      </>
+    );
   const message =
     state.status === "loading"
       ? "projectMemory.checking"
@@ -139,6 +175,29 @@ function MemoryObservation({
               {t("projectMemory.prepare")}
             </Button>
           </div>
+        ) : null}
+        {state.status === "ready" &&
+        state.observation.scope.state === "incomplete" &&
+        !state.observation.scope.ancestryComplete ? (
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs text-muted-foreground">
+              {t("projectMemory.inspectDescription")}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void controller.current?.inspectAncestors();
+              }}
+            >
+              {t("projectMemory.inspectAncestors")}
+            </Button>
+          </div>
+        ) : null}
+        {state.status === "ready" && canInitializeMemory(state.observation) ? (
+          <Button size="sm" onClick={() => controller.current?.configure()}>
+            {t("projectMemory.initialize")}
+          </Button>
         ) : null}
       </div>
       <DialogFooter>

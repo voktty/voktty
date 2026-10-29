@@ -73,7 +73,7 @@ export function ProjectMemoryButton({
         </Button>
       </DialogTrigger>
       {open ? (
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t("projectMemory.title")}</DialogTitle>
             <DialogDescription>

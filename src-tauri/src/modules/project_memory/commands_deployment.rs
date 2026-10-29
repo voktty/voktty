@@ -131,6 +131,7 @@ pub struct RecoveryReply {
 #[serde(rename_all = "camelCase")]
 pub struct PreviewReply {
     schema: u8,
+    root: PathBuf,
     review: String,
     revision: u64,
     deployment: PreparedDeployment,
@@ -282,6 +283,7 @@ impl PresentationResource {
         review.phase = Phase::Ready;
         Ok(PreviewReply {
             schema: 1,
+            root: snapshot.root,
             review: capture.token.clone(),
             revision: capture.revision,
             deployment: snapshot.deployment,

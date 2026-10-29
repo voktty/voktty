@@ -33,6 +33,7 @@ const publication = {
 function reply(revision = 1) {
   return {
     schema: 1,
+    root: "/project",
     revision,
     review: `native-review-${revision}`,
     deployment: { entries: [], canPublish: true, lock: null },
@@ -86,6 +87,25 @@ it("captures preview inputs before awaiting and sends only the native token to c
   });
   await owner.close();
 });
+
+it.each([undefined, "", "bad\nroot", "x".repeat(4097)])(
+  "rejects a missing or invalid display root before review adoption (%s)",
+  async (root) => {
+    const { owner, selected } = await setup();
+    invoke.mockImplementation(async (command: string) =>
+      command === "project_memory_preview" ? { ...reply(), root } : undefined,
+    );
+    await expect(owner.preview(selected, input)).rejects.toMatchObject({
+      code: "cancelled",
+    });
+    expect(
+      invoke.mock.calls.filter(
+        ([command]) => command === "project_memory_confirm_preview",
+      ),
+    ).toHaveLength(0);
+    await owner.close();
+  },
+);
 
 it("coalesces actual confirmation settlement and preserves a partial-write failure once", async () => {
   const { owner, selected } = await setup();

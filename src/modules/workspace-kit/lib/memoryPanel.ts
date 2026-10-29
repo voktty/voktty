@@ -3,6 +3,9 @@ import {
   createNativeMemoryPresentation,
   type NativeMemoryScope,
   type NativeMemorySelection,
+  type NativeMemoryReview,
+  type NativeMemoryPublication,
+  type NativeMemoryDeploymentError,
 } from "@/modules/workspace-kit/lib/nativeMemory";
 
 export type MemoryPanelTarget = Readonly<{
@@ -13,10 +16,23 @@ export type MemoryPanelTarget = Readonly<{
 export type MemoryPanelState =
   | { status: "loading" }
   | { status: "ready"; observation: NativeMemoryScope }
-  | { status: "error"; code: string; canPrepare: boolean };
+  | { status: "error"; code: string; canPrepare: boolean }
+  | { status: "configuring" }
+  | { status: "previewing" }
+  | { status: "review" | "publishing"; review: NativeMemoryReview }
+  | { status: "published"; root: string; report: NativeMemoryPublication }
+  | { status: "deploymentError"; error: NativeMemoryDeploymentError };
 type Client = Pick<
   ReturnType<typeof createNativeMemoryPresentation>,
-  "select" | "isCurrent" | "discover" | "initializeLocalState" | "close"
+  | "select"
+  | "isCurrent"
+  | "discover"
+  | "initializeLocalState"
+  | "close"
+  | "preview"
+  | "confirmPreview"
+  | "cancelPreview"
+  | "isReviewCurrent"
 >;
 type Entry = {
   client: Client;
@@ -63,12 +79,17 @@ export function createMemoryPanelController(
   entries.add(entry);
   let selected: NativeMemorySelection | null = null;
   let pending: Promise<void> | null = null;
+  let state: MemoryPanelState = { status: "loading" };
+  let observation: NativeMemoryScope | null = null;
   const current = () =>
     !entry.retired && selected !== null && entry.client.isCurrent(selected);
-  const notify = (state: MemoryPanelState) => {
-    if (!entry.retired) publish(state);
+  const notify = (next: MemoryPanelState) => {
+    if (!entry.retired) {
+      state = next;
+      publish(next);
+    }
   };
-  function run(prepare: boolean) {
+  function run(prepare: boolean, inspectAncestors = false) {
     if (entry.retired) return Promise.resolve();
     if (pending) return pending;
     pending = Promise.resolve()
@@ -77,10 +98,14 @@ export function createMemoryPanelController(
         notify({ status: "loading" });
         if (entry.retired) return;
         try {
+          if (inspectAncestors) selected = null;
           if (!selected)
             selected = await entry.client.select(
               captured.path,
               captured.environment,
+              ...(inspectAncestors
+                ? ([{ inspectAncestors: true }] as const)
+                : []),
             );
           const receipt = selected;
           if (!receipt || !current()) return;
@@ -88,9 +113,10 @@ export function createMemoryPanelController(
             await entry.client.initializeLocalState(receipt);
             if (!current()) return;
           }
-          const observation = await entry.client.discover(receipt);
+          const observed = await entry.client.discover(receipt);
           if (!current()) return;
-          notify({ status: "ready", observation });
+          observation = observed;
+          notify({ status: "ready", observation: observed });
         } catch (error) {
           if (entry.retired) return;
           const code =
@@ -113,11 +139,121 @@ export function createMemoryPanelController(
       });
     return pending;
   }
+  function deploy(work: (receipt: NativeMemorySelection) => Promise<void>) {
+    if (entry.retired || !selected || !current()) return Promise.resolve();
+    if (pending) return pending;
+    const receipt = selected;
+    pending = Promise.resolve()
+      .then(async () => {
+        if (!current()) return;
+        try {
+          await work(receipt);
+        } catch (error) {
+          if (!current()) return;
+          const failure =
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            typeof error.code === "string"
+              ? (error as NativeMemoryDeploymentError)
+              : { code: "unavailable" };
+          notify({ status: "deploymentError", error: failure });
+        }
+      })
+      .finally(() => {
+        pending = null;
+      });
+    return pending;
+  }
   return {
     load: () => run(false),
     prepare: () => run(true),
+    inspectAncestors() {
+      if (
+        state.status !== "ready" ||
+        state.observation.scope?.state !== "incomplete" ||
+        state.observation.scope.ancestryComplete
+      )
+        return Promise.resolve();
+      return run(false, true);
+    },
+    configure() {
+      if (
+        !pending &&
+        current() &&
+        state.status === "ready" &&
+        canInitializeMemory(state.observation)
+      )
+        notify({ status: "configuring" });
+    },
+    preview(
+      inputs: Readonly<Record<string, string>>,
+      links: Readonly<{ agents: boolean; claude: boolean }>,
+    ) {
+      if (state.status !== "configuring") return Promise.resolve();
+      const values = structuredClone(inputs);
+      const choices = structuredClone(links);
+      return deploy(async (receipt) => {
+        notify({ status: "previewing" });
+        if (!current()) return;
+        const review = await entry.client.preview(receipt, {
+          destination: captured.path,
+          environment: captured.environment,
+          inputs: values,
+          links: choices,
+        });
+        if (current() && entry.client.isReviewCurrent(receipt, review))
+          notify({ status: "review", review });
+      });
+    },
+    confirm(accepted: NativeMemoryReview) {
+      if (
+        state.status !== "review" ||
+        state.review !== accepted ||
+        !selected ||
+        !entry.client.isReviewCurrent(selected, accepted) ||
+        !accepted.snapshot.deployment.canPublish ||
+        accepted.snapshot.publicationBlocker
+      )
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "publishing", review: accepted });
+        if (!current()) return;
+        const report = await entry.client.confirmPreview(receipt, accepted);
+        if (current())
+          notify({ status: "published", root: accepted.snapshot.root, report });
+      });
+    },
+    back() {
+      if (pending || !current() || !observation) return Promise.resolve();
+      if (state.status === "deploymentError") {
+        notify({ status: "configuring" });
+        return Promise.resolve();
+      }
+      if (state.status === "configuring") {
+        notify({ status: "ready", observation });
+        return Promise.resolve();
+      }
+      if (state.status !== "review") return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "previewing" });
+        if (!current()) return;
+        await entry.client.cancelPreview(receipt);
+        if (current()) notify({ status: "configuring" });
+      });
+    },
     dispose: () => closeEntry(entry),
   };
+}
+
+export function canInitializeMemory(observation: NativeMemoryScope) {
+  return (
+    observation.scope?.ancestryComplete === true &&
+    observation.blockedCount === 0 &&
+    !observation.root &&
+    (observation.scope.state === "absent" ||
+      observation.scope.state === "reserved")
+  );
 }
 
 export function supportedMemoryPanelTarget(target: MemoryPanelTarget) {
