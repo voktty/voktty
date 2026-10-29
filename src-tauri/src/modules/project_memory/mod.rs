@@ -170,6 +170,12 @@ mod tests;
 mod selection;
 pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
 
+mod deployment;
+pub use deployment::{
+    NativeMemoryPreparedPreview, NativeMemoryPreviewRead, NativeMemoryPreviewReceipt,
+    NativeMemoryPreviewRequest, NativeMemoryPublication,
+};
+
 mod storage;
 pub use storage::NativeMemoryStorage;
 

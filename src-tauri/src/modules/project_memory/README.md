@@ -42,6 +42,51 @@ returned observation; successful `finish` only validates its own delivery point.
 Selection mutation is synchronous and requires exclusive owner access, with no
 lock held across worker awaits. IPC presentations delegate to this owner.
 
+## Selection-owned deployment reviews
+
+Each `NativeMemorySelection` retains at most one opening, ready or consumed
+review. `prepare_preview` uses the current selection as its origin and captures
+the explicit destination's local read authority from the actual registry. It
+never registers paths or accepts a caller-supplied origin. A new review retires
+the previous one before destination validation or worker admission, including
+unsupported destinations and invalid inputs. A stale selection cannot retire
+another selection's review. Preparation uses the shared four-slot native worker
+budget and returns a noncloneable prepared artifact with its original identity.
+
+`NativeMemoryPreviewRead::receipt` exposes only a weak native identity, so an
+opening request can be cancelled without borrowing a later review. Opening
+receipts cannot read a ready plan or admit publication. `accept_preview` stores
+only the matching original opening's completed artifact; it grants no instruction
+trust, session consent or write permission. Plans remain immutable. Review and
+selection receipts are native-only and cannot be constructed by deserialization.
+
+`publish_preview` consumes a ready plan once, before worker admission. Failed
+admission or publication never restores acceptance. It requires an independent,
+qualified native `MemoryWriteAccess`; read authority never manufactures writes.
+The native command integration still needs its purpose-bound write factory.
+The worker uses the exact original preview, read authorities and review deadline.
+Publication has its own bounded request control; the completed preparation's
+response deadline does not shorten or renew the manual review's two-minute life.
+
+New selection, failed selection, clearing, owner disposal or another review
+permanently retires the old review and requests cooperative cancellation of its
+current phase. Its destination source retires with it. Preparation and publication
+results recheck the original review, origin and destination after awaiting.
+Cancelled delivery does not roll back files or acknowledge a blocked filesystem
+call. Partial reports and the private recovery intent retain their existing
+semantics. Native worker slots and publication locks remain held through physical
+IO settlement even when the owner has already retired.
+
+Callers must recheck `is_preview_current` immediately before delivering an
+already returned result. That check describes lifetime only: a consumed review
+can still identify its in-flight result but cannot publish again. Exact
+`cancel_preview` cleanup can release it afterward without touching a replacement.
+No mutation lock spans an await. Registry limits still bound containing owners;
+there is no review history, background timer, implicit deployment or AI launch.
+Window/application forwarding, IPC and narrow ancestor consent remain pending.
+Linux tests exercise the real native workers and filesystem. Other native runtime
+qualification remains pending.
+
 `NativeMemoryStorage::capture` obtains only Tauri's native `app_local_data_dir`
 path, without IO or a project/cwd fallback. Its `open` and explicit `initialize`
 operations run through `MemoryWorkers::store`, sharing the four-slot budget and
@@ -64,7 +109,7 @@ mistaken for private mode bits. Permission checks are point-in-time observations
 Explicit initialization can create missing native app-directory suffixes after
 verifying that chain. It never overwrites existing entries or repairs permissions.
 Ordinary open stays noncreating. Kit deployment UI, narrow project-ancestor consent,
-publication workers and platform runtime qualification remain pending. This
+application publication wiring and platform runtime qualification remain pending. This
 module still starts no filesystem work automatically.
 
 `NativeMemoryOwners` provides the native lifecycle registry for panel

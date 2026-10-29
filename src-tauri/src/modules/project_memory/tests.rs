@@ -10,6 +10,10 @@ mod selection_tests;
 #[path = "owners_tests.rs"]
 mod owners_tests;
 
+#[cfg(target_os = "linux")]
+#[path = "deployment_tests.rs"]
+mod deployment_tests;
+
 pub(super) fn runtime() -> Runtime {
     Builder::new_current_thread().enable_time().build().unwrap()
 }
