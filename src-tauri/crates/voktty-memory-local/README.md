@@ -243,8 +243,8 @@ cooperative cancellation. It does not abort or acknowledge an admitted filesyste
 call. Queued or blocked work retains its slot and captured authority through
 settlement, even after the consumer has timed out or disappeared. Completed but
 unconsumed results also retain their slots, bounding abandoned ready payloads.
-Receiving or discarding the result releases that slot. These are observation
-workers, not a publication executor, OS-thread join or resource-cleanup receipt.
+Receiving or discarding the result releases that slot. These observation results
+do not acknowledge publication, an OS-thread join or resource cleanup.
 Normal settlement does not cancel a shared control, so later phases can still
 use that request's original remaining lifetime.
 
@@ -254,6 +254,44 @@ tests exercise actual disk discovery and context on blocking threads, project
 isolation, fresh instruction fingerprints and denied requests without writes.
 Windows cross-compilation does not qualify its runtime behavior. App/CLI wiring,
 selection ownership and authenticated remote execution are still pending.
+
+## Bounded deployment workers
+
+`MemoryWorkers::preview` and `publish` use the same blocking executor and
+four-slot process budget as store, scope and context work. They do not create
+a separate queue or runtime. `MemoryPreviewRequest` moves its original store,
+cwd, destination, independent read authorities, input strings and root-link
+choices into the worker. Both paths retain the existing 4 KiB/128-component
+limits. Before scheduling, inputs must contain at most 32 string values, with
+64-byte keys, 16 KiB per value and 256 KiB total key/value bytes. The shared
+template core still validates known names, required values and rendered limits.
+The caller must qualify the local filesystem and capture real native grants;
+neither the request nor this worker grants paths, writes or instruction trust.
+
+Preview prepares the native plan from actual bytes without creating a kit and
+returns an `OwnedInitializationPreview` with its exact original authorities.
+Publication consumes that artifact without reopening or replanning, using its
+captured read authority and the caller's independent native write authority.
+Each request retains its original discovery control, capped at fifteen seconds,
+with five-second IO phases. Queue time counts against that same deadline.
+The review's two-minute lifetime is never renewed by worker admission. A
+publication attempt consumes its review even if admission fails; retry requires
+another explicit review, not automatic reacceptance.
+
+`MemoryDeploymentJob::finish` distinguishes `Worker`, `Preview` and `Publication`
+errors. A current publication failure retains its acknowledged changes and
+recovery paths in `PublicationFailure`. Worker timeout, cancellation, runtime
+failure or missing reply carries no publication report and never proves that
+no files were written. Retirement rejects delivery even if publication already
+completed; it never rolls back targets or restarts an operation. Already admitted
+IO retains its slot and publication lock until actual settlement. Queued retired
+work never starts IO, and ready results retain capacity until consumed or dropped.
+Partial publication remains recoverable through the private intent and a fresh
+explicit review. These jobs are not presentation or native-window receipts.
+IPC, selection-owned review storage and authenticated remote workers remain
+pending. Linux tests exercise mixed capacity, queued cancellation, blocked
+publication through timeout, partial recovery and completed-but-retired delivery;
+other native runtime qualification remains pending.
 
 ## Windows handle reader
 

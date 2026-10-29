@@ -24,7 +24,10 @@ pub use publication::{
     InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, PublicationError,
     PublicationFailure, PublicationReport, RecoveryFile,
 };
-pub use workers::{MemoryJob, MemoryStoreMode, MemoryWorkError, MemoryWorkers};
+pub use workers::{
+    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryJob, MemoryPreviewRequest,
+    MemoryStoreMode, MemoryWorkError, MemoryWorkers,
+};
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;
 #[cfg(unix)]

@@ -78,12 +78,21 @@ impl Drop for Slot {
 /// worker retains its slot and captured native authority until it settles.
 #[must_use = "finish or drop the observation job to release its consumer"]
 pub struct MemoryJob<T> {
-    receiver: oneshot::Receiver<(Result<T, ReadError>, Slot)>,
+    job: Job<T, ReadError>,
+}
+impl<T> MemoryJob<T> {
+    pub async fn finish(self) -> Result<T, MemoryWorkError> {
+        self.job.receive().await?.map_err(MemoryWorkError::Read)
+    }
+}
+
+struct Job<T, E> {
+    receiver: oneshot::Receiver<(Result<T, E>, Slot)>,
     control: Control,
     settled: bool,
 }
-impl<T> MemoryJob<T> {
-    pub async fn finish(mut self) -> Result<T, MemoryWorkError> {
+impl<T, E> Job<T, E> {
+    async fn receive(mut self) -> Result<Result<T, E>, MemoryWorkError> {
         self.control.check()?;
         Handle::try_current().map_err(|_| MemoryWorkError::RuntimeUnavailable)?;
         let received = tokio::time::timeout_at(
@@ -96,10 +105,10 @@ impl<T> MemoryJob<T> {
         let (result, _slot) = received
             .map_err(|_| MemoryWorkError::Read(ReadError::Timeout))?
             .map_err(|_| MemoryWorkError::Failed)?;
-        result.map_err(MemoryWorkError::Read)
+        Ok(result)
     }
 }
-impl<T> Drop for MemoryJob<T> {
+impl<T, E> Drop for Job<T, E> {
     fn drop(&mut self) {
         if !self.settled {
             self.control.cancel();
@@ -212,6 +221,14 @@ impl MemoryWorkers {
         control: Control,
         work: impl FnOnce() -> Result<T, ReadError> + Send + 'static,
     ) -> Result<MemoryJob<T>, MemoryWorkError> {
+        self.submit(control, work).map(|job| MemoryJob { job })
+    }
+
+    fn submit<T: Send + 'static, E: From<ReadError> + Send + 'static>(
+        &self,
+        control: Control,
+        work: impl FnOnce() -> Result<T, E> + Send + 'static,
+    ) -> Result<Job<T, E>, MemoryWorkError> {
         control.check()?;
         let runtime = Handle::try_current().map_err(|_| MemoryWorkError::RuntimeUnavailable)?;
         let mut active = self.active.load(Ordering::Acquire);
@@ -236,20 +253,25 @@ impl MemoryWorkers {
         drop(runtime.spawn_blocking(move || {
             let result = worker_control
                 .check()
+                .map_err(E::from)
                 .and_then(|_| work())
                 .and_then(|value| {
-                    worker_control.check()?;
+                    worker_control.check().map_err(E::from)?;
                     Ok(value)
                 });
             let _ = sender.send((result, slot));
         }));
-        Ok(MemoryJob {
+        Ok(Job {
             receiver,
             control,
             settled: false,
         })
     }
 }
+
+#[path = "deployment_workers.rs"]
+mod deployment;
+pub use deployment::{MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPreviewRequest};
 
 #[cfg(test)]
 #[path = "workers_tests.rs"]
