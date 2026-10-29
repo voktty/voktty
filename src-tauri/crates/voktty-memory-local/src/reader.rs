@@ -183,6 +183,10 @@ pub(crate) struct OwnedMemoryWorkspace {
 }
 
 impl OwnedMemoryWorkspace {
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub(crate) fn borrow(&self) -> LocalMemoryWorkspace<'_> {
         LocalMemoryWorkspace {
             root: self.root.clone(),

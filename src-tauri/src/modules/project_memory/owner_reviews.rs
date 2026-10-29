@@ -108,4 +108,17 @@ impl NativeMemoryOwners {
         self.selection_mut(window, presentation)?
             .publish_preview(selected, preview, access, control)
     }
+
+    pub fn confirm_preview(
+        &mut self,
+        window: &NativeMemoryWindowReceipt,
+        presentation: &NativeMemoryPresentationReceipt,
+        selected: &NativeMemorySelectionReceipt,
+        preview: &NativeMemoryPreviewReceipt,
+        registry: &WorkspaceRegistry,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryPublication, MemoryDeploymentWorkError> {
+        self.selection_mut(window, presentation)?
+            .confirm_preview(selected, preview, registry, control)
+    }
 }

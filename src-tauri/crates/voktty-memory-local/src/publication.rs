@@ -3,7 +3,7 @@ use std::fs;
 #[cfg(unix)]
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -110,6 +110,14 @@ pub struct RecoveryFile {
     pub text: String,
 }
 
+/// Native review IO inventory, not filesystem authorization or an executable plan.
+pub struct PublicationWriteRequirements {
+    pub root: PathBuf,
+    pub create: Vec<String>,
+    pub replace: Vec<String>,
+    pub recovery: Vec<String>,
+}
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) struct Migration<'a> {
     pub path: &'a str,
@@ -198,6 +206,30 @@ pub struct OwnedInitializationPreview {
 }
 
 impl OwnedInitializationPreview {
+    pub fn write_requirements(&self) -> PublicationWriteRequirements {
+        let mut requirements = PublicationWriteRequirements {
+            root: self.destination.root().to_owned(),
+            create: Vec::new(),
+            replace: Vec::new(),
+            recovery: (0..self.intent.files.len())
+                .filter_map(|index| self.intent.backup(index))
+                .collect(),
+        };
+        for (index, entry) in self.prepared.plan.entries.iter().enumerate() {
+            match entry.action {
+                DeploymentAction::Create => requirements.create.push(entry.path.clone()),
+                DeploymentAction::Migrate => {
+                    requirements.replace.push(entry.path.clone());
+                    if let Some(backup) = self.intent.backup(index) {
+                        requirements.create.push(backup);
+                    }
+                }
+                _ => {}
+            }
+        }
+        requirements
+    }
+
     pub fn deployment(&self) -> &PreparedDeployment {
         &self.prepared
     }

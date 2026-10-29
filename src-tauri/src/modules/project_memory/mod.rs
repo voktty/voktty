@@ -25,6 +25,21 @@ fn native_spelling(path: &Path) -> Result<PathBuf, ReadError> {
     }
 }
 
+fn authorized_roots(registry: &WorkspaceRegistry) -> Result<Vec<PathBuf>, MemoryWorkError> {
+    registry
+        .snapshot_authorized_roots(256, 1024 * 1024)
+        .map_err(|error| {
+            MemoryWorkError::Read(match error {
+                RegistrySnapshotError::Unavailable => ReadError::Denied,
+                RegistrySnapshotError::Limit => ReadError::Limit,
+            })
+        })?
+        .iter()
+        .map(|root| native_spelling(root))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 impl Access {
     fn authorized(&self, path: &Path) -> bool {
         let Ok(path) = native_spelling(path) else {
@@ -101,17 +116,7 @@ impl NativeMemorySource {
         if text.len() > 4096 || requested.components().count() > 128 {
             return Err(ReadError::Limit.into());
         }
-        let roots = registry
-            .snapshot_authorized_roots(256, 1024 * 1024)
-            .map_err(|error| {
-                MemoryWorkError::Read(match error {
-                    RegistrySnapshotError::Unavailable => ReadError::Denied,
-                    RegistrySnapshotError::Limit => ReadError::Limit,
-                })
-            })?
-            .iter()
-            .map(|root| native_spelling(root))
-            .collect::<Result<Vec<_>, _>>()?;
+        let roots = authorized_roots(registry)?;
         let access = Arc::new(Access {
             roots,
             live: AtomicBool::new(true),
@@ -171,6 +176,7 @@ mod selection;
 pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
 
 mod deployment;
+mod write_authority;
 pub use deployment::{
     NativeMemoryPreparedPreview, NativeMemoryPreviewRead, NativeMemoryPreviewReceipt,
     NativeMemoryPreviewRequest, NativeMemoryPreviewSnapshot, NativeMemoryPreviewTarget,

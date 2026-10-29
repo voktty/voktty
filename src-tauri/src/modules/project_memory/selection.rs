@@ -196,4 +196,20 @@ impl NativeMemorySelection {
             control,
         )
     }
+
+    pub fn confirm_preview(
+        &mut self,
+        selection: &NativeMemorySelectionReceipt,
+        receipt: &NativeMemoryPreviewReceipt,
+        registry: &WorkspaceRegistry,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryPublication, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.confirm(
+            self.source.as_ref().ok_or(ReadError::Cancelled)?,
+            receipt,
+            registry,
+            control,
+        )
+    }
 }

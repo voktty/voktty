@@ -293,4 +293,29 @@ impl NativeMemoryDeployment {
             }
         }
     }
+
+    pub(super) fn confirm(
+        &mut self,
+        source: &NativeMemorySource,
+        receipt: &NativeMemoryPreviewReceipt,
+        registry: &WorkspaceRegistry,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryPublication, MemoryDeploymentWorkError> {
+        let preview = self.preview(receipt)?;
+        let review = self.review.as_ref().ok_or_else(cancelled)?;
+        let access = super::write_authority::NativeMemoryWriteAuthority::capture(
+            registry,
+            preview,
+            source.access.clone(),
+            review.destination.access.clone(),
+            &review.live,
+        );
+        match access {
+            Ok(access) => self.publish(source, receipt, Arc::new(access), control),
+            Err(error) => {
+                self.clear();
+                Err(error.into())
+            }
+        }
+    }
 }

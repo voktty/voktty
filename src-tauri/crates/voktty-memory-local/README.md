@@ -460,6 +460,14 @@ The owning presentation must discard its review on selection retirement; retaini
 it alone is not a session permit or a publication worker. IPC and bounded worker
 integration remain pending.
 
+`OwnedInitializationPreview::write_requirements` exposes a bounded native IO
+inventory with the captured canonical destination, planned creations, selected
+migrations and exact recovery names from the original intent. It is neither
+filesystem authorization nor an executable plan. Skipped targets are omitted
+from creation and replacement; their recorded recovery names remain available
+for separately authorized cleanup. The application's purpose-bound write factory
+derives its scope from this original object, never from an editable display DTO.
+
 Publication rechecks both native directory identities, installation UUID,
 preference revision, scopes and exact expected bytes. `MemoryWriteAccess` is an
 independent native authority for creating files and directories, including secret

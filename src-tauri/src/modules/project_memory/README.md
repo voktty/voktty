@@ -21,7 +21,7 @@ reads, including completed results awaiting delivery. A new source cannot revive
 them. Captured grants never widen when the registry changes. Retirement is
 cooperative and does not acknowledge cancellation of a blocked OS call.
 
-This Rust-only foundation grants no writes, instruction trust or session consent.
+Capturing a read source grants no writes, instruction trust or session consent.
 Project observation is not started at startup. Its owner must
 qualify the local filesystem and retire sources when selection changes; a local
 environment descriptor alone does not prove filesystem or transport ownership.
@@ -72,7 +72,7 @@ selection receipts are native-only and cannot be constructed by deserialization.
 `publish_preview` consumes a ready plan once, before worker admission. Failed
 admission or publication never restores acceptance. It requires an independent,
 qualified native `MemoryWriteAccess`; read authority never manufactures writes.
-The native command integration still needs its purpose-bound write factory.
+`confirm_preview` supplies the purpose-bound native authority described below.
 The worker uses the exact original preview, read authorities and review deadline.
 Publication has its own bounded request control; the completed preparation's
 response deadline does not shorten or renew the manual review's two-minute life.
@@ -181,8 +181,36 @@ native artifact. It holds no mutation lock after returning and cannot replace
 the accepted plan. Editing a snapshot's proposed bytes does not change what
 publication writes. Callers still revalidate `is_preview_current` before delivery.
 No ownership mutex spans an await. Publication continues to require separate
-qualified native write authority; these forwarding methods grant none. Native
-IPC tokens, command ordering and the purpose-bound write factory remain pending.
+qualified native write authority. Native
+IPC tokens and command ordering remain pending.
+
+## Purpose-bound publication authority
+
+Explicit native `confirm_preview` captures fresh, bounded registry grants and
+derives its write scope from the original immutable `OwnedInitializationPreview`.
+It never accepts a display snapshot, serialized plan or caller-provided inventory.
+The canonical destination, reviewed creations, necessary parent directories and
+exact recorded migration backups define the scope. Creation staging is limited
+to native UUID-v4 names in the reviewed creation parents. Replacement covers only
+selected known migrations; removal covers only exact recorded recovery entries.
+Skipped targets receive no creation or replacement grant, including on recovery.
+
+The factory performs no IO and authorizes no new workspace roots. It independently
+captures at most 256 existing registry roots and 1 MiB of encoded paths; its
+purpose scope admits at most 512 stored paths and 2 MiB of encoded paths. Every
+use checks the original origin, destination and review lifetime, exact native
+path spelling and secret-path write protections. Retirement cannot be reversed
+by selecting the same path again. Registry revocation must still retire sources.
+Native descriptor checks, exact bytes, platform restrictions and publication
+deadlines remain mandatory; this authority does not replace them.
+
+Confirmation consumes the ready review once. Failure to capture write authority
+also retires that acceptance, rather than falling back to read grants. Window and
+application forwarding retain their existing exact ownership checks. Linux tests
+cover real publication, three opted-in migrations, reserved content, recovery,
+canonical aliases, denied or oversized grant snapshots and foreign owners.
+IPC confirmation, ancestor consent and other native runtime qualification remain
+pending.
 
 ## Observation IPC
 

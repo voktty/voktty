@@ -133,6 +133,20 @@ impl NativeMemoryApplication {
             owners.publish_preview(receipt, presentation, selected, preview, access, control)
         })
     }
+
+    pub fn confirm_preview(
+        &self,
+        window: &NativeMemoryWindow,
+        presentation: &NativeMemoryPresentationReceipt,
+        selected: &NativeMemorySelectionReceipt,
+        preview: &NativeMemoryPreviewReceipt,
+        registry: &WorkspaceRegistry,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryPublication, MemoryDeploymentWorkError> {
+        self.with_deployment(window, |owners, receipt| {
+            owners.confirm_preview(receipt, presentation, selected, preview, registry, control)
+        })
+    }
 }
 
 #[cfg(all(test, target_os = "linux"))]

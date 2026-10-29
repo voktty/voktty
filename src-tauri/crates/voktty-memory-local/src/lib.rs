@@ -22,7 +22,7 @@ mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, PublicationError,
-    PublicationFailure, PublicationReport, RecoveryFile,
+    PublicationFailure, PublicationReport, PublicationWriteRequirements, RecoveryFile,
 };
 pub use workers::{
     MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryJob, MemoryPreviewRequest,
