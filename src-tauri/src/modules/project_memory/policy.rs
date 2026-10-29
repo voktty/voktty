@@ -66,6 +66,12 @@ impl NativeMemoryPolicyReservation {
             .upgrade()
             .is_some_and(|live| live.load(Ordering::Acquire))
     }
+
+    pub fn retire(&self) {
+        if let Some(live) = self.live.upgrade() {
+            live.store(false, Ordering::Release);
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]

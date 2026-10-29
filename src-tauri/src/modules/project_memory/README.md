@@ -364,9 +364,44 @@ writes are not rolled back by retirement.
 
 The existing window, presentation and physical worker budgets remain unchanged.
 Linux tests exercise replacement, exact cleanup, foreign ownership, selection
-round trips, native retirement and queued cancellation. Policy IPC, client and
-panel controls, exact session permissions and context delivery remain pending.
+round trips, native retirement and queued cancellation. The policy IPC below
+exposes these operations; client and panel controls, exact session permissions
+and context delivery remain pending.
 Remote policy operations and other native runtimes are not yet qualified.
+
+## Local policy IPC
+
+`project_memory_review_policy` requires the calling presentation, current selection
+and a strict request with an increasing safe-integer `revision` and a `policy`
+string of `manual`, `always` or `never`. The legacy store alias `ask` and client
+roots, digests, grants and session fields are rejected. The choice is captured
+before awaiting. Native reservation precedes noncreating private-state opening;
+the original deadline, source and reservation guard each asynchronous phase.
+Only a complete, unambiguous ready memory scope can produce a policy review.
+
+The schema-1 reply contains an opaque UUID, revision, canonical memory `root`,
+`projectKey`, requested `policy` and that project's effective nullable `preference`.
+It exposes neither installation identity, private root bindings, unrelated
+preferences nor instruction or factual documents. Review performs no preference
+write and does not validate current instruction bytes as trusted.
+
+`project_memory_confirm_policy` accepts only the current selection and ready UUID.
+It consumes the original artifact before admission and changes only its retained
+policy after native scope, identity and revision checks. Admission or acceptance
+failure never restores the token. The schema-1 reply contains only that project's
+persisted `preference`. Concurrent preference changes report `stale` rather than
+rebasing acceptance. Instruction trust, session enables and capture consent
+remain independent; no repository file, tool approval or model is changed.
+
+`project_memory_cancel_policy` uses the request revision, including before a
+review UUID exists. Newer cancellation records a tombstone; stale cancellation
+and asynchronous error cleanup cannot cancel a successor. Command disposal
+retires its exact native weak reservation and cancels its captured IO phase.
+Source, presentation, window and application retirement reject late results and
+errors. The original review lifetime is never renewed, no mutex spans an await,
+and admitted work retains its physical budget until settlement. Retired delivery
+does not roll back an admitted policy write. Errors contain only redacted codes.
+The IPC has no frontend controls, session grants or context consumers yet.
 
 ## Instruction trust IPC
 
