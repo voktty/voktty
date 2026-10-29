@@ -273,6 +273,10 @@ impl MemoryWorkers {
 mod deployment;
 pub use deployment::{MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPreviewRequest};
 
+#[path = "trust_workers.rs"]
+mod trust;
+pub use trust::{MemoryTrustError, MemoryTrustJob, MemoryTrustReview};
+
 #[cfg(test)]
 #[path = "workers_tests.rs"]
 mod tests;

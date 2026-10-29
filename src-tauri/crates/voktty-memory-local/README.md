@@ -305,6 +305,42 @@ pending. Linux tests exercise mixed capacity, queued cancellation, blocked
 publication through timeout, partial recovery and completed-but-retired delivery;
 other native runtime qualification remains pending.
 
+## Native instruction trust reviews
+
+`MemoryWorkers::review_trust` resolves the memory root from a captured execution
+directory through complete ancestor discovery. It requires one unambiguous valid
+kit, then opens that root with the original native read authority. Permission to
+inspect ancestor markers never grants permission to read their instructions.
+Discovery does not scan descendants on this path or certify that the tree cannot
+change later. The review retains the exact native execution and memory directory
+identities, original store and authority, configuration, local preference snapshot
+and bounded instruction bytes, including an explicitly assigned role and root
+rules. Its immutable observation is for display, not a context-delivery permit.
+Preparing or discarding a review changes neither project files nor preferences.
+
+`accept_trust` consumes that opaque, non-cloneable review. It expires after two
+minutes and is never reconstructed from a client-supplied path, hash or snapshot.
+Acceptance rediscovers the scope, rereads instructions, compares configuration,
+fingerprint and the complete local preference snapshot, then rediscovers again
+and checks both captured directory identities. Trust is stored only through the
+reviewed preference revision's compare-and-swap. Any intervening preference
+mutation requires another review; it is never automatically rebased. Factual
+PROJECT/CONTEXT edits do not change instruction trust. Policy, including `never`,
+session consent, capture consent and repository content remain unchanged.
+
+Both operations use the existing four-slot blocking-worker budget and original
+discovery deadline, with bounded five-second read phases. Ready replies retain
+their slot until consumed or dropped. Cancellation prevents queued IO and retires
+delivery, but does not undo an already admitted preferences write. Scope and byte
+checks are point-in-time observations, not a transaction against external writers.
+Consumers must revalidate actual instructions, scope and consent before delivery.
+Errors distinguish worker/read failures, unavailable scope and changed reviews.
+These APIs do not implement presentation tokens, policy controls, a session grant,
+accepted-byte history for later diffs, CLI use or provider injection. Linux tests
+exercise parent resolution, changed instructions/roles/root rules/configuration,
+preference conflicts, stale roots/installations, retirement and shared capacity;
+other platforms still require native runtime qualification.
+
 ## Windows handle reader
 
 The Windows backend accepts absolute local disk paths, including verbatim disk
