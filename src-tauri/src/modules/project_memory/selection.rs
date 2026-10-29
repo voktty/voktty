@@ -25,9 +25,27 @@ impl NativeMemorySelection {
         requested: PathBuf,
         environment: &WorkspaceEnv,
     ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
+        self.select_with_inspection(registry, requested, environment, false)
+    }
+
+    pub fn select_with_inspection(
+        &mut self,
+        registry: &WorkspaceRegistry,
+        requested: PathBuf,
+        environment: &WorkspaceEnv,
+        inspect_ancestors: bool,
+    ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
         self.deployment.clear();
         self.source = None;
-        let source = NativeMemorySource::capture(registry, requested, environment)?;
+        let inspection = inspect_ancestors
+            .then(|| native_spelling(&requested))
+            .transpose()?;
+        let source = NativeMemorySource::capture_with_inspection(
+            registry,
+            requested,
+            environment,
+            inspection,
+        )?;
         let receipt = NativeMemorySelectionReceipt {
             access: Arc::downgrade(&source.access),
         };
@@ -115,8 +133,13 @@ impl NativeMemorySelection {
     ) -> Result<NativeMemoryPreviewReceipt, MemoryDeploymentWorkError> {
         self.current(receipt)?;
         self.deployment.clear();
-        let destination =
-            NativeMemorySource::capture(registry, target.destination, &target.environment)?;
+        let inspection = self.current(receipt)?.access.ancestor_inspection.clone();
+        let destination = NativeMemorySource::capture_with_inspection(
+            registry,
+            target.destination,
+            &target.environment,
+            inspection,
+        )?;
         Ok(self.deployment.reserve(destination, target.control))
     }
 

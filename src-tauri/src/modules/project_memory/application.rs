@@ -214,6 +214,19 @@ impl NativeMemoryApplication {
         })
     }
 
+    pub fn select_with_inspection(
+        &self,
+        window: &NativeMemoryWindow,
+        presentation: &NativeMemoryPresentationReceipt,
+        registry: &WorkspaceRegistry,
+        requested: PathBuf,
+        environment: &WorkspaceEnv,
+    ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
+        self.with_owners(window, |owners, receipt| {
+            owners.select_with_inspection(receipt, presentation, registry, requested, environment)
+        })
+    }
+
     pub fn is_current(
         &self,
         window: &NativeMemoryWindow,

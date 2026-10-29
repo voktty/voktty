@@ -503,3 +503,7 @@ pub fn project_memory_cancel_preview(
 #[cfg(all(test, target_os = "linux"))]
 #[path = "commands_deployment_tests.rs"]
 mod tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "commands_ancestor_tests.rs"]
+mod ancestor_tests;

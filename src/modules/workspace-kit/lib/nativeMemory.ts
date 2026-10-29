@@ -162,13 +162,18 @@ export function createNativeMemoryPresentation() {
   }
 
   return {
-    async select(path: string, environment: WorkspaceEnv) {
+    async select(
+      path: string,
+      environment: WorkspaceEnv,
+      options: Readonly<{ inspectAncestors?: boolean }> = {},
+    ) {
       if (closed) cancelled();
       current = null;
       review = null;
       const requested = ++revision;
       if (!Number.isSafeInteger(requested)) cancelled();
       const capturedEnvironment = nativeEnvironment(environment);
+      const inspectAncestors = options.inspectAncestors === true;
       const check = () => {
         if (closed || revision !== requested) cancelled();
       };
@@ -180,6 +185,7 @@ export function createNativeMemoryPresentation() {
           path,
           environment: capturedEnvironment,
           revision: requested,
+          ...(inspectAncestors ? { inspectAncestors: true } : {}),
         });
         check();
         const receipt = Object.freeze({ [selectionBrand]: true as const });

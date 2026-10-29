@@ -63,6 +63,7 @@ async fn prepare(
 fn access(root: &Path) -> Arc<Access> {
     Arc::new(Access {
         roots: vec![root.to_owned()],
+        ancestor_inspection: None,
         live: AtomicBool::new(true),
     })
 }

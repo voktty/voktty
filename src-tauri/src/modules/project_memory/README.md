@@ -96,7 +96,7 @@ can still identify its in-flight result but cannot publish again. Exact
 `cancel_preview` cleanup can release it afterward without touching a replacement.
 No mutation lock spans an await. Registry limits still bound containing owners;
 there is no review history, background timer, implicit deployment or AI launch.
-Narrow ancestor consent remains pending.
+Ancestor inspection requires the explicit selection consent described below.
 Linux tests exercise the real native workers and filesystem. Other native runtime
 qualification remains pending.
 
@@ -318,7 +318,7 @@ stale cancellation leaves a successor intact. Cleanup after an asynchronous
 failure also matches the original token. Selection changes, resource close and
 native owner retirement suppress late results and errors. No ownership or
 command-state lock spans an await. Physical workers retain their own capacity
-and publication exclusion until IO settles. Panel flow, narrow ancestor consent
+and publication exclusion until IO settles. Panel flow, ancestor-consent controls
 and remote transports remain pending.
 
 The typed deployment client captures destination, environment, string inputs and
@@ -337,3 +337,36 @@ requests per presentation remain counted through actual settlement, including
 superseded requests. These JavaScript guards neither grant native authority nor
 prove filesystem cancellation. The panel still exposes inspection and explicit
 private-state preparation only; deploying a kit requires a separate review UI.
+
+## Narrow ancestor inspection
+
+`project_memory_select` accepts an optional `inspectAncestors` boolean, false
+when omitted. A true value is reserved for an explicit inspection action. It
+creates a new selection and retires its predecessor, including already admitted
+reads and reviews; it never widens a retained source. Consent is local to that
+exact presentation and selection and is neither persisted nor inherited by later
+selections. The client captures the option before awaiting native opening.
+The current inspection panel does not yet expose this consent control.
+
+The source retains the original validated native path as an immutable inspection
+anchor. In addition to the ordinary captured registry grants, it allows metadata
+of strict ancestors, their `.voktty` directories and those directories' immediate
+entries; it permits enumeration only of those `.voktty` directories and content
+reads only of their exact `kit.json` markers. Enumeration is needed to distinguish
+reserved application data from partial memory and retains the discovery engine's
+128-entry classification limit. Parent directories, sibling projects, instructions,
+sessions and nested private state receive no general enumeration or content grant.
+Secret-path protections, native descriptor checks, marker limits, filesystem
+boundaries and discovery deadlines remain unchanged. A marker link stays blocked.
+
+This inspection never registers workspace roots or promotes an observed parent
+to a workspace. Readable parent markers grant neither context delivery nor writes,
+trust or session consent. Preview destinations still require fresh native registry
+authorization; their sources inherit only the original inspection anchor, not a
+new chain derived from an unrelated destination. Publication rechecks that same
+scope and uses its independent purpose-bound write authority. Selecting an
+unregistered parent as a destination still fails. No IO occurs while capturing
+this grant; canonical aliases outside its exact spelling remain incomplete rather
+than acquiring inferred permissions. Linux tests cover real discovery and
+publication without granting parents. Other native runtime qualification and
+the user-facing inspection consent remain pending.

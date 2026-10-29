@@ -143,6 +143,22 @@ impl NativeMemoryOwners {
             .select(registry, requested, environment)
     }
 
+    pub fn select_with_inspection(
+        &mut self,
+        window: &NativeMemoryWindowReceipt,
+        receipt: &NativeMemoryPresentationReceipt,
+        registry: &WorkspaceRegistry,
+        requested: PathBuf,
+        environment: &WorkspaceEnv,
+    ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
+        self.selection_mut(window, receipt)?.select_with_inspection(
+            registry,
+            requested,
+            environment,
+            true,
+        )
+    }
+
     fn selection_mut(
         &mut self,
         window: &NativeMemoryWindowReceipt,

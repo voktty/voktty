@@ -115,6 +115,18 @@ impl PresentationResource {
         environment: &WorkspaceEnv,
         revision: u64,
     ) -> Result<String, MemoryCommandError> {
+        self.select_with_inspection(app, registry, path, environment, revision, false)
+    }
+
+    fn select_with_inspection(
+        &self,
+        app: &NativeMemoryApplication,
+        registry: &WorkspaceRegistry,
+        path: PathBuf,
+        environment: &WorkspaceEnv,
+        revision: u64,
+        inspect_ancestors: bool,
+    ) -> Result<String, MemoryCommandError> {
         let mut selected = self.selected.lock().map_err(|_| cancelled())?;
         if revision == 0 || revision > 9_007_199_254_740_991 || revision <= selected.revision {
             return Err(cancelled());
@@ -124,7 +136,11 @@ impl PresentationResource {
         if !self.live.load(Ordering::Acquire) {
             return Err(cancelled());
         }
-        let receipt = app.select(&self.window, &self.receipt, registry, path, environment)?;
+        let receipt = if inspect_ancestors {
+            app.select_with_inspection(&self.window, &self.receipt, registry, path, environment)?
+        } else {
+            app.select(&self.window, &self.receipt, registry, path, environment)?
+        };
         let token = uuid::Uuid::new_v4().to_string();
         selected.selected = Some(Selected {
             token: token.clone(),
@@ -227,6 +243,7 @@ pub fn project_memory_close(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn project_memory_select(
     window: WebviewWindow,
     app: State<'_, NativeMemoryApplication>,
@@ -235,8 +252,14 @@ pub fn project_memory_select(
     path: PathBuf,
     environment: WorkspaceEnv,
     revision: u64,
+    inspect_ancestors: Option<bool>,
 ) -> Result<String, MemoryCommandError> {
-    presentation(&window, &handle)?.select(&app, &registry, path, &environment, revision)
+    let resource = presentation(&window, &handle)?;
+    if inspect_ancestors == Some(true) {
+        resource.select_with_inspection(&app, &registry, path, &environment, revision, true)
+    } else {
+        resource.select(&app, &registry, path, &environment, revision)
+    }
 }
 
 #[derive(Debug, Serialize)]

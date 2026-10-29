@@ -10,6 +10,7 @@ use voktty_memory_local::{
 
 struct Access {
     roots: Vec<PathBuf>,
+    ancestor_inspection: Option<PathBuf>,
     live: AtomicBool,
 }
 
@@ -41,6 +42,22 @@ fn authorized_roots(registry: &WorkspaceRegistry) -> Result<Vec<PathBuf>, Memory
 }
 
 impl Access {
+    fn inspection_allows(&self, path: &Path, suffix: Option<&Path>) -> bool {
+        let Some(anchor) = &self.ancestor_inspection else {
+            return false;
+        };
+        if !self.live.load(Ordering::Acquire) {
+            return false;
+        }
+        let Ok(path) = native_spelling(path) else {
+            return false;
+        };
+        anchor.ancestors().skip(1).any(|ancestor| {
+            let expected = suffix.map_or_else(|| ancestor.to_owned(), |s| ancestor.join(s));
+            path == expected && path.to_str().is_some_and(path_policy::readable)
+        })
+    }
+
     fn authorized(&self, path: &Path) -> bool {
         let Ok(path) = native_spelling(path) else {
             return false;
@@ -54,15 +71,25 @@ impl Access {
 impl MemoryReadAccess for Access {
     fn allows_metadata(&self, path: &Path) -> bool {
         self.authorized(path)
+            || self.inspection_allows(path, None)
+            || self.inspection_allows(path, Some(Path::new(".voktty")))
+            || self.inspection_allows(path, Some(Path::new(".voktty/kit.json")))
+            || (!path
+                .components()
+                .any(|part| matches!(part, Component::ParentDir))
+                && path.parent().is_some_and(|parent| {
+                    self.inspection_allows(parent, Some(Path::new(".voktty")))
+                }))
     }
     fn allows_workspace_root(&self, path: &Path) -> bool {
         self.authorized(path) && path.to_str().is_some_and(path_policy::readable)
     }
     fn allows_read(&self, path: &Path) -> bool {
-        self.authorized(path) && path.to_str().is_some_and(path_policy::readable)
+        (self.authorized(path) && path.to_str().is_some_and(path_policy::readable))
+            || self.inspection_allows(path, Some(Path::new(".voktty/kit.json")))
     }
     fn allows_enumeration(&self, path: &Path) -> bool {
-        self.authorized(path)
+        self.authorized(path) || self.inspection_allows(path, Some(Path::new(".voktty")))
     }
 }
 
@@ -93,6 +120,15 @@ impl NativeMemorySource {
         requested: PathBuf,
         environment: &WorkspaceEnv,
     ) -> Result<Self, MemoryWorkError> {
+        Self::capture_with_inspection(registry, requested, environment, None)
+    }
+
+    fn capture_with_inspection(
+        registry: &WorkspaceRegistry,
+        requested: PathBuf,
+        environment: &WorkspaceEnv,
+        ancestor_inspection: Option<PathBuf>,
+    ) -> Result<Self, MemoryWorkError> {
         if !matches!(environment, WorkspaceEnv::Local) {
             return Err(ReadError::Unsupported.into());
         }
@@ -119,6 +155,7 @@ impl NativeMemorySource {
         let roots = authorized_roots(registry)?;
         let access = Arc::new(Access {
             roots,
+            ancestor_inspection,
             live: AtomicBool::new(true),
         });
         if !access.allows_workspace_root(&requested) {
@@ -171,6 +208,9 @@ impl Drop for NativeMemorySource {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod ancestor_inspection_tests;
 
 mod selection;
 pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
