@@ -42,6 +42,9 @@ impl Directory {
     pub(crate) fn identity(&self) -> (u64, u128) {
         match *self {}
     }
+    pub(crate) fn root_instance(&self) -> Option<crate::preferences::RootInstance> {
+        match *self {}
+    }
     pub(crate) fn canonical_root(&self, _: &Path) -> Result<PathBuf, ReadError> {
         match *self {}
     }

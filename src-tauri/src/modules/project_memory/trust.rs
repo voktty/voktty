@@ -92,10 +92,7 @@ impl NativeMemoryTrustReview {
             config: observed.config.clone(),
             instructions: observed.instructions.clone(),
             fingerprint: observed.fingerprint.clone(),
-            preference: observed
-                .local_preferences
-                .project(&observed.project_key)
-                .cloned(),
+            preference: observed.preference.clone(),
         })
     }
 }

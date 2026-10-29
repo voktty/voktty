@@ -397,6 +397,13 @@ impl Directory {
     pub(crate) fn identity(&self) -> (u64, u128) {
         (self.metadata.dev(), self.metadata.ino().into())
     }
+    pub(crate) fn root_instance(&self) -> Option<crate::preferences::RootInstance> {
+        crate::preferences::RootInstance::unix(
+            self.metadata.dev(),
+            self.metadata.ino().into(),
+            self.metadata.created().ok(),
+        )
+    }
     pub(crate) fn canonical_root(&self, root: &Path) -> Result<PathBuf, ReadError> {
         Ok(root.to_path_buf())
     }

@@ -539,6 +539,13 @@ impl Directory {
     pub(crate) fn identity(&self) -> (u64, u128) {
         (self.state.volume, self.state.id)
     }
+    pub(crate) fn root_instance(&self) -> Option<crate::preferences::RootInstance> {
+        crate::preferences::RootInstance::windows(
+            self.state.volume,
+            self.state.id,
+            self.state.created,
+        )
+    }
     pub(crate) fn filesystem_id(&self) -> String {
         format!("windows-volume:{:016x}", self.state.volume)
     }

@@ -16,6 +16,7 @@ mod application;
 mod bootstrap;
 mod discovery;
 pub mod path_policy;
+mod preferences;
 mod publication;
 mod reader;
 mod workers;
@@ -97,6 +98,12 @@ pub struct LocalMemorySnapshot {
     installation_id: String,
     revision: u64,
     projects: Vec<ProjectPreference>,
+    #[serde(
+        default,
+        deserialize_with = "preferences::RootBindings::deserialize",
+        skip_serializing_if = "preferences::RootBindings::is_legacy"
+    )]
+    bindings: preferences::RootBindings,
 }
 
 impl LocalMemorySnapshot {
@@ -114,8 +121,7 @@ impl LocalMemorySnapshot {
 
     fn validate(&self) -> Result<(), StoreError> {
         let id = Uuid::parse_str(&self.installation_id).map_err(|_| StoreError::InvalidStore)?;
-        if self.schema != 1
-            || id.get_version_num() != 4
+        if id.get_version_num() != 4
             || id.get_variant() != uuid::Variant::RFC4122
             || id.to_string() != self.installation_id
             || self.projects.len() > MAX_PROJECTS
@@ -133,6 +139,9 @@ impl LocalMemorySnapshot {
             {
                 return Err(StoreError::InvalidStore);
             }
+        }
+        if !self.bindings.valid(self.schema, &keys) {
+            return Err(StoreError::InvalidStore);
         }
         Ok(())
     }
@@ -199,6 +208,7 @@ impl LocalMemoryStore {
                     installation_id: Uuid::new_v4().to_string(),
                     revision: 0,
                     projects: Vec::new(),
+                    bindings: preferences::RootBindings::Legacy,
                 };
                 self.write(&snapshot)?;
                 Ok(snapshot)
@@ -251,12 +261,26 @@ impl LocalMemoryStore {
         key: &str,
         change: impl FnOnce(&mut ProjectPreference),
     ) -> Result<LocalMemorySnapshot, StoreError> {
+        self.update_snapshot(revision, key, None, |snapshot, index| {
+            change(&mut snapshot.projects[index])
+        })
+    }
+
+    fn update_snapshot(
+        &self,
+        revision: u64,
+        key: &str,
+        installation: Option<&str>,
+        change: impl FnOnce(&mut LocalMemorySnapshot, usize),
+    ) -> Result<LocalMemorySnapshot, StoreError> {
         if !digest(key) {
             return Err(StoreError::InvalidInput);
         }
         let _lock = self.lock()?;
         let mut snapshot = self.read()?;
-        if snapshot.revision != revision {
+        if snapshot.revision != revision
+            || installation.is_some_and(|installation| installation != snapshot.installation_id)
+        {
             return Err(StoreError::Conflict);
         }
         let index = match snapshot
@@ -277,7 +301,7 @@ impl LocalMemoryStore {
                 snapshot.projects.len() - 1
             }
         };
-        change(&mut snapshot.projects[index]);
+        change(&mut snapshot, index);
         snapshot.revision = snapshot.revision.checked_add(1).ok_or(StoreError::Limit)?;
         snapshot
             .projects

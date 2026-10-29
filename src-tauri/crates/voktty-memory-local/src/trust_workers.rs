@@ -90,13 +90,12 @@ impl MemoryTrustReview {
             return Err(MemoryTrustError::Changed);
         }
         memory
-            .store()
             .trust_instructions(
                 self.observed.local_preferences.revision(),
-                &self.observed.project_key,
                 &self.observed.fingerprint.digest,
+                &control.read_control()?,
             )
-            .map_err(|error| ReadError::Store(error).into())
+            .map_err(Into::into)
     }
 }
 

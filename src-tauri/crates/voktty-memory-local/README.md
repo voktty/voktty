@@ -115,8 +115,24 @@ evicts an old `never` record. Corrupt or unavailable data is never reset or
 replaced by a permissive default: callers must block memory delivery and surface
 the error. Recovery/export UI remains pending.
 
-Policy and trust are separate mutations. Trusting instructions preserves policy;
-changing policy preserves the trusted digest; revocation clears only trust.
+Native observations expose `preference` as the effective preference for the
+currently opened root. `local_preferences` and `project()` expose raw metadata
+for revision checks, not permission to deliver memory. An unbound or replaced
+root loses its accepted digest and positive policy; `never` remains effective.
+The public project key continues to identify installation, filesystem and path.
+
+Explicit native trust acceptance promotes the private store to schema 2 and
+binds the record to the opened volume/device, file ID/inode and creation time.
+Legacy reads do not migrate or rewrite state. Binding acceptance checks both
+revision and installation under the existing lock and cannot reactivate an old
+unbound `always`. Missing creation time prevents bound acceptance. These are
+OS-reported identities, not protection against privileged metadata forgery or
+restoring the entire private state and filesystem identity. Native Windows and
+Apple runtime qualification remains pending. Bindings never enter the IPC reply.
+
+Policy and trust are separate mutations. Native trust acceptance preserves the
+effective policy; changing policy preserves the trusted digest; revocation
+clears only trust.
 Session enables/disables and capture permissions are never persisted here.
 The decision core must still check current native scope, actual instruction
 bytes, the exact session grant and adapter/transport capabilities before use.

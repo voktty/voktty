@@ -10,13 +10,14 @@ use voktty_workspace_kit::{
     InstructionFingerprint, Issue, PathFact, RootLinks,
 };
 
+use crate::preferences::RootInstance;
 #[cfg(not(any(unix, windows)))]
 use crate::reader_unavailable as platform;
 #[cfg(unix)]
 use crate::reader_unix as platform;
 #[cfg(windows)]
 use crate::reader_windows as platform;
-use crate::{LocalMemorySnapshot, LocalMemoryStore, StoreError};
+use crate::{LocalMemorySnapshot, LocalMemoryStore, ProjectPreference, StoreError};
 
 static ACTIVE_READS: AtomicUsize = AtomicUsize::new(0);
 
@@ -155,6 +156,7 @@ pub struct NativeContextObservation {
     pub identity: Value,
     pub project_key: String,
     pub local_preferences: LocalMemorySnapshot,
+    pub preference: Option<ProjectPreference>,
     pub config: Value,
     pub instructions: Value,
     pub fingerprint: InstructionFingerprint,
@@ -167,6 +169,7 @@ pub struct NativeContextObservation {
 pub struct LocalMemoryWorkspace<'a> {
     root: PathBuf,
     root_id: (u64, u128),
+    root_instance: Option<RootInstance>,
     identity: Value,
     project_key: String,
     store: &'a LocalMemoryStore,
@@ -176,6 +179,7 @@ pub struct LocalMemoryWorkspace<'a> {
 pub(crate) struct OwnedMemoryWorkspace {
     root: PathBuf,
     root_id: (u64, u128),
+    root_instance: Option<RootInstance>,
     identity: Value,
     project_key: String,
     store: Arc<LocalMemoryStore>,
@@ -191,6 +195,7 @@ impl OwnedMemoryWorkspace {
         LocalMemoryWorkspace {
             root: self.root.clone(),
             root_id: self.root_id,
+            root_instance: self.root_instance.clone(),
             identity: self.identity.clone(),
             project_key: self.project_key.clone(),
             store: &self.store,
@@ -213,6 +218,7 @@ impl<'a> LocalMemoryWorkspace<'a> {
         Ok(OwnedMemoryWorkspace {
             root: self.root.clone(),
             root_id: self.root_id,
+            root_instance: self.root_instance.clone(),
             identity: self.identity.clone(),
             project_key: self.project_key.clone(),
             store,
@@ -301,6 +307,7 @@ impl<'a> LocalMemoryWorkspace<'a> {
         Ok(Self {
             root,
             root_id: directory.identity(),
+            root_instance: directory.root_instance(),
             identity,
             project_key,
             store,
@@ -394,6 +401,8 @@ impl<'a> LocalMemoryWorkspace<'a> {
         Ok(NativeContextObservation {
             identity: self.identity.clone(),
             project_key: self.project_key.clone(),
+            preference: local_preferences
+                .project_for_root(&self.project_key, self.root_instance.as_ref()),
             local_preferences,
             config,
             instructions,
@@ -421,11 +430,34 @@ impl<'a> LocalMemoryWorkspace<'a> {
         let resolved = directory.canonical_root(&self.root)?;
         control.check()?;
         if directory.identity() != self.root_id
+            || directory.root_instance() != self.root_instance
             || voktty_paths::canonical_display_path(&resolved) != self.identity["canonicalRoot"]
         {
             return Err(ReadError::StaleRoot);
         }
         Ok(directory)
+    }
+
+    pub(crate) fn trust_instructions(
+        &self,
+        revision: u64,
+        digest: &str,
+        control: &ReadControl,
+    ) -> Result<LocalMemorySnapshot, ReadError> {
+        self.checked_root(control)?;
+        let root = self.root_instance.as_ref().ok_or(ReadError::Unsupported)?;
+        control.check()?;
+        self.store
+            .trust_for_root(
+                revision,
+                self.identity["machineId"]
+                    .as_str()
+                    .ok_or(ReadError::InvalidInput)?,
+                &self.project_key,
+                root,
+                digest,
+            )
+            .map_err(ReadError::Store)
     }
 
     fn collect(

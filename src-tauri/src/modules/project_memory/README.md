@@ -361,7 +361,11 @@ of its captured phase control; a weak receipt alone is not an IO acknowledgement
 
 The schema-1 reply contains the review UUID, request revision, resolved `root`,
 `projectKey`, validated `config`, actual `instructions`, their `fingerprint` and
-only that project's nullable `preference`. It excludes the installation identity,
+only that project's nullable effective `preference`. Unbound legacy records or
+replaced root identities display `manual` without trust, while `never` survives.
+Explicit acceptance binds the native root in private store schema 2 without
+reactivating an old unbound `always`; unavailable creation time blocks acceptance.
+The IPC remains schema 1 and excludes private root bindings, installation identity,
 all other projects' preferences and factual PROJECT/CONTEXT documents. Display
 data cannot replace the immutable native review. The reader's existing per-file,
 aggregate and path limits still apply. No trust history or accepted-byte diff is
