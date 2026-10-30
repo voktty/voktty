@@ -9,6 +9,7 @@ import type { Block, HarnessId, TaskListMeta } from "../session";
 import type { GeneratedSessionTitle } from "../sessionTitle";
 import type { UserQuestionReply } from "../userQuestion";
 import type { NativeCommandProvider } from "./nativeCommands";
+import { assertHarnessMemoryTarget } from "@/modules/harness/lib/harnessMemoryDelivery";
 import type {
   ApprovalDecision,
   CompactContextInput,
@@ -32,6 +33,7 @@ export type TitleInput = {
  */
 export type HarnessAdapter = {
   id: HarnessId;
+  projectMemory?: "managed-turn";
   /** True when this adapter can run live turns. */
   live: boolean;
   /** False when the harness cannot accept a follow-up while a turn is running. Default: same as live. */
@@ -310,6 +312,9 @@ export async function sendHarnessTurn(
   input: SendTurnInput & { harness: HarnessId },
 ) {
   const adapter = requireHarness(input.harness);
+  if (input.projectMemory && adapter.projectMemory !== "managed-turn")
+    throw new Error("KIT_MEMORY_CONTEXT_UNSUPPORTED");
+  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
   if (!adapter.live) {
     throw new Error(`${input.harness} is not connected yet`);
   }
@@ -387,6 +392,9 @@ export async function steerHarnessTurn(
   input: SteerTurnInput & { harness: HarnessId },
 ): Promise<void> {
   const adapter = requireHarness(input.harness);
+  if (input.projectMemory && adapter.projectMemory !== "managed-turn")
+    throw new Error("KIT_MEMORY_CONTEXT_UNSUPPORTED");
+  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
   if (!adapter.live) {
     throw new Error(`${input.harness} is not connected yet`);
   }

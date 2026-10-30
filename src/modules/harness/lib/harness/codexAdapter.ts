@@ -23,6 +23,7 @@ import { registerHarness, type HarnessAdapter } from "./registry";
 
 export const codexAdapter: HarnessAdapter = {
   id: "codex",
+  projectMemory: "managed-turn",
   live: true,
   sendTurn: sendCodexTurn,
   compactContext: compactCodexContext,

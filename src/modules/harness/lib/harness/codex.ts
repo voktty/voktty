@@ -4,6 +4,11 @@ import { sameProviderAccountId } from "../providerAccounts";
 import type { RuntimeMode } from "../session";
 import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import {
+  assertHarnessMemoryTarget,
+  type HarnessMemoryTurnSource,
+  type PreparedHarnessMemory,
+} from "@/modules/harness/lib/harnessMemoryDelivery";
 import { questionPromptTitle, type UserQuestionReply } from "../userQuestion";
 import {
   closeRetiredRawChildren,
@@ -69,6 +74,7 @@ type PendingQuestion = {
 const QUESTION_AUTO_RESOLVE_MS = 120_000;
 
 type Live = {
+  memoryContext: object | null;
   child: CodexChild;
   rpc: JsonRpcClient;
   threadId: string;
@@ -195,6 +201,7 @@ function snapshotSessionInput<T extends HarnessSessionInput>(input: T): T {
 }
 
 export async function sendCodexTurn(request: SendTurnInput): Promise<void> {
+  assertHarnessMemoryTarget(request.projectMemory, request.cwd);
   const input = {
     ...snapshotSessionInput(request),
     attachments: request.attachments?.map((attachment) => ({ ...attachment })),
@@ -273,6 +280,7 @@ export async function rewindCodexLastTurn(
 
   const beforeTurnId = await lastUserTurnId(live, input.providerTurnId);
   assertChild(live.child);
+  live.memoryContext = null;
   await live.rpc.request("thread/revert", {
     threadId: live.threadId,
     beforeTurnId,
@@ -314,6 +322,7 @@ async function lastUserTurnId(
 }
 
 export async function steerCodexTurn(input: SteerTurnInput): Promise<void> {
+  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
   const live = liveByThread.get(input.sessionId);
   if (!live) throw new Error("No active Codex session");
   const turnId = live.activeTurnId;
@@ -332,7 +341,15 @@ export async function steerCodexTurn(input: SteerTurnInput): Promise<void> {
     return;
   }
 
+  const memory = input.projectMemory
+    ? await prepareCodexMemory(live, input.projectMemory)
+    : null;
+  if (memory?.prefix && Array.isArray(params.input))
+    params.input.unshift({ type: "text", text: memory.prefix });
+  memory?.assertCurrent();
+  memory?.issued();
   await live.rpc.request("turn/steer", params);
+  memory?.acknowledge();
   assertChild(live.child);
   live.onEvent({ type: "turn.started", providerTurnId: turnId });
 }
@@ -721,6 +738,7 @@ async function startLive(
     void effort;
 
     const live: Live = {
+      memoryContext: null,
       child,
       rpc,
       threadId,
@@ -776,6 +794,42 @@ async function startLive(
   }
 }
 
+async function prepareCodexMemory(
+  live: Live,
+  source: HarnessMemoryTurnSource,
+): Promise<PreparedHarnessMemory & { issued: () => void }> {
+  live.memoryContext ??= {};
+  const context = live.memoryContext;
+  const generation = live.turnGeneration;
+  const turnId = live.activeTurnId;
+  let issued = false;
+  const assertCurrent = () => {
+    source.assertCurrent();
+    if (
+      !isCurrentLive(live) ||
+      live.cancelled ||
+      live.memoryContext !== context ||
+      (!issued &&
+        (live.turnGeneration !== generation || live.activeTurnId !== turnId))
+    )
+      throw new Error("Codex memory delivery was retired");
+  };
+  assertCurrent();
+  const prepared = await source.prepare(context, live.threadId, assertCurrent);
+  assertCurrent();
+  return {
+    prefix: prepared?.prefix ?? null,
+    assertCurrent: () => {
+      prepared?.assertCurrent();
+      assertCurrent();
+    },
+    acknowledge: () => prepared?.acknowledge() ?? false,
+    issued: () => {
+      issued = true;
+    },
+  };
+}
+
 async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   const model = nativeModelId(input.model);
   const effort = input.modelSettings?.reasoningEffort;
@@ -802,6 +856,12 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   live.emittedAsyncQuestions.clear();
   live.turnGeneration += 1;
 
+  const memory = input.projectMemory
+    ? await prepareCodexMemory(live, input.projectMemory)
+    : null;
+  if (memory?.prefix && Array.isArray(params.input))
+    params.input.unshift({ type: "text", text: memory.prefix });
+
   const turnPromise = new Promise<void>((resolve, reject) => {
     live.turnDone = resolve;
     live.turnFailed = reject;
@@ -810,10 +870,13 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   settlePendingTurn(live);
 
   try {
+    memory?.assertCurrent();
+    memory?.issued();
     const response = await live.rpc.request<{ turn?: { id?: string } }>(
       "turn/start",
       params,
     );
+    memory?.acknowledge();
     if (!isCurrentLive(live) || live.cancelled) return;
     input.onAccepted?.();
     if (!isCurrentLive(live)) return;
@@ -841,6 +904,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
 }
 
 async function runCompaction(live: Live): Promise<void> {
+  live.memoryContext = null;
   live.emittedAssistant = "";
   live.emittedReasoning = "";
   live.emittedGeneratedImages.clear();
@@ -882,6 +946,13 @@ function handleNotification(
     return;
   }
   const rec = asRecord(params);
+  if (
+    (method === "thread/compacted" && rec?.threadId === live.threadId) ||
+    ((method === "item/started" || method === "item/completed") &&
+      rec?.threadId === live.threadId &&
+      asRecord(rec.item)?.type === "contextCompaction")
+  )
+    live.memoryContext = null;
   // Child threads share this connection. Their lifecycle must not touch the
   // parent's turn or clear its approvals, but what they do is the inside of a
   // subagent — mirror it onto the row that spawned them.

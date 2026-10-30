@@ -7,6 +7,7 @@ import type {
   TurnIntent,
 } from "../session";
 import type { UserQuestion } from "../userQuestion";
+import type { HarnessMemoryTurnSource } from "@/modules/harness/lib/harnessMemoryDelivery";
 
 export type HarnessEvent =
   | { type: "session.started" }
@@ -155,6 +156,7 @@ export type HarnessSessionInput = {
 
 export type SendTurnInput = HarnessSessionInput & {
   text: string;
+  projectMemory?: HarnessMemoryTurnSource;
   attachments?: Attachment[];
   /** Called once the provider has accepted the user turn. */
   onAccepted?: () => void;
@@ -169,6 +171,7 @@ export type SteerTurnInput = {
   modelSettings?: Record<string, string>;
   providerAccountId?: string;
   text: string;
+  projectMemory?: HarnessMemoryTurnSource;
   attachments?: Attachment[];
 };
 
