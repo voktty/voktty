@@ -1,5 +1,10 @@
 import { nativeModelId } from "../models";
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import {
+  assertHarnessMemoryTarget,
+  type PreparedHarnessMemory,
+} from "@/modules/harness/lib/harnessMemoryDelivery";
+import { inspectAgyMemoryResult } from "@/modules/harness/lib/harness/agyMemory";
 import { supportsAgyStreamInput } from "./agyProtocol";
 import {
   closeRetiredRawChildren,
@@ -45,6 +50,16 @@ type Live = {
   turnFailed: ((error: Error) => void) | null;
   turnEndPending: boolean;
   emittedAssistant: string;
+  completedTurns: number;
+  memoryTurn?: MemoryTurn;
+};
+
+type MemoryTurn = {
+  prepared: PreparedHarnessMemory;
+  writeComplete: boolean;
+  resultSeen: boolean;
+  resultHandled: boolean;
+  acceptedConversationId: string | null;
 };
 
 const liveBySession = new Map<string, Live>();
@@ -69,6 +84,7 @@ function closeAdmission(admission: Admission, cancelled = true): Promise<void> {
   const live = admission.live;
   if (liveBySession.get(id) === live) liveBySession.delete(id);
   if (live) {
+    retireMemoryTurn(live);
     if (cancelled) live.cancelled = true;
     live.muteUpdates = true;
   }
@@ -109,6 +125,11 @@ export function setAgyBinaryResolver(
 
 export async function sendAgyTurn(request: SendTurnInput): Promise<void> {
   const input = snapshotInput(request);
+  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
+  if (input.projectMemory && input.text.trimStart().startsWith("/"))
+    throw new Error(
+      "Project memory cannot be delivered with an Antigravity slash command. Disable memory or send a normal prompt.",
+    );
   const live = await ensureLive(input);
   guardCurrent(live.admission);
   if (live.admission.cancelled) {
@@ -272,6 +293,7 @@ async function startLive(
       turnFailed: null,
       turnEndPending: false,
       emittedAssistant: "",
+      completedTurns: 0,
     };
     admission.live = live;
     const stderr: string[] = [];
@@ -328,18 +350,52 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   const content = agyPrompt(input.text, input.attachments ?? []);
   if (!content.trim()) return;
 
-  live.emittedAssistant = "";
-  const turn = new Promise<void>((resolve, reject) => {
-    live.turnDone = resolve;
-    live.turnFailed = reject;
-  });
-  void turn.catch(() => undefined);
-  settlePendingTurn(live);
-
+  let prepared: PreparedHarnessMemory | null = null;
+  let memory: MemoryTurn | undefined;
   try {
-    await handle.write(JSON.stringify({ event: "user", message: { content } }));
+    assertHarnessMemoryTarget(input.projectMemory, input.cwd);
+    if (input.projectMemory)
+      prepared = await input.projectMemory.prepare(
+        live,
+        { adapter: "agy", providerSessionId: live.conversationId },
+        () => guardCurrent(live.admission),
+      );
+    guardCurrent(live.admission);
+    if (live.cancelled) return;
+    prepared?.assertCurrent();
+    guardCurrent(live.admission);
+    live.emittedAssistant = "";
+    const turn = new Promise<void>((resolve, reject) => {
+      live.turnDone = resolve;
+      live.turnFailed = reject;
+    });
+    void turn.catch(() => undefined);
+    settlePendingTurn(live);
+    if (prepared) {
+      memory = {
+        prepared,
+        writeComplete: false,
+        resultSeen: false,
+        resultHandled: false,
+        acceptedConversationId: null,
+      };
+      live.memoryTurn = memory;
+    }
+    const messageContent = prepared?.prefix
+      ? [
+          { type: "text", text: prepared.prefix },
+          { type: "text", text: content },
+        ]
+      : content;
+    await handle.write(
+      JSON.stringify({ event: "user", message: { content: messageContent } }),
+    );
     if (live.cancelled) return;
     guardCurrent(live.admission);
+    if (memory) {
+      memory.writeComplete = true;
+      acknowledgeMemoryTurn(live, memory);
+    }
     settlePendingTurn(live);
     await turn;
     if (!live.cancelled) guardCurrent(live.admission);
@@ -349,9 +405,30 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     emitEvent(live, { type: "session.error", message: failure.message });
     throw failure;
   } finally {
+    prepared?.settle();
+    if (live.memoryTurn === memory) live.memoryTurn = undefined;
     live.turnDone = null;
     live.turnFailed = null;
   }
+}
+
+function retireMemoryTurn(live: Live): void {
+  const memory = live.memoryTurn;
+  live.memoryTurn = undefined;
+  memory?.prepared.settle();
+}
+
+function acknowledgeMemoryTurn(live: Live, memory: MemoryTurn): void {
+  if (
+    live.memoryTurn === memory &&
+    isCurrent(live.admission) &&
+    !live.cancelled &&
+    !live.muteUpdates &&
+    memory.writeComplete &&
+    memory.resultHandled &&
+    memory.acceptedConversationId
+  )
+    memory.prepared.acknowledge(memory.acceptedConversationId);
 }
 
 export function buildAgySpawnArgs(
@@ -478,6 +555,18 @@ function handleResult(
   event: Record<string, unknown>,
 ): void {
   const result = asRecord(event.result) ?? event;
+  const memory = live.memoryTurn;
+  const progress = inspectAgyMemoryResult(
+    result,
+    live.conversationId,
+    live.completedTurns,
+  );
+  live.completedTurns = progress.completedTurns;
+  const ownsResult = memory && !memory.resultSeen;
+  if (ownsResult) {
+    memory.resultSeen = true;
+    memory.acceptedConversationId = progress.acceptedConversationId;
+  }
   bindConversation(
     sessionId,
     live,
@@ -505,6 +594,10 @@ function handleResult(
     { type: "message.completed" },
     { type: "reasoning.completed" },
   ]);
+  if (ownsResult) {
+    memory.resultHandled = true;
+    acknowledgeMemoryTurn(live, memory);
+  }
 }
 
 function bindConversation(
