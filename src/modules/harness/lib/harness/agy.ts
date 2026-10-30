@@ -1,7 +1,9 @@
 import { nativeModelId } from "../models";
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import { supportsAgyStreamInput } from "./agyProtocol";
 import {
   closeRetiredRawChildren,
+  execChild,
   type RawChildHandle,
   reserveRawChild,
   resolveGeminiBinary,
@@ -240,6 +242,21 @@ async function startLive(
     if (resume && !canResume) resumeBySession.delete(input.sessionId);
     const { path } = await resolveAgyBinaryImpl();
     guardCurrent(admission);
+    let version: string;
+    try {
+      version = await execChild(path, ["--version"]);
+    } catch {
+      guardCurrent(admission);
+      throw new Error(
+        "Unable to verify the Antigravity CLI version. Retry after checking the CLI installation.",
+      );
+    }
+    guardCurrent(admission);
+    if (!supportsAgyStreamInput(version)) {
+      throw new Error(
+        "Antigravity CLI 1.1.15 or newer with stream-json input is required. Update the CLI and retry.",
+      );
+    }
     const handle = admission.handle;
     if (!handle) throw new Error("Antigravity session was retired");
     const live: Live = {

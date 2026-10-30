@@ -26,6 +26,10 @@ import {
 // Real subprocesses exercise framing, startup, stdout delivery and teardown
 // through the existing production adapters without contacting a paid model.
 const fixture = `#!/usr/bin/env node
+if (process.argv.includes('--version')) {
+  process.stdout.write('1.1.15\\n');
+  process.exit(0);
+}
 const readline = require('node:readline');
 const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
 // Records what each turn actually received, so tests can prove that settings

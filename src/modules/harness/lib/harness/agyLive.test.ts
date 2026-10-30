@@ -7,6 +7,7 @@ let onLine: ((line: string) => void) | undefined;
 
 vi.mock("./child", () => ({
   resolveGeminiBinary: async () => ({ path: "/fake/agy" }),
+  execChild: async () => "1.1.15",
   closeRetiredRawChildren: async () => undefined,
   reserveRawChild: (logicalSessionId: string) => {
     let retired = false;

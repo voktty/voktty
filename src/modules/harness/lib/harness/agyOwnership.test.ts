@@ -26,6 +26,7 @@ const pids = new Map<string, number>();
 let nextPid = 100;
 let releaseBridge: (() => void) | undefined;
 let binary: (() => Promise<{ path: string }>) | undefined;
+let version: (() => Promise<string>) | undefined;
 let spawn: ((id: string) => Promise<void>) | undefined;
 let write: ((id: string) => Promise<void>) | undefined;
 let kill: ((id: string) => Promise<void>) | undefined;
@@ -95,6 +96,8 @@ beforeAll(async () => {
       if (command === "harness_resolve_gemini")
         return (await (binary?.() ??
           Promise.resolve({ path: "/synthetic/agy" }))) as T;
+      if (command === "harness_exec")
+        return (await (version?.() ?? Promise.resolve("1.1.15"))) as T;
       if (command === "harness_spawn") {
         const pid = nextPid++;
         pids.set(id, pid);
@@ -127,6 +130,7 @@ beforeEach(() => {
   calls.length = 0;
   pids.clear();
   binary = undefined;
+  version = undefined;
   spawn = undefined;
   write = undefined;
   kill = undefined;
@@ -135,6 +139,7 @@ beforeEach(() => {
 afterEach(async () => {
   vi.restoreAllMocks();
   binary = undefined;
+  version = undefined;
   spawn = undefined;
   write = undefined;
   kill = undefined;
@@ -154,9 +159,61 @@ it("uses exact opaque stdin and original logical control context for happy conse
   });
   expect(call.args.sessionId).not.toBe(SID);
   expect(invocations("harness_spawn")).toHaveLength(1);
+  expect(invocations("harness_exec").map((value) => value.args)).toEqual([
+    { command: "/synthetic/agy", args: ["--version"], cwd: undefined },
+  ]);
   expect(
     invocations("harness_write").map((value) => value.args.sessionId),
   ).toEqual([call.args.sessionId, call.args.sessionId]);
+});
+it("rejects an incompatible CLI before spawn or user input and permits a verified retry", async () => {
+  version = async () => "1.1.7";
+  await expect(sendAgyTurn(input())).rejects.toThrow("1.1.15 or newer");
+  expect(invocations("harness_spawn")).toHaveLength(0);
+  expect(invocations("harness_write")).toHaveLength(0);
+  version = async () => "1.1.15";
+  await sendAgyTurn(input("retry"));
+  expect(invocations("harness_spawn")).toHaveLength(1);
+  expect(invocations("harness_write")).toHaveLength(1);
+});
+it("refuses failed version inspection without exposing the probe error", async () => {
+  version = async () => {
+    throw new Error("synthetic private diagnostic");
+  };
+  await expect(sendAgyTurn(input())).rejects.toThrow(
+    "Unable to verify the Antigravity CLI version.",
+  );
+  expect(invocations("harness_spawn")).toHaveLength(0);
+  expect(invocations("harness_write")).toHaveLength(0);
+});
+it("coalesces version inspection and retires its pending callers without blocking a replacement", async () => {
+  const held = deferred<string>();
+  version = () => held.promise;
+  const a = observed(sendAgyTurn(input("A")));
+  const a1 = observed(sendAgyTurn(input("A1")));
+  await flush();
+  expect(invocations("harness_exec")).toHaveLength(1);
+  await stopAgySession(SID);
+  version = undefined;
+  await sendAgyTurn(input("B"));
+  const b = lastId();
+  held.resolve("1.1.15");
+  await expect(a).rejects.toThrow(/retired/i);
+  await expect(a1).rejects.toThrow(/retired/i);
+  expect(invocations("harness_spawn")).toHaveLength(1);
+  expect(invocations("harness_write")).toHaveLength(1);
+  expect(processes.has(b)).toBe(true);
+});
+it("does not run version inspection after a retired binary resolution", async () => {
+  const held = deferred<{ path: string }>();
+  binary = () => held.promise;
+  const turn = observed(sendAgyTurn(input()));
+  await flush();
+  await stopAgySession(SID);
+  held.resolve({ path: "/synthetic/agy" });
+  await expect(turn).rejects.toThrow(/retired/i);
+  expect(invocations("harness_exec")).toHaveLength(0);
+  expect(invocations("harness_spawn")).toHaveLength(0);
 });
 it("retires held binary A and queued A1 while B and C progress without awaiting A", async () => {
   const held = deferred<{ path: string }>();
