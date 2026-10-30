@@ -816,3 +816,340 @@ it.each(["session.providerBound", "session.started"] as const)(
     expect(inputs()).toEqual([]);
   },
 );
+
+it.each(["user", "initialize"])(
+  "retains a failed %s writer and prevents warm or changed-settings reuse until stop",
+  async (kind) => {
+    const failure = new Error("captured native writer failed");
+    write = async (_id, message) => {
+      if (
+        kind === "user"
+          ? message.type === "user"
+          : (message.request as Record<string, unknown> | undefined)
+              ?.subtype === "initialize"
+      )
+        throw failure;
+    };
+    await expect(sendClaudeTurn(input())).rejects.toBe(failure);
+    const id = lastId();
+    const count = invocations("harness_write").length;
+    await expect(sendClaudeTurn(input("warm"))).rejects.toBe(failure);
+    await expect(
+      sendClaudeTurn({
+        ...input("changed"),
+        model: "claude:opus-5",
+        cwd: "/other",
+      }),
+    ).rejects.toBe(failure);
+    expect(invocations("harness_spawn")).toHaveLength(1);
+    expect(invocations("harness_write")).toHaveLength(count);
+    expect(invocations("harness_kill")).toEqual([]);
+    expect(processes.has(id)).toBe(true);
+    write = undefined;
+    await sendClaudeTurn(input("sibling", [], "sibling"));
+    await stopClaudeSession(SID);
+    await sendClaudeTurn(input("after stop"));
+    expect(lastId()).not.toBe(id);
+  },
+);
+
+it.each([
+  "approval",
+  "question",
+  "plan",
+  "full access",
+  "unknown control",
+  "exit plan",
+])(
+  "observes a %s response writer failure even when its legacy caller catches it",
+  async (kind) => {
+    autoResult = false;
+    const failure = new Error("control response failed");
+    write = async (_id, message) => {
+      if (message.type === "control_response") throw failure;
+    };
+    const requestInput = input();
+    if (kind === "plan") requestInput.intent = "plan";
+    if (kind === "full access") requestInput.runtimeMode = "full-access";
+    requestInput.onEvent = (event) => {
+      if (event.type === "approval.requested")
+        respondClaudeApproval(SID, event.requestId, "allow");
+      if (event.type === "question.asked")
+        respondClaudeQuestion(SID, event.requestId, {
+          kind: "answered",
+          answers: { "0": ["One"] },
+        });
+    };
+    const turn = observed(sendClaudeTurn(requestInput));
+    await flush();
+    const id = lastId();
+    if (kind === "unknown control")
+      emit(id, {
+        type: "control_request",
+        request_id: "unknown",
+        request: { subtype: "unknown" },
+      });
+    else
+      request(
+        id,
+        kind === "question"
+          ? "AskUserQuestion"
+          : kind === "plan"
+            ? "Read"
+            : kind === "exit plan"
+              ? "ExitPlanMode"
+              : "Bash",
+      );
+    await flush();
+    result(id);
+    await expect(turn).rejects.toBe(failure);
+    await expect(sendClaudeTurn(input("blocked"))).rejects.toBe(failure);
+    expect(replies(id)).toHaveLength(1);
+    expect(processes.has(id)).toBe(true);
+    expect(invocations("harness_kill")).toEqual([]);
+  },
+);
+
+it.each([false, true])(
+  "a late UI writer failure blocks the same actor's new turn after ordinary completion or cancel=%s",
+  async (cancelled) => {
+    autoResult = false;
+    const held = deferred<void>();
+    const failure = new Error("late UI writer");
+    write = async (_id, message) => {
+      if (message.type === "control_response") await held.promise;
+    };
+    const requestInput = input("first");
+    requestInput.onEvent = (event) => {
+      if (event.type === "approval.requested")
+        respondClaudeApproval(SID, event.requestId, "allow");
+    };
+    let firstDone = false;
+    const first = observed(sendClaudeTurn(requestInput)).then(() => {
+      firstDone = true;
+    });
+    await flush();
+    const id = lastId();
+    request(id);
+    await flush();
+    if (cancelled) await cancelClaudeTurn(SID);
+    else result(id);
+    await first;
+    const next = observed(sendClaudeTurn(input("next")));
+    await flush();
+    expect(inputs(id)).toHaveLength(2);
+    held.reject(failure);
+    await flush();
+    await expect(next).rejects.toBe(failure);
+    expect(firstDone).toBe(true);
+    await expect(sendClaudeTurn(input("blocked"))).rejects.toBe(failure);
+    expect(processes.has(id)).toBe(true);
+  },
+);
+
+it("a retired UI writer cannot poison a replacement while retaining its own physical settlement", async () => {
+  autoResult = false;
+  const held = deferred<void>();
+  write = async (_id, message) => {
+    if (message.type === "control_response") await held.promise;
+  };
+  const requestInput = input();
+  requestInput.onEvent = (event) => {
+    if (event.type === "approval.requested")
+      respondClaudeApproval(SID, event.requestId, "allow");
+  };
+  const first = observed(sendClaudeTurn(requestInput));
+  await flush();
+  const old = lastId();
+  request(old);
+  await flush();
+  result(old);
+  await first;
+  await stopClaudeSession(SID);
+  write = undefined;
+  const next = observed(sendClaudeTurn(input("replacement")));
+  await flush();
+  const id = lastId();
+  held.reject(new Error("old UI write"));
+  await flush();
+  result(id);
+  await next;
+  autoResult = true;
+  await sendClaudeTurn(input("still usable"));
+  expect(lastId()).toBe(id);
+  expect(inputs(id)).toHaveLength(2);
+});
+
+it("retains the first failure across multiple actual pending writers", async () => {
+  autoResult = false;
+  const heldA = deferred<void>();
+  const heldB = deferred<void>();
+  let count = 0;
+  write = async (_id, message) => {
+    if (message.type === "control_response") {
+      count += 1;
+      await (count === 1 ? heldA.promise : heldB.promise);
+    }
+  };
+  const requestInput = input();
+  requestInput.onEvent = (event) => {
+    if (event.type === "approval.requested")
+      respondClaudeApproval(SID, event.requestId, "allow");
+  };
+  const first = observed(sendClaudeTurn(requestInput));
+  await flush();
+  const id = lastId();
+  request(id);
+  request(id);
+  await flush();
+  result(id);
+  await first;
+  expect(replies(id)).toHaveLength(2);
+  const firstError = new Error("first failure");
+  heldA.reject(firstError);
+  await flush();
+  heldB.reject(new Error("second failure"));
+  await flush();
+  await expect(sendClaudeTurn(input("blocked"))).rejects.toBe(firstError);
+});
+
+it("blocks post-failure frames and controls without corrupting the provider binding", async () => {
+  const events: HarnessEvent[] = [];
+  write = async (_id, message) => {
+    if (message.type === "user") throw new Error("failed input");
+  };
+  await expect(sendClaudeTurn(input("failed", events))).rejects.toThrow(
+    "failed input",
+  );
+  const id = lastId();
+  const provider = providers.get(id);
+  const count = events.length;
+  emit(id, { type: "system", subtype: "init", session_id: "foreign-provider" });
+  emit(id, {
+    type: "assistant",
+    message: { content: [{ type: "text", text: "late" }] },
+  });
+  request(id);
+  result(id);
+  await flush();
+  expect(events).toHaveLength(count);
+  expect(replies(id)).toEqual([]);
+  write = undefined;
+  await stopClaudeSession(SID);
+  await sendClaudeTurn(input("resume"));
+  expect(invocations("harness_spawn").slice(-1)[0].args.args).toContain(
+    provider,
+  );
+});
+
+it("reclaims a failed admission on its genuine native exit", async () => {
+  write = async (_id, message) => {
+    if (message.type === "user") throw new Error("failed input");
+  };
+  await expect(sendClaudeTurn(input())).rejects.toThrow("failed input");
+  const id = lastId();
+  listeners.get("harness-exit")?.({
+    payload: { sessionId: id, pid: processes.get(id), code: 1 },
+  });
+  await flush();
+  write = undefined;
+  await sendClaudeTurn(input("after exit"));
+  expect(lastId()).not.toBe(id);
+});
+
+it("charges actual writers through result, retirement and cleanup instead of freeing the 256-write quota early", async () => {
+  autoResult = false;
+  const held = deferred<void>();
+  write = async (_id, message) => {
+    if (message.type === "user") await held.promise;
+  };
+  const work: Promise<void>[] = [observed(sendClaudeTurn(input()))];
+  try {
+    await flush();
+    const id = lastId();
+    for (let index = 0; index < 255; index += 1)
+      work.push(
+        observed(
+          steerClaudeTurn({
+            sessionId: SID,
+            cwd: "/repo",
+            model: "claude:claude-sonnet-5",
+            text: `steer-${index}`,
+          }),
+        ),
+      );
+    await flush();
+    expect(inputs(id)).toHaveLength(256);
+    await expect(
+      steerClaudeTurn({
+        sessionId: SID,
+        cwd: "/repo",
+        model: "claude:claude-sonnet-5",
+        text: "overflow",
+      }),
+    ).rejects.toThrow("write capacity");
+    expect(inputs(id)).toHaveLength(256);
+    result(id);
+    await stopClaudeSession(SID);
+    write = undefined;
+    await expect(sendClaudeTurn(input("still full"))).rejects.toThrow(
+      "write capacity",
+    );
+    held.resolve();
+    await Promise.allSettled(work);
+    await stopClaudeSession(SID);
+    autoResult = true;
+    await sendClaudeTurn(input("capacity recovered"));
+    expect(inputs()).toHaveLength(257);
+  } finally {
+    await stopClaudeSession(SID);
+    held.resolve();
+    await Promise.allSettled(work);
+  }
+});
+
+it.each(["steer", "compact"])(
+  "blocks the exact actor after an actual %s input writer failure",
+  async (kind) => {
+    autoResult = false;
+    const first = observed(sendClaudeTurn(input("first")));
+    await flush();
+    const id = lastId();
+    if (kind === "compact") {
+      result(id);
+      await first;
+    }
+    const failure = new Error(`${kind} input failed`);
+    write = async (_id, message) => {
+      if (message.type === "user") throw failure;
+    };
+    if (kind === "steer") {
+      await expect(
+        steerClaudeTurn({
+          sessionId: SID,
+          cwd: "/repo",
+          model: "claude:claude-sonnet-5",
+          text: "steer",
+        }),
+      ).rejects.toBe(failure);
+      await expect(first).rejects.toBe(failure);
+    } else await expect(compactClaudeContext(input())).rejects.toBe(failure);
+    await expect(sendClaudeTurn(input("blocked"))).rejects.toBe(failure);
+    expect(inputs(id)).toHaveLength(2);
+    expect(processes.has(id)).toBe(true);
+    expect(invocations("harness_kill")).toEqual([]);
+  },
+);
+
+it("normalizes a non-Error actual writer failure once and retains that same barrier", async () => {
+  write = async (_id, message) => {
+    if (message.type === "user")
+      return Promise.reject("synthetic write rejection");
+  };
+  const error = await sendClaudeTurn(input()).catch(
+    (reason: unknown) => reason,
+  );
+  expect(error).toBeInstanceOf(Error);
+  expect(error).toMatchObject({ message: "synthetic write rejection" });
+  await expect(sendClaudeTurn(input("blocked"))).rejects.toBe(error);
+});

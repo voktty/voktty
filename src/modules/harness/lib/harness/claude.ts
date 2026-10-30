@@ -157,6 +157,7 @@ type Admission = {
   opening?: Promise<Live>;
   live?: Live;
   interrupt?: Promise<void>;
+  failure?: Error;
 };
 
 type Resume = {
@@ -166,6 +167,8 @@ type Resume = {
 };
 
 const INIT_TIMEOUT_MS = 8_000;
+const MAX_PENDING_WRITES = 256;
+let pendingWrites = 0;
 
 const liveByThread = new Map<string, Live>();
 const admissions = new Map<string, Admission>();
@@ -207,9 +210,34 @@ function guardCurrent(admission: Admission): void {
 }
 
 function guardOperation(live: Live, generation: object): void {
-  guardCurrent(live.admission);
+  guardUsable(live.admission);
   if (live.admission.generation !== generation)
     throw new Error("Claude turn was cancelled");
+}
+
+function guardUsable(admission: Admission): void {
+  guardCurrent(admission);
+  if (admission.failure) throw admission.failure;
+}
+
+function recordWriterFailure(admission: Admission, error: Error): void {
+  if (!isCurrent(admission) || admission.failure) return;
+  admission.failure = error;
+  const live = admission.live;
+  if (!live) return;
+  live.muteUpdates = true;
+  live.activeTurn = false;
+  const failed = live.turnFailed;
+  const initialized = live.initDone;
+  live.turnDone = null;
+  live.turnFailed = null;
+  live.initDone = null;
+  for (const pending of live.approvals.values()) pending.resolve("cancelled");
+  live.approvals.clear();
+  for (const pending of live.questions.values()) pending.resolve("cancelled");
+  live.questions.clear();
+  failed?.(error);
+  initialized?.();
 }
 
 function setEventSink(live: Live, sink: (event: HarnessEvent) => void): void {
@@ -218,6 +246,7 @@ function setEventSink(live: Live, sink: (event: HarnessEvent) => void): void {
   live.onEvent = (event) => {
     if (
       isCurrent(live.admission) &&
+      !live.admission.failure &&
       live.admission.generation === generation &&
       !live.muteUpdates
     )
@@ -277,7 +306,7 @@ export async function sendClaudeTurn(request: SendTurnInput): Promise<void> {
   const opening = admission.opening;
   if (!opening) throw new Error("Claude session was retired");
   const live = await opening;
-  guardCurrent(admission);
+  guardUsable(admission);
   if (admission.generation !== generation) return;
   live.turns = live.turns
     .catch(() => undefined)
@@ -309,7 +338,7 @@ export async function compactClaudeContext(
   const opening = admission.opening;
   if (!opening) throw new Error("Claude session was retired");
   const live = await opening;
-  guardCurrent(admission);
+  guardUsable(admission);
   if (admission.generation !== generation) return;
   live.turns = live.turns
     .catch(() => undefined)
@@ -350,6 +379,7 @@ export async function compactClaudeContext(
 
 export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
   const live = liveByThread.get(input.sessionId);
+  if (live) guardUsable(live.admission);
   if (!live?.activeTurn) throw new Error("No active turn to steer");
   const generation = live.admission.generation;
   guardOperation(live, generation);
@@ -496,6 +526,8 @@ function ensureLive(
   const settingsKey = settingsKeyFor(input);
   const planning = input.intent === "plan";
   const existing = admissions.get(input.sessionId);
+  if (existing && isCurrent(existing) && existing.failure)
+    throw existing.failure;
   if (
     existing &&
     isCurrent(existing) &&
@@ -549,7 +581,7 @@ async function startLive(
   launch: ReturnType<typeof launchOptions>,
 ): Promise<Live> {
   try {
-    guardCurrent(admission);
+    guardUsable(admission);
     const resume = resumeByThread.get(input.sessionId);
     const canResume =
       resume != null &&
@@ -570,7 +602,7 @@ async function startLive(
     const { path } = isRemote
       ? { path: "claude" }
       : await resolveClaudeBinaryImpl();
-    guardCurrent(admission);
+    guardUsable(admission);
     const handle = admission.handle;
     if (!handle) throw new Error("Claude session was retired");
     const claudeSessionId =
@@ -644,7 +676,7 @@ async function startLive(
       },
     );
 
-    guardCurrent(admission);
+    guardUsable(admission);
     liveByThread.set(input.sessionId, live);
     await handle.spawn(
       path,
@@ -657,7 +689,7 @@ async function startLive(
       input.networkAllowlist,
       { provider: "claude", id: input.providerAccountId ?? "default" },
     );
-    guardCurrent(admission);
+    guardUsable(admission);
     resumeByThread.set(input.sessionId, {
       sessionId: live.claudeSessionId,
       cwd: input.cwd,
@@ -668,20 +700,21 @@ async function startLive(
       live,
       buildControlRequest(nextControlId(live), { subtype: "initialize" }),
     );
-    guardCurrent(admission);
+    guardUsable(admission);
     await waitForInit(live, INIT_TIMEOUT_MS);
-    guardCurrent(admission);
+    guardUsable(admission);
     live.onEvent({
       type: "session.providerBound",
       providerSessionId: live.claudeSessionId,
     });
-    guardCurrent(admission);
+    guardUsable(admission);
     live.onEvent({ type: "session.started" });
-    guardCurrent(admission);
+    guardUsable(admission);
     admission.openingComplete = true;
     return live;
   } catch (error) {
-    void closeAdmission(admission);
+    if (!admission.failure || !isCurrent(admission))
+      void closeAdmission(admission);
     throw error;
   }
 }
@@ -737,7 +770,7 @@ async function runTurn(
 }
 
 function handleLine(sessionId: string, live: Live, line: string): void {
-  if (!isCurrent(live.admission)) return;
+  if (!isCurrent(live.admission) || live.admission.failure) return;
   const rec = parseJsonLine(line);
   if (!rec) return;
 
@@ -1631,10 +1664,29 @@ async function writeJson(
   live: Live,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  guardCurrent(live.admission);
+  const admission = live.admission;
+  guardUsable(admission);
+  const line = JSON.stringify(payload);
+  guardUsable(admission);
   const handle = live.admission.handle;
   if (!handle) throw new Error("Claude session was retired");
-  return handle.write(JSON.stringify(payload));
+  if (pendingWrites >= MAX_PENDING_WRITES) {
+    const error = new Error(
+      "Claude write capacity exceeded. Stop this session before retrying.",
+    );
+    recordWriterFailure(admission, error);
+    throw error;
+  }
+  pendingWrites += 1;
+  try {
+    await handle.write(line);
+  } catch (reason) {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    recordWriterFailure(admission, error);
+    throw error;
+  } finally {
+    pendingWrites -= 1;
+  }
 }
 
 function settingsKeyFor(input: HarnessSessionInput): string {
