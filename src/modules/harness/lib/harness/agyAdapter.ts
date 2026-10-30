@@ -13,6 +13,7 @@ import { type HarnessAdapter, registerHarness } from "./registry";
 export const agyAdapter: HarnessAdapter = {
   id: "gemini",
   live: true,
+  projectMemory: "managed-turn",
   canSteer: false,
   sendTurn: sendAgyTurn,
   steerTurn: steerAgyTurn,

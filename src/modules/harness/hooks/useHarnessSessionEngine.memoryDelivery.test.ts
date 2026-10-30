@@ -22,14 +22,24 @@ import {
   bindCodexSession,
   rewindCodexLastTurn,
 } from "@/modules/harness/lib/harness/codex";
+import {
+  __agyTestReset,
+  stopAgySession,
+} from "@/modules/harness/lib/harness/agy";
+import { agyAdapter } from "@/modules/harness/lib/harness/agyAdapter";
+import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
+import { t } from "@/modules/i18n";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   attachments: vi.fn(),
+  version: vi.fn(async () => "1.1.15"),
   messages: [] as {
     id?: number;
     method?: string;
     params?: Record<string, unknown>;
+    event?: string;
+    message?: { content: unknown };
   }[],
   line: null as null | ((line: string) => void),
 }));
@@ -41,6 +51,8 @@ vi.mock("@/modules/harness/lib/harness", async () => ({
 vi.mock("@/modules/harness/lib/harness/child", () => ({
   closeRetiredRawChildren: async () => {},
   resolveCodexBinary: async () => ({ path: "/fake/codex" }),
+  resolveGeminiBinary: async () => ({ path: "/fake/agy" }),
+  execChild: mocks.version,
   reserveRawChild(logicalSessionId: string) {
     let retired = false;
     let callback: ((line: string) => void) | null = null;
@@ -248,6 +260,7 @@ beforeEach(() => {
   panels = [];
   mocks.messages = [];
   mocks.line = null;
+  mocks.version.mockReset().mockResolvedValue("1.1.15");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   mocks.attachments.mockReset().mockImplementation(async (value) => value);
@@ -275,15 +288,18 @@ beforeEach(() => {
     rewindLastTurn: rewindCodexLastTurn,
     respondApproval: () => {},
   });
+  registerHarness(agyAdapter);
 });
 afterEach(async () => {
   await act(async () => {
     for (const root of roots) root.unmount();
     await stopCodexSession("source");
+    await stopAgySession("source");
     await Promise.all(scopes.map((scope) => scope.close()));
     await Promise.all(panels.map((panel) => panel.close()));
   });
   __codexTestReset();
+  __agyTestReset();
   resetHarnessIdlePark();
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -554,6 +570,360 @@ it("blocks an explicitly enabled turn after native policy revocation", async () 
   expect(
     mocks.messages.some((message) => message.method === "turn/start"),
   ).toBe(false);
+  expect(engine().readSession("source")?.busy).toBe(false);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+  ).toBe(true);
+});
+
+const agySession: Partial<Session> = {
+  harness: "gemini",
+  model: "gemini:gemini-3.8-flash",
+};
+async function agyInput(count = 1) {
+  await act(async () => {
+    await vi.waitFor(() =>
+      expect(
+        mocks.messages.filter((message) => message.event === "user"),
+      ).toHaveLength(count),
+    );
+  });
+  return mocks.messages.filter((message) => message.event === "user")[count - 1]
+    .message?.content;
+}
+async function finishAgy(
+  engine: () => ReturnType<typeof useHarnessSessionEngine>,
+  numTurns = 1,
+  nextInput?: number,
+) {
+  await act(async () => {
+    mocks.line?.(
+      JSON.stringify({
+        event: "result",
+        result: {
+          status: "SUCCESS",
+          conversation_id: "agy-provider",
+          num_turns: numTurns,
+        },
+      }),
+    );
+    await vi.dynamicImportSettled();
+  });
+  if (nextInput !== undefined) await agyInput(nextInput);
+  expect(engine().readSession("source")?.busy).toBe(nextInput !== undefined);
+}
+
+it.each(["normal", "plan", "build"])(
+  "delivers explicitly enabled memory through the real AGY adapter and engine for %s",
+  async (kind) => {
+    const engine = mount({
+      ...agySession,
+      ...(kind === "build"
+        ? {
+            blocks: [
+              {
+                id: "plan",
+                role: "plan" as const,
+                text: "approved plan",
+                plan: { status: "ready" as const },
+              },
+            ],
+          }
+        : {}),
+    });
+    let prepared!: Awaited<ReturnType<typeof prepare>>;
+    await act(async () => {
+      prepared = await prepare(engine());
+    });
+    expect(prepared.scope.delivery?.getSnapshot().supported).toBe(true);
+    expect(mocks.messages).toEqual([]);
+    await act(async () => {
+      if (kind === "build") engine().onBuildPlan("source", "plan");
+      else
+        engine().onSubmit(
+          "source",
+          "original task",
+          [],
+          kind === "plan" ? { intent: "plan" } : undefined,
+        );
+    });
+    expect(await agyInput()).toEqual([
+      { type: "text", text: prepared.packet.text },
+      expect.objectContaining({ type: "text" }),
+    ]);
+    expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+    await finishAgy(engine);
+    expect(prepared.scope.delivery?.getSnapshot().receipt).toMatchObject({
+      adapter: "agy",
+      providerSessionId: "agy-provider",
+      packet: prepared.packet,
+    });
+    expect(engine().readSession("source")?.providerSessionId).toBe(
+      "agy-provider",
+    );
+    expect(JSON.stringify(engine().sessions)).not.toContain(
+      prepared.packet.text,
+    );
+  },
+);
+
+it.each(["absent", "prepared only"])(
+  "preserves AGY input and avoids memory IO when %s",
+  async (kind) => {
+    const engine = mount(agySession);
+    if (kind === "prepared only")
+      await act(async () => {
+        await prepare(engine(), false);
+      });
+    const reads = mocks.invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ).length;
+    await act(async () => engine().onSubmit("source", "unchanged task"));
+    expect(await agyInput()).toBe("unchanged task");
+    expect(
+      mocks.invoke.mock.calls.filter(
+        ([command]) => command === "project_memory_context_read",
+      ),
+    ).toHaveLength(reads);
+    await finishAgy(engine);
+  },
+);
+
+it("preserves the AGY steering restriction and delivers fresh memory for an explicitly queued follow-up", async () => {
+  const engine = mount(agySession);
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+    engine().onSubmit("source", "first task");
+  });
+  await agyInput();
+  await act(async () =>
+    engine().onSubmit("source", "follow-up", [], { followUpBehavior: "steer" }),
+  );
+  expect(
+    mocks.messages.filter((message) => message.event === "user"),
+  ).toHaveLength(1);
+  expect(engine().readSession("source")?.queuedMessages ?? []).toEqual([]);
+  await act(async () =>
+    engine().onSubmit("source", "follow-up", [], { followUpBehavior: "queue" }),
+  );
+  expect(engine().readSession("source")?.queuedMessages).toHaveLength(1);
+  await finishAgy(engine, 1, 2);
+  expect(await agyInput(2)).toEqual([
+    { type: "text", text: prepared.packet.text },
+    { type: "text", text: "follow-up" },
+  ]);
+  await finishAgy(engine, 2);
+  expect(mocks.version).toHaveBeenCalledTimes(1);
+});
+
+it("does not admit an unsupported edited resend or read its memory", async () => {
+  const engine = mount(agySession);
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+  });
+  const reads = mocks.invoke.mock.calls.filter(
+    ([command]) => command === "project_memory_context_read",
+  ).length;
+  await act(async () =>
+    engine().onSubmit("source", "edited task", [], { resendEdited: true }),
+  );
+  expect(mocks.messages).toEqual([]);
+  expect(
+    mocks.invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ),
+  ).toHaveLength(reads);
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+});
+
+it.each(["context roundtrip", "stop", "disable"])(
+  "suppresses an AGY input after %s during the native memory read",
+  async (kind) => {
+    const engine = mount(agySession);
+    let prepared!: Awaited<ReturnType<typeof prepare>>;
+    await act(async () => {
+      prepared = await prepare(engine());
+    });
+    const read = deferred<unknown>();
+    const original = mocks.invoke.getMockImplementation();
+    mocks.invoke.mockImplementation((command, args) =>
+      command === "project_memory_context_read"
+        ? read.promise
+        : original?.(command, args),
+    );
+    const before = mocks.invoke.mock.calls.length;
+    await act(async () => engine().onSubmit("source", "stale input"));
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(
+          mocks.invoke.mock.calls
+            .slice(before)
+            .some(([command]) => command === "project_memory_context_read"),
+        ).toBe(true),
+      );
+      if (kind === "stop") engine().onStop("source");
+      else if (kind === "disable") await prepared.scope.close();
+      else
+        engine().applySessionDeltas(
+          [
+            {
+              kind: "update",
+              id: "source",
+              update: (session) => ({ ...session, cwd: "/other" }),
+            },
+            {
+              kind: "update",
+              id: "source",
+              update: (session) => ({ ...session, cwd: "/project" }),
+            },
+          ],
+          "immediate",
+        );
+      read.resolve(packet());
+      await vi.dynamicImportSettled();
+    });
+    expect(mocks.messages.some((message) => message.event === "user")).toBe(
+      false,
+    );
+    expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  },
+);
+
+it("captures AGY consent at submission instead of adopting a later activation", async () => {
+  const engine = mount(agySession);
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine(), false);
+  });
+  const attachments = deferred<[]>();
+  mocks.attachments.mockReturnValueOnce(attachments.promise);
+  await act(async () => engine().onSubmit("source", "old input"));
+  await act(async () => {
+    await prepared.scope.delivery?.enable(prepared.packet, () => true);
+    attachments.resolve([]);
+  });
+  expect(await agyInput()).toBe("old input");
+  await finishAgy(engine);
+  await act(async () => engine().onSubmit("source", "new input"));
+  expect(await agyInput(2)).toEqual([
+    { type: "text", text: prepared.packet.text },
+    { type: "text", text: "new input" },
+  ]);
+  await finishAgy(engine, 2);
+});
+
+it("keeps AGY version failures actionable without a false input or memory receipt", async () => {
+  const engine = mount(agySession);
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+  });
+  mocks.version.mockResolvedValue("1.1.7");
+  await act(async () => {
+    engine().onSubmit("source", "task");
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.messages).toEqual([]);
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  expect(engine().readSession("source")?.busy).toBe(false);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("1.1.15 or newer")),
+  ).toBe(true);
+});
+
+it("activates AGY through the shared panel, displays only acknowledged input and disables future delivery", async () => {
+  const engine = mount(agySession);
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine(), false);
+  });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () =>
+    root.render(
+      createElement(MemoryConversation, {
+        conversation: prepared.scope,
+        environment: { kind: "local" },
+      }),
+    ),
+  );
+  const button = (key: string) => {
+    const found = [...container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === t(key),
+    );
+    if (!found) throw new Error(`Missing button ${key}`);
+    return found;
+  };
+  await act(async () => button("projectMemory.conversationRead").click());
+  expect(container.textContent).toContain("24 KiB");
+  expect(container.textContent).toContain("1.1.15");
+  expect(prepared.scope.delivery?.getSnapshot().enabled).toBe(false);
+  await act(async () => button("projectMemory.deliveryEnable").click());
+  expect(prepared.scope.delivery?.getSnapshot().enabled).toBe(true);
+  expect(mocks.messages).toEqual([]);
+  expect(mocks.version).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain(
+    t("projectMemory.deliveryLastAccepted"),
+  );
+  await act(async () => engine().onSubmit("source", "task"));
+  await agyInput();
+  expect(container.textContent).not.toContain(
+    t("projectMemory.deliveryLastAccepted"),
+  );
+  await finishAgy(engine);
+  expect(container.textContent).toContain(
+    t("projectMemory.deliveryLastAccepted"),
+  );
+  expect(container.textContent).toContain("agy-provider");
+  await act(async () => button("projectMemory.conversationDisable").click());
+  const reads = mocks.invoke.mock.calls.filter(
+    ([command]) => command === "project_memory_context_read",
+  ).length;
+  await act(async () => engine().onSubmit("source", "without new memory"));
+  expect(await agyInput(2)).toBe("without new memory");
+  expect(
+    mocks.invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ),
+  ).toHaveLength(reads);
+  await finishAgy(engine, 2);
+});
+
+it("blocks AGY delivery after native memory policy revocation", async () => {
+  const engine = mount(agySession);
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+  });
+  const original = mocks.invoke.getMockImplementation();
+  mocks.invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? Promise.resolve({
+          schema: 1,
+          decision: {
+            schema: 1,
+            policy: "never",
+            contextAllowed: false,
+            captureAllowed: false,
+            reason: "KIT_MEMORY_POLICY_NEVER",
+          },
+          packet: null,
+        })
+      : original?.(command, args),
+  );
+  await act(async () => {
+    engine().onSubmit("source", "blocked task");
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.messages).toEqual([]);
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
   expect(engine().readSession("source")?.busy).toBe(false);
   expect(
     engine()
