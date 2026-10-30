@@ -14,8 +14,12 @@ import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-u
 import type { MemoryConversationCapture } from "@/modules/workspace-kit/lib/memoryConversation";
 import { createMemoryConversationPanel } from "@/modules/workspace-kit/lib/memoryConversationPanel";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+const { invoke, writeText } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  writeText: vi.fn(),
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText }));
 vi.mock("@/modules/i18n", () => ({
   t: (key: string) => key,
   useTranslation: () => ({ t: (key: string) => key }),
@@ -136,6 +140,7 @@ async function mount() {
   return { scope, capture, captureMemorySession, views, view, input };
 }
 beforeEach(() => {
+  writeText.mockReset().mockResolvedValue(undefined);
   scopes = [];
   captures = [];
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -172,6 +177,7 @@ afterEach(async () => {
   for (const capture of captures) capture.release();
   await Promise.all(scopes.map((scope) => scope.close()));
   container.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -478,4 +484,161 @@ it("rejects a closed panel's late packet while preserving memory for a fresh pan
   expect(document.body.textContent).toContain(
     "projectMemory.conversationPrepared",
   );
+});
+
+async function prepare() {
+  const f = await mount();
+  await open();
+  await review();
+  await click("projectMemory.conversationPrepare");
+  return f;
+}
+
+it("copies the exact preview after a fresh native read without claiming agent delivery", async () => {
+  await prepare();
+  const reads = () =>
+    invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ).length;
+  const before = reads();
+  expect(writeText).not.toHaveBeenCalled();
+  await click("common.copy");
+  expect(reads()).toBe(before + 1);
+  await act(async () => {
+    await vi.waitFor(() =>
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(packet().packet?.text),
+    );
+  });
+  expect(document.body.textContent).toContain("common.copied");
+  expect(document.body.textContent).toContain(
+    "projectMemory.conversationPrepared",
+  );
+});
+
+it.each(["KIT_MEMORY_POLICY_NEVER", "KIT_MEMORY_INSTRUCTIONS_CHANGED"])(
+  "rechecks %s before copying and withdraws the old preview",
+  async (reason) => {
+    await prepare();
+    const original = invoke.getMockImplementation();
+    invoke.mockImplementation((command, args) =>
+      command === "project_memory_context_read"
+        ? Promise.resolve(packet(reason))
+        : original?.(command, args),
+    );
+    await click("common.copy");
+    expect(writeText).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("<script>context</script>");
+    expect(document.body.textContent).not.toContain("common.copied");
+    expect(
+      [...document.querySelectorAll("button")].some(
+        (item) => item.textContent === "common.copy",
+      ),
+    ).toBe(false);
+  },
+);
+
+it("requires a new gesture after factual content changes instead of copying unseen text", async () => {
+  await prepare();
+  const original = invoke.getMockImplementation();
+  const changed = packet();
+  if (!changed.packet) throw new Error("Missing packet");
+  changed.packet.text = "Fresh project facts";
+  changed.packet.bytes = new TextEncoder().encode(changed.packet.text).length;
+  changed.packet.digest = "d".repeat(64);
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? Promise.resolve(changed)
+      : original?.(command, args),
+  );
+  await click("common.copy");
+  expect(writeText).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain(changed.packet.text);
+  await click("common.copy");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(changed.packet.text);
+});
+
+it.each(["close", "focus"])(
+  "rejects late copy reads after %s without closing accepted engine memory",
+  async (kind) => {
+    const f = await prepare();
+    const read = deferred<unknown>();
+    const original = invoke.getMockImplementation();
+    invoke.mockImplementation((command, args) =>
+      command === "project_memory_context_read"
+        ? read.promise
+        : original?.(command, args),
+    );
+    await click("common.copy");
+    if (kind === "close") await click("common.close");
+    else
+      await act(async () =>
+        f.view.update({
+          ...f.input,
+          report: { ...f.input.report, activeSessionId: null },
+        }),
+      );
+    await act(async () => read.resolve(packet()));
+    expect(writeText).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("common.copied");
+    expect(f.scope.status()).toBe("ready");
+  },
+);
+
+it("reports clipboard failure without false success and permits an explicit retry", async () => {
+  await prepare();
+  vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+    new Error("Web clipboard unavailable"),
+  );
+  writeText.mockRejectedValueOnce(new Error("Clipboard unavailable"));
+  await click("common.copy");
+  expect(document.body.textContent).toContain("harness.chrome.copyFailed");
+  expect(document.body.textContent).not.toContain("common.copied");
+  await click("common.copy");
+  expect(writeText).toHaveBeenCalledTimes(2);
+  expect(document.body.textContent).toContain("common.copied");
+  expect(document.body.textContent).not.toContain("harness.chrome.copyFailed");
+});
+
+it("uses the existing web clipboard fallback when native clipboard is unavailable", async () => {
+  await prepare();
+  const web = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  writeText.mockRejectedValueOnce(new Error("Native clipboard unavailable"));
+  await click("common.copy");
+  expect(web).toHaveBeenCalledExactlyOnceWith(packet().packet?.text);
+  expect(document.body.textContent).toContain("common.copied");
+});
+
+it("does not enter clipboard fallbacks after the original focus retires", async () => {
+  const f = await prepare();
+  const web = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const write = deferred<void>();
+  writeText.mockImplementationOnce(async () => {
+    await write.promise;
+    throw new Error("Native clipboard unavailable");
+  });
+  await click("common.copy");
+  await act(async () =>
+    f.view.update({
+      ...f.input,
+      report: { ...f.input.report, activeSessionId: null },
+    }),
+  );
+  await act(async () => write.resolve());
+  expect(web).not.toHaveBeenCalled();
+  expect(document.body.textContent).not.toContain("common.copied");
+});
+
+it("coalesces copy gestures and suppresses late clipboard feedback after panel closure", async () => {
+  const f = await prepare();
+  const write = deferred<void>();
+  writeText.mockReturnValue(write.promise);
+  await click("common.copy");
+  expect(button("common.copy").disabled).toBe(true);
+  await click("common.copy");
+  expect(writeText).toHaveBeenCalledTimes(1);
+  await click("common.close");
+  await act(async () => write.resolve());
+  await open();
+  expect(document.body.textContent).not.toContain("common.copied");
+  expect(f.scope.status()).toBe("ready");
 });

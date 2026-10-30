@@ -56,6 +56,7 @@ export function MemoryConversation({
   }, [conversation, environment]);
   const busy =
     status === "binding" ||
+    (state.status === "prepared" && state.copyStatus === "copying") ||
     ["reviewing", "binding", "reading"].includes(state.status);
   const review =
     state.status === "review" || state.status === "binding"
@@ -165,6 +166,25 @@ export function MemoryConversation({
                       {result.packet.text}
                     </pre>
                   </details>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      if (result.packet)
+                        void controller.current?.copy(result.packet);
+                    }}
+                  >
+                    {t("common.copy")}
+                  </Button>
+                  {state.status === "prepared" &&
+                  state.copyStatus === "copied" ? (
+                    <p role="status">{t("common.copied")}</p>
+                  ) : null}
+                  {state.status === "prepared" &&
+                  state.copyStatus === "failed" ? (
+                    <p role="alert">{t("harness.chrome.copyFailed")}</p>
+                  ) : null}
                 </>
               ) : null}
             </div>

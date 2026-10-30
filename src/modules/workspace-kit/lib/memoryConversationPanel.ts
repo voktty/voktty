@@ -1,5 +1,8 @@
 import type { WorkspaceEnv } from "@/modules/workspace/env";
-import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
+import type {
+  MemoryContextPacket,
+  MemoryContextResult,
+} from "@/modules/workspace-kit/lib/context";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   createNativeMemoryPresentation,
@@ -10,7 +13,11 @@ import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/native
 export type MemoryConversationPanelState =
   | { status: "idle" | "reviewing" | "reading" | "closed" | "error" }
   | { status: "review" | "binding"; review: NativeMemoryTrustReview }
-  | { status: "prepared"; result: MemoryContextResult };
+  | {
+      status: "prepared";
+      result: MemoryContextResult;
+      copyStatus?: "copying" | "copied" | "failed";
+    };
 type Entry = {
   client: ReturnType<typeof createNativeMemoryPresentation>;
   retired: boolean;
@@ -134,6 +141,47 @@ export function createMemoryConversationPanel(
     read() {
       if (conversation.status() !== "ready") return Promise.resolve();
       return run(read);
+    },
+    copy(packet: MemoryContextPacket) {
+      if (
+        conversation.status() !== "ready" ||
+        state.status !== "prepared" ||
+        state.result.packet !== packet
+      )
+        return Promise.resolve();
+      return run(async () => {
+        if (state.status !== "prepared" || state.result.packet !== packet)
+          return;
+        notify({ ...state, copyStatus: "copying" });
+        if (!current()) return;
+        const result = await conversation.read();
+        if (!current()) return;
+        if (!result) {
+          notify({ status: "error" });
+          return;
+        }
+        const fresh = result.packet;
+        if (
+          !fresh ||
+          fresh.projectKey !== packet.projectKey ||
+          fresh.instructionDigest !== packet.instructionDigest ||
+          fresh.digest !== packet.digest ||
+          fresh.text !== packet.text
+        ) {
+          notify({ status: "prepared", result });
+          return;
+        }
+        try {
+          const { copyText } = await import("@/modules/harness/lib/clipboard");
+          if (!current()) return;
+          await copyText(fresh.text, () => {
+            if (!current()) throw new Error("Memory copy retired");
+          });
+          notify({ status: "prepared", result, copyStatus: "copied" });
+        } catch {
+          notify({ status: "prepared", result, copyStatus: "failed" });
+        }
+      });
     },
     disable() {
       return run(async () => {
