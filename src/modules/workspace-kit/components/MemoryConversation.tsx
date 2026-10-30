@@ -3,11 +3,14 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/modules/i18n";
 import type { WorkspaceEnv } from "@/modules/workspace/env";
 import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
+import { inactiveMemoryDelivery } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   createMemoryConversationPanel,
   type MemoryConversationPanelState,
 } from "@/modules/workspace-kit/lib/memoryConversationPanel";
 import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+
+const noDelivery = () => inactiveMemoryDelivery;
 
 export function MemoryConversation({
   conversation,
@@ -20,6 +23,10 @@ export function MemoryConversation({
   const status = useSyncExternalStore(
     conversation.subscribe,
     conversation.status,
+  );
+  const delivery = useSyncExternalStore(
+    conversation.subscribe,
+    conversation.delivery?.getSnapshot ?? noDelivery,
   );
   const [state, setState] = useState<MemoryConversationPanelState>({
     status: "idle",
@@ -57,6 +64,7 @@ export function MemoryConversation({
   const busy =
     status === "binding" ||
     (state.status === "prepared" && state.copyStatus === "copying") ||
+    (state.status === "prepared" && state.enabling === true) ||
     ["reviewing", "binding", "reading"].includes(state.status);
   const review =
     state.status === "review" || state.status === "binding"
@@ -80,6 +88,33 @@ export function MemoryConversation({
         <p role="status">{t("projectMemory.conversationRetired")}</p>
       ) : (
         <>
+          {delivery.root ? (
+            <p className="break-all text-xs" dir="auto">
+              {t("projectMemory.root")}: <code>{delivery.root}</code>
+            </p>
+          ) : null}
+          {delivery.enabled ? (
+            <p role="status">{t("projectMemory.deliveryEnabled")}</p>
+          ) : null}
+          {delivery.receipt ? (
+            <details className="space-y-2 rounded border border-border p-2 text-xs">
+              <summary>{t("projectMemory.deliveryLastAccepted")}</summary>
+              <p>
+                {t("projectMemory.deliveryAccepted", {
+                  adapter: delivery.receipt.adapter,
+                })}
+              </p>
+              <p className="break-all font-mono" dir="auto">
+                {delivery.receipt.providerSessionId}
+              </p>
+              <pre
+                className="max-h-64 overflow-auto whitespace-pre-wrap break-words"
+                dir="auto"
+              >
+                {delivery.receipt.packet.text}
+              </pre>
+            </details>
+          ) : null}
           {state.status === "error" ? (
             <p role="alert">{t("projectMemory.conversationError")}</p>
           ) : null}
@@ -144,7 +179,9 @@ export function MemoryConversation({
               <p role="status">
                 {t(
                   result.packet
-                    ? "projectMemory.conversationPrepared"
+                    ? delivery.receipt
+                      ? "projectMemory.deliveryPrepared"
+                      : "projectMemory.conversationPrepared"
                     : result.decision.reason === "KIT_MEMORY_POLICY_NEVER"
                       ? "projectMemory.conversationPolicyBlocked"
                       : "projectMemory.conversationTrustBlocked",
@@ -166,6 +203,29 @@ export function MemoryConversation({
                       {result.packet.text}
                     </pre>
                   </details>
+                  {!delivery.enabled ? (
+                    delivery.supported ? (
+                      <div className="space-y-2">
+                        <p className="text-xs">
+                          {t("projectMemory.deliveryConsent")}
+                        </p>
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => {
+                            if (result.packet)
+                              void controller.current?.enable(result.packet);
+                          }}
+                        >
+                          {t("projectMemory.deliveryEnable")}
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-xs">
+                        {t("projectMemory.deliveryUnsupported")}
+                      </p>
+                    )
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"

@@ -174,6 +174,50 @@ it("retains an immutable copy of the packet actually prepared for delivery", asy
   expect(Object.isFrozen(f.delivery.receipt()?.packet)).toBe(true);
 });
 
+it("does not reuse a cached packet while another memory delivery remains unconfirmed", async () => {
+  const f = fixture();
+  const context = {};
+  (await f.source.prepare(context, "provider", () => {}))?.acknowledge();
+  f.read.mockResolvedValue(result("intermediate facts"));
+  const pending = await f.source.prepare(context, "provider", () => {});
+  expect(pending?.prefix).toBe("intermediate facts");
+  f.read.mockResolvedValue(result());
+  const next = await f.source.prepare(context, "provider", () => {});
+  expect(next?.prefix).toBe(result().packet?.text);
+  pending?.acknowledge();
+  f.read.mockResolvedValue(result("intermediate facts"));
+  const third = await f.source.prepare(context, "provider", () => {});
+  expect(third?.prefix).toBe("intermediate facts");
+  next?.settle();
+  third?.settle();
+});
+
+it("retires a failed delivery outcome without permitting a late acknowledgment or cached reuse", async () => {
+  const f = fixture();
+  const context = {};
+  (await f.source.prepare(context, "provider", () => {}))?.acknowledge();
+  const failed = await f.source.prepare(context, "provider", () => {});
+  expect(failed?.prefix).toBeNull();
+  failed?.settle();
+  failed?.settle();
+  expect(failed?.acknowledge()).toBe(false);
+  const next = await f.source.prepare(context, "provider", () => {});
+  expect(next?.prefix).toBe(result().packet?.text);
+  next?.settle();
+});
+
+it("keeps an accepted receipt when an observer throws", async () => {
+  const f = fixture();
+  const delivery = createHarnessMemoryDelivery(f.conversation, () => {
+    throw new Error("observer");
+  });
+  const prepared = await delivery
+    .capture(() => {})
+    .prepare({}, "provider", () => {});
+  expect(prepared?.acknowledge()).toBe(true);
+  expect(delivery.receipt()?.providerSessionId).toBe("provider");
+});
+
 it("retains shared capacity through actual read settlement, including retired callers", async () => {
   const read = deferred<MemoryContextResult>();
   let active = true;

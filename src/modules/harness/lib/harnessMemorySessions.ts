@@ -1,4 +1,15 @@
-import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
+import type {
+  MemoryContextPacket,
+  MemoryContextResult,
+} from "@/modules/workspace-kit/lib/context";
+import {
+  createHarnessMemoryDelivery,
+  type HarnessMemoryTurnSource,
+} from "@/modules/harness/lib/harnessMemoryDelivery";
+import {
+  inactiveMemoryDelivery,
+  type MemoryDeliveryState,
+} from "@/modules/workspace-kit/lib/memoryConversation";
 import type {
   MemoryConversation,
   MemoryConversationBinding,
@@ -64,7 +75,13 @@ export function createHarnessMemorySessions() {
   let disposed = false;
   const sessions = new Map<
     object,
-    { entry: Entry; receipt: HarnessMemorySession }
+    {
+      entry: Entry;
+      receipt: HarnessMemorySession;
+      source: (
+        assertCurrent: () => void,
+      ) => HarnessMemoryTurnSource | undefined;
+    }
   >();
   return {
     capture(
@@ -72,6 +89,7 @@ export function createHarnessMemorySessions() {
       projectCwd: string,
       cwd: string,
       isOwnerCurrent: () => boolean,
+      supportsDelivery = false,
     ): HarnessMemorySession {
       if (disposed || !isOwnerCurrent() || disposed) fail("cancelled");
       const existing = sessions.get(owner);
@@ -82,6 +100,11 @@ export function createHarnessMemorySessions() {
       let binding = false;
       let admission: (() => boolean) | null = null;
       let reading: Promise<MemoryContextResult | null> | null = null;
+      let enabling = false;
+      let deliveryState: MemoryDeliveryState = Object.freeze({
+        ...inactiveMemoryDelivery,
+        supported: supportsDelivery,
+      });
       const current = () =>
         !disposed &&
         !entry.retired &&
@@ -126,6 +149,54 @@ export function createHarnessMemorySessions() {
               : binding
                 ? "binding"
                 : "inactive",
+        delivery: Object.freeze({
+          getSnapshot: () =>
+            current() ? deliveryState : inactiveMemoryDelivery,
+          async enable(
+            packet: MemoryContextPacket,
+            isCallerCurrent: () => boolean,
+          ) {
+            check();
+            if (!supportsDelivery || !bound || binding) fail("cancelled");
+            if (enabling) fail("busy");
+            enabling = true;
+            const expected = { ...packet };
+            entry.pending += 1;
+            const assertCurrent = () => {
+              check();
+              if (!isCallerCurrent()) fail("cancelled");
+              check();
+            };
+            try {
+              assertCurrent();
+              if (reading) await reading;
+              assertCurrent();
+              const result = await receipt.read();
+              assertCurrent();
+              if (!result) fail("cancelled");
+              const fresh = result.packet;
+              if (
+                result.decision.contextAllowed &&
+                fresh &&
+                fresh.projectKey === expected.projectKey &&
+                fresh.instructionDigest === expected.instructionDigest &&
+                fresh.digest === expected.digest &&
+                fresh.text === expected.text
+              ) {
+                deliveryState = Object.freeze({
+                  ...deliveryState,
+                  enabled: true,
+                });
+                notify(entry);
+              }
+              return result;
+            } finally {
+              enabling = false;
+              entry.pending -= 1;
+              collect(entry);
+            }
+          },
+        }),
         async bind(input: Binding, isActionCurrent = () => true) {
           check();
           if (binding) fail("busy");
@@ -153,6 +224,10 @@ export function createHarnessMemorySessions() {
             if (!isActionCurrent()) fail("cancelled");
             check();
             bound = true;
+            deliveryState = Object.freeze({
+              ...deliveryState,
+              root: review.snapshot.root,
+            });
             binding = false;
             notify(entry);
             check();
@@ -196,9 +271,27 @@ export function createHarnessMemorySessions() {
         },
         close: () => close(entry),
       });
+      const delivery = createHarnessMemoryDelivery(receipt, (accepted) => {
+        if (!current()) return;
+        deliveryState = Object.freeze({ ...deliveryState, receipt: accepted });
+        notify(entry);
+      });
       entries.add(entry);
-      sessions.set(owner, { entry, receipt });
+      sessions.set(owner, {
+        entry,
+        receipt,
+        source: (assertCurrent) =>
+          deliveryState.enabled && current()
+            ? delivery.capture(() => {
+                assertCurrent();
+                if (!deliveryState.enabled) fail("cancelled");
+              })
+            : undefined,
+      });
       return receipt;
+    },
+    turnSource(owner: object | undefined, assertCurrent: () => void) {
+      return owner ? sessions.get(owner)?.source(assertCurrent) : undefined;
     },
     reconcile(owners: Iterable<object>) {
       const currentOwners = new Set(owners);
@@ -221,6 +314,7 @@ export function qualifyHarnessMemorySession(
   session: HarnessMemorySession,
   isActionCurrent: () => boolean,
 ): HarnessMemorySession {
+  const delivery = session.delivery;
   function check() {
     if (!isActionCurrent() || !session.isCurrent()) fail("cancelled");
   }
@@ -228,6 +322,28 @@ export function qualifyHarnessMemorySession(
     ...session,
     isCurrent: () => isActionCurrent() && session.isCurrent(),
     status: () => (isActionCurrent() ? session.status() : "retired"),
+    ...(delivery
+      ? {
+          delivery: Object.freeze({
+            getSnapshot: () =>
+              isActionCurrent()
+                ? delivery.getSnapshot()
+                : inactiveMemoryDelivery,
+            async enable(
+              packet: MemoryContextPacket,
+              isCallerCurrent: () => boolean,
+            ) {
+              check();
+              const result = await delivery.enable(
+                packet,
+                () => isActionCurrent() && isCallerCurrent(),
+              );
+              check();
+              return result;
+            },
+          }),
+        }
+      : {}),
     async bind(input: Binding, isCallerCurrent = () => true) {
       check();
       const admission = () => isActionCurrent() && isCallerCurrent();

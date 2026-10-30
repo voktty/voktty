@@ -95,6 +95,7 @@ import {
 import { preparePrompt } from "@/modules/harness/lib/promptPreparation";
 import { createQueuedPromptSources } from "@/modules/harness/lib/queuedPromptSources";
 import { createHarnessMemorySessions } from "@/modules/harness/lib/harnessMemorySessions";
+import { getHarness } from "@/modules/harness/lib/harness/registry";
 import {
   captureRemotePromptSource,
   PromptSourceRetiredError,
@@ -374,32 +375,60 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     memorySessions.current?.reconcile(state.contextOwners.values());
   }, [state.contextOwners]);
 
-  const captureMemorySession = useCallback((id: string) => {
-    const session = sessionsRef.current.find(
-      (candidate) => candidate.id === id,
-    );
-    const owner = contextOwners.current.get(id);
-    const lifetime = executionLifetime.current;
-    const memory = memorySessions.current;
-    if (
-      !session ||
-      !owner ||
-      !lifetime ||
-      !memory ||
-      inputsRef.current.isRemoving(id) ||
-      inputsRef.current.isSwitching(id) ||
-      inputsRef.current.isProjectReserved?.(session.cwd)
-    )
-      return null;
-    return memory.capture(
-      owner,
-      session.cwd,
-      sessionWorkCwd(session),
-      () =>
-        executionLifetime.current === lifetime &&
-        contextOwners.current.get(id) === owner,
-    );
-  }, []);
+  const captureMemorySession = useCallback(
+    (id: string) => {
+      let session = sessionsRef.current.find(
+        (candidate) => candidate.id === id,
+      );
+      if (
+        session &&
+        supportsProviderAccounts(session.harness) &&
+        session.providerAccountId === undefined &&
+        executionLifetime.current &&
+        !inputsRef.current.isRemoving(id) &&
+        !inputsRef.current.isSwitching(id) &&
+        !inputsRef.current.isProjectReserved?.(session.cwd)
+      ) {
+        const original = session;
+        const providerAccountId = selectedProviderAccountId(
+          session.harness,
+          session.cwd,
+        );
+        updateSession(
+          id,
+          (candidate) =>
+            candidate === original
+              ? { ...candidate, providerAccountId }
+              : candidate,
+          "immediate",
+        );
+        session = sessionsRef.current.find((candidate) => candidate.id === id);
+      }
+      const owner = contextOwners.current.get(id);
+      const lifetime = executionLifetime.current;
+      const memory = memorySessions.current;
+      if (
+        !session ||
+        !owner ||
+        !lifetime ||
+        !memory ||
+        inputsRef.current.isRemoving(id) ||
+        inputsRef.current.isSwitching(id) ||
+        inputsRef.current.isProjectReserved?.(session.cwd)
+      )
+        return null;
+      return memory.capture(
+        owner,
+        session.cwd,
+        sessionWorkCwd(session),
+        () =>
+          executionLifetime.current === lifetime &&
+          contextOwners.current.get(id) === owner,
+        getHarness(session.harness)?.projectMemory === "managed-turn",
+      );
+    },
+    [updateSession],
+  );
 
   const capturePreparationContext = useCallback(
     (id: string, expected: Session) => {
@@ -715,6 +744,13 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             throw new PromptSourceRetiredError();
           promptSource?.assertCurrent();
         };
+        const projectMemory = memorySessions.current?.turnSource(
+          contextOwners.current.get(sessionId),
+          () => {
+            if (!steerIsCurrent() || !contextIsCurrent())
+              throw new PromptSourceRetiredError();
+          },
+        );
         const visible = displayAttachments(attachments);
         const cards = userTurnCards(noteCard);
         updateSessions([sessionId], (s) => {
@@ -746,6 +782,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             if (!steerIsCurrent()) return;
             assertPreparationCurrent();
             const turn = steerHarnessTurn({
+              ...(projectMemory ? { projectMemory } : {}),
               harness: current.harness,
               sessionId,
               cwd: workCwd,
@@ -920,6 +957,13 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           throw new PromptSourceRetiredError();
         promptSource?.assertCurrent();
       };
+      const projectMemory = memorySessions.current?.turnSource(
+        contextOwners.current.get(sessionId),
+        () => {
+          if (!isCurrentTurn(sessionId, gen, turnOwner) || !contextIsCurrent())
+            throw new PromptSourceRetiredError();
+        },
+      );
 
       if (
         isFirstTurn &&
@@ -1116,6 +1160,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             ? userMessagesAfterHandoff(current)
             : [];
           const turn = sendHarnessTurn({
+            ...(projectMemory ? { projectMemory } : {}),
             harness: current.harness,
             sessionId,
             cwd: workCwd,

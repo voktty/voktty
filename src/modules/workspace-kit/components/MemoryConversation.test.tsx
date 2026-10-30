@@ -86,13 +86,15 @@ async function review() {
   if (!checkbox) throw new Error("Missing reviewed consent");
   await act(async () => checkbox.click());
 }
-async function mount() {
+async function mount(supportsDelivery = false) {
   const manager = createHarnessMemorySessions();
+  const owner = {};
   const scope = manager.capture(
-    {},
+    owner,
     "/project",
     "/project/worktree",
     () => true,
+    supportsDelivery,
   );
   scopes.push(scope);
   const views = createHarnessWindowViews();
@@ -137,7 +139,16 @@ async function mount() {
       </StrictMode>,
     ),
   );
-  return { scope, capture, captureMemorySession, views, view, input };
+  return {
+    scope,
+    capture,
+    captureMemorySession,
+    views,
+    view,
+    input,
+    manager,
+    owner,
+  };
 }
 beforeEach(() => {
   writeText.mockReset().mockResolvedValue(undefined);
@@ -486,8 +497,8 @@ it("rejects a closed panel's late packet while preserving memory for a fresh pan
   );
 });
 
-async function prepare() {
-  const f = await mount();
+async function prepare(supportsDelivery = false) {
+  const f = await mount(supportsDelivery);
   await open();
   await review();
   await click("projectMemory.conversationPrepare");
@@ -641,4 +652,99 @@ it("coalesces copy gestures and suppresses late clipboard feedback after panel c
   await open();
   expect(document.body.textContent).not.toContain("common.copied");
   expect(f.scope.status()).toBe("ready");
+});
+
+it("requires explicit delivery consent after preparation and preserves it after panel closure", async () => {
+  const f = await prepare(true);
+  expect(f.manager.turnSource(f.owner, () => {})).toBeUndefined();
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
+  await click("projectMemory.deliveryEnable");
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(true);
+  expect(document.body.textContent).toContain("projectMemory.deliveryEnabled");
+  expect(f.scope.delivery?.getSnapshot().receipt).toBeNull();
+  expect(
+    invoke.mock.calls.every(([command]) =>
+      command.startsWith("project_memory_"),
+    ),
+  ).toBe(true);
+  await click("common.close");
+  expect(f.manager.turnSource(f.owner, () => {})).toBeDefined();
+});
+
+it("updates the open panel only after provider acceptance and keeps the delivered text separate", async () => {
+  const f = await prepare(true);
+  await click("projectMemory.deliveryEnable");
+  const source = f.manager.turnSource(f.owner, () => {});
+  if (!source) throw new Error("Missing delivery source");
+  const prepared = await source.prepare({}, "provider-thread", () => {});
+  expect(document.body.textContent).not.toContain(
+    "projectMemory.deliveryLastAccepted",
+  );
+  await act(async () => {
+    expect(prepared?.acknowledge()).toBe(true);
+  });
+  expect(document.body.textContent).toContain(
+    "projectMemory.deliveryLastAccepted",
+  );
+  expect(document.body.textContent).toContain("projectMemory.deliveryAccepted");
+  expect(document.body.textContent).toContain("provider-thread");
+  expect(document.body.textContent).not.toContain(
+    "projectMemory.conversationPrepared",
+  );
+  expect(document.querySelector("script")).toBeNull();
+});
+
+it("retains the manual copy alternative for an adapter without automatic delivery", async () => {
+  await prepare();
+  expect(document.body.textContent).toContain(
+    "projectMemory.deliveryUnsupported",
+  );
+  expect(button("common.copy").disabled).toBe(false);
+  expect(
+    [...document.querySelectorAll("button")].some(
+      (item) => item.textContent === "projectMemory.deliveryEnable",
+    ),
+  ).toBe(false);
+});
+
+it("does not enable a retired caller after a late native read", async () => {
+  const f = await prepare(true);
+  const read = deferred<unknown>();
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? read.promise
+      : original?.(command, args),
+  );
+  await click("projectMemory.deliveryEnable");
+  await act(async () =>
+    f.view.update({
+      ...f.input,
+      report: { ...f.input.report, activeSessionId: null },
+    }),
+  );
+  await act(async () => read.resolve(packet()));
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
+  expect(f.manager.turnSource(f.owner, () => {})).toBeUndefined();
+  expect(f.scope.status()).toBe("ready");
+});
+
+it("requires a new gesture to enable a packet changed since its preview", async () => {
+  const f = await prepare(true);
+  const original = invoke.getMockImplementation();
+  const changed = packet();
+  if (!changed.packet) throw new Error("Missing packet");
+  changed.packet.text = "new facts";
+  changed.packet.bytes = new TextEncoder().encode(changed.packet.text).length;
+  changed.packet.digest = "d".repeat(64);
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? Promise.resolve(changed)
+      : original?.(command, args),
+  );
+  await click("projectMemory.deliveryEnable");
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
+  expect(document.body.textContent).toContain("new facts");
+  await click("projectMemory.deliveryEnable");
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(true);
 });

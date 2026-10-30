@@ -17,6 +17,7 @@ export type MemoryConversationPanelState =
       status: "prepared";
       result: MemoryContextResult;
       copyStatus?: "copying" | "copied" | "failed";
+      enabling?: boolean;
     };
 type Entry = {
   client: ReturnType<typeof createNativeMemoryPresentation>;
@@ -141,6 +142,23 @@ export function createMemoryConversationPanel(
     read() {
       if (conversation.status() !== "ready") return Promise.resolve();
       return run(read);
+    },
+    enable(packet: MemoryContextPacket) {
+      const delivery = conversation.delivery;
+      if (
+        !delivery ||
+        state.status !== "prepared" ||
+        state.result.packet !== packet
+      )
+        return Promise.resolve();
+      return run(async () => {
+        if (state.status !== "prepared" || state.result.packet !== packet)
+          return;
+        notify({ ...state, enabling: true });
+        if (!current()) return;
+        const result = await delivery.enable(packet, current);
+        notify({ status: "prepared", result });
+      });
     },
     copy(packet: MemoryContextPacket) {
       if (

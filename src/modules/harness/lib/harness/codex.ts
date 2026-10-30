@@ -346,10 +346,14 @@ export async function steerCodexTurn(input: SteerTurnInput): Promise<void> {
     : null;
   if (memory?.prefix && Array.isArray(params.input))
     params.input.unshift({ type: "text", text: memory.prefix });
-  memory?.assertCurrent();
-  memory?.issued();
-  await live.rpc.request("turn/steer", params);
-  memory?.acknowledge();
+  try {
+    memory?.assertCurrent();
+    memory?.issued();
+    await live.rpc.request("turn/steer", params);
+    memory?.acknowledge();
+  } finally {
+    memory?.settle();
+  }
   assertChild(live.child);
   live.onEvent({ type: "turn.started", providerTurnId: turnId });
 }
@@ -816,7 +820,12 @@ async function prepareCodexMemory(
   };
   assertCurrent();
   const prepared = await source.prepare(context, live.threadId, assertCurrent);
-  assertCurrent();
+  try {
+    assertCurrent();
+  } catch (error) {
+    prepared?.settle();
+    throw error;
+  }
   return {
     prefix: prepared?.prefix ?? null,
     assertCurrent: () => {
@@ -824,6 +833,7 @@ async function prepareCodexMemory(
       assertCurrent();
     },
     acknowledge: () => prepared?.acknowledge() ?? false,
+    settle: () => prepared?.settle(),
     issued: () => {
       issued = true;
     },
@@ -898,6 +908,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     });
     throw error;
   } finally {
+    memory?.settle();
     live.turnDone = null;
     live.turnFailed = null;
   }

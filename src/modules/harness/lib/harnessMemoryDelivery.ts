@@ -1,17 +1,14 @@
-import type { MemoryContextPacket } from "@/modules/workspace-kit/lib/context";
-import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
+import type {
+  MemoryConversation,
+  MemoryDeliveryReceipt,
+} from "@/modules/workspace-kit/lib/memoryConversation";
 
-export type HarnessMemoryDeliveryReceipt = Readonly<{
-  schema: 1;
-  adapter: "codex";
-  method: "managed-turn";
-  providerSessionId: string;
-  packet: MemoryContextPacket;
-}>;
+export type HarnessMemoryDeliveryReceipt = MemoryDeliveryReceipt;
 export type PreparedHarnessMemory = Readonly<{
   prefix: string | null;
   assertCurrent: () => void;
   acknowledge: () => boolean;
+  settle: () => void;
 }>;
 export type HarnessMemoryTurnSource = Readonly<{
   cwd: string;
@@ -38,12 +35,16 @@ export function assertHarnessMemoryTarget(
   source.assertCurrent();
 }
 
-export function createHarnessMemoryDelivery(conversation: MemoryConversation) {
+export function createHarnessMemoryDelivery(
+  conversation: MemoryConversation,
+  onReceipt?: (receipt: HarnessMemoryDeliveryReceipt) => void,
+) {
   const cwd = conversation.cwd;
   let receipt: HarnessMemoryDeliveryReceipt | null = null;
   let acknowledgedContext: object | null = null;
   let sequence = 0;
   let acknowledgedSequence = 0;
+  let inFlight = 0;
   return {
     receipt: () => receipt,
     capture(assertCallerCurrent: () => void): HarnessMemoryTurnSource {
@@ -73,6 +74,16 @@ export function createHarnessMemoryDelivery(conversation: MemoryConversation) {
             fail("busy");
           const admittedSequence = ++sequence;
           pending += 1;
+          inFlight += 1;
+          let handedOff = false;
+          let settled = false;
+          let accepted = false;
+          const settle = () => {
+            if (settled) return;
+            settled = true;
+            inFlight -= 1;
+            if (!accepted) acknowledgedContext = null;
+          };
           try {
             const result = await conversation.read();
             current();
@@ -80,6 +91,7 @@ export function createHarnessMemoryDelivery(conversation: MemoryConversation) {
               fail(result?.decision.reason ?? "unavailable");
             const packet = Object.freeze({ ...result.packet });
             const alreadyDelivered =
+              inFlight === 1 &&
               acknowledgedContext === providerContext &&
               receipt?.providerSessionId === providerSessionId &&
               receipt.packet.projectKey === packet.projectKey &&
@@ -87,18 +99,23 @@ export function createHarnessMemoryDelivery(conversation: MemoryConversation) {
               receipt.packet.digest === packet.digest &&
               receipt.packet.text === packet.text;
             let acknowledged: boolean | undefined;
+            handedOff = true;
             return Object.freeze({
               prefix: alreadyDelivered ? null : packet.text,
               assertCurrent: current,
+              settle,
               acknowledge() {
+                if (settled && acknowledged === undefined) return false;
                 try {
                   current();
                 } catch {
+                  settle();
                   return false;
                 }
                 if (acknowledged !== undefined) return acknowledged;
                 if (admittedSequence < acknowledgedSequence) {
                   acknowledged = false;
+                  settle();
                   return false;
                 }
                 acknowledged = true;
@@ -111,11 +128,19 @@ export function createHarnessMemoryDelivery(conversation: MemoryConversation) {
                   providerSessionId,
                   packet,
                 });
+                accepted = true;
+                settle();
+                try {
+                  onReceipt?.(receipt);
+                } catch {
+                  /* A presentation failure cannot undo provider acceptance. */
+                }
                 return true;
               },
             });
           } finally {
             pending -= 1;
+            if (!handedOff) settle();
           }
         },
       });

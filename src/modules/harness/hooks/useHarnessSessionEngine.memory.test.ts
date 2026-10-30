@@ -646,3 +646,62 @@ it("bounds observers and releases their slots on unsubscription", async () => {
   for (const remove of removals) remove();
   expect(invoke).not.toHaveBeenCalled();
 });
+
+it("rechecks native policy after an earlier shared read settles before enabling delivery", async () => {
+  const manager = createHarnessMemorySessions();
+  const scope = manager.capture({}, "/project", "/project", () => true, true);
+  scopes.push(scope);
+  await scope.bind(await input(scope));
+  const expected = required(required(await scope.read()).packet);
+  const old = deferred<unknown>();
+  const started = deferred<void>();
+  const original = invoke.getMockImplementation();
+  let reads = 0;
+  invoke.mockImplementation((command, args) => {
+    if (command !== "project_memory_context_read")
+      return original?.(command, args);
+    reads += 1;
+    started.resolve();
+    return reads === 1
+      ? old.promise
+      : Promise.resolve({
+          schema: 1,
+          decision: {
+            schema: 1,
+            policy: "never",
+            contextAllowed: false,
+            captureAllowed: false,
+            reason: "KIT_MEMORY_POLICY_NEVER",
+          },
+          packet: null,
+        });
+  });
+  const previous = scope.read();
+  await started.promise;
+  const enabling = scope.delivery?.enable(expected, () => true);
+  expect(reads).toBe(1);
+  old.resolve(packet());
+  await previous;
+  expect((await enabling)?.decision.contextAllowed).toBe(false);
+  expect(reads).toBe(2);
+  expect(scope.delivery?.getSnapshot().enabled).toBe(false);
+  manager.dispose();
+});
+
+it("reserves delivery activation before evaluating a reentrant caller guard", async () => {
+  const manager = createHarnessMemorySessions();
+  const scope = manager.capture({}, "/project", "/project", () => true, true);
+  scopes.push(scope);
+  await scope.bind(await input(scope));
+  const expected = required(required(await scope.read()).packet);
+  let nested: Promise<unknown> | undefined;
+  await scope.delivery?.enable(expected, () => {
+    nested ??= scope.delivery
+      ?.enable(expected, () => true)
+      .catch((error: unknown) => error);
+    return true;
+  });
+  expect(await nested).toMatchObject({ code: "busy" });
+  expect(scope.delivery?.getSnapshot().enabled).toBe(true);
+  manager.dispose();
+});
