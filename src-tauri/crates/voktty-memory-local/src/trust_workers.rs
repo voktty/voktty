@@ -58,7 +58,10 @@ impl MemoryTrustReview {
         &self.observed
     }
 
-    fn accept(self, control: &DiscoveryControl) -> Result<LocalMemorySnapshot, MemoryTrustError> {
+    fn revalidate(
+        &self,
+        control: &DiscoveryControl,
+    ) -> Result<NativeContextObservation, MemoryTrustError> {
         if Instant::now() >= self.expires {
             return Err(MemoryTrustError::Changed);
         }
@@ -89,7 +92,13 @@ impl MemoryTrustReview {
         if Instant::now() >= self.expires {
             return Err(MemoryTrustError::Changed);
         }
-        memory
+        Ok(current)
+    }
+
+    fn accept(self, control: &DiscoveryControl) -> Result<LocalMemorySnapshot, MemoryTrustError> {
+        self.revalidate(control)?;
+        self.memory
+            .borrow()
             .trust_instructions(
                 self.observed.local_preferences.revision(),
                 &self.observed.fingerprint.digest,
@@ -181,3 +190,9 @@ impl MemoryWorkers {
 #[cfg(all(test, target_os = "linux"))]
 #[path = "trust_workers_tests.rs"]
 mod tests;
+
+#[path = "context_session.rs"]
+mod context_session;
+pub use context_session::{
+    MemoryContextRead, MemoryContextSession, MemoryContextSessionJob, MemorySessionUse,
+};

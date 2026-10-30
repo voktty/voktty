@@ -299,6 +299,8 @@ The window host owns one Inbox source over persisted recent projects and live or
 
 Harness prompt preparation captures an engine-owned context receipt in addition to its turn and remote-source guards. Accepted changes to project cwd, effective worktree cwd, harness, runtime mode or provider account retire that receipt, including a round trip within one delta batch. Transcript, title and provider-binding updates preserve it. Retirement blocks subsequent preparation stages and send or steer admission; it does not cancel a request already issued, retire existing output delivery, authorize project memory or establish native quiescence.
 
+`voktty-memory-local` can bind an exact reviewed native context session and prepare fresh packets using the shared policy and 24 KiB builder. Bindings retain original execution and memory roots, recheck effective policy and trust on reads, and retire independently of other allocations. Session choices are never persisted and this path grants no captures. These local preparation APIs are not yet wired to application/window ownership, IPC, activation controls or provider delivery. See `src-tauri/crates/voktty-memory-local/CONTEXT.md`.
+
 ### AI subsystem (`src/modules/ai/`)
 
 BYOK. Cloud providers via `@ai-sdk/*`: **OpenAI, Anthropic, Google, xAI, Cerebras, Groq, DeepSeek, Mistral, OpenRouter**, plus **OpenAI-compatible** for any custom base URL. Local / offline providers (key-optional, model id supplied at runtime): **LM Studio, MLX, Ollama**. Provider list in `config.ts` (`PROVIDERS`); model registry includes `DEFAULT_MODEL_ID` + `DEFAULT_AUTOCOMPLETE_MODEL`.

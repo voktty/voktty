@@ -26,8 +26,9 @@ pub use publication::{
     PublicationFailure, PublicationReport, PublicationWriteRequirements, RecoveryFile,
 };
 pub use workers::{
-    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryJob, MemoryPolicyError, MemoryPolicyJob,
-    MemoryPolicyReview, MemoryPreviewRequest, MemoryStoreMode, MemoryTrustError, MemoryTrustJob,
+    MemoryContextRead, MemoryContextSession, MemoryContextSessionJob, MemoryDeploymentJob,
+    MemoryDeploymentWorkError, MemoryJob, MemoryPolicyError, MemoryPolicyJob, MemoryPolicyReview,
+    MemoryPreviewRequest, MemorySessionUse, MemoryStoreMode, MemoryTrustError, MemoryTrustJob,
     MemoryTrustReview, MemoryWorkError, MemoryWorkers,
 };
 #[cfg(not(any(unix, windows)))]

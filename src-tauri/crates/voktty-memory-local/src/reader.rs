@@ -187,6 +187,10 @@ pub(crate) struct OwnedMemoryWorkspace {
 }
 
 impl OwnedMemoryWorkspace {
+    pub(crate) fn is_authorized(&self) -> bool {
+        self.access.allows_workspace_root(&self.root) && self.access.allows_metadata(&self.root)
+    }
+
     pub(crate) fn root(&self) -> &Path {
         &self.root
     }

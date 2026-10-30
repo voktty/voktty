@@ -296,7 +296,10 @@ pub use deployment::{MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPrevi
 
 #[path = "trust_workers.rs"]
 mod trust;
-pub use trust::{MemoryTrustError, MemoryTrustJob, MemoryTrustReview};
+pub use trust::{
+    MemoryContextRead, MemoryContextSession, MemoryContextSessionJob, MemorySessionUse,
+    MemoryTrustError, MemoryTrustJob, MemoryTrustReview,
+};
 
 #[path = "policy_workers.rs"]
 mod policy;
