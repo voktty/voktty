@@ -94,6 +94,8 @@ export function createNativeMemoryPresentation() {
   let current: {
     receipt: NativeMemorySelection;
     token: string;
+    path: string;
+    local: boolean;
   } | null = null;
 
   function handle() {
@@ -210,7 +212,12 @@ export function createNativeMemoryPresentation() {
         });
         check();
         const receipt = Object.freeze({ [selectionBrand]: true as const });
-        current = { receipt, token };
+        current = {
+          receipt,
+          token,
+          path,
+          local: capturedEnvironment.kind === "local",
+        };
         return receipt;
       } catch (error) {
         check();
@@ -344,6 +351,15 @@ export function createNativeMemoryPresentation() {
     },
     isCurrent(receipt: NativeMemorySelection) {
       return !closed && current?.receipt === receipt;
+    },
+    isLocalSelection(receipt: NativeMemorySelection, path: string) {
+      return (
+        !closed &&
+        current?.receipt === receipt &&
+        current.local &&
+        current.path === path &&
+        !path.startsWith("remote://")
+      );
     },
     isReviewCurrent(
       receipt: NativeMemorySelection,

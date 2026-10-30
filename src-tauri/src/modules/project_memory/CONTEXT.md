@@ -103,9 +103,29 @@ Closing the panel after binding leaves that independently owned context usable;
 closing the context retires delivery before requesting exact native cleanup.
 Binding never confirms instruction trust or persists a session choice.
 
-Engine conversation ownership, manual activation controls and
-Harness/internal-agent/CLI delivery remain to be connected. A view, path or
-provider session string cannot stand in for the exact
+The Harness engine's `captureMemorySession` retains its exact preparation-context
+owner and mounted execution lifetime. Cwd, worktree, harness, runtime-mode and
+provider-account transitions retire those receipts, including round trips and
+same-ID readmission. Transcript, title and provider-binding updates preserve them.
+React effects reconcile committed owners and dispose only their original manager;
+no native cleanup runs inside a state updater. Capture and inactive reads start
+no native IO. The shared 256-entry receipt budget includes inactive captures,
+pending retired binds and reads, and failed cleanup until exact retry succeeds.
+Later explicit captures retry retained cleanup without background polling.
+
+Binding checks that the presentation selected the original execution cwd with a
+local environment. This compares frontend input provenance, not canonical paths
+or filesystem authority; Rust still validates the actual source and scope. A
+different path, filesystem or unresolved remote namespace cannot supply the
+binding. The view facade holds its original persistence permit through activation
+and read publication, including after close cancellation. After accepted binding,
+closing the panel or originating view does not retire the engine-owned context.
+Memory receipts and native handles are not added to serializable Session data.
+The internal `ready` status means bound, not trusted, allowed or delivered; every
+packet read still checks current native policy and instruction trust.
+
+Manual activation controls and Harness/internal-agent/CLI delivery remain to be
+connected. A view, path or provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet
 preparation does not demonstrate provider delivery, reading or comprehension.

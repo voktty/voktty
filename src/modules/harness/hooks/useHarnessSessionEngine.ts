@@ -94,6 +94,7 @@ import {
 } from "@/modules/harness/lib/plan";
 import { preparePrompt } from "@/modules/harness/lib/promptPreparation";
 import { createQueuedPromptSources } from "@/modules/harness/lib/queuedPromptSources";
+import { createHarnessMemorySessions } from "@/modules/harness/lib/harnessMemorySessions";
 import {
   captureRemotePromptSource,
   PromptSourceRetiredError,
@@ -166,6 +167,9 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
   owners.current = state.owners;
   const contextOwners = useRef(state.contextOwners);
   contextOwners.current = state.contextOwners;
+  const memorySessions = useRef<ReturnType<
+    typeof createHarnessMemorySessions
+  > | null>(null);
   const eventOwners = useRef(new WeakMap<HarnessEvent, object>());
   const turnGen = useRef(new Map<string, number>());
   for (const id of turnGen.current.keys()) {
@@ -355,13 +359,47 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
   );
   useEffect(() => {
     const lifetime = {};
+    const memory = createHarnessMemorySessions();
     executionLifetime.current = lifetime;
+    memorySessions.current = memory;
     return () => {
       if (executionLifetime.current === lifetime)
         executionLifetime.current = null;
+      if (memorySessions.current === memory) memorySessions.current = null;
+      memory.dispose();
       harnessEvents.cancelScheduled();
     };
   }, [harnessEvents]);
+  useEffect(() => {
+    memorySessions.current?.reconcile(state.contextOwners.values());
+  }, [state.contextOwners]);
+
+  const captureMemorySession = useCallback((id: string) => {
+    const session = sessionsRef.current.find(
+      (candidate) => candidate.id === id,
+    );
+    const owner = contextOwners.current.get(id);
+    const lifetime = executionLifetime.current;
+    const memory = memorySessions.current;
+    if (
+      !session ||
+      !owner ||
+      !lifetime ||
+      !memory ||
+      inputsRef.current.isRemoving(id) ||
+      inputsRef.current.isSwitching(id) ||
+      inputsRef.current.isProjectReserved?.(session.cwd)
+    )
+      return null;
+    return memory.capture(
+      owner,
+      session.cwd,
+      sessionWorkCwd(session),
+      () =>
+        executionLifetime.current === lifetime &&
+        contextOwners.current.get(id) === owner,
+    );
+  }, []);
 
   const capturePreparationContext = useCallback(
     (id: string, expected: Session) => {
@@ -1588,6 +1626,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     sessions,
     sessionsRef: sessionsRef as Readonly<{ current: Session[] }>,
     captureSessionLifetime,
+    captureMemorySession,
     readSession: (id: string) =>
       sessionsRef.current.find((session) => session.id === id),
     applySessionDeltas,

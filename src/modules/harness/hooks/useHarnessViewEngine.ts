@@ -3,6 +3,7 @@ import type { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarness
 import type { PersistenceOwner } from "@/modules/harness/lib/persistenceAdmission";
 import type { createHarnessWindowSessionHolds } from "@/modules/harness/lib/harnessWindowSessionHolds";
 import { applyHarnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
+import { qualifyHarnessMemorySession } from "@/modules/harness/lib/harnessMemorySessions";
 
 type Engine = ReturnType<typeof useHarnessSessionEngine>;
 export type HarnessViewEngine = Omit<Engine, "cancelScheduledHarnessEvents">;
@@ -26,6 +27,14 @@ export function useHarnessViewEngine(
         return read(latest.current)(...args);
       };
     return {
+      captureMemorySession(id: string) {
+        const permit = getOwner()?.capture();
+        if (!permit?.isCurrent()) return null;
+        const session = latest.current.captureMemorySession(id);
+        return session && permit.isCurrent()
+          ? qualifyHarnessMemorySession(session, permit.isCurrent)
+          : null;
+      },
       captureSessionLifetime(id: string) {
         const permit = getOwner()?.capture();
         const current = latest.current.captureSessionLifetime(id);
