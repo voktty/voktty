@@ -1,6 +1,10 @@
 import type { NativeMemorySelection } from "@/modules/workspace-kit/lib/nativeMemory";
 import type { KitConfig } from "@/modules/workspace-kit/lib/configTypes";
 import type { InstructionFingerprint } from "@/modules/workspace-kit/lib/context";
+import {
+  bindNativeMemoryContext,
+  type NativeMemoryContext,
+} from "@/modules/workspace-kit/lib/nativeMemoryContext";
 
 export type NativeMemoryPreference = Readonly<{
   projectKey: string;
@@ -40,7 +44,7 @@ type Review = {
   revision: number;
   receipt: NativeMemoryTrustReview | null;
   token: string | null;
-  phase: "opening" | "ready" | "accepting" | "consumed";
+  phase: "opening" | "ready" | "accepting" | "binding" | "consumed";
   confirmation: Promise<NativeMemoryTrustAccepted> | null;
   cancellation: Promise<boolean> | null;
 };
@@ -224,6 +228,57 @@ export function createNativeMemoryTrustClient(owner: Owner) {
       current = null;
     },
     api: {
+      async bindContext(
+        selection: NativeMemorySelection,
+        accepted: NativeMemoryTrustReview,
+        context: NativeMemoryContext,
+        mode: "inherit" | "enabled" | "disabled",
+      ): Promise<void> {
+        owner.checkSelection(selection);
+        const expected = current;
+        if (
+          !expected ||
+          expected.selection !== selection ||
+          expected.receipt !== accepted ||
+          expected.phase !== "ready" ||
+          !expected.token
+        )
+          cancelled();
+        if (!["inherit", "enabled", "disabled"].includes(mode))
+          throw Object.assign(new Error("Invalid memory context mode"), {
+            code: "invalidInput",
+          });
+        expected.phase = "binding";
+        let bound = false;
+        try {
+          const checkContext = await bindNativeMemoryContext(
+            context,
+            {
+              root: accepted.snapshot.root,
+              projectKey: accepted.snapshot.projectKey,
+              instructionDigest: accepted.snapshot.fingerprint.digest,
+            },
+            (handle, checkContext) =>
+              owner.request<unknown>(
+                selection,
+                "project_memory_context_bind",
+                { context: handle, request: { review: expected.token, mode } },
+                () => {
+                  check(expected);
+                  checkContext();
+                },
+              ),
+          );
+          bound = true;
+          check(expected);
+          checkContext();
+        } catch (error) {
+          if (bound) await context.close();
+          throw error;
+        } finally {
+          expected.phase = "consumed";
+        }
+      },
       async reviewTrust(
         selection: NativeMemorySelection,
         role: string | null = null,

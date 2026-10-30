@@ -93,8 +93,18 @@ confirmed survives presentation close; resource or window retirement rejects
 late results. None of the commands starts an agent, writes project files or
 grants captures.
 
-Typed frontend clients, engine conversation ownership, manual activation controls
-and Harness/internal-agent/CLI delivery remain to be connected. A view, path or
+The typed frontend context client opens only during explicit binding through an
+exact instruction-review receipt. It keeps resource handles private, validates
+the acknowledged root and packet identity, bounds packets to 24 KiB UTF-8, and
+requires an original-owner validity predicate around asynchronous work. Reads
+coalesce per context. Window-local budgets cap resources and unsettled reads at
+256, retaining retired work through settlement and failed cleanup for retry.
+Closing the panel after binding leaves that independently owned context usable;
+closing the context retires delivery before requesting exact native cleanup.
+Binding never confirms instruction trust or persists a session choice.
+
+Engine conversation ownership, manual activation controls and
+Harness/internal-agent/CLI delivery remain to be connected. A view, path or
 provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet
