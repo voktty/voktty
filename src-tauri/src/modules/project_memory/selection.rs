@@ -21,6 +21,48 @@ pub struct NativeMemorySelectionReceipt {
 }
 
 impl NativeMemorySelection {
+    pub fn bind_context_session(
+        &mut self,
+        target: &NativeMemoryContextReceipt,
+        receipt: &NativeMemorySelectionReceipt,
+        review: NativeMemoryTrustReview,
+        choice: voktty_memory_local::MemorySessionUse,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
+        self.current(receipt)?.validate_trust(&review)?;
+        self.trust_control
+            .as_mut()
+            .filter(|reservation| reservation.matches(&review))
+            .ok_or(ReadError::Cancelled)?
+            .accepting(control.clone());
+        self.current(receipt)?
+            .bind_context_session(target, review, choice, control)
+    }
+
+    pub(super) fn promote_context(
+        &mut self,
+        receipt: &NativeMemorySelectionReceipt,
+        prepared: NativeMemoryPreparedContext,
+    ) -> Result<context::NativeMemoryContext, MemoryTrustError> {
+        let source = self.current(receipt)?;
+        if !Arc::ptr_eq(&source.access, &prepared.access)
+            || !prepared.live.load(Ordering::Acquire)
+            || !self.trust_control.as_ref().is_some_and(|control| {
+                Arc::ptr_eq(&control.live, &prepared.live) && control.live.load(Ordering::Acquire)
+            })
+        {
+            return Err(ReadError::Cancelled.into());
+        }
+        let source = self.source.take().ok_or(ReadError::Cancelled)?;
+        self.deployment.clear();
+        self.trust_control = None;
+        self.policy_control = None;
+        Ok(context::NativeMemoryContext {
+            source,
+            native: prepared.native,
+        })
+    }
+
     pub fn select(
         &mut self,
         registry: &WorkspaceRegistry,

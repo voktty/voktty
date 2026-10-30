@@ -57,10 +57,11 @@ emission. Scope, bytes and preferences are point-in-time observations, not a
 transaction against external writers or a promise to erase previously returned
 text. An error or cancellation never rolls back filesystem work elsewhere.
 
-Application/window ownership, independent source acquisition, IPC resources,
-Harness/internal-agent/CLI consumers and visual activation remain integration
-work. In particular, a source owned by a panel retires when that panel closes;
-it cannot be reused as the independent conversation's source. The caller must
-capture a separate native source from actual authorization. SSH, WSL and Docker
+The native application can reserve window contexts and transfer a panel's exact
+source into its confirmed context. See the
+[native owner contract](../../src/modules/project_memory/CONTEXT.md). A panel
+retires sources it still owns; a promoted context requires its own release.
+IPC resources, Harness/internal-agent/CLI consumers and visual activation remain
+integration work. SSH, WSL and Docker
 must use their own qualified transports rather than this local reader. Native
 Windows/macOS/Android runtime qualification remains pending.

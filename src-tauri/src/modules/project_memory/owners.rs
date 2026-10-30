@@ -13,6 +13,21 @@ pub struct NativeMemoryOwners {
 struct WindowOwner {
     identity: Arc<()>,
     presentations: Vec<Presentation>,
+    contexts: Vec<ContextOwner>,
+}
+
+struct ContextOwner {
+    identity: Arc<()>,
+    context: Option<super::context::NativeMemoryContext>,
+    binding: Option<DiscoveryControl>,
+}
+
+impl Drop for ContextOwner {
+    fn drop(&mut self) {
+        if let Some(control) = &self.binding {
+            control.cancel();
+        }
+    }
 }
 
 struct Presentation {
@@ -57,6 +72,7 @@ impl NativeMemoryOwners {
             WindowOwner {
                 identity,
                 presentations: Vec::new(),
+                contexts: Vec::new(),
             },
         );
         Ok(receipt)
@@ -198,3 +214,6 @@ mod trust;
 
 #[path = "owner_policy.rs"]
 mod policy;
+
+#[path = "owner_context.rs"]
+mod context;

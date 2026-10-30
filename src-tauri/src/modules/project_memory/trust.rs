@@ -150,6 +150,22 @@ impl NativeMemoryTrustWrite {
 }
 
 impl NativeMemorySource {
+    pub(super) fn bind_context_session(
+        &self,
+        target: &NativeMemoryContextReceipt,
+        review: NativeMemoryTrustReview,
+        choice: voktty_memory_local::MemorySessionUse,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
+        self.validate_trust(&review)?;
+        Ok(NativeMemoryContextBinding {
+            target: target.clone(),
+            job: MemoryWorkers::default().bind_context_session(review.native, choice, control)?,
+            access: self.access.clone(),
+            live: review.live,
+        })
+    }
+
     pub(super) fn review_trust(
         &self,
         store: Arc<LocalMemoryStore>,

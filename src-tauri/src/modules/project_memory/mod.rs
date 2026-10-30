@@ -227,6 +227,12 @@ pub use policy::{
     NativeMemoryPolicySnapshot, NativeMemoryPolicyWrite,
 };
 
+mod context;
+pub use context::{
+    NativeMemoryContextBinding, NativeMemoryContextReceipt, NativeMemoryContextTarget,
+    NativeMemoryPreparedContext,
+};
+
 mod deployment;
 mod write_authority;
 pub use deployment::{
