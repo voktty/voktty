@@ -373,6 +373,9 @@ pub mod trust;
 #[path = "commands_policy.rs"]
 pub mod policy;
 
+#[path = "commands_context.rs"]
+pub mod context;
+
 #[cfg(test)]
 #[path = "commands_tests.rs"]
 mod tests;

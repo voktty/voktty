@@ -16,6 +16,17 @@ pub struct NativeMemoryWindow {
 }
 
 impl NativeMemoryWindow {
+    pub(super) fn close_context(&self, context: &NativeMemoryContextReceipt) {
+        if let Some(owners) = self.owners.upgrade() {
+            let mut owners = owners
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(owners) = owners.as_mut() {
+                owners.close_context(&self.receipt, context);
+            }
+        }
+    }
+
     pub(super) fn close_presentation(&self, presentation: &NativeMemoryPresentationReceipt) {
         if let Some(owners) = self.owners.upgrade() {
             let mut owners = owners

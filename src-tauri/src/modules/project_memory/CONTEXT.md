@@ -57,9 +57,45 @@ Closing a logical opening cannot free a still-running worker or binding slot.
 None of these operations writes session consent, trust or policy to disk, grants
 capture permission, starts a model or changes the existing local-only reader.
 
-Tauri resource commands, typed frontend clients, engine conversation ownership,
-manual activation controls and Harness/internal-agent/CLI delivery remain to be
-connected. A view, path or provider session string cannot stand in for the exact
+## IPC resources
+
+The desktop registers four explicit commands. `project_memory_context_open`
+returns a strict `{ id, token }` handle for an empty context in the invoking
+webview's resource table. Its UUID token distinguishes resources even when a
+table ID is reused. Opening starts no filesystem read or state initialization.
+`project_memory_context_close` checks that handle's type and token before taking
+the resource. Native `Resource::close` and drop retire the same receipt through
+the captured window's weak owners, without requiring application State to remain
+available.
+
+`project_memory_context_bind` takes a presentation handle, selection token,
+already-open context handle and strict `{ review, mode }` request. The review
+token must name the current ready artifact from `project_memory_review_trust`.
+It is consumed once without accepting or persisting instruction trust. Modes are
+`inherit`, `enabled` and `disabled`; unknown fields or modes are rejected. No
+root, project key, trust digest, instruction text, store path, logical session ID
+or capture consent can be supplied in that request.
+
+The resource admits one transition from opening to binding. Concurrent attempts
+return `busy`; replay against a ready context returns `cancelled`, preserving the
+incumbent in both cases. Native preparation retains the original selection and
+review reservation through settlement. Promotion clears that presentation's
+selected command state after moving its source, then checks presentation and
+context retirement before acknowledging `{ schema: 1, root }`. The root is
+display metadata, not proof of allowed delivery. An admitted failure retires its
+known context; table cleanup removes only that exact resource allocation.
+
+`project_memory_context_read` requires a ready resource, checks its original
+lifetime before and after the native read, and returns `MemoryContextResult`.
+Denied policy or trust returns no packet. The packet remains bounded to 24 KiB
+UTF-8. Native errors expose only the existing redacted code. A context that was
+confirmed survives presentation close; resource or window retirement rejects
+late results. None of the commands starts an agent, writes project files or
+grants captures.
+
+Typed frontend clients, engine conversation ownership, manual activation controls
+and Harness/internal-agent/CLI delivery remain to be connected. A view, path or
+provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet
 preparation does not demonstrate provider delivery, reading or comprehension.

@@ -41,6 +41,7 @@ enum Phase {
     Opening,
     Ready,
     Accepting,
+    BindingContext,
 }
 
 #[derive(Clone)]
@@ -69,6 +70,75 @@ pub(super) struct CommandTrust {
 }
 
 impl PresentationResource {
+    fn begin_context_binding(
+        &self,
+        app: &NativeMemoryApplication,
+        selection: &str,
+        token: &str,
+        context: &super::context::ContextResource,
+        mode: voktty_memory_local::MemorySessionUse,
+    ) -> Result<
+        (
+            Capture,
+            Result<NativeMemoryContextBinding, MemoryTrustError>,
+        ),
+        MemoryCommandError,
+    > {
+        context.check(app, &self.window)?;
+        let mut state = self.selected.lock().map_err(|_| cancelled())?;
+        let selected = self.trust_selected(app, selection, &mut state)?;
+        let review = selected
+            .trust
+            .current
+            .as_mut()
+            .filter(|review| {
+                token.len() == 36 && review.capture.token == token && review.phase == Phase::Ready
+            })
+            .ok_or_else(cancelled)?;
+        let artifact = review.artifact.take().ok_or_else(cancelled)?;
+        review.phase = Phase::BindingContext;
+        review.control = DiscoveryControl::default();
+        let result = app.bind_context_session(
+            &self.window,
+            NativeMemoryContextTarget {
+                context: &context.receipt,
+                presentation: &self.receipt,
+                selected: &review.capture.selected,
+            },
+            artifact,
+            mode,
+            review.control.clone(),
+        );
+        Ok((review.capture.clone(), result))
+    }
+
+    fn promote_command_context(
+        &self,
+        app: &NativeMemoryApplication,
+        selection: &str,
+        capture: &Capture,
+        context: &super::context::ContextResource,
+        prepared: NativeMemoryPreparedContext,
+    ) -> Result<(), MemoryCommandError> {
+        let mut state = self.selected.lock().map_err(|_| cancelled())?;
+        self.matching_trust(app, selection, capture, Phase::BindingContext, &mut state)?;
+        context.check(app, &self.window)?;
+        app.promote_context(
+            &self.window,
+            NativeMemoryContextTarget {
+                context: &context.receipt,
+                presentation: &self.receipt,
+                selected: &capture.selected,
+            },
+            prepared,
+        )?;
+        state.selected = None;
+        if !self.live.load(Ordering::Acquire) {
+            return Err(cancelled());
+        }
+        context.check(app, &self.window)
+    }
+
     fn trust_selected<'a>(
         &self,
         app: &NativeMemoryApplication,
@@ -237,7 +307,7 @@ impl PresentationResource {
     }
 }
 
-async fn review(
+pub(super) async fn review(
     app: &NativeMemoryApplication,
     resource: &PresentationResource,
     selection: &str,
@@ -288,7 +358,7 @@ async fn review(
     }
 }
 
-async fn confirm(
+pub(super) async fn confirm(
     app: &NativeMemoryApplication,
     resource: &PresentationResource,
     selection: &str,
@@ -310,6 +380,29 @@ async fn confirm(
         schema: 1,
         preference: result?,
     })
+}
+
+pub(super) async fn bind_context(
+    app: &NativeMemoryApplication,
+    resource: &PresentationResource,
+    selection: &str,
+    token: &str,
+    context: &super::context::ContextResource,
+    mode: voktty_memory_local::MemorySessionUse,
+) -> Result<(), MemoryCommandError> {
+    let (capture, job) = resource.begin_context_binding(app, selection, token, context, mode)?;
+    let result = async {
+        let prepared = job?.finish().await?;
+        resource.promote_command_context(app, selection, &capture, context, prepared)
+    }
+    .await;
+    if let Err(error) = result {
+        if !resource.cancel_trust_review(app, selection, capture.revision, Some(&capture.token))? {
+            return Err(cancelled());
+        }
+        return Err(error);
+    }
+    Ok(())
 }
 
 #[tauri::command]

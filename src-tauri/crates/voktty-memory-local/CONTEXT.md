@@ -61,7 +61,8 @@ The native application can reserve window contexts and transfer a panel's exact
 source into its confirmed context. See the
 [native owner contract](../../src/modules/project_memory/CONTEXT.md). A panel
 retires sources it still owns; a promoted context requires its own release.
-IPC resources, Harness/internal-agent/CLI consumers and visual activation remain
-integration work. SSH, WSL and Docker
+The desktop exposes explicit opaque context resources through the native owner
+contract. Frontend clients, Harness/internal-agent/CLI consumers and visual
+activation remain integration work. SSH, WSL and Docker
 must use their own qualified transports rather than this local reader. Native
 Windows/macOS/Android runtime qualification remains pending.
