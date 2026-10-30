@@ -2,6 +2,22 @@ import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   projectMemory: {
+    conversationTitle: "Memoria para esta conversación",
+    manageConversationDirectory: "Gestionar memoria del directorio de la conversación",
+    manageBrowsedDirectory: "Volver a la memoria del directorio explorado",
+    conversationDescription: "Prepara contexto desde el directorio de ejecución de esta conversación. Aún no se envía nada al agente. No guarda confianza ni política, inicia agentes ni habilita capturas.",
+    conversationReview: "Revisar contexto para esta conversación",
+    conversationAccept: "He revisado esta raíz y estas instrucciones y quiero preparar contexto para esta conversación.",
+    conversationPrepare: "Preparar contexto de la conversación",
+    conversationRead: "Inspeccionar contexto preparado",
+    conversationDisable: "Desactivar el contexto de esta conversación",
+    conversationPrepared: "Contexto preparado. No se ha enviado al agente.",
+    conversationPreview: "Vista previa del contexto preparado",
+    conversationInitial: "La memoria del proyecto aún contiene contenido inicial o vacío.",
+    conversationPolicyBlocked: "La política local impide usar memoria. Revisa la política del proyecto debajo antes de reintentar.",
+    conversationTrustBlocked: "Contexto no disponible. Revisa la confianza en instrucciones y los ajustes de memoria debajo y vuelve a inspeccionar.",
+    conversationRetired: "Este contexto está cerrado o la conversación capturada ha cambiado. Reabre el panel desde la conversación que quieres usar.",
+    conversationError: "No se pudo preparar el contexto de la conversación. Revisa la conversación actual y los ajustes del proyecto antes de reintentar.",
     policyConfigure: "Configurar uso de memoria", policyTitle: "Política local de uso de memoria",
     policyDescription: "Se guarda en este equipo para este proyecto hasta que la cambies. Los archivos del proyecto, la confianza en instrucciones y los permisos de captura se conservan.",
     policyDeliveryPending: "La entrega de memoria a agentes aún no está conectada. Guardar una política no habilita una sesión.",

@@ -1,10 +1,12 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { useTranslation } from "@/modules/i18n";
 import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
 import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
 import { MemoryPolicy } from "@/modules/workspace-kit/components/MemoryPolicy";
+import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
+import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   createMemoryPanelController,
   canInitializeMemory,
@@ -17,14 +19,58 @@ import {
 
 export default function ProjectMemoryPanel({
   target,
+  conversation = null,
+  conversationError = false,
 }: {
   target: MemoryPanelTarget | null;
+  conversation?: Conversation | null;
+  conversationError?: boolean;
 }) {
   const { t } = useTranslation();
   const [revision, setRevision] = useState(0);
+  const [manageConversation, setManageConversation] = useState(false);
+  const managementTarget = useMemo(
+    () =>
+      manageConversation && target && conversation
+        ? { ...target, path: conversation.cwd }
+        : target,
+    [manageConversation, target, conversation],
+  );
   return (
     <>
-      {target ? (
+      {conversation &&
+      target &&
+      target.environment.kind === "local" &&
+      !conversation.cwd.startsWith("remote://") ? (
+        <MemoryConversation
+          conversation={conversation}
+          environment={target.environment}
+        />
+      ) : null}
+      {conversationError ? (
+        <p role="alert">{t("projectMemory.conversationError")}</p>
+      ) : null}
+      {conversation &&
+      target &&
+      conversation.cwd !== target.path &&
+      target.environment.kind === "local" &&
+      !conversation.cwd.startsWith("remote://") ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (manageConversation || conversation.isCurrent())
+              setManageConversation((value) => !value);
+          }}
+        >
+          {t(
+            manageConversation
+              ? "projectMemory.manageBrowsedDirectory"
+              : "projectMemory.manageConversationDirectory",
+          )}
+        </Button>
+      ) : null}
+      {managementTarget ? (
         <>
           <dl className="grid min-w-0 gap-3 rounded-lg border border-border p-3 text-xs">
             <div>
@@ -32,7 +78,7 @@ export default function ProjectMemoryPanel({
                 {t("projectMemory.directory")}
               </dt>
               <dd className="mt-1 break-all font-mono" dir="auto">
-                {target.path}
+                {managementTarget.path}
               </dd>
             </div>
             <div>
@@ -40,18 +86,18 @@ export default function ProjectMemoryPanel({
                 {t("projectMemory.environment")}
               </dt>
               <dd className="mt-1">
-                {target.path.startsWith("remote://")
+                {managementTarget.path.startsWith("remote://")
                   ? t("projectMemory.remote")
-                  : target.environment.kind === "local"
+                  : managementTarget.environment.kind === "local"
                     ? t("projectMemory.local")
-                    : target.environment.kind.toUpperCase()}
+                    : managementTarget.environment.kind.toUpperCase()}
               </dd>
             </div>
           </dl>
-          {supportedMemoryPanelTarget(target) ? (
+          {supportedMemoryPanelTarget(managementTarget) ? (
             <MemoryObservation
-              key={revision}
-              target={target}
+              key={`${revision}:${managementTarget.path}`}
+              target={managementTarget}
               onReload={() => setRevision((value) => value + 1)}
             />
           ) : (

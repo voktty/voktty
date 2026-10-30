@@ -31,6 +31,106 @@ function required<T>(value: T | null | undefined): T {
 }
 
 describe("Harness window resource cohorts", () => {
+  it("captures only the selected foreground conversation, without a fallback for file focus", () => {
+    const views = createHarnessWindowViews();
+    const one = fixture();
+    const view = views.register(1, one.input);
+    expect(views.captureFocusedSession(1, one.session.cwd)).toBeNull();
+    views.select(1);
+    expect(views.captureFocusedSession(1, "/other")).toBeNull();
+    const capture = required(views.captureFocusedSession(1, one.session.cwd));
+    expect(capture.sessionId).toBe(one.session.id);
+    view.update({
+      ...one.input,
+      report: { ...one.input.report, activeSessionId: null },
+    });
+    expect(views.captureFocusedSession(1, one.session.cwd)).toBeNull();
+    view.update(one.input);
+    expect(capture.isCurrent()).toBe(false);
+  });
+
+  it.each([
+    "focus",
+    "project",
+    "selection",
+    "replacement",
+    "release",
+    "removing",
+    "switching",
+  ])("never revives captured focus after a %s roundtrip", (kind) => {
+    const views = createHarnessWindowViews();
+    const one = fixture();
+    const view = views.register(1, one.input);
+    views.select(1);
+    const capture = required(views.captureFocusedSession(1, one.session.cwd));
+    if (kind === "focus")
+      view.update({
+        ...one.input,
+        report: { ...one.input.report, activeSessionId: null },
+      });
+    if (kind === "project") view.update({ ...one.input, projectCwd: "/other" });
+    if (kind === "selection") views.select(null);
+    if (kind === "replacement") views.register(1, one.input);
+    if (kind === "release") {
+      view.release();
+      required(
+        views.restore(1, required(views.getSnapshot().cohorts[0])),
+      ).update(one.input);
+    }
+    if (kind === "removing")
+      view.update({ ...one.input, removingSessionIds: [one.session.id] });
+    if (kind === "switching")
+      view.update({ ...one.input, switchingSessionIds: [one.session.id] });
+    view.update(one.input);
+    views.select(1);
+    expect(capture.isCurrent()).toBe(false);
+    expect(
+      required(views.captureFocusedSession(1, one.session.cwd)).isCurrent(),
+    ).toBe(true);
+  });
+
+  it("retires focus before external observers can restore it reentrantly", () => {
+    const views = createHarnessWindowViews();
+    const one = fixture();
+    const view = views.register(1, one.input);
+    views.select(1);
+    const capture = required(views.captureFocusedSession(1, one.session.cwd));
+    let restored = false;
+    views.subscribe(() => {
+      if (restored) return;
+      restored = true;
+      view.update(one.input);
+    });
+    view.update({
+      ...one.input,
+      report: { ...one.input.report, activeSessionId: null },
+    });
+    expect(capture.isCurrent()).toBe(false);
+  });
+
+  it("preserves capture across metadata updates and bounds retained captures", () => {
+    const views = createHarnessWindowViews();
+    const one = fixture();
+    const view = views.register(1, one.input);
+    views.select(1);
+    const captures = Array.from({ length: 256 }, () =>
+      required(views.captureFocusedSession(1, one.session.cwd)),
+    );
+    view.update({ ...one.input, projectReturnMemory: new Map() });
+    expect(captures.every((capture) => capture.isCurrent())).toBe(true);
+    expect(() => views.captureFocusedSession(1, one.session.cwd)).toThrow(
+      "capacity",
+    );
+    captures[0].release();
+    expect(
+      required(views.captureFocusedSession(1, one.session.cwd)).isCurrent(),
+    ).toBe(true);
+    views.select(null);
+    views.select(1);
+    expect(
+      required(views.captureFocusedSession(1, one.session.cwd)).isCurrent(),
+    ).toBe(true);
+  });
   it("captures both projects independently of the selected view", () => {
     const views = createHarnessWindowViews();
     const one = fixture();

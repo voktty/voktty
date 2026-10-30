@@ -240,6 +240,7 @@ export function createHarnessWindowViews(
     { token: object; cohort: HarnessWindowViewCohort; key: string }
   >();
   const listeners = new Set<() => void>();
+  const focusedCaptures = new Set<{ valid: () => boolean; retired: boolean }>();
   let selectedOwnerId: number | null = null;
   let sequence = 0;
   let snapshot: HarnessWindowViewsSnapshot = Object.freeze({
@@ -303,6 +304,12 @@ export function createHarnessWindowViews(
     captureCohorts(prospective, selectedOwnerId, []);
   };
   const publish = () => {
+    for (const capture of focusedCaptures) {
+      if (!capture.valid()) {
+        capture.retired = true;
+        focusedCaptures.delete(capture);
+      }
+    }
     snapshot = Object.freeze({
       cohorts: Object.freeze(
         [...entries.values()]
@@ -371,9 +378,7 @@ export function createHarnessWindowViews(
         const layout = entry.cohort.state.layout;
         const files = [
           ...layout.tabs.flatMap((tab) =>
-            tab.filePanes.flatMap(
-              (pane) => pane.files,
-            ),
+            tab.filePanes.flatMap((pane) => pane.files),
           ),
           ...layout.projectTerminals.flatMap((dock) => dock.pane.files),
         ];
@@ -466,6 +471,42 @@ export function createHarnessWindowViews(
       return true;
     },
     getSnapshot: () => snapshot,
+    captureFocusedSession(ownerId: number, projectCwd: string) {
+      const original = entries.get(ownerId);
+      const sessionId = original?.cohort.state.report.activeSessionId;
+      if (!original || !sessionId) return null;
+      const token = original.token;
+      const capture = {
+        retired: false,
+        valid: () => {
+          const entry = entries.get(ownerId);
+          const state = entry?.cohort.state;
+          return (
+            !capture.retired &&
+            entry?.token === token &&
+            entry.cohort.active &&
+            selectedOwnerId === ownerId &&
+            state?.layout.projectCwd === projectCwd &&
+            state.report.activeSessionId === sessionId &&
+            state.report.foregroundSessionIds.includes(sessionId) &&
+            !state.removingSessionIds.includes(sessionId) &&
+            !state.switchingSessionIds.includes(sessionId)
+          );
+        },
+      };
+      if (!capture.valid()) return null;
+      if (focusedCaptures.size >= MAX_REFERENCES)
+        throw new RangeError("Harness focused conversation capacity exceeded");
+      focusedCaptures.add(capture);
+      return Object.freeze({
+        sessionId,
+        isCurrent: capture.valid,
+        release() {
+          capture.retired = true;
+          focusedCaptures.delete(capture);
+        },
+      });
+    },
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {

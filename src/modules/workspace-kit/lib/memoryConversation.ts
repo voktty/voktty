@@ -27,3 +27,8 @@ export type MemoryConversation = Readonly<{
   read: () => Promise<MemoryContextResult | null>;
   close: () => Promise<void>;
 }>;
+
+export type MemoryConversationCapture = Readonly<{
+  conversation: MemoryConversation;
+  release: () => void;
+}>;

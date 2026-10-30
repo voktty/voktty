@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useTranslation } from "@/modules/i18n";
 import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
+import type { MemoryConversationCapture } from "@/modules/workspace-kit/lib/memoryConversation";
 import { cn } from "@/lib/utils";
 
 const Panel = lazy(
@@ -21,30 +22,52 @@ const Panel = lazy(
 export function ProjectMemoryButton({
   target,
   rail = false,
+  captureConversation,
 }: {
   target: MemoryPanelTarget | null;
   rail?: boolean;
+  captureConversation?: () => MemoryConversationCapture | null;
 }) {
   const { t } = useTranslation();
   const key = JSON.stringify(target);
   const [opened, setOpened] = useState<{
     key: string;
     target: MemoryPanelTarget | null;
+    capture: MemoryConversationCapture | null;
+    conversationError: boolean;
   } | null>(null);
   const open = opened !== null && opened.key === key;
   useLayoutEffect(() => {
-    if (opened && opened.key !== key) setOpened(null);
+    if (opened && opened.key !== key) {
+      opened.capture?.release();
+      setOpened(null);
+    }
+    return () => opened?.capture?.release();
   }, [opened, key]);
   return (
     <Dialog
       open={open}
-      onOpenChange={(value) =>
-        setOpened(
-          value
-            ? { key, target: target ? structuredClone(target) : null }
-            : null,
-        )
-      }
+      onOpenChange={(value) => {
+        if (!value) {
+          opened?.capture?.release();
+          setOpened(null);
+          return;
+        }
+        if (open) return;
+        let capture: MemoryConversationCapture | null = null;
+        let conversationError = false;
+        try {
+          capture = captureConversation?.() ?? null;
+        } catch {
+          conversationError = true;
+        }
+        setOpened({
+          key,
+          target: target ? structuredClone(target) : null,
+          capture,
+          conversationError,
+        });
+      }}
     >
       <DialogTrigger asChild>
         <Button
@@ -83,7 +106,11 @@ export function ProjectMemoryButton({
           <Suspense
             fallback={<p role="status">{t("projectMemory.checking")}</p>}
           >
-            <Panel target={opened.target} />
+            <Panel
+              target={opened.target}
+              conversation={opened.capture?.conversation}
+              conversationError={opened.conversationError}
+            />
           </Suspense>
         </DialogContent>
       ) : null}

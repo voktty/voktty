@@ -124,8 +124,27 @@ Memory receipts and native handles are not added to serializable Session data.
 The internal `ready` status means bound, not trusted, allowed or delivered; every
 packet read still checks current native policy and instruction trust.
 
-Manual activation controls and Harness/internal-agent/CLI delivery remain to be
-connected. A view, path or provider session string cannot stand in for the exact
+The shared project-memory panel can manually prepare context for the exact
+focused Harness conversation. The opening gesture captures its engine receipt,
+view registration and original persistence permit separately from the serialized
+project target. Focus, project, selection or registration transitions permanently
+retire the caller capture before view observers run. The reviewed selection uses
+the conversation's execution cwd, including a worktree, rather than the folder
+currently browsed by the project panel. Review and confirmation do not save trust
+or policy. The panel reads fresh native policy and trust results and labels an
+allowed packet as prepared but not sent, with an escaped preview and an initial
+content indicator. An explicit disable closes only that exact memory context.
+Closing the panel releases caller subscriptions and its presentation, preserving
+an accepted engine binding. Pending admission cannot outlive the original caller.
+Panel resources retain their bounded slots through pending physical work and
+retryable cleanup. Project management remains available without a conversation.
+When execution and browsed directories differ, a separate explicit action switches
+project management to the conversation directory and can return to the original
+browsed directory. This lets worktree instruction trust be reviewed for its own
+root without silently redirecting project management or granting session use.
+
+Harness/internal-agent/CLI delivery remains to be connected. A view, path or
+provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet
 preparation does not demonstrate provider delivery, reading or comprehension.
