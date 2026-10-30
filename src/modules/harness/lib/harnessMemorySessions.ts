@@ -1,32 +1,15 @@
+import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
 import type {
-  createNativeMemoryPresentation,
-  NativeMemorySelection,
-} from "@/modules/workspace-kit/lib/nativeMemory";
-import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+  MemoryConversation,
+  MemoryConversationBinding,
+} from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   createNativeMemoryContext,
   type NativeMemoryContext,
 } from "@/modules/workspace-kit/lib/nativeMemoryContext";
-import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
 
-type Binding = Readonly<{
-  presentation: Pick<
-    ReturnType<typeof createNativeMemoryPresentation>,
-    "bindContext" | "isLocalSelection"
-  >;
-  selection: NativeMemorySelection;
-  review: NativeMemoryTrustReview;
-  mode: "inherit" | "enabled" | "disabled";
-}>;
-export type HarnessMemorySession = Readonly<{
-  projectCwd: string;
-  cwd: string;
-  isCurrent: () => boolean;
-  status: () => "inactive" | "binding" | "ready" | "retired";
-  bind: (input: Binding, isActionCurrent?: () => boolean) => Promise<void>;
-  read: () => Promise<MemoryContextResult | null>;
-  close: () => Promise<void>;
-}>;
+type Binding = MemoryConversationBinding;
+export type HarnessMemorySession = MemoryConversation;
 type Entry = {
   native: NativeMemoryContext;
   isCurrent: () => boolean;
@@ -34,8 +17,19 @@ type Entry = {
   pending: number;
   acknowledged: boolean;
   closing: Promise<void> | null;
+  listeners: Set<() => void>;
 };
 const entries = new Set<Entry>();
+function notify(entry: Entry) {
+  for (const listener of [...entry.listeners]) {
+    if (!entry.listeners.has(listener)) continue;
+    try {
+      listener();
+    } catch {
+      /* Observation cannot undo ownership. */
+    }
+  }
+}
 function fail(code: "cancelled" | "busy"): never {
   throw Object.assign(new Error(`Harness memory ${code}`), { code });
 }
@@ -44,9 +38,9 @@ function collect(entry: Entry) {
     entries.delete(entry);
 }
 function close(entry: Entry): Promise<void> {
+  const first = !entry.retired;
   entry.retired = true;
-  if (entry.closing) return entry.closing;
-  entry.closing = Promise.resolve()
+  entry.closing ??= Promise.resolve()
     .then(() => entry.native.close())
     .then(() => {
       entry.acknowledged = true;
@@ -56,6 +50,10 @@ function close(entry: Entry): Promise<void> {
       entry.closing = null;
       throw error;
     });
+  if (first) {
+    notify(entry);
+    entry.listeners.clear();
+  }
   return entry.closing;
 }
 function retire(entry: Entry) {
@@ -99,6 +97,7 @@ export function createHarnessMemorySessions() {
         pending: 0,
         acknowledged: false,
         closing: null,
+        listeners: new Set(),
       };
       const check = () => {
         if (!current()) {
@@ -110,6 +109,15 @@ export function createHarnessMemorySessions() {
         projectCwd,
         cwd,
         isCurrent: current,
+        subscribe(listener: () => void) {
+          if (!current()) return () => undefined;
+          if (!entry.listeners.has(listener) && entry.listeners.size >= 256)
+            fail("busy");
+          entry.listeners.add(listener);
+          return () => {
+            entry.listeners.delete(listener);
+          };
+        },
         status: () =>
           !current()
             ? "retired"
@@ -126,6 +134,7 @@ export function createHarnessMemorySessions() {
           entry.pending += 1;
           let started = false;
           try {
+            notify(entry);
             const { presentation, selection, review, mode } = input;
             if (!isActionCurrent()) fail("cancelled");
             check();
@@ -144,6 +153,9 @@ export function createHarnessMemorySessions() {
             if (!isActionCurrent()) fail("cancelled");
             check();
             bound = true;
+            binding = false;
+            notify(entry);
+            check();
           } catch (error) {
             if (started) await close(entry);
             throw error;
@@ -152,6 +164,7 @@ export function createHarnessMemorySessions() {
             binding = false;
             entry.pending -= 1;
             collect(entry);
+            if (!entry.retired && !bound) notify(entry);
           }
         },
         read() {

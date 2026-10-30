@@ -535,3 +535,114 @@ it("retains retired reads in the shared receipt budget through physical settleme
   scopes.push(manager.capture({}, "/next", "/next", () => true));
   manager.dispose();
 });
+
+it("publishes binding, usable readiness and retirement without native IO on subscription", async () => {
+  const f = mount();
+  const scope = capture(f.engine());
+  const states: string[] = [];
+  let read: Promise<unknown> | undefined;
+  scope.subscribe(() => {
+    states.push(scope.status());
+    if (scope.status() === "ready") read = scope.read();
+  });
+  expect(invoke).not.toHaveBeenCalled();
+  await scope.bind(await input(scope));
+  expect(await read).toEqual(packet());
+  act(() => f.engine().removeSession("source"));
+  await scope.close();
+  expect(states).toEqual(["binding", "ready", "retired"]);
+});
+
+it("returns to inactive after a rejected selection and allows exact unsubscription", async () => {
+  const f = mount();
+  const scope = capture(f.engine());
+  const states: string[] = [];
+  const unsubscribe = scope.subscribe(() => states.push(scope.status()));
+  await expect(scope.bind(await input(scope, "/other"))).rejects.toMatchObject({
+    code: "cancelled",
+  });
+  expect(states).toEqual(["binding", "inactive"]);
+  unsubscribe();
+  await scope.bind(await input(scope));
+  await scope.close();
+  expect(states).toEqual(["binding", "inactive"]);
+});
+
+it("isolates throwing observers and skips observers removed during notification", async () => {
+  const f = mount();
+  const scope = capture(f.engine());
+  const removed = vi.fn();
+  let unsubscribe: () => void = () => undefined;
+  scope.subscribe(() => {
+    unsubscribe();
+    throw new Error("observer");
+  });
+  unsubscribe = scope.subscribe(removed);
+  await scope.bind(await input(scope));
+  expect(await scope.read()).toEqual(packet());
+  expect(removed).not.toHaveBeenCalled();
+});
+
+it.each(["binding", "ready"])(
+  "honors observer retirement during %s publication",
+  async (state) => {
+    const f = mount();
+    const scope = capture(f.engine());
+    let closing: Promise<void> | undefined;
+    const states: string[] = [];
+    scope.subscribe(() => {
+      states.push(scope.status());
+      if (scope.status() === state) closing = scope.close();
+    });
+    await expect(scope.bind(await input(scope))).rejects.toMatchObject({
+      code: "cancelled",
+    });
+    await closing;
+    expect(scope.status()).toBe("retired");
+    expect(states[states.length - 1]).toBe("retired");
+    expect(
+      invoke.mock.calls.filter(
+        ([command]) => command === "project_memory_context_bind",
+      ),
+    ).toHaveLength(state === "binding" ? 0 : 1);
+  },
+);
+
+it("publishes retirement once and reserves exact cleanup before reentrant close", async () => {
+  const f = mount();
+  const scope = capture(f.engine());
+  await scope.bind(await input(scope));
+  let nested: Promise<void> | undefined;
+  const observer = vi.fn(() => {
+    nested = scope.close();
+  });
+  scope.subscribe(observer);
+  const closing = scope.close();
+  expect(nested).toBe(closing);
+  await closing;
+  await scope.close();
+  expect(observer).toHaveBeenCalledTimes(1);
+  expect(
+    invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_close",
+    ),
+  ).toHaveLength(1);
+  const stale = vi.fn();
+  scope.subscribe(stale);
+  await scope.close();
+  expect(stale).not.toHaveBeenCalled();
+});
+
+it("bounds observers and releases their slots on unsubscription", async () => {
+  const f = mount();
+  const scope = capture(f.engine());
+  const listeners = Array.from({ length: 256 }, () => () => undefined);
+  const removals = listeners.map((listener) => scope.subscribe(listener));
+  expect(() => scope.subscribe(() => undefined)).toThrowError("busy");
+  const duplicate = scope.subscribe(listeners[0]);
+  duplicate();
+  const unsubscribe = scope.subscribe(() => undefined);
+  unsubscribe();
+  for (const remove of removals) remove();
+  expect(invoke).not.toHaveBeenCalled();
+});
