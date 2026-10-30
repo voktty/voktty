@@ -131,6 +131,7 @@ import { HarnessEventQueue } from "@/modules/harness/lib/harnessFlush";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyHarnessSessionDeltas,
+  sameHarnessPreparationContext,
   HarnessProjectReservedError,
   type HarnessSessionDelta,
 } from "@/modules/harness/lib/harnessSessionEngineState";
@@ -153,6 +154,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     return {
       sessions,
       owners: new Map(sessions.map((session) => [session.id, {}])),
+      contextOwners: new Map(sessions.map((session) => [session.id, {}])),
     };
   });
   const { sessions } = state;
@@ -162,6 +164,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
   sessionsRef.current = sessions;
   const owners = useRef(state.owners);
   owners.current = state.owners;
+  const contextOwners = useRef(state.contextOwners);
+  contextOwners.current = state.contextOwners;
   const eventOwners = useRef(new WeakMap<HarnessEvent, object>());
   const turnGen = useRef(new Map<string, number>());
   for (const id of turnGen.current.keys()) {
@@ -202,6 +206,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       const apply = (previous: typeof state) => {
         let nextSessions = previous.sessions;
         let nextOwners = previous.owners;
+        let nextContextOwners = previous.contextOwners;
         for (const delta of deltas) {
           const next = applyHarnessSessionDeltas(
             nextSessions,
@@ -209,6 +214,18 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             inputsRef.current.isProjectReserved,
           );
           if (next === nextSessions) continue;
+          const id = delta.kind === "admit" ? delta.session.id : delta.id;
+          const before = nextSessions.find((session) => session.id === id);
+          const after = next.find((session) => session.id === id);
+          if (
+            !before ||
+            !after ||
+            !sameHarnessPreparationContext(before, after)
+          ) {
+            nextContextOwners = new Map(nextContextOwners);
+            if (after) nextContextOwners.set(id, {});
+            else nextContextOwners.delete(id);
+          }
           if (delta.kind === "remove" || delta.kind === "admit") {
             nextOwners = new Map(nextOwners);
             if (delta.kind === "remove") nextOwners.delete(delta.id);
@@ -218,7 +235,11 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         }
         return nextSessions === previous.sessions
           ? previous
-          : { sessions: nextSessions, owners: nextOwners };
+          : {
+              sessions: nextSessions,
+              owners: nextOwners,
+              contextOwners: nextContextOwners,
+            };
       };
       if (scheduling === "immediate") {
         const next = apply(stateRef.current);
@@ -226,6 +247,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         stateRef.current = next;
         sessionsRef.current = next.sessions;
         owners.current = next.owners;
+        contextOwners.current = next.contextOwners;
         setState(next);
       } else
         setState((previous) => {
@@ -340,6 +362,23 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       harnessEvents.cancelScheduled();
     };
   }, [harnessEvents]);
+
+  const capturePreparationContext = useCallback(
+    (id: string, expected: Session) => {
+      const current = sessionsRef.current.find((session) => session.id === id);
+      const owner =
+        current && sameHarnessPreparationContext(current, expected)
+          ? contextOwners.current.get(id)
+          : undefined;
+      const lifetime = executionLifetime.current;
+      return () =>
+        owner !== undefined &&
+        lifetime !== null &&
+        contextOwners.current.get(id) === owner &&
+        executionLifetime.current === lifetime;
+    },
+    [],
+  );
 
   const stopSessionForRemoval = useCallback(
     async (sessionId: string): Promise<Session | undefined> => {
@@ -632,8 +671,10 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
                 queuedMessage?.sourceCwd,
               )
             : captureRemotePromptSource(workCwd);
+        const contextIsCurrent = capturePreparationContext(sessionId, current);
         const assertPreparationCurrent = () => {
-          if (!steerIsCurrent()) throw new PromptSourceRetiredError();
+          if (!steerIsCurrent() || !contextIsCurrent())
+            throw new PromptSourceRetiredError();
           promptSource?.assertCurrent();
         };
         const visible = displayAttachments(attachments);
@@ -711,11 +752,6 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
               queuedMessage?.sourceCwd,
             )
           : captureRemotePromptSource(workCwd);
-      const assertPreparationCurrent = () => {
-        if (!isCurrentTurn(sessionId, gen, turnOwner))
-          throw new PromptSourceRetiredError();
-        promptSource?.assertCurrent();
-      };
       const initialBlocks = editedResend ? editedResend.blocks : current.blocks;
       const isFirstTurn = initialBlocks.length === 0;
       const placeholderTitle = canReplaceSessionTitle(
@@ -835,6 +871,17 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           s.id === sessionId ? { ...s, busy: true } : s,
         );
       }
+      const contextIsCurrent = capturePreparationContext(
+        sessionId,
+        options?.resendEdited
+          ? storedCurrent
+          : { ...current, providerAccountId },
+      );
+      const assertPreparationCurrent = () => {
+        if (!isCurrentTurn(sessionId, gen, turnOwner) || !contextIsCurrent())
+          throw new PromptSourceRetiredError();
+        promptSource?.assertCurrent();
+      };
 
       if (
         isFirstTurn &&
@@ -1131,6 +1178,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
       editedResends.finish,
       queuedSources,
       updateSession,
+      capturePreparationContext,
     ],
   );
 

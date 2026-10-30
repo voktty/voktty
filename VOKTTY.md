@@ -297,6 +297,8 @@ The window host owns one Inbox source over persisted recent projects and live or
   Harness shell tabs use the existing schema v2 with stable tab/workspace identities, cwd, bounded opaque conversation IDs and validated color/icon/lock metadata, never native resource IDs or credentials. Nonlocal-origin migration does not reinterpret an ambiguous cwd as a local project or authorize it locally; an explicit remote namespace remains presentation metadata, not an execution capability. HarnessStack owns the shared engine and window host after its first warm activation.
 - **ai/** - see below.
 
+Harness prompt preparation captures an engine-owned context receipt in addition to its turn and remote-source guards. Accepted changes to project cwd, effective worktree cwd, harness, runtime mode or provider account retire that receipt, including a round trip within one delta batch. Transcript, title and provider-binding updates preserve it. Retirement blocks subsequent preparation stages and send or steer admission; it does not cancel a request already issued, retire existing output delivery, authorize project memory or establish native quiescence.
+
 ### AI subsystem (`src/modules/ai/`)
 
 BYOK. Cloud providers via `@ai-sdk/*`: **OpenAI, Anthropic, Google, xAI, Cerebras, Groq, DeepSeek, Mistral, OpenRouter**, plus **OpenAI-compatible** for any custom base URL. Local / offline providers (key-optional, model id supplied at runtime): **LM Studio, MLX, Ollama**. Provider list in `config.ts` (`PROVIDERS`); model registry includes `DEFAULT_MODEL_ID` + `DEFAULT_AUTOCOMPLETE_MODEL`.

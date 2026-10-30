@@ -1,5 +1,15 @@
 import type { Session } from "@/modules/harness/lib/session";
 
+export function sameHarnessPreparationContext(a: Session, b: Session): boolean {
+  return (
+    a.cwd === b.cwd &&
+    (a.worktreeCwd || a.cwd) === (b.worktreeCwd || b.cwd) &&
+    a.harness === b.harness &&
+    a.runtimeMode === b.runtimeMode &&
+    a.providerAccountId === b.providerAccountId
+  );
+}
+
 export class HarnessProjectReservedError extends Error {
   constructor() {
     super("Harness project is reserved");

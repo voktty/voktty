@@ -705,3 +705,174 @@ it("claims a transferred native steering request once before React commits", asy
   expect(admissions).toBe(1);
   expect(mocks.steer).toHaveBeenCalledOnce();
 });
+
+const contextChanges: Partial<Session>[] = [
+  { cwd: "/other-project" },
+  { worktreeCwd: "/other-worktree" },
+  { harness: "codex" },
+  { runtimeMode: "auto" },
+  { providerAccountId: "other-account" },
+];
+
+it.each(contextChanges)(
+  "permanently retires prepared sends and steering after context changes: %j",
+  async (patch) => {
+    for (const mode of ["send", "steer"] as const) {
+      let finish!: (value: []) => void;
+      mocks.prepareAttachments.mockImplementationOnce(
+        () =>
+          new Promise<[]>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const engine = mount([chat("source", { busy: mode === "steer" })]);
+      const original = engine().sessions[0];
+      await act(async () =>
+        engine().onSubmit("source", "hello", [], {
+          followUpBehavior: "steer",
+        }),
+      );
+      act(() =>
+        engine().applySessionDeltas(
+          [
+            {
+              kind: "update",
+              id: "source",
+              update: (session) => ({ ...session, ...patch }),
+            },
+            {
+              kind: "update",
+              id: "source",
+              update: (session) => ({
+                ...session,
+                cwd: original.cwd,
+                worktreeCwd: original.worktreeCwd,
+                harness: original.harness,
+                runtimeMode: original.runtimeMode,
+                providerAccountId: original.providerAccountId,
+              }),
+            },
+          ],
+          "immediate",
+        ),
+      );
+      await act(async () => {
+        finish([]);
+        await vi.dynamicImportSettled();
+      });
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.steer).not.toHaveBeenCalled();
+      expect(mocks.notes).not.toHaveBeenCalled();
+      if (mode === "send") expect(engine().sessions[0].busy).toBe(false);
+    }
+  },
+);
+
+it.each(["scheduled", "immediate"] as const)(
+  "retires preparation through a %s project roundtrip and permits a fresh turn",
+  async (scheduling) => {
+    let finish!: (value: []) => void;
+    mocks.prepareAttachments.mockImplementationOnce(
+      () =>
+        new Promise<[]>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const engine = mount([chat("source"), chat("sibling")]);
+    await act(async () => engine().onSubmit("source", "old"));
+    act(() =>
+      engine().applySessionDeltas(
+        [
+          {
+            kind: "update",
+            id: "source",
+            update: (session) => ({ ...session, cwd: "/other" }),
+          },
+          {
+            kind: "update",
+            id: "source",
+            update: (session) => ({ ...session, cwd: "/repo" }),
+          },
+        ],
+        scheduling,
+      ),
+    );
+    await act(async () => {
+      finish([]);
+      await vi.dynamicImportSettled();
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(engine().sessions[0].busy).toBe(false);
+    await act(async () => {
+      engine().onSubmit("source", "fresh");
+      await vi.dynamicImportSettled();
+    });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send.mock.calls[0][0]).toMatchObject({
+      text: "fresh",
+      cwd: "/repo",
+    });
+    expect(engine().sessions[1].blocks).toHaveLength(1);
+  },
+);
+
+it("does not retire preparation for transcript, title or provider binding updates", async () => {
+  let finish!: (value: []) => void;
+  mocks.prepareAttachments.mockImplementationOnce(
+    () =>
+      new Promise<[]>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const engine = mount([chat("source")]);
+  await act(async () => engine().onSubmit("source", "hello"));
+  act(() =>
+    engine().updateSession(
+      "source",
+      (session) => ({
+        ...session,
+        title: "renamed",
+        providerSessionId: "provider-binding",
+        blocks: [
+          ...session.blocks,
+          { id: "status", role: "system", text: "updated" },
+        ],
+      }),
+      "immediate",
+    ),
+  );
+  await act(async () => {
+    finish([]);
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.send).toHaveBeenCalledOnce();
+  expect(engine().sessions[0].title).toBe("renamed");
+});
+
+it("does not prepare for a replacement session reusing the same ID", async () => {
+  let finish!: (value: []) => void;
+  mocks.prepareAttachments.mockImplementationOnce(
+    () =>
+      new Promise<[]>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const engine = mount([chat("source")]);
+  await act(async () => engine().onSubmit("source", "old"));
+  const replacement = chat("source");
+  act(() =>
+    engine().applySessionDeltas(
+      [
+        { kind: "remove", id: "source" },
+        { kind: "admit", session: replacement },
+      ],
+      "immediate",
+    ),
+  );
+  await act(async () => {
+    finish([]);
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(engine().sessions[0]).toBe(replacement);
+});
