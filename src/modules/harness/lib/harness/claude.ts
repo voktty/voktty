@@ -1,19 +1,13 @@
 import { nativeModelId } from "../models";
 import { sameProviderAccountId } from "../providerAccounts";
-import type {
-  RuntimeMode,
-  TaskListItem,
-  TaskListMeta,
-} from "../session";
+import type { RuntimeMode, TaskListItem, TaskListMeta } from "../session";
 import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { loadClaudeHooks } from "../settings";
 import {
-  killChild,
+  closeRetiredRawChildren,
+  type RawChildHandle,
+  reserveRawChild,
   resolveClaudeBinary,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-  writeChild,
 } from "./child";
 import {
   askUserQuestionAllowInput,
@@ -117,6 +111,7 @@ type LiveAgentTask = {
 };
 
 type Live = {
+  admission: Admission;
   cwd: string;
   claudeSessionId: string;
   providerAccountId?: string;
@@ -124,9 +119,9 @@ type Live = {
   planning: boolean;
   settingsKey: string;
   onEvent: (event: HarnessEvent) => void;
+  eventSink: (event: HarnessEvent) => void;
   approvals: Map<number, PendingApproval>;
   questions: Map<number, PendingQuestion>;
-  nextApprovalUiId: number;
   nextControlId: number;
   toolsByIndex: Map<number, InFlightTool>;
   toolsById: Map<string, InFlightTool>;
@@ -149,6 +144,21 @@ type Live = {
   compactionConfirmed: boolean;
 };
 
+type Admission = {
+  sessionId: string;
+  cwd: string;
+  providerAccountId?: string;
+  planning: boolean;
+  settingsKey: string;
+  retired: boolean;
+  openingComplete: boolean;
+  generation: object;
+  handle?: RawChildHandle;
+  opening?: Promise<Live>;
+  live?: Live;
+  interrupt?: Promise<void>;
+};
+
 type Resume = {
   sessionId: string;
   cwd: string;
@@ -158,6 +168,8 @@ type Resume = {
 const INIT_TIMEOUT_MS = 8_000;
 
 const liveByThread = new Map<string, Live>();
+const admissions = new Map<string, Admission>();
+let nextApprovalUiId = 1;
 const resumeByThread = new Map<string, Resume>();
 /**
  * Claude task lists outlive a Live: a restart that resumes the conversation
@@ -182,25 +194,103 @@ export function setClaudeBinaryResolver(
   resolveClaudeBinaryImpl = fn;
 }
 
-export async function sendClaudeTurn(input: SendTurnInput): Promise<void> {
-  let live: Live;
-  try {
-    live = await ensureLive(input);
-  } catch (error) {
-    cancelledThreads.delete(input.sessionId);
-    throw error;
-  }
-  if (cancelledThreads.delete(input.sessionId)) return;
+function isCurrent(admission: Admission): boolean {
+  return (
+    !admission.retired &&
+    !admission.handle?.retired &&
+    admissions.get(admission.sessionId) === admission
+  );
+}
 
-  live.onEvent = input.onEvent;
-  live.runtimeMode = input.runtimeMode;
+function guardCurrent(admission: Admission): void {
+  if (!isCurrent(admission)) throw new Error("Claude session was retired");
+}
+
+function guardOperation(live: Live, generation: object): void {
+  guardCurrent(live.admission);
+  if (live.admission.generation !== generation)
+    throw new Error("Claude turn was cancelled");
+}
+
+function setEventSink(live: Live, sink: (event: HarnessEvent) => void): void {
+  live.eventSink = sink;
+  const generation = live.admission.generation;
+  live.onEvent = (event) => {
+    if (
+      isCurrent(live.admission) &&
+      live.admission.generation === generation &&
+      !live.muteUpdates
+    )
+      sink(event);
+  };
+}
+
+function retireAdmission(admission: Admission): void {
+  admission.retired = true;
+  const id = admission.sessionId;
+  if (admissions.get(id) === admission) admissions.delete(id);
+  const live = admission.live;
+  if (liveByThread.get(id) === live) liveByThread.delete(id);
+}
+
+function closeAdmission(admission: Admission, cancelled = true): Promise<void> {
+  retireAdmission(admission);
+  const live = admission.live;
+  if (live) {
+    if (cancelled) live.cancelled = true;
+    live.muteUpdates = true;
+    for (const pending of live.approvals.values()) pending.resolve("deny");
+    live.approvals.clear();
+    for (const pending of live.questions.values())
+      pending.resolve({ kind: "skipped" });
+    live.questions.clear();
+    live.activeTurn = false;
+    const done = live.turnDone;
+    const initialized = live.initDone;
+    live.turnDone = null;
+    live.turnFailed = null;
+    live.initDone = null;
+    done?.();
+    initialized?.();
+  }
+  return admission.handle?.close().catch(() => undefined) ?? Promise.resolve();
+}
+
+function snapshotSession<T extends HarnessSessionInput>(input: T): T {
+  return {
+    ...input,
+    modelSettings: input.modelSettings ? { ...input.modelSettings } : undefined,
+    networkAllowlist: input.networkAllowlist
+      ? [...input.networkAllowlist]
+      : input.networkAllowlist,
+  };
+}
+
+export async function sendClaudeTurn(request: SendTurnInput): Promise<void> {
+  const input = snapshotSession({
+    ...request,
+    attachments: request.attachments?.map((attachment) => ({ ...attachment })),
+  });
+  if (cancelledThreads.delete(input.sessionId)) return;
+  const admission = ensureLive(input);
+  const generation = admission.generation;
+  const opening = admission.opening;
+  if (!opening) throw new Error("Claude session was retired");
+  const live = await opening;
+  guardCurrent(admission);
+  if (admission.generation !== generation) return;
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      if (!isCurrent(admission) || admission.generation !== generation) return;
+      if (admission.interrupt) await admission.interrupt;
+      guardOperation(live, generation);
+      setEventSink(live, input.onEvent);
+      live.runtimeMode = input.runtimeMode;
       live.cancelled = false;
       live.muteUpdates = false;
       try {
-        await runTurn(live, input);
+        await runTurn(live, input, generation);
       } catch (error) {
         if (live.cancelled) return;
         throw error;
@@ -210,31 +300,41 @@ export async function sendClaudeTurn(input: SendTurnInput): Promise<void> {
 }
 
 export async function compactClaudeContext(
-  input: CompactContextInput,
+  request: CompactContextInput,
 ): Promise<void> {
-  const settingsKey = settingsKeyFor(input);
-  let live = liveByThread.get(input.sessionId);
-  if (!live || live.cwd !== input.cwd || live.settingsKey !== settingsKey) {
-    live = await ensureLive(input);
-  }
+  const input = snapshotSession(request);
   if (cancelledThreads.delete(input.sessionId)) return;
-
-  live.onEvent = input.onEvent;
-  live.runtimeMode = input.runtimeMode;
+  const admission = ensureLive(input, true);
+  const generation = admission.generation;
+  const opening = admission.opening;
+  if (!opening) throw new Error("Claude session was retired");
+  const live = await opening;
+  guardCurrent(admission);
+  if (admission.generation !== generation) return;
   live.turns = live.turns
     .catch(() => undefined)
     .then(async () => {
+      if (!isCurrent(admission) || admission.generation !== generation) return;
+      if (admission.interrupt) await admission.interrupt;
+      guardOperation(live, generation);
+      setEventSink(live, input.onEvent);
+      live.runtimeMode = input.runtimeMode;
       live.cancelled = false;
       live.muteUpdates = false;
       live.manualCompaction = true;
       live.compactionConfirmed = false;
       try {
-        await runTurn(live, {
-          ...input,
-          modelSettings: undefined,
-          text: "/compact",
-          attachments: [],
-        });
+        await runTurn(
+          live,
+          {
+            ...input,
+            modelSettings: undefined,
+            text: "/compact",
+            attachments: [],
+          },
+          generation,
+        );
+        guardOperation(live, generation);
         if (!live.compactionConfirmed) {
           throw new Error("Claude Code did not confirm context compaction");
         }
@@ -251,6 +351,8 @@ export async function compactClaudeContext(
 export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
   const live = liveByThread.get(input.sessionId);
   if (!live?.activeTurn) throw new Error("No active turn to steer");
+  const generation = live.admission.generation;
+  guardOperation(live, generation);
 
   const message = buildClaudeUserMessage({
     text: input.text,
@@ -260,7 +362,8 @@ export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
   const content = (message.message as { content: unknown[] }).content;
   if (content.length === 0) return;
 
-  await writeJson(input.sessionId, message);
+  await writeJson(live, message);
+  guardOperation(live, generation);
 }
 
 export function respondClaudeApproval(
@@ -286,11 +389,36 @@ export function respondClaudeQuestion(
 }
 
 export async function cancelClaudeTurn(sessionId: string): Promise<void> {
-  const live = liveByThread.get(sessionId);
-  if (!live) {
-    cancelledThreads.add(sessionId);
+  const opening = admissions.get(sessionId);
+  if (opening && !opening.openingComplete) {
+    await closeAdmission(opening);
     return;
   }
+  const live = liveByThread.get(sessionId);
+  if (!live) {
+    const admission = admissions.get(sessionId);
+    if (admission) await closeAdmission(admission);
+    else cancelledThreads.add(sessionId);
+    return;
+  }
+  const admission = live.admission;
+  if (!admission.interrupt) {
+    const interrupt = Promise.resolve().then(() =>
+      writeJson(
+        live,
+        buildControlRequest(nextControlId(live), { subtype: "interrupt" }),
+      ),
+    );
+    admission.interrupt = interrupt;
+    void interrupt.then(
+      () => {
+        if (admission.interrupt === interrupt) admission.interrupt = undefined;
+      },
+      () => {},
+    );
+  }
+  const interrupt = admission.interrupt;
+  admission.generation = {};
   live.cancelled = true;
   live.muteUpdates = true;
   for (const [, pending] of live.approvals) pending.resolve("deny");
@@ -298,36 +426,20 @@ export async function cancelClaudeTurn(sessionId: string): Promise<void> {
   for (const [, pending] of live.questions)
     pending.resolve({ kind: "skipped" });
   live.questions.clear();
-  await writeJson(
-    sessionId,
-    buildControlRequest(nextControlId(live), { subtype: "interrupt" }),
-  ).catch(() => undefined);
   finishActiveTurn(live, [
     { type: "message.completed" },
     { type: "reasoning.completed" },
   ]);
+  await interrupt.catch(() => undefined);
 }
 
 export async function stopClaudeSession(sessionId: string): Promise<void> {
   cancelledThreads.delete(sessionId);
-  const live = liveByThread.get(sessionId);
-  liveByThread.delete(sessionId);
-  if (live) {
-    live.muteUpdates = true;
-    for (const [, pending] of live.approvals) pending.resolve("deny");
-    live.approvals.clear();
-    for (const [, pending] of live.questions)
-      pending.resolve({ kind: "skipped" });
-    live.questions.clear();
-    live.activeTurn = false;
-    live.turnDone?.();
-    live.turnDone = null;
-    live.turnFailed = null;
-    live.initDone?.();
-    live.initDone = null;
-  }
-  unwatchChild(sessionId);
-  await killChild(sessionId).catch(() => undefined);
+  const admission = admissions.get(sessionId);
+  if (admission) retireAdmission(admission);
+  const retired = closeRetiredRawChildren(sessionId).catch(() => undefined);
+  const closing = admission ? closeAdmission(admission) : Promise.resolve();
+  await Promise.all([retired, closing]);
 }
 
 export async function forgetClaudeSession(sessionId: string): Promise<void> {
@@ -377,163 +489,209 @@ export function restoreClaudeTaskLists(
   });
 }
 
-async function ensureLive(input: HarnessSessionInput): Promise<Live> {
+function ensureLive(
+  input: HarnessSessionInput,
+  preservePlanning = false,
+): Admission {
   const settingsKey = settingsKeyFor(input);
   const planning = input.intent === "plan";
-  const existing = liveByThread.get(input.sessionId);
+  const existing = admissions.get(input.sessionId);
   if (
     existing &&
+    isCurrent(existing) &&
     existing.cwd === input.cwd &&
-    sameProviderAccountId(existing.providerAccountId, input.providerAccountId) &&
+    sameProviderAccountId(
+      existing.providerAccountId,
+      input.providerAccountId,
+    ) &&
     existing.settingsKey === settingsKey &&
-    existing.planning === planning
+    (preservePlanning || existing.planning === planning) &&
+    existing.opening
   ) {
-    existing.onEvent = input.onEvent;
-    existing.runtimeMode = input.runtimeMode;
     return existing;
   }
-  if (existing) {
-    // Model and launch-setting changes require a fresh Claude process, but
-    // they must resume the same provider conversation. Only a cwd change
-    // invalidates the stored session because Claude sessions are cwd-bound.
-    if (
-      existing.cwd !== input.cwd ||
-      !sameProviderAccountId(existing.providerAccountId, input.providerAccountId)
-    ) {
-      resumeByThread.delete(input.sessionId);
-    }
-    await stopClaudeSession(input.sessionId);
-  }
-
-  const resume = resumeByThread.get(input.sessionId);
-  const canResume =
-    resume != null &&
-    resume.cwd === input.cwd &&
-    sameProviderAccountId(resume.providerAccountId, input.providerAccountId);
-  if (
-    resume &&
-    (resume.cwd !== input.cwd ||
-      !sameProviderAccountId(resume.providerAccountId, input.providerAccountId))
-  ) {
-    resumeByThread.delete(input.sessionId);
-  }
-
-  const isRemote = isRemoteProjectPath(input.cwd);
-  const { path } = isRemote
-    ? { path: "claude" }
-    : await resolveClaudeBinaryImpl();
-  const liveRef: { current: Live | null } = { current: null };
-  const claudeSessionId =
-    canResume && resume ? resume.sessionId : crypto.randomUUID();
-  const retained = tasksByThread.get(input.sessionId);
-  const claudeTasks =
-    retained?.providerSessionId === claudeSessionId
-      ? retained.tasks
-      : new Map<string, TaskListItem>();
-  tasksByThread.set(input.sessionId, {
-    providerSessionId: claudeSessionId,
-    tasks: claudeTasks,
-  });
-  const launch = launchOptions(
-    input,
-    canResume ? resume?.sessionId : undefined,
-    claudeSessionId,
-  );
-
-  const live: Live = {
+  const admission: Admission = {
+    sessionId: input.sessionId,
     cwd: input.cwd,
-    claudeSessionId,
     providerAccountId: input.providerAccountId,
-    runtimeMode: input.runtimeMode,
     planning,
     settingsKey,
-    onEvent: input.onEvent,
-    approvals: new Map(),
-    questions: new Map(),
-    nextApprovalUiId: 1,
-    nextControlId: 1,
-    toolsByIndex: new Map(),
-    toolsById: new Map(),
-    agentTasks: new Map(),
-    claudeTasks,
-    turnResultSeen: false,
-    cancelled: false,
-    muteUpdates: false,
-    turns: Promise.resolve(),
-    turnDone: null,
-    turnFailed: null,
-    turnEndPending: false,
-    activeTurn: false,
-    initDone: null,
-    initialized: false,
-    emittedAssistant: "",
-    emittedReasoning: "",
-    manualCompaction: false,
-    compactionConfirmed: false,
+    retired: false,
+    openingComplete: false,
+    generation: {},
   };
-  liveRef.current = live;
-
-  let lastStderr = "";
-  watchChild(
-    input.sessionId,
-    (line) => {
-      const current = liveRef.current;
-      if (!current) return;
-      handleLine(input.sessionId, current, line);
-    },
-    (code) => {
-      liveByThread.delete(input.sessionId);
-      input.onEvent({ type: "session.ended", code });
-      const current = liveRef.current;
-      const exitError = lastStderr.trim() || "Claude Code exited";
-      current?.turnFailed?.(new Error(exitError));
-      current?.initDone?.();
-      if (current) {
-        current.turnDone = null;
-        current.turnFailed = null;
-        current.initDone = null;
-      }
-    },
-    (stderrLine) => {
-      lastStderr = stderrLine;
-    },
-  );
-
-  await spawnChild(
-    input.sessionId,
-    path,
-    buildClaudeSpawnArgs(launch),
-    input.cwd,
-    input.networkAllowlist,
-    { provider: "claude", id: input.providerAccountId ?? "default" },
-  );
-
-  liveByThread.set(input.sessionId, live);
-  resumeByThread.set(input.sessionId, {
-    sessionId: claudeSessionId,
-    cwd: input.cwd,
-    providerAccountId: input.providerAccountId,
-  });
-
+  const launch = launchOptions(input, undefined, "");
+  admissions.set(input.sessionId, admission);
   try {
-    await writeJson(
-      input.sessionId,
-      buildControlRequest(nextControlId(live), { subtype: "initialize" }),
+    admission.handle = reserveRawChild(input.sessionId);
+    guardCurrent(admission);
+    if (existing) void closeAdmission(existing);
+    guardCurrent(admission);
+    admission.opening = Promise.resolve().then(() =>
+      startLive(input, admission, launch),
     );
-    await waitForInit(live, INIT_TIMEOUT_MS);
-    live.onEvent({
-      type: "session.providerBound",
-      providerSessionId: live.claudeSessionId,
-    });
-    live.onEvent({ type: "session.started" });
-    return live;
+    return admission;
   } catch (error) {
-    await stopClaudeSession(input.sessionId);
+    const restore =
+      admissions.get(input.sessionId) === admission &&
+      existing &&
+      !existing.retired &&
+      !existing.handle?.retired;
+    void closeAdmission(admission);
+    if (restore) admissions.set(input.sessionId, existing);
     throw error;
   }
 }
 
-async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
+async function startLive(
+  input: HarnessSessionInput,
+  admission: Admission,
+  launch: ReturnType<typeof launchOptions>,
+): Promise<Live> {
+  try {
+    guardCurrent(admission);
+    const resume = resumeByThread.get(input.sessionId);
+    const canResume =
+      resume != null &&
+      resume.cwd === input.cwd &&
+      sameProviderAccountId(resume.providerAccountId, input.providerAccountId);
+    if (
+      resume &&
+      (resume.cwd !== input.cwd ||
+        !sameProviderAccountId(
+          resume.providerAccountId,
+          input.providerAccountId,
+        ))
+    ) {
+      resumeByThread.delete(input.sessionId);
+    }
+
+    const isRemote = isRemoteProjectPath(input.cwd);
+    const { path } = isRemote
+      ? { path: "claude" }
+      : await resolveClaudeBinaryImpl();
+    guardCurrent(admission);
+    const handle = admission.handle;
+    if (!handle) throw new Error("Claude session was retired");
+    const claudeSessionId =
+      canResume && resume ? resume.sessionId : crypto.randomUUID();
+    const retained = tasksByThread.get(input.sessionId);
+    const claudeTasks =
+      retained?.providerSessionId === claudeSessionId
+        ? new Map([...retained.tasks].map(([id, item]) => [id, { ...item }]))
+        : new Map<string, TaskListItem>();
+    tasksByThread.set(input.sessionId, {
+      providerSessionId: claudeSessionId,
+      tasks: claudeTasks,
+    });
+    const resumeId = canResume ? resume?.sessionId : undefined;
+
+    const live: Live = {
+      admission,
+      cwd: input.cwd,
+      claudeSessionId,
+      providerAccountId: input.providerAccountId,
+      runtimeMode: input.runtimeMode,
+      planning: admission.planning,
+      settingsKey: admission.settingsKey,
+      onEvent: input.onEvent,
+      eventSink: input.onEvent,
+      approvals: new Map(),
+      questions: new Map(),
+      nextControlId: 1,
+      toolsByIndex: new Map(),
+      toolsById: new Map(),
+      agentTasks: new Map(),
+      claudeTasks,
+      turnResultSeen: false,
+      cancelled: false,
+      muteUpdates: false,
+      turns: Promise.resolve(),
+      turnDone: null,
+      turnFailed: null,
+      turnEndPending: false,
+      activeTurn: false,
+      initDone: null,
+      initialized: false,
+      emittedAssistant: "",
+      emittedReasoning: "",
+      manualCompaction: false,
+      compactionConfirmed: false,
+    };
+    admission.live = live;
+    setEventSink(live, input.onEvent);
+
+    let lastStderr = "";
+    handle.watch(
+      (line) => {
+        if (isCurrent(admission)) handleLine(input.sessionId, live, line);
+      },
+      (code) => {
+        if (!isCurrent(admission)) return;
+        const failed = live.turnFailed;
+        const sink = live.eventSink;
+        const deliver = !live.muteUpdates;
+        const exitError = lastStderr.trim() || "Claude Code exited";
+        live.turnDone = null;
+        live.turnFailed = null;
+        void closeAdmission(admission, false);
+        failed?.(new Error(exitError));
+        if (deliver && !admissions.has(input.sessionId))
+          sink({ type: "session.ended", code });
+      },
+      (stderrLine) => {
+        if (isCurrent(admission)) lastStderr = stderrLine;
+      },
+    );
+
+    guardCurrent(admission);
+    liveByThread.set(input.sessionId, live);
+    await handle.spawn(
+      path,
+      buildClaudeSpawnArgs({
+        ...launch,
+        resume: resumeId,
+        sessionId: resumeId ? undefined : claudeSessionId,
+      }),
+      input.cwd,
+      input.networkAllowlist,
+      { provider: "claude", id: input.providerAccountId ?? "default" },
+    );
+    guardCurrent(admission);
+    resumeByThread.set(input.sessionId, {
+      sessionId: live.claudeSessionId,
+      cwd: input.cwd,
+      providerAccountId: input.providerAccountId,
+    });
+
+    await writeJson(
+      live,
+      buildControlRequest(nextControlId(live), { subtype: "initialize" }),
+    );
+    guardCurrent(admission);
+    await waitForInit(live, INIT_TIMEOUT_MS);
+    guardCurrent(admission);
+    live.onEvent({
+      type: "session.providerBound",
+      providerSessionId: live.claudeSessionId,
+    });
+    guardCurrent(admission);
+    live.onEvent({ type: "session.started" });
+    guardCurrent(admission);
+    admission.openingComplete = true;
+    return live;
+  } catch (error) {
+    void closeAdmission(admission);
+    throw error;
+  }
+}
+
+async function runTurn(
+  live: Live,
+  input: SendTurnInput,
+  generation: object,
+): Promise<void> {
+  guardOperation(live, generation);
   const effort = input.modelSettings?.effort;
   const message = buildClaudeUserMessage({
     text: input.text,
@@ -554,13 +712,17 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     live.turnDone = resolve;
     live.turnFailed = reject;
   });
+  void turnPromise.catch(() => undefined);
   live.activeTurn = true;
   settlePendingTurn(live);
 
   try {
-    await writeJson(input.sessionId, message);
+    await writeJson(live, message);
+    if (live.cancelled || live.admission.generation !== generation) return;
+    guardOperation(live, generation);
     settlePendingTurn(live);
     await turnPromise;
+    if (!live.cancelled) guardOperation(live, generation);
   } catch (error) {
     if (live.cancelled) return;
     live.onEvent({
@@ -575,6 +737,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
 }
 
 function handleLine(sessionId: string, live: Live, line: string): void {
+  if (!isCurrent(live.admission)) return;
   const rec = parseJsonLine(line);
   if (!rec) return;
 
@@ -600,7 +763,7 @@ function handleLine(sessionId: string, live: Live, line: string): void {
 
   const control = parseControlRequest(rec);
   if (control) {
-    void handleControlRequest(sessionId, live, control);
+    void handleControlRequest(live, control).catch(() => undefined);
     return;
   }
 
@@ -624,6 +787,7 @@ function handleLine(sessionId: string, live: Live, line: string): void {
       type: "session.providerBound",
       providerSessionId: sessionIdFromLine,
     });
+    if (!isCurrent(live.admission) || live.muteUpdates) return;
   }
 
   if (
@@ -812,6 +976,7 @@ function handleUser(live: Live, rec: Record<string, unknown>): void {
       detail: result.text || undefined,
       preview: previewFromTool(tool.name, tool.input, result.text),
     });
+    if (!isCurrent(live.admission) || live.muteUpdates) return;
     if (
       !result.isError &&
       applyClaudeTaskTool(live.claudeTasks, tool.name, tool.input, result.text)
@@ -857,15 +1022,16 @@ function handleResult(live: Live, rec: Record<string, unknown>): void {
 }
 
 async function handleControlRequest(
-  sessionId: string,
   live: Live,
   control: ClaudeControlRequest,
 ): Promise<void> {
+  if (!isCurrent(live.admission)) return;
+  const emit = live.onEvent;
+  const generation = live.admission.generation;
   if (control.subtype !== "can_use_tool" && control.subtype !== "permission") {
-    await writeJson(
-      sessionId,
-      buildControlResponse(control.requestId, {}),
-    ).catch(() => undefined);
+    await writeJson(live, buildControlResponse(control.requestId, {})).catch(
+      () => undefined,
+    );
     return;
   }
 
@@ -874,7 +1040,7 @@ async function handleControlRequest(
 
   if (live.cancelled || live.muteUpdates) {
     await writeJson(
-      sessionId,
+      live,
       buildControlResponse(
         control.requestId,
         toClaudePermissionResult("deny", input),
@@ -885,8 +1051,9 @@ async function handleControlRequest(
 
   if (toolName === "AskUserQuestion") {
     const questions = questionsFromUnknown(input);
-    const uiId = live.nextApprovalUiId++;
-    live.onEvent({
+    const uiId = allocateApprovalUiId();
+    const pending = waitQuestion(live, uiId, control.requestId);
+    emit({
       type: "question.asked",
       requestId: uiId,
       title:
@@ -894,17 +1061,23 @@ async function handleControlRequest(
       questions,
       callId: control.toolUseId,
     });
-    const outcome = await waitQuestion(live, uiId, control.requestId);
+    const outcome = await pending;
+    live.questions.delete(uiId);
+    if (!isCurrent(live.admission)) return;
     const decision =
       outcome === "cancelled"
         ? "cancelled"
         : outcome.kind === "answered"
           ? "answered"
           : "skipped";
-    live.onEvent({ type: "question.resolved", requestId: uiId, decision });
+    emit({ type: "question.resolved", requestId: uiId, decision });
     if (outcome === "cancelled") return;
+    const cancelled =
+      live.cancelled ||
+      live.muteUpdates ||
+      live.admission.generation !== generation;
     const response =
-      outcome.kind === "answered"
+      !cancelled && outcome.kind === "answered"
         ? {
             behavior: "allow",
             updatedInput: askUserQuestionAllowInput(input, outcome),
@@ -914,7 +1087,7 @@ async function handleControlRequest(
             message: "User cancelled tool execution.",
           };
     await writeJson(
-      sessionId,
+      live,
       buildControlResponse(control.requestId, response),
     ).catch(() => undefined);
     return;
@@ -922,9 +1095,9 @@ async function handleControlRequest(
 
   if (toolName === "ExitPlanMode") {
     const plan = extractExitPlanModePlan(input);
-    if (plan) live.onEvent({ type: "plan", text: plan });
+    if (plan) emit({ type: "plan", text: plan });
     await writeJson(
-      sessionId,
+      live,
       buildControlResponse(control.requestId, {
         behavior: "deny",
         message:
@@ -935,12 +1108,27 @@ async function handleControlRequest(
   }
 
   applyKnownToolInput(live, toolName, input, control.toolUseId);
+  if (!isCurrent(live.admission)) return;
+  if (
+    live.cancelled ||
+    live.muteUpdates ||
+    live.admission.generation !== generation
+  ) {
+    await writeJson(
+      live,
+      buildControlResponse(
+        control.requestId,
+        toClaudePermissionResult("deny", input),
+      ),
+    ).catch(() => undefined);
+    return;
+  }
 
   if (live.planning) {
     const kind = toolKindFromName(toolName);
     const decision = kind === "read" || kind === "search" ? "allow" : "deny";
     await writeJson(
-      sessionId,
+      live,
       buildControlResponse(
         control.requestId,
         toClaudePermissionResult(decision, input),
@@ -951,7 +1139,7 @@ async function handleControlRequest(
 
   if (live.runtimeMode === "full-access") {
     await writeJson(
-      sessionId,
+      live,
       buildControlResponse(
         control.requestId,
         toClaudePermissionResult("allow", input),
@@ -960,8 +1148,9 @@ async function handleControlRequest(
     return;
   }
 
-  const uiId = live.nextApprovalUiId++;
-  live.onEvent({
+  const uiId = allocateApprovalUiId();
+  const pending = waitApproval(live, uiId, control.requestId, input);
+  emit({
     type: "approval.requested",
     requestId: uiId,
     title: toolTitle(toolName, input),
@@ -969,16 +1158,31 @@ async function handleControlRequest(
     callId: control.toolUseId,
     preview: previewFromTool(toolName, input),
   });
-  const decision = await waitApproval(live, uiId, control.requestId, input);
-  live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
+  const decision = await pending;
+  live.approvals.delete(uiId);
+  if (!isCurrent(live.admission)) return;
+  emit({ type: "approval.resolved", requestId: uiId, decision });
   if (decision === "cancelled") return;
   await writeJson(
-    sessionId,
+    live,
     buildControlResponse(
       control.requestId,
-      toClaudePermissionResult(decision, input),
+      toClaudePermissionResult(
+        live.cancelled ||
+          live.muteUpdates ||
+          live.admission.generation !== generation
+          ? "deny"
+          : decision,
+        input,
+      ),
     ),
   ).catch(() => undefined);
+}
+
+function allocateApprovalUiId(): number {
+  if (nextApprovalUiId >= Number.MAX_SAFE_INTEGER)
+    throw new Error("Claude UI request capacity exceeded");
+  return nextApprovalUiId++;
 }
 
 function applyKnownToolInput(
@@ -1220,10 +1424,7 @@ function noteSubagentTool(
  * never joins the parent transcript — that would read as the main agent
  * talking — but it is the most legible thing in the panel for its own row.
  */
-function noteSubagentNarration(
-  live: Live,
-  rec: Record<string, unknown>,
-): void {
+function noteSubagentNarration(live: Live, rec: Record<string, unknown>): void {
   const parent = subagentParent(live, rec);
   if (!parent) return;
   const model = stringField(asRecord(rec.message), "model");
@@ -1258,10 +1459,7 @@ function noteSubagentNarration(
 }
 
 /** Settles the subagent's own tool rows once their results come back. */
-function noteSubagentResults(
-  live: Live,
-  rec: Record<string, unknown>,
-): void {
+function noteSubagentResults(live: Live, rec: Record<string, unknown>): void {
   const parent = subagentParent(live, rec);
   if (!parent) return;
   for (const result of toolResultsFromUserMessage(rec)) {
@@ -1376,18 +1574,26 @@ function maybeFinishTurn(live: Live): void {
 }
 
 function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
+  const generation = live.admission.generation;
+  const wasActive = live.activeTurn;
   live.turnEndPending = false;
   live.activeTurn = false;
-  for (const event of extraEvents) live.onEvent(event);
   const done = live.turnDone;
   const failed = live.turnFailed;
   live.turnDone = null;
   live.turnFailed = null;
-  if (done) {
-    done();
-    return;
+  try {
+    for (const event of extraEvents) live.onEvent(event);
+  } finally {
+    if (done) done();
+    else if (
+      !failed &&
+      wasActive &&
+      isCurrent(live.admission) &&
+      live.admission.generation === generation
+    )
+      live.turnEndPending = true;
   }
-  if (!failed) live.turnEndPending = true;
 }
 
 function settlePendingTurn(live: Live): void {
@@ -1421,11 +1627,14 @@ function nextControlId(live: Live): string {
   return `monocode_${live.nextControlId}`;
 }
 
-function writeJson(
-  sessionId: string,
+async function writeJson(
+  live: Live,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  return writeChild(sessionId, JSON.stringify(payload));
+  guardCurrent(live.admission);
+  const handle = live.admission.handle;
+  if (!handle) throw new Error("Claude session was retired");
+  return handle.write(JSON.stringify(payload));
 }
 
 function settingsKeyFor(input: HarnessSessionInput): string {
@@ -1483,6 +1692,8 @@ function launchOptions(
 
 /** Exported for tests. */
 export function __claudeTestReset(): void {
+  admissions.clear();
+  nextApprovalUiId = 1;
   liveByThread.clear();
   resumeByThread.clear();
   tasksByThread.clear();

@@ -7,21 +7,33 @@ let onExit: ((code?: number | null) => void) | undefined;
 
 vi.mock("./child", () => ({
   resolveClaudeBinary: async () => ({ path: "/fake/claude" }),
-  spawnChild: async (_id: string, _path: string, args: string[]) => {
-    spawned.push(args);
-  },
-  killChild: async () => undefined,
-  unwatchChild: () => undefined,
-  watchChild: (
-    _id: string,
-    line: (l: string) => void,
-    exit?: (code?: number | null) => void,
-  ) => {
-    onLine = line;
-    onExit = exit;
-  },
-  writeChild: async (_id: string, line: string) => {
-    sent.push(line);
+  closeRetiredRawChildren: async () => undefined,
+  reserveRawChild: (logicalSessionId: string) => {
+    let retired = false;
+    return {
+      nativeId: crypto.randomUUID(),
+      logicalSessionId,
+      get retired() {
+        return retired;
+      },
+      spawn: async (_path: string, args: string[]) => {
+        spawned.push(args);
+      },
+      watch: (
+        line: (value: string) => void,
+        exit: (code?: number | null) => void,
+      ) => {
+        onLine = line;
+        onExit = exit;
+        return () => undefined;
+      },
+      write: async (line: string) => {
+        sent.push(line);
+      },
+      close: async () => {
+        retired = true;
+      },
+    };
   },
 }));
 
