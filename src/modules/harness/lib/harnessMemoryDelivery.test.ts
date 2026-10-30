@@ -242,3 +242,101 @@ it("retains shared capacity through actual read settlement, including retired ca
   ).toBe(true);
   expect(await f.source.prepare({}, "provider", () => {})).not.toBeNull();
 });
+
+it("prepares Antigravity memory before its real conversation identity is known", async () => {
+  const f = fixture();
+  const context = {};
+  const prepared = await f.source.prepare(
+    context,
+    { adapter: "agy" },
+    () => {},
+  );
+  expect(prepared?.prefix).toBe(result().packet?.text);
+  expect(f.delivery.receipt()).toBeNull();
+  expect(prepared?.acknowledge("real-conversation")).toBe(true);
+  expect(f.delivery.receipt()).toEqual({
+    schema: 1,
+    adapter: "agy",
+    method: "managed-turn",
+    providerSessionId: "real-conversation",
+    packet: result().packet,
+  });
+  const next = await f.source.prepare(
+    context,
+    { adapter: "agy", providerSessionId: "real-conversation" },
+    () => {},
+  );
+  expect(next?.prefix).toBe(result().packet?.text);
+  next?.settle();
+});
+
+it.each([undefined, "", "   ", "x".repeat(4097), "id\nother", "id\0other"])(
+  "rejects an invalid late provider identity permanently: %j",
+  async (id) => {
+    const f = fixture();
+    const prepared = await f.source.prepare({}, { adapter: "agy" }, () => {});
+    expect(prepared?.acknowledge(id)).toBe(false);
+    expect(prepared?.acknowledge("valid-later")).toBe(false);
+    expect(f.delivery.receipt()).toBeNull();
+  },
+);
+
+it.each([
+  "provider",
+  { adapter: "agy" as const, providerSessionId: "provider" },
+])(
+  "does not let acceptance substitute an identity captured before preparation",
+  async (target) => {
+    const f = fixture();
+    const prepared = await f.source.prepare({}, target, () => {});
+    expect(prepared?.acknowledge("different")).toBe(false);
+    expect(f.delivery.receipt()).toBeNull();
+  },
+);
+
+it("captures the Antigravity target before asynchronous policy reads", async () => {
+  const f = fixture();
+  const read = deferred<MemoryContextResult>();
+  f.read.mockReturnValue(read.promise);
+  const target = { adapter: "agy" as const, providerSessionId: "original" };
+  const pending = f.source.prepare({}, target, () => {});
+  target.providerSessionId = "replacement";
+  read.resolve(result());
+  const prepared = await pending;
+  expect(prepared?.acknowledge()).toBe(true);
+  expect(f.delivery.receipt()?.providerSessionId).toBe("original");
+});
+
+it("rejects late identity publication after transport retirement or settlement", async () => {
+  const f = fixture();
+  let current = true;
+  const prepared = await f.source.prepare({}, { adapter: "agy" }, () => {
+    if (!current) throw new Error("retired");
+  });
+  current = false;
+  expect(prepared?.acknowledge("real-conversation")).toBe(false);
+  const abandoned = await f.source.prepare({}, { adapter: "agy" }, () => {});
+  abandoned?.settle();
+  expect(abandoned?.acknowledge("real-conversation")).toBe(false);
+  expect(f.delivery.receipt()).toBeNull();
+});
+
+it("does not let an older late identity overwrite a newer accepted packet", async () => {
+  const f = fixture();
+  const old = await f.source.prepare({}, { adapter: "agy" }, () => {});
+  const next = await f.source.prepare({}, { adapter: "agy" }, () => {});
+  expect(next?.acknowledge("new-conversation")).toBe(true);
+  expect(old?.acknowledge("old-conversation")).toBe(false);
+  expect(f.delivery.receipt()?.providerSessionId).toBe("new-conversation");
+});
+
+it("does not reuse acceptance across adapters even if their context and IDs match", async () => {
+  const f = fixture();
+  const context = {};
+  const agy = await f.source.prepare(context, { adapter: "agy" }, () => {});
+  expect(agy?.acknowledge("provider")).toBe(true);
+  const codex = await f.source.prepare(context, "provider", () => {});
+  expect(codex?.prefix).toBe(result().packet?.text);
+  expect(codex?.acknowledge()).toBe(true);
+  expect(f.delivery.receipt()?.adapter).toBe("codex");
+});

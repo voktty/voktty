@@ -19,7 +19,7 @@ export type MemoryConversationBinding = Readonly<{
 }>;
 export type MemoryDeliveryReceipt = Readonly<{
   schema: 1;
-  adapter: "codex";
+  adapter: "codex" | "agy";
   method: "managed-turn";
   providerSessionId: string;
   packet: MemoryContextPacket;

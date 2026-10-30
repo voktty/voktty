@@ -7,7 +7,7 @@ export type HarnessMemoryDeliveryReceipt = MemoryDeliveryReceipt;
 export type PreparedHarnessMemory = Readonly<{
   prefix: string | null;
   assertCurrent: () => void;
-  acknowledge: () => boolean;
+  acknowledge: (providerSessionId?: string) => boolean;
   settle: () => void;
 }>;
 export type HarnessMemoryTurnSource = Readonly<{
@@ -15,7 +15,7 @@ export type HarnessMemoryTurnSource = Readonly<{
   assertCurrent: () => void;
   prepare: (
     providerContext: object,
-    providerSessionId: string,
+    target: string | Readonly<{ adapter: "agy"; providerSessionId?: string }>,
     assertTransportCurrent: () => void,
   ) => Promise<PreparedHarnessMemory | null>;
 }>;
@@ -23,6 +23,15 @@ export type HarnessMemoryTurnSource = Readonly<{
 let pending = 0;
 function fail(code: string): never {
   throw Object.assign(new Error(`Project memory: ${code}`), { code });
+}
+
+function validProviderSessionId(id: unknown): id is string {
+  return (
+    typeof id === "string" &&
+    id.length <= 4096 &&
+    id.trim().length > 0 &&
+    !/\p{Cc}/u.test(id)
+  );
 }
 
 export function assertHarnessMemoryTarget(
@@ -55,20 +64,24 @@ export function createHarnessMemoryDelivery(
       return Object.freeze({
         cwd,
         assertCurrent: check,
-        async prepare(
-          providerContext,
-          providerSessionId,
-          assertTransportCurrent,
-        ) {
+        async prepare(providerContext, target, assertTransportCurrent) {
           const current = () => {
             check();
             assertTransportCurrent();
             check();
           };
           current();
+          const adapter = typeof target === "string" ? "codex" : target.adapter;
+          const providerSessionId =
+            typeof target === "string" ? target : target.providerSessionId;
           if (conversation.status() === "inactive") return null;
           if (conversation.status() !== "ready") fail("busy");
-          if (!providerSessionId.trim() || providerSessionId.length > 4096)
+          if (
+            (adapter !== "codex" && adapter !== "agy") ||
+            (providerSessionId === undefined
+              ? adapter !== "agy"
+              : !validProviderSessionId(providerSessionId))
+          )
             fail("unavailable");
           if (pending >= 256 || sequence === Number.MAX_SAFE_INTEGER)
             fail("busy");
@@ -91,9 +104,12 @@ export function createHarnessMemoryDelivery(
               fail(result?.decision.reason ?? "unavailable");
             const packet = Object.freeze({ ...result.packet });
             const alreadyDelivered =
+              adapter === "codex" &&
               inFlight === 1 &&
               acknowledgedContext === providerContext &&
-              receipt?.providerSessionId === providerSessionId &&
+              receipt !== null &&
+              receipt.adapter === adapter &&
+              receipt.providerSessionId === providerSessionId &&
               receipt.packet.projectKey === packet.projectKey &&
               receipt.packet.instructionDigest === packet.instructionDigest &&
               receipt.packet.digest === packet.digest &&
@@ -104,7 +120,7 @@ export function createHarnessMemoryDelivery(
               prefix: alreadyDelivered ? null : packet.text,
               assertCurrent: current,
               settle,
-              acknowledge() {
+              acknowledge(acceptedSessionId = providerSessionId) {
                 if (settled && acknowledged === undefined) return false;
                 try {
                   current();
@@ -113,6 +129,15 @@ export function createHarnessMemoryDelivery(
                   return false;
                 }
                 if (acknowledged !== undefined) return acknowledged;
+                if (
+                  !validProviderSessionId(acceptedSessionId) ||
+                  (providerSessionId !== undefined &&
+                    acceptedSessionId !== providerSessionId)
+                ) {
+                  acknowledged = false;
+                  settle();
+                  return false;
+                }
                 if (admittedSequence < acknowledgedSequence) {
                   acknowledged = false;
                   settle();
@@ -123,9 +148,9 @@ export function createHarnessMemoryDelivery(
                 acknowledgedContext = providerContext;
                 receipt = Object.freeze({
                   schema: 1,
-                  adapter: "codex",
+                  adapter,
                   method: "managed-turn",
-                  providerSessionId,
+                  providerSessionId: acceptedSessionId,
                   packet,
                 });
                 accepted = true;
