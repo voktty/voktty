@@ -60,6 +60,51 @@ pub struct MemoryContextSession {
     bound: Arc<BoundContext>,
 }
 impl MemoryContextSession {
+    /// Binds a synchronous native owner without persisting consent or trust.
+    /// The owner must retire this binding when its conversation ends.
+    pub fn bind(
+        review: MemoryTrustReview,
+        choice: MemorySessionUse,
+        control: &DiscoveryControl,
+    ) -> Result<Self, MemoryTrustError> {
+        let slot = SessionSlot::acquire(
+            SESSIONS
+                .get_or_init(|| Arc::new(AtomicUsize::new(0)))
+                .clone(),
+        )?;
+        Self::bind_with_slot(review, choice, control, slot)
+    }
+
+    fn bind_with_slot(
+        review: MemoryTrustReview,
+        choice: MemorySessionUse,
+        control: &DiscoveryControl,
+        slot: SessionSlot,
+    ) -> Result<Self, MemoryTrustError> {
+        review.revalidate(control)?;
+        Ok(Self {
+            bound: Arc::new(BoundContext {
+                origin: review.origin,
+                memory: review.memory,
+                config: review.observed.config,
+                fingerprint: review.observed.fingerprint,
+                id: uuid::Uuid::new_v4().to_string(),
+                choice,
+                live: AtomicBool::new(true),
+                _slot: slot,
+            }),
+        })
+    }
+
+    /// Rechecks current scope, policy and trust before returning a bounded packet.
+    /// Preparing a packet is not a receipt of delivery to a provider.
+    pub fn read(
+        &self,
+        control: &DiscoveryControl,
+    ) -> Result<MemoryContextResult, MemoryTrustError> {
+        self.bound.read(control)
+    }
+
     pub fn root(&self) -> &Path {
         self.bound.memory.root()
     }
@@ -207,19 +252,7 @@ impl MemoryWorkers {
     ) -> Result<MemoryContextSessionJob, MemoryTrustError> {
         let slot = SessionSlot::acquire(active)?;
         let job = self.submit(Control::Scope(control.clone()), move || {
-            review.revalidate(&control)?;
-            Ok(MemoryContextSession {
-                bound: Arc::new(BoundContext {
-                    origin: review.origin,
-                    memory: review.memory,
-                    config: review.observed.config,
-                    fingerprint: review.observed.fingerprint,
-                    id: uuid::Uuid::new_v4().to_string(),
-                    choice,
-                    live: AtomicBool::new(true),
-                    _slot: slot,
-                }),
-            })
+            MemoryContextSession::bind_with_slot(review, choice, &control, slot)
         })?;
         Ok(MemoryContextSessionJob { job })
     }

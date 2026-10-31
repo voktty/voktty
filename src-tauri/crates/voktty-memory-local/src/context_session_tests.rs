@@ -146,6 +146,167 @@ fn bytes(f: &Fixture) -> Vec<u8> {
     fs::read(f.state.path().join("memory-local.json")).unwrap()
 }
 
+fn synchronous_review(f: &Fixture) -> MemoryTrustReview {
+    MemoryTrustReview::prepare(
+        f.store.clone(),
+        f.project.path().join("src"),
+        f.access.clone(),
+        None,
+        &DiscoveryControl::default(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn standalone_context_needs_no_runtime_and_preserves_policy_and_trust_boundaries() {
+    for (trusted, local, choice, expected) in [
+        (
+            false,
+            MemoryPolicy::Always,
+            MemorySessionUse::Inherit,
+            "KIT_MEMORY_TRUST_REQUIRED",
+        ),
+        (
+            true,
+            MemoryPolicy::Manual,
+            MemorySessionUse::Inherit,
+            "KIT_MEMORY_CONSENT_REQUIRED",
+        ),
+        (
+            true,
+            MemoryPolicy::Manual,
+            MemorySessionUse::Enabled,
+            "KIT_MEMORY_READY",
+        ),
+        (
+            true,
+            MemoryPolicy::Always,
+            MemorySessionUse::Inherit,
+            "KIT_MEMORY_READY",
+        ),
+        (
+            true,
+            MemoryPolicy::Always,
+            MemorySessionUse::Disabled,
+            "KIT_MEMORY_SESSION_DISABLED",
+        ),
+        (
+            true,
+            MemoryPolicy::Never,
+            MemorySessionUse::Enabled,
+            "KIT_MEMORY_POLICY_NEVER",
+        ),
+    ] {
+        let f = fixture();
+        if trusted {
+            synchronous_review(&f)
+                .accept(&DiscoveryControl::default())
+                .unwrap();
+        }
+        policy(&f, local);
+        let before = bytes(&f);
+        let session = MemoryContextSession::bind(
+            synchronous_review(&f),
+            choice,
+            &DiscoveryControl::default(),
+        )
+        .unwrap();
+        f.access.instruction_reads.store(0, Ordering::Release);
+        let result = session.read(&DiscoveryControl::default()).unwrap();
+        assert_eq!(result.decision.reason, expected);
+        assert!(!result.decision.capture_allowed);
+        assert_eq!(result.packet.is_some(), expected == "KIT_MEMORY_READY");
+        if let Some(packet) = result.packet {
+            assert!(packet.bytes <= 24 * 1024);
+            assert_eq!(packet.bytes, packet.text.len());
+            assert!(packet.text.contains("Context binding"));
+        } else {
+            assert_eq!(f.access.instruction_reads.load(Ordering::Acquire), 0);
+        }
+        assert_eq!(bytes(&f), before);
+    }
+}
+
+#[test]
+fn synchronous_reads_recheck_facts_revocation_cancellation_and_independent_retirement() {
+    let f = fixture();
+    synchronous_review(&f)
+        .accept(&DiscoveryControl::default())
+        .unwrap();
+    let first = MemoryContextSession::bind(
+        synchronous_review(&f),
+        MemorySessionUse::Enabled,
+        &DiscoveryControl::default(),
+    )
+    .unwrap();
+    let second = MemoryContextSession::bind(
+        synchronous_review(&f),
+        MemorySessionUse::Enabled,
+        &DiscoveryControl::default(),
+    )
+    .unwrap();
+    fs::write(
+        f.project.path().join(".voktty/CONTEXT.md"),
+        "Fresh synchronous facts",
+    )
+    .unwrap();
+    assert!(first
+        .read(&DiscoveryControl::default())
+        .unwrap()
+        .packet
+        .unwrap()
+        .text
+        .contains("Fresh synchronous facts"));
+    let cancelled = DiscoveryControl::default();
+    cancelled.cancel();
+    assert!(first.read(&cancelled).is_err());
+    assert!(first.read(&DiscoveryControl::new(Duration::ZERO)).is_err());
+    policy(&f, MemoryPolicy::Never);
+    assert_eq!(
+        first
+            .read(&DiscoveryControl::default())
+            .unwrap()
+            .decision
+            .reason,
+        "KIT_MEMORY_POLICY_NEVER"
+    );
+    policy(&f, MemoryPolicy::Manual);
+    first.retire();
+    assert!(matches!(
+        first.read(&DiscoveryControl::default()),
+        Err(MemoryTrustError::Worker(MemoryWorkError::Read(
+            ReadError::Cancelled
+        )))
+    ));
+    drop(first);
+    assert!(second
+        .read(&DiscoveryControl::default())
+        .unwrap()
+        .packet
+        .is_some());
+}
+
+#[test]
+fn synchronous_failed_binding_releases_its_reserved_slot_without_mutating_state() {
+    let f = fixture();
+    let before = bytes(&f);
+    let mut review = synchronous_review(&f);
+    review.expires = Instant::now();
+    let budget = Arc::new(AtomicUsize::new(0));
+    let slot = SessionSlot::acquire(budget.clone()).unwrap();
+    assert!(matches!(
+        MemoryContextSession::bind_with_slot(
+            review,
+            MemorySessionUse::Enabled,
+            &DiscoveryControl::default(),
+            slot
+        ),
+        Err(MemoryTrustError::Changed)
+    ));
+    assert_eq!(budget.load(Ordering::Acquire), 0);
+    assert_eq!(bytes(&f), before);
+}
+
 #[test]
 fn native_context_applies_manual_always_never_and_explicit_session_disable_without_writes() {
     for (local, choice, expected) in [

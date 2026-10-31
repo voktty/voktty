@@ -1,6 +1,6 @@
 # Native session context preparation
 
-`MemoryWorkers::bind_context_session` consumes an existing native
+`MemoryContextSession::bind` and `MemoryWorkers::bind_context_session` consume an existing native
 `MemoryTrustReview` with an explicit `MemorySessionUse` choice. The review is
 an immutable observation for display, separate from accepting instruction trust.
 Binding repeats its scope, root identity, instruction fingerprint, configuration,
@@ -21,7 +21,7 @@ caller must associate this owner with the exact originating conversation and
 retire it before changing that conversation's execution context. A view ID,
 path string or provider resume ID cannot establish that association.
 
-`MemoryWorkers::session_context` prepares a fresh bounded `MemoryContextResult`.
+`MemoryContextSession::read` and `MemoryWorkers::session_context` prepare a fresh bounded `MemoryContextResult`.
 It checks the original directory identities and complete ancestor scope, then
 loads effective preferences for that root. The shared decision core evaluates
 the local policy, session choice and trusted digest before instruction reads.
@@ -46,6 +46,15 @@ until its physical worker and response have settled. Independent bindings never
 adopt each other's authority or retirement. Keeping an idle binding starts no
 timer, watcher or provider; workers run only for requested binding or reads.
 
+Synchronous owners use the same binding constructor, process-wide session budget,
+scope and policy checks, and packet builder without creating an async runtime.
+They consume the original native review and retain the session until their exact
+conversation ends. Synchronous reads hold native read permits and the discovery
+deadline; the four-worker admission and response-retirement wrapper applies only
+to worker calls. Retirement and dropping remain independent for each binding.
+No synchronous call writes preferences, accepts instruction trust or starts a
+provider. A prepared packet is not evidence of provider delivery.
+
 Binding and read consumers also check the captured root authority after receiving
 a ready worker result, so retirement before consumption cannot deliver that result.
 
@@ -62,7 +71,7 @@ source into its confirmed context. See the
 [native owner contract](../../src/modules/project_memory/CONTEXT.md). A panel
 retires sources it still owns; a promoted context requires its own release.
 The desktop exposes explicit opaque context resources through the native owner
-contract. Frontend clients, Harness/internal-agent/CLI consumers and visual
-activation remain integration work. SSH, WSL and Docker
+contract. Standalone CLI managed-launch consumption remains integration work.
+SSH, WSL and Docker
 must use their own qualified transports rather than this local reader. Native
 Windows/macOS/Android runtime qualification remains pending.
