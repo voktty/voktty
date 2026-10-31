@@ -14,10 +14,13 @@ use voktty_memory_local::{
 #[path = "memory_tests.rs"]
 mod tests;
 
+mod init;
+
 #[derive(Debug, PartialEq)]
 pub(super) enum MemoryCommand {
     Help,
     Status { project: Option<PathBuf> },
+    Init(init::InitOptions),
 }
 
 pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
@@ -40,19 +43,27 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
             let mut project = None;
             while let Some(arg) = args.next() {
                 if arg != "--project" || project.is_some() {
-                    return Err(usage_error("memory status accepts only one --project <directory>"));
+                    return Err(usage_error(
+                        "memory status accepts only one --project <directory>",
+                    ));
                 }
-                let value = args.next().filter(|s| !s.is_empty()).ok_or_else(|| {
-                    usage_error("--project requires a directory")
-                })?;
+                let value = args
+                    .next()
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| usage_error("--project requires a directory"))?;
                 if value.to_str().is_some_and(|s| s.starts_with('-')) {
-                    return Err(usage_error("--project requires a directory; use ./ for names beginning with -"));
+                    return Err(usage_error(
+                        "--project requires a directory; use ./ for names beginning with -",
+                    ));
                 }
                 project = Some(PathBuf::from(value));
             }
             Ok(MemoryCommand::Status { project })
         }
-        _ => Err(usage_error("available memory command: status [--project <directory>]; initialize or change use through Project Memory in Voktty")),
+        "init" => init::parse(args.collect()),
+        _ => Err(usage_error(
+            "available memory commands: status|init; use memory --help",
+        )),
     }
 }
 
@@ -227,16 +238,17 @@ fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
         },
         "policy":policy,
         "trust":trust,
-        "capabilities":{"discovery":true, "initialization":false, "contextDelivery":false, "capture":false},
+        "capabilities":{"discovery":true, "initialization":true, "contextDelivery":false, "capture":false},
     }))
 }
 
 pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, CliError> {
     match command {
         MemoryCommand::Help => {
-            println!("Usage: voktty memory status [--project <directory>] [--json]\n\nInspects local memory markers without creating a kit or starting an agent.\nUses the current directory when --project is omitted. Instruction trust is not rechecked.\nInitialize or change use through Project Memory in Voktty.");
+            println!("Usage: voktty memory status [--project <directory>] [--json]\n       voktty memory init [--project <directory>] [--set <name=value>]...\n                          [--link-agents] [--link-claude]\n                          [--preview | --yes [--accept-plan <sha256>]] [--json]\n\nStatus reads markers without changing project files. Init reviews the shared template,\ncreates files only after acceptance and does not enable memory, captures or agents.\nWithout an interactive terminal, init requires --preview or --yes and --project.\nExisting rules and private-ignore migrations require a reviewed --accept-plan digest\nwith --yes, or interactive acceptance. Unknown conflicts are never overwritten.\n--set names: project_name, project_summary, owner_title, primary_branch, verify_commands,\n             language, created_at (YYYY-MM-DD), default_runtime, default_model.\nDefaults: folder name, current UTC date, English and the shared template defaults.\nProject memory may be committed to Git; review content before sharing it.");
             Ok(ExitCode::SUCCESS)
         }
+        MemoryCommand::Init(options) => init::run(options, as_json),
         MemoryCommand::Status { project } => {
             let project = project.unwrap_or_else(|| PathBuf::from("."));
             let project = if project.is_absolute() {

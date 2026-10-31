@@ -9160,6 +9160,7 @@ name = "voktty-cli"
 version = "1.0.19"
 dependencies = [
  "base64 0.23.1",
+ "chrono",
  "dirs 7.0.0",
  "hex",
  "libc",
@@ -9167,6 +9168,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "uuid",
  "voktty-aliases",
  "voktty-control-protocol",
  "voktty-memory-local",
@@ -9202,10 +9204,12 @@ dependencies = [
 name = "voktty-memory-local"
 version = "1.0.19"
 dependencies = [
+ "hex",
  "libc",
  "regex",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "uuid",

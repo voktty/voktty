@@ -341,3 +341,41 @@ fn retained_partial_review_preserves_recovery_intent_without_new_transaction() {
     assert!(f.project.path().join(".voktty/kit.json").exists());
     assert!(!f.state.path().join(INTENT).exists());
 }
+
+#[test]
+fn acceptance_digest_is_stable_across_fresh_migration_transaction_ids() {
+    let f = fixture();
+    fs::create_dir(f.project.path().join(".voktty")).unwrap();
+    fs::write(f.project.path().join(".voktty/.gitignore"), "*\n").unwrap();
+    let first = owned(&f);
+    let second = owned(&f);
+    assert_ne!(first.intent.transaction, second.intent.transaction);
+    assert_eq!(first.acceptance_digest(), second.acceptance_digest());
+    assert_eq!(first.acceptance_digest().len(), 64);
+    fs::write(f.project.path().join(".voktty/.gitignore"), "*\r\n").unwrap();
+    assert_ne!(first.acceptance_digest(), owned(&f).acceptance_digest());
+}
+
+#[test]
+fn acceptance_digest_changes_with_native_root_or_preference_revision() {
+    let f = fixture();
+    let first = owned(&f).acceptance_digest();
+    let workspace = LocalMemoryWorkspace::open(
+        &f.store,
+        f.project.path(),
+        f.origin.as_ref(),
+        &ReadControl::default(),
+    )
+    .unwrap();
+    f.store
+        .set_policy(0, workspace.project_key(), MemoryPolicy::Never)
+        .unwrap();
+    let changed = owned(&f).acceptance_digest();
+    assert_ne!(first, changed);
+    let saved = f.project.path().with_extension("digest-saved");
+    fs::rename(f.project.path(), &saved).unwrap();
+    fs::create_dir(f.project.path()).unwrap();
+    assert_ne!(changed, owned(&f).acceptance_digest());
+    fs::remove_dir(f.project.path()).unwrap();
+    fs::rename(saved, f.project.path()).unwrap();
+}

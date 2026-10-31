@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 use voktty_workspace_kit::{
     prepare_deployment, render_template, resource, DeploymentAction, PathFact, PreparedDeployment,
     RootLinks,
@@ -206,6 +207,25 @@ pub struct OwnedInitializationPreview {
 }
 
 impl OwnedInitializationPreview {
+    /// Binds CLI acceptance to the native root identities, preference revision
+    /// and exact reviewed bytes, without exposing private identity material.
+    pub fn acceptance_digest(&self) -> String {
+        let review = serde_json::json!({
+            "schema":1,
+            "origin":self.intent.origin,
+            "destination":self.intent.destination,
+            "originBinding":self.intent.origin_id,
+            "destinationBinding":self.intent.destination_id,
+            "revision":self.revision,
+            "deployment":self.prepared,
+            "resuming":self.resuming,
+            "recovery":self.recovery.iter().map(|file| {
+                serde_json::json!({"path":file.path,"text":file.text})
+            }).collect::<Vec<_>>(),
+        });
+        hex::encode(Sha256::digest(review.to_string().as_bytes()))
+    }
+
     pub fn write_requirements(&self) -> PublicationWriteRequirements {
         let mut requirements = PublicationWriteRequirements {
             root: self.destination.root().to_owned(),
