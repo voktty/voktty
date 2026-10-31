@@ -4,7 +4,18 @@ import type { RuntimeMode, TaskListItem, TaskListMeta } from "../session";
 import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { loadClaudeHooks } from "../settings";
 import {
+  assertHarnessMemoryTarget,
+  type HarnessMemoryTurnSource,
+  type PreparedHarnessMemory,
+} from "@/modules/harness/lib/harnessMemoryDelivery";
+import {
+  buildClaudeMemoryInput,
+  isClaudeMemoryEcho,
+  supportsClaudeMemoryReplay,
+} from "@/modules/harness/lib/harness/claudeMemory";
+import {
   closeRetiredRawChildren,
+  execChild,
   type RawChildHandle,
   reserveRawChild,
   resolveClaudeBinary,
@@ -142,6 +153,17 @@ type Live = {
   emittedReasoning: string;
   manualCompaction: boolean;
   compactionConfirmed: boolean;
+  memoryContext?: object;
+  memoryInputs?: Map<string, MemoryInput>;
+};
+
+type MemoryInput = {
+  uuid: string;
+  prepared: PreparedHarnessMemory;
+  message: Record<string, unknown>;
+  written: boolean;
+  echoed: boolean;
+  timer?: ReturnType<typeof setTimeout>;
 };
 
 type Admission = {
@@ -152,6 +174,7 @@ type Admission = {
   settingsKey: string;
   retired: boolean;
   openingComplete: boolean;
+  replay: boolean;
   generation: object;
   handle?: RawChildHandle;
   opening?: Promise<Live>;
@@ -169,6 +192,9 @@ type Resume = {
 const INIT_TIMEOUT_MS = 8_000;
 const MAX_PENDING_WRITES = 256;
 let pendingWrites = 0;
+const MAX_MEMORY_INPUTS = 256;
+const MEMORY_ACK_TIMEOUT_MS = 30_000;
+let pendingMemoryInputs = 0;
 
 const liveByThread = new Map<string, Live>();
 const admissions = new Map<string, Admission>();
@@ -225,6 +251,7 @@ function recordWriterFailure(admission: Admission, error: Error): void {
   admission.failure = error;
   const live = admission.live;
   if (!live) return;
+  retireMemoryInputs(live);
   live.muteUpdates = true;
   live.activeTurn = false;
   const failed = live.turnFailed;
@@ -266,6 +293,7 @@ function closeAdmission(admission: Admission, cancelled = true): Promise<void> {
   retireAdmission(admission);
   const live = admission.live;
   if (live) {
+    retireMemoryInputs(live);
     if (cancelled) live.cancelled = true;
     live.muteUpdates = true;
     for (const pending of live.approvals.values()) pending.resolve("deny");
@@ -300,8 +328,13 @@ export async function sendClaudeTurn(request: SendTurnInput): Promise<void> {
     ...request,
     attachments: request.attachments?.map((attachment) => ({ ...attachment })),
   });
+  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
+  if (input.projectMemory && input.text.trimStart().startsWith("/"))
+    throw new Error(
+      "Project memory cannot be delivered with a Claude slash command. Disable memory or use the dedicated command action.",
+    );
   if (cancelledThreads.delete(input.sessionId)) return;
-  const admission = ensureLive(input);
+  const admission = ensureLive(input, false, input.projectMemory !== undefined);
   const generation = admission.generation;
   const opening = admission.opening;
   if (!opening) throw new Error("Claude session was retired");
@@ -352,6 +385,7 @@ export async function compactClaudeContext(
       live.muteUpdates = false;
       live.manualCompaction = true;
       live.compactionConfirmed = false;
+      invalidateMemoryContext(live);
       try {
         await runTurn(
           live,
@@ -378,11 +412,19 @@ export async function compactClaudeContext(
 }
 
 export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
+  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
   const live = liveByThread.get(input.sessionId);
   if (live) guardUsable(live.admission);
   if (!live?.activeTurn) throw new Error("No active turn to steer");
   const generation = live.admission.generation;
   guardOperation(live, generation);
+  if (
+    input.projectMemory &&
+    (!live.admission.replay || input.text.trimStart().startsWith("/"))
+  )
+    throw new Error(
+      "Claude memory follow-ups require a replay-enabled process and a normal prompt. Queue the follow-up instead.",
+    );
 
   const message = buildClaudeUserMessage({
     text: input.text,
@@ -392,8 +434,29 @@ export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
   const content = (message.message as { content: unknown[] }).content;
   if (content.length === 0) return;
 
-  await writeJson(live, message);
-  guardOperation(live, generation);
+  let memory: MemoryInput | undefined;
+  let completed = false;
+  try {
+    if (input.projectMemory)
+      memory = await prepareMemoryInput(
+        live,
+        input.projectMemory,
+        message,
+        generation,
+      );
+    guardOperation(live, generation);
+    memory?.prepared.assertCurrent();
+    guardOperation(live, generation);
+    await writeJson(live, memory?.message ?? message);
+    guardOperation(live, generation);
+    completed = true;
+    if (memory) {
+      memory.written = true;
+      acknowledgeMemoryInput(live, memory);
+    }
+  } finally {
+    if (memory && !completed) settleMemoryInput(live, memory);
+  }
 }
 
 export function respondClaudeApproval(
@@ -449,6 +512,7 @@ export async function cancelClaudeTurn(sessionId: string): Promise<void> {
   }
   const interrupt = admission.interrupt;
   admission.generation = {};
+  invalidateMemoryContext(live);
   live.cancelled = true;
   live.muteUpdates = true;
   for (const [, pending] of live.approvals) pending.resolve("deny");
@@ -522,6 +586,7 @@ export function restoreClaudeTaskLists(
 function ensureLive(
   input: HarnessSessionInput,
   preservePlanning = false,
+  replay = false,
 ): Admission {
   const settingsKey = settingsKeyFor(input);
   const planning = input.intent === "plan";
@@ -538,6 +603,7 @@ function ensureLive(
     ) &&
     existing.settingsKey === settingsKey &&
     (preservePlanning || existing.planning === planning) &&
+    (!replay || existing.replay) &&
     existing.opening
   ) {
     return existing;
@@ -550,6 +616,7 @@ function ensureLive(
     settingsKey,
     retired: false,
     openingComplete: false,
+    replay,
     generation: {},
   };
   const launch = launchOptions(input, undefined, "");
@@ -603,6 +670,24 @@ async function startLive(
       ? { path: "claude" }
       : await resolveClaudeBinaryImpl();
     guardUsable(admission);
+    if (admission.replay) {
+      if (isRemote)
+        throw new Error("Claude project memory requires a local CLI.");
+      let version: string;
+      try {
+        version = await execChild(path, ["--version"]);
+      } catch {
+        guardUsable(admission);
+        throw new Error(
+          "Unable to verify the Claude CLI version for project memory.",
+        );
+      }
+      guardUsable(admission);
+      if (!supportsClaudeMemoryReplay(version))
+        throw new Error(
+          "Claude Code 2.1.312 or newer is required for acknowledged project memory input.",
+        );
+    }
     const handle = admission.handle;
     if (!handle) throw new Error("Claude session was retired");
     const claudeSessionId =
@@ -678,17 +763,16 @@ async function startLive(
 
     guardUsable(admission);
     liveByThread.set(input.sessionId, live);
-    await handle.spawn(
-      path,
-      buildClaudeSpawnArgs({
-        ...launch,
-        resume: resumeId,
-        sessionId: resumeId ? undefined : claudeSessionId,
-      }),
-      input.cwd,
-      input.networkAllowlist,
-      { provider: "claude", id: input.providerAccountId ?? "default" },
-    );
+    const args = buildClaudeSpawnArgs({
+      ...launch,
+      resume: resumeId,
+      sessionId: resumeId ? undefined : claudeSessionId,
+    });
+    if (admission.replay) args.push("--replay-user-messages");
+    await handle.spawn(path, args, input.cwd, input.networkAllowlist, {
+      provider: "claude",
+      id: input.providerAccountId ?? "default",
+    });
     guardUsable(admission);
     resumeByThread.set(input.sessionId, {
       sessionId: live.claudeSessionId,
@@ -719,6 +803,92 @@ async function startLive(
   }
 }
 
+function detachMemoryInput(live: Live, input: MemoryInput): boolean {
+  if (live.memoryInputs?.get(input.uuid) !== input) return false;
+  live.memoryInputs.delete(input.uuid);
+  if (input.timer !== undefined) clearTimeout(input.timer);
+  pendingMemoryInputs -= 1;
+  return true;
+}
+
+function settleMemoryInput(live: Live, input: MemoryInput): void {
+  if (detachMemoryInput(live, input)) input.prepared.settle();
+}
+
+function retireMemoryInputs(live: Live): void {
+  for (const input of live.memoryInputs?.values() ?? [])
+    settleMemoryInput(live, input);
+}
+
+function invalidateMemoryContext(live: Live): void {
+  retireMemoryInputs(live);
+  if (live.memoryContext) live.memoryContext = {};
+}
+
+function acknowledgeMemoryInput(live: Live, input: MemoryInput): void {
+  if (!input.written || !input.echoed || !detachMemoryInput(live, input))
+    return;
+  try {
+    input.prepared.acknowledge(input.message.session_id as string);
+  } finally {
+    input.prepared.settle();
+  }
+}
+
+async function prepareMemoryInput(
+  live: Live,
+  source: HarnessMemoryTurnSource,
+  message: Record<string, unknown>,
+  generation: object,
+): Promise<MemoryInput | undefined> {
+  guardOperation(live, generation);
+  assertHarnessMemoryTarget(source, live.cwd);
+  live.memoryContext ??= {};
+  const context = live.memoryContext;
+  const providerSessionId = live.claudeSessionId;
+  const prepared = await source.prepare(
+    context,
+    { adapter: "claude", providerSessionId },
+    () => {
+      guardOperation(live, generation);
+      if (live.memoryContext !== context)
+        throw new Error("Claude memory context changed");
+    },
+  );
+  if (!prepared) return;
+  try {
+    guardOperation(live, generation);
+    prepared.assertCurrent();
+    guardOperation(live, generation);
+    if (pendingMemoryInputs >= MAX_MEMORY_INPUTS)
+      throw new Error("Claude memory acknowledgement capacity exceeded");
+    const uuid = crypto.randomUUID();
+    const input: MemoryInput = {
+      uuid,
+      prepared,
+      message: buildClaudeMemoryInput(
+        message,
+        prepared.prefix,
+        uuid,
+        providerSessionId,
+      ),
+      written: false,
+      echoed: false,
+    };
+    live.memoryInputs ??= new Map();
+    live.memoryInputs.set(uuid, input);
+    pendingMemoryInputs += 1;
+    input.timer = setTimeout(
+      () => settleMemoryInput(live, input),
+      MEMORY_ACK_TIMEOUT_MS,
+    );
+    return input;
+  } catch (error) {
+    prepared.settle();
+    throw error;
+  }
+}
+
 async function runTurn(
   live: Live,
   input: SendTurnInput,
@@ -734,38 +904,58 @@ async function runTurn(
   const content = (message.message as { content: unknown[] }).content;
   if (content.length === 0) return;
 
-  live.emittedAssistant = "";
-  live.emittedReasoning = "";
-  live.toolsByIndex.clear();
-  live.toolsById.clear();
-  live.agentTasks.clear();
-  live.turnResultSeen = false;
-
-  const turnPromise = new Promise<void>((resolve, reject) => {
-    live.turnDone = resolve;
-    live.turnFailed = reject;
-  });
-  void turnPromise.catch(() => undefined);
-  live.activeTurn = true;
-  settlePendingTurn(live);
-
+  let memory: MemoryInput | undefined;
   try {
-    await writeJson(live, message);
-    if (live.cancelled || live.admission.generation !== generation) return;
+    if (input.projectMemory)
+      memory = await prepareMemoryInput(
+        live,
+        input.projectMemory,
+        message,
+        generation,
+      );
     guardOperation(live, generation);
-    settlePendingTurn(live);
-    await turnPromise;
-    if (!live.cancelled) guardOperation(live, generation);
-  } catch (error) {
-    if (live.cancelled) return;
-    live.onEvent({
-      type: "session.error",
-      message: error instanceof Error ? error.message : String(error),
+    memory?.prepared.assertCurrent();
+    guardOperation(live, generation);
+
+    live.emittedAssistant = "";
+    live.emittedReasoning = "";
+    live.toolsByIndex.clear();
+    live.toolsById.clear();
+    live.agentTasks.clear();
+    live.turnResultSeen = false;
+
+    const turnPromise = new Promise<void>((resolve, reject) => {
+      live.turnDone = resolve;
+      live.turnFailed = reject;
     });
-    throw error;
+    void turnPromise.catch(() => undefined);
+    live.activeTurn = true;
+    settlePendingTurn(live);
+
+    try {
+      await writeJson(live, memory?.message ?? message);
+      if (live.cancelled || live.admission.generation !== generation) return;
+      guardOperation(live, generation);
+      if (memory) {
+        memory.written = true;
+        acknowledgeMemoryInput(live, memory);
+      }
+      settlePendingTurn(live);
+      await turnPromise;
+      if (!live.cancelled) guardOperation(live, generation);
+    } catch (error) {
+      if (live.cancelled) return;
+      live.onEvent({
+        type: "session.error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    } finally {
+      live.turnDone = null;
+      live.turnFailed = null;
+    }
   } finally {
-    live.turnDone = null;
-    live.turnFailed = null;
+    if (memory) settleMemoryInput(live, memory);
   }
 }
 
@@ -776,6 +966,15 @@ function handleLine(sessionId: string, live: Live, line: string): void {
 
   const type = stringField(rec, "type");
   if (type === "keep_alive") return;
+  if (type === "user" && rec.isReplay === true) {
+    const uuid = stringField(rec, "uuid");
+    const memory = uuid ? live.memoryInputs?.get(uuid) : undefined;
+    if (memory && isClaudeMemoryEcho(rec, memory.message)) {
+      memory.echoed = true;
+      acknowledgeMemoryInput(live, memory);
+    }
+    return;
+  }
 
   const cancelId = parseControlCancelId(rec);
   if (cancelId) {
@@ -804,6 +1003,7 @@ function handleLine(sessionId: string, live: Live, line: string): void {
 
   const sessionIdFromLine = sessionIdFromMessage(rec);
   if (sessionIdFromLine && sessionIdFromLine !== live.claudeSessionId) {
+    invalidateMemoryContext(live);
     live.claudeSessionId = sessionIdFromLine;
     // A different conversation starts with its own task ids.
     live.claudeTasks = new Map();
@@ -862,6 +1062,8 @@ function handleLine(sessionId: string, live: Live, line: string): void {
     return;
   }
   if (type === "system") {
+    if ((stringField(rec, "subtype") ?? "").startsWith("compact"))
+      invalidateMemoryContext(live);
     const text = statusTextFromSystem(rec);
     if (text) {
       if ((stringField(rec, "subtype") ?? "").startsWith("compact")) {

@@ -51,6 +51,30 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+it("requires a known Claude binding and isolates reuse from other adapters", async () => {
+  const f = fixture();
+  const context = {};
+  const target = { adapter: "claude" as const, providerSessionId: "provider" };
+  const prepared = await f.source.prepare(context, target, () => {});
+  expect(prepared?.acknowledge("other")).toBe(false);
+  expect(f.delivery.receipt()).toBeNull();
+  (await f.source.prepare(context, target, () => {}))?.acknowledge();
+  expect(f.delivery.receipt()?.adapter).toBe("claude");
+  const repeat = await f.source.prepare(context, target, () => {});
+  expect(repeat?.prefix).toBeNull();
+  repeat?.acknowledge();
+  const codex = await f.source.prepare(context, "provider", () => {});
+  expect(codex?.prefix).toBe(result().packet?.text);
+  codex?.settle();
+  await expect(
+    f.source.prepare(
+      context,
+      { adapter: "claude", providerSessionId: "" },
+      () => {},
+    ),
+  ).rejects.toMatchObject({ code: "unavailable" });
+});
+
 it("records acceptance separately from preparation and reads policy even for an unchanged provider", async () => {
   const f = fixture();
   const provider = {};

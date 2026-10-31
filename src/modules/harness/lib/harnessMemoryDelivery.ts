@@ -15,7 +15,10 @@ export type HarnessMemoryTurnSource = Readonly<{
   assertCurrent: () => void;
   prepare: (
     providerContext: object,
-    target: string | Readonly<{ adapter: "agy"; providerSessionId?: string }>,
+    target:
+      | string
+      | Readonly<{ adapter: "agy"; providerSessionId?: string }>
+      | Readonly<{ adapter: "claude"; providerSessionId: string }>,
     assertTransportCurrent: () => void,
   ) => Promise<PreparedHarnessMemory | null>;
 }>;
@@ -77,7 +80,9 @@ export function createHarnessMemoryDelivery(
           if (conversation.status() === "inactive") return null;
           if (conversation.status() !== "ready") fail("busy");
           if (
-            (adapter !== "codex" && adapter !== "agy") ||
+            (adapter !== "codex" &&
+              adapter !== "agy" &&
+              adapter !== "claude") ||
             (providerSessionId === undefined
               ? adapter !== "agy"
               : !validProviderSessionId(providerSessionId))
@@ -104,7 +109,7 @@ export function createHarnessMemoryDelivery(
               fail(result?.decision.reason ?? "unavailable");
             const packet = Object.freeze({ ...result.packet });
             const alreadyDelivered =
-              adapter === "codex" &&
+              (adapter === "codex" || adapter === "claude") &&
               inFlight === 1 &&
               acknowledgedContext === providerContext &&
               receipt !== null &&
