@@ -5,6 +5,7 @@ import {
   stepCountIs,
   streamText,
   type LanguageModel,
+  type ModelMessage,
   type UIMessage,
 } from "ai";
 import {
@@ -33,6 +34,7 @@ import { createProxyFetch } from "./proxyFetch";
 import { reconcileFileToolCalls } from "@/modules/ai/lib/chatFileTools";
 import { fileToolCallsFor } from "@/modules/ai/lib/fileToolCalls";
 import { guardToolRun } from "@/modules/ai/lib/toolRunGuard";
+import { hasAiMemoryInput } from "@/modules/ai/lib/aiMemoryDelivery";
 import {
   fileToolApprovalTransform,
   retireFileToolRun,
@@ -408,9 +410,13 @@ export type RunAgentOptions = {
   abortSignal?: AbortSignal;
   isCurrent?: () => boolean;
   isToolRunCurrent?: () => boolean;
+  projectKitInput?: Readonly<{ text: string; onResponse: () => void }>;
 };
 
 export async function runAgentStream(opts: RunAgentOptions) {
+  const projectKitInput = opts.projectKitInput
+    ? { ...opts.projectKitInput }
+    : undefined;
   const toolContext = opts.toolContext;
   const abortSignal = opts.abortSignal;
   const isCurrent = opts.isCurrent;
@@ -429,6 +435,11 @@ export async function runAgentStream(opts: RunAgentOptions) {
   reconcileFileToolCalls(toolContext, opts.uiMessages);
   assertCurrent();
   const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
+  if (
+    projectKitInput &&
+    resolveModel(modelId, opts.customEndpoints ?? []).provider === "harness"
+  )
+    throw new Error("Project memory: KIT_MEMORY_MODEL_UNSUPPORTED");
   const model = await buildConfiguredLanguageModel(modelId, opts.keys, {
     lmstudioBaseURL: opts.lmstudioBaseURL,
     lmstudioModelId: opts.lmstudioModelId,
@@ -483,26 +494,39 @@ export async function runAgentStream(opts: RunAgentOptions) {
     compactedHistory,
     provider,
   );
+  if (
+    projectKitInput &&
+    !hasAiMemoryInput(prompt.messages, projectKitInput.text)
+  )
+    throw new Error("Project memory: KIT_MEMORY_INPUT_CHANGED");
   const mcpTools = await loadMcpToolsForRun(opts.uiMessages);
   assertCurrent();
 
   let stepsSeen = 0;
+  let responseEligible = true;
+  let responseReported = false;
   const tools = buildTools(toolContext, mcpTools, opts.onSubagentStep);
   assertCurrent();
   const providerTools = isToolRunCurrent
     ? guardToolRun(tools, isToolRunCurrent)
     : tools;
   if (isToolRunCurrent) assertCurrent();
+  const assertMemoryInput = (messages: readonly ModelMessage[]) => {
+    if (projectKitInput && !hasAiMemoryInput(messages, projectKitInput.text))
+      throw new Error("Project memory: KIT_MEMORY_INPUT_CHANGED");
+  };
+  assertMemoryInput(prompt.messages);
   return streamText({
     model,
     system: prompt.system,
     messages: prompt.messages,
     allowSystemInMessages: false,
     tools: providerTools,
-    ...(isToolRunCurrent
+    ...(isToolRunCurrent || projectKitInput
       ? {
-          prepareStep: () => {
+          prepareStep: (step: { messages: ModelMessage[] }) => {
             assertCurrent();
+            if (projectKitInput) assertMemoryInput(step.messages);
             return {};
           },
         }
@@ -510,8 +534,35 @@ export async function runAgentStream(opts: RunAgentOptions) {
     experimental_transform: fileToolApprovalTransform(tools, prompt.messages),
     stopWhen: stepCountIs(MAX_AGENT_STEPS),
     abortSignal,
-    onAbort: () => retireFileToolRun(tools),
-    onError: () => retireFileToolRun(tools),
+    onAbort: () => {
+      responseEligible = false;
+      retireFileToolRun(tools);
+    },
+    onError: () => {
+      responseEligible = false;
+      retireFileToolRun(tools);
+    },
+    ...(projectKitInput
+      ? {
+          onLanguageModelCallEnd: (event: { finishReason: string }) => {
+            if (
+              responseReported ||
+              !responseEligible ||
+              !["stop", "length", "content-filter", "tool-calls"].includes(
+                event.finishReason,
+              )
+            )
+              return;
+            try {
+              assertCurrent();
+            } catch {
+              return;
+            }
+            responseReported = true;
+            projectKitInput.onResponse();
+          },
+        }
+      : {}),
     onStepFinish: (step) => {
       stepsSeen++;
       if (opts.onStep) {

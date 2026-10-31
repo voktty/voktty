@@ -12,6 +12,16 @@ export type AiProjectKitMemorySource = Readonly<{
   assertCurrent: () => void;
   subscribe: (listener: () => void) => () => void;
   read: (assertCallerCurrent: () => void) => Promise<MemoryContextPacket>;
+  prepare?: (
+    modelId: string,
+    assertCallerCurrent: () => void,
+  ) => Promise<PreparedAiMemoryInput>;
+}>;
+
+export type PreparedAiMemoryInput = Readonly<{
+  packet: MemoryContextPacket;
+  acknowledge: () => boolean;
+  settle: () => void;
 }>;
 
 let pendingReads = 0;

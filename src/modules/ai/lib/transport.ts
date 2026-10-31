@@ -12,6 +12,7 @@ import {
   assertAiProjectKitMemoryTarget,
   prependAiProjectKitMemory,
   type AiProjectKitMemorySource,
+  type PreparedAiMemoryInput,
 } from "@/modules/ai/lib/projectKitMemory";
 import { guardRunStream } from "@/modules/ai/lib/runStreamGuard";
 import { captureAiMessageSnapshot } from "@/modules/ai/lib/messageSnapshot";
@@ -159,6 +160,7 @@ export function createContextAwareTransport(deps: Deps) {
       ? captureAiMessageSnapshot(options.messages)
       : null;
     let snapshotHandedOff = false;
+    let preparedMemory: PreparedAiMemoryInput | undefined;
     try {
       const submittedMessages = snapshot?.messages ?? options.messages;
       if (
@@ -219,7 +221,12 @@ export function createContextAwareTransport(deps: Deps) {
         ? injectEnvIntoLastUser(submittedMessages, envBlock)
         : submittedMessages;
       if (kitMemory) {
-        const packet = await kitMemory.read(assertCurrent);
+        preparedMemory = await kitMemory.prepare?.(
+          captured.modelId,
+          assertCurrent,
+        );
+        const packet =
+          preparedMemory?.packet ?? (await kitMemory.read(assertCurrent));
         assertCurrent();
         messagesForRun = prependAiProjectKitMemory(messagesForRun, packet);
       }
@@ -264,6 +271,16 @@ export function createContextAwareTransport(deps: Deps) {
           abortSignal: kitAbort?.signal ?? abortSignal,
           projectMemory,
           uiMessages: messagesForRun,
+          ...(preparedMemory
+            ? {
+                projectKitInput: {
+                  text: preparedMemory.packet.text,
+                  onResponse: () => {
+                    if (canPublish()) preparedMemory?.acknowledge();
+                  },
+                },
+              }
+            : {}),
         });
         assertCurrent();
         const stream = result.toUIMessageStream({
@@ -279,7 +296,13 @@ export function createContextAwareTransport(deps: Deps) {
             requestActive,
             retireKit,
             cleanup,
-            snapshot.release,
+            () => {
+              try {
+                preparedMemory?.settle();
+              } finally {
+                snapshot.release();
+              }
+            },
           );
           snapshotHandedOff = true;
           return guarded;
@@ -292,7 +315,13 @@ export function createContextAwareTransport(deps: Deps) {
         throw error;
       }
     } finally {
-      if (!snapshotHandedOff) snapshot?.release();
+      if (!snapshotHandedOff) {
+        try {
+          preparedMemory?.settle();
+        } finally {
+          snapshot?.release();
+        }
+      }
     }
   };
 
