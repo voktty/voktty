@@ -15,6 +15,7 @@ use voktty_memory_local::{
 mod tests;
 
 mod init;
+mod launch;
 mod policy;
 mod trust;
 
@@ -25,6 +26,7 @@ pub(super) enum MemoryCommand {
     Init(init::InitOptions),
     Use(policy::UseOptions),
     Trust(trust::TrustOptions),
+    Run(launch::RunOptions),
 }
 
 pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
@@ -67,8 +69,9 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
         "init" => init::parse(args.collect()),
         "use" => policy::parse(args.collect()),
         "trust" => trust::parse(args.collect()),
+        "run" => launch::parse(args.collect()),
         _ => Err(usage_error(
-            "available memory commands: status|init|use|trust; use memory --help",
+            "available memory commands: status|init|use|trust|run; use memory --help",
         )),
     }
 }
@@ -265,14 +268,16 @@ fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
 pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, CliError> {
     match command {
         MemoryCommand::Help => {
+            println!("Launch: voktty memory run [--project <directory>] [--session|--no-memory]\n                          codex|claude|agy [-- <agent-args...>]\nLaunches with unchanged agent arguments and inherited terminal IO on Unix.\nNo permission launches without memory; requested memory currently stops before launch\nuntil the adapter delivery channel is verified. Use Project Memory to copy a startup message.\nRun never initializes a kit or private state. Wrapper --json is unavailable; agent --json\nafter -- is forwarded unchanged. Native Windows launch remains unavailable.\n");
             println!("Trust: voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]\n                          --preview | --accept-review <sha256> [--json]\nReviews complete instructions, then accepts only the matching review on this machine.\nDoes not change use policy, grant tools or enable context delivery or captures.\n");
-            println!("Policy: voktty memory use --always|--never|--manual [--project <directory>] [--preview] [--json]\n\nStores this machine's project policy without accepting instructions or enabling captures.\n--session requires an addressable conversation; use Project Memory in that conversation.\nStandalone session launch and delivery are not available yet.\n");
+            println!("Policy: voktty memory use --always|--never|--manual [--project <directory>] [--preview] [--json]\n\nStores this machine's project policy without accepting instructions or enabling captures.\n--session requires an addressable conversation; use Project Memory in that conversation.\nStandalone memory delivery is not available yet; run --no-memory launches on Unix.\n");
             println!("Usage: voktty memory status [--project <directory>] [--json]\n       voktty memory init [--project <directory>] [--set <name=value>]...\n                          [--link-agents] [--link-claude]\n                          [--preview | --yes [--accept-plan <sha256>]] [--json]\n\nStatus reads markers without changing project files. Init reviews the shared template,\ncreates files only after acceptance and does not enable memory, captures or agents.\nWithout an interactive terminal, init requires --preview or --yes and --project.\nExisting rules and private-ignore migrations require a reviewed --accept-plan digest\nwith --yes, or interactive acceptance. Unknown conflicts are never overwritten.\n--set names: project_name, project_summary, owner_title, primary_branch, verify_commands,\n             language, created_at (YYYY-MM-DD), default_runtime, default_model.\nDefaults: folder name, current UTC date, English and the shared template defaults.\nProject memory may be committed to Git; review content before sharing it.");
             Ok(ExitCode::SUCCESS)
         }
         MemoryCommand::Init(options) => init::run(options, as_json),
         MemoryCommand::Use(options) => policy::run(options, as_json),
         MemoryCommand::Trust(options) => trust::run(options, as_json),
+        MemoryCommand::Run(options) => launch::run(options, as_json),
         MemoryCommand::Status { project } => {
             let project = project.unwrap_or_else(|| PathBuf::from("."));
             let project = if project.is_absolute() {

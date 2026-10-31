@@ -25,6 +25,8 @@ voktty memory use --always|--never|--manual [--project <directory>]
                   [--preview] [--json]
 voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]
                     --preview | --accept-review <sha256> [--json]
+voktty memory run [--project <directory>] [--session|--no-memory]
+                  codex|claude|agy [-- <agent-args...>]
 ```
 
 App control commands require Voktty to be running. A command launched inside a Voktty pane targets that pane's space, even if another space or tab has UI focus. An external client without pane context falls back to the active UI context. `memory status` runs independently and uses its process directory or explicit `--project`, without control credentials or UI focus.
@@ -89,6 +91,16 @@ Preview displays the complete native instruction inventory and configuration, in
 
 Acceptance stores only this machine's root-bound instruction digest, preserves use policy including `never`, grants no tools or session permission, and delivers no context or captures. Successful schema-1 JSON uses the normal `ok/result` envelope with `root`, `reviewDigest`, `trustStored`, and false `policyChanged`, `contextActivated`, `capturesActivated` and `projectFilesChanged`. Preview additionally includes `config` and `instructions`, with `trustStored: false`. Usage errors exit 2; native/state IO errors exit 3; unavailable or changed review scopes exit 5. Errors redact file contents and private state. Linux process tests cover this flow; native Windows and macOS runtime qualification remains outstanding.
 
+## Standalone agent launch
+
+`memory run` currently implements the Unix execution contract; adapter memory delivery remains pending. It accepts only `codex`, `claude` or `agy`, with optional wrapper `--project` and mutually exclusive `--session`/`--no-memory` before the `--` separator. Every argument after that separator belongs to the agent and is forwarded unchanged, including empty arguments, non-UTF-8 bytes and the agent's `--json`. Wrapper `--json` is rejected because child output is inherited rather than wrapped in a Voktty envelope. Unknown adapters, duplicate or incompatible options and unseparated agent arguments fail before IO.
+
+The wrapper qualifies its selected native execution directory and observes bounded ancestor scope and existing root-bound policy through `memory status`'s shared implementation. It creates no kit or installation state, reads no instruction bodies and prompts for no consent. A complete absent or reserved scope, or a ready kit with Manual/Never and no session request, launches without integration and writes an actionable notice to stderr. Invalid, ambiguous or incomplete scopes fail explicitly. `--no-memory` skips kit and preference inspection after qualifying the directory. Existing runtime rule files remain outside Voktty's removal authority.
+
+An explicit session request requires a ready kit and cannot override Never. A session request or inherited Always currently fails before starting an agent with `memory_delivery_unavailable` and the manual startup-message alternative. The command never claims a prepared or delivered packet. Managed packet delivery remains unavailable; a successful passthrough launch is not a delivery receipt. Native synchronous context APIs are available for adapter integration. Official references document interactive initial user prompts for [Codex](https://developers.openai.com/codex/cli/reference/) and [Claude](https://code.claude.com/docs/en/cli-reference); Voktty still needs bounded version admission and channel verification before using them.
+
+On Unix the final step uses `CommandExt::exec`, replacing the wrapper with the chosen executable resolved through the caller's PATH. It keeps the selected cwd, terminal descriptors, process ID, process group, signals and native exit status without reconstructing shell text, intercepting stdin, installing aliases or starting an async runtime. The agent owns its process and provider behavior after replacement. Spawn failures use a redacted unavailable error. Native Windows launch is explicitly unavailable before project IO until its process and console contract is implemented. Linux fixtures cover argv, cwd, binary stdin, stdout/stderr, exit codes and signal behavior; native macOS runtime qualification remains outstanding.
+
 ## Transport and authentication
 
 The app binds an ephemeral loopback TCP port and writes a discovery descriptor to the user cache directory under `voktty/control.json`. The descriptor contains the protocol version, address, process id, app version, and a random 256-bit token.
@@ -122,7 +134,7 @@ Launcher directories for exited processes are removed at the next control-server
 
 `tauri.conf.json` declares `binaries/voktty-cli` as an external binary. Tauri selects the file with the current target-triple suffix and signs or packages it with the app. The release workflow passes its explicit Rust target to `scripts/build-cli.mjs`, which prevents an x86_64 macOS release from accidentally bundling an arm64 helper from the host.
 
-The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust brings the measured build to 9,289,008 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
+The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust measured 9,289,008 bytes and Unix agent launch brings the measured build to 9,299,784 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
 
 ## Current limits
 
