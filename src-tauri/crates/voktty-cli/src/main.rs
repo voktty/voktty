@@ -22,6 +22,8 @@ use voktty_control_protocol::{
     SERVER_RESPONSE_ID,
 };
 
+mod memory;
+
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const IO_TIMEOUT: Duration = Duration::from_secs(7);
 const EXIT_USAGE: u8 = 2;
@@ -55,6 +57,7 @@ enum Action {
         params: Value,
     },
     Alias(AliasCommand),
+    Memory(memory::MemoryCommand),
     HarnessWait {
         session_id: String,
         states: Vec<String>,
@@ -158,6 +161,7 @@ fn run(args: Vec<OsString>) -> Result<ExitCode, CliError> {
             Ok(ExitCode::SUCCESS)
         }
         Action::Alias(command) => run_alias(command, config.json),
+        Action::Memory(command) => memory::run(command, config.json),
         Action::HarnessWait {
             session_id,
             states,
@@ -250,6 +254,7 @@ fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
         Some("open") => parse_open(args)?,
         Some("review") => parse_review(args)?,
         Some("alias") => Action::Alias(parse_alias(args)?),
+        Some("memory") => Action::Memory(memory::parse(args)?),
         Some(
             name @ ("ipme" | "port" | "ports" | "sslcheck" | "jwt" | "envdiff" | "hash" | "sysinfo"
             | "bench"),
@@ -1993,6 +1998,7 @@ fn print_result(method: &str, result: Value, as_json: bool) {
 }
 
 fn print_help() {
+    println!("Standalone project memory: voktty memory status [--project <directory>] [--json]\n");
     println!(
         "Voktty command line interface\n\n\
 Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty harness list [--json]\n  voktty harness status|result <session-id> [--json]\n  voktty harness send <session-id> <text> [--json]\n  voktty harness wait <session-id> [--state <working|waiting|done>]... [--timeout <seconds>] [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\

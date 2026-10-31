@@ -9169,6 +9169,8 @@ dependencies = [
  "tempfile",
  "voktty-aliases",
  "voktty-control-protocol",
+ "voktty-memory-local",
+ "voktty-workspace-kit",
  "windows-sys 0.61.2",
 ]
 

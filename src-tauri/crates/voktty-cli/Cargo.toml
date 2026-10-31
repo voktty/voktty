@@ -18,6 +18,7 @@ serde_json = "1"
 sha2 = "0.10"
 voktty-aliases = { path = "../voktty-aliases" }
 voktty-control-protocol = { path = "../voktty-control-protocol" }
+voktty-memory-local = { path = "../voktty-memory-local" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -30,3 +31,4 @@ windows-sys = { version = "0.61", features = [
 
 [dev-dependencies]
 tempfile = "3"
+voktty-workspace-kit = { path = "../voktty-workspace-kit" }

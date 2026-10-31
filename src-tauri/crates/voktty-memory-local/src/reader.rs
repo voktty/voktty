@@ -164,6 +164,87 @@ pub struct NativeContextObservation {
     pub context: PathFact,
 }
 
+/// Resolves an explicitly requested local directory without creating state or
+/// granting access. Callers must still capture their own read/write authority.
+pub fn resolve_local_memory_directory(
+    requested: &Path,
+    control: &ReadControl,
+) -> Result<PathBuf, ReadError> {
+    let _permit = ReadPermit::acquire(control)?;
+    resolve_memory_directory(requested, control)
+}
+
+fn resolve_memory_directory(requested: &Path, control: &ReadControl) -> Result<PathBuf, ReadError> {
+    control.check()?;
+    platform::ensure_supported()?;
+    let text = requested.to_str().ok_or(ReadError::InvalidInput)?;
+    if text.contains("://")
+        || text.starts_with("//")
+        || (text.starts_with(r"\\") && !text.starts_with(r"\\?\"))
+    {
+        return Err(ReadError::Unsupported);
+    }
+    #[cfg(not(windows))]
+    if text.as_bytes().get(1) == Some(&b':') || text.contains('\\') {
+        return Err(ReadError::Unsupported);
+    }
+    if !requested.is_absolute() || !crate::path_policy::readable(text) {
+        return Err(ReadError::Denied);
+    }
+    if text.len() > 4096 || requested.components().count() > 128 {
+        return Err(ReadError::Limit);
+    }
+    platform::validate_requested_root(requested)?;
+    let root = std::fs::canonicalize(requested).map_err(|_| ReadError::Io)?;
+    control.check()?;
+    platform::validate_requested_root(&root)?;
+    let directory = platform::Directory::open_root(&root, control)?;
+    #[cfg(unix)]
+    directory.qualify_project_filesystem(control)?;
+    let root = directory.canonical_root(&root)?;
+    let text = root.to_str().ok_or(ReadError::InvalidInput)?;
+    if !crate::path_policy::readable(text) {
+        return Err(ReadError::Denied);
+    }
+    if text.len() > 4096 || root.components().count() > 128 {
+        return Err(ReadError::Limit);
+    }
+    control.check()?;
+    Ok(root)
+}
+
+/// Metadata/configuration discovery without an installation identity. Directory
+/// keys are invocation-local, never persistent project keys or trust receipts.
+pub fn inspect_local_memory_scope(
+    requested: &Path,
+    access: &dyn MemoryReadAccess,
+    control: &crate::DiscoveryControl,
+) -> Result<crate::NativeScopeObservation, ReadError> {
+    let phase = control.read_control()?;
+    let _permit = ReadPermit::acquire(&phase)?;
+    if !access.allows_workspace_root(requested) {
+        return Err(ReadError::Denied);
+    }
+    let root = resolve_memory_directory(requested, &phase)?;
+    if !access.allows_workspace_root(&root) {
+        return Err(ReadError::Denied);
+    }
+    let original = platform::Directory::open_root(&root, &phase)?;
+    let result = crate::discovery::gather(
+        &root,
+        &uuid::Uuid::new_v4().to_string(),
+        access,
+        crate::DiscoveryPurpose::Discover,
+        control,
+    )?;
+    let current = platform::Directory::open_root(&root, &control.read_control()?)?;
+    if current.identity() != original.identity() || !access.allows_workspace_root(&root) {
+        return Err(ReadError::StaleRoot);
+    }
+    control.read_control()?;
+    Ok(result)
+}
+
 /// Captures an authorized local execution root, not a resolved memory scope.
 /// Keep remote/WSL/Docker selection in its native transport; never fall back here.
 pub struct LocalMemoryWorkspace<'a> {
@@ -331,7 +412,9 @@ impl<'a> LocalMemoryWorkspace<'a> {
         &self.project_key
     }
 
-    pub(crate) fn observe_preference(
+    /// Observes only this captured root's effective preference. It neither reads
+    /// instructions nor establishes that an accepted digest is still current.
+    pub fn observe_preference(
         &self,
         control: &ReadControl,
     ) -> Result<(LocalMemorySnapshot, Option<ProjectPreference>), ReadError> {

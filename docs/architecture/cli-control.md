@@ -17,20 +17,34 @@ voktty alias run|test <name> [--] [args...] [--json]
 voktty alias import <file> [--json]
 voktty alias export <file> [--force] [--json]
 voktty ipme [--public] [--json]
+voktty memory status [--project <directory>] [--json]
 ```
 
-The app must already be running. A command launched inside a Voktty pane targets that pane's space, even if another space or tab has UI focus. An external client without pane context falls back to the active UI context.
+App control commands require Voktty to be running. A command launched inside a Voktty pane targets that pane's space, even if another space or tab has UI focus. An external client without pane context falls back to the active UI context. `memory status` runs independently and uses its process directory or explicit `--project`, without control credentials or UI focus.
 
 ## Components
 
 - `src-tauri/crates/voktty-control-protocol` contains dependency-light request, response, error, descriptor, and method types shared by the app and CLI.
-- `src-tauri/crates/voktty-cli` contains the standalone console client. It intentionally avoids Clap, Tokio and Tauri. Its blocking `reqwest` client is used only by the explicit `ipme --public` action.
+- `src-tauri/crates/voktty-cli` contains the standalone console client. It has no Clap or Tauri dependency and does not create an async runtime for memory discovery. It reuses the synchronous native memory reader and embedded kit validation resources; Tokio remains a transitive dependency of the existing HTTP and memory libraries.
+- `src-tauri/crates/voktty-memory-local` owns local memory path qualification, bounded native discovery and installation preferences. The CLI uses the same scope resolver, root bindings and secret-path protections as the desktop.
 - `src-tauri/crates/voktty-aliases` contains the dependency-light schema, validation, merge, context and atomic configuration core shared by the app and CLI.
 - `src-tauri/src/modules/control.rs` owns endpoint discovery, authentication, message limits, concurrency limits, timeouts, path canonicalization, and request routing.
 - `src/modules/control/` maps a caller pane to its tab and space, then performs the small set of UI-only actions.
 - `scripts/build-cli.mjs` builds the target-specific helper expected by Tauri's `externalBin` bundler.
 
 Rust handles `ping`, `capabilities`, authentication, and file validation directly. Actions that must mutate React state are emitted to the main webview and completed through `control_respond`. This keeps OS validation in Rust without duplicating the tab model outside React.
+
+## Standalone memory status
+
+`memory status` inspects the selected directory and its ancestor markers on the qualified local filesystem. It performs no descendant scan, instruction read, initialization, policy change or model call. Explicit invocation authorizes only ancestor directory metadata, bounded `.voktty` entry names and `kit.json` content. It does not register a desktop workspace or grant instruction access. Native reads reject links, unsupported filesystems, secret paths, invalid or oversized markers and incomplete ancestry through the existing reader. Discovery and verification share a five-second cooperative deadline; this cannot interrupt a blocked OS call.
+
+Discovery works without private state. The native stateless inspector uses invocation-local directory keys for the common pure resolver; these keys are omitted from CLI output and cannot identify a persistent project or grant trust. If a ready kit has existing private state, the CLI opens the fixed `dev.voktty/project-memory` directory beneath the native local application-data directory, matching Tauri's storage origin. It observes only that root's effective policy and whether an accepted instruction digest is stored, including native root-instance checks and final revalidation. Existing state may acquire its normal preferences lock; the command creates no application directories, installation identity or project files. Missing state reports the default `manual` policy separately from an unavailable state origin. Corrupt or inaccessible existing state is preserved and fails explicitly.
+
+Trust reports `not_checked`, `not_accepted` or `stored_not_checked`. The last value confirms only a stored digest, not that current instructions still match it. The command never prints instruction text, persistent project keys, installation IDs or other projects' preferences. Its current capabilities declare discovery only; CLI initialization, use and delivery remain unavailable and are not enabled by an `always` preference.
+
+With `--json`, stdout contains `{ "ok": true, "result": { "schema": 1, ... } }` for a completed observation. The result includes `transport`, canonical `directory`, a uniquely resolved `root` or null, `scope`, `policy`, `trust` and `capabilities`. `scope` includes state, ancestry completeness, ancestor-kit paths, blocked count and `descendantsChecked: false`. An ambiguous scope lists every observed ancestor kit and returns no selected root. Exit 0 means a complete `ready`, `absent` or `reserved` observation; exit 5 means an invalid, partial, ambiguous or incomplete scope, with the observation still on stdout. Usage errors exit 2; unavailable or refused native/state IO exits 3. Errors use the existing `{ "ok": false, "error": { "code", "message" } }` stderr envelope with redacted messages. `memory --help` describes the currently available command; unsupported subcommands fail before filesystem or control-plane IO.
+
+The local binary does not translate `remote://`, UNC, WSL or Docker destinations into local paths. Running a compatible CLI inside another environment uses that process's own native filesystem and installation state; it does not borrow the desktop's authorization or state. Native Windows and macOS runtime qualification remains required.
 
 ## Transport and authentication
 
@@ -65,7 +79,7 @@ Launcher directories for exited processes are removed at the next control-server
 
 `tauri.conf.json` declares `binaries/voktty-cli` as an external binary. Tauri selects the file with the current target-triple suffix and signs or packages it with the app. The release workflow passes its explicit Rust target to `scripts/build-cli.mjs`, which prevents an x86_64 macOS release from accidentally bundling an arm64 helper from the host.
 
-The release profile uses one codegen unit, fat LTO, size optimization, abort-on-panic, and stripping. Always measure the actual target artifacts after changing dependencies.
+The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increases the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes in the measured release build. This trades additional artifact size for the same scope, path and preference rules as the desktop, and includes the resources needed by subsequent standalone memory commands. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
 
 ## Current limits
 
