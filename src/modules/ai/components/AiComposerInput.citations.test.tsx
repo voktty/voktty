@@ -8,6 +8,8 @@ import {
   type FileCitationSource,
 } from "@/modules/ai/store/chatStore";
 import type { useComposer } from "@/modules/ai/lib/composer";
+import { SLASH_COMMANDS } from "@/modules/ai/lib/slashCommands";
+import { t } from "@/modules/i18n";
 
 const fixture = vi.hoisted(() => ({
   composer: null as ReturnType<typeof useComposer> | null,
@@ -42,6 +44,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 let root: Root | null;
+let container: HTMLDivElement;
 let source: FileCitationSource;
 let frames: FrameRequestCallback[];
 beforeEach(async () => {
@@ -75,7 +78,8 @@ beforeEach(async () => {
     attachFileByPath: vi.fn(async () => true),
     attachTextFile: vi.fn(() => true),
   } as unknown as ReturnType<typeof useComposer>;
-  root = createRoot(document.createElement("div"));
+  container = document.createElement("div");
+  root = createRoot(container);
   await act(async () => root?.render(createElement(AiComposerInput)));
   expect(fixture.pick).toBeTypeOf("function");
 });
@@ -84,6 +88,35 @@ afterEach(async () => {
   root = null;
   vi.unstubAllGlobals();
 });
+
+it.each([
+  ["/init", [], true],
+  ["  #init details ", [], true],
+  ["notes", [SLASH_COMMANDS.init], true],
+  ["/plan", [SLASH_COMMANDS.init], false],
+  ["#custom", [SLASH_COMMANDS.init], false],
+  ["notes", [SLASH_COMMANDS.plan, SLASH_COMMANDS.init], false],
+  ["/initialize", [], false],
+  ["normal draft", [], false],
+] as const)(
+  "explains init only when it will run for %s",
+  async (value, pickedCommands, visible) => {
+    const composer = fixture.composer;
+    if (!composer) throw new Error("Missing composer fixture");
+    composer.value = value;
+    composer.pickedCommands = [...pickedCommands];
+    composer.submit = vi.fn();
+    await act(async () => root?.render(createElement(AiComposerInput)));
+    const textarea = composer.textareaRef.current;
+    expect(textarea).not.toBeNull();
+    const helpId = textarea?.getAttribute("aria-describedby");
+    const help = helpId ? container.querySelector(`[id="${helpId}"]`) : null;
+    if (visible) expect(help?.textContent).toBe(t("ai.slashCommands.initHelp"));
+    else expect(helpId).toBeNull();
+    expect(composer.submit).not.toHaveBeenCalled();
+    expect(fixture.guestRead).not.toHaveBeenCalled();
+  },
+);
 
 it("passes the original filesystem and root to native attachment reads", async () => {
   source = {

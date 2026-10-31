@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Chat, type UIMessage } from "@ai-sdk/react";
 import { AiComposerProvider, useComposer } from "@/modules/ai/lib/composer";
 import { chats, useChatStore } from "@/modules/ai/store/chatStore";
+import { SLASH_COMMANDS } from "@/modules/ai/lib/slashCommands";
 import {
   FILE_ATTACHMENT_EVENT,
   requestFileAttachment,
@@ -23,9 +24,6 @@ vi.mock("@/modules/ai/store/chatRuntime", () => ({
 }));
 vi.mock("@/modules/ai/hooks/useWhisperRecording", () => ({
   useWhisperRecording: () => ({}),
-}));
-vi.mock("@/modules/ai/lib/slashCommands", () => ({
-  tryRunSlashCommand: () => ({ kind: "unhandled" }),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -153,6 +151,31 @@ it("coalesces duplicate submits while the runtime import is pending", async () =
     parts: [{ type: "text", text: "original prompt" }],
   });
 });
+
+it.each(["typed", "picked"])(
+  "submits %s init as an ordinary approved-tool request",
+  async (mode) => {
+    const original = makeChat("original");
+    await act(async () => {
+      composer.setValue(mode === "typed" ? "/init" : "");
+      if (mode === "picked") composer.addCommand(SLASH_COMMANDS.init);
+    });
+    expect(original.sendMessage).not.toHaveBeenCalled();
+    await act(async () => composer.submit());
+    expect(original.sendMessage).toHaveBeenCalledExactlyOnceWith({
+      role: "user",
+      parts: [
+        {
+          type: "text",
+          text: expect.stringContaining(
+            '<voktty-command name="init" />\n\nReview this workspace',
+          ),
+        },
+      ],
+    });
+    expect(fixture.nativeRead).not.toHaveBeenCalled();
+  },
+);
 
 it("admits fresh callbacks after a selection round trip without reviving old ones", async () => {
   const original = makeChat("original");

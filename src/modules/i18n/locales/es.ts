@@ -2346,7 +2346,8 @@ export const es: TranslationSchema = {
       },
     },
     slashCommands: {
-      init: "Inicializar espacio de trabajo",
+      init: "Revisar VOKTTY.md",
+      initHelp: "Envía al modelo una petición para revisar o crear VOKTTY.md. Para inicializar o habilitar el kit .voktty/ por separado, abre Memoria del proyecto. Los cambios de archivos siguen requiriendo aprobación.",
       plan: "Modo de planificación",
       claudeCode: "Delegar en Claude Code",
     },

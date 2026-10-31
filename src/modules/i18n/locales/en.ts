@@ -2285,7 +2285,8 @@ export const en = {
       },
     },
     slashCommands: {
-      init: "Initialize workspace",
+      init: "Review VOKTTY.md",
+      initHelp: "Sends a request to review or create VOKTTY.md using the model. To initialize or enable the separate .voktty/ kit, open Project Memory. File changes still require approval.",
       plan: "Plan mode",
       claudeCode: "Delegate to Claude Code",
     },

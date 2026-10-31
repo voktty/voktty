@@ -4,7 +4,14 @@ import { usePresence } from "@/lib/usePresence";
 import { cn } from "@/lib/utils";
 import { readGuestFile } from "@/modules/collab/lib/guestRuntime";
 import { useTranslation } from "@/modules/i18n";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useChatActionOwner } from "@/modules/ai/lib/useChatActionOwner";
 import { captureProjectCitation } from "@/modules/ai/lib/projectCitation";
 import {
@@ -13,7 +20,7 @@ import {
 } from "@/modules/ai/lib/workspaceCitationFiles";
 import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import { useComposer } from "../lib/composer";
-import { SLASH_COMMANDS } from "../lib/slashCommands";
+import { getComposerCommandInput, SLASH_COMMANDS } from "../lib/slashCommands";
 import { useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { FilePickerContent } from "./FilePicker";
@@ -71,6 +78,10 @@ function detectFileTrigger(value: string, caret: number): FileTrigger | null {
 export function AiComposerInput() {
   const { t } = useTranslation();
   const c = useComposer();
+  const initHelpId = useId();
+  const initSelected = /^[/#]init(?:\s|$)/.test(
+    getComposerCommandInput(c.value, c.pickedCommands),
+  );
   const snippets = useSnippetsStore((s) => s.snippets);
   const live = useChatStore((state) => state.live);
   const focusSignal = useChatStore((state) => state.focusSignal);
@@ -414,6 +425,7 @@ export function AiComposerInput() {
                 }
               }}
               placeholder={t("ai.inputPlaceholder")}
+              aria-describedby={initSelected ? initHelpId : undefined}
               rows={1}
               className={cn(
                 "max-h-40 w-full min-w-0 flex-1 resize-none bg-transparent text-[13px] leading-relaxed outline-none",
@@ -443,6 +455,12 @@ export function AiComposerInput() {
           />
         )}
       </Popover>
+
+      {initSelected && (
+        <p id={initHelpId} className="px-1 text-xs text-muted-foreground">
+          {t("ai.slashCommands.initHelp")}
+        </p>
+      )}
 
       {voiceRow.mounted && (
         <div data-state={voiceRow.state} className="voktty-reveal">

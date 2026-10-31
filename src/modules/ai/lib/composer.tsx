@@ -18,7 +18,7 @@ import type { ProjectAttachmentSource } from "@/modules/ai/lib/projectAttachment
 import { FILE_ATTACHMENT_EVENT, takeFileAttachmentRequest } from "@/modules/ai/lib/fileAttachmentRequest";
 export { MAX_TEXT_INLINE } from "@/modules/ai/lib/browserAttachments";
 import { useSnippetsStore } from "../store/snippetsStore";
-import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
+import { getComposerCommandInput, type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
 import {
   useLiveComponentStore,
   formatComponentPromptDirective,
@@ -322,14 +322,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
     // the prompt to the VOKTTY.md scan template before sending.
     let effectiveText = trimmed;
     let commandMarker: string | null = null;
-    let commandSource = trimmed;
-    if (
-      pickedCommands.length > 0 &&
-      !trimmed.startsWith("/") &&
-      !trimmed.startsWith("#")
-    ) {
-      commandSource = `#${pickedCommands[0].name} ${trimmed}`.trim();
-    }
+    const commandSource = getComposerCommandInput(trimmed, pickedCommands);
     if (commandSource.startsWith("/") || commandSource.startsWith("#")) {
       const outcome = tryRunSlashCommand(commandSource);
       if (outcome.kind === "handled") {
