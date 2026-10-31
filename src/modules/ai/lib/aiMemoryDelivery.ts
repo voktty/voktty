@@ -4,16 +4,12 @@ import {
   captureAiProjectKitMemory,
   type AiProjectKitMemorySource,
 } from "@/modules/ai/lib/projectKitMemory";
-import type { MemoryContextPacket } from "@/modules/workspace-kit/lib/context";
-import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
+import type {
+  MemoryConversation,
+  ModelMemoryDeliveryReceipt,
+} from "@/modules/workspace-kit/lib/memoryConversation";
 
-export type AiMemoryDeliveryReceipt = Readonly<{
-  schema: 1;
-  method: "model-response";
-  requestId: string;
-  modelId: string;
-  packet: MemoryContextPacket;
-}>;
+export type AiMemoryDeliveryReceipt = ModelMemoryDeliveryReceipt;
 
 let pending = 0;
 

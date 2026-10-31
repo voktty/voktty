@@ -6,6 +6,7 @@ import { AiProjectMemoryButton } from "@/modules/ai/components/AiProjectMemoryBu
 import {
   captureChatMemoryConversation,
   forgetChatMemoryOwner,
+  getChatProjectKitMemory,
 } from "@/modules/ai/lib/chatMemoryOwner";
 import { captureAiMemoryConversation } from "@/modules/ai/lib/aiMemoryConversation";
 import { getOrCreateChat } from "@/modules/ai/store/chatRuntime";
@@ -195,7 +196,7 @@ it("opens manually, prepares the original Chat through reviewed consent, and nev
     "projectMemory.conversationPrepared",
   );
   expect(document.body.textContent).toContain(
-    "projectMemory.deliveryUnsupported",
+    "projectMemory.apiDeliveryConsent",
   );
   expect(document.querySelector("script")).toBeNull();
   expect(scope.delivery?.getSnapshot().enabled).toBe(false);
@@ -215,6 +216,82 @@ it("opens manually, prepares the original Chat through reviewed consent, and nev
   await open();
   await click("projectMemory.conversationRead");
   expect(document.body.textContent).toContain(text);
+});
+
+it("enables future API input separately from preparation and shows a receipt only after a model response", async () => {
+  await mount();
+  await open();
+  await review();
+  await click("projectMemory.conversationPrepare");
+  const chat = getOrCreateChat("original");
+  const scope = rawScope();
+  expect(getChatProjectKitMemory(chat)).toBeUndefined();
+  expect(scope.delivery?.getSnapshot().receipt).toBeNull();
+  await click("projectMemory.deliveryEnable");
+  expect(scope.delivery?.getSnapshot().enabled).toBe(true);
+  expect(scope.delivery?.getSnapshot().receipt).toBeNull();
+  expect(send).not.toHaveBeenCalled();
+  const source = getChatProjectKitMemory(chat);
+  const prepared = await source?.prepare?.("ollama-local", () => {});
+  if (!prepared) throw new Error("Missing enabled model input");
+  expect(scope.delivery?.getSnapshot().receipt).toBeNull();
+  try {
+    await act(async () => {
+      expect(prepared.acknowledge()).toBe(true);
+    });
+    expect(scope.delivery?.getSnapshot().receipt).toMatchObject({
+      method: "model-response",
+      packet: { text },
+    });
+    expect(document.body.textContent).toContain(
+      "projectMemory.apiDeliveryAccepted",
+    );
+    expect(document.body.textContent).toContain("projectMemory.apiRequestId");
+    expect(document.body.textContent).not.toContain(
+      "projectMemory.deliveryAccepted",
+    );
+    expect(document.querySelector("script")).toBeNull();
+    await click("projectMemory.conversationDisable");
+    expect(getChatProjectKitMemory(chat)).toBeUndefined();
+    expect(send).not.toHaveBeenCalled();
+  } finally {
+    prepared.settle();
+  }
+});
+
+it("does not confirm delivery enablement after the originating selection retires", async () => {
+  await mount();
+  await open();
+  await review();
+  await click("projectMemory.conversationPrepare");
+  const scope = rawScope();
+  const chat = getOrCreateChat("original");
+  let finish!: (value: unknown) => void;
+  let start!: () => void;
+  const held = new Promise<unknown>((resolve) => {
+    finish = resolve;
+  });
+  const admitted = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) => {
+    if (command === "project_memory_context_read") {
+      start();
+      return held;
+    }
+    return original?.(command, args);
+  });
+  await click("projectMemory.deliveryEnable");
+  await admitted;
+  getOrCreateChat("sibling");
+  await act(async () => useChatStore.getState().switchSession("sibling"));
+  await act(async () => finish(packet()));
+  expect(scope.delivery?.getSnapshot().enabled).toBe(false);
+  expect(getChatProjectKitMemory(chat)).toBeUndefined();
+  expect(scope.status()).toBe("ready");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(send).not.toHaveBeenCalled();
 });
 
 it("retires a pending binding when the selected conversation changes", async () => {

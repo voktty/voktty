@@ -4,11 +4,14 @@ import {
 } from "@/modules/ai/lib/aiFileContext";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import { createMemoryConversations } from "@/modules/workspace-kit/lib/memoryConversations";
+import { createAiMemoryDelivery } from "@/modules/ai/lib/aiMemoryDelivery";
+import type { AiProjectKitMemorySource } from "@/modules/ai/lib/projectKitMemory";
 
 type Owner = {
   capture: () => MemoryConversation | null;
   reconcile: (getRoot?: () => AiFileRootContext | null) => void;
   retire: () => void;
+  source: () => AiProjectKitMemorySource | undefined;
 };
 const owners = new WeakMap<object, Owner>();
 
@@ -31,15 +34,21 @@ export function registerChatMemoryOwner(
   forgetChatMemoryOwner(chat);
   let retired = false;
   let root: string | null = null;
-  let manager: ReturnType<typeof createMemoryConversations> | null = null;
+  let manager: ReturnType<
+    typeof createMemoryConversations<AiProjectKitMemorySource>
+  > | null = null;
   let conversation: MemoryConversation | null = null;
   let capturing = false;
   let unsubscribe: (() => void) | null = null;
+  let releaseDelivery: (() => void) | null = null;
+  let requested = false;
   const retire = () => {
     if (retired) return;
     retired = true;
     const release = unsubscribe;
     unsubscribe = null;
+    releaseDelivery?.();
+    releaseDelivery = null;
     try {
       release?.();
     } finally {
@@ -75,8 +84,18 @@ export function registerChatMemoryOwner(
         if (!selected || !current()) return null;
         root = selected;
         if (!current()) return null;
-        manager ??= createMemoryConversations();
-        conversation = manager.capture(chat, root, root, current);
+        manager ??= createMemoryConversations(
+          createAiMemoryDelivery,
+          "model-response",
+        );
+        conversation = manager.capture(chat, root, root, current, true);
+        releaseDelivery?.();
+        const captured = conversation;
+        releaseDelivery = captured.subscribe(() => {
+          if (captured.delivery?.getSnapshot().enabled) requested = true;
+          else if (!retired && captured.status() === "retired")
+            requested = false;
+        });
         if (!unsubscribe && deps.subscribeRoot) {
           try {
             const release = deps.subscribeRoot(() => {
@@ -99,6 +118,17 @@ export function registerChatMemoryOwner(
       if (root !== null) current(getRoot);
     },
     retire,
+    source() {
+      if (!current()) {
+        if (requested) throw new Error("Project memory: cancelled");
+        return undefined;
+      }
+      const source = manager?.turnSource(chat, () => {
+        if (!current()) throw new Error("Project memory: cancelled");
+      });
+      if (source) requested = true;
+      return source;
+    },
   };
   owners.set(chat, owner);
 }
@@ -120,4 +150,12 @@ export function forgetChatMemoryOwner(chat: object): void {
   const owner = owners.get(chat);
   owners.delete(chat);
   owner?.retire();
+}
+
+export function getChatProjectKitMemory(
+  chat: object,
+): AiProjectKitMemorySource | undefined {
+  const owner = owners.get(chat);
+  if (!owner) throw new Error("Project memory: cancelled");
+  return owner.source();
 }

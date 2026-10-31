@@ -13,6 +13,9 @@ export const es: TranslationSchema = {
     conversationDisable: "Desactivar el contexto de esta conversación",
     conversationPrepared: "Contexto preparado. No hay entrega confirmada para este contexto.",
     deliveryEnable: "Habilitar memoria para futuros turnos",
+    apiDeliveryConsent: "Permite incluir memoria de confianza del proyecto en futuras peticiones al modelo de esta conversación, con hasta 24 KiB de entrada adicional en cada petición. No inicia turnos ni concede permisos de herramientas. Los modelos CLI locales no están admitidos por este canal. Desactivar impide futuras entregas, pero no borra contexto ya enviado; usa una conversación nueva para dejarlo atrás.",
+    apiDeliveryAccepted: "Se recibió una respuesta para esta entrada de memoria con la selección de modelo {model}. No se confirma lectura ni comprensión.",
+    apiRequestId: "Petición local: {id}",
     deliveryConsent:
       "Permite enviar memoria de confianza del proyecto con futuros turnos gestionados y seguimientos admitidos por este agente en esta conversación. Claude requiere CLI 2.1.312 o posterior y puede reiniciar su proceso para retomar la conversación al enviar memoria por primera vez. Introducir o reponer memoria puede usar hasta 24 KiB de entrada del modelo. Antigravity requiere CLI 1.1.15 o posterior y reenvía ese contexto en cada turno. Pon el seguimiento en cola si el agente en ejecución no admite memoria. Esta acción no inicia turnos. Desactivar bloquea futuras entregas, pero no borra contexto ya enviado; usa una conversación nueva para dejarlo atrás.",
     deliveryEnabled: "Memoria habilitada para futuros turnos de esta conversación.",

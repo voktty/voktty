@@ -17,14 +17,27 @@ export type MemoryConversationBinding = Readonly<{
   review: NativeMemoryTrustReview;
   mode: "inherit" | "enabled" | "disabled";
 }>;
-export type MemoryDeliveryReceipt = Readonly<{
+export type ManagedMemoryDeliveryReceipt = Readonly<{
   schema: 1;
   adapter: "codex" | "agy" | "claude";
   method: "managed-turn";
   providerSessionId: string;
   packet: MemoryContextPacket;
 }>;
+export type ModelMemoryDeliveryReceipt = Readonly<{
+  schema: 1;
+  method: "model-response";
+  requestId: string;
+  modelId: string;
+  packet: MemoryContextPacket;
+  providerSessionId?: never;
+}>;
+export type MemoryDeliveryReceipt =
+  | ManagedMemoryDeliveryReceipt
+  | ModelMemoryDeliveryReceipt;
+export type MemoryDeliveryChannel = MemoryDeliveryReceipt["method"];
 export type MemoryDeliveryState = Readonly<{
+  channel?: MemoryDeliveryChannel;
   supported: boolean;
   enabled: boolean;
   root: string | null;

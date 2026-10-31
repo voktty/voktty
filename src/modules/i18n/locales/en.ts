@@ -11,6 +11,9 @@ export const en = {
     conversationDisable: "Disable this conversation's context",
     conversationPrepared: "Context prepared. No delivery is confirmed for this context.",
     deliveryEnable: "Enable memory for future turns",
+    apiDeliveryConsent: "Allow this conversation to include trusted project memory in future model requests, using up to 24 KiB of additional input on every request. This does not start a turn or grant tool permissions. Local CLI models are not supported by this channel. Disabling prevents future delivery but cannot erase context already sent; use a new conversation to leave it behind.",
+    apiDeliveryAccepted: "A response was received for this memory input using model selection {model}. Reading or understanding is not confirmed.",
+    apiRequestId: "Local request: {id}",
     deliveryConsent:
       "Allow this conversation to send trusted project memory with future managed turns and supported follow-ups. Claude requires CLI 2.1.312 or newer and may restart its process to resume the conversation when memory is first sent. Adding or restoring memory can use up to 24 KiB of model input. Antigravity requires CLI 1.1.15 or newer and resends that context on every turn. Queue a follow-up if the running agent cannot accept memory. This action does not start a turn. Disabling blocks future delivery but cannot erase context already sent; use a new conversation to leave it behind.",
     deliveryEnabled: "Memory is enabled for future turns in this conversation.",

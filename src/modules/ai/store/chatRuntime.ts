@@ -5,7 +5,10 @@ import {
 } from "ai";
 import { getModel, providerNeedsKey, type ModelId } from "../config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { registerChatMemoryOwner } from "@/modules/ai/lib/chatMemoryOwner";
+import {
+  getChatProjectKitMemory,
+  registerChatMemoryOwner,
+} from "@/modules/ai/lib/chatMemoryOwner";
 import { subscribeAiFileRoot } from "@/modules/ai/lib/aiRootObservation";
 import { BUILTIN_AGENTS } from "../lib/agents";
 import { isAiRuntimeAvailable } from "../lib/runtimeAvailability";
@@ -60,6 +63,7 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     isAvailable: isAiRuntimeAvailable,
     getKeys: () => useChatStore.getState().apiKeys,
     toolContext,
+    getProjectKitMemory: () => getChatProjectKitMemory(chat),
     getModelId: () => useChatStore.getState().selectedModelId,
     getCustomInstructions: () =>
       usePreferencesStore.getState().customInstructions,

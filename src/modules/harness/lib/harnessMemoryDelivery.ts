@@ -1,9 +1,9 @@
 import type {
   MemoryConversation,
-  MemoryDeliveryReceipt,
+  ManagedMemoryDeliveryReceipt,
 } from "@/modules/workspace-kit/lib/memoryConversation";
 
-export type HarnessMemoryDeliveryReceipt = MemoryDeliveryReceipt;
+export type HarnessMemoryDeliveryReceipt = ManagedMemoryDeliveryReceipt;
 export type PreparedHarnessMemory = Readonly<{
   prefix: string | null;
   assertCurrent: () => void;

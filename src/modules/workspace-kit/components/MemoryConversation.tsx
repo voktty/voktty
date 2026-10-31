@@ -100,12 +100,20 @@ export function MemoryConversation({
             <details className="space-y-2 rounded border border-border p-2 text-xs">
               <summary>{t("projectMemory.deliveryLastAccepted")}</summary>
               <p>
-                {t("projectMemory.deliveryAccepted", {
-                  adapter: delivery.receipt.adapter,
-                })}
+                {delivery.receipt.method === "model-response"
+                  ? t("projectMemory.apiDeliveryAccepted", {
+                      model: delivery.receipt.modelId,
+                    })
+                  : t("projectMemory.deliveryAccepted", {
+                      adapter: delivery.receipt.adapter,
+                    })}
               </p>
               <p className="break-all font-mono" dir="auto">
-                {delivery.receipt.providerSessionId}
+                {delivery.receipt.method === "model-response"
+                  ? t("projectMemory.apiRequestId", {
+                      id: delivery.receipt.requestId,
+                    })
+                  : delivery.receipt.providerSessionId}
               </p>
               <pre
                 className="max-h-64 overflow-auto whitespace-pre-wrap break-words"
@@ -207,7 +215,11 @@ export function MemoryConversation({
                     delivery.supported ? (
                       <div className="space-y-2">
                         <p className="text-xs">
-                          {t("projectMemory.deliveryConsent")}
+                          {t(
+                            delivery.channel === "model-response"
+                              ? "projectMemory.apiDeliveryConsent"
+                              : "projectMemory.deliveryConsent",
+                          )}
                         </p>
                         <Button
                           size="sm"

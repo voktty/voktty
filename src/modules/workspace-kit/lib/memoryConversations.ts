@@ -6,6 +6,7 @@ import {
   inactiveMemoryDelivery,
   type MemoryDeliveryState,
   type MemoryDeliveryReceipt,
+  type MemoryDeliveryChannel,
 } from "@/modules/workspace-kit/lib/memoryConversation";
 import type {
   MemoryConversation,
@@ -73,6 +74,7 @@ function retire(entry: Entry) {
 
 export function createMemoryConversations<Source = never>(
   createDelivery?: DeliveryFactory<Source>,
+  channel: MemoryDeliveryChannel = "managed-turn",
 ) {
   let disposed = false;
   const sessions = new Map<
@@ -104,6 +106,7 @@ export function createMemoryConversations<Source = never>(
       let deliveryState: MemoryDeliveryState = Object.freeze({
         ...inactiveMemoryDelivery,
         supported: supportsDelivery && createDelivery !== undefined,
+        ...(channel === "model-response" ? { channel } : {}),
       });
       const current = () =>
         !disposed &&
@@ -273,7 +276,7 @@ export function createMemoryConversations<Source = never>(
         close: () => close(entry),
       });
       const delivery = createDelivery?.(receipt, (accepted) => {
-        if (!current()) return;
+        if (!current() || accepted.method !== channel) return;
         deliveryState = Object.freeze({ ...deliveryState, receipt: accepted });
         notify(entry);
       });

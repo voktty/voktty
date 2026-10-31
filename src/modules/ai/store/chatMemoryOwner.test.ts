@@ -123,7 +123,11 @@ it("allocates no memory resource or root read by constructing and selecting chat
 it("captures the exact Chat independently of active selection and Stop", async () => {
   const chat = getOrCreateChat("original");
   const scope = capture(chat);
-  expect(scope.delivery?.getSnapshot().supported).toBe(false);
+  expect(scope.delivery?.getSnapshot()).toMatchObject({
+    supported: true,
+    channel: "model-response",
+    enabled: false,
+  });
   await bind(scope);
   getOrCreateChat("sibling");
   useChatStore.getState().switchSession("sibling");
