@@ -79,6 +79,7 @@ export function useAiLiveBridge(params: Params) {
   const fileContextRef = useRef<AiFileContext | null>(null);
   const fileRootContextRef = useRef<AiFileRootContext | null>(null);
   const citationRootRef = useRef<AiFileRootContext | null>(null);
+  const notifyFileRoot = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     fileContextRef.current = resolveAiFileContext(activeTab, terminalWorkspace);
     fileRootContextRef.current = resolveAiFileRootContext(
@@ -88,6 +89,7 @@ export function useAiLiveBridge(params: Params) {
     citationRootRef.current = params.explorerRoot?.startsWith("remote://")
       ? { root: params.explorerRoot, workspace: { kind: "local" } }
       : fileRootContextRef.current;
+    notifyFileRoot.current?.();
     return () => {
       fileContextRef.current = null;
       fileRootContextRef.current = null;
@@ -102,6 +104,19 @@ export function useAiLiveBridge(params: Params) {
 
   useEffect(() => {
     let active = true;
+    let rootListeners: Set<() => void> | null = null;
+    const notify = () => {
+      if (!rootListeners) return;
+      for (const listener of [...rootListeners]) {
+        if (!rootListeners.has(listener)) continue;
+        try {
+          listener();
+        } catch {
+          /* Observers cannot interrupt the root publication. */
+        }
+      }
+    };
+    notifyFileRoot.current = notify;
     const isLocalTab = (tab: Tab): boolean => {
       if (
         "workspaceEnv" in tab &&
@@ -199,6 +214,19 @@ export function useAiLiveBridge(params: Params) {
     };
 
     setLive({
+      subscribeFileRootContext: (listener) => {
+        if (!active) {
+          listener();
+          return () => undefined;
+        }
+        rootListeners ??= new Set();
+        if (!rootListeners.has(listener) && rootListeners.size >= 256)
+          throw new RangeError("File root observer capacity exceeded");
+        rootListeners.add(listener);
+        return () => {
+          rootListeners?.delete(listener);
+        };
+      },
       getFileRootContext: () =>
         active && fileRootContextRef.current
           ? structuredClone(fileRootContextRef.current)
@@ -351,6 +379,9 @@ export function useAiLiveBridge(params: Params) {
     });
     return () => {
       active = false;
+      if (notifyFileRoot.current === notify) notifyFileRoot.current = null;
+      notify();
+      rootListeners?.clear();
     };
   }, [setLive, terminalRefs]);
 }

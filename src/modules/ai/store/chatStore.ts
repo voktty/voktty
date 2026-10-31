@@ -1,6 +1,10 @@
 import type { Chat, UIMessage } from "@ai-sdk/react";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { forgetChatFileTools } from "@/modules/ai/lib/chatFileTools";
+import {
+  forgetChatMemoryOwner,
+  reconcileChatMemoryOwner,
+} from "@/modules/ai/lib/chatMemoryOwner";
 import type {
   AiFileContext,
   AiFileRootContext,
@@ -47,6 +51,7 @@ export type FileCitationSource =
   | { kind: "collab"; leafId: number; available: boolean };
 
 export type Live = {
+  subscribeFileRootContext?: (listener: () => void) => () => void;
   getFileRootContext?: () => AiFileRootContext | null;
   getFileContext?: () => AiFileContext | null;
   getCwd: () => string | null;
@@ -223,6 +228,8 @@ function metadataForSession(id: string | null): AgentMeta {
 }
 
 export function touchChat(id: string, c: Chat<UIMessage>) {
+  const previous = chats.get(id);
+  if (previous && previous !== c) forgetChatMemoryOwner(previous);
   if (chats.has(id)) chats.delete(id);
   chats.set(id, c);
   while (chats.size > CHATS_LRU_CAP) {
@@ -231,6 +238,7 @@ export function touchChat(id: string, c: Chat<UIMessage>) {
     if (useChatStore.getState().activeSessionId === oldest) break;
     flushPersistEntry(oldest);
     const retired = chats.get(oldest);
+    if (retired) forgetChatMemoryOwner(retired);
     if (retired) forgetChatFileTools(retired);
     void chats.get(oldest)?.stop();
     chats.delete(oldest);
@@ -307,7 +315,11 @@ function persistPanelOpen(open: boolean) {
 
 export const useChatStore = create<StoreState>((set, get) => ({
   live: NOOP_LIVE,
-  setLive: (live) => set({ live }),
+  setLive: (live) => {
+    for (const chat of chats.values())
+      reconcileChatMemoryOwner(chat, () => live.getFileRootContext?.() ?? null);
+    set({ live });
+  },
 
   approvalResponder: null,
   setApprovalResponder: (fn) => set({ approvalResponder: fn }),
@@ -535,6 +547,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
   deleteSession: (id) => {
     const remaining = get().sessions.filter((s) => s.id !== id);
     const retired = chats.get(id);
+    if (retired) forgetChatMemoryOwner(retired);
     if (retired) forgetChatFileTools(retired);
     chats.get(id)?.stop();
     chats.delete(id);

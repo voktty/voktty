@@ -5,6 +5,7 @@ import {
 } from "ai";
 import { getModel, providerNeedsKey, type ModelId } from "../config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { registerChatMemoryOwner } from "@/modules/ai/lib/chatMemoryOwner";
 import { BUILTIN_AGENTS } from "../lib/agents";
 import { isAiRuntimeAvailable } from "../lib/runtimeAvailability";
 import {
@@ -150,6 +151,13 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     },
   });
   registerChatFileTools(chat, toolContext);
+  registerChatMemoryOwner(chat, {
+    isCurrent: () => chats.get(sessionId) === chat,
+    getRoot: () => toolContext.getFileRootContext?.() ?? null,
+    subscribeRoot: (listener) =>
+      useChatStore.getState().live.subscribeFileRootContext?.(listener) ??
+      (() => undefined),
+  });
   const stop = chat.stop;
   chat.stop = () => {
     retireChatFileTools(chat);
