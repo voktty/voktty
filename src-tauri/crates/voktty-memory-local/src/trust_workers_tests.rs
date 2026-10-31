@@ -108,6 +108,65 @@ fn state_bytes(f: &Fixture) -> Vec<u8> {
     fs::read(f.state.path().join("memory-local.json")).unwrap()
 }
 
+fn sync_review(f: &Fixture) -> MemoryTrustReview {
+    MemoryTrustReview::prepare(
+        f.store.clone(),
+        f.project.path().join("src"),
+        f.access.clone(),
+        None,
+        &DiscoveryControl::default(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn synchronous_review_digest_survives_facts_but_not_root_or_revision_changes() {
+    for change in 0..5 {
+        let f = fixture();
+        let first = sync_review(&f);
+        let digest = first.acceptance_digest().unwrap();
+        assert_ne!(digest, first.observation().fingerprint.digest);
+        assert_eq!(digest, sync_review(&f).acceptance_digest().unwrap());
+        match change {
+            0 => fs::write(f.project.path().join(".voktty/CONTEXT.md"), "Updated facts").unwrap(),
+            1 => fs::write(
+                f.project.path().join(".voktty/INIT.md"),
+                "Updated instructions",
+            )
+            .unwrap(),
+            2 => {
+                f.store
+                    .set_policy(0, &first.observation().project_key, MemoryPolicy::Never)
+                    .unwrap();
+            }
+            3 => {
+                fs::rename(
+                    f.project.path().join("src"),
+                    f.project.path().join("old-src"),
+                )
+                .unwrap();
+                fs::create_dir(f.project.path().join("src")).unwrap();
+            }
+            _ => {
+                fs::remove_file(f.state.path().join("memory-local.json")).unwrap();
+                f.store.initialize().unwrap();
+            }
+        }
+        let fresh = sync_review(&f).acceptance_digest().unwrap();
+        if change == 0 {
+            assert_eq!(digest, fresh);
+            let key = first.observation().project_key.clone();
+            let accepted = first.accept(&DiscoveryControl::default()).unwrap();
+            assert_eq!(accepted.project(&key).unwrap().policy, MemoryPolicy::Manual);
+        } else {
+            assert_ne!(digest, fresh, "change {change}");
+            let before = state_bytes(&f);
+            assert!(first.accept(&DiscoveryControl::default()).is_err());
+            assert_eq!(state_bytes(&f), before);
+        }
+    }
+}
+
 #[test]
 fn review_resolves_parent_without_writes_and_acceptance_preserves_never_policy() {
     let f = fixture();

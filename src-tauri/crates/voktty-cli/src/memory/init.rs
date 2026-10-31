@@ -1,4 +1,6 @@
-use super::{map_error, usage_error, CliError, MarkerAccess, MemoryCommand, EXIT_REQUEST};
+use super::{
+    map_error, terminal_text, usage_error, CliError, MarkerAccess, MemoryCommand, EXIT_REQUEST,
+};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -248,20 +250,6 @@ fn review(root: &Path, preview: &OwnedInitializationPreview) -> Value {
         "deployment":preview.deployment(),"isResuming":preview.is_resuming(),
         "publicationBlocker":preview.publication_blocker().map(|error| error.to_string()),
         "recoveryFiles":preview.recovery_files().iter().map(|file| json!({"path":file.path,"text":file.text})).collect::<Vec<_>>()})
-}
-
-fn terminal_text(value: &str) -> String {
-    let mut text = String::new();
-    for c in value.chars() {
-        if (c.is_control() && !matches!(c, '\n' | '\t'))
-            || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
-        {
-            text.extend(c.escape_default());
-        } else {
-            text.push(c);
-        }
-    }
-    text
 }
 
 fn show_review(value: &Value, as_json: bool) {

@@ -4,6 +4,7 @@ use crate::{
     DiscoveryControl, LocalMemorySnapshot, LocalMemoryStore, LocalMemoryWorkspace,
     MemoryReadAccess, NativeContextObservation, ReadError,
 };
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -50,6 +51,52 @@ pub struct MemoryTrustReview {
 }
 
 impl MemoryTrustReview {
+    /// Prepares the same native review for synchronous standalone owners.
+    pub fn prepare(
+        store: Arc<LocalMemoryStore>,
+        origin: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        role: Option<String>,
+        control: &DiscoveryControl,
+    ) -> Result<Self, MemoryTrustError> {
+        validate_path(&origin)?;
+        if role.as_ref().is_some_and(|role| role.len() > 256) {
+            return Err(ReadError::Limit.into());
+        }
+        let origin =
+            LocalMemoryWorkspace::open(&store, &origin, access.as_ref(), &control.read_control()?)?;
+        let (path, key) = resolve(&origin, control)?;
+        let memory =
+            LocalMemoryWorkspace::open(&store, &path, access.as_ref(), &control.read_control()?)?;
+        if memory.project_key() != key {
+            return Err(MemoryTrustError::Changed);
+        }
+        let observed = memory.observe_context(role.as_deref(), &control.read_control()?)?;
+        if resolve(&origin, control)? != (path, key) {
+            return Err(MemoryTrustError::Changed);
+        }
+        Ok(Self {
+            origin: origin.retain(store.clone(), access.clone())?,
+            memory: memory.retain(store.clone(), access.clone())?,
+            observed,
+            expires: Instant::now() + Duration::from_secs(120),
+        })
+    }
+
+    /// Binds explicit acceptance to the reviewed roots, installation, revision,
+    /// configuration and instruction bytes. Factual context is not instruction trust.
+    pub fn acceptance_digest(&self) -> Result<String, MemoryTrustError> {
+        let value = serde_json::json!({
+            "schema":"voktty-memory-trust-review-v1",
+            "origin":self.origin.review_binding()?,
+            "memory":self.memory.review_binding()?,
+            "revision":self.observed.local_preferences.revision(),
+            "config":self.observed.config,
+            "instructions":self.observed.fingerprint.digest,
+        });
+        Ok(hex::encode(Sha256::digest(value.to_string().as_bytes())))
+    }
+
     pub fn root(&self) -> &Path {
         self.memory.root()
     }
@@ -95,7 +142,10 @@ impl MemoryTrustReview {
         Ok(current)
     }
 
-    fn accept(self, control: &DiscoveryControl) -> Result<LocalMemorySnapshot, MemoryTrustError> {
+    pub fn accept(
+        self,
+        control: &DiscoveryControl,
+    ) -> Result<LocalMemorySnapshot, MemoryTrustError> {
         self.revalidate(control)?;
         self.memory
             .borrow()
@@ -141,33 +191,7 @@ impl MemoryWorkers {
             return Err(ReadError::Limit.into());
         }
         let job = self.submit(Control::Scope(control.clone()), move || {
-            let origin = LocalMemoryWorkspace::open(
-                &store,
-                &origin,
-                access.as_ref(),
-                &control.read_control()?,
-            )?;
-            let (path, key) = resolve(&origin, &control)?;
-            let memory = LocalMemoryWorkspace::open(
-                &store,
-                &path,
-                access.as_ref(),
-                &control.read_control()?,
-            )?;
-            if memory.project_key() != key {
-                return Err(MemoryTrustError::Changed);
-            }
-            let observed = memory.observe_context(role.as_deref(), &control.read_control()?)?;
-            let (current_path, current_key) = resolve(&origin, &control)?;
-            if current_path != path || current_key != key {
-                return Err(MemoryTrustError::Changed);
-            }
-            Ok(MemoryTrustReview {
-                origin: origin.retain(store.clone(), access.clone())?,
-                memory: memory.retain(store.clone(), access.clone())?,
-                observed,
-                expires: Instant::now() + Duration::from_secs(120),
-            })
+            MemoryTrustReview::prepare(store, origin, access, role, &control)
         })?;
         Ok(MemoryTrustJob { job })
     }

@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct RootInstance(String);
 impl RootInstance {
     #[cfg(unix)]

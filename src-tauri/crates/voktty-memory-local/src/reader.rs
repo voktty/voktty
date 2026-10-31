@@ -268,6 +268,11 @@ pub(crate) struct OwnedMemoryWorkspace {
 }
 
 impl OwnedMemoryWorkspace {
+    pub(crate) fn review_binding(&self) -> Result<Value, ReadError> {
+        let instance = self.root_instance.as_ref().ok_or(ReadError::Unsupported)?;
+        Ok(json!({"identity":self.identity,"instance":instance}))
+    }
+
     pub(crate) fn is_authorized(&self) -> bool {
         self.access.allows_workspace_root(&self.root) && self.access.allows_metadata(&self.root)
     }

@@ -23,6 +23,8 @@ voktty memory init [--project <directory>] [--set <name=value>]...
                    [--preview | --yes [--accept-plan <sha256>]] [--json]
 voktty memory use --always|--never|--manual [--project <directory>]
                   [--preview] [--json]
+voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]
+                    --preview | --accept-review <sha256> [--json]
 ```
 
 App control commands require Voktty to be running. A command launched inside a Voktty pane targets that pane's space, even if another space or tab has UI focus. An external client without pane context falls back to the active UI context. `memory status` runs independently and uses its process directory or explicit `--project`, without control credentials or UI focus.
@@ -75,7 +77,17 @@ The CLI calls `MemoryPolicyReview::prepare` and its consuming `accept` method sy
 
 Successful JSON output uses the existing `ok/result` envelope with schema 1, canonical memory `root`, `scope: "project-on-this-machine"`, `previousMode`, `mode`, `policyStored` and `trust`. `contextActivated`, `capturesActivated` and `projectFilesChanged` are false. Preview has `policyStored: false`; successful acceptance has `policyStored: true`. Usage errors exit 2, unavailable native/state IO exits 3, and unavailable or changed review scopes exit 5. No private project keys, installation IDs or unrelated preferences enter the output. The command cannot erase an admitted write or reset corrupt state automatically.
 
-`--session` outside a launch requires an addressable conversation. This CLI does not yet expose that binding and rejects the option before filesystem or private-state IO, with an action to use Project Memory in the actual conversation. It never stores a global choice disguised as temporary permission. Standalone session launch, instruction-trust acceptance and provider delivery remain pending.
+`--session` outside a launch requires an addressable conversation. This CLI does not yet expose that binding and rejects the option before filesystem or private-state IO, with an action to use Project Memory in the actual conversation. It never stores a global choice disguised as temporary permission. Standalone session launch and provider delivery remain pending.
+
+## Standalone instruction trust
+
+`memory trust` requires exactly one of `--preview` or `--accept-review <sha256>`. It uses the process directory or `--project` and accepts an optional exact `.voktty/team/roles/<name>.md` path; names contain only lowercase ASCII letters, digits and hyphens. Invalid options fail before IO. The CLI first resolves one ready kit with complete ancestor discovery. Only that resolved root receives instruction-read authority, alongside the original execution directory and metadata-only ancestor markers. Shared native path, link, filesystem, size and lifetime checks remain in force.
+
+Preview displays the complete native instruction inventory and configuration, including selected role and existing root rules. It excludes factual `PROJECT.md`/`CONTEXT.md`, installation identity, persistent project keys and unrelated preferences. Human previews escape terminal controls and bidi overrides; JSON retains literal content through normal JSON escaping. Explicit preview may initialize private installation state, but creates no project preference or project files.
+
+`reviewDigest` hashes a versioned native review binding: original execution root and memory root identities and birth instances, installation, preference revision, configuration and instruction fingerprint including role. Use the same execution directory and role when accepting. A replaced root, changed configuration or instructions, changed role or any preference revision requires another preview. Factual context changes alone do not require instruction trust again. The hash is an explicit acceptance check, not delivery authority or a token with its own expiration. Each invocation constructs a fresh native review with the existing two-minute lifetime; consuming acceptance rechecks scope, root instances, installation, preferences and current instructions before the native compare-and-swap write. Desktop workers delegate to the same synchronous preparation and acceptance while retaining their admission and retirement wrapper.
+
+Acceptance stores only this machine's root-bound instruction digest, preserves use policy including `never`, grants no tools or session permission, and delivers no context or captures. Successful schema-1 JSON uses the normal `ok/result` envelope with `root`, `reviewDigest`, `trustStored`, and false `policyChanged`, `contextActivated`, `capturesActivated` and `projectFilesChanged`. Preview additionally includes `config` and `instructions`, with `trustStored: false`. Usage errors exit 2; native/state IO errors exit 3; unavailable or changed review scopes exit 5. Errors redact file contents and private state. Linux process tests cover this flow; native Windows and macOS runtime qualification remains outstanding.
 
 ## Transport and authentication
 
@@ -110,7 +122,7 @@ Launcher directories for exited processes are removed at the next control-server
 
 `tauri.conf.json` declares `binaries/voktty-cli` as an external binary. Tauri selects the file with the current target-triple suffix and signs or packages it with the app. The release workflow passes its explicit Rust target to `scripts/build-cli.mjs`, which prevents an x86_64 macOS release from accidentally bundling an arm64 helper from the host.
 
-The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management brings the measured build to 9,208,400 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
+The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust brings the measured build to 9,289,008 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
 
 ## Current limits
 
