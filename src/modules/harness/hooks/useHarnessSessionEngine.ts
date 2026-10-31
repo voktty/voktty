@@ -61,6 +61,7 @@ import {
   type UserQuestionReply,
 } from "@/modules/harness/lib/harness";
 import { isEditTool } from "@/modules/harness/lib/harness/preview";
+import { HarnessSteerRejectedError } from "@/modules/harness/lib/harness/types";
 import {
   CONTINUE_PROMPT,
   canAutoContinue,
@@ -796,14 +797,21 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             await turn;
           } catch (error: unknown) {
             if (!steerIsCurrent()) return;
+            if (
+              error instanceof HarnessSteerRejectedError &&
+              !contextIsCurrent()
+            )
+              return;
             const message =
               error instanceof Error
                 ? error.message
                 : `${current.harness} could not steer the active turn`;
-            enqueueHarnessEvent(sessionId, {
-              type: "session.error",
-              message,
-            });
+            enqueueHarnessEvent(
+              sessionId,
+              error instanceof HarnessSteerRejectedError
+                ? { type: "status", text: message }
+                : { type: "session.error", message },
+            );
             flushHarnessEvents();
           } finally {
             promptSource?.release();

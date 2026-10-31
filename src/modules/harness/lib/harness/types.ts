@@ -175,6 +175,14 @@ export type SteerTurnInput = {
   attachments?: Attachment[];
 };
 
+/** A follow-up rejected before provider writing leaves the original turn active. */
+export class HarnessSteerRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessSteerRejectedError";
+  }
+}
+
 export type RewindLastTurnInput = CompactContextInput & {
   /** Provider turn boundary for the visible user message, when known. */
   providerTurnId?: string;

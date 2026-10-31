@@ -3,6 +3,7 @@ import { createHarnessMemoryDelivery } from "@/modules/harness/lib/harnessMemory
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
 import type { SendTurnInput } from "@/modules/harness/lib/harness/types";
+import { HarnessSteerRejectedError } from "@/modules/harness/lib/harness/types";
 
 type Child = {
   retired: boolean;
@@ -621,4 +622,33 @@ it("keeps the dedicated compact command free of memory and invalidates reuse", a
   expect(content(users(child)[2])).toHaveLength(2);
   result(child);
   await turn;
+});
+
+it("does not deliver a delayed memory follow-up into a replacement turn on the same actor", async () => {
+  const f = fixture();
+  const first = observed(sendClaudeTurn({ ...base, projectMemory: f.source }));
+  const child = await written();
+  echo(child);
+  const read = deferred<MemoryContextResult>();
+  f.read.mockReturnValueOnce(read.promise);
+  const steer = observed(
+    steerClaudeTurn({
+      ...base,
+      text: "late follow-up",
+      projectMemory: f.source,
+    }),
+  );
+  await flush();
+  result(child);
+  await first;
+  const next = observed(sendClaudeTurn({ ...base, text: "next turn" }));
+  await written(0, 2);
+  read.resolve(packet());
+  await expect(steer).rejects.toBeInstanceOf(HarnessSteerRejectedError);
+  expect(users(child)).toHaveLength(2);
+  expect(content(users(child)[1])).toEqual([
+    { type: "text", text: "next turn" },
+  ]);
+  result(child);
+  await next;
 });

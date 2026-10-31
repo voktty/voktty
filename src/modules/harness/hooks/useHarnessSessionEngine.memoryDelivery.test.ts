@@ -27,6 +27,11 @@ import {
   stopAgySession,
 } from "@/modules/harness/lib/harness/agy";
 import { agyAdapter } from "@/modules/harness/lib/harness/agyAdapter";
+import { claudeAdapter } from "@/modules/harness/lib/harness/claudeAdapter";
+import {
+  __claudeTestReset,
+  stopClaudeSession,
+} from "@/modules/harness/lib/harness/claude";
 import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
 import { t } from "@/modules/i18n";
 
@@ -34,11 +39,13 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   attachments: vi.fn(),
   version: vi.fn(async () => "1.1.15"),
+  write: vi.fn(async (_message: { type?: string }) => {}),
   messages: [] as {
     id?: number;
     method?: string;
     params?: Record<string, unknown>;
     event?: string;
+    type?: string;
     message?: { content: unknown };
   }[],
   line: null as null | ((line: string) => void),
@@ -52,6 +59,7 @@ vi.mock("@/modules/harness/lib/harness/child", () => ({
   closeRetiredRawChildren: async () => {},
   resolveCodexBinary: async () => ({ path: "/fake/codex" }),
   resolveGeminiBinary: async () => ({ path: "/fake/agy" }),
+  resolveClaudeBinary: async () => ({ path: "/fake/claude" }),
   execChild: mocks.version,
   reserveRawChild(logicalSessionId: string) {
     let retired = false;
@@ -72,6 +80,19 @@ vi.mock("@/modules/harness/lib/harness/child", () => ({
         if (retired) throw new Error("retired");
         const message = JSON.parse(payload);
         mocks.messages.push(message);
+        if (
+          message.type === "control_request" &&
+          message.request.subtype === "initialize"
+        )
+          queueMicrotask(() =>
+            callback?.(
+              JSON.stringify({
+                type: "system",
+                subtype: "init",
+                session_id: "claude-provider",
+              }),
+            ),
+          );
         const result =
           message.method === "initialize" ||
           message.method === "turn/interrupt" ||
@@ -85,6 +106,7 @@ vi.mock("@/modules/harness/lib/harness/child", () => ({
           queueMicrotask(() =>
             callback?.(JSON.stringify({ id: message.id, result })),
           );
+        await mocks.write(message);
       },
       close: async () => {
         retired = true;
@@ -261,6 +283,7 @@ beforeEach(() => {
   mocks.messages = [];
   mocks.line = null;
   mocks.version.mockReset().mockResolvedValue("1.1.15");
+  mocks.write.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   mocks.attachments.mockReset().mockImplementation(async (value) => value);
@@ -289,17 +312,20 @@ beforeEach(() => {
     respondApproval: () => {},
   });
   registerHarness(agyAdapter);
+  registerHarness(claudeAdapter);
 });
 afterEach(async () => {
   await act(async () => {
     for (const root of roots) root.unmount();
     await stopCodexSession("source");
     await stopAgySession("source");
+    await stopClaudeSession("source");
     await Promise.all(scopes.map((scope) => scope.close()));
     await Promise.all(panels.map((panel) => panel.close()));
   });
   __codexTestReset();
   __agyTestReset();
+  __claudeTestReset();
   resetHarnessIdlePark();
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -929,5 +955,590 @@ it("blocks AGY delivery after native memory policy revocation", async () => {
     engine()
       .readSession("source")
       ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+  ).toBe(true);
+});
+
+function mountClaude(patch: Partial<Session> = {}) {
+  mocks.version.mockResolvedValue("2.1.312 (Claude Code)");
+  return mount({ harness: "claude", model: "claude:sonnet", ...patch });
+}
+async function claudeInput(count = 1) {
+  await act(async () => {
+    await vi.waitFor(() =>
+      expect(
+        mocks.messages.filter((message) => message.type === "user"),
+      ).toHaveLength(count),
+    );
+  });
+  return mocks.messages.filter((message) => message.type === "user")[count - 1];
+}
+async function acknowledgeClaude(count = 1) {
+  const message = await claudeInput(count);
+  await act(async () => {
+    mocks.line?.(
+      JSON.stringify({
+        ...message,
+        client_composed: undefined,
+        isReplay: true,
+        parent_tool_use_id: null,
+      }),
+    );
+  });
+}
+async function finishClaude(
+  engine: () => ReturnType<typeof useHarnessSessionEngine>,
+  nextInput?: number,
+) {
+  await act(async () => {
+    mocks.line?.(
+      JSON.stringify({
+        type: "result",
+        subtype: "success",
+        session_id: "claude-provider",
+        result: "done",
+      }),
+    );
+    await vi.dynamicImportSettled();
+  });
+  if (nextInput !== undefined) await claudeInput(nextInput);
+  expect(engine().readSession("source")?.busy).toBe(nextInput !== undefined);
+}
+
+it.each(["normal", "plan", "build"])(
+  "delivers explicitly enabled memory through the real Claude adapter and engine for %s",
+  async (kind) => {
+    const engine = mountClaude(
+      kind === "build"
+        ? {
+            blocks: [
+              {
+                id: "plan",
+                role: "plan",
+                text: "approved plan",
+                plan: { status: "ready" },
+              },
+            ],
+          }
+        : {},
+    );
+    let prepared!: Awaited<ReturnType<typeof prepare>>;
+    await act(async () => {
+      prepared = await prepare(engine());
+    });
+    expect(prepared.scope.delivery?.getSnapshot().supported).toBe(true);
+    expect(mocks.messages).toEqual([]);
+    await act(async () => {
+      if (kind === "build") engine().onBuildPlan("source", "plan");
+      else
+        engine().onSubmit(
+          "source",
+          "original task",
+          [],
+          kind === "plan" ? { intent: "plan" } : undefined,
+        );
+    });
+    expect((await claudeInput()).message?.content).toEqual([
+      { type: "text", text: prepared.packet.text },
+      expect.objectContaining({ type: "text" }),
+    ]);
+    expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+    await acknowledgeClaude();
+    expect(prepared.scope.delivery?.getSnapshot().receipt).toMatchObject({
+      adapter: "claude",
+      providerSessionId: "claude-provider",
+      packet: prepared.packet,
+    });
+    await finishClaude(engine);
+    expect(JSON.stringify(engine().sessions)).not.toContain(
+      prepared.packet.text,
+    );
+  },
+);
+it.each(["absent", "prepared only"])(
+  "preserves Claude input and avoids memory IO and probes when %s",
+  async (kind) => {
+    const engine = mountClaude();
+    if (kind === "prepared only")
+      await act(async () => {
+        await prepare(engine(), false);
+      });
+    const reads = mocks.invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ).length;
+    await act(async () => engine().onSubmit("source", "unchanged task"));
+    expect(await claudeInput()).toEqual({
+      type: "user",
+      session_id: "",
+      parent_tool_use_id: null,
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "unchanged task" }],
+      },
+    });
+    expect(mocks.version).not.toHaveBeenCalled();
+    expect(
+      mocks.invoke.mock.calls.filter(
+        ([command]) => command === "project_memory_context_read",
+      ),
+    ).toHaveLength(reads);
+    await finishClaude(engine);
+  },
+);
+it("does not treat a generic Claude result as a delivery receipt", async () => {
+  const engine = mountClaude();
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+    engine().onSubmit("source", "task");
+  });
+  await claudeInput();
+  await finishClaude(engine);
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  await acknowledgeClaude();
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  await act(async () => engine().onSubmit("source", "retry context"));
+  expect((await claudeInput(2)).message?.content).toEqual([
+    { type: "text", text: prepared.packet.text },
+    { type: "text", text: "retry context" },
+  ]);
+  await finishClaude(engine);
+});
+it("delivers Claude memory on steering and explicitly queued follow-ups", async () => {
+  const engine = mountClaude();
+  await act(async () => {
+    await prepare(engine());
+    engine().onSubmit("source", "first task");
+  });
+  await acknowledgeClaude();
+  await act(async () =>
+    engine().onSubmit("source", "steered task", [], {
+      followUpBehavior: "steer",
+    }),
+  );
+  expect((await claudeInput(2)).message?.content).toEqual([
+    { type: "text", text: "steered task" },
+  ]);
+  await acknowledgeClaude(2);
+  await act(async () =>
+    engine().onSubmit("source", "queued task", [], {
+      followUpBehavior: "queue",
+    }),
+  );
+  expect(engine().readSession("source")?.queuedMessages).toHaveLength(1);
+  await finishClaude(engine, 3);
+  expect((await claudeInput(3)).message?.content).toEqual([
+    { type: "text", text: "queued task" },
+  ]);
+  await acknowledgeClaude(3);
+  await finishClaude(engine);
+});
+it("requires queueing when Claude memory is enabled during an ordinary active turn", async () => {
+  const engine = mountClaude();
+  await act(async () => engine().onSubmit("source", "ordinary task"));
+  await claudeInput();
+  await act(async () => {
+    await prepare(engine());
+  });
+  await act(async () => {
+    engine().onSubmit("source", "steer with memory", [], {
+      followUpBehavior: "steer",
+    });
+    await vi.dynamicImportSettled();
+  });
+  expect(
+    mocks.messages.filter((message) => message.type === "user"),
+  ).toHaveLength(1);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("Queue the follow-up")),
+  ).toBe(true);
+  expect(engine().readSession("source")?.busy).toBe(true);
+  await act(async () =>
+    engine().onSubmit("source", "queued with memory", [], {
+      followUpBehavior: "queue",
+    }),
+  );
+  await finishClaude(engine, 2);
+  expect((await claudeInput(2)).message?.content).toEqual([
+    { type: "text", text: packet().packet.text },
+    { type: "text", text: "queued with memory" },
+  ]);
+  await acknowledgeClaude(2);
+  await finishClaude(engine);
+});
+it.each(["context roundtrip", "stop", "disable"])(
+  "suppresses Claude input after %s during the native memory read",
+  async (kind) => {
+    const engine = mountClaude();
+    let prepared!: Awaited<ReturnType<typeof prepare>>;
+    await act(async () => {
+      prepared = await prepare(engine());
+    });
+    const read = deferred<unknown>();
+    const original = mocks.invoke.getMockImplementation();
+    mocks.invoke.mockImplementation((command, args) =>
+      command === "project_memory_context_read"
+        ? read.promise
+        : original?.(command, args),
+    );
+    const before = mocks.invoke.mock.calls.length;
+    await act(async () => engine().onSubmit("source", "stale task"));
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(
+          mocks.invoke.mock.calls
+            .slice(before)
+            .some(([command]) => command === "project_memory_context_read"),
+        ).toBe(true),
+      );
+      if (kind === "stop") engine().onStop("source");
+      else if (kind === "disable") await prepared.scope.close();
+      else
+        engine().applySessionDeltas(
+          [
+            {
+              kind: "update",
+              id: "source",
+              update: (session) => ({ ...session, cwd: "/other" }),
+            },
+            {
+              kind: "update",
+              id: "source",
+              update: (session) => ({ ...session, cwd: "/project" }),
+            },
+          ],
+          "immediate",
+        );
+      read.resolve(packet());
+      await vi.dynamicImportSettled();
+    });
+    expect(
+      mocks.messages.filter((message) => message.type === "user"),
+    ).toHaveLength(0);
+    expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  },
+);
+it("keeps a Claude version failure actionable without sending memory", async () => {
+  const engine = mountClaude();
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+  });
+  mocks.version.mockResolvedValue("2.1.311");
+  await act(async () => {
+    engine().onSubmit("source", "task");
+    await vi.dynamicImportSettled();
+  });
+  expect(mocks.messages).toEqual([]);
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  expect(engine().readSession("source")?.busy).toBe(false);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("2.1.312 or newer")),
+  ).toBe(true);
+});
+it("activates Claude through the shared panel, shows its exact receipt and disables future delivery", async () => {
+  const engine = mountClaude();
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine(), false);
+  });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () =>
+    root.render(
+      createElement(MemoryConversation, {
+        conversation: prepared.scope,
+        environment: { kind: "local" },
+      }),
+    ),
+  );
+  const button = (key: string) => {
+    const found = [...container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === t(key),
+    );
+    if (!found) throw new Error(`Missing button ${key}`);
+    return found;
+  };
+  await act(async () => button("projectMemory.conversationRead").click());
+  expect(container.textContent).toContain("2.1.312");
+  expect(container.textContent).toContain("24 KiB");
+  await act(async () => button("projectMemory.deliveryEnable").click());
+  expect(prepared.scope.delivery?.getSnapshot().enabled).toBe(true);
+  expect(mocks.messages).toEqual([]);
+  expect(mocks.version).not.toHaveBeenCalled();
+  await act(async () => engine().onSubmit("source", "task"));
+  await claudeInput();
+  expect(container.textContent).not.toContain(
+    t("projectMemory.deliveryLastAccepted"),
+  );
+  await acknowledgeClaude();
+  expect(container.textContent).toContain(
+    t("projectMemory.deliveryLastAccepted"),
+  );
+  expect(container.textContent).toContain("claude-provider");
+  await finishClaude(engine);
+  await act(async () => button("projectMemory.conversationDisable").click());
+  const reads = mocks.invoke.mock.calls.filter(
+    ([command]) => command === "project_memory_context_read",
+  ).length;
+  await act(async () => engine().onSubmit("source", "without memory"));
+  expect((await claudeInput(2)).message?.content).toEqual([
+    { type: "text", text: "without memory" },
+  ]);
+  expect(
+    mocks.invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ),
+  ).toHaveLength(reads);
+  await finishClaude(engine);
+});
+it("blocks Claude input after native policy revocation", async () => {
+  const engine = mountClaude();
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine());
+  });
+  const original = mocks.invoke.getMockImplementation();
+  mocks.invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? Promise.resolve({
+          schema: 1,
+          decision: {
+            schema: 1,
+            policy: "never",
+            contextAllowed: false,
+            captureAllowed: false,
+            reason: "KIT_MEMORY_POLICY_NEVER",
+          },
+          packet: null,
+        })
+      : original?.(command, args),
+  );
+  await act(async () => {
+    engine().onSubmit("source", "blocked task");
+    await vi.dynamicImportSettled();
+  });
+  expect(
+    mocks.messages.filter((message) => message.type === "user"),
+  ).toHaveLength(0);
+  expect(prepared.scope.delivery?.getSnapshot().receipt).toBeNull();
+  expect(engine().readSession("source")?.busy).toBe(false);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+  ).toBe(true);
+});
+it("keeps the original Claude turn active when policy rejects a memory follow-up before writing", async () => {
+  const engine = mountClaude();
+  await act(async () => {
+    await prepare(engine());
+    engine().onSubmit("source", "original task");
+  });
+  await acknowledgeClaude();
+  const original = mocks.invoke.getMockImplementation();
+  mocks.invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? Promise.resolve({
+          schema: 1,
+          decision: {
+            schema: 1,
+            policy: "never",
+            contextAllowed: false,
+            captureAllowed: false,
+            reason: "KIT_MEMORY_POLICY_NEVER",
+          },
+          packet: null,
+        })
+      : original?.(command, args),
+  );
+  await act(async () => {
+    engine().onSubmit("source", "rejected follow-up", [], {
+      followUpBehavior: "steer",
+    });
+    await vi.dynamicImportSettled();
+  });
+  expect(engine().readSession("source")?.busy).toBe(true);
+  expect(
+    mocks.messages.filter((message) => message.type === "user"),
+  ).toHaveLength(1);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+  ).toBe(true);
+  await finishClaude(engine);
+});
+it("still ends a Claude turn when the native input writer fails", async () => {
+  const engine = mountClaude();
+  await act(async () => {
+    await prepare(engine());
+    engine().onSubmit("source", "original task");
+  });
+  await acknowledgeClaude();
+  mocks.write.mockImplementation(async (message) => {
+    if (message.type === "user") throw new Error("physical writer failed");
+  });
+  await act(async () => {
+    engine().onSubmit("source", "failed follow-up", [], {
+      followUpBehavior: "steer",
+    });
+    await vi.dynamicImportSettled();
+  });
+  expect(engine().readSession("source")?.busy).toBe(false);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("physical writer failed")),
+  ).toBe(true);
+});
+it("captures Claude consent at submission instead of adopting an activation during preparation", async () => {
+  const engine = mountClaude();
+  let prepared!: Awaited<ReturnType<typeof prepare>>;
+  await act(async () => {
+    prepared = await prepare(engine(), false);
+  });
+  const attachments = deferred<[]>();
+  mocks.attachments.mockReturnValueOnce(attachments.promise);
+  await act(async () => engine().onSubmit("source", "old input"));
+  await act(async () => {
+    await prepared.scope.delivery?.enable(prepared.packet, () => true);
+    attachments.resolve([]);
+  });
+  expect((await claudeInput()).message?.content).toEqual([
+    { type: "text", text: "old input" },
+  ]);
+  expect(mocks.version).not.toHaveBeenCalled();
+  await finishClaude(engine);
+  await act(async () => engine().onSubmit("source", "new input"));
+  expect((await claudeInput(2)).message?.content).toEqual([
+    { type: "text", text: prepared.packet.text },
+    { type: "text", text: "new input" },
+  ]);
+  await acknowledgeClaude(2);
+  await finishClaude(engine);
+});
+it("does not expand Claude's unsupported edited-resend contract when memory is enabled", async () => {
+  const engine = mountClaude();
+  await act(async () => {
+    await prepare(engine());
+  });
+  const reads = mocks.invoke.mock.calls.filter(
+    ([command]) => command === "project_memory_context_read",
+  ).length;
+  await act(async () =>
+    engine().onSubmit("source", "edited task", [], { resendEdited: true }),
+  );
+  expect(mocks.messages).toEqual([]);
+  expect(
+    mocks.invoke.mock.calls.filter(
+      ([command]) => command === "project_memory_context_read",
+    ),
+  ).toHaveLength(reads);
+});
+
+it("withdraws a rejected Claude memory follow-up when its preparation context has retired", async () => {
+  const engine = mountClaude();
+  await act(async () => {
+    await prepare(engine());
+    engine().onSubmit("source", "original task");
+  });
+  await acknowledgeClaude();
+  const read = deferred<unknown>();
+  const original = mocks.invoke.getMockImplementation();
+  mocks.invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? read.promise
+      : original?.(command, args),
+  );
+  const before = mocks.invoke.mock.calls.length;
+  await act(async () =>
+    engine().onSubmit("source", "stale follow-up", [], {
+      followUpBehavior: "steer",
+    }),
+  );
+  await act(async () => {
+    await vi.waitFor(() =>
+      expect(
+        mocks.invoke.mock.calls
+          .slice(before)
+          .some(([command]) => command === "project_memory_context_read"),
+      ).toBe(true),
+    );
+    engine().applySessionDeltas(
+      [
+        {
+          kind: "update",
+          id: "source",
+          update: (session) => ({ ...session, cwd: "/other" }),
+        },
+        {
+          kind: "update",
+          id: "source",
+          update: (session) => ({ ...session, cwd: "/project" }),
+        },
+      ],
+      "immediate",
+    );
+  });
+  const blocks = engine().readSession("source")?.blocks;
+  await act(async () => {
+    read.resolve(packet());
+    await vi.dynamicImportSettled();
+  });
+  expect(
+    mocks.messages.filter((message) => message.type === "user"),
+  ).toHaveLength(1);
+  expect(engine().readSession("source")?.blocks).toEqual(blocks);
+  expect(engine().readSession("source")?.busy).toBe(true);
+  await finishClaude(engine);
+});
+
+it("does not send an orphaned Claude follow-up if its turn finishes during memory reading", async () => {
+  const engine = mountClaude();
+  await act(async () => {
+    await prepare(engine());
+    engine().onSubmit("source", "original task");
+  });
+  await acknowledgeClaude();
+  const read = deferred<unknown>();
+  const original = mocks.invoke.getMockImplementation();
+  mocks.invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? read.promise
+      : original?.(command, args),
+  );
+  const before = mocks.invoke.mock.calls.length;
+  await act(async () =>
+    engine().onSubmit("source", "late follow-up", [], {
+      followUpBehavior: "steer",
+    }),
+  );
+  await act(async () => {
+    await vi.waitFor(() =>
+      expect(
+        mocks.invoke.mock.calls
+          .slice(before)
+          .some(([command]) => command === "project_memory_context_read"),
+      ).toBe(true),
+    );
+  });
+  await finishClaude(engine);
+  await act(async () => {
+    read.resolve(packet());
+    await vi.dynamicImportSettled();
+  });
+  expect(
+    mocks.messages.filter((message) => message.type === "user"),
+  ).toHaveLength(1);
+  expect(engine().readSession("source")?.busy).toBe(false);
+  expect(
+    engine()
+      .readSession("source")
+      ?.blocks.some((block) => block.text.includes("Queue the follow-up")),
   ).toBe(true);
 });

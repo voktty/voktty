@@ -73,6 +73,7 @@ import {
   type ClaudeControlRequest,
 } from "./claudeProtocol";
 import { isAgentToolName } from "./preview";
+import { HarnessSteerRejectedError } from "@/modules/harness/lib/harness/types";
 import { joinStreamText, snapshotRemainder } from "./streamText";
 import {
   questionPromptTitle,
@@ -412,31 +413,31 @@ export async function compactClaudeContext(
 }
 
 export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
-  assertHarnessMemoryTarget(input.projectMemory, input.cwd);
   const live = liveByThread.get(input.sessionId);
   if (live) guardUsable(live.admission);
   if (!live?.activeTurn) throw new Error("No active turn to steer");
   const generation = live.admission.generation;
   guardOperation(live, generation);
-  if (
-    input.projectMemory &&
-    (!live.admission.replay || input.text.trimStart().startsWith("/"))
-  )
-    throw new Error(
-      "Claude memory follow-ups require a replay-enabled process and a normal prompt. Queue the follow-up instead.",
-    );
-
-  const message = buildClaudeUserMessage({
-    text: input.text,
-    attachments: input.attachments,
-    effort: input.modelSettings?.effort,
-  });
-  const content = (message.message as { content: unknown[] }).content;
-  if (content.length === 0) return;
-
+  const turnDone = live.turnDone;
   let memory: MemoryInput | undefined;
   let completed = false;
+  let writing = false;
   try {
+    assertHarnessMemoryTarget(input.projectMemory, input.cwd);
+    if (
+      input.projectMemory &&
+      (!live.admission.replay || input.text.trimStart().startsWith("/"))
+    )
+      throw new Error(
+        "Claude memory follow-ups require a replay-enabled process and a normal prompt. Queue the follow-up instead.",
+      );
+    const message = buildClaudeUserMessage({
+      text: input.text,
+      attachments: input.attachments,
+      effort: input.modelSettings?.effort,
+    });
+    const content = (message.message as { content: unknown[] }).content;
+    if (content.length === 0) return;
     if (input.projectMemory)
       memory = await prepareMemoryInput(
         live,
@@ -447,6 +448,11 @@ export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
     guardOperation(live, generation);
     memory?.prepared.assertCurrent();
     guardOperation(live, generation);
+    if (!live.activeTurn || live.turnDone !== turnDone)
+      throw new Error(
+        "The Claude turn ended before the follow-up was ready. Queue the follow-up instead.",
+      );
+    writing = true;
     await writeJson(live, memory?.message ?? message);
     guardOperation(live, generation);
     completed = true;
@@ -454,6 +460,12 @@ export async function steerClaudeTurn(input: SteerTurnInput): Promise<void> {
       memory.written = true;
       acknowledgeMemoryInput(live, memory);
     }
+  } catch (error) {
+    if (!writing)
+      throw new HarnessSteerRejectedError(
+        error instanceof Error ? error.message : String(error),
+      );
+    throw error;
   } finally {
     if (memory && !completed) settleMemoryInput(live, memory);
   }
