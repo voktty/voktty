@@ -6,9 +6,30 @@ const pending = new WeakMap<object, Map<string, Receipt>>();
 const running = new WeakMap<object, Set<{ retire: () => void }>>();
 const registries = new WeakMap<object, FileToolCalls>();
 const retired = new WeakSet<object>();
+let runGuards: WeakMap<object, () => boolean> | undefined;
 
 export function isFileToolRunCurrent(tool: object): boolean {
-  return !retired.has(tool);
+  if (retired.has(tool)) return false;
+  try {
+    return runGuards?.get(tool)?.() !== false && !retired.has(tool);
+  } catch {
+    return false;
+  }
+}
+
+export function bindFileToolRunGuard(
+  tools: ToolSet,
+  isCurrent: () => boolean,
+): void {
+  const captured = Object.values(tools).filter((tool) => registries.has(tool));
+  for (const tool of captured) {
+    const existing = runGuards?.get(tool);
+    if (existing && existing !== isCurrent)
+      throw new Error("The file tool run already has an owner.");
+  }
+  if (!captured.length) return;
+  runGuards ??= new WeakMap();
+  for (const tool of captured) runGuards.set(tool, isCurrent);
 }
 
 export function registerFileToolRegistry(

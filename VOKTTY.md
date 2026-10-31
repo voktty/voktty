@@ -317,6 +317,8 @@ Claude also has an optional memory input channel beneath the public adapter regi
 
 ### AI subsystem (`src/modules/ai/`)
 
+The internal-agent transport supports an optional source from an explicitly bound native memory conversation, restricted to its exact local file-root directory. Fresh policy-checked packets occupy a separate user text part; legacy root rules remain in the system prompt. Bounded history snapshots, context-specific legacy caching, original approval identities, tool-stage guards and a cancellable output-stream guard retain the captured owner through preparation and execution. Chat activation and consent are not wired to this source yet, and it creates no provider-acceptance receipt. See `docs/architecture/ai-subsystem.md` for limits and lifecycle guarantees.
+
 BYOK. Cloud providers via `@ai-sdk/*`: **OpenAI, Anthropic, Google, xAI, Cerebras, Groq, DeepSeek, Mistral, OpenRouter**, plus **OpenAI-compatible** for any custom base URL. Local / offline providers (key-optional, model id supplied at runtime): **LM Studio, MLX, Ollama**. Provider list in `config.ts` (`PROVIDERS`); model registry includes `DEFAULT_MODEL_ID` + `DEFAULT_AUTOCOMPLETE_MODEL`.
 
 Editor model roles are explicit: the active chat model owns reasoning, quick fixes, refactoring and future multi-file agent edits; the configured autocomplete model owns low-latency ghost completion and future local live correction. Features must use these roles rather than silently selecting another model.

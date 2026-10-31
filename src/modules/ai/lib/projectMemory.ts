@@ -41,6 +41,8 @@ export function createProjectMemoryReader(
   const cache = new Map<string, { content: string | null; savedAt: number }>();
   const publications = new Map<string, object>();
   let pending = 0;
+  let namespaces: WeakMap<object, number> | undefined;
+  let nextNamespace = 0;
 
   const load = async (target: AiFileRootContext, assertCurrent: () => void) => {
     const { root, workspace } = target;
@@ -85,6 +87,7 @@ export function createProjectMemoryReader(
     async read(
       source: AiFileRootContext | null,
       assertCurrent: () => void,
+      namespace?: object,
     ): Promise<string | null> {
       assertCurrent();
       if (
@@ -101,7 +104,18 @@ export function createProjectMemoryReader(
       )
         return null;
       const target = structuredClone(source);
-      const key = fileReadCacheKey(target.root, target.workspace);
+      let key = fileReadCacheKey(target.root, target.workspace);
+      if (namespace) {
+        namespaces ??= new WeakMap();
+        let id = namespaces.get(namespace);
+        if (id === undefined) {
+          if (nextNamespace === Number.MAX_SAFE_INTEGER)
+            throw new Error("Project memory context capacity exceeded.");
+          id = ++nextNamespace;
+          namespaces.set(namespace, id);
+        }
+        key = `context:${id}:${key}`;
+      }
       if (key.length > 65536) return null;
       const existing = cache.get(key);
       if (existing && now() - existing.savedAt < TTL_MS) {

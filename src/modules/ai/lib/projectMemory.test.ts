@@ -202,3 +202,48 @@ it("refuses oversized roots and descriptor keys before filesystem IO", async () 
   );
   expect(f.canonicalize).not.toHaveBeenCalled();
 });
+
+it("keeps bounded TTL snapshots separate between native context owners at the same path", async () => {
+  let now = 0;
+  const f = fixture({ cacheSize: 2, now: () => now });
+  const original = {},
+    replacement = {},
+    sibling = {};
+  f.readFile.mockResolvedValueOnce(text("original rules"));
+  expect(await f.reader.read(source, current, original)).toBe("original rules");
+  f.readFile.mockResolvedValueOnce(text("replacement rules"));
+  expect(await f.reader.read(source, current, replacement)).toBe(
+    "replacement rules",
+  );
+  expect(await f.reader.read(source, current, original)).toBe("original rules");
+  expect(f.readFile).toHaveBeenCalledTimes(2);
+  await f.reader.read(source, current, sibling);
+  await f.reader.read(source, current, replacement);
+  expect(f.readFile).toHaveBeenCalledTimes(4);
+  now = 30_000;
+  await f.reader.read(source, current, original);
+  expect(f.readFile).toHaveBeenCalledTimes(5);
+});
+it("does not let a previous context's late completion populate a replacement context's cache", async () => {
+  const f = fixture();
+  const original = {},
+    replacement = {};
+  let finish!: (result: ReadResult) => void;
+  f.readFile.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const pending = f.reader.read(source, current, original);
+  await vi.waitFor(() => expect(f.readFile).toHaveBeenCalledTimes(1));
+  f.readFile.mockResolvedValueOnce(text("replacement rules"));
+  expect(await f.reader.read(source, current, replacement)).toBe(
+    "replacement rules",
+  );
+  finish(text("old rules"));
+  expect(await pending).toBe("old rules");
+  expect(await f.reader.read(source, current, replacement)).toBe(
+    "replacement rules",
+  );
+  expect(f.readFile).toHaveBeenCalledTimes(2);
+});

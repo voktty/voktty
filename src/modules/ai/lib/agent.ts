@@ -32,6 +32,7 @@ import { prepareAgentPrompt } from "./prompt";
 import { createProxyFetch } from "./proxyFetch";
 import { reconcileFileToolCalls } from "@/modules/ai/lib/chatFileTools";
 import { fileToolCallsFor } from "@/modules/ai/lib/fileToolCalls";
+import { guardToolRun } from "@/modules/ai/lib/toolRunGuard";
 import {
   fileToolApprovalTransform,
   retireFileToolRun,
@@ -406,15 +407,22 @@ export type RunAgentOptions = {
   uiMessages: UIMessage[];
   abortSignal?: AbortSignal;
   isCurrent?: () => boolean;
+  isToolRunCurrent?: () => boolean;
 };
 
 export async function runAgentStream(opts: RunAgentOptions) {
   const toolContext = opts.toolContext;
   const abortSignal = opts.abortSignal;
   const isCurrent = opts.isCurrent;
+  const isToolRunCurrent = opts.isToolRunCurrent;
   const lifetime = fileToolCallsFor(toolContext).captureLifetime();
   const assertCurrent = () => {
-    if (isCurrent?.() === false || abortSignal?.aborted || !lifetime())
+    if (
+      isCurrent?.() === false ||
+      isToolRunCurrent?.() === false ||
+      abortSignal?.aborted ||
+      !lifetime()
+    )
       throw new Error("The original AI request has retired.");
   };
   assertCurrent();
@@ -481,12 +489,24 @@ export async function runAgentStream(opts: RunAgentOptions) {
   let stepsSeen = 0;
   const tools = buildTools(toolContext, mcpTools, opts.onSubagentStep);
   assertCurrent();
+  const providerTools = isToolRunCurrent
+    ? guardToolRun(tools, isToolRunCurrent)
+    : tools;
+  if (isToolRunCurrent) assertCurrent();
   return streamText({
     model,
     system: prompt.system,
     messages: prompt.messages,
     allowSystemInMessages: false,
-    tools,
+    tools: providerTools,
+    ...(isToolRunCurrent
+      ? {
+          prepareStep: () => {
+            assertCurrent();
+            return {};
+          },
+        }
+      : {}),
     experimental_transform: fileToolApprovalTransform(tools, prompt.messages),
     stopWhen: stepCountIs(MAX_AGENT_STEPS),
     abortSignal,

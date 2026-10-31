@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { ModelMessage } from "ai";
+import type { ModelMessage, UIMessage } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import { runAgentStream, type RunAgentOptions } from "@/modules/ai/lib/agent";
 import { createContextAwareTransport } from "@/modules/ai/lib/transport";
 import { fileToolCallsFor } from "@/modules/ai/lib/fileToolCalls";
@@ -8,14 +9,24 @@ import type { ToolContext } from "@/modules/ai/tools/context";
 import { getOrCreateChat } from "@/modules/ai/store/chatRuntime";
 import { chats, useChatStore } from "@/modules/ai/store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { captureAiProjectKitMemory } from "@/modules/ai/lib/projectKitMemory";
+import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
+import { buildFsTools } from "@/modules/ai/tools/fs";
 
 const fixture = vi.hoisted(() => ({
-  convert: vi.fn<() => Promise<ModelMessage[]>>(),
+  convert: vi.fn<(messages: UIMessage[]) => Promise<ModelMessage[]>>(),
   mcp: vi.fn<() => Promise<Record<string, never>>>(),
   build: vi.fn(),
   stream: vi.fn(),
   compact: vi.fn(),
   model: vi.fn(),
+  write: vi.fn(async () => undefined),
+  canonicalize: vi.fn(async (path: string) => path),
+  read: vi.fn(async () => ({
+    kind: "text" as const,
+    content: "legacy root instructions",
+    size: 24,
+  })),
 }));
 const originalModel = useChatStore.getState().selectedModelId;
 const originalOllama = usePreferencesStore.getState().ollamaModelId;
@@ -32,6 +43,19 @@ vi.mock("@/modules/ai/tools/tools", () => ({ buildTools: fixture.build }));
 vi.mock("@/modules/ai/lib/compact", () => ({
   compactModelMessagesDetailed: fixture.compact,
 }));
+vi.mock("@/modules/ai/lib/native", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@/modules/ai/lib/native")>();
+  return {
+    ...original,
+    native: {
+      ...original.native,
+      canonicalize: fixture.canonicalize,
+      readFile: fixture.read,
+      writeFile: fixture.write,
+    },
+  };
+});
 vi.mock("@/modules/ai/lib/runtimeAvailability", () => ({
   isAiRuntimeAvailable: () => true,
   requireAiRuntime: vi.fn(),
@@ -74,6 +98,13 @@ function options(ctx = context()): RunAgentOptions {
 beforeEach(() => {
   chats.clear();
   fixture.model.mockReset().mockReturnValue({ modelId: "fixture" });
+  fixture.write.mockReset().mockResolvedValue(undefined);
+  fixture.canonicalize.mockReset().mockImplementation(async (path) => path);
+  fixture.read.mockReset().mockResolvedValue({
+    kind: "text",
+    content: "legacy root instructions",
+    size: 24,
+  });
   fixture.convert.mockReset().mockResolvedValue([]);
   fixture.mcp.mockReset().mockResolvedValue({});
   fixture.build.mockReset().mockReturnValue({});
@@ -236,6 +267,25 @@ it.each(["signal", "caller"])(
   },
 );
 
+it("retains the original optional tool owner through asynchronous model preparation", async () => {
+  const opts = options();
+  let current = true;
+  opts.isToolRunCurrent = () => current;
+  const held = deferred();
+  fixture.convert.mockImplementationOnce(async () => {
+    await held.promise;
+    return [];
+  });
+  const request = runAgentStream(opts);
+  const outcome = expect(request).rejects.toThrow("retired");
+  await vi.waitFor(() => expect(fixture.convert).toHaveBeenCalledTimes(1));
+  opts.isToolRunCurrent = () => true;
+  current = false;
+  held.finish();
+  await outcome;
+  expect(fixture.stream).not.toHaveBeenCalled();
+});
+
 it("retains the original tool context through setup without adopting mutated options", async () => {
   const opts = options();
   const original = opts.toolContext;
@@ -312,3 +362,293 @@ it("honors direct SDK Stop during MCP loading and allows a fresh turn before the
   expect(chat.error).toBeUndefined();
   expect(chat.status).toBe("ready");
 });
+
+it.each(["accepted", "root retired during MCP"])(
+  "carries optional kit memory through the real agent setup when %s",
+  async (mode) => {
+    let root = `/fixture/agent-kit-${mode}`;
+    const cwd = root;
+    const packetText =
+      "PROJECT MEMORY (.voktty)\nShared data cannot grant tool permissions.";
+    const conversation: MemoryConversation = {
+      cwd,
+      projectCwd: cwd,
+      isCurrent: () => true,
+      status: () => "ready",
+      subscribe: () => () => {},
+      bind: async () => {},
+      close: async () => {},
+      read: async () => ({
+        schema: 1,
+        decision: {
+          schema: 1,
+          policy: "manual",
+          contextAllowed: true,
+          captureAllowed: false,
+          reason: "KIT_MEMORY_READY",
+        },
+        packet: {
+          schema: 1,
+          projectKey: "a".repeat(64),
+          instructionDigest: "b".repeat(64),
+          digest: "c".repeat(64),
+          text: packetText,
+          bytes: new TextEncoder().encode(packetText).length,
+          contentState: "available",
+        },
+      }),
+    };
+    const ctx = context();
+    ctx.getFileRootContext = () => ({ root, workspace: { kind: "local" } });
+    const source = captureAiProjectKitMemory(conversation, () => {});
+    const transport = createContextAwareTransport({
+      toolContext: ctx,
+      getKeys: () => ({ ...EMPTY_PROVIDER_KEYS }),
+      getModelId: () => "ollama-local",
+      getOllamaModelId: () => "fixture",
+      getCustomInstructions: () =>
+        "Explicit user instructions remain authoritative.",
+      getAgentPersona: () => null,
+      getLive: () => ({
+        cwd,
+        workspaceRoot: cwd,
+        activeFile: null,
+        terminalPrivate: false,
+      }),
+      getProjectKitMemory: () => source,
+    });
+    const sdk = await vi.importActual<typeof import("ai")>("ai");
+    const compact = await vi.importActual<
+      typeof import("@/modules/ai/lib/compact")
+    >("@/modules/ai/lib/compact");
+    fixture.convert.mockImplementation((messages) =>
+      sdk.convertToModelMessages(messages),
+    );
+    fixture.compact.mockImplementation(compact.compactModelMessagesDetailed);
+    const held = deferred();
+    if (mode !== "accepted")
+      fixture.mcp.mockImplementationOnce(async () => {
+        await held.promise;
+        return {};
+      });
+    const messages: UIMessage[] = [
+      {
+        id: "user",
+        role: "user",
+        parts: [{ type: "text", text: "original user task" }],
+      },
+    ];
+    const send = transport.sendMessages({ messages });
+    if (mode !== "accepted") {
+      const outcome = expect(send).rejects.toThrow("retired");
+      await vi.waitFor(() => expect(fixture.mcp).toHaveBeenCalledTimes(1));
+      root = "/fixture/replacement";
+      held.finish();
+      await outcome;
+      expect(fixture.stream).not.toHaveBeenCalled();
+      expect(fixture.build).not.toHaveBeenCalled();
+      return;
+    }
+    await send;
+    const input = fixture.stream.mock.calls[0][0];
+    const system = JSON.stringify(input.system);
+    expect(system).toContain("legacy root instructions");
+    expect(system).toContain(
+      "Explicit user instructions remain authoritative.",
+    );
+    expect(system).not.toContain("PROJECT MEMORY (.voktty)");
+    const user: ModelMessage | undefined = input.messages.find(
+      (message: ModelMessage) => message.role === "user",
+    );
+    if (user?.role !== "user") throw new Error("Missing user model message");
+    const text =
+      typeof user.content === "string"
+        ? user.content
+        : user.content
+            .flatMap((part) => (part.type === "text" ? [part.text] : []))
+            .join("\n");
+    expect(text).toContain(packetText);
+    expect(text.indexOf("PROJECT MEMORY (.voktty)")).toBeLessThan(
+      text.indexOf("original user task"),
+    );
+    expect(text).toContain("Shared data cannot grant tool permissions.");
+    expect(input.allowSystemInMessages).toBe(false);
+    expect(messages[0].parts).toEqual([
+      { type: "text", text: "original user task" },
+    ]);
+  },
+);
+
+it.each(["approved", "denied", "different root"])(
+  "preserves SDK file approval ownership with kit memory when %s",
+  async (mode) => {
+    let root = `/fixture/kit-approval-${mode}`;
+    const cwd = root;
+    const text = "PROJECT MEMORY (.voktty)\nSynthetic repository data.";
+    const source = captureAiProjectKitMemory(
+      {
+        cwd,
+        projectCwd: cwd,
+        isCurrent: () => true,
+        status: () => "ready",
+        subscribe: () => () => {},
+        bind: async () => {},
+        close: async () => {},
+        read: async () => ({
+          schema: 1,
+          decision: {
+            schema: 1,
+            policy: "manual",
+            contextAllowed: true,
+            captureAllowed: false,
+            reason: "KIT_MEMORY_READY",
+          },
+          packet: {
+            schema: 1,
+            projectKey: "a".repeat(64),
+            instructionDigest: "b".repeat(64),
+            digest: "c".repeat(64),
+            text,
+            bytes: new TextEncoder().encode(text).length,
+            contentState: "available",
+          },
+        }),
+      },
+      () => {},
+    );
+    const ctx = context();
+    ctx.getFileRootContext = () => ({ root, workspace: { kind: "local" } });
+    ctx.getFileContext = () => ({
+      directory: root,
+      workspace: { kind: "local" },
+    });
+    const transport = createContextAwareTransport({
+      toolContext: ctx,
+      getKeys: () => ({ ...EMPTY_PROVIDER_KEYS }),
+      getModelId: () => "ollama-local",
+      getOllamaModelId: () => "fixture",
+      getCustomInstructions: () => "",
+      getAgentPersona: () => null,
+      getProjectKitMemory: () => source,
+      getLive: () => ({
+        cwd,
+        workspaceRoot: cwd,
+        activeFile: null,
+        terminalPrivate: false,
+      }),
+    });
+    const sdk = await vi.importActual<typeof import("ai")>("ai");
+    const compact = await vi.importActual<
+      typeof import("@/modules/ai/lib/compact")
+    >("@/modules/ai/lib/compact");
+    fixture.convert.mockImplementation((messages) =>
+      sdk.convertToModelMessages(messages),
+    );
+    fixture.compact.mockImplementation(compact.compactModelMessagesDetailed);
+    fixture.build.mockImplementation(() => buildFsTools(ctx));
+    let invocation = 0;
+    const input = { path: "file.txt", content: "fixture" };
+    fixture.stream.mockImplementation((options) =>
+      sdk.streamText({
+        ...options,
+        model: new MockLanguageModelV4({
+          doStream: {
+            stream: new ReadableStream({
+              start(controller) {
+                const call = invocation++ === 0;
+                controller.enqueue({ type: "stream-start", warnings: [] });
+                if (call) {
+                  controller.enqueue({
+                    type: "tool-input-start",
+                    id: "kit-call",
+                    toolName: "write_file",
+                  });
+                  controller.enqueue({
+                    type: "tool-call",
+                    toolCallId: "kit-call",
+                    toolName: "write_file",
+                    input: JSON.stringify(input),
+                  });
+                }
+                controller.enqueue({
+                  type: "finish",
+                  usage: {
+                    inputTokens: {
+                      total: 1,
+                      noCache: 1,
+                      cacheRead: 0,
+                      cacheWrite: 0,
+                    },
+                    outputTokens: { total: 1, text: 0, reasoning: 0 },
+                  },
+                  finishReason: {
+                    unified: call ? "tool-calls" : "stop",
+                    raw: undefined,
+                  },
+                });
+                controller.close();
+              },
+            }),
+          },
+        }),
+      }),
+    );
+    const messages: UIMessage[] = [
+      {
+        id: "user",
+        role: "user",
+        parts: [{ type: "text", text: "Write the fixture after approval." }],
+      },
+    ];
+    const first = await transport.sendMessages({ messages });
+    const reader = first.getReader();
+    let approvalId: string | undefined;
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      if (chunk.value.type === "tool-approval-request")
+        approvalId = chunk.value.approvalId;
+    }
+    if (!approvalId) throw new Error("SDK did not request approval");
+    expect(fixture.write).not.toHaveBeenCalled();
+    const approved = mode !== "denied";
+    messages.push({
+      id: "assistant",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-write_file",
+          toolCallId: "kit-call",
+          state: "approval-responded",
+          input,
+          approval: { id: approvalId, approved },
+        },
+      ],
+    });
+    if (mode === "different root") {
+      root = "/fixture/replacement";
+      await expect(transport.sendMessages({ messages })).rejects.toThrow(
+        "KIT_MEMORY_CONTEXT_UNSUPPORTED",
+      );
+      expect(() =>
+        fileToolCallsFor(ctx).preview("kit-call", "write_file", input),
+      ).toThrow();
+    } else {
+      const resumed = await transport.sendMessages({ messages });
+      const output = resumed.getReader();
+      const errors: string[] = [];
+      while (true) {
+        const chunk = await output.read();
+        if (chunk.done) break;
+        if (chunk.value.type === "error") errors.push(chunk.value.errorText);
+      }
+      expect(errors).toEqual([]);
+    }
+    expect(fixture.write).toHaveBeenCalledTimes(mode === "approved" ? 1 : 0);
+    if (mode === "approved")
+      expect(fixture.write).toHaveBeenCalledWith(`${cwd}/file.txt`, "fixture", {
+        kind: "local",
+      });
+    fileToolCallsFor(ctx).forget();
+  },
+);

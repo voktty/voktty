@@ -8,6 +8,13 @@ import { native } from "./native";
 import type { ToolContext } from "../tools/tools";
 import { createProjectMemoryReader } from "@/modules/ai/lib/projectMemory";
 import { fileToolCallsFor } from "@/modules/ai/lib/fileToolCalls";
+import {
+  assertAiProjectKitMemoryTarget,
+  prependAiProjectKitMemory,
+  type AiProjectKitMemorySource,
+} from "@/modules/ai/lib/projectKitMemory";
+import { guardRunStream } from "@/modules/ai/lib/runStreamGuard";
+import { captureAiMessageSnapshot } from "@/modules/ai/lib/messageSnapshot";
 
 const projectMemoryReader = createProjectMemoryReader({
   canonicalize: native.canonicalize,
@@ -47,6 +54,7 @@ type Deps = {
   onCompact?: (info: { droppedCount: number }) => void;
   onFinishMeta?: (info: { hitStepCap: boolean; finishReason: string }) => void;
   getPlanMode?: () => boolean;
+  getProjectKitMemory?: () => AiProjectKitMemorySource | undefined;
 };
 
 type SendOptions = {
@@ -57,20 +65,60 @@ type SendOptions = {
 
 export function createContextAwareTransport(deps: Deps) {
   let latestRequest: object | null = null;
+  let lastKitContext: { context: object; isCurrent: () => boolean } | null =
+    null;
+  let legacyMemoryNamespace: object | undefined;
   const run = async (options: SendOptions) => {
     if (deps.isAvailable?.() === false) {
       requireAiRuntime();
     }
     const calls = fileToolCallsFor(deps.toolContext);
-    const lifetime = calls.captureLifetime();
+    let lifetime = calls.captureLifetime();
     const abortSignal = options.abortSignal;
     const request = {};
+    let kitMemory: AiProjectKitMemorySource | undefined;
+    let kitAbort: AbortController | undefined;
     let finished = false;
-    const requestCurrent = () => !abortSignal?.aborted && lifetime();
+    const requestCurrent = () =>
+      !abortSignal?.aborted && !kitAbort?.signal.aborted && lifetime();
     if (!requestCurrent())
       throw new Error("The original AI request has retired.");
     latestRequest = request;
-    const requestActive = () => latestRequest === request && requestCurrent();
+    const previousKitContext = lastKitContext;
+    if (previousKitContext && !previousKitContext.isCurrent()) {
+      if (latestRequest !== request || !requestCurrent())
+        throw new Error("The original AI request has retired.");
+      calls.retireAll();
+      lifetime = calls.captureLifetime();
+      legacyMemoryNamespace = {};
+      if (lastKitContext === previousKitContext) lastKitContext = null;
+    }
+    const kitContextCurrent = () => {
+      try {
+        kitMemory?.assertCurrent();
+        if (kitMemory) {
+          const current = deps.toolContext.getFileRootContext?.();
+          if (
+            !boundary ||
+            !current ||
+            current.root !== boundary.root ||
+            current.workspace.kind !== "local"
+          )
+            return false;
+        }
+      } catch {
+        return false;
+      }
+      return true;
+    };
+    const requestActive = () => {
+      if (latestRequest !== request || !requestCurrent()) return false;
+      if (!kitContextCurrent()) {
+        if (latestRequest === request && requestCurrent()) calls.retireAll();
+        return false;
+      }
+      return latestRequest === request && requestCurrent();
+    };
     const canPublish = () => !finished && requestActive();
     const assertCurrent = () => {
       if (!requestActive())
@@ -86,73 +134,165 @@ export function createContextAwareTransport(deps: Deps) {
     const live = { ...deps.getLive() };
     const source = deps.toolContext.getFileRootContext?.() ?? null;
     const boundary = source ? structuredClone(source) : null;
-    const persona = deps.getAgentPersona();
-    const captured = {
-      keys: { ...deps.getKeys() },
-      modelId: deps.getModelId(),
-      languageId: deps.getLanguage?.(),
-      customInstructions: deps.getCustomInstructions(),
-      agentPersona: persona ? { ...persona } : null,
-      toolContext: deps.toolContext,
-      onStep: (step: string | null) => {
-        if (canPublish()) callbacks.step?.(step);
-      },
-      onSubagentStep: (step: string) => {
-        if (canPublish()) callbacks.subagentStep?.(step);
-      },
-      onUsage: (delta: AgentUsageDelta) => {
-        if (calls.isCurrent()) callbacks.usage?.(delta, canPublish());
-      },
-      onCompact: (info: { droppedCount: number }) => {
-        if (canPublish()) callbacks.compact?.(info);
-      },
-      onFinishMeta: (info: { hitStepCap: boolean; finishReason: string }) => {
-        const publish = canPublish();
-        finished = true;
-        if (publish) callbacks.finish?.(info);
-      },
-      lmstudioBaseURL: deps.getLmstudioBaseURL?.(),
-      lmstudioModelId: deps.getLmstudioModelId?.(),
-      mlxBaseURL: deps.getMlxBaseURL?.(),
-      mlxModelId: deps.getMlxModelId?.(),
-      ollamaBaseURL: deps.getOllamaBaseURL?.(),
-      ollamaModelId: deps.getOllamaModelId?.(),
-      openaiCompatibleBaseURL: deps.getOpenaiCompatibleBaseURL?.(),
-      openaiCompatibleModelId: deps.getOpenaiCompatibleModelId?.(),
-      openaiCompatibleContextLimit: deps.getOpenaiCompatibleContextLimit?.(),
-      openrouterModelId: deps.getOpenrouterModelId?.(),
-      customEndpoints: structuredClone(deps.getCustomEndpoints?.()),
-      customEndpointKeys: structuredClone(deps.getCustomEndpointKeys?.()),
-      planMode: deps.getPlanMode?.(),
-      abortSignal,
-      isCurrent: requestActive,
-    };
-    const projectMemory = await projectMemoryReader.read(
-      boundary,
-      assertCurrent,
-    );
+    kitMemory = deps.getProjectKitMemory?.();
+    if (
+      kitMemory &&
+      lastKitContext &&
+      kitMemory.context !== lastKitContext.context
+    ) {
+      if (latestRequest !== request || !requestCurrent())
+        throw new Error("The original AI request has retired.");
+      calls.retireAll();
+      lifetime = calls.captureLifetime();
+      lastKitContext = null;
+    }
+    assertAiProjectKitMemoryTarget(kitMemory, boundary);
     assertCurrent();
-    const envBlock = formatEnvBlock(live);
-    const messagesForRun = envBlock
-      ? injectEnvIntoLastUser(options.messages, envBlock)
-      : options.messages;
+    if (kitMemory) {
+      lastKitContext = {
+        context: kitMemory.context,
+        isCurrent: kitContextCurrent,
+      };
+      legacyMemoryNamespace = kitMemory.context;
+    }
+    const snapshot = kitMemory
+      ? captureAiMessageSnapshot(options.messages)
+      : null;
+    let snapshotHandedOff = false;
     try {
-      const result = await runAgentStream({
-        ...captured,
-        projectMemory,
-        uiMessages: messagesForRun,
-      });
-      assertCurrent();
-      return result.toUIMessageStream({
-        originalMessages: options.messages,
-        onError: (error) => {
-          finished = true;
-          return formatAiError(error);
+      const submittedMessages = snapshot?.messages ?? options.messages;
+      if (
+        kitMemory &&
+        !submittedMessages.some((message) => message.role === "user")
+      )
+        throw new Error("Project memory: KIT_MEMORY_USER_TURN_REQUIRED");
+      const persona = deps.getAgentPersona();
+      const captured = {
+        keys: { ...deps.getKeys() },
+        modelId: deps.getModelId(),
+        languageId: deps.getLanguage?.(),
+        customInstructions: deps.getCustomInstructions(),
+        agentPersona: persona ? { ...persona } : null,
+        toolContext: deps.toolContext,
+        onStep: (step: string | null) => {
+          if (canPublish()) callbacks.step?.(step);
         },
-      });
-    } catch (error) {
-      finished = true;
-      throw error;
+        onSubagentStep: (step: string) => {
+          if (canPublish()) callbacks.subagentStep?.(step);
+        },
+        onUsage: (delta: AgentUsageDelta) => {
+          if (calls.isCurrent()) callbacks.usage?.(delta, canPublish());
+        },
+        onCompact: (info: { droppedCount: number }) => {
+          if (canPublish()) callbacks.compact?.(info);
+        },
+        onFinishMeta: (info: { hitStepCap: boolean; finishReason: string }) => {
+          const publish = canPublish();
+          finished = true;
+          if (publish) callbacks.finish?.(info);
+        },
+        lmstudioBaseURL: deps.getLmstudioBaseURL?.(),
+        lmstudioModelId: deps.getLmstudioModelId?.(),
+        mlxBaseURL: deps.getMlxBaseURL?.(),
+        mlxModelId: deps.getMlxModelId?.(),
+        ollamaBaseURL: deps.getOllamaBaseURL?.(),
+        ollamaModelId: deps.getOllamaModelId?.(),
+        openaiCompatibleBaseURL: deps.getOpenaiCompatibleBaseURL?.(),
+        openaiCompatibleModelId: deps.getOpenaiCompatibleModelId?.(),
+        openaiCompatibleContextLimit: deps.getOpenaiCompatibleContextLimit?.(),
+        openrouterModelId: deps.getOpenrouterModelId?.(),
+        customEndpoints: structuredClone(deps.getCustomEndpoints?.()),
+        customEndpointKeys: structuredClone(deps.getCustomEndpointKeys?.()),
+        planMode: deps.getPlanMode?.(),
+        abortSignal,
+        isCurrent: requestActive,
+        ...(kitMemory ? { isToolRunCurrent: requestActive } : {}),
+      };
+      const projectMemory = await projectMemoryReader.read(
+        boundary,
+        assertCurrent,
+        legacyMemoryNamespace,
+      );
+      assertCurrent();
+      const envBlock = formatEnvBlock(live);
+      let messagesForRun = envBlock
+        ? injectEnvIntoLastUser(submittedMessages, envBlock)
+        : submittedMessages;
+      if (kitMemory) {
+        const packet = await kitMemory.read(assertCurrent);
+        assertCurrent();
+        messagesForRun = prependAiProjectKitMemory(messagesForRun, packet);
+      }
+      let unsubscribe = () => {};
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        finished = true;
+        abortSignal?.removeEventListener("abort", abortKit);
+        unsubscribe();
+      };
+      const abortKit = () => {
+        finished = true;
+        kitAbort?.abort();
+      };
+      const retireKit = () => {
+        if (
+          latestRequest === request &&
+          requestCurrent() &&
+          !kitContextCurrent()
+        )
+          calls.retireAll();
+        abortKit();
+      };
+      try {
+        if (kitMemory) {
+          kitAbort = new AbortController();
+          abortSignal?.addEventListener("abort", abortKit, { once: true });
+          const release = kitMemory.subscribe(() => {
+            if (!kitContextCurrent()) {
+              retireKit();
+              cleanup();
+            }
+          });
+          if (cleaned) release();
+          else unsubscribe = release;
+          assertCurrent();
+        }
+        const result = await runAgentStream({
+          ...captured,
+          abortSignal: kitAbort?.signal ?? abortSignal,
+          projectMemory,
+          uiMessages: messagesForRun,
+        });
+        assertCurrent();
+        const stream = result.toUIMessageStream({
+          originalMessages: submittedMessages,
+          onError: (error) => {
+            finished = true;
+            return formatAiError(error);
+          },
+        });
+        if (kitMemory && snapshot) {
+          const guarded = guardRunStream(
+            stream,
+            requestActive,
+            retireKit,
+            cleanup,
+            snapshot.release,
+          );
+          snapshotHandedOff = true;
+          return guarded;
+        }
+        return stream;
+      } catch (error) {
+        finished = true;
+        cleanup();
+        kitAbort?.abort();
+        throw error;
+      }
+    } finally {
+      if (!snapshotHandedOff) snapshot?.release();
     }
   };
 
