@@ -45,6 +45,40 @@ pub struct MemoryPolicyReview {
     expires: Instant,
 }
 impl MemoryPolicyReview {
+    /// Prepares a synchronous native review for a standalone owner. Worker
+    /// callers retain their existing admission and settlement wrapper.
+    pub fn prepare(
+        store: Arc<LocalMemoryStore>,
+        origin: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        policy: MemoryPolicy,
+        control: &DiscoveryControl,
+    ) -> Result<Self, MemoryPolicyError> {
+        validate_path(&origin)?;
+        let origin =
+            LocalMemoryWorkspace::open(&store, &origin, access.as_ref(), &control.read_control()?)?;
+        let (path, key) =
+            resolve_ready_memory(&origin, control)?.ok_or(MemoryPolicyError::ScopeUnavailable)?;
+        let memory =
+            LocalMemoryWorkspace::open(&store, &path, access.as_ref(), &control.read_control()?)?;
+        if memory.project_key() != key {
+            return Err(MemoryPolicyError::Changed);
+        }
+        let (snapshot, preference) = memory.observe_preference(&control.read_control()?)?;
+        if resolve_ready_memory(&origin, control)? != Some((path, key.clone())) {
+            return Err(MemoryPolicyError::Changed);
+        }
+        Ok(Self {
+            origin: origin.retain(store.clone(), access.clone())?,
+            memory: memory.retain(store.clone(), access.clone())?,
+            snapshot,
+            preference,
+            project_key: key,
+            policy,
+            expires: Instant::now() + Duration::from_secs(120),
+        })
+    }
+
     pub fn root(&self) -> &Path {
         self.memory.root()
     }
@@ -58,7 +92,12 @@ impl MemoryPolicyReview {
         self.policy
     }
 
-    fn accept(self, control: &DiscoveryControl) -> Result<ProjectPreference, MemoryPolicyError> {
+    /// Consumes the original review under its root, lifetime and revision checks.
+    /// A policy choice grants no instruction trust, session or capture permission.
+    pub fn accept(
+        self,
+        control: &DiscoveryControl,
+    ) -> Result<ProjectPreference, MemoryPolicyError> {
         if Instant::now() >= self.expires {
             return Err(MemoryPolicyError::Changed);
         }
@@ -118,36 +157,7 @@ impl MemoryWorkers {
     ) -> Result<MemoryPolicyJob<MemoryPolicyReview>, MemoryPolicyError> {
         validate_path(&origin)?;
         let job = self.submit(Control::Scope(control.clone()), move || {
-            let origin = LocalMemoryWorkspace::open(
-                &store,
-                &origin,
-                access.as_ref(),
-                &control.read_control()?,
-            )?;
-            let (path, key) = resolve_ready_memory(&origin, &control)?
-                .ok_or(MemoryPolicyError::ScopeUnavailable)?;
-            let memory = LocalMemoryWorkspace::open(
-                &store,
-                &path,
-                access.as_ref(),
-                &control.read_control()?,
-            )?;
-            if memory.project_key() != key {
-                return Err(MemoryPolicyError::Changed);
-            }
-            let (snapshot, preference) = memory.observe_preference(&control.read_control()?)?;
-            if resolve_ready_memory(&origin, &control)? != Some((path, key.clone())) {
-                return Err(MemoryPolicyError::Changed);
-            }
-            Ok(MemoryPolicyReview {
-                origin: origin.retain(store.clone(), access.clone())?,
-                memory: memory.retain(store.clone(), access.clone())?,
-                snapshot,
-                preference,
-                project_key: key,
-                policy,
-                expires: Instant::now() + Duration::from_secs(120),
-            })
+            MemoryPolicyReview::prepare(store, origin, access, policy, &control)
         })?;
         Ok(MemoryPolicyJob { job })
     }

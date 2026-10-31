@@ -15,12 +15,14 @@ use voktty_memory_local::{
 mod tests;
 
 mod init;
+mod policy;
 
 #[derive(Debug, PartialEq)]
 pub(super) enum MemoryCommand {
     Help,
     Status { project: Option<PathBuf> },
     Init(init::InitOptions),
+    Use(policy::UseOptions),
 }
 
 pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
@@ -61,8 +63,9 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
             Ok(MemoryCommand::Status { project })
         }
         "init" => init::parse(args.collect()),
+        "use" => policy::parse(args.collect()),
         _ => Err(usage_error(
-            "available memory commands: status|init; use memory --help",
+            "available memory commands: status|init|use; use memory --help",
         )),
     }
 }
@@ -238,17 +241,19 @@ fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
         },
         "policy":policy,
         "trust":trust,
-        "capabilities":{"discovery":true, "initialization":true, "contextDelivery":false, "capture":false},
+        "capabilities":{"discovery":true, "initialization":true, "persistentPolicy":true, "contextDelivery":false, "capture":false},
     }))
 }
 
 pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, CliError> {
     match command {
         MemoryCommand::Help => {
+            println!("Policy: voktty memory use --always|--never|--manual [--project <directory>] [--preview] [--json]\n\nStores this machine's project policy without accepting instructions or enabling captures.\n--session requires an addressable conversation; use Project Memory in that conversation.\nStandalone session launch and delivery are not available yet.\n");
             println!("Usage: voktty memory status [--project <directory>] [--json]\n       voktty memory init [--project <directory>] [--set <name=value>]...\n                          [--link-agents] [--link-claude]\n                          [--preview | --yes [--accept-plan <sha256>]] [--json]\n\nStatus reads markers without changing project files. Init reviews the shared template,\ncreates files only after acceptance and does not enable memory, captures or agents.\nWithout an interactive terminal, init requires --preview or --yes and --project.\nExisting rules and private-ignore migrations require a reviewed --accept-plan digest\nwith --yes, or interactive acceptance. Unknown conflicts are never overwritten.\n--set names: project_name, project_summary, owner_title, primary_branch, verify_commands,\n             language, created_at (YYYY-MM-DD), default_runtime, default_model.\nDefaults: folder name, current UTC date, English and the shared template defaults.\nProject memory may be committed to Git; review content before sharing it.");
             Ok(ExitCode::SUCCESS)
         }
         MemoryCommand::Init(options) => init::run(options, as_json),
+        MemoryCommand::Use(options) => policy::run(options, as_json),
         MemoryCommand::Status { project } => {
             let project = project.unwrap_or_else(|| PathBuf::from("."));
             let project = if project.is_absolute() {

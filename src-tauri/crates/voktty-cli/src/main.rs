@@ -1998,7 +1998,7 @@ fn print_result(method: &str, result: Value, as_json: bool) {
 }
 
 fn print_help() {
-    println!("Standalone project memory: voktty memory status [--project <directory>] [--json]\nInitialization: voktty memory init --help\n");
+    println!("Standalone project memory: voktty memory status [--project <directory>] [--json]\nInitialization and policy: voktty memory --help\n");
     println!(
         "Voktty command line interface\n\n\
 Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty harness list [--json]\n  voktty harness status|result <session-id> [--json]\n  voktty harness send <session-id> <text> [--json]\n  voktty harness wait <session-id> [--state <working|waiting|done>]... [--timeout <seconds>] [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\

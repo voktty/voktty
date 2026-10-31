@@ -8,6 +8,52 @@ use tokio::runtime::{Builder, Runtime};
 
 const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+#[test]
+fn synchronous_policy_review_rejects_changed_preferences_without_rebasing() {
+    let f = fixture();
+    let review = MemoryPolicyReview::prepare(
+        f.store.clone(),
+        f.project.path().join("src"),
+        f.access.clone(),
+        MemoryPolicy::Always,
+        &DiscoveryControl::default(),
+    )
+    .unwrap();
+    f.store
+        .set_policy(0, review.project_key(), MemoryPolicy::Never)
+        .unwrap();
+    let before = bytes(&f);
+    assert_eq!(
+        review.accept(&DiscoveryControl::default()),
+        Err(MemoryPolicyError::Changed)
+    );
+    assert_eq!(bytes(&f), before);
+    assert_eq!(f.access.instruction_reads.load(Ordering::Acquire), 0);
+}
+
+#[test]
+fn synchronous_policy_review_preserves_expiry_and_retired_authority_guards() {
+    for expire in [true, false] {
+        let f = fixture();
+        let mut review = MemoryPolicyReview::prepare(
+            f.store.clone(),
+            f.project.path().join("src"),
+            f.access.clone(),
+            MemoryPolicy::Always,
+            &DiscoveryControl::default(),
+        )
+        .unwrap();
+        if expire {
+            review.expires = Instant::now();
+        } else {
+            f.access.retired.store(true, Ordering::Release);
+        }
+        let before = bytes(&f);
+        assert!(review.accept(&DiscoveryControl::default()).is_err());
+        assert_eq!(bytes(&f), before);
+    }
+}
+
 struct Access {
     root: PathBuf,
     retired: AtomicBool,
