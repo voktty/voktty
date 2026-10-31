@@ -42,7 +42,7 @@ import {
   Tick01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   compatModelIdForEndpoint,
   getCompatModelInfo,
@@ -65,6 +65,12 @@ import { useChatStore } from "../store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { isProviderUsable } from "../lib/availability";
 import { harnessChatModelInfo, harnessChatModels } from "../lib/harnessCatalog";
+
+const AiProjectMemoryButton = lazy(() =>
+  import("@/modules/ai/components/AiProjectMemoryButton").then((module) => ({
+    default: module.AiProjectMemoryButton,
+  })),
+);
 
 const PROVIDER_ICON = {
   openai: ChatGptIcon,
@@ -195,6 +201,10 @@ export function AiStatusBarControls({
       )}
 
       <ModelDropdown compact={compact} />
+
+      <Suspense fallback={null}>
+        <AiProjectMemoryButton />
+      </Suspense>
 
       <IconBtn
         title={t("agentHistory.shortcutTooltip", { shortcut: "Ctrl+Shift+H" })}

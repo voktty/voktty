@@ -22,7 +22,10 @@ export function registerChatMemoryOwner(
   deps: Readonly<{
     isCurrent: () => boolean;
     getRoot: () => AiFileRootContext | null;
-    subscribeRoot?: (listener: () => void) => () => void;
+    subscribeRoot?: (
+      listener: () => void,
+      onUnavailable: () => void,
+    ) => () => void;
   }>,
 ): void {
   forgetChatMemoryOwner(chat);
@@ -37,8 +40,11 @@ export function registerChatMemoryOwner(
     retired = true;
     const release = unsubscribe;
     unsubscribe = null;
-    release?.();
-    manager?.dispose();
+    try {
+      release?.();
+    } finally {
+      manager?.dispose();
+    }
   };
   const current = (getRoot = deps.getRoot) => {
     if (retired) return false;
@@ -75,7 +81,7 @@ export function registerChatMemoryOwner(
           try {
             const release = deps.subscribeRoot(() => {
               current();
-            });
+            }, retire);
             if (retired) release();
             else unsubscribe = release;
           } catch (error) {

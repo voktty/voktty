@@ -282,3 +282,45 @@ it("rejects a deleted chat's pending read while preserving the same-ID successor
   await bind(next);
   expect(next.status()).toBe("ready");
 });
+
+it("rebinds same-root replacement publications before observing later root roundtrips", async () => {
+  const chat = getOrCreateChat("original");
+  const scope = capture(chat);
+  await bind(scope);
+  const listeners = new Set<() => void>();
+  let next = boundary;
+  const state = useChatStore.getState();
+  state.setLive({
+    ...state.live,
+    getFileRootContext: () => next,
+    subscribeFileRootContext(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  });
+  expect(scope.isCurrent()).toBe(true);
+  expect(listeners.size).toBe(1);
+  next = { root: "/other", workspace: { kind: "local" } };
+  for (const listener of [...listeners]) listener();
+  next = boundary;
+  for (const listener of [...listeners]) listener();
+  expect(scope.isCurrent()).toBe(false);
+  expect(listeners.size).toBe(0);
+});
+
+it("fails closed when a replacement publication cannot be observed", async () => {
+  const scope = capture();
+  await bind(scope);
+  const state = useChatStore.getState();
+  expect(() =>
+    state.setLive({
+      ...state.live,
+      subscribeFileRootContext: () => {
+        throw new Error("fixture observer failure");
+      },
+    }),
+  ).not.toThrow();
+  expect(scope.isCurrent()).toBe(false);
+});
