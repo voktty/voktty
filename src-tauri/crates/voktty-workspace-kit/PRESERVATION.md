@@ -174,3 +174,32 @@ checker can consume them through the existing reviewed base-update flow. Item
 fragment appends need separate evidence; these records cannot certify them.
 Native inventory authority, authenticated origin, age/month qualification and
 backlinks remain required before accepting compaction.
+
+## Whole-file archive time qualification
+
+`check_memory_archive_time` and `checkMemoryArchiveTime` recompute exact,
+unambiguous whole-file moves from both snapshots. They do not accept a caller's
+movement list or claimed dates. For handoffs, the shared portable UTC basename
+validator supplies the timestamp. The archive month must equal the handoff's
+month, rather than the month when compaction runs. Filesystem timestamps and
+LOG dates never qualify age. This is syntactic calendar evidence, not proof of
+authorship or when a file was physically created.
+
+The caller supplies its observed clock in integer Unix milliseconds from zero
+through 8640000000000000, and the configured `archive.afterDays` integer from 1
+through 36500. Invalid settings fail even without moves. A day is exactly
+86400000 milliseconds. "Older than" is strict: equality with the threshold is
+still too recent. Future timestamps are diagnosed separately. Wrong months and
+age problems can both be reported for the same source.
+
+Reports contain scalar-sorted source paths for qualified moves, unknown dates,
+future dates, too-recent moves and wrong months. Qualification applies only to
+each identified move; it is not an overall verdict. Copies, rewritten files,
+ambiguous movements and other rejected candidates still require the separate
+archive-file report. An empty time report does not rescue their diagnostics.
+Closed plans currently have unknown dates because snapshots retain no qualified
+closure date; a plan filename's date is not its closure. Plan date qualification
+and item-fragment dates remain required work. No persisted schema, template,
+writer, IO or CLI command is added by this component. Native clock/config and
+baseline ownership, fragments, backlinks and integrated checking remain required
+before accepting compaction.

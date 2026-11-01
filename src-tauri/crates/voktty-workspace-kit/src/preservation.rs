@@ -15,6 +15,10 @@ pub use archive_files::{compare_memory_archive_files, MemoryArchiveFileReport, M
 mod archive_log;
 pub use archive_log::{check_memory_archive_log, MemoryArchiveLogReport};
 
+#[path = "archive_time.rs"]
+mod archive_time;
+pub use archive_time::{check_memory_archive_time, MemoryArchiveTimeReport};
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPreservationFile {

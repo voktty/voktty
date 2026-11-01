@@ -1,0 +1,535 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "older than threshold",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "exact threshold remains live",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896093000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "one millisecond beyond threshold",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896093000001,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "one millisecond below threshold",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896092999999,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "future timestamp",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1893500999999,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "current timestamp",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1893501000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "archive uses handoff month not current month",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-02/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": ["continuity/handoffs/2030-01-01-1230-agent.md"]
+      }
+    },
+    {
+      "name": "recent and wrong month both diagnosed",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-02/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1893587400000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "wrongMonths": ["continuity/handoffs/2030-01-01-1230-agent.md"]
+      }
+    },
+    {
+      "name": "future and wrong month both diagnosed",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-02/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1893500999999,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "tooRecent": [],
+        "wrongMonths": ["continuity/handoffs/2030-01-01-1230-agent.md"]
+      }
+    },
+    {
+      "name": "unknown filename date",
+      "before": {
+        "continuity/handoffs/legacy.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/legacy.md": "History [T-1]\n"
+      },
+      "nowMs": 1893501000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["continuity/handoffs/legacy.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "invalid leap date",
+      "before": {
+        "continuity/handoffs/2030-02-29-0000-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-02/2030-02-29-0000-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1902141000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["continuity/handoffs/2030-02-29-0000-agent.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "valid leap date",
+      "before": {
+        "continuity/handoffs/2028-02-29-2359-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2028-02/2028-02-29-2359-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1838937600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/2028-02-29-2359-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "year rollover",
+      "before": {
+        "continuity/handoffs/2029-12-31-2359-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2029-12/2029-12-31-2359-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896912000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/2029-12-31-2359-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "Unicode agent name",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-雪.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-雪.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/2030-01-01-1230-雪.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "unqualified timestamp field",
+      "before": {
+        "continuity/handoffs/2030-01-01-2460-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-2460-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["continuity/handoffs/2030-01-01-2460-agent.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "basename byte limit",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [
+          "continuity/handoffs/2030-01-01-1230-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md"
+        ],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "closed plan has no proven closure date",
+      "before": {
+        "plans/2030-01-01-plan.md": "State: closed 2029-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-plan.md": "State: closed 2029-01-01\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2030-01-01-plan.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "open plan never becomes temporal evidence",
+      "before": {
+        "plans/2030-01-01-plan.md": "State: open\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-plan.md": "State: open\n"
+      },
+      "nowMs": 1928061000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "handoff open references remain history",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "[T-1] still open in plan\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "[T-1] still open in plan\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/2030-01-01-1230-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "copy is not a move",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n",
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "existing archive cannot rescue deletion",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n",
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "changed bytes cannot qualify by age",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "rewritten\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "ambiguous destinations cannot qualify by age",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-agent.md": "History [T-1]\n",
+        "archive/2030-02/2030-01-01-1230-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 1896957000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "maximum configured days exact boundary",
+      "before": {
+        "continuity/handoffs/1970-01-01-0000-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/1970-01/1970-01-01-0000-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 3153600000000,
+      "afterDays": 36500,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["continuity/handoffs/1970-01-01-0000-agent.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "epoch remains a real date",
+      "before": {
+        "continuity/handoffs/1970-01-01-0000-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/1970-01/1970-01-01-0000-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 3153600000001,
+      "afterDays": 36500,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/1970-01-01-0000-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "date beyond four digit calendar unknown",
+      "before": {
+        "continuity/handoffs/10000-01-01-0000-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/9999-01/10000-01-01-0000-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 8640000000000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["continuity/handoffs/10000-01-01-0000-agent.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "maximum observation timestamp",
+      "before": {
+        "continuity/handoffs/9999-12-31-2359-agent.md": "History [T-1]\n"
+      },
+      "after": {
+        "archive/9999-12/9999-12-31-2359-agent.md": "History [T-1]\n"
+      },
+      "nowMs": 8640000000000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["continuity/handoffs/9999-12-31-2359-agent.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "mixed results preserve scalar order and independent diagnostics",
+      "before": {
+        "continuity/handoffs/2030-01-01-1230-𐀀.md": "same\n",
+        "continuity/handoffs/2030-01-01-1230-.md": "same\n",
+        "plans/old.md": "State: closed\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-1230-𐀀.md": "same\n",
+        "archive/2030-01/2030-01-01-1230-.md": "same\n",
+        "archive/2030-01/old.md": "State: closed\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [
+          "continuity/handoffs/2030-01-01-1230-.md",
+          "continuity/handoffs/2030-01-01-1230-𐀀.md"
+        ],
+        "unknownDates": ["plans/old.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "no move",
+      "before": {},
+      "after": {},
+      "nowMs": 1893501000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    }
+  ]
+}
