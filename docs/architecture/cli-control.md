@@ -91,6 +91,43 @@ Preview displays the complete native instruction inventory and configuration, in
 
 Acceptance stores only this machine's root-bound instruction digest, preserves use policy including `never`, grants no tools or session permission, and delivers no context or captures. Successful schema-1 JSON uses the normal `ok/result` envelope with `root`, `reviewDigest`, `trustStored`, and false `policyChanged`, `contextActivated`, `capturesActivated` and `projectFilesChanged`. Preview additionally includes `config` and `instructions`, with `trustStored: false`. Usage errors exit 2; native/state IO errors exit 3; unavailable or changed review scopes exit 5. Errors redact file contents and private state. Linux process tests cover this flow; native Windows and macOS runtime qualification remains outstanding.
 
+## Standalone memory measurement
+
+`voktty memory measure [--project <directory>] [--up-next-heading <heading>] [--json]`
+works without Desktop, a TTY or private installation state. It resolves one ready
+ancestor kit through the common native scope resolver and delegates to
+`measure_local_memory` and the shared pure measurement core. It never initializes
+a kit, opens preferences, enables memory, reads instruction or handoff bodies,
+captures, archives or compacts files. An unavailable or ambiguous scope fails
+without selecting an arbitrary kit. Remote namespaces remain unsupported.
+
+The command measures configured character limits for `CONTEXT.md`, `PROJECT.md`,
+`plans/INDEX.md`, `plans/TRACKING.md` and `continuity/CHANGELOG.md`; Up next entries
+use the exact heading, defaulting to `Up next`. Translated projects can pass
+`--up-next-heading` explicitly. Handoff count and age use bounded metadata for
+regular Markdown files excluding README. Age comes from the portable UTC filename,
+not filesystem timestamps. Unknown or future dates remain unknown. Incomplete
+enumeration, links/special Markdown entries and unavailable documents never
+become zero counts or empty text.
+
+Schema-1 JSON returns the normal `ok/result` envelope with `transport: "local"`,
+`root`, `measurements`, `complete` and `exceeded`. Each metric has `path`, `metric`
+(`chars`, `up-next`, `files` or `age-ms`), nullable `value`, `limit` and `status`
+(`ok`, `exceeded` or `unknown`). Exit 0 means complete and within limits; exit 5
+returns a report with unknown or exceeded metrics. Usage errors exit 2; native
+scope, authorization or IO errors exit 3 with the existing redacted error envelope.
+Status capabilities advertise `measurement: true` independently of delivery.
+
+The reader retains one of four native read permits through settlement, the
+original fifteen-second discovery lifetime and five-second phases. Its measured
+document set is at most six files of 256 KiB each (1.5 MiB); scope discovery
+retains its separate bounded ancestor configuration reads. It enumerates at most
+20,000 handoff entries plus one overflow observation and rechecks directory objects, configuration,
+scope and authority without following symlinks/reparse points. These are bounded
+point-in-time observations, not an atomic filesystem snapshot. Linux process and
+native tests cover this contract; other native platforms still require runtime
+qualification. See the [native measurement contract](../../src-tauri/crates/voktty-memory-local/MEASUREMENT.md).
+
 ## Standalone agent launch
 
 `memory run` accepts `codex`, `claude` or `agy`, with optional wrapper `--project` and mutually exclusive `--session`/`--no-memory` before the `--` separator. Without integration, every argument after that separator is forwarded unchanged, including empty arguments, non-UTF-8 bytes and the agent's `--json`. Wrapper `--json` is rejected because child output is inherited rather than wrapped in a Voktty envelope. Unknown adapters, duplicate or incompatible options and unseparated agent arguments fail before IO.
@@ -140,7 +177,7 @@ Launcher directories for exited processes are removed at the next control-server
 
 `tauri.conf.json` declares `binaries/voktty-cli` as an external binary. Tauri selects the file with the current target-triple suffix and signs or packages it with the app. The release workflow passes its explicit Rust target to `scripts/build-cli.mjs`, which prevents an x86_64 macOS release from accidentally bundling an arm64 helper from the host.
 
-The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust measured 9,289,008 bytes and Unix agent launch measured 9,299,784 bytes and the qualified Codex initial-prompt channel measured 9,386,032 bytes. The shared Codex/Claude initial-prompt build measures 9,388,760 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
+The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust measured 9,289,008 bytes and Unix agent launch measured 9,299,784 bytes and the qualified Codex initial-prompt channel measured 9,386,032 bytes. The shared Codex/Claude initial-prompt build measured 9,388,760 bytes; standalone memory measurement brings the measured Linux x86_64 build to 9,453,896 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
 
 ## Current limits
 

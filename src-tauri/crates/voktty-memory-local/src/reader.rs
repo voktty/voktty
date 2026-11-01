@@ -21,6 +21,10 @@ use crate::{LocalMemorySnapshot, LocalMemoryStore, ProjectPreference, StoreError
 
 static ACTIVE_READS: AtomicUsize = AtomicUsize::new(0);
 
+#[path = "measurement.rs"]
+mod measurement;
+pub use measurement::{measure_local_memory, NativeMemoryMeasurements};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadError {
     InvalidInput,
