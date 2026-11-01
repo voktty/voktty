@@ -78,3 +78,45 @@ retain its original native owner, validate both observations' binding, use actua
 clock/configuration, compose every preservation diagnostic, and coordinate writes
 before accepting compaction. The pure contract is documented in
 [`voktty-workspace-kit/PRESERVATION.md`](../voktty-workspace-kit/PRESERVATION.md).
+
+## Protected shared capture
+
+`observe_shared_preservation` uses the same captured workspace, native reader,
+discovery, ownership and verification path while also hashing protected shared
+files. Its `protected()` accessor returns the separate pure protected snapshot.
+The legacy factual-only method returns `None`; that absence must never be treated
+as a successful protected check by a future comprehensive consumer.
+
+The shared method enumerates the kit root and its known factual directories,
+`capture/`, `team/` and `team/roles/`. It observes fixed packaged bases, configuration,
+roster, integrity lock and both root-rule paths, plus qualified extra roles,
+capture instructions and static templates. Unknown files, unsupported layouts,
+symlinks and reparse points fail rather than silently shrinking this inventory.
+The fixed path list is supplied by the packaged pure core, never repository data.
+The pure protected contract is in [PROTECTED.md](../voktty-workspace-kit/PROTECTED.md).
+
+The root listing may inspect metadata for reserved `state`, `mailbox`, `locks`,
+`sessions`, `tasks`, `tasks.json` and `tools.json` entries, but shared capture never
+enumerates their descendants or reads their bodies. Root-rule capture observes
+only `AGENTS.md` and `CLAUDE.md`, not other project files. Every protected read,
+including absence, requires its own native read grant. Metadata grants do not
+substitute for enumeration, read or workspace-root authority.
+
+Factual and protected observations share the existing 128-file and 4 MiB body
+budgets; absent fixed protected paths count toward that combined file limit.
+Directory and enumeration limits remain shared as well. Protected bodies are
+reread and compared before return; root configuration must also match the original
+scope read. Final source, enumeration and root authority checks still apply.
+Temporary protected read bodies are discarded after validation and hashing. The returned object
+exposes their hashes and sizes, without an instruction-body getter or serialization
+of the native object. Existing configuration and factual source accessors retain
+their contract; the original validated configuration remains available separately.
+
+Hashing accepts opaque roster and instruction text without interpreting it;
+native scope still requires its existing valid kit configuration. No preference,
+trust, session, capture permission or provider state changes. This is bounded
+point-in-time evidence, not an atomic snapshot, compaction lock, persisted baseline
+or complete compaction verdict. No current UI, worker or CLI is wired to the new
+method. A future composer must require this shared observation explicitly, check
+both original bindings and every protected and factual diagnostic, and coordinate
+writers before accepting compaction.

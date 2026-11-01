@@ -1,0 +1,661 @@
+{
+  "schema": 1,
+  "requiredPaths": [
+    ".voktty/.gitignore",
+    ".voktty/INDEX.md",
+    ".voktty/INIT.md",
+    ".voktty/README.md",
+    ".voktty/RULES.md",
+    ".voktty/architecture/README.md",
+    ".voktty/archive/README.md",
+    ".voktty/capture/README.md",
+    ".voktty/capture/compact.md",
+    ".voktty/capture/handoff.md",
+    ".voktty/capture/initial.md",
+    ".voktty/capture/milestone.md",
+    ".voktty/capture/refresh.md",
+    ".voktty/continuity/README.md",
+    ".voktty/continuity/handoffs/README.md",
+    ".voktty/domains/README.md",
+    ".voktty/domains/_TEMPLATE.md",
+    ".voktty/external/README.md",
+    ".voktty/external/_TEMPLATE.md",
+    ".voktty/kit.json",
+    ".voktty/kit.lock.json",
+    ".voktty/kit.schema.json",
+    ".voktty/plans/README.md",
+    ".voktty/rituals/README.md",
+    ".voktty/team/MESSAGING.md",
+    ".voktty/team/agents.json",
+    ".voktty/team/agents.schema.json",
+    ".voktty/team/roles/developer.md",
+    ".voktty/team/roles/orchestrator.md",
+    ".voktty/team/roles/verifier.md",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "snapshots": [
+    {
+      "name": "empty distinguishes absence",
+      "documents": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": [
+        {
+          "path": "AGENTS.md",
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "name": "opaque malformed JSON",
+      "documents": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "{unparsed [T-1] ```"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/team/agents.json",
+          "kind": "file",
+          "sha256": "8d609e633cca9a3d06d8591cd738864735327d21ae7cc80bbd9f3d91095e33dc",
+          "bytes": 19
+        }
+      ]
+    },
+    {
+      "name": "exact CRLF instructions",
+      "documents": {
+        ".voktty/RULES.md": {
+          "kind": "file",
+          "text": "# Rules\r\né\r\n"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/RULES.md",
+          "kind": "file",
+          "sha256": "1836bf5afb44531e68132f9be5c94817d722dd9af765d2fcf1097b1679de8632",
+          "bytes": 13
+        }
+      ]
+    },
+    {
+      "name": "root instructions",
+      "documents": {
+        "CLAUDE.md": {
+          "kind": "file",
+          "text": "never execute a hash"
+        }
+      },
+      "expected": [
+        {
+          "path": "CLAUDE.md",
+          "kind": "file",
+          "sha256": "935ec42cea6ff57248788c93248a552605c37ef03efcf249021d680a2d18d634",
+          "bytes": 20
+        }
+      ]
+    },
+    {
+      "name": "custom role",
+      "documents": {
+        ".voktty/team/roles/custom-1.md": {
+          "kind": "file",
+          "text": "```unclosed\n[D-7]\n"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/team/roles/custom-1.md",
+          "kind": "file",
+          "sha256": "cf339982fc8dbd322b778ad6a4a5d3921d9b85dd6bb5a0b462c1892937f10216",
+          "bytes": 18
+        }
+      ]
+    },
+    {
+      "name": "custom capture",
+      "documents": {
+        ".voktty/capture/custom-1.md": {
+          "kind": "file",
+          "text": "[Q-2] {not parsed}"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/capture/custom-1.md",
+          "kind": "file",
+          "sha256": "43631b5d6eb8959a648abebc5b53e501abb2f6871d9a6850957b5f8edb1cb5e6",
+          "bytes": 18
+        }
+      ]
+    },
+    {
+      "name": "extra static template",
+      "documents": {
+        ".voktty/architecture/_TEMPLATE.md": {
+          "kind": "file",
+          "text": "template"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/architecture/_TEMPLATE.md",
+          "kind": "file",
+          "sha256": "5cde0f1298f41f7d1c8b907a36992a7a513225a2615bd6e307bf1a9149b06b40",
+          "bytes": 8
+        }
+      ]
+    },
+    {
+      "name": "configuration",
+      "documents": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "not parsed as instructions"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/kit.json",
+          "kind": "file",
+          "sha256": "4f332e091cff79685d03c9ededab659efe39b49555e804051578584df9693607",
+          "bytes": 26
+        }
+      ]
+    },
+    {
+      "name": "lock",
+      "documents": {
+        ".voktty/kit.lock.json": {
+          "kind": "file",
+          "text": "{}"
+        }
+      },
+      "expected": [
+        {
+          "path": ".voktty/kit.lock.json",
+          "kind": "file",
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "bytes": 2
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "AGENTS.md same",
+      "before": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": "AGENTS.md changed",
+      "before": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "different"
+        }
+      },
+      "expected": {
+        "changedFiles": ["AGENTS.md"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": "AGENTS.md added",
+      "before": {},
+      "after": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": ["AGENTS.md"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": "AGENTS.md removed",
+      "before": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {},
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": ["AGENTS.md"]
+      }
+    },
+    {
+      "name": "AGENTS.md empty added",
+      "before": {},
+      "after": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": ["AGENTS.md"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": "AGENTS.md line endings",
+      "before": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x\ny"
+        }
+      },
+      "after": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "x\r\ny"
+        }
+      },
+      "expected": {
+        "changedFiles": ["AGENTS.md"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/kit.json same",
+      "before": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/kit.json changed",
+      "before": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "different"
+        }
+      },
+      "expected": {
+        "changedFiles": [".voktty/kit.json"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/kit.json added",
+      "before": {},
+      "after": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/kit.json"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/kit.json removed",
+      "before": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {},
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": [".voktty/kit.json"]
+      }
+    },
+    {
+      "name": ".voktty/kit.json empty added",
+      "before": {},
+      "after": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/kit.json"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/kit.json line endings",
+      "before": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x\ny"
+        }
+      },
+      "after": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "x\r\ny"
+        }
+      },
+      "expected": {
+        "changedFiles": [".voktty/kit.json"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/agents.json same",
+      "before": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/agents.json changed",
+      "before": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "different"
+        }
+      },
+      "expected": {
+        "changedFiles": [".voktty/team/agents.json"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/agents.json added",
+      "before": {},
+      "after": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/team/agents.json"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/agents.json removed",
+      "before": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {},
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": [".voktty/team/agents.json"]
+      }
+    },
+    {
+      "name": ".voktty/team/agents.json empty added",
+      "before": {},
+      "after": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/team/agents.json"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/agents.json line endings",
+      "before": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x\ny"
+        }
+      },
+      "after": {
+        ".voktty/team/agents.json": {
+          "kind": "file",
+          "text": "x\r\ny"
+        }
+      },
+      "expected": {
+        "changedFiles": [".voktty/team/agents.json"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/roles/custom.md same",
+      "before": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/roles/custom.md changed",
+      "before": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "different"
+        }
+      },
+      "expected": {
+        "changedFiles": [".voktty/team/roles/custom.md"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/roles/custom.md added",
+      "before": {},
+      "after": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/team/roles/custom.md"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/roles/custom.md removed",
+      "before": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x"
+        }
+      },
+      "after": {},
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [],
+        "removedFiles": [".voktty/team/roles/custom.md"]
+      }
+    },
+    {
+      "name": ".voktty/team/roles/custom.md empty added",
+      "before": {},
+      "after": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/team/roles/custom.md"],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": ".voktty/team/roles/custom.md line endings",
+      "before": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x\ny"
+        }
+      },
+      "after": {
+        ".voktty/team/roles/custom.md": {
+          "kind": "file",
+          "text": "x\r\ny"
+        }
+      },
+      "expected": {
+        "changedFiles": [".voktty/team/roles/custom.md"],
+        "addedFiles": [],
+        "removedFiles": []
+      }
+    },
+    {
+      "name": "role rename is removal and addition",
+      "before": {
+        ".voktty/team/roles/old.md": {
+          "kind": "file",
+          "text": "same"
+        }
+      },
+      "after": {
+        ".voktty/team/roles/new.md": {
+          "kind": "file",
+          "text": "same"
+        }
+      },
+      "expected": {
+        "changedFiles": [],
+        "addedFiles": [".voktty/team/roles/new.md"],
+        "removedFiles": [".voktty/team/roles/old.md"]
+      }
+    }
+  ],
+  "invalidPaths": [
+    ".voktty/state/private.json",
+    ".voktty/mailbox/inbox.md",
+    ".voktty/locks/memory.json",
+    ".voktty/sessions/one.md",
+    ".voktty/tasks.json",
+    ".voktty/tools.json",
+    ".voktty/PROJECT.md",
+    ".voktty/plans/work.md",
+    ".voktty/domains/auth.md",
+    ".voktty/archive/2026-01/old.md",
+    ".voktty/team/roles/Upper.md",
+    ".voktty/team/roles/nested/custom.md",
+    ".voktty/team/roles/../RULES.md",
+    ".voktty/team/roles/a%2Fb.md",
+    ".voktty/team/roles/.md",
+    ".voktty/team/roles/a.MD",
+    ".voktty/team/roles/a.json",
+    ".voktty/capture/Nested/custom.md",
+    ".voktty/capture/a.md?x",
+    ".voktty/capture/a\\b.md",
+    "/AGENTS.md",
+    "remote://host/AGENTS.md",
+    "AGENTS.md#x",
+    "AGENTS.md\u0000",
+    "../AGENTS.md"
+  ]
+}

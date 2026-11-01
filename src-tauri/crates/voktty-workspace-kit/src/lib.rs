@@ -8,6 +8,7 @@ mod lock;
 mod memory;
 mod policy;
 mod preservation;
+mod protected;
 mod scope;
 mod template;
 mod validation;
@@ -64,6 +65,11 @@ pub use preservation::{
     MemoryArchiveLinkReport, MemoryArchiveLogReport, MemoryArchiveMove, MemoryArchiveTimeReport,
     MemoryPlanIndexReport, MemoryPreservationComparison, MemoryPreservationFile,
     MemoryPreservationSnapshot,
+};
+pub use protected::{
+    compare_memory_protected, is_memory_protected_path, memory_protected_paths,
+    snapshot_memory_protected, MemoryProtectedComparison, MemoryProtectedFile,
+    MemoryProtectedSnapshot,
 };
 pub use scope::{resolve_memory_scope, MemoryScope};
 pub use template::{render_template, FileKind, RenderedFile};

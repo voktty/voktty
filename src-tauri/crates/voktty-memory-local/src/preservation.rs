@@ -2,7 +2,10 @@ use super::measurement::PinnedDirectory;
 use super::*;
 use crate::discovery::EntryKind;
 use std::ffi::{OsStr, OsString};
-use voktty_workspace_kit::{snapshot_memory_preservation, MemoryPreservationSnapshot};
+use voktty_workspace_kit::{
+    is_memory_protected_path, memory_protected_paths, snapshot_memory_preservation,
+    snapshot_memory_protected, MemoryPreservationSnapshot, MemoryProtectedSnapshot,
+};
 
 /// Native observation only. It cannot be reconstructed from repository or IPC data.
 pub struct NativeMemoryPreservation {
@@ -11,6 +14,7 @@ pub struct NativeMemoryPreservation {
     config: String,
     sources: BTreeMap<String, PathFact>,
     snapshot: MemoryPreservationSnapshot,
+    protected: Option<MemoryProtectedSnapshot>,
 }
 
 impl NativeMemoryPreservation {
@@ -24,6 +28,10 @@ impl NativeMemoryPreservation {
 
     pub fn config(&self) -> &str {
         &self.config
+    }
+
+    pub fn protected(&self) -> Option<&MemoryProtectedSnapshot> {
+        self.protected.as_ref()
     }
 }
 
@@ -52,6 +60,8 @@ struct Inventory<'a> {
     directories: Vec<PinnedDirectory>,
     memberships: BTreeMap<PathBuf, Vec<(OsString, EntryKind)>>,
     paths: BTreeSet<String>,
+    protected: BTreeSet<String>,
+    shared: bool,
     entries: usize,
 }
 
@@ -88,12 +98,47 @@ impl Inventory<'_> {
             {
                 return Err(ReadError::Unsupported);
             }
-            let path = format!("{relative}/{name}");
+            let path = if relative.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{relative}/{name}")
+            };
             if path.len() > 4096 {
                 return Err(ReadError::Limit);
             }
+            if self.shared
+                && relative.is_empty()
+                && matches!(
+                    name,
+                    "state"
+                        | "mailbox"
+                        | "locks"
+                        | "sessions"
+                        | "tasks"
+                        | "tasks.json"
+                        | "tools.json"
+                )
+            {
+                continue;
+            }
             if entry.kind == EntryKind::Directory {
-                if !relative.starts_with("archive") {
+                let shared_directory = self.shared
+                    && ((relative.is_empty()
+                        && matches!(
+                            name,
+                            "plans"
+                                | "domains"
+                                | "architecture"
+                                | "rituals"
+                                | "external"
+                                | "archive"
+                                | "capture"
+                                | "team"
+                                | "continuity"
+                        ))
+                        || relative == "team" && name == "roles"
+                        || relative == "continuity" && name == "handoffs");
+                if !shared_directory && !relative.starts_with("archive") {
                     return Err(ReadError::Unsupported);
                 }
                 if relative == "archive"
@@ -109,24 +154,44 @@ impl Inventory<'_> {
                 let nested = child(&directory, name, self.access, self.control)?
                     .ok_or(ReadError::StaleRoot)?;
                 self.scan(nested, &path)?;
-            } else if (name == "README.md" && !relative.starts_with("archive/"))
-                || (name == "_TEMPLATE.md"
-                    && matches!(
-                        relative,
-                        "plans" | "domains" | "architecture" | "rituals" | "external"
-                    ))
+            } else if self.shared
+                && (self.protected.contains(&format!(".voktty/{path}"))
+                    || ((matches!(relative, "capture" | "team/roles")
+                        || matches!(name, "README.md" | "_TEMPLATE.md"))
+                        && is_memory_protected_path(&format!(".voktty/{path}"))))
+            {
+                if entry.kind != EntryKind::File {
+                    return Err(ReadError::Unavailable);
+                }
+                self.protected.insert(format!(".voktty/{path}"));
+            } else if !self.shared
+                && ((name == "README.md" && !relative.starts_with("archive/"))
+                    || (name == "_TEMPLATE.md"
+                        && matches!(
+                            relative,
+                            "plans" | "domains" | "architecture" | "rituals" | "external"
+                        )))
             {
                 if entry.kind != EntryKind::File {
                     return Err(ReadError::Unavailable);
                 }
             } else if name.to_ascii_lowercase().ends_with(".md") {
+                if self.shared
+                    && ((relative.is_empty() && !matches!(name, "PROJECT.md" | "CONTEXT.md"))
+                        || relative == "continuity" && name != "CHANGELOG.md"
+                        || matches!(relative, "capture" | "team" | "team/roles"))
+                {
+                    return Err(ReadError::Unsupported);
+                }
                 if entry.kind != EntryKind::File || !name.ends_with(".md") {
                     return Err(ReadError::Unavailable);
                 }
                 self.paths.insert(path);
-                if self.paths.len() > 128 {
-                    return Err(ReadError::Limit);
-                }
+            } else if self.shared {
+                return Err(ReadError::Unsupported);
+            }
+            if self.paths.len() + self.protected.len() > 128 {
+                return Err(ReadError::Limit);
             }
         }
         if self.directories.len() >= 128 {
@@ -164,6 +229,22 @@ impl LocalMemoryWorkspace<'_> {
         &self,
         control: &crate::DiscoveryControl,
     ) -> Result<NativeMemoryPreservation, ReadError> {
+        self.capture_preservation(control, false)
+    }
+
+    /// Also hashes protected shared files; their text never grants trust or capture permission.
+    pub fn observe_shared_preservation(
+        &self,
+        control: &crate::DiscoveryControl,
+    ) -> Result<NativeMemoryPreservation, ReadError> {
+        self.capture_preservation(control, true)
+    }
+
+    fn capture_preservation(
+        &self,
+        control: &crate::DiscoveryControl,
+        shared: bool,
+    ) -> Result<NativeMemoryPreservation, ReadError> {
         let phase = control.read_control()?;
         let _permit = ReadPermit::acquire(&phase)?;
         let instance = self.root_instance.clone().ok_or(ReadError::Unsupported)?;
@@ -200,6 +281,12 @@ impl LocalMemoryWorkspace<'_> {
             control: &phase,
             directories: vec![],
             memberships: BTreeMap::new(),
+            protected: if shared {
+                memory_protected_paths().into_iter().collect()
+            } else {
+                BTreeSet::new()
+            },
+            shared,
             entries: 0,
             paths: [
                 "PROJECT.md",
@@ -213,23 +300,33 @@ impl LocalMemoryWorkspace<'_> {
             .map(String::from)
             .collect(),
         };
-        for name in [
-            "plans",
-            "domains",
-            "architecture",
-            "rituals",
-            "external",
-            "archive",
-        ] {
-            if let Some(directory) = child(&kit, name, self.access, &phase)? {
-                inventory.scan(directory, name)?;
+        if shared {
+            inventory.scan(
+                PinnedDirectory::new(
+                    kit.path.clone(),
+                    platform::Directory::open_root(&kit.path, &phase)?,
+                )?,
+                "",
+            )?;
+        } else {
+            for name in [
+                "plans",
+                "domains",
+                "architecture",
+                "rituals",
+                "external",
+                "archive",
+            ] {
+                if let Some(directory) = child(&kit, name, self.access, &phase)? {
+                    inventory.scan(directory, name)?;
+                }
             }
-        }
-        if let Some(continuity) = child(&kit, "continuity", self.access, &phase)? {
-            if let Some(handoffs) = child(&continuity, "handoffs", self.access, &phase)? {
-                inventory.scan(handoffs, "continuity/handoffs")?;
+            if let Some(continuity) = child(&kit, "continuity", self.access, &phase)? {
+                if let Some(handoffs) = child(&continuity, "handoffs", self.access, &phase)? {
+                    inventory.scan(handoffs, "continuity/handoffs")?;
+                }
+                inventory.directories.push(continuity);
             }
-            inventory.directories.push(continuity);
         }
         let mut sources = BTreeMap::new();
         let mut bytes = 0usize;
@@ -247,6 +344,24 @@ impl LocalMemoryWorkspace<'_> {
             sources.insert(path.clone(), fact);
         }
         let snapshot = snapshot_memory_preservation(&sources, true).map_err(ReadError::Contract)?;
+        let mut protected_sources = BTreeMap::new();
+        for path in &inventory.protected {
+            let fact = root
+                .directory
+                .read_text(&self.root, path, self.access, &phase)?;
+            if let PathFact::File { text } = &fact {
+                bytes = bytes
+                    .checked_add(text.len())
+                    .filter(|n| *n <= 4 * 1024 * 1024)
+                    .ok_or(ReadError::Limit)?;
+            }
+            protected_sources.insert(path.clone(), fact);
+        }
+        let protected = if shared {
+            Some(snapshot_memory_protected(&protected_sources, true).map_err(ReadError::Contract)?)
+        } else {
+            None
+        };
         for (path, expected) in &sources {
             if !matches!(
                 (kit.directory.read_text(&kit.path, path, self.access, &phase)?, expected),
@@ -257,6 +372,21 @@ impl LocalMemoryWorkspace<'_> {
         }
         if !matches!(kit.directory.read_text(&kit.path, "kit.json", self.access, &phase)?,
             PathFact::File { text } if text == config)
+        {
+            return Err(ReadError::StaleRoot);
+        }
+        for (path, expected) in &protected_sources {
+            let current = root
+                .directory
+                .read_text(&self.root, path, self.access, &phase)?;
+            if !matches!((&current, expected), (PathFact::Absent, PathFact::Absent))
+                && !matches!((current, expected), (PathFact::File { text }, PathFact::File { text: previous }) if text == *previous)
+            {
+                return Err(ReadError::StaleRoot);
+            }
+        }
+        if shared
+            && !matches!(protected_sources.get(".voktty/kit.json"), Some(PathFact::File { text }) if *text == config)
         {
             return Err(ReadError::StaleRoot);
         }
@@ -306,6 +436,9 @@ impl LocalMemoryWorkspace<'_> {
             .keys()
             .any(|path| !self.access.allows_read(&kit.path.join(path)))
             || !self.access.allows_read(&kit.path.join("kit.json"))
+            || protected_sources
+                .keys()
+                .any(|path| !self.access.allows_read(&self.root.join(path)))
         {
             return Err(ReadError::Denied);
         }
@@ -316,6 +449,7 @@ impl LocalMemoryWorkspace<'_> {
             config,
             sources,
             snapshot,
+            protected,
         })
     }
 }

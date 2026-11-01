@@ -1,5 +1,16 @@
 export { loadKitTemplate } from "@/modules/workspace-kit/lib/resources";
 export {
+  memoryProtectedPaths,
+  isMemoryProtectedPath,
+  snapshotMemoryProtected,
+  compareMemoryProtected,
+} from "@/modules/workspace-kit/lib/protected";
+export type {
+  MemoryProtectedFile,
+  MemoryProtectedSnapshot,
+  MemoryProtectedComparison,
+} from "@/modules/workspace-kit/lib/protected";
+export {
   parseKitTemplate,
   renderKitTemplate,
 } from "@/modules/workspace-kit/lib/template";
