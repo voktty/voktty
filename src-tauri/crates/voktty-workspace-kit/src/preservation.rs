@@ -3,6 +3,12 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "archive_fragments.rs"]
+mod archive_fragments;
+pub use archive_fragments::{
+    check_memory_archive_fragments, MemoryArchiveFragment, MemoryArchiveFragmentReport,
+};
+
 #[path = "plan_index.rs"]
 mod plan_index;
 pub use plan_index::{check_memory_plan_index, MemoryPlanIndexReport};

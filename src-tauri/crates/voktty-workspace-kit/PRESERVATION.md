@@ -241,3 +241,73 @@ it first qualifies on February 1. The destination month is that closure month's
 literal `YYYY-MM`. Handoffs retain their existing minute-precision behavior.
 This adds no timestamp to snapshots or persisted schema, and does not prove
 historical truth, native baseline ownership, fragment integrity or backlinks.
+
+## Intact item fragments and archive appends
+
+`check_memory_archive_fragments` and `checkMemoryArchiveFragments` bind both
+complete raw inventories to their snapshots using the existing snapshot builder.
+Path sets, SHA-256 and byte sizes must agree before comparison. Missing, blocked,
+changed or over-budget evidence fails without a positive partial result. The
+TypeScript implementation captures both inventories and expected hash values
+before asynchronous work. Reconstructing comparison values does not attest to
+native inventory completeness, baseline origin, permissions or project ownership.
+
+The qualified fragment channel uses plain top-level list items or level-one
+through level-six ATX sections containing a visible `[T-n done]`, `[D-n done]`
+or `[Q-n done]` marker, with exactly one literal ` · closed YYYY-MM-DD` suffix. Lists may
+use `-`, `+`, `*` or one through nine decimal digits followed by `.` or `)`.
+For `continuity/CHANGELOG.md`, a plain `## YYYY-MM-DD` section can identify a
+closed historical entry without an item ID. The shared calendar and visibility
+lexer apply; comments and inline code cannot fabricate dated markers.
+
+A list block owns every following raw line through the next top-level list or
+ATX heading. A section owns every raw line through the next same-level or higher
+ATX heading, including nested sections and their reasons. The earliest enclosing
+candidate owns an overlapping candidate. Blank lines, indentation, UTF-8, code
+and newline bytes within that unit remain part of its evidence. Retaining only
+an ID or its first line cannot rescue a removed reason. A unit that remains
+byte-identical in its live source needs no archive credit. Duplicate original
+headers in a changed source remain unverified rather than lending multiplicity.
+
+The source must have a qualified plain layout. HTML, quotes, links, references,
+emphasis and other unqualified visible markup leave changed closed content
+unverified. Closed inline code and fenced code use the existing visibility
+channel while retaining their raw bytes. Closed occurrences outside a derived
+unit and unqualified changelog sections also remain unverified. This is an
+explicit conservative block channel, not a CommonMark renderer or support for
+every valid Markdown layout. Additional layouts require qualification rather
+than silently accepting smaller arbitrary line cuts.
+
+Only a removed or changed unit with no syntactically open item can qualify.
+Its closure day must be valid and strictly older than `archive.afterDays`, using
+the last UTC millisecond for age and the first for future-day detection. The
+only qualified target is `archive/<closure month>/<source basename>`. The
+checker derives units and destinations itself; callers supply no authoritative
+offsets, movement claims, dates or permission booleans.
+
+An existing archive must preserve its entire prior byte prefix. An unfinished
+last line requires LF or CRLF before appending. Only newly appended bytes can
+credit a removed unit; old archive text cannot rescue a deletion. The suffix
+must consist entirely of exact, uniquely attributed units. A separator LF or
+CRLF may join a unit without a final LF to another unit. Duplicate use,
+ambiguous same-header sources, altered reasons or any unattributed suffix retire
+all credit for that archive, including preceding valid-looking units. A new
+empty archive provides no evidence. Qualified whole-file moves are recomputed
+and left to the existing whole-file and temporal components.
+
+Reports include source/line/target/byte-size/SHA-256 fragment receipts and
+scalar-sorted diagnostics for missing fragments, unknown/future/recent dates,
+open units, ambiguous attribution, unverified sources, rewritten archives and
+unattributed archive appends. Diagnostic keys use `<source>#L<one-based line>`;
+snapshot paths cannot contain `#`. Receipts contain no document bodies and prove
+only byte preservation within supplied inventories, not historical truth or
+semantic equivalence. There are at most 1,024 structural boundaries per document,
+256 units per comparison and 64 MiB of live-content search budget. Existing
+128-file, 4 MiB inventory and 256 KiB per-document limits remain in force.
+
+This component does not erase whole-file diagnostics. A future composer may
+discharge a changed/new archive only for a fully qualified append target, while
+still checking lost archives, ineligible file removals, live obligations, index
+membership, LOG records, backlinks and native baseline authority. No integrated
+checker, fragment LOG writer, template migration, IPC, persisted schema or
+filesystem mutation is added here. Empty arrays still never approve compaction.

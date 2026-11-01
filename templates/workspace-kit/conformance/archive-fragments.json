@@ -1,0 +1,1175 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "multiple units may append in another order",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] First · closed 2030-01-01\nReason one.\n\n- [T-2 done] Second · closed 2030-01-01\nReason two.\n\n- [T-3] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-3] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-2 done] Second · closed 2030-01-01\nReason two.\n\n- [T-1 done] First · closed 2030-01-01\nReason one.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 53,
+            "sha256": "d09e6cdbffa5aee2d125a78037f4232a7c34e19aca0a3e32b61866fc479ef4fc"
+          },
+          {
+            "source": "plans/TRACKING.md",
+            "line": 6,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 54,
+            "sha256": "2c8942bb74eff51d8eb9c98dc429e536894a0969965735cd79ee5b76f8d3039c"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "closed code visibility preserves all raw reason bytes",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] First · closed 2030-01-01\nReason with `code` intact.\n```text\n## Not a boundary\n[T-99] example\n```\n\n- [T-3] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-3] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] First · closed 2030-01-01\nReason with `code` intact.\n```text\n## Not a boundary\n[T-99] example\n```\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 113,
+            "sha256": "e6ec80e021bfc05ee09f72823300a150f4b76fc282996242c7c5a543ad90e0ac"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "ambiguous closure metadata cannot backdate a recent block",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-02-28 · closed 2020-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2020-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-02-28 · closed 2020-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": ["plans/TRACKING.md#L3"],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2020-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "list block preserves the complete reason",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 68,
+            "sha256": "60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "ID retained but reason deleted still fails",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n- [T-2] Next\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "archived ID without its reason fails",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "rewritten archived reason fails",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Different reason.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "replayed identical block retires all credit",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "unattributed suffix retires all credit",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\nExtra\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "existing archive prefix preserved",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 68,
+            "sha256": "60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "old archive bytes cannot rescue deletion",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "changed old prefix fails even with intact fragment",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Edited history\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": ["archive/2030-01/TRACKING.md"],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "missing old archive prefix fails",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": ["archive/2030-01/TRACKING.md"],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "old final line may end at append boundary",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 68,
+            "sha256": "60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "old final line may end CRLF at boundary",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history\r\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 68,
+            "sha256": "60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "unseparated old line does not qualify",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "Old history- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": ["archive/2030-01/TRACKING.md"],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "wrong month cannot credit removed fragment",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-02/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-02/TRACKING.md"]
+      }
+    },
+    {
+      "name": "renamed target cannot credit fragment",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/OTHER.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/OTHER.md"]
+      }
+    },
+    {
+      "name": "nested target cannot credit fragment",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/nested/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/nested/TRACKING.md"]
+      }
+    },
+    {
+      "name": "copy is not a removed fragment",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "retained bytes need no archival",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "no archive leaves missing evidence",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "unknown closure date never credits",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": ["plans/TRACKING.md#L3"],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "invalid closure date never credits",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-02-30\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-02-30\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": ["plans/TRACKING.md#L3"],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "future closure never credits",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2031-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2031-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": ["plans/TRACKING.md#L3"],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "strict day threshold equality remains recent",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1896134399999,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["plans/TRACKING.md#L3"],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "one ms after day threshold qualifies",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1896134400000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 68,
+            "sha256": "60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "current day is recent not future",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1893499200000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["plans/TRACKING.md#L3"],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "open item inside closed block cannot archive",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason [Q-3] pending.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason [Q-3] pending.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": ["plans/TRACKING.md#L3"],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "CRLF exact bytes survive",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\r\n  Reason preserved.\r\n\r\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\r\n  Reason preserved.\r\n\r\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 71,
+            "sha256": "f21f2ad42be4d74b35f4a154617016da86cd2693d7fe50704510d75394e700d4"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "EOL rewrite cannot credit",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\r\n  Reason preserved.\r\n\r\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "Unicode reasons retain UTF8 bytes",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Razón 雪 preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Razón 雪 preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 72,
+            "sha256": "3c639870303eaad63cebba442c5fbf672b96c310be058baba99bb3e9645855a0"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "heading owns complete nested reasons",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n### [D-1 done] Decision · closed 2030-01-01\n\nReason.\n\n#### Detail\nMore reason.\n\n## Next\n[T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n## Next\n[T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "### [D-1 done] Decision · closed 2030-01-01\n\nReason.\n\n#### Detail\nMore reason.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 81,
+            "sha256": "73b4abfe81c878584b88fd4dd797b9152d011e2c6856a765f26525fa4fea768f"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "numbered list owns unindented reason",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n1. [T-1 done] Upload retry · closed 2030-01-01\nReason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "1. [T-1 done] Upload retry · closed 2030-01-01\nReason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 67,
+            "sha256": "99b6cb526fe0ef465777d6a5fe6db8e4485ac4ef816ceda8ec71252f8a924670"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "HTML source is unverified",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n<div>\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n<div>\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": ["plans/TRACKING.md"],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "multiline link source is unverified",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n[example](\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n[example](\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": ["plans/TRACKING.md"],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "table item is unverified",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n| [T-1 done] Upload · closed 2030-01-01 | Reason |\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "| [T-1 done] Upload · closed 2030-01-01 | Reason |\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": ["plans/TRACKING.md"],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "duplicate source headers are unverified",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": ["plans/TRACKING.md"],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "dated changelog owns all reasons",
+      "before": {
+        "continuity/CHANGELOG.md": "# Impact\n\n## 2030-01-01\n\n- Released.\n  Reason preserved.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "# Impact\n\n",
+        "archive/2030-01/CHANGELOG.md": "## 2030-01-01\n\n- Released.\n  Reason preserved.\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "continuity/CHANGELOG.md",
+            "line": 3,
+            "target": "archive/2030-01/CHANGELOG.md",
+            "bytes": 47,
+            "sha256": "a7dbf3dae8402d627841464b57face0b6e2b8c3213aaf0c6d3c3e84f7abd24d7"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "undated changelog is unverified",
+      "before": {
+        "continuity/CHANGELOG.md": "# Impact\n\n## Old history\n\nReason preserved.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "# Impact\n\nArchived.\n\n",
+        "archive/2030-01/CHANGELOG.md": "## Old history\n\nReason preserved.\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": ["continuity/CHANGELOG.md"],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/CHANGELOG.md"]
+      }
+    },
+    {
+      "name": "no final newline is preserved",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved."
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\nArchived.\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved."
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 3,
+            "target": "archive/2030-01/TRACKING.md",
+            "bytes": 66,
+            "sha256": "0b87c042e0592934cb624da96b888dbef63c10ca1915b28d00a88dd9316ad688"
+          }
+        ],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "empty no-op",
+      "before": {},
+      "after": {},
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "whole files remain a separate proof",
+      "before": {
+        "plans/P.md": "State: closed 2030-01-01\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed 2030-01-01\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "ambiguous same-name source attribution fails",
+      "before": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n",
+        "domains/TRACKING.md": "# Tracking\n\n- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n- [T-2] Next\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Tracking\n\n- [T-2] Next\n",
+        "domains/TRACKING.md": "# Tracking\n\n- [T-2] Next\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Upload retry · closed 2030-01-01\n  Reason preserved.\n\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "fragments": [],
+        "missingFragments": ["domains/TRACKING.md#L3", "plans/TRACKING.md#L3"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "openFragments": [],
+        "ambiguousFragments": [
+          "domains/TRACKING.md#L3",
+          "plans/TRACKING.md#L3"
+        ],
+        "unverifiedSources": [],
+        "rewrittenArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    }
+  ]
+}
