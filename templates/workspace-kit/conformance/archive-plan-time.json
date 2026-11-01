@@ -1,0 +1,1014 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "HTML in a level-one title remains unqualified",
+      "before": {
+        "plans/P.md": "# Plan: <div>\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "# Plan: <div>\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/P.md": "# Plan: <div>\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "multiline link cannot supply a closure",
+      "before": {
+        "plans/P.md": "[example](\nState: closed 2030-01-01\n)\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "[example](\nState: closed 2030-01-01\n)\n"
+      },
+      "sources": {
+        "plans/P.md": "[example](\nState: closed 2030-01-01\n)\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "multiline emphasis cannot supply closure",
+      "before": {
+        "plans/P.md": "*example\nState: closed 2030-01-01\ncontinued*\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "*example\nState: closed 2030-01-01\ncontinued*\n"
+      },
+      "sources": {
+        "plans/P.md": "*example\nState: closed 2030-01-01\ncontinued*\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "multiline reference cannot supply closure",
+      "before": {
+        "plans/P.md": "[example]:\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "[example]:\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/P.md": "[example]:\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "unqualified header heading remains unknown",
+      "before": {
+        "plans/P.md": "#malformed\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "#malformed\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/P.md": "#malformed\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "extra carriage return cannot end a qualified field",
+      "before": {
+        "plans/P.md": "State: closed 2030-01-01\r\r\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed 2030-01-01\r\r\n"
+      },
+      "sources": {
+        "plans/P.md": "State: closed 2030-01-01\r\r\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "Unicode line separator cannot end a qualified field",
+      "before": {
+        "plans/P.md": "State: closed 2030-01-01\u2028\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed 2030-01-01\u2028\n"
+      },
+      "sources": {
+        "plans/P.md": "State: closed 2030-01-01\u2028\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/P.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "plain closed field",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "bold closed state",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: **closed** 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: **closed** 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: **closed** 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "canonical combined date and state",
+      "before": {
+        "plans/2020-01-01-topic.md": "# Plan: Topic\n\nDate: 2020-01-01 · State: closed 2030-01-01\nOriginal request: Test\n\n## Goal\nDone\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "# Plan: Topic\n\nDate: 2020-01-01 · State: closed 2030-01-01\nOriginal request: Test\n\n## Goal\nDone\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "# Plan: Topic\n\nDate: 2020-01-01 · State: closed 2030-01-01\nOriginal request: Test\n\n## Goal\nDone\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "CRLF preserved",
+      "before": {
+        "plans/2020-01-01-topic.md": "State:\t**closed**\t2030-01-01 \t\r\n\r\n## Goal\r\nDone\r\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State:\t**closed**\t2030-01-01 \t\r\n\r\n## Goal\r\nDone\r\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State:\t**closed**\t2030-01-01 \t\r\n\r\n## Goal\r\nDone\r\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "dated closure without prior bytes remains unknown",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {},
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "changed previous text cannot qualify a date",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2029-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      },
+      "error": "KIT_ARCHIVE_TIME_SOURCE_CHANGED"
+    },
+    {
+      "name": "changed previous newline cannot qualify",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\r\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      },
+      "error": "KIT_ARCHIVE_TIME_SOURCE_CHANGED"
+    },
+    {
+      "name": "current closure day is recent not future",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1893499200000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["plans/2020-01-01-topic.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "whole day equality is still recent",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1896134399999,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["plans/2020-01-01-topic.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "one ms after whole day threshold",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1896134400000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "midnight date alone cannot archive early",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1896048000001,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["plans/2020-01-01-topic.md"],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "future closure date",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-04-01\n"
+      },
+      "after": {
+        "archive/2030-04/2020-01-01-topic.md": "State: closed 2030-04-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-04-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": ["plans/2020-01-01-topic.md"],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "wrong closure month despite original filename date",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2020-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": ["plans/2020-01-01-topic.md"]
+      }
+    },
+    {
+      "name": "recent and wrong month",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2020-01/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1893542400000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": ["plans/2020-01-01-topic.md"],
+        "wrongMonths": ["plans/2020-01-01-topic.md"]
+      }
+    },
+    {
+      "name": "invalid leap closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-02-29\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-02-29\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-02-29\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "valid leap closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2028-02-29\n"
+      },
+      "after": {
+        "archive/2028-02/2020-01-01-topic.md": "State: closed 2028-02-29\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2028-02-29\n"
+      },
+      "nowMs": 1838160000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "closure without a date",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "creation date does not replace closure date",
+      "before": {
+        "plans/2020-01-01-topic.md": "Date: 2020-01-01 · State: closed\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "Date: 2020-01-01 · State: closed\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "Date: 2020-01-01 · State: closed\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "duplicate equal closure fields are ambiguous",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "duplicate different closure dates are ambiguous",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\nState: closed 2029-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\nState: closed 2029-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\nState: closed 2029-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "hidden comment date cannot supply evidence",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed <!-- 2030-01-01 -->\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed <!-- 2030-01-01 -->\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed <!-- 2030-01-01 -->\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "comment edits cannot fabricate a closure field",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: <!-- x -->closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: <!-- x -->closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: <!-- x -->closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "inline code date cannot supply evidence",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed `2030-01-01`\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed `2030-01-01`\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed `2030-01-01`\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "fenced example ignored with real field",
+      "before": {
+        "plans/2020-01-01-topic.md": "```txt\nState: closed 2020-01-01\n```\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "```txt\nState: closed 2020-01-01\n```\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "```txt\nState: closed 2020-01-01\n```\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "comment example ignored with real field",
+      "before": {
+        "plans/2020-01-01-topic.md": "<!-- State: closed 2020-01-01 -->\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "<!-- State: closed 2020-01-01 -->\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "<!-- State: closed 2020-01-01 -->\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "body date cannot supply header closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed\n\n## Goal\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed\n\n## Goal\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed\n\n## Goal\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "body date does not override valid header",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n\n## Goal\nState: closed 2020-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n\n## Goal\nState: closed 2020-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n\n## Goal\nState: closed 2020-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "HTML container cannot supply a closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "<div>\nState: closed 2030-01-01\n</div>\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "<div>\nState: closed 2030-01-01\n</div>\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "<div>\nState: closed 2030-01-01\n</div>\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "quote lazy continuation cannot supply closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "> Example\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "> Example\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "> Example\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "list lazy continuation cannot supply closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "- Example\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "- Example\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "- Example\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "indented block before closure is unqualified",
+      "before": {
+        "plans/2020-01-01-topic.md": "    Example\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "    Example\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "    Example\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "setext heading cannot supply a header field",
+      "before": {
+        "plans/2020-01-01-topic.md": "Example\n===\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "Example\n===\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "Example\n===\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "unbalanced bold marker remains unknown",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: **closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: **closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: **closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "trailing prose cannot fabricate a precise date",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01 extra\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01 extra\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01 extra\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "inline request cannot masquerade as closure",
+      "before": {
+        "plans/2020-01-01-topic.md": "Original request: example · State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "Original request: example · State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "Original request: example · State: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "Unicode prefix does not hide duplicate field",
+      "before": {
+        "plans/2020-01-01-topic.md": "éState: closed 2020-01-01\nState: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "éState: closed 2020-01-01\nState: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "éState: closed 2020-01-01\nState: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "invalid optional creation date invalidates field",
+      "before": {
+        "plans/2020-01-01-topic.md": "Date: 2020-02-30 · State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "Date: 2020-02-30 · State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "Date: 2020-02-30 · State: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": ["plans/2020-01-01-topic.md"],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "no move when copied",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2030-01-01\n",
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "rewritten archive never qualifies by date",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/2020-01-01-topic.md": "State: closed 2029-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 2030-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": [],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "epoch closure day remains real",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 1970-01-01\n"
+      },
+      "after": {
+        "archive/1970-01/2020-01-01-topic.md": "State: closed 1970-01-01\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 1970-01-01\n"
+      },
+      "nowMs": 1898553600000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    },
+    {
+      "name": "maximum calendar closure day remains real",
+      "before": {
+        "plans/2020-01-01-topic.md": "State: closed 9999-12-31\n"
+      },
+      "after": {
+        "archive/9999-12/2020-01-01-topic.md": "State: closed 9999-12-31\n"
+      },
+      "sources": {
+        "plans/2020-01-01-topic.md": "State: closed 9999-12-31\n"
+      },
+      "nowMs": 8640000000000000,
+      "afterDays": 30,
+      "expected": {
+        "qualifiedMoves": ["plans/2020-01-01-topic.md"],
+        "unknownDates": [],
+        "futureDates": [],
+        "tooRecent": [],
+        "wrongMonths": []
+      }
+    }
+  ]
+}

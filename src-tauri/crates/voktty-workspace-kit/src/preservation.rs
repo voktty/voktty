@@ -17,7 +17,9 @@ pub use archive_log::{check_memory_archive_log, MemoryArchiveLogReport};
 
 #[path = "archive_time.rs"]
 mod archive_time;
-pub use archive_time::{check_memory_archive_time, MemoryArchiveTimeReport};
+pub use archive_time::{
+    check_memory_archive_time, check_memory_archive_time_with_sources, MemoryArchiveTimeReport,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

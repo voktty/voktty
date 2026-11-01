@@ -197,9 +197,47 @@ future dates, too-recent moves and wrong months. Qualification applies only to
 each identified move; it is not an overall verdict. Copies, rewritten files,
 ambiguous movements and other rejected candidates still require the separate
 archive-file report. An empty time report does not rescue their diagnostics.
-Closed plans currently have unknown dates because snapshots retain no qualified
-closure date; a plan filename's date is not its closure. Plan date qualification
-and item-fragment dates remain required work. No persisted schema, template,
+The snapshot-only API leaves closed-plan dates unknown because snapshots retain
+no closure date; a plan filename's date is not its closure. No persisted schema, template,
 writer, IO or CLI command is added by this component. Native clock/config and
 baseline ownership, fragments, backlinks and integrated checking remain required
 before accepting compaction.
+
+### Source-bound plan closure dates
+
+`check_memory_archive_time_with_sources` and `checkMemoryArchiveTimeWithSources`
+also consume actual previous source facts. Only exact, unambiguous moved plans
+request a body. The entire selected batch is captured and checked against the
+128-entry, 256 KiB per-body and 4 MiB aggregate limits before hashes are checked.
+Each supplied body must match the original movement's SHA-256 and byte size;
+changed evidence fails the operation without returning partial qualification.
+Missing or blocked facts leave that plan's date unknown. Extra facts are not
+parsed or credited, but still count toward the 128-entry input limit. TypeScript
+captures every selected body and movement before its first asynchronous hash.
+These facts are comparison evidence, not native authority or authenticated origin.
+
+The qualified closure field is one unindented header line before the first
+level-two through level-six ATX heading: `State: closed YYYY-MM-DD` or
+`State: **closed** YYYY-MM-DD`. An optional `Date: YYYY-MM-DD` field can precede
+it on that same line, separated by a spaced middle dot. ASCII spaces or tabs
+separate fields; dates must pass the shared Gregorian calendar validator.
+Exactly one visible closure field is required, even if duplicates agree.
+Additional prose, malformed markers, changed visible bytes or invalid dates
+cannot qualify the field. The shared visibility lexer ignores closed fences,
+comments and inline code; hidden text cannot supply a missing closure date.
+
+The surrounding header must remain plain metadata. Indented, quoted, list,
+setext, HTML, link, reference, emphasis and other unqualified markup contexts
+leave the date unknown. Level-one titles are allowed. This is a conservative
+explicit field channel, not a second CommonMark renderer or universal Markdown
+support. Unsupported valid layouts require qualification before they can credit
+archival. The existing plan-state and open-item guards still govern eligibility.
+
+A closure date identifies a UTC day, not an observed instant. Its first
+millisecond detects a future day; its last millisecond determines age, so the
+checker never archives early by guessing a midnight closing time. A plan closed
+on January 1 remains too recent at the end of January 31 with `afterDays: 30`;
+it first qualifies on February 1. The destination month is that closure month's
+literal `YYYY-MM`. Handoffs retain their existing minute-precision behavior.
+This adds no timestamp to snapshots or persisted schema, and does not prove
+historical truth, native baseline ownership, fragment integrity or backlinks.
