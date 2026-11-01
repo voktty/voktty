@@ -52,7 +52,14 @@ fn status_works_without_desktop_tty_or_private_state_and_creates_nothing() {
     assert_eq!(value["scope"]["state"], "absent");
     assert_eq!(value["scope"]["ancestryComplete"], true);
     assert_eq!(value["scope"]["descendantsChecked"], false);
-    assert_eq!(value["capabilities"]["contextDelivery"], false);
+    assert_eq!(
+        value["capabilities"]["contextDelivery"],
+        cfg!(target_os = "linux")
+    );
+    assert_eq!(
+        value["capabilities"]["initialPromptLaunch"]["codexVersions"],
+        json!(["0.165.0"])
+    );
     assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }
 

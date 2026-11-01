@@ -72,7 +72,14 @@ fn status_uses_native_root_bound_preferences_without_claiming_current_trust() {
         json!({"state":"observed","mode":"always"})
     );
     assert_eq!(result["trust"], "stored_not_checked");
-    assert_eq!(result["capabilities"]["contextDelivery"], false);
+    assert_eq!(
+        result["capabilities"]["contextDelivery"],
+        cfg!(target_os = "linux")
+    );
+    assert_eq!(
+        result["capabilities"]["initialPromptLaunch"]["codexVersions"],
+        json!(["0.165.0"])
+    );
     assert_eq!(store.load().unwrap(), trusted);
     workspace
         .set_policy(trusted.revision(), MemoryPolicy::Never, &control)

@@ -90,9 +90,17 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
     Ok(MemoryCommand::Trust(options))
 }
 
-struct TrustReadAccess {
+pub(super) struct TrustReadAccess {
     marker: MarkerAccess,
     memory: PathBuf,
+}
+impl TrustReadAccess {
+    pub(super) fn new(origin: PathBuf, memory: PathBuf) -> Self {
+        Self {
+            marker: MarkerAccess { root: origin },
+            memory,
+        }
+    }
 }
 impl MemoryReadAccess for TrustReadAccess {
     fn allows_metadata(&self, path: &Path) -> bool {
@@ -111,7 +119,7 @@ impl MemoryReadAccess for TrustReadAccess {
     }
 }
 
-fn trust_error(error: MemoryTrustError) -> CliError {
+pub(super) fn trust_error(error: MemoryTrustError) -> CliError {
     match error {
         MemoryTrustError::Worker(MemoryWorkError::Read(error)) => map_error(error),
         error => CliError::new(
@@ -150,7 +158,7 @@ pub(super) fn run(options: TrustOptions, as_json: bool) -> Result<ExitCode, CliE
     let memory = resolved_root(&scope)
         .ok_or_else(|| map_error(ReadError::Unavailable))?
         .to_owned();
-    let access = Arc::new(TrustReadAccess { marker, memory });
+    let access = Arc::new(TrustReadAccess::new(marker.root, memory));
     let parent = dirs::data_local_dir()
         .ok_or_else(|| usage_error("native application data directory is unavailable"))?
         .join("dev.voktty");

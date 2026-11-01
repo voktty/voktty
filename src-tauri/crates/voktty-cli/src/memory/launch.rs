@@ -6,6 +6,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use voktty_memory_local::{resolve_local_memory_directory, DiscoveryControl};
 
+#[cfg(target_os = "linux")]
+mod codex;
+
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct RunOptions {
     project: Option<PathBuf>,
@@ -52,7 +55,10 @@ pub(super) fn run(options: RunOptions, as_json: bool) -> Result<ExitCode, CliErr
             EXIT_UNAVAILABLE,
         ));
     }
-    let requested = options.project.unwrap_or_else(|| PathBuf::from("."));
+    let requested = options
+        .project
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("."));
     let requested = if requested.is_absolute() {
         requested
     } else {
@@ -85,11 +91,121 @@ pub(super) fn run(options: RunOptions, as_json: bool) -> Result<ExitCode, CliErr
             return Err(CliError::new("memory_policy_never", "the stored Never policy blocks session memory; change it explicitly before launching", EXIT_REQUEST));
         }
         if options.session || policy == "always" {
-            return Err(CliError::new("memory_delivery_unavailable", "this launch's memory delivery channel is not verified yet; use Project Memory to copy a startup message, or --no-memory to launch explicitly without integration; no agent was started", EXIT_UNAVAILABLE));
+            return with_memory(&root, parent.as_deref(), &observation, &options);
         }
     }
     eprintln!("Project memory is not connected for this launch. Use memory init, memory trust and memory use to manage it explicitly. Existing agent rule files still apply.");
     execute(&options.adapter, &options.args, &root)
+}
+
+#[cfg(target_os = "linux")]
+fn with_memory(
+    root: &std::path::Path,
+    parent: Option<&std::path::Path>,
+    observation: &serde_json::Value,
+    options: &RunOptions,
+) -> Result<ExitCode, CliError> {
+    use super::{
+        existing_store,
+        trust::{trust_error, TrustReadAccess},
+    };
+    use std::os::fd::AsRawFd;
+    use std::os::unix::{
+        fs::{MetadataExt, OpenOptionsExt},
+        process::CommandExt,
+    };
+    use std::sync::Arc;
+    use voktty_memory_local::{MemoryContextSession, MemorySessionUse, MemoryTrustReview};
+    if options.adapter != "codex" {
+        return Err(codex::unavailable());
+    }
+    codex::arguments(&options.args, "")?;
+    let directory = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(root)
+        .map_err(|_| codex::unavailable())?;
+    let directory_identity = directory.metadata().map_err(|_| codex::unavailable())?;
+    let admitted = codex::Admission::prepare(root)?;
+    let control = DiscoveryControl::default();
+    let store = parent
+        .map(|parent| existing_store(parent, &control))
+        .transpose()?
+        .flatten()
+        .ok_or_else(codex::unavailable)?;
+    let memory = observation["root"]
+        .as_str()
+        .map(PathBuf::from)
+        .ok_or_else(codex::unavailable)?;
+    let access = Arc::new(TrustReadAccess::new(root.to_owned(), memory));
+    let review =
+        MemoryTrustReview::prepare(Arc::new(store), root.to_owned(), access, None, &control)
+            .map_err(trust_error)?;
+    let session = MemoryContextSession::bind(
+        review,
+        if options.session {
+            MemorySessionUse::Enabled
+        } else {
+            MemorySessionUse::Inherit
+        },
+        &control,
+    )
+    .map_err(trust_error)?;
+    let result = session.read(&control).map_err(trust_error)?;
+    let packet = result.packet.ok_or_else(|| {
+        CliError::new(
+            "memory_permission_required",
+            format!(
+                "{}; review memory trust and use before launching; no agent was started",
+                result.decision.reason
+            ),
+            EXIT_REQUEST,
+        )
+    })?;
+    let args = codex::arguments(&options.args, &packet.text)?;
+    let current = session.read(&control).map_err(trust_error)?;
+    if current.packet.as_ref() != Some(&packet) {
+        return Err(codex::unavailable());
+    }
+    let current = std::fs::metadata(root).map_err(|_| codex::unavailable())?;
+    if (current.dev(), current.ino()) != (directory_identity.dev(), directory_identity.ino()) {
+        return Err(codex::unavailable());
+    }
+    let executable = admitted.path()?;
+    let fd = directory.as_raw_fd();
+    let mut command = std::process::Command::new(executable);
+    command.args(args);
+    // The captured directory stays the child's cwd even if its path is renamed.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::fchdir(fd) == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error())
+            }
+        });
+    }
+    eprintln!("Project memory prepared for Codex's initial user prompt. Provider acceptance and reading are not verified; future turns and resume are managed by Codex.");
+    let _error = command.exec();
+    Err(CliError::new(
+        "memory_launch_failed",
+        "the admitted agent could not be started; no delivery receipt was recorded",
+        EXIT_UNAVAILABLE,
+    ))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn with_memory(
+    _root: &std::path::Path,
+    _parent: Option<&std::path::Path>,
+    _observation: &serde_json::Value,
+    _options: &RunOptions,
+) -> Result<ExitCode, CliError> {
+    Err(CliError::new(
+        "memory_launch_unsupported",
+        "native memory launch is not available on this platform yet",
+        EXIT_UNAVAILABLE,
+    ))
 }
 
 #[cfg(unix)]

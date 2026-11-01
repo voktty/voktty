@@ -60,6 +60,28 @@ impl Fixture {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    fn verified_codex(&self) {
+        let path = self.bin.join("codex");
+        let original = fs::read_to_string(&path).unwrap();
+        let probe = "import os,sys,json,signal\nif sys.argv[1:]==['--version']:\n assert sys.stdin.buffer.read()==b''\n mode=os.getenv('VERSION_FIXTURE','ok')\n if mode=='flood':\n  while True: os.write(1,b'x'*8192)\n if mode=='hang':\n  if os.fork()==0:\n   open(os.environ['PROBE_PID'],'w').write(str(os.getpid()))\n   while True: signal.pause()\n  sys.exit(0)\n if mode=='revoke':\n  path=os.environ['PROBE_STATE']\n  state=json.load(open(path));state['revision']+=1;state['projects'][0]['policy']='never'\n  open(path,'w').write(json.dumps(state))\n if mode=='mutate': os.chmod(sys.argv[0],0o755)\n print('codex-cli '+('0.166.0' if mode=='wrong' else '0.165.0'),flush=True)\n sys.exit(2 if mode=='nonzero' else 0)\n";
+        fs::write(
+            path,
+            original.replacen("import os,sys,json,signal\n", probe, 1),
+        )
+        .unwrap();
+    }
+    fn trust(&self) {
+        let review = value(&self.run(&["memory", "trust", "--preview", "--json"]));
+        let digest = review["result"]["reviewDigest"].as_str().unwrap();
+        assert!(self
+            .run(&["memory", "trust", "--accept-review", digest])
+            .status
+            .success());
+    }
+    fn state(&self) -> PathBuf {
+        self.data
+            .join("dev.voktty/project-memory/memory-local.json")
+    }
 }
 fn value(output: &Output) -> Value {
     assert!(
@@ -249,4 +271,244 @@ fn invalid_requests_missing_executables_and_explicit_project_have_clear_boundari
     assert_eq!(result["cwd"].as_str().unwrap(), other.to_str().unwrap());
     fs::remove_file(f.bin.join("codex")).unwrap();
     assert_eq!(f.run(&["memory", "run", "codex"]).status.code(), Some(3));
+}
+
+#[test]
+fn session_packet_reaches_the_initial_user_argument_without_consuming_stdin_or_persisting_permission(
+) {
+    let f = Fixture::new();
+    f.init();
+    fs::write(
+        f.project.join(".voktty/CONTEXT.md"),
+        "SYNTHETIC CONTEXT FACTS",
+    )
+    .unwrap();
+    f.trust();
+    f.verified_codex();
+    let before = fs::read(f.state()).unwrap();
+    let user = "User request with spaces\n$(literal, never a shell)";
+    let mut child = f
+        .command(&[
+            "memory",
+            "run",
+            "--session",
+            "codex",
+            "--",
+            "--model",
+            "fixture model",
+            "--no-alt-screen",
+            user,
+        ])
+        .env("RUN_EXIT", "37")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&[0, 255, b'\n'])
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(37),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let args: Vec<String> = result["args"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| String::from_utf8(hex::decode(s.as_str().unwrap()).unwrap()).unwrap())
+        .collect();
+    assert_eq!(&args[..3], &["--model", "fixture model", "--no-alt-screen"]);
+    assert_eq!(args.len(), 4);
+    assert!(args[3].starts_with("PROJECT MEMORY (.voktty)\n"));
+    assert!(args[3].contains("SYNTHETIC CONTEXT FACTS"));
+    assert!(args[3].contains(".voktty/INIT.md"));
+    assert!(args[3].ends_with(&format!("User request:\n{user}")));
+    assert_eq!(result["input"], "00ff0a");
+    assert_eq!(result["pid"], pid);
+    assert_eq!(result["cwd"].as_str().unwrap(), f.project.to_str().unwrap());
+    assert_eq!(fs::read(f.state()).unwrap(), before);
+}
+
+#[test]
+fn inherited_always_delivers_current_facts_and_refuses_changed_instruction_trust() {
+    let f = Fixture::new();
+    f.init();
+    f.trust();
+    f.verified_codex();
+    assert!(f.run(&["memory", "use", "--always"]).status.success());
+    let before = fs::read(f.state()).unwrap();
+    let result = value(&f.run(&["memory", "run", "codex"]));
+    assert_eq!(result["args"][0], hex::encode("--"));
+    let packet =
+        String::from_utf8(hex::decode(result["args"][1].as_str().unwrap()).unwrap()).unwrap();
+    assert!(packet.contains(".voktty/INIT.md"));
+    assert_eq!(fs::read(f.state()).unwrap(), before);
+    fs::write(f.project.join(".voktty/INIT.md"), "Changed after trust").unwrap();
+    let refused = f.run(&["memory", "run", "codex"]);
+    assert_eq!(refused.status.code(), Some(5));
+    assert!(refused.stdout.is_empty());
+    assert_eq!(fs::read(f.state()).unwrap(), before);
+}
+
+#[test]
+fn unverified_versions_modes_and_missing_trust_never_start_an_integrated_agent() {
+    let f = Fixture::new();
+    f.init();
+    f.verified_codex();
+    let output = f.run(&["memory", "run", "--session", "codex"]);
+    assert_eq!(output.status.code(), Some(5));
+    assert!(output.stdout.is_empty());
+    f.trust();
+    for args in [
+        vec!["resume"],
+        vec!["exec"],
+        vec!["--cd", ".."],
+        vec!["--remote", "ws://invalid"],
+        vec!["--config", "x=y"],
+        vec!["--model", "--remote"],
+    ] {
+        let mut command = vec!["memory", "run", "--session", "codex", "--"];
+        command.extend(args);
+        let refused = f.run(&command);
+        assert_eq!(refused.status.code(), Some(3));
+        assert!(refused.stdout.is_empty());
+    }
+    for mode in ["wrong", "nonzero", "flood", "mutate"] {
+        let output = f
+            .command(&["memory", "run", "--session", "codex"])
+            .env("VERSION_FIXTURE", mode)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(3), "mode {mode}");
+        assert!(output.stdout.is_empty());
+    }
+    for adapter in ["claude", "agy"] {
+        let output = f.run(&["memory", "run", "--session", adapter]);
+        assert_eq!(output.status.code(), Some(3));
+        assert!(output.stdout.is_empty());
+    }
+}
+
+#[test]
+fn policy_revoked_during_version_admission_blocks_the_packet() {
+    let f = Fixture::new();
+    f.init();
+    f.trust();
+    f.verified_codex();
+    let output = f
+        .command(&["memory", "run", "--session", "codex"])
+        .env("VERSION_FIXTURE", "revoke")
+        .env("PROBE_STATE", f.state())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(5));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("KIT_MEMORY_POLICY_NEVER"));
+}
+
+#[test]
+fn bounded_version_probe_kills_descendants_holding_its_pipe() {
+    let f = Fixture::new();
+    f.init();
+    f.trust();
+    f.verified_codex();
+    let pid_file = f.project.parent().unwrap().join("probe.pid");
+    let start = Instant::now();
+    let output = f
+        .command(&["memory", "run", "--session", "codex"])
+        .env("VERSION_FIXTURE", "hang")
+        .env("PROBE_PID", &pid_file)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(3));
+    assert!(output.stdout.is_empty());
+    assert!(start.elapsed() < Duration::from_secs(5));
+    let pid = fs::read_to_string(pid_file).unwrap();
+    assert_descendant_settled(&pid);
+}
+
+fn assert_descendant_settled(pid: &str) {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    // Group SIGKILL delivery can precede the descendant's final scheduler turn.
+    loop {
+        let status = fs::read_to_string(format!("/proc/{pid}/status"));
+        if status
+            .as_ref()
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            || status.as_ref().is_ok_and(|text| {
+                text.lines()
+                    .any(|line| line.starts_with("State:") && line.contains('Z'))
+            })
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "probe descendant did not settle: {status:?}"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn termination_during_probe_settles_its_group_before_preserving_the_signal() {
+    let f = Fixture::new();
+    f.init();
+    f.trust();
+    f.verified_codex();
+    let pid_file = f.project.parent().unwrap().join("cancel-probe.pid");
+    let mut child = f
+        .command(&["memory", "run", "--session", "codex"])
+        .env("VERSION_FIXTURE", "hang")
+        .env("PROBE_PID", &pid_file)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let ready = Instant::now() + Duration::from_secs(2);
+    let pid = loop {
+        if let Ok(pid) = fs::read_to_string(&pid_file) {
+            if pid.parse::<i32>().is_ok() {
+                break pid;
+            }
+        }
+        if Instant::now() >= ready {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("probe did not become ready");
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert_eq!(unsafe { libc::kill(child.id() as i32, libc::SIGTERM) }, 0);
+    let deadline = Instant::now() + Duration::from_secs(4);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            if status.signal() != Some(libc::SIGTERM) {
+                unsafe {
+                    libc::kill(pid.parse().unwrap(), libc::SIGKILL);
+                }
+            }
+            assert_eq!(status.signal(), Some(libc::SIGTERM));
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            unsafe {
+                libc::kill(pid.parse().unwrap(), libc::SIGKILL);
+            }
+            panic!("termination did not settle the probe");
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_descendant_settled(&pid);
 }

@@ -71,7 +71,9 @@ source into its confirmed context. See the
 [native owner contract](../../src/modules/project_memory/CONTEXT.md). A panel
 retires sources it still owns; a promoted context requires its own release.
 The desktop exposes explicit opaque context resources through the native owner
-contract. Standalone CLI managed-launch consumption remains integration work.
+contract. Standalone Linux CLI launches can consume this native binding for a
+qualified initial user prompt; this does not establish provider acceptance or
+managed resume. See [CLI control](../../../docs/architecture/cli-control.md).
 SSH, WSL and Docker
 must use their own qualified transports rather than this local reader. Native
 Windows/macOS/Android runtime qualification remains pending.
