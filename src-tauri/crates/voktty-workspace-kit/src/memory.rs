@@ -117,6 +117,18 @@ fn visible_line(line: &str, comment: &mut bool) -> String {
 }
 
 pub fn inspect_memory_text(text: &str, up_next_heading: &str) -> KitResult<MemoryText> {
+    inspect_text(text, up_next_heading, None)
+}
+
+pub(crate) fn inspect_memory_plan_text(text: &str) -> KitResult<MemoryText> {
+    inspect_text(text, "Up next", Some("State"))
+}
+
+fn inspect_text(
+    text: &str,
+    up_next_heading: &str,
+    state_label: Option<&str>,
+) -> KitResult<MemoryText> {
     if text.len() > 256 * 1024 {
         return Err(vec![Issue::new("KIT_MEMORY_TEXT_TOO_LARGE", vec![])]);
     }
@@ -204,6 +216,11 @@ pub fn inspect_memory_text(text: &str, up_next_heading: &str) -> KitResult<Memor
         }
         if header && !visible.starts_with([' ', '#', '>', '\t']) && !p.bullet.is_match(&visible) {
             for part in visible.split('·') {
+                if state_label.is_some_and(|label| {
+                    part.split_once(':').map(|(key, _)| js_trim(key)) != Some(label)
+                }) {
+                    continue;
+                }
                 if let Some(state) = p.state.captures(js_trim(part)) {
                     states.insert(state[1].to_owned());
                 }

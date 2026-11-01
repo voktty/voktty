@@ -74,6 +74,18 @@ export function inspectMemoryText(
   text: string,
   upNextHeading = "Up next",
 ): MemoryText {
+  return inspectText(text, upNextHeading);
+}
+
+export function inspectMemoryPlanText(text: string): MemoryText {
+  return inspectText(text, "Up next", "State");
+}
+
+function inspectText(
+  text: string,
+  upNextHeading: string,
+  stateLabel?: string,
+): MemoryText {
   if (text.length > 256 * 1024) throw new Error("KIT_MEMORY_TEXT_TOO_LARGE");
   const bytes = encoder.encode(text).byteLength;
   if (bytes > 256 * 1024) throw new Error("KIT_MEMORY_TEXT_TOO_LARGE");
@@ -153,6 +165,11 @@ export function inspectMemoryText(
     }
     if (header && !/^(?:[ #>\t]|[-+*][ \t]|[0-9]+[.)][ \t])/.test(visible)) {
       for (const part of visible.split("·")) {
+        if (
+          stateLabel !== undefined &&
+          part.split(":")[0].trim() !== stateLabel
+        )
+          continue;
         const state =
           /^[^:]+:[ \t]*(?:\*\*)?(open|written|waiting|parked|closed)(?:\*\*)?(?:[ \t]|$)/.exec(
             part.trim(),

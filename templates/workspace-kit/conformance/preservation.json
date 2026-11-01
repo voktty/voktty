@@ -1,0 +1,1605 @@
+{
+  "schema": 1,
+  "snapshots": [
+    {
+      "name": "hashes unicode ordering roles states and occurrences",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "é😀\n[T-1]\n[D-2 done]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "# Plan\nState: open\n"
+        },
+        "continuity/handoffs/2026-10-01-0000-solo.md": {
+          "kind": "file",
+          "text": "[T-8]"
+        },
+        "archive/2026-10/old.md": {
+          "kind": "file",
+          "text": "[D-4 done]"
+        },
+        "domains/.md": {
+          "kind": "file",
+          "text": "one"
+        },
+        "domains/𐀀.md": {
+          "kind": "file",
+          "text": "two"
+        }
+      },
+      "expected": {
+        "schema": 1,
+        "files": [
+          {
+            "path": "CONTEXT.md",
+            "kind": "live",
+            "sha256": "4dd9f210c553558ef9f616d17e8de6a1d6411122fc050f9d82e43c6f32a1ed9a",
+            "bytes": 23,
+            "items": [
+              {
+                "id": "T-1",
+                "state": "open",
+                "line": 2
+              },
+              {
+                "id": "D-2",
+                "state": "done",
+                "line": 3
+              }
+            ],
+            "planState": null
+          },
+          {
+            "path": "PROJECT.md",
+            "kind": "live",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "archive/2026-10/old.md",
+            "kind": "archive",
+            "sha256": "0bb41e7dbfaacd1e80cca3aa0cb04b05673031fe8cf5334c8346f9f77a405d97",
+            "bytes": 10,
+            "items": [
+              {
+                "id": "D-4",
+                "state": "done",
+                "line": 1
+              }
+            ],
+            "planState": null
+          },
+          {
+            "path": "archive/LOG.md",
+            "kind": "record",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "continuity/CHANGELOG.md",
+            "kind": "live",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "continuity/handoffs/2026-10-01-0000-solo.md",
+            "kind": "history",
+            "sha256": "77fdbdc480e5a4d6fa9225c5a9ce1eefa5efe457bca8be037badc186dc27b4a6",
+            "bytes": 5,
+            "items": [
+              {
+                "id": "T-8",
+                "state": "open",
+                "line": 1
+              }
+            ],
+            "planState": null
+          },
+          {
+            "path": "domains/.md",
+            "kind": "live",
+            "sha256": "7692c3ad3540bb803c020b3aee66cd8887123234ea0c6e7143c0add73ff431ed",
+            "bytes": 3,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "domains/𐀀.md",
+            "kind": "live",
+            "sha256": "3fc4ccfe745870e2c0d99f71f30ff0656c8dedd41cc1d7d3d376b0dbe685e2f3",
+            "bytes": 3,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "plans/INDEX.md",
+            "kind": "live",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "plans/TRACKING.md",
+            "kind": "live",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0,
+            "items": [],
+            "planState": null
+          },
+          {
+            "path": "plans/topic.md",
+            "kind": "live",
+            "sha256": "872c2cbce1bb88673fd9e796c7394337d4d5de7044c62e0ff6de665772128bc3",
+            "bytes": 19,
+            "items": [],
+            "planState": "open"
+          }
+        ]
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "unchanged open and closed ids",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1] [D-2 done] [Q-3]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1] [D-2 done] [Q-3]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "deleted open item",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": ["T-1"],
+        "missingItems": ["T-1"],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "open item only archived",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/2026-10/context.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        }
+      },
+      "expected": {
+        "missingLiveItems": ["T-1"],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "closed item archived",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1 done]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/2026-10/context.md": {
+          "kind": "file",
+          "text": "[T-1 done]"
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "open item completed but kept live",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1 done]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "closed mention cannot erase an open occurrence",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1 done]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/2026-10/context.md": {
+          "kind": "file",
+          "text": "[T-1 done]"
+        }
+      },
+      "expected": {
+        "missingLiveItems": ["T-1"],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "history ids are not current obligations",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/handoffs/2026-10-01-0000-solo.md": {
+          "kind": "file",
+          "text": "[T-8]"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "archive log cannot rescue a lost item",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        }
+      },
+      "expected": {
+        "missingLiveItems": ["T-1"],
+        "missingItems": ["T-1"],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "historical reference cannot rescue a lost item",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/handoffs/2026-10-01-0000-solo.md": {
+          "kind": "file",
+          "text": "[T-1]"
+        }
+      },
+      "expected": {
+        "missingLiveItems": ["T-1"],
+        "missingItems": ["T-1"],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "previously archived item disappears",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/2026-10/old.md": {
+          "kind": "file",
+          "text": "[D-4 done]"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-4"],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "open plan disappears",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "State: open\n"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": ["plans/topic.md"]
+      }
+    },
+    {
+      "name": "unknown plan state is conservatively live",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "# Plan\n"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/2026-10/topic.md": {
+          "kind": "file",
+          "text": "# Plan\n"
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": ["plans/topic.md"]
+      }
+    },
+    {
+      "name": "closed plan movement needs separate byte and log checks",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "State: closed\n"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "code and comments do not introduce obligations",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "`[T-1]`\n<!-- [T-2] -->\n```md\n[T-3]\n```\n"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "ids retain digits beyond floating point precision",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "[T-9007199254740993]"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": ["T-9007199254740993"],
+        "missingItems": ["T-9007199254740993"],
+        "missingLivePlans": []
+      }
+    },
+    {
+      "name": "owner named closed is not plan state",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "Owner: closed\n"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": ["plans/topic.md"]
+      }
+    },
+    {
+      "name": "canonical state is independent of owner name",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "State: open\nOwner: closed\n"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": ["plans/topic.md"]
+      }
+    },
+    {
+      "name": "state inside code cannot close a plan",
+      "before": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/topic.md": {
+          "kind": "file",
+          "text": "Owner: closed\n```\nState: closed\n```\n"
+        }
+      },
+      "after": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": ["plans/topic.md"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "traversal",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/../lost.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_PATH_INVALID"
+    },
+    {
+      "name": "reserved state",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "state/private.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_PATH_INVALID"
+    },
+    {
+      "name": "secret path",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        ".ssh/private.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_PATH_INVALID"
+    },
+    {
+      "name": "remote namespace",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "remote://host/project.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_PATH_INVALID"
+    },
+    {
+      "name": "invalid archive month",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/2026-13/old.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_PATH_INVALID"
+    },
+    {
+      "name": "encoded traversal",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/%2e%2e.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_PATH_INVALID"
+    },
+    {
+      "name": "incomplete inventory",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": false,
+      "error": "KIT_PRESERVATION_INCOMPLETE"
+    },
+    {
+      "name": "missing required file",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_INCOMPLETE"
+    },
+    {
+      "name": "unclosed fence",
+      "documents": {
+        "PROJECT.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "CONTEXT.md": {
+          "kind": "file",
+          "text": "```\n[T-1]\n"
+        },
+        "plans/INDEX.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "plans/TRACKING.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "continuity/CHANGELOG.md": {
+          "kind": "file",
+          "text": ""
+        },
+        "archive/LOG.md": {
+          "kind": "file",
+          "text": ""
+        }
+      },
+      "complete": true,
+      "error": "KIT_PRESERVATION_TEXT_INCOMPLETE"
+    }
+  ]
+}

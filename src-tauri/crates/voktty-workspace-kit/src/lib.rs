@@ -7,6 +7,7 @@ mod identity;
 mod lock;
 mod memory;
 mod policy;
+mod preservation;
 mod scope;
 mod template;
 mod validation;
@@ -54,6 +55,10 @@ pub use memory::{
     MemoryMeasurement, MemoryMeasurements, MemoryText, MilestoneOccurrence,
 };
 pub use policy::{evaluate_memory_use, MemoryUseDecision};
+pub use preservation::{
+    compare_memory_preservation, snapshot_memory_preservation, MemoryPreservationComparison,
+    MemoryPreservationFile, MemoryPreservationSnapshot,
+};
 pub use scope::{resolve_memory_scope, MemoryScope};
 pub use template::{render_template, FileKind, RenderedFile};
 pub use validation::{parse_agent_roster, parse_kit_config, PathCase};

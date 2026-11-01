@@ -20,6 +20,15 @@ export type {
 } from "@/modules/workspace-kit/lib/context";
 export { memoryProjectKey } from "@/modules/workspace-kit/lib/identity";
 export { handoffCreatedAtMs } from "@/modules/workspace-kit/lib/handoff";
+export {
+  snapshotMemoryPreservation,
+  compareMemoryPreservation,
+} from "@/modules/workspace-kit/lib/preservation";
+export type {
+  MemoryPreservationFile,
+  MemoryPreservationSnapshot,
+  MemoryPreservationComparison,
+} from "@/modules/workspace-kit/lib/preservation";
 export { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
 export type {
   NativeMemorySelection,
