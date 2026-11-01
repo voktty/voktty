@@ -9,11 +9,27 @@ the original project binding; a repository or IPC boolean is not that evidence.
 
 Paths are normalized, case-preserving, kit-relative factual Markdown paths:
 PROJECT/CONTEXT, the plan index/tracking and individual plans, domain cards,
+architecture standards, rituals and external assignments,
 the continuity changelog, handoffs, archive records and `archive/YYYY-MM/` data.
 Reserved runtime directories, instruction bases, root rules, absolute paths,
 traversal, control characters and ambiguous URL/path characters are rejected.
 The six fixed factual/index/log files are required even if they are empty.
 Unknown Markdown layouts require explicit qualification rather than silent omission.
+
+Immediate `.md` documents in `architecture/`, `rituals/` and `external/` are live
+factual sources, including `rituals/SCHEDULE.md`. Their README and `_TEMPLATE.md`
+bases are excluded, as in plans and domains. A `State: closed` field in one of
+these documents does not turn it into a plan or permit whole-file archival.
+Open IDs must remain live; history and archive LOG mentions cannot rescue them.
+Closed-unit fragments use the same exact-reason, age, append-only archive, LOG
+and original-owner navigation checks as existing live sources. Duplicate archive
+basenames retain the existing ambiguity rules. Nested live documents and mixed
+case extensions remain unsupported rather than being silently omitted.
+
+This factual channel does not classify roster JSON, instruction bases or custom
+roles. Their unchanged-content evidence and native inventory authority must be
+qualified separately before whole-memory compaction can be accepted; this
+extension does not grant instruction trust or permission to change those files.
 
 The inventory is bounded to 128 files, 4 MiB total UTF-8, 256 KiB per file,
 8,192 item occurrences and 64 ASCII bytes per ID. Paths have at most 64

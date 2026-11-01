@@ -97,7 +97,10 @@ fn kind(path: &str) -> Option<&'static str> {
         return Some("record");
     }
     if parts.len() == 2
-        && matches!(parts[0], "plans" | "domains")
+        && matches!(
+            parts[0],
+            "plans" | "domains" | "architecture" | "rituals" | "external"
+        )
         && !matches!(parts[1], "README.md" | "_TEMPLATE.md")
     {
         return Some("live");

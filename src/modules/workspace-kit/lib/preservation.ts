@@ -53,7 +53,9 @@ function kind(path: string): MemoryPreservationFile["kind"] | null {
   if (path === "archive/LOG.md") return "record";
   if (
     parts.length === 2 &&
-    ["plans", "domains"].includes(parts[0]) &&
+    ["plans", "domains", "architecture", "rituals", "external"].includes(
+      parts[0],
+    ) &&
     !["README.md", "_TEMPLATE.md"].includes(parts[1])
   )
     return "live";

@@ -16,20 +16,22 @@ the synchronous native caller, without a registry or persisted receipt.
 the caller's current native workspace. That check does not establish that file
 contents remain unchanged or authorize use of the retained bytes by another owner.
 
-The qualified preservation inventory includes the six required PROJECT, CONTEXT, plan index,
-tracking, changelog and archive LOG documents; immediate Markdown plans and
-domain cards; immediate handoffs; and Markdown files recursively beneath valid
+The qualified preservation inventory includes the six required PROJECT, CONTEXT,
+plan index, tracking, changelog and archive LOG documents; immediate Markdown
+plans, domain cards, architecture standards, rituals and external assignments;
+immediate handoffs; and Markdown files recursively beneath valid
 `archive/YYYY-MM/` directories. Static `README.md` guides are excluded from the
-live directories and archive root. `_TEMPLATE.md` is excluded only from plans
-and domains. Names remain case-sensitive. Archived README and template bodies
+live directories and archive root. `_TEMPLATE.md` is excluded from plans, domains,
+architecture, rituals and external assignments. Names remain case-sensitive.
+Archived README and template bodies
 are factual data and remain included. Unsupported nested live directories,
 archive-month names, non-UTF-8 names and mixed-case Markdown extensions fail
 explicitly instead of silently reducing the inventory. Other non-Markdown files
 are outside this factual channel.
 
 This is the existing pure preservation channel, not a complete inventory of all
-shared kit content. Architecture cards, rituals, external assignments, roster
-data and custom roles are not classified by that pure snapshot contract and are
+shared kit content. Roster data, instruction bases and custom roles are not
+classified by that pure snapshot contract and are
 not inspected here. Their preservation must be qualified before a composed
 checker can claim the plan's whole-memory acceptance criteria. An empty report
 from this channel cannot certify those other shared files.
@@ -45,7 +47,7 @@ and never follow symlink/reparse directories. Relevant symlink, special, missing
 blocked, oversized or invalid UTF-8 files cannot produce a partial baseline.
 The shared readers enforce the per-file 256 KiB limit. Inventory limits are
 128 factual documents, 4 MiB aggregate document bytes, 128 scanned directories,
-20,000 total enumerated entries, 256 UTF-8 bytes per entry name, 4 KiB relative
+20,000 captured enumeration entries, 256 UTF-8 bytes per entry name, 4 KiB relative
 paths and fewer than 64 directory components. The pure snapshot also enforces
 its Markdown and item-occurrence limits. Configuration has its separate native
 per-file limit.
@@ -54,6 +56,15 @@ Capture shares the existing four-reader budget and original discovery deadline
 and cancellation. It rereads every selected document and configuration, repeats
 scope discovery, verifies pinned directory revisions and identities, and rechecks
 read/enumeration/root authority and installation identity before returning.
+Every scanned directory is enumerated again, comparing its exact entry names and
+types independent of listing order. Directory timestamps alone cannot establish
+unchanged membership. Each recheck is bounded to the captured count plus one;
+an incomplete, enlarged, renamed or type-changed listing rejects the capture.
+Captured membership metadata shares the existing 20,000-entry and name-size
+bounds and exists only for the duration of the native observation.
+Verification performs another bounded enumeration pass: across all directories
+it visits at most the captured 20,000 entries plus one extra entry per directory
+before rejecting an enlarged listing. Both passes share the original deadline.
 External changes observed during those checks reject the capture. This is a
 bounded observation, not an atomic filesystem transaction, exclusive compaction
 lock, protection from privileged metadata forgery or cancellation of a kernel

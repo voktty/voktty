@@ -413,3 +413,80 @@ fn oversized_or_uninspectable_documents_fail_without_positive_snapshot() {
             .is_err());
     }
 }
+
+#[test]
+fn expanded_factual_channels_capture_real_bytes_and_retain_open_obligations() {
+    use voktty_workspace_kit::compare_memory_preservation;
+    for path in [
+        "architecture/auth.md",
+        "rituals/SCHEDULE.md",
+        "external/review.md",
+    ] {
+        let fixture = Fixture::new();
+        fixture.write(path, "# Exact\r\n[T-71]\r\n");
+        let workspace = fixture.open();
+        let before = workspace
+            .observe_preservation(&DiscoveryControl::default())
+            .unwrap();
+        assert!(
+            matches!(before.sources().get(path), Some(PathFact::File { text })
+            if text == "# Exact\r\n[T-71]\r\n")
+        );
+        fixture.write(path, "# Current\n");
+        let after = workspace
+            .observe_preservation(&DiscoveryControl::default())
+            .unwrap();
+        let loss = compare_memory_preservation(before.snapshot(), after.snapshot());
+        assert_eq!(loss.missing_live_items, vec!["T-71"]);
+        assert_eq!(loss.missing_items, vec!["T-71"]);
+    }
+}
+
+#[test]
+fn expanded_factual_channels_require_independent_enumeration_and_read_authority() {
+    for path in [
+        "architecture/auth.md",
+        "rituals/SCHEDULE.md",
+        "external/review.md",
+    ] {
+        for directory in [false, true] {
+            let fixture = Fixture::new();
+            fixture.write(path, "[D-71]\n");
+            let target = if directory {
+                path.split('/').next().unwrap()
+            } else {
+                path
+            };
+            *fixture.access.denied.lock().unwrap() =
+                Some(fixture.access.root.join(".voktty").join(target));
+            assert!(fixture
+                .open()
+                .observe_preservation(&DiscoveryControl::default())
+                .is_err());
+        }
+    }
+}
+
+#[test]
+fn new_factual_membership_after_enumeration_retires_expanded_capture() {
+    for directory in ["architecture", "rituals", "external"] {
+        let fixture = Fixture::new();
+        let target = fixture
+            .access
+            .root
+            .join(".voktty")
+            .join(directory)
+            .join("new.md");
+        *fixture.access.mutate.lock().unwrap() = Some(Box::new(move || {
+            std::fs::write(target, "[Q-71]\n").unwrap();
+        }));
+        let result = fixture
+            .open()
+            .observe_preservation(&DiscoveryControl::default());
+        assert!(
+            matches!(&result, Err(ReadError::StaleRoot)),
+            "{directory}: {:?}",
+            result.err()
+        );
+    }
+}

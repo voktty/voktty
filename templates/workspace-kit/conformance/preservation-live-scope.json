@@ -1,0 +1,512 @@
+{
+  "schema": 1,
+  "snapshots": [
+    {
+      "name": "architecture/auth.md",
+      "path": "architecture/auth.md",
+      "text": "# Rule\r\n[D-7]\r\n[Q-8 done]\r\n",
+      "expected": {
+        "path": "architecture/auth.md",
+        "kind": "live",
+        "sha256": "189f306c97453092505ead6feb23510efa3dab535d8cb6b9bf10bf7642f79822",
+        "bytes": 27,
+        "items": [
+          {
+            "id": "D-7",
+            "state": "open",
+            "line": 2
+          },
+          {
+            "id": "Q-8",
+            "state": "done",
+            "line": 3
+          }
+        ],
+        "planState": null
+      }
+    },
+    {
+      "name": "rituals/SCHEDULE.md",
+      "path": "rituals/SCHEDULE.md",
+      "text": "# Rule\r\n[D-7]\r\n[Q-8 done]\r\n",
+      "expected": {
+        "path": "rituals/SCHEDULE.md",
+        "kind": "live",
+        "sha256": "189f306c97453092505ead6feb23510efa3dab535d8cb6b9bf10bf7642f79822",
+        "bytes": 27,
+        "items": [
+          {
+            "id": "D-7",
+            "state": "open",
+            "line": 2
+          },
+          {
+            "id": "Q-8",
+            "state": "done",
+            "line": 3
+          }
+        ],
+        "planState": null
+      }
+    },
+    {
+      "name": "external/review.md",
+      "path": "external/review.md",
+      "text": "# Rule\r\n[D-7]\r\n[Q-8 done]\r\n",
+      "expected": {
+        "path": "external/review.md",
+        "kind": "live",
+        "sha256": "189f306c97453092505ead6feb23510efa3dab535d8cb6b9bf10bf7642f79822",
+        "bytes": 27,
+        "items": [
+          {
+            "id": "D-7",
+            "state": "open",
+            "line": 2
+          },
+          {
+            "id": "Q-8",
+            "state": "done",
+            "line": 3
+          }
+        ],
+        "planState": null
+      }
+    }
+  ],
+  "invalidPaths": [
+    "architecture/README.md",
+    "architecture/_TEMPLATE.md",
+    "architecture/nested/work.md",
+    "architecture/../work.md",
+    "architecture/work.MD",
+    "architecture/work.json",
+    "rituals/README.md",
+    "rituals/_TEMPLATE.md",
+    "rituals/nested/work.md",
+    "rituals/../work.md",
+    "rituals/work.MD",
+    "rituals/work.json",
+    "external/README.md",
+    "external/_TEMPLATE.md",
+    "external/nested/work.md",
+    "external/../work.md",
+    "external/work.MD",
+    "external/work.json"
+  ],
+  "losses": [
+    {
+      "name": "architecture/auth.md lost open",
+      "path": "architecture/auth.md",
+      "before": "[T-41]\n",
+      "after": "",
+      "archive": null,
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": ["T-41"],
+        "missingItems": ["T-41"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "architecture/auth.md archived open",
+      "path": "architecture/auth.md",
+      "before": "[T-41]\n",
+      "after": "",
+      "archive": "[T-41]\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": ["T-41"],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "architecture/auth.md archived closed",
+      "path": "architecture/auth.md",
+      "before": "[D-42 done]\n",
+      "after": "",
+      "archive": "[D-42 done]\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "architecture/auth.md history closed",
+      "path": "architecture/auth.md",
+      "before": "[D-42 done]\n",
+      "after": "",
+      "archive": null,
+      "handoff": "[D-42 done]\n",
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-42"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "architecture/auth.md removed closed document",
+      "path": "architecture/auth.md",
+      "before": "[D-42 done]\n",
+      "after": null,
+      "archive": null,
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-42"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": ["architecture/auth.md"]
+    },
+    {
+      "name": "architecture/auth.md closed metadata is not a plan",
+      "path": "architecture/auth.md",
+      "before": "State: closed 2026-01-01\n",
+      "after": null,
+      "archive": "State: closed 2026-01-01\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": ["architecture/auth.md"]
+    },
+    {
+      "name": "rituals/SCHEDULE.md lost open",
+      "path": "rituals/SCHEDULE.md",
+      "before": "[T-41]\n",
+      "after": "",
+      "archive": null,
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": ["T-41"],
+        "missingItems": ["T-41"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "rituals/SCHEDULE.md archived open",
+      "path": "rituals/SCHEDULE.md",
+      "before": "[T-41]\n",
+      "after": "",
+      "archive": "[T-41]\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": ["T-41"],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "rituals/SCHEDULE.md archived closed",
+      "path": "rituals/SCHEDULE.md",
+      "before": "[D-42 done]\n",
+      "after": "",
+      "archive": "[D-42 done]\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "rituals/SCHEDULE.md history closed",
+      "path": "rituals/SCHEDULE.md",
+      "before": "[D-42 done]\n",
+      "after": "",
+      "archive": null,
+      "handoff": "[D-42 done]\n",
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-42"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "rituals/SCHEDULE.md removed closed document",
+      "path": "rituals/SCHEDULE.md",
+      "before": "[D-42 done]\n",
+      "after": null,
+      "archive": null,
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-42"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": ["rituals/SCHEDULE.md"]
+    },
+    {
+      "name": "rituals/SCHEDULE.md closed metadata is not a plan",
+      "path": "rituals/SCHEDULE.md",
+      "before": "State: closed 2026-01-01\n",
+      "after": null,
+      "archive": "State: closed 2026-01-01\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": ["rituals/SCHEDULE.md"]
+    },
+    {
+      "name": "external/review.md lost open",
+      "path": "external/review.md",
+      "before": "[T-41]\n",
+      "after": "",
+      "archive": null,
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": ["T-41"],
+        "missingItems": ["T-41"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "external/review.md archived open",
+      "path": "external/review.md",
+      "before": "[T-41]\n",
+      "after": "",
+      "archive": "[T-41]\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": ["T-41"],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "external/review.md archived closed",
+      "path": "external/review.md",
+      "before": "[D-42 done]\n",
+      "after": "",
+      "archive": "[D-42 done]\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "external/review.md history closed",
+      "path": "external/review.md",
+      "before": "[D-42 done]\n",
+      "after": "",
+      "archive": null,
+      "handoff": "[D-42 done]\n",
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-42"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": []
+    },
+    {
+      "name": "external/review.md removed closed document",
+      "path": "external/review.md",
+      "before": "[D-42 done]\n",
+      "after": null,
+      "archive": null,
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": ["D-42"],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": ["external/review.md"]
+    },
+    {
+      "name": "external/review.md closed metadata is not a plan",
+      "path": "external/review.md",
+      "before": "State: closed 2026-01-01\n",
+      "after": null,
+      "archive": "State: closed 2026-01-01\n",
+      "handoff": null,
+      "expected": {
+        "missingLiveItems": [],
+        "missingItems": [],
+        "missingLivePlans": []
+      },
+      "ineligibleRemovedFiles": ["external/review.md"]
+    }
+  ],
+  "fragments": [
+    {
+      "name": "architecture/auth.md exact reasons",
+      "path": "architecture/auth.md",
+      "before": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "after": "# Source\nArchived: [D-7](../archive/2026-01/auth.md)\n",
+      "target": "archive/2026-01/auth.md",
+      "archive": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "unit": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "bytes": 64,
+      "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430",
+      "expectedKeys": ["architecture/auth.md#L2"],
+      "expectedMissing": [],
+      "log": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tarchitecture/auth.md\t2\tarchive/2026-01/auth.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tarchitecture/auth.md\t73\t53\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n",
+      "expectedLog": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "architecture/auth.md altered reason",
+      "path": "architecture/auth.md",
+      "before": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "after": "# Source\nArchived: [D-7](../archive/2026-01/auth.md)\n",
+      "target": "archive/2026-01/auth.md",
+      "archive": "- [D-7 done] decision · closed 2026-01-01\nThe short reason.\n",
+      "unit": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "bytes": 64,
+      "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430",
+      "expectedKeys": [],
+      "expectedMissing": ["architecture/auth.md#L2"],
+      "log": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tarchitecture/auth.md\t2\tarchive/2026-01/auth.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tarchitecture/auth.md\t73\t53\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n",
+      "expectedLog": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "architecture/auth.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "rituals/SCHEDULE.md exact reasons",
+      "path": "rituals/SCHEDULE.md",
+      "before": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "after": "# Source\nArchived: [D-7](../archive/2026-01/SCHEDULE.md)\n",
+      "target": "archive/2026-01/SCHEDULE.md",
+      "archive": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "unit": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "bytes": 64,
+      "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430",
+      "expectedKeys": ["rituals/SCHEDULE.md#L2"],
+      "expectedMissing": [],
+      "log": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\trituals/SCHEDULE.md\t2\tarchive/2026-01/SCHEDULE.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\trituals/SCHEDULE.md\t73\t57\n",
+      "expectedLog": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "rituals/SCHEDULE.md altered reason",
+      "path": "rituals/SCHEDULE.md",
+      "before": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "after": "# Source\nArchived: [D-7](../archive/2026-01/SCHEDULE.md)\n",
+      "target": "archive/2026-01/SCHEDULE.md",
+      "archive": "- [D-7 done] decision · closed 2026-01-01\nThe short reason.\n",
+      "unit": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "bytes": 64,
+      "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430",
+      "expectedKeys": [],
+      "expectedMissing": ["rituals/SCHEDULE.md#L2"],
+      "log": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\trituals/SCHEDULE.md\t2\tarchive/2026-01/SCHEDULE.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\trituals/SCHEDULE.md\t73\t57\n",
+      "expectedLog": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/TRACKING.md",
+          "rituals/SCHEDULE.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "external/review.md exact reasons",
+      "path": "external/review.md",
+      "before": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "after": "# Source\nArchived: [D-7](../archive/2026-01/review.md)\n",
+      "target": "archive/2026-01/review.md",
+      "archive": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "unit": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "bytes": 64,
+      "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430",
+      "expectedKeys": ["external/review.md#L2"],
+      "expectedMissing": [],
+      "log": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\texternal/review.md\t2\tarchive/2026-01/review.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\texternal/review.md\t73\t55\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n",
+      "expectedLog": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "external/review.md altered reason",
+      "path": "external/review.md",
+      "before": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "after": "# Source\nArchived: [D-7](../archive/2026-01/review.md)\n",
+      "target": "archive/2026-01/review.md",
+      "archive": "- [D-7 done] decision · closed 2026-01-01\nThe short reason.\n",
+      "unit": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+      "bytes": 64,
+      "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430",
+      "expectedKeys": [],
+      "expectedMissing": ["external/review.md#L2"],
+      "log": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\texternal/review.md\t2\tarchive/2026-01/review.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\texternal/review.md\t73\t55\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n",
+      "expectedLog": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "external/review.md",
+          "plans/INDEX.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    }
+  ]
+}

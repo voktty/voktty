@@ -1,7 +1,7 @@
 use super::measurement::PinnedDirectory;
 use super::*;
 use crate::discovery::EntryKind;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use voktty_workspace_kit::{snapshot_memory_preservation, MemoryPreservationSnapshot};
 
 /// Native observation only. It cannot be reconstructed from repository or IPC data.
@@ -50,6 +50,7 @@ struct Inventory<'a> {
     access: &'a dyn MemoryReadAccess,
     control: &'a ReadControl,
     directories: Vec<PinnedDirectory>,
+    memberships: BTreeMap<PathBuf, Vec<(OsString, EntryKind)>>,
     paths: BTreeSet<String>,
     entries: usize,
 }
@@ -70,6 +71,13 @@ impl Inventory<'_> {
         if !listing.complete || self.entries > 20000 {
             return Err(ReadError::Limit);
         }
+        let mut membership: Vec<_> = listing
+            .entries
+            .iter()
+            .map(|entry| (entry.name.clone(), entry.kind))
+            .collect();
+        membership.sort_by(|a, b| a.0.cmp(&b.0));
+        self.memberships.insert(directory.path.clone(), membership);
         for entry in listing.entries {
             self.control.check()?;
             let name = entry.name.to_str().ok_or(ReadError::Unsupported)?;
@@ -102,7 +110,11 @@ impl Inventory<'_> {
                     .ok_or(ReadError::StaleRoot)?;
                 self.scan(nested, &path)?;
             } else if (name == "README.md" && !relative.starts_with("archive/"))
-                || (name == "_TEMPLATE.md" && matches!(relative, "plans" | "domains"))
+                || (name == "_TEMPLATE.md"
+                    && matches!(
+                        relative,
+                        "plans" | "domains" | "architecture" | "rituals" | "external"
+                    ))
             {
                 if entry.kind != EntryKind::File {
                     return Err(ReadError::Unavailable);
@@ -187,6 +199,7 @@ impl LocalMemoryWorkspace<'_> {
             access: self.access,
             control: &phase,
             directories: vec![],
+            memberships: BTreeMap::new(),
             entries: 0,
             paths: [
                 "PROJECT.md",
@@ -200,7 +213,14 @@ impl LocalMemoryWorkspace<'_> {
             .map(String::from)
             .collect(),
         };
-        for name in ["plans", "domains", "archive"] {
+        for name in [
+            "plans",
+            "domains",
+            "architecture",
+            "rituals",
+            "external",
+            "archive",
+        ] {
             if let Some(directory) = child(&kit, name, self.access, &phase)? {
                 inventory.scan(directory, name)?;
             }
@@ -252,6 +272,23 @@ impl LocalMemoryWorkspace<'_> {
         }
         for directory in &inventory.directories {
             directory.verify(self.access, &phase)?;
+            if let Some(expected) = inventory.memberships.get(&directory.path) {
+                let listing = directory.directory.entries(
+                    &directory.path,
+                    self.access,
+                    &phase,
+                    expected.len() + 1,
+                )?;
+                let mut current: Vec<_> = listing
+                    .entries
+                    .into_iter()
+                    .map(|entry| (entry.name, entry.kind))
+                    .collect();
+                current.sort_by(|a, b| a.0.cmp(&b.0));
+                if !listing.complete || current != *expected {
+                    return Err(ReadError::StaleRoot);
+                }
+            }
             if !self.access.allows_enumeration(&directory.path)
                 && directory.path != kit.path.join("continuity")
             {
