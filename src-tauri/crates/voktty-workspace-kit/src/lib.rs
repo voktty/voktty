@@ -2,6 +2,7 @@ mod context;
 mod deployment;
 mod document;
 mod git_exclude;
+mod handoff;
 mod identity;
 mod lock;
 mod memory;
@@ -45,6 +46,7 @@ pub use deployment::{
     RootLinks,
 };
 pub use git_exclude::{plan_git_memory_exclusion, GitMemoryExcludePlan};
+pub use handoff::handoff_created_at_ms;
 pub use identity::memory_project_key;
 pub use lock::{parse_kit_lock, prepare_deployment, BaseIntegrity, KitLock, PreparedDeployment};
 pub use memory::{

@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "1970-01-01-0000-solo.md",
+      "expected": 0
+    },
+    {
+      "name": "2026-11-01-0930-orchestrator.md",
+      "expected": 1793525400000
+    },
+    {
+      "name": "2000-02-29-2359-solo.md",
+      "expected": 951868740000
+    },
+    {
+      "name": "2024-02-29-1200-developer.md",
+      "expected": 1709208000000
+    },
+    {
+      "name": "2100-03-01-0000-solo.md",
+      "expected": 4107542400000
+    },
+    {
+      "name": "2400-02-29-0101-solo.md",
+      "expected": 13574566860000
+    },
+    {
+      "name": "9999-12-31-2359-solo.md",
+      "expected": 253402300740000
+    },
+    {
+      "name": "2026-01-01-0000-á.md",
+      "expected": 1767225600000
+    },
+    {
+      "name": "2026-01-01-0000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md",
+      "expected": 1767225600000
+    },
+    {
+      "name": "2026-01-01-0000-solo.md",
+      "expected": 1767225600000
+    },
+    {
+      "name": "2026-02-01-0000-solo.md",
+      "expected": 1769904000000
+    },
+    {
+      "name": "2026-03-01-0000-solo.md",
+      "expected": 1772323200000
+    },
+    {
+      "name": "2026-04-01-0000-solo.md",
+      "expected": 1775001600000
+    },
+    {
+      "name": "2026-05-01-0000-solo.md",
+      "expected": 1777593600000
+    },
+    {
+      "name": "2026-06-01-0000-solo.md",
+      "expected": 1780272000000
+    },
+    {
+      "name": "2026-07-01-0000-solo.md",
+      "expected": 1782864000000
+    },
+    {
+      "name": "2026-08-01-0000-solo.md",
+      "expected": 1785542400000
+    },
+    {
+      "name": "2026-09-01-0000-solo.md",
+      "expected": 1788220800000
+    },
+    {
+      "name": "2026-10-01-0000-solo.md",
+      "expected": 1790812800000
+    },
+    {
+      "name": "2026-11-01-0000-solo.md",
+      "expected": 1793491200000
+    },
+    {
+      "name": "2026-12-01-0000-solo.md",
+      "expected": 1796083200000
+    },
+    {
+      "name": "README.md",
+      "expected": null
+    },
+    {
+      "name": "2026-11-01-0930-.md",
+      "expected": null
+    },
+    {
+      "name": "2026-11-01-0930-solo.MD",
+      "expected": null
+    },
+    {
+      "name": "1969-12-31-2359-solo.md",
+      "expected": null
+    },
+    {
+      "name": "0000-01-01-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "1900-02-29-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2100-02-29-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-02-29-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-04-31-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-00-01-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-13-01-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-00-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-2400-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0060-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-1-01-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-00:00-solo.md",
+      "expected": null
+    },
+    {
+      "name": "２０２６-01-01-0000-solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-../solo.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-a\\b.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-a\u0000b.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-a\nb.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-solo.md\n",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md",
+      "expected": null
+    },
+    {
+      "name": "2026-01-01-0000-ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+      "expected": null
+    }
+  ]
+}
