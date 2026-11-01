@@ -80,6 +80,10 @@ fn status_uses_native_root_bound_preferences_without_claiming_current_trust() {
         result["capabilities"]["initialPromptLaunch"]["codexVersions"],
         json!(["0.165.0"])
     );
+    assert_eq!(
+        result["capabilities"]["initialPromptLaunch"]["claudeVersions"],
+        json!(["2.1.312"])
+    );
     assert_eq!(store.load().unwrap(), trusted);
     workspace
         .set_policy(trusted.revision(), MemoryPolicy::Never, &control)

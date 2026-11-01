@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use voktty_memory_local::{resolve_local_memory_directory, DiscoveryControl};
 
 #[cfg(target_os = "linux")]
-mod codex;
+mod adapters;
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct RunOptions {
@@ -116,27 +116,25 @@ fn with_memory(
     };
     use std::sync::Arc;
     use voktty_memory_local::{MemoryContextSession, MemorySessionUse, MemoryTrustReview};
-    if options.adapter != "codex" {
-        return Err(codex::unavailable());
-    }
-    codex::arguments(&options.args, "")?;
+    let adapter = adapters::Adapter::parse(&options.adapter).ok_or_else(adapters::unavailable)?;
+    adapters::arguments(adapter, &options.args, "")?;
     let directory = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
         .open(root)
-        .map_err(|_| codex::unavailable())?;
-    let directory_identity = directory.metadata().map_err(|_| codex::unavailable())?;
-    let admitted = codex::Admission::prepare(root)?;
+        .map_err(|_| adapters::unavailable())?;
+    let directory_identity = directory.metadata().map_err(|_| adapters::unavailable())?;
+    let admitted = adapters::Admission::prepare(root, adapter)?;
     let control = DiscoveryControl::default();
     let store = parent
         .map(|parent| existing_store(parent, &control))
         .transpose()?
         .flatten()
-        .ok_or_else(codex::unavailable)?;
+        .ok_or_else(adapters::unavailable)?;
     let memory = observation["root"]
         .as_str()
         .map(PathBuf::from)
-        .ok_or_else(codex::unavailable)?;
+        .ok_or_else(adapters::unavailable)?;
     let access = Arc::new(TrustReadAccess::new(root.to_owned(), memory));
     let review =
         MemoryTrustReview::prepare(Arc::new(store), root.to_owned(), access, None, &control)
@@ -162,14 +160,14 @@ fn with_memory(
             EXIT_REQUEST,
         )
     })?;
-    let args = codex::arguments(&options.args, &packet.text)?;
+    let args = adapters::arguments(adapter, &options.args, &packet.text)?;
     let current = session.read(&control).map_err(trust_error)?;
     if current.packet.as_ref() != Some(&packet) {
-        return Err(codex::unavailable());
+        return Err(adapters::unavailable());
     }
-    let current = std::fs::metadata(root).map_err(|_| codex::unavailable())?;
+    let current = std::fs::metadata(root).map_err(|_| adapters::unavailable())?;
     if (current.dev(), current.ino()) != (directory_identity.dev(), directory_identity.ino()) {
-        return Err(codex::unavailable());
+        return Err(adapters::unavailable());
     }
     let executable = admitted.path()?;
     let fd = directory.as_raw_fd();
@@ -185,7 +183,7 @@ fn with_memory(
             }
         });
     }
-    eprintln!("Project memory prepared for Codex's initial user prompt. Provider acceptance and reading are not verified; future turns and resume are managed by Codex.");
+    eprintln!("Project memory prepared for {}'s initial user prompt. Provider acceptance and reading are not verified; future turns and resume are managed by the agent.", adapter.command());
     let _error = command.exec();
     Err(CliError::new(
         "memory_launch_failed",

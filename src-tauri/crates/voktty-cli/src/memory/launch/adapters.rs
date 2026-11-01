@@ -3,25 +3,145 @@ use std::ffi::OsString;
 use std::path::Path;
 
 pub(super) fn unavailable() -> CliError {
-    CliError::new("memory_delivery_unavailable", "memory launch supports verified Codex 0.165.0 interactive arguments only; use Project Memory to copy a startup message, or --no-memory for an unchanged launch; no agent was started", EXIT_UNAVAILABLE)
+    CliError::new("memory_delivery_unavailable", "memory launch supports verified Codex 0.165.0 or Claude 2.1.312 interactive arguments only; use Project Memory to copy a startup message, or --no-memory for an unchanged launch; no agent was started", EXIT_UNAVAILABLE)
 }
 
-fn takes_value(flag: &str) -> bool {
-    matches!(
-        flag,
-        "--model"
-            | "-m"
-            | "--sandbox"
-            | "-s"
-            | "--ask-for-approval"
-            | "-a"
-            | "--local-provider"
-            | "--add-dir"
-    )
+#[derive(Clone, Copy)]
+pub(crate) enum Adapter {
+    Codex,
+    Claude,
+}
+
+impl Adapter {
+    pub(super) fn parse(name: &str) -> Option<Self> {
+        match name {
+            "codex" => Some(Self::Codex),
+            "claude" => Some(Self::Claude),
+            _ => None,
+        }
+    }
+    pub(super) fn command(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::Claude => "claude",
+        }
+    }
+    fn version_line(self) -> &'static str {
+        match self {
+            Self::Codex => "codex-cli 0.165.0",
+            Self::Claude => "2.1.312 (Claude Code)",
+        }
+    }
+    fn takes_value(self, flag: &str) -> bool {
+        if matches!(self, Self::Claude) {
+            return matches!(
+                flag,
+                "--model" | "--effort" | "--permission-mode" | "--name" | "-n"
+            );
+        }
+        matches!(
+            flag,
+            "--model"
+                | "-m"
+                | "--sandbox"
+                | "-s"
+                | "--ask-for-approval"
+                | "-a"
+                | "--local-provider"
+                | "--add-dir"
+        )
+    }
+    fn boolean(self, flag: &str) -> bool {
+        match self {
+            Self::Codex => matches!(
+                flag,
+                "--no-alt-screen"
+                    | "--no-daemon"
+                    | "--oss"
+                    | "--search"
+                    | "--approve-for-me"
+                    | "--dangerously-bypass-approvals-and-sandbox"
+                    | "--dangerously-bypass-hook-trust"
+            ),
+            Self::Claude => matches!(
+                flag,
+                "--no-chrome"
+                    | "--disable-slash-commands"
+                    | "--allow-dangerously-skip-permissions"
+                    | "--dangerously-skip-permissions"
+            ),
+        }
+    }
+    fn command_word(self, text: &str) -> bool {
+        if matches!(self, Self::Claude) {
+            return matches!(
+                text,
+                "agents"
+                    | "attach"
+                    | "auth"
+                    | "auto-mode"
+                    | "doctor"
+                    | "gateway"
+                    | "import"
+                    | "install"
+                    | "logs"
+                    | "mcp"
+                    | "plugin"
+                    | "plugins"
+                    | "purge"
+                    | "respawn"
+                    | "rm"
+                    | "setup-token"
+                    | "stop"
+                    | "kill"
+                    | "ultrareview"
+                    | "update"
+                    | "upgrade"
+                    | "remote-control"
+                    | "self-hosted-runner"
+                    | "help"
+            );
+        }
+        matches!(
+            text,
+            "agents"
+                | "exec"
+                | "e"
+                | "review"
+                | "login"
+                | "logout"
+                | "mcp"
+                | "plugin"
+                | "app-server"
+                | "remote-control"
+                | "completion"
+                | "update"
+                | "doctor"
+                | "sandbox"
+                | "debug"
+                | "apply"
+                | "resume"
+                | "queue"
+                | "archive"
+                | "delete"
+                | "migrate-rollouts"
+                | "migrate-nfs-db"
+                | "unarchive"
+                | "fork"
+                | "cloud"
+                | "exec-server"
+                | "features"
+                | "help"
+        )
+    }
 }
 
 /// Leaves native options intact and prefixes only the initial user prompt.
-pub(super) fn arguments(args: &[OsString], packet: &str) -> Result<Vec<OsString>, CliError> {
+pub(super) fn arguments(
+    adapter: Adapter,
+    args: &[OsString],
+    packet: &str,
+) -> Result<Vec<OsString>, CliError> {
     let mut prompt = None;
     let mut separated = false;
     let mut i = 0;
@@ -32,68 +152,25 @@ pub(super) fn arguments(args: &[OsString], packet: &str) -> Result<Vec<OsString>
             i += 1;
             continue;
         }
-        if !separated && takes_value(text) {
+        if !separated && adapter.takes_value(text) {
             i += 1;
-            let value = args
-                .get(i)
+            args.get(i)
                 .and_then(|value| value.to_str())
                 .filter(|s| !s.is_empty() && !s.starts_with('-'))
                 .ok_or_else(unavailable)?;
-            let _ = value;
         } else if !separated && text.starts_with('-') {
             let assigned = text.split_once('=').is_some_and(|(flag, value)| {
-                takes_value(flag) && !value.is_empty() && !value.starts_with('-')
+                adapter.takes_value(flag) && !value.is_empty() && !value.starts_with('-')
             });
-            if !assigned
-                && !matches!(
-                    text,
-                    "--no-alt-screen"
-                        | "--no-daemon"
-                        | "--oss"
-                        | "--search"
-                        | "--approve-for-me"
-                        | "--dangerously-bypass-approvals-and-sandbox"
-                        | "--dangerously-bypass-hook-trust"
-                )
-            {
+            if !assigned && !adapter.boolean(text) {
                 return Err(unavailable());
             }
         } else {
             if prompt.is_some()
                 || i + 1 != args.len()
                 || text == "-"
-                || (!separated
-                    && matches!(
-                        text,
-                        "agents"
-                            | "exec"
-                            | "e"
-                            | "review"
-                            | "login"
-                            | "logout"
-                            | "mcp"
-                            | "plugin"
-                            | "app-server"
-                            | "remote-control"
-                            | "completion"
-                            | "update"
-                            | "doctor"
-                            | "sandbox"
-                            | "debug"
-                            | "apply"
-                            | "resume"
-                            | "queue"
-                            | "archive"
-                            | "delete"
-                            | "migrate-rollouts"
-                            | "migrate-nfs-db"
-                            | "unarchive"
-                            | "fork"
-                            | "cloud"
-                            | "exec-server"
-                            | "features"
-                            | "help"
-                    ))
+                || (matches!(adapter, Adapter::Claude) && text.trim_start().starts_with('/'))
+                || (!separated && adapter.command_word(text))
             {
                 return Err(unavailable());
             }
@@ -190,7 +267,7 @@ mod native {
         }
     }
     impl Admission {
-        pub(crate) fn prepare(root: &Path) -> Result<Self, CliError> {
+        pub(crate) fn prepare(root: &Path, adapter: Adapter) -> Result<Self, CliError> {
             let paths = std::env::var_os("PATH").ok_or_else(unavailable)?;
             let path = std::env::split_paths(&paths)
                 .map(|dir| {
@@ -199,7 +276,7 @@ mod native {
                     } else {
                         root.join(dir)
                     };
-                    dir.join("codex")
+                    dir.join(adapter.command())
                 })
                 .find(|path| identity(path).is_ok())
                 .ok_or_else(unavailable)?;
@@ -269,7 +346,7 @@ mod native {
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
-            if std::str::from_utf8(&bytes).ok().map(str::trim) != Some("codex-cli 0.165.0") {
+            if std::str::from_utf8(&bytes).ok().map(str::trim) != Some(adapter.version_line()) {
                 return Err(unavailable());
             }
             admitted.path()?;

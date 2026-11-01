@@ -60,6 +60,10 @@ fn status_works_without_desktop_tty_or_private_state_and_creates_nothing() {
         value["capabilities"]["initialPromptLaunch"]["codexVersions"],
         json!(["0.165.0"])
     );
+    assert_eq!(
+        value["capabilities"]["initialPromptLaunch"]["claudeVersions"],
+        json!(["2.1.312"])
+    );
     assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }
 

@@ -61,12 +61,25 @@ impl Fixture {
         );
     }
     fn verified_codex(&self) {
-        let path = self.bin.join("codex");
+        self.verified_agent("codex", "codex-cli 0.165.0");
+    }
+    fn verified_claude(&self) {
+        self.verified_agent("claude", "2.1.312 (Claude Code)");
+    }
+    fn verified_agent(&self, name: &str, version: &str) {
+        let path = self.bin.join(name);
         let original = fs::read_to_string(&path).unwrap();
         let probe = "import os,sys,json,signal\nif sys.argv[1:]==['--version']:\n assert sys.stdin.buffer.read()==b''\n mode=os.getenv('VERSION_FIXTURE','ok')\n if mode=='flood':\n  while True: os.write(1,b'x'*8192)\n if mode=='hang':\n  if os.fork()==0:\n   open(os.environ['PROBE_PID'],'w').write(str(os.getpid()))\n   while True: signal.pause()\n  sys.exit(0)\n if mode=='revoke':\n  path=os.environ['PROBE_STATE']\n  state=json.load(open(path));state['revision']+=1;state['projects'][0]['policy']='never'\n  open(path,'w').write(json.dumps(state))\n if mode=='mutate': os.chmod(sys.argv[0],0o755)\n print('codex-cli '+('0.166.0' if mode=='wrong' else '0.165.0'),flush=True)\n sys.exit(2 if mode=='nonzero' else 0)\n";
         fs::write(
             path,
-            original.replacen("import os,sys,json,signal\n", probe, 1),
+            original.replacen(
+                "import os,sys,json,signal\n",
+                &probe.replace(
+                    "'codex-cli '+('0.166.0' if mode=='wrong' else '0.165.0')",
+                    &format!("'unqualified' if mode=='wrong' else {version:?}"),
+                ),
+                1,
+            ),
         )
         .unwrap();
     }
@@ -511,4 +524,161 @@ fn termination_during_probe_settles_its_group_before_preserving_the_signal() {
         std::thread::sleep(Duration::from_millis(5));
     }
     assert_descendant_settled(&pid);
+}
+
+#[test]
+fn claude_session_preserves_options_user_request_stdin_pid_and_manual_policy() {
+    let f = Fixture::new();
+    f.init();
+    f.trust();
+    f.verified_claude();
+    fs::write(f.project.join(".voktty/CONTEXT.md"), "Shared Claude facts").unwrap();
+    let before = fs::read(f.state()).unwrap();
+    let user = "Explain the shared facts\nKeep this exact request";
+    let mut child = f
+        .command(&[
+            "memory",
+            "run",
+            "--session",
+            "claude",
+            "--",
+            "--model",
+            "claude-sonnet-4-5",
+            "--effort",
+            "high",
+            "--permission-mode",
+            "plan",
+            "--name",
+            "Fixture label",
+            user,
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("RUN_EXIT", "23")
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&[255, 0, b'\n'])
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(23),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let args: Vec<String> = result["args"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| String::from_utf8(hex::decode(s.as_str().unwrap()).unwrap()).unwrap())
+        .collect();
+    assert_eq!(
+        &args[..8],
+        &[
+            "--model",
+            "claude-sonnet-4-5",
+            "--effort",
+            "high",
+            "--permission-mode",
+            "plan",
+            "--name",
+            "Fixture label"
+        ]
+    );
+    assert_eq!(args.len(), 9);
+    assert!(args[8].starts_with("PROJECT MEMORY (.voktty)\n"));
+    assert!(args[8].contains("Shared Claude facts"));
+    assert!(args[8].ends_with(&format!("User request:\n{user}")));
+    assert_eq!(result["input"], "ff000a");
+    assert_eq!(result["pid"], pid);
+    assert_eq!(fs::read(f.state()).unwrap(), before);
+}
+
+#[test]
+fn claude_always_requires_its_own_version_and_current_root_bound_trust() {
+    let f = Fixture::new();
+    f.init();
+    f.verified_claude();
+    assert_eq!(
+        f.run(&["memory", "run", "--session", "claude"])
+            .status
+            .code(),
+        Some(5)
+    );
+    f.trust();
+    assert!(f.run(&["memory", "use", "--always"]).status.success());
+    let before = fs::read(f.state()).unwrap();
+    let result = value(&f.run(&["memory", "run", "claude"]));
+    assert_eq!(result["args"][0], hex::encode("--"));
+    let text =
+        String::from_utf8(hex::decode(result["args"][1].as_str().unwrap()).unwrap()).unwrap();
+    assert!(text.contains(".voktty/INIT.md"));
+    assert_eq!(fs::read(f.state()).unwrap(), before);
+    let wrong = f
+        .command(&["memory", "run", "claude"])
+        .env("VERSION_FIXTURE", "wrong")
+        .output()
+        .unwrap();
+    assert_eq!(wrong.status.code(), Some(3));
+    assert!(wrong.stdout.is_empty());
+    f.verified_codex();
+    fs::copy(f.bin.join("codex"), f.bin.join("claude")).unwrap();
+    let wrong_family = f.run(&["memory", "run", "claude"]);
+    assert_eq!(wrong_family.status.code(), Some(3));
+    assert!(wrong_family.stdout.is_empty());
+    assert_eq!(fs::read(f.state()).unwrap(), before);
+}
+
+#[test]
+fn claude_unverified_modes_are_refused_and_no_memory_keeps_native_arguments() {
+    let f = Fixture::new();
+    f.init();
+    f.trust();
+    f.verified_claude();
+    for flags in [
+        vec!["--print"],
+        vec!["-p"],
+        vec!["--resume", "fixture"],
+        vec!["--continue"],
+        vec!["--worktree", "other"],
+        vec!["--settings", "{}"],
+        vec!["--add-dir", "one", "two"],
+        vec!["--agents", "{}"],
+        vec!["purge"],
+        vec!["auth"],
+        vec!["/help"],
+    ] {
+        let mut args = vec!["memory", "run", "--session", "claude", "--"];
+        args.extend(flags);
+        let refused = f.run(&args);
+        assert_eq!(refused.status.code(), Some(3));
+        assert!(refused.stdout.is_empty());
+    }
+    assert!(f.run(&["memory", "use", "--never"]).status.success());
+    assert_eq!(
+        f.run(&["memory", "run", "--session", "claude"])
+            .status
+            .code(),
+        Some(5)
+    );
+    let native = value(&f.run(&[
+        "memory",
+        "run",
+        "--no-memory",
+        "claude",
+        "--",
+        "--resume",
+        "fixture id",
+    ]));
+    assert_eq!(
+        native["args"],
+        serde_json::json!([hex::encode("--resume"), hex::encode("fixture id")])
+    );
 }
