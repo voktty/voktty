@@ -83,5 +83,34 @@ component does not claim to implement all CommonMark or rendering extensions.
 Limits are 256 KiB of index text, 1,024 link tokens or unverified lines, and
 4,096 UTF-8 bytes per destination body. Reaching a limit fails explicitly.
 
-Unchanged archive bytes, movement LOG records, baseline authenticity and native
-ownership remain separate required checks before exposing an integrated checker.
+## Whole-file archive evidence
+
+`compare_memory_archive_files` and `compareMemoryArchiveFiles` compare two
+complete snapshots. They identify exact whole-file moves from removed handoffs
+or closed plans with no syntactically open item to newly created immediate
+`archive/YYYY-MM/<original filename>` destinations. Both SHA-256 and UTF-8 byte
+size must match. Historical handoff references do not prevent archiving a
+handoff; they are history rather than live obligations. Unknown or nonclosed
+plans and other live files cannot qualify as whole-file archival sources.
+
+An existing archive cannot rescue a deletion. Multiple matching new targets or
+multiple removed sources claiming the same target are ambiguous and produce no
+movement evidence for those sources. Renaming, nesting, case changes, newline
+conversion and content rewrites cannot substitute for an intact file move.
+Reports retain missing or changed old archives, rewritten retained handoffs,
+unpreserved eligible sources, ambiguous sources, ineligible removals and every
+new archive without uniquely attributed whole-file evidence. All output paths
+use Unicode scalar ordering. The TypeScript mirror freezes report values.
+The existing snapshot limits bound the comparison to 128 files per inventory;
+the comparison performs no IO, hashing, extra document reads or mutations.
+
+`moves` proves only byte equality and unique path attribution within the supplied
+inventories. It does not prove that an archival age threshold was reached, that
+the destination month is historically correct, that the move has a LOG record,
+that live backlinks survived, or that the snapshot origin is authentic. It never
+authorizes a move. Newly appended closed-item fragments remain unattributed and
+changes to existing archive files remain explicit diagnostics until a separate
+fragment verifier establishes intact prior content and append-only preservation.
+Empty diagnostics do not approve compaction. Movement LOG records, age/month
+qualification, fragment checks, baseline authenticity and native ownership remain
+required before exposing an integrated checker.

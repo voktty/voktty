@@ -7,6 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 mod plan_index;
 pub use plan_index::{check_memory_plan_index, MemoryPlanIndexReport};
 
+#[path = "archive_files.rs"]
+mod archive_files;
+pub use archive_files::{compare_memory_archive_files, MemoryArchiveFileReport, MemoryArchiveMove};
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPreservationFile {

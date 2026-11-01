@@ -1,0 +1,658 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "unchanged documents",
+      "before": {},
+      "after": {},
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "closed plan intact",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [
+          {
+            "source": "plans/P.md",
+            "target": "archive/2030-01/P.md",
+            "sha256": "4195f1676e3d1d8440c0e0a6ffb97c5733c83c327ca5232fc575725edd4117cd",
+            "bytes": 41
+          }
+        ],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "historical open references are not live obligations",
+      "before": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "after": {
+        "archive/2030-01/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "expected": {
+        "moves": [
+          {
+            "source": "continuity/handoffs/H.md",
+            "target": "archive/2030-01/H.md",
+            "sha256": "6fa5caf0e9b9e92ebd0017964e415cf386134a15fbd800e23ffabdffbde4e40d",
+            "bytes": 40
+          }
+        ],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "missing closed plan",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {},
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "missing handoff",
+      "before": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "after": {},
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["continuity/handoffs/H.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "rewritten target same byte length",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve causes\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "truncated archive",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "line ending conversion is a rewrite",
+      "before": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "after": {
+        "archive/2030-01/H.md": "[T-1] still open elsewhere\nContexto é\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["continuity/handoffs/H.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/H.md"]
+      }
+    },
+    {
+      "name": "renamed target",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/Renamed.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/Renamed.md"]
+      }
+    },
+    {
+      "name": "nested target is not canonical whole file",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/plans/P.md"]
+      }
+    },
+    {
+      "name": "existing archive cannot rescue deletion",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "overwriting existing archive cannot rescue deletion",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "archive/2030-01/P.md": "old"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": ["archive/2030-01/P.md"],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "duplicate monthly candidates",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "archive/2030-02/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": ["plans/P.md"],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md", "archive/2030-02/P.md"]
+      }
+    },
+    {
+      "name": "same target cannot rescue two removed files",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "continuity/handoffs/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": ["continuity/handoffs/P.md", "plans/P.md"],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "copy while source stays live is unattributed",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "open plan stays ineligible",
+      "before": {
+        "plans/P.md": "State: open\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: open\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": ["plans/P.md"],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "unknown plan stays ineligible",
+      "before": {
+        "plans/P.md": "Owner: closed\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "Owner: closed\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": ["plans/P.md"],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "closed plan with open obligation stays ineligible",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1]\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1]\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": ["plans/P.md"],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/P.md"]
+      }
+    },
+    {
+      "name": "domain card cannot disappear",
+      "before": {
+        "domains/D.md": "closed"
+      },
+      "after": {
+        "archive/2030-01/D.md": "closed"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": ["domains/D.md"],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/D.md"]
+      }
+    },
+    {
+      "name": "archive deletion",
+      "before": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {},
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": ["archive/2030-01/P.md"],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "archive rename is not preservation",
+      "before": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-02/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": ["archive/2030-01/P.md"],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-02/P.md"]
+      }
+    },
+    {
+      "name": "existing archive changes are unverified",
+      "before": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\nnew"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": ["archive/2030-01/P.md"],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "existing archive unchanged",
+      "before": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "retained handoff rewrite",
+      "before": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "after": {
+        "continuity/handoffs/H.md": "replacement"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": ["continuity/handoffs/H.md"],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "retained handoff unchanged",
+      "before": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "after": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "new live handoff is not a move",
+      "before": {},
+      "after": {
+        "continuity/handoffs/H.md": "[T-1] still open elsewhere\nContexto é\r\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "case preserving filename",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/p.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": ["plans/P.md"],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/p.md"]
+      }
+    },
+    {
+      "name": "exact and rewritten candidates remain separately visible",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "archive/2030-02/P.md": "rewritten"
+      },
+      "expected": {
+        "moves": [
+          {
+            "source": "plans/P.md",
+            "target": "archive/2030-01/P.md",
+            "sha256": "4195f1676e3d1d8440c0e0a6ffb97c5733c83c327ca5232fc575725edd4117cd",
+            "bytes": 41
+          }
+        ],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-02/P.md"]
+      }
+    },
+    {
+      "name": "same contents with distinct filenames do not collide",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "plans/Q.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] preserve reason\n",
+        "archive/2030-01/Q.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [
+          {
+            "source": "plans/P.md",
+            "target": "archive/2030-01/P.md",
+            "sha256": "4195f1676e3d1d8440c0e0a6ffb97c5733c83c327ca5232fc575725edd4117cd",
+            "bytes": 41
+          },
+          {
+            "source": "plans/Q.md",
+            "target": "archive/2030-01/Q.md",
+            "sha256": "4195f1676e3d1d8440c0e0a6ffb97c5733c83c327ca5232fc575725edd4117cd",
+            "bytes": 41
+          }
+        ],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "empty whole file remains factual",
+      "before": {
+        "continuity/handoffs/H.md": ""
+      },
+      "after": {
+        "archive/2030-01/H.md": ""
+      },
+      "expected": {
+        "moves": [
+          {
+            "source": "continuity/handoffs/H.md",
+            "target": "archive/2030-01/H.md",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0
+          }
+        ],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "unicode paths and content preserve scalar order",
+      "before": {
+        "plans/é.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "after": {
+        "archive/2030-01/é.md": "State: closed\n[T-1 done] preserve reason\n"
+      },
+      "expected": {
+        "moves": [
+          {
+            "source": "plans/é.md",
+            "target": "archive/2030-01/é.md",
+            "sha256": "4195f1676e3d1d8440c0e0a6ffb97c5733c83c327ca5232fc575725edd4117cd",
+            "bytes": 41
+          }
+        ],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": []
+      }
+    },
+    {
+      "name": "partial item archive needs separate fragment proof",
+      "before": {
+        "plans/TRACKING.md": "[T-1 done] old\n[T-2] live\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[T-2] live\n",
+        "archive/2030-01/TRACKING.md": "[T-1 done] old\n"
+      },
+      "expected": {
+        "moves": [],
+        "missingMovedFiles": [],
+        "ambiguousFiles": [],
+        "ineligibleRemovedFiles": [],
+        "changedHandoffs": [],
+        "missingArchives": [],
+        "changedArchives": [],
+        "unattributedArchives": ["archive/2030-01/TRACKING.md"]
+      }
+    }
+  ]
+}
