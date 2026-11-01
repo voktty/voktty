@@ -27,8 +27,14 @@ export type {
   MemoryArchiveFileReport,
   MemoryArchiveMove,
 } from "@/modules/workspace-kit/lib/archiveFiles";
-export { checkMemoryArchiveLog } from "@/modules/workspace-kit/lib/archiveLog";
-export type { MemoryArchiveLogReport } from "@/modules/workspace-kit/lib/archiveLog";
+export {
+  checkMemoryArchiveLog,
+  checkMemoryArchiveLogWithSources,
+} from "@/modules/workspace-kit/lib/archiveLog";
+export type {
+  MemoryArchiveLogReport,
+  MemoryArchiveFragmentLogReport,
+} from "@/modules/workspace-kit/lib/archiveLog";
 export {
   snapshotMemoryPreservation,
   compareMemoryPreservation,

@@ -19,7 +19,10 @@ pub use archive_files::{compare_memory_archive_files, MemoryArchiveFileReport, M
 
 #[path = "archive_log.rs"]
 mod archive_log;
-pub use archive_log::{check_memory_archive_log, MemoryArchiveLogReport};
+pub use archive_log::{
+    check_memory_archive_log, check_memory_archive_log_with_sources,
+    MemoryArchiveFragmentLogReport, MemoryArchiveLogReport,
+};
 
 #[path = "archive_time.rs"]
 mod archive_time;

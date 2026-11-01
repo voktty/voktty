@@ -12,6 +12,15 @@ pub struct MemoryArchiveLogReport {
     pub complete: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryArchiveFragmentLogReport {
+    pub log: MemoryArchiveLogReport,
+    pub fragments: MemoryArchiveFragmentReport,
+    pub logged_fragments: Vec<String>,
+    pub missing_fragments: Vec<String>,
+}
+
 fn log_matches(snapshot: &MemoryPreservationSnapshot, text: &str) -> bool {
     snapshot.files.iter().any(|file| {
         file.path == "archive/LOG.md"
@@ -47,6 +56,13 @@ fn metadata(date: &str, agent: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
+fn source_log(sources: &BTreeMap<String, PathFact>) -> KitResult<&str> {
+    match sources.get("archive/LOG.md") {
+        Some(PathFact::File { text }) => Ok(text.as_str()),
+        _ => Err(invalid("KIT_PRESERVATION_INCOMPLETE")),
+    }
+}
+
 /// Checks the appended raw TSV channel, not Markdown rendering or compaction approval.
 pub fn check_memory_archive_log(
     before: &MemoryPreservationSnapshot,
@@ -54,6 +70,16 @@ pub fn check_memory_archive_log(
     before_log: &str,
     after_log: &str,
 ) -> KitResult<MemoryArchiveLogReport> {
+    check_log(before, after, before_log, after_log, None).map(|(log, _, _)| log)
+}
+
+fn check_log(
+    before: &MemoryPreservationSnapshot,
+    after: &MemoryPreservationSnapshot,
+    before_log: &str,
+    after_log: &str,
+    fragments: Option<&[MemoryArchiveFragment]>,
+) -> KitResult<(MemoryArchiveLogReport, Vec<String>, Vec<String>)> {
     if before_log.len() > 256 * 1024 || after_log.len() > 256 * 1024 {
         return Err(invalid("KIT_ARCHIVE_LOG_LIMIT"));
     }
@@ -108,6 +134,12 @@ pub fn check_memory_archive_log(
     };
     let mut seen_moves = BTreeSet::new();
     let mut seen_sizes = BTreeSet::new();
+    let expected_fragments: BTreeMap<_, _> = fragments
+        .unwrap_or_default()
+        .iter()
+        .map(|fragment| (format!("{}#L{}", fragment.source, fragment.line), fragment))
+        .collect();
+    let mut seen_fragments = BTreeSet::new();
     let mut offset = 0;
     let mut records = 0;
     for (index, raw) in after_log.split('\n').enumerate() {
@@ -131,6 +163,34 @@ pub fn check_memory_archive_log(
             continue;
         }
         match fields[0] {
+            "VOKTTY-FRAGMENT-1" if fragments.is_some() && fields.len() == 8 => {
+                let Some(source_line) = size(fields[4]).flatten().filter(|line| *line > 0) else {
+                    report.invalid_lines.push(index + 1);
+                    continue;
+                };
+                let bytes = size(fields[6]).flatten();
+                if fields[3].len() > 4096
+                    || fields[5].len() > 4096
+                    || bytes.is_none()
+                    || fields[7].len() != 64
+                    || !fields[7]
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                {
+                    report.invalid_lines.push(index + 1);
+                    continue;
+                }
+                let key = format!("{}#L{}", fields[3], source_line);
+                if !seen_fragments.insert(key.clone()) {
+                    report.duplicate_lines.push(index + 1);
+                } else if !expected_fragments.get(&key).is_some_and(|fragment| {
+                    fragment.target == fields[5]
+                        && Some(fragment.bytes) == bytes
+                        && fragment.sha256 == fields[7]
+                }) {
+                    report.unmatched_lines.push(index + 1);
+                }
+            }
             "VOKTTY-MOVE-1" if fields.len() == 7 => {
                 let bytes = size(fields[5]).flatten();
                 if fields[3].len() > 4096
@@ -175,6 +235,7 @@ pub fn check_memory_archive_log(
     if !report.complete {
         seen_moves.clear();
         seen_sizes.clear();
+        seen_fragments.clear();
     }
     report.logged_moves = moves
         .keys()
@@ -193,5 +254,51 @@ pub fn check_memory_archive_log(
             .map(|s| (*s).into())
             .collect();
     }
-    Ok(report)
+    let logged_fragments = expected_fragments
+        .keys()
+        .filter(|key| seen_fragments.contains(*key))
+        .cloned()
+        .collect();
+    let missing_fragments = expected_fragments
+        .keys()
+        .filter(|key| !seen_fragments.contains(*key))
+        .cloned()
+        .collect();
+    Ok((report, logged_fragments, missing_fragments))
+}
+
+/// Recomputes fragment and LOG evidence from actual source inventories, without granting authority.
+pub fn check_memory_archive_log_with_sources(
+    before: &MemoryPreservationSnapshot,
+    after: &MemoryPreservationSnapshot,
+    previous_sources: &BTreeMap<String, PathFact>,
+    current_sources: &BTreeMap<String, PathFact>,
+    now_ms: u64,
+    after_days: u64,
+) -> KitResult<MemoryArchiveFragmentLogReport> {
+    let fragments = check_memory_archive_fragments(
+        before,
+        after,
+        previous_sources,
+        current_sources,
+        now_ms,
+        after_days,
+    )?;
+    let bound_before = snapshot_memory_preservation(previous_sources, true)?;
+    let bound_after = snapshot_memory_preservation(current_sources, true)?;
+    let before_log = source_log(previous_sources)?;
+    let after_log = source_log(current_sources)?;
+    let (log, logged_fragments, missing_fragments) = check_log(
+        &bound_before,
+        &bound_after,
+        before_log,
+        after_log,
+        Some(&fragments.fragments),
+    )?;
+    Ok(MemoryArchiveFragmentLogReport {
+        log,
+        fragments,
+        logged_fragments,
+        missing_fragments,
+    })
 }

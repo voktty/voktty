@@ -1,0 +1,1210 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "UTF8 source and fragment sizes remain factual",
+      "fixture": "Unicode reasons retain UTF8 bytes",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t72\t3c639870303eaad63cebba442c5fbf672b96c310be058baba99bb3e9645855a0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t97\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "exact observed fragment and sizes",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "missing fragment record leaves a missing key",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "fragment alone cannot replace live size records",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "wrong source",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/OTHER.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "wrong source line",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t4\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "zero source line",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t0\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "negative source line",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t-1\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "absent source line",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t-\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "leading zero source line",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t03\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "fractional source line",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3.0\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "source line at ceiling unmatched",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t262144\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "source line above ceiling",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t262145\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "wrong target",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-02/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "wrong size",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t69\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "zero size cannot rescue a real block",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t0\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "negative size",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t-1\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "absent size",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t-\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "size leading zero",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t068\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "size at ceiling unmatched",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t262144\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "size above ceiling",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t262145\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "wrong hash",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t0000000000000000000000000000000000000000000000000000000000000000\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "uppercase hash",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60B78B60104598FB6AA1CD6F711C5CB34D0B647A02C97D6C7ABEF891EEC9F621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "short hash",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f62\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "invalid date",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-02-30\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "invalid agent",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\t_agent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "unknown record version",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-2\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "encoded path alias",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans%2FTRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "quoted path is not decoded",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\t\"plans/TRACKING.md\"\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "oversized source path",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "duplicate fragment retires all log credit",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [2],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "indented protocol row is invalid",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": " VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "extra field is invalid",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\textra\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "missing field is invalid",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [1],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "valid literal row inside fence still counts",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "```text\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\n```\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "CRLF protocol remains exact",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\r\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "historical matching row cannot credit new movement",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\n",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "completing historical last line cannot credit it",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "a new row after historical copy qualifies",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\n",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "invalid row after historical line uses physical index",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "History\n",
+      "afterLog": "History\nVOKTTY-unknown\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [2],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    },
+    {
+      "name": "rewritten LOG prefix fails",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "History\n",
+      "afterLog": "Edited\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "error": "KIT_ARCHIVE_LOG_NOT_APPEND_ONLY"
+    },
+    {
+      "name": "no LF after old final line fails",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "History",
+      "afterLog": "HistoryVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "error": "KIT_ARCHIVE_LOG_NOT_APPEND_ONLY"
+    },
+    {
+      "name": "explicit boundary after old final line qualifies",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "History",
+      "afterLog": "History\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "record cannot fabricate proof: archived ID without its reason fails",
+      "fixture": "archived ID without its reason fails",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t47\t957aad85fe43e39bdbcd0e49a7b97cecd5302ada98ba3971da15e0a8d7402166\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "record cannot fabricate proof: open item inside closed block cannot archive",
+      "fixture": "open item inside closed block cannot archive",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t72\te0c4fd0a5ec0168c40954d105c8662824f53e06ca38642924c5f8ba29398bd87\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t97\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "record cannot fabricate proof: unknown closure date never credits",
+      "fixture": "unknown closure date never credits",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t47\td76953dbdf79698c5ae9aad81819973b1cf01fd1c7e2693ad56cca1303b1176a\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t72\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "record cannot fabricate proof: future closure never credits",
+      "fixture": "future closure never credits",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t65a5a66f1827af0d7c5afee7dd8796ed02ab6f8d44e54197eaf15f4f6555f9c7\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "record cannot fabricate proof: duplicate source headers are unverified",
+      "fixture": "duplicate source headers are unverified",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t136\t10261705f9c018205eff1dab11e0b94764d114a65d014e52d66cf2e47cffeff9\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t161\t36\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [1],
+          "duplicateLines": [],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "two fragments from one source are independent",
+      "fixture": "multiple units may append in another order",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t53\td09e6cdbffa5aee2d125a78037f4232a7c34e19aca0a3e32b61866fc479ef4fc\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t6\tarchive/2030-01/TRACKING.md\t54\t2c8942bb74eff51d8eb9c98dc429e536894a0969965735cd79ee5b76f8d3039c\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t132\t25\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3", "plans/TRACKING.md#L6"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "one of two fragment rows is still missing",
+      "fixture": "multiple units may append in another order",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t53\td09e6cdbffa5aee2d125a78037f4232a7c34e19aca0a3e32b61866fc479ef4fc\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t132\t25\n",
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": ["plans/TRACKING.md#L6"]
+      }
+    },
+    {
+      "name": "MOVE SIZE and FRAGMENT coexist",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-MOVE-1\t2030-03-01\tagent\tplans/P.md\tarchive/2030-01/P.md\t25\t6c6a74a9be1b9ae09d448f99edfe7d8005b6fb4d2d81af643f0b0ce2c91fd0be\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/P.md\t25\t-\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "extraBefore": {
+        "plans/P.md": "State: closed 2030-01-01\n"
+      },
+      "extraAfter": {
+        "archive/2030-01/P.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "log": {
+          "loggedMoves": ["plans/P.md"],
+          "missingMoves": [],
+          "missingSizes": [],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [],
+          "complete": true
+        },
+        "loggedFragments": ["plans/TRACKING.md#L3"],
+        "missingFragments": []
+      }
+    },
+    {
+      "name": "bad fragment retires otherwise valid MOVE and SIZE",
+      "fixture": "list block preserves the complete reason",
+      "beforeLog": "",
+      "afterLog": "VOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-FRAGMENT-1\t2030-03-01\tagent\tplans/TRACKING.md\t3\tarchive/2030-01/TRACKING.md\t68\t60b78b60104598fb6aa1cd6f711c5cb34d0b647a02c97d6c7abef891eec9f621\nVOKTTY-MOVE-1\t2030-03-01\tagent\tplans/P.md\tarchive/2030-01/P.md\t25\t6c6a74a9be1b9ae09d448f99edfe7d8005b6fb4d2d81af643f0b0ce2c91fd0be\nVOKTTY-SIZE-1\t2030-03-01\tagent\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/P.md\t25\t-\nVOKTTY-SIZE-1\t2030-03-01\tagent\tplans/TRACKING.md\t93\t36\n",
+      "extraBefore": {
+        "plans/P.md": "State: closed 2030-01-01\n"
+      },
+      "extraAfter": {
+        "archive/2030-01/P.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "log": {
+          "loggedMoves": [],
+          "missingMoves": ["plans/P.md"],
+          "missingSizes": [
+            "CONTEXT.md",
+            "PROJECT.md",
+            "continuity/CHANGELOG.md",
+            "plans/INDEX.md",
+            "plans/P.md",
+            "plans/TRACKING.md"
+          ],
+          "invalidLines": [],
+          "unmatchedLines": [],
+          "duplicateLines": [2],
+          "complete": false
+        },
+        "loggedFragments": [],
+        "missingFragments": ["plans/TRACKING.md#L3"]
+      }
+    }
+  ]
+}

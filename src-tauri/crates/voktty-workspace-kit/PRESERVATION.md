@@ -311,3 +311,49 @@ still checking lost archives, ineligible file removals, live obligations, index
 membership, LOG records, backlinks and native baseline authority. No integrated
 checker, fragment LOG writer, template migration, IPC, persisted schema or
 filesystem mutation is added here. Empty arrays still never approve compaction.
+
+## Source-bound fragment LOG records
+
+`check_memory_archive_log_with_sources` and `checkMemoryArchiveLogWithSources`
+recompute intact fragment evidence from both complete source inventories, bound
+to their supplied snapshots. MOVE eligibility and live-file sizes are also
+rebuilt from raw source facts rather than accepting mutable snapshot metadata
+or a caller's receipt list. These bounded extra hashes add no filesystem reads.
+The TypeScript wrapper captures both inventories and expected hash identities
+before asynchronous loading or hashing; the fragment component stays lazy.
+The legacy LOG API captures its movement, size and hash observations before
+asynchronous hashing as well.
+
+This source-aware entry point additionally accepts one raw eight-field layout
+in newly appended `archive/LOG.md` bytes (`TAB` is a literal tab):
+
+- `VOKTTY-FRAGMENT-1 TAB date TAB agent TAB source TAB line TAB target TAB bytes TAB sha256`
+
+`line` is the one-based original physical source line, a canonical ASCII decimal
+integer from 1 through 262144 without leading zeroes or an absence marker.
+`source` and `line` identify one recomputed fragment. Source and target paths,
+byte size and lowercase SHA-256 must match that fragment exactly. No URI,
+quote, JSON or escape decoding is performed. The existing date/agent syntax,
+4096-byte path, 256 KiB size, 16 KiB record, 256 KiB LOG and 1024-new-record
+limits remain in force. Dates and names do not authenticate timing or authorship.
+The original API and report shape remain unchanged and reject new fragment
+records instead of pretending to verify them without source bytes.
+
+MOVE, SIZE and FRAGMENT share one parser, append-only boundary and record budget.
+Historical records, including a final line completed by a newly added newline,
+cannot credit a new fragment. Duplicate fragment keys use `<source>#L<line>`;
+another line in the same source is independent. Any invalid, unmatched or
+duplicate record withdraws all MOVE, SIZE and FRAGMENT logging credit, even
+credit preceding the bad record. A correctly formatted record cannot fabricate
+an intact fragment from a shortened reason, an open unit or an unqualified source.
+
+The new report contains the existing `log` report, the full independent
+`fragments` byte-preservation report, and `loggedFragments`/`missingFragments`
+keys. Fragment byte evidence remains independent of whether it was logged.
+`log.complete` describes record qualification only; consumers must inspect both
+complete reports and all missing-record arrays. An empty missing-fragment array
+does not rescue failed byte evidence. Missing live-file SIZE records still
+matter even when every fragment record matched. No overall approval flag, LOG
+writer, template migration, persisted baseline, IPC or CLI check is introduced.
+Backlinks, native inventory/clock/config authority, root-bound baseline origin
+and full composition remain required before accepting compaction.
