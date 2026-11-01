@@ -1,0 +1,1070 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "unchanged actual inventories",
+      "before": {},
+      "after": {},
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "protected rewrite is not a compaction edit",
+      "before": {},
+      "after": {},
+      "protectedBefore": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "old"
+        }
+      },
+      "protectedAfter": {
+        "AGENTS.md": {
+          "kind": "file",
+          "text": "new"
+        }
+      },
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["PROTECTED_CHANGED_FILES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "protected role addition",
+      "before": {},
+      "after": {},
+      "protectedBefore": {},
+      "protectedAfter": {
+        ".voktty/team/roles/new.md": {
+          "kind": "file",
+          "text": "new"
+        }
+      },
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["PROTECTED_ADDED_FILES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "protected configuration removal",
+      "before": {},
+      "after": {},
+      "protectedBefore": {
+        ".voktty/kit.json": {
+          "kind": "file",
+          "text": "old"
+        }
+      },
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["PROTECTED_REMOVED_FILES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "lost open item despite well formed LOG",
+      "before": {
+        "CONTEXT.md": "[T-1]\n"
+      },
+      "after": {
+        "CONTEXT.md": "",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t6\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "PRESERVATION_MISSING_ITEMS",
+        "PRESERVATION_MISSING_LIVE_ITEMS"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {
+        "PRESERVATION_MISSING_LIVE_ITEMS": ["T-1"],
+        "PRESERVATION_MISSING_ITEMS": ["T-1"]
+      }
+    },
+    {
+      "name": "an archived open item must still remain live",
+      "before": {
+        "CONTEXT.md": "[T-1]\n"
+      },
+      "after": {
+        "archive/2026-01/item.md": "[T-1]\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t6\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_UNATTRIBUTED_ARCHIVES",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES",
+        "PRESERVATION_MISSING_LIVE_ITEMS"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "removed open plan remains an obligation",
+      "before": {
+        "plans/work.md": "State: open\n[T-2]\n"
+      },
+      "after": {
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/work.md\t18\t-\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_INELIGIBLE_REMOVALS",
+        "PRESERVATION_MISSING_ITEMS",
+        "PRESERVATION_MISSING_LIVE_ITEMS",
+        "PRESERVATION_MISSING_LIVE_PLANS"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "index membership checked even without changes",
+      "before": {
+        "plans/work.md": "State: open\n"
+      },
+      "after": {
+        "plans/work.md": "State: open\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["INDEX_MISSING_PLANS"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "dangling plan index link",
+      "before": {
+        "plans/INDEX.md": "[Missing](gone.md)\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Missing](gone.md)\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["INDEX_UNAVAILABLE_PLAN_LINKS"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "unqualified index never silently succeeds",
+      "before": {
+        "plans/INDEX.md": "[Topic][ref]\n[ref]: topic.md"
+      },
+      "after": {
+        "plans/INDEX.md": "[Topic][ref]\n[ref]: topic.md"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["INDEX_INCOMPLETE", "INDEX_UNVERIFIED_LINES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "missing intact closed plan bytes",
+      "before": {
+        "plans/work.md": "State: closed 2026-01-01\n"
+      },
+      "after": {
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/work.md\t25\t-\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_MISSING_MOVED_FILES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "ambiguous whole file targets",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2026-01/2026-01-01-0000-solo.md": "history\n",
+        "archive/2026-02/2026-01-01-0000-solo.md": "history\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_AMBIGUOUS_FILES",
+        "ARCHIVE_UNATTRIBUTED_ARCHIVES",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "retained handoff cannot be rewritten",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "original\n"
+      },
+      "after": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "rewritten\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_CHANGED_HANDOFFS"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "previous archive cannot disappear",
+      "before": {
+        "archive/2026-01/old.md": "old\n"
+      },
+      "after": {
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_MISSING_ARCHIVES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "previous archive prefix cannot be rewritten",
+      "before": {
+        "archive/2026-01/old.md": "old\n"
+      },
+      "after": {
+        "archive/2026-01/old.md": "new\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_CHANGED_ARCHIVES",
+        "FRAGMENT_REWRITTEN_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "unattributed append to previous archive",
+      "before": {
+        "archive/2026-01/old.md": "old\n"
+      },
+      "after": {
+        "archive/2026-01/old.md": "old\nextra\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_CHANGED_ARCHIVES",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "empty new archive is not evidence",
+      "before": {},
+      "after": {
+        "archive/2026-01/empty.md": "",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_UNATTRIBUTED_ARCHIVES",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "qualified handoff whole move",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2026-01/2026-01-01-0000-solo.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2026-01/2026-01-01-0000-solo.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/2026-01-01-0000-solo.md\tarchive/2026-01/2026-01-01-0000-solo.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t54\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2026-01-01-0000-solo.md",
+            "target": "archive/2026-01/2026-01-01-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "qualified closed plan whole move",
+      "before": {
+        "plans/work.md": "# Plan\nState: closed 2026-01-01\n"
+      },
+      "after": {
+        "archive/2026-01/work.md": "# Plan\nState: closed 2026-01-01\n",
+        "plans/INDEX.md": "[Archive](../archive/2026-01/work.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tplans/work.md\tarchive/2026-01/work.md\t32\tba5e5db82991b55d8b534d2aa4b9f5c0d4d5f1337fc48fd24dc798250ef8f60b\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t38\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/work.md\t32\t-\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "plans/work.md",
+            "target": "archive/2026-01/work.md",
+            "bytes": 32,
+            "sha256": "ba5e5db82991b55d8b534d2aa4b9f5c0d4d5f1337fc48fd24dc798250ef8f60b"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "wrong month stays a blocker",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2026-02/2026-01-01-0000-solo.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2026-02/2026-01-01-0000-solo.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/2026-01-01-0000-solo.md\tarchive/2026-02/2026-01-01-0000-solo.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t54\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_WRONG_MONTHS"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2026-01-01-0000-solo.md",
+            "target": "archive/2026-02/2026-01-01-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "future move stays a blocker",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2030-01/2030-01-01-0000-solo.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/2030-01-01-0000-solo.md\tarchive/2030-01/2030-01-01-0000-solo.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t54\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_FUTURE_DATES"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2030-01-01-0000-solo.md",
+            "target": "archive/2030-01/2030-01-01-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "recent move stays a blocker",
+      "before": {
+        "continuity/handoffs/2026-10-15-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2026-10/2026-10-15-0000-solo.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2026-10/2026-10-15-0000-solo.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/2026-10-15-0000-solo.md\tarchive/2026-10/2026-10-15-0000-solo.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t54\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_TOO_RECENT"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2026-10-15-0000-solo.md",
+            "target": "archive/2026-10/2026-10-15-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "unknown handoff date stays a blocker",
+      "before": {
+        "continuity/handoffs/legacy.md": "history\n"
+      },
+      "after": {
+        "archive/2026-01/legacy.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2026-01/legacy.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/legacy.md\tarchive/2026-01/legacy.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t40\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_UNKNOWN_DATES"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/legacy.md",
+            "target": "archive/2026-01/legacy.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "unknown plan closure date stays a blocker",
+      "before": {
+        "plans/work.md": "State: closed\n"
+      },
+      "after": {
+        "archive/2026-01/work.md": "State: closed\n",
+        "plans/INDEX.md": "[Archive](../archive/2026-01/work.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tplans/work.md\tarchive/2026-01/work.md\t14\t9fbf0721243acc3a0f895aebe3b94dfe73ff916dc107de36a7baeaa20ca06667\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t38\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/work.md\t14\t-\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["ARCHIVE_UNKNOWN_DATES"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "plans/work.md",
+            "target": "archive/2026-01/work.md",
+            "bytes": 14,
+            "sha256": "9fbf0721243acc3a0f895aebe3b94dfe73ff916dc107de36a7baeaa20ca06667"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "whole move requires LOG record",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2026-01/2026-01-01-0000-solo.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2026-01/2026-01-01-0000-solo.md)\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t54\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["LOG_MISSING_MOVES"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2026-01-01-0000-solo.md",
+            "target": "archive/2026-01/2026-01-01-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "whole move requires owner backlink",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "history\n"
+      },
+      "after": {
+        "archive/2026-01/2026-01-01-0000-solo.md": "history\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/2026-01-01-0000-solo.md\tarchive/2026-01/2026-01-01-0000-solo.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["LINKS_MISSING_MOVES"],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2026-01-01-0000-solo.md",
+            "target": "archive/2026-01/2026-01-01-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "qualified new fragment append",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\nArchived: [D-7](../archive/2026-01/TRACKING.md)\n",
+        "archive/2026-01/TRACKING.md": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tplans/TRACKING.md\t2\tarchive/2026-01/TRACKING.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t57\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [],
+      "expectedAppends": ["archive/2026-01/TRACKING.md"],
+      "raw": {
+        "files.unattributedArchives": ["archive/2026-01/TRACKING.md"],
+        "log.fragments.fragments": [
+          {
+            "source": "plans/TRACKING.md",
+            "line": 2,
+            "target": "archive/2026-01/TRACKING.md",
+            "bytes": 64,
+            "sha256": "282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430"
+          }
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "qualified existing archive append",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/2026-01/TRACKING.md": "old\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\nArchived: [D-7](../archive/2026-01/TRACKING.md)\n",
+        "archive/2026-01/TRACKING.md": "old\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tplans/TRACKING.md\t2\tarchive/2026-01/TRACKING.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t57\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [],
+      "expectedAppends": ["archive/2026-01/TRACKING.md"],
+      "raw": {
+        "files.changedArchives": ["archive/2026-01/TRACKING.md"]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "valid append cannot rescue another rewritten archive",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/2026-01/TRACKING.md": "old\n",
+        "archive/2026-01/unrelated.md": "old\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\nArchived: [D-7](../archive/2026-01/TRACKING.md)\n",
+        "archive/2026-01/TRACKING.md": "old\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/2026-01/unrelated.md": "bad\n",
+        "archive/LOG.md": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tplans/TRACKING.md\t2\tarchive/2026-01/TRACKING.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t57\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_CHANGED_ARCHIVES",
+        "FRAGMENT_REWRITTEN_ARCHIVES"
+      ],
+      "expectedAppends": ["archive/2026-01/TRACKING.md"],
+      "raw": {
+        "files.changedArchives": [
+          "archive/2026-01/TRACKING.md",
+          "archive/2026-01/unrelated.md"
+        ]
+      },
+      "subjects": {
+        "ARCHIVE_CHANGED_ARCHIVES": ["archive/2026-01/unrelated.md"],
+        "FRAGMENT_REWRITTEN_ARCHIVES": ["archive/2026-01/unrelated.md"]
+      }
+    },
+    {
+      "name": "fragment requires LOG record",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\nArchived: [D-7](../archive/2026-01/TRACKING.md)\n",
+        "archive/2026-01/TRACKING.md": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t57\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["LOG_MISSING_FRAGMENTS"],
+      "expectedAppends": ["archive/2026-01/TRACKING.md"],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "fragment requires its owner backlink",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\n",
+        "archive/2026-01/TRACKING.md": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tplans/TRACKING.md\t2\tarchive/2026-01/TRACKING.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t9\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["LINKS_MISSING_FRAGMENTS"],
+      "expectedAppends": ["archive/2026-01/TRACKING.md"],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "unqualified backlink owner withdraws evidence",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\n<a href=\"../archive/2026-01/TRACKING.md\">Archive</a>\n",
+        "archive/2026-01/TRACKING.md": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tplans/TRACKING.md\t2\tarchive/2026-01/TRACKING.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t62\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "LINKS_MISSING_FRAGMENTS",
+        "LINKS_UNVERIFIED_DOCUMENTS"
+      ],
+      "expectedAppends": ["archive/2026-01/TRACKING.md"],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "shortened reason cannot qualify fragment",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\nArchived: [D-7](../archive/2026-01/TRACKING.md)\n",
+        "archive/2026-01/TRACKING.md": "- [D-7 done] decision · closed 2026-01-01\nThe short reason.\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t57\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_UNATTRIBUTED_ARCHIVES",
+        "FRAGMENT_MISSING",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "unknown fragment cannot lose its reason",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[D-7 done]\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t52\t11\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["FRAGMENT_UNKNOWN_DATES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "future fragment cannot lose its reason",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2030-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[D-7 done]\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t11\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["FRAGMENT_FUTURE_DATES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "recent fragment cannot lose its reason",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-10-15\nThe complete reason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[D-7 done]\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t11\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["FRAGMENT_TOO_RECENT"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "open nested obligation prevents fragment archival",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n[T-8]\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[D-7 done]\n[T-8]\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t79\t17\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["FRAGMENT_OPEN"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "unqualified changed closed source is not cleared",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n[link](other.md)\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[D-7 done]\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t90\t11\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["FRAGMENT_UNVERIFIED_SOURCES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "a removed fragment owner remains missing",
+      "before": {
+        "domains/only.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "archive/2026-01/only.md": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-FRAGMENT-1\t2026-11-01\tsolo\tdomains/only.md\t2\tarchive/2026-01/only.md\t64\t282482c934db0f97b482d6a1819f30aebea7cec7d518e9316056651f34de5430\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tdomains/only.md\t73\t-\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_INELIGIBLE_REMOVALS",
+        "LINKS_MISSING_DOCUMENTS",
+        "LINKS_MISSING_FRAGMENTS"
+      ],
+      "expectedAppends": ["archive/2026-01/only.md"],
+      "raw": {},
+      "subjects": {
+        "ARCHIVE_INELIGIBLE_REMOVALS": ["domains/only.md"],
+        "LINKS_MISSING_DOCUMENTS": ["domains/only.md"],
+        "LINKS_MISSING_FRAGMENTS": ["domains/only.md#L2"]
+      }
+    },
+    {
+      "name": "size records are mandatory after live rewriting",
+      "before": {
+        "CONTEXT.md": "old"
+      },
+      "after": {
+        "CONTEXT.md": "new"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": ["LOG_MISSING_SIZES"],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "invalid LOG withdraws all positive records",
+      "before": {},
+      "after": {
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-bad\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "LOG_INCOMPLETE",
+        "LOG_INVALID_LINES",
+        "LOG_MISSING_SIZES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "unmatched LOG withdraws all positive records",
+      "before": {},
+      "after": {
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tdomains/absent.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "LOG_INCOMPLETE",
+        "LOG_MISSING_SIZES",
+        "LOG_UNMATCHED_LINES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "duplicate LOG withdraws all positive records",
+      "before": {},
+      "after": {
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "LOG_DUPLICATE_LINES",
+        "LOG_INCOMPLETE",
+        "LOG_MISSING_SIZES"
+      ],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {}
+    },
+    {
+      "name": "rewritten historical LOG fails without partial report",
+      "before": {
+        "archive/LOG.md": "old\n"
+      },
+      "after": {
+        "archive/LOG.md": "changed\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {},
+      "error": "KIT_ARCHIVE_LOG_NOT_APPEND_ONLY"
+    },
+    {
+      "name": "invalid time settings fail without a report",
+      "before": {},
+      "after": {},
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 0,
+      "expectedCodes": [],
+      "expectedAppends": [],
+      "raw": {},
+      "subjects": {},
+      "error": "KIT_ARCHIVE_TIME_INVALID"
+    },
+    {
+      "name": "ambiguous same-basename fragments cannot share one receipt",
+      "before": {
+        "domains/a.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "external/a.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n"
+      },
+      "after": {
+        "domains/a.md": "[D-7 done]\n",
+        "external/a.md": "[D-7 done]\n",
+        "archive/2026-01/a.md": "- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tdomains/a.md\t73\t11\nVOKTTY-SIZE-1\t2026-11-01\tsolo\texternal/a.md\t73\t11\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t0\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_UNATTRIBUTED_ARCHIVES",
+        "FRAGMENT_AMBIGUOUS",
+        "FRAGMENT_MISSING",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {
+        "log.fragments.ambiguousFragments": [
+          "domains/a.md#L2",
+          "external/a.md#L2"
+        ]
+      },
+      "subjects": {}
+    },
+    {
+      "name": "intact prefix cannot credit an unqualified suffix in the same append",
+      "before": {
+        "plans/TRACKING.md": "# Source\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\n",
+        "archive/2026-01/TRACKING.md": "old\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "# Source\nArchived: [D-7](../archive/2026-01/TRACKING.md)\n",
+        "archive/2026-01/TRACKING.md": "old\n- [D-7 done] decision · closed 2026-01-01\nThe complete reason.\nunattributed tail\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t73\t57\n"
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "ARCHIVE_CHANGED_ARCHIVES",
+        "FRAGMENT_MISSING",
+        "FRAGMENT_UNATTRIBUTED_ARCHIVES"
+      ],
+      "expectedAppends": [],
+      "raw": {
+        "files.changedArchives": ["archive/2026-01/TRACKING.md"],
+        "log.fragments.fragments": [],
+        "links.linkedFragments": []
+      },
+      "subjects": {
+        "ARCHIVE_CHANGED_ARCHIVES": ["archive/2026-01/TRACKING.md"]
+      }
+    },
+    {
+      "name": "valid whole move cannot rescue a lost open obligation",
+      "before": {
+        "continuity/handoffs/2026-01-01-0000-solo.md": "history\n",
+        "CONTEXT.md": "[T-1]\n"
+      },
+      "after": {
+        "archive/2026-01/2026-01-01-0000-solo.md": "history\n",
+        "plans/TRACKING.md": "[Archive](../archive/2026-01/2026-01-01-0000-solo.md)\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2026-11-01\tsolo\tcontinuity/handoffs/2026-01-01-0000-solo.md\tarchive/2026-01/2026-01-01-0000-solo.md\t8\t834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tCONTEXT.md\t6\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2026-11-01\tsolo\tplans/TRACKING.md\t0\t54\n",
+        "CONTEXT.md": ""
+      },
+      "protectedBefore": {},
+      "protectedAfter": {},
+      "nowMs": 1793491200000,
+      "afterDays": 30,
+      "expectedCodes": [
+        "PRESERVATION_MISSING_ITEMS",
+        "PRESERVATION_MISSING_LIVE_ITEMS"
+      ],
+      "expectedAppends": [],
+      "raw": {
+        "files.moves": [
+          {
+            "source": "continuity/handoffs/2026-01-01-0000-solo.md",
+            "target": "archive/2026-01/2026-01-01-0000-solo.md",
+            "bytes": 8,
+            "sha256": "834e1cc36168f216747fbf3b8de6cc700e64700276b25a3563233b2df000fdfb"
+          }
+        ]
+      },
+      "subjects": {
+        "PRESERVATION_MISSING_LIVE_ITEMS": ["T-1"],
+        "PRESERVATION_MISSING_ITEMS": ["T-1"]
+      }
+    }
+  ]
+}

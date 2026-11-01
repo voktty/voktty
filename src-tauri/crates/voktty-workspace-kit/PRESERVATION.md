@@ -65,6 +65,10 @@ Empty diagnostic lists must never authorize compaction, archival or restoration.
 Those remaining checks and native ownership must be composed before exposing
 `memory check` or accepting an automatic compaction result.
 
+The source-bound composition of these individual reports is documented in
+[CHECK.md](CHECK.md). Its diagnostic output remains separate from native baseline
+origin, writer coordination and permission to accept compaction.
+
 ## Qualified plan-index links
 
 `check_memory_plan_index` and `checkMemoryPlanIndex` compare the supplied index

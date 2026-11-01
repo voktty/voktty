@@ -3,6 +3,10 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "check.rs"]
+mod check;
+pub use check::{check_memory_preservation, MemoryCheckIssue, MemoryCheckReport};
+
 #[path = "memory_links.rs"]
 mod memory_links;
 

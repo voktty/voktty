@@ -18,6 +18,15 @@ pub struct MemoryProtectedSnapshot {
     files: Vec<MemoryProtectedFile>,
 }
 
+impl MemoryProtectedSnapshot {
+    pub(crate) fn size(&self) -> (usize, usize) {
+        (
+            self.files.len(),
+            self.files.iter().filter_map(|f| f.bytes).sum(),
+        )
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryProtectedComparison {

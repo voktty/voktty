@@ -7,6 +7,9 @@ use voktty_workspace_kit::{
     snapshot_memory_protected, MemoryPreservationSnapshot, MemoryProtectedSnapshot,
 };
 
+#[path = "check.rs"]
+mod check;
+
 /// Native observation only. It cannot be reconstructed from repository or IPC data.
 pub struct NativeMemoryPreservation {
     identity: Value,
@@ -210,6 +213,14 @@ impl LocalMemoryWorkspace<'_> {
         control: &ReadControl,
     ) -> Result<(), ReadError> {
         let _permit = ReadPermit::acquire(control)?;
+        self.check_binding(baseline, control)
+    }
+
+    fn check_binding(
+        &self,
+        baseline: &NativeMemoryPreservation,
+        control: &ReadControl,
+    ) -> Result<(), ReadError> {
         self.checked_root(control)?;
         if self.identity != baseline.identity
             || self.root_instance.as_ref() != Some(&baseline.instance)
@@ -247,6 +258,15 @@ impl LocalMemoryWorkspace<'_> {
     ) -> Result<NativeMemoryPreservation, ReadError> {
         let phase = control.read_control()?;
         let _permit = ReadPermit::acquire(&phase)?;
+        self.capture_preservation_inner(control, shared)
+    }
+
+    fn capture_preservation_inner(
+        &self,
+        control: &crate::DiscoveryControl,
+        shared: bool,
+    ) -> Result<NativeMemoryPreservation, ReadError> {
+        let phase = control.read_control()?;
         let instance = self.root_instance.clone().ok_or(ReadError::Unsupported)?;
         let root = PinnedDirectory::new(self.root.clone(), self.checked_root(&phase)?)?;
         let local = self.store.load().map_err(ReadError::Store)?;

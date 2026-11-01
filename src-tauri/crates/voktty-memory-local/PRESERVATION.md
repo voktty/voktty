@@ -120,3 +120,36 @@ or complete compaction verdict. No current UI, worker or CLI is wired to the new
 method. A future composer must require this shared observation explicitly, check
 both original bindings and every protected and factual diagnostic, and coordinate
 writers before accepting compaction.
+
+## Native composed checking
+
+`LocalMemoryWorkspace::check_preservation` accepts only a native baseline with
+the protected shared observation present. Factual-only baselines reject before
+new document reads. The baseline must match the caller's installation, filesystem,
+canonical project root and native root instance under current native authority.
+The method captures a fresh shared current observation itself; callers cannot
+substitute an old or fabricated after-snapshot.
+
+The archive threshold comes from that current native configuration, and Unix
+milliseconds come from `SystemTime`, not repository metadata or caller-provided
+dates. Protected configuration changes remain issues even when the new threshold
+is syntactically valid. The shared pure composer rebuilds factual evidence and
+retains every component result and negative diagnostic. Its contract is in
+[CHECK.md](../voktty-workspace-kit/CHECK.md).
+
+Archive-age integers follow JSON Schema numeric meaning: `30`, `30.0` and `3e1`
+all represent the same allowed threshold. Conversion requires a finite integral
+value within 1 through 36500; capture never rewrites its original JSON spelling.
+
+One original reader permit covers root validation, current capture, composition
+and final root/installation/authority revalidation. Private capture and binding
+helpers reuse that permit instead of consuming nested reader slots. Original
+discovery cancellation and deadlines apply through settlement; failure returns
+no partial report. Native bodies, source limits, sensitive-path controls and
+the existing platform reader restrictions remain unchanged.
+
+The method does not write, persist a baseline, obtain an exclusive compaction
+lock, create trust or deliver instructions. Its report is a bounded observation,
+not an atomic filesystem transaction or reusable authorization. Another writer
+can still change files after observation. No IPC, CLI, worker or automatic
+compaction flow is connected to this API yet.

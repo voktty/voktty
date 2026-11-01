@@ -59,10 +59,11 @@ pub use policy::{evaluate_memory_use, MemoryUseDecision};
 pub use preservation::{
     check_memory_archive_fragments, check_memory_archive_links, check_memory_archive_log,
     check_memory_archive_log_with_sources, check_memory_archive_time,
-    check_memory_archive_time_with_sources, check_memory_plan_index, compare_memory_archive_files,
-    compare_memory_preservation, snapshot_memory_preservation, MemoryArchiveFileReport,
-    MemoryArchiveFragment, MemoryArchiveFragmentLogReport, MemoryArchiveFragmentReport,
-    MemoryArchiveLinkReport, MemoryArchiveLogReport, MemoryArchiveMove, MemoryArchiveTimeReport,
+    check_memory_archive_time_with_sources, check_memory_plan_index, check_memory_preservation,
+    compare_memory_archive_files, compare_memory_preservation, snapshot_memory_preservation,
+    MemoryArchiveFileReport, MemoryArchiveFragment, MemoryArchiveFragmentLogReport,
+    MemoryArchiveFragmentReport, MemoryArchiveLinkReport, MemoryArchiveLogReport,
+    MemoryArchiveMove, MemoryArchiveTimeReport, MemoryCheckIssue, MemoryCheckReport,
     MemoryPlanIndexReport, MemoryPreservationComparison, MemoryPreservationFile,
     MemoryPreservationSnapshot,
 };

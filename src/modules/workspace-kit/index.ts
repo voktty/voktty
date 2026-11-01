@@ -1,4 +1,9 @@
 export { loadKitTemplate } from "@/modules/workspace-kit/lib/resources";
+export { checkMemoryPreservation } from "@/modules/workspace-kit/lib/check";
+export type {
+  MemoryCheckIssue,
+  MemoryCheckReport,
+} from "@/modules/workspace-kit/lib/check";
 export {
   memoryProtectedPaths,
   isMemoryProtectedPath,
