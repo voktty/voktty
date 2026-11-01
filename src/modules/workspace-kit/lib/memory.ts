@@ -70,6 +70,46 @@ function visibleLine(line: string, comment: { open: boolean }): string {
   return visible;
 }
 
+export function visibleMemoryLines(text: string) {
+  const comment = { open: false };
+  let fence: { marker: string; length: number } | null = null;
+  let finished = false;
+  function* lines(): Generator<readonly [number, string]> {
+    for (const [index, raw] of text.split("\n").entries()) {
+      const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+      if (fence) {
+        const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+        if (
+          closing &&
+          closing[1][0] === fence.marker &&
+          closing[1].length >= fence.length
+        )
+          fence = null;
+        yield [index, ""];
+        continue;
+      }
+      if (!comment.open) {
+        const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/s.exec(line);
+        if (opening && !(opening[1][0] === "`" && opening[2].includes("`"))) {
+          fence = { marker: opening[1][0], length: opening[1].length };
+          yield [index, ""];
+          continue;
+        }
+      }
+      yield [index, visibleLine(line, comment)];
+    }
+    finished = true;
+  }
+  return {
+    lines: lines(),
+    warnings: () => [
+      ...(!finished ? ["incomplete-scan"] : []),
+      ...(fence ? ["unclosed-fence"] : []),
+      ...(comment.open ? ["unclosed-comment"] : []),
+    ],
+  };
+}
+
 export function inspectMemoryText(
   text: string,
   upNextHeading = "Up next",
@@ -107,32 +147,12 @@ function inspectText(
   }[] = [];
   const states = new Set<string>();
   const warnings: string[] = [];
-  const comment = { open: false };
-  let fence: { marker: string; length: number } | null = null;
+  const visibleLines = visibleMemoryLines(text);
   let header = true;
   let sections = 0;
   let inNext = false;
   const bullets: number[] = [];
-  for (const [index, raw] of text.split("\n").entries()) {
-    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    if (fence) {
-      const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
-      if (
-        closing &&
-        closing[1][0] === fence.marker &&
-        closing[1].length >= fence.length
-      )
-        fence = null;
-      continue;
-    }
-    if (!comment.open) {
-      const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/s.exec(line);
-      if (opening && !(opening[1][0] === "`" && opening[2].includes("`"))) {
-        fence = { marker: opening[1][0], length: opening[1].length };
-        continue;
-      }
-    }
-    const visible = visibleLine(line, comment);
+  for (const [index, visible] of visibleLines.lines) {
     for (const match of visible.matchAll(/\[([TDQ]-[1-9][0-9]*)( done)?\]/g)) {
       ids.push({
         id: match[1],
@@ -182,8 +202,7 @@ function inspectText(
       if (bullet) bullets.push(bullet[1].length);
     }
   }
-  if (fence) warnings.push("unclosed-fence");
-  if (comment.open) warnings.push("unclosed-comment");
+  warnings.push(...visibleLines.warnings());
   if (sections > 1) warnings.push("duplicate-up-next");
   if (states.size > 1) warnings.push("conflicting-plan-state");
   const indentation = bullets.reduce(

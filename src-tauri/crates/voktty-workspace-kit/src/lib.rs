@@ -56,8 +56,9 @@ pub use memory::{
 };
 pub use policy::{evaluate_memory_use, MemoryUseDecision};
 pub use preservation::{
-    compare_memory_preservation, snapshot_memory_preservation, MemoryPreservationComparison,
-    MemoryPreservationFile, MemoryPreservationSnapshot,
+    check_memory_plan_index, compare_memory_preservation, snapshot_memory_preservation,
+    MemoryPlanIndexReport, MemoryPreservationComparison, MemoryPreservationFile,
+    MemoryPreservationSnapshot,
 };
 pub use scope::{resolve_memory_scope, MemoryScope};
 pub use template::{render_template, FileKind, RenderedFile};

@@ -20,6 +20,8 @@ export type {
 } from "@/modules/workspace-kit/lib/context";
 export { memoryProjectKey } from "@/modules/workspace-kit/lib/identity";
 export { handoffCreatedAtMs } from "@/modules/workspace-kit/lib/handoff";
+export { checkMemoryPlanIndex } from "@/modules/workspace-kit/lib/planIndex";
+export type { MemoryPlanIndexReport } from "@/modules/workspace-kit/lib/planIndex";
 export {
   snapshotMemoryPreservation,
   compareMemoryPreservation,

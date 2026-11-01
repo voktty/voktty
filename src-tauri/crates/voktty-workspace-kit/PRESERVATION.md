@@ -48,3 +48,40 @@ movement records, authentic baseline origin or native inventory completeness.
 Empty diagnostic lists must never authorize compaction, archival or restoration.
 Those remaining checks and native ownership must be composed before exposing
 `memory check` or accepting an automatic compaction result.
+
+## Qualified plan-index links
+
+`check_memory_plan_index` and `checkMemoryPlanIndex` compare the supplied index
+bytes with the snapshot's `plans/INDEX.md` hash before examining links. They
+report linked plans, nonclosed plans missing from the qualified link channel,
+local plan links absent from the complete snapshot, and one-based unverified
+line numbers. `complete` describes syntax qualification; missing or unavailable
+plans can still be reported when it is true. A consumer must inspect all these
+fields. This component alone never approves compaction.
+Any unverified syntax retires all positive link evidence in that report, including
+links encountered before an unsupported container or markup fragment.
+
+The qualified channel is inline Markdown links with a local relative destination,
+optional fragment and simple unescaped quoted title. Angle destinations support
+spaces, balanced parentheses are bounded to depth 16, and UTF-8 percent encoding
+is decoded strictly. Plain relative `.`/`..` segments resolve from `plans/` without
+escaping the kit. Encoded traversal or separators, namespaces, absolute paths,
+queries, controls and ambiguous raw URI characters remain unverified. Paths and
+membership preserve scalar ordering and case; native filesystem aliases require
+their own qualification. HTTP(S) links and self fragments never establish plan
+membership or cause network access. Images and links to static guide/index files
+do not count as plan entries.
+
+The shared streaming visibility lexer excludes fenced/inline code and comments
+without retaining all visible lines. Ambiguous reference, nested-label, HTML,
+multiline and indented syntax cannot create a complete qualified report.
+Quoted or nested container forms can also remain unqualified. The
+[CommonMark container and tab rules](https://spec.commonmark.org/0.31.2/)
+motivate these conservative qualification boundaries. Additional valid
+Markdown forms therefore require explicit qualification; the
+component does not claim to implement all CommonMark or rendering extensions.
+Limits are 256 KiB of index text, 1,024 link tokens or unverified lines, and
+4,096 UTF-8 bytes per destination body. Reaching a limit fails explicitly.
+
+Unchanged archive bytes, movement LOG records, baseline authenticity and native
+ownership remain separate required checks before exposing an integrated checker.

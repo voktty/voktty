@@ -73,7 +73,7 @@ function kind(path: string): MemoryPreservationFile["kind"] | null {
   return null;
 }
 
-function scalarCompare(left: string, right: string): number {
+export function scalarCompare(left: string, right: string): number {
   const a = [...left];
   const b = [...right];
   for (let i = 0; i < Math.min(a.length, b.length); i += 1) {

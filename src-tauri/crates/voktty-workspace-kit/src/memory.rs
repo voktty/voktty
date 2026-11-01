@@ -116,6 +116,67 @@ fn visible_line(line: &str, comment: &mut bool) -> String {
     visible
 }
 
+pub(crate) struct VisibleMemoryLines<'a> {
+    lines: std::str::Split<'a, char>,
+    comment: bool,
+    fence: Option<(u8, usize)>,
+    finished: bool,
+}
+
+pub(crate) fn visible_memory_lines(text: &str) -> VisibleMemoryLines<'_> {
+    VisibleMemoryLines {
+        lines: text.split('\n'),
+        comment: false,
+        fence: None,
+        finished: false,
+    }
+}
+
+impl VisibleMemoryLines<'_> {
+    pub(crate) fn warnings(&self) -> Vec<&'static str> {
+        let mut warnings = Vec::new();
+        if !self.finished {
+            warnings.push("incomplete-scan");
+        }
+        if self.fence.is_some() {
+            warnings.push("unclosed-fence");
+        }
+        if self.comment {
+            warnings.push("unclosed-comment");
+        }
+        warnings
+    }
+}
+
+impl Iterator for VisibleMemoryLines<'_> {
+    type Item = String;
+    fn next(&mut self) -> Option<Self::Item> {
+        let Some(raw) = self.lines.next() else {
+            self.finished = true;
+            return None;
+        };
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        let p = patterns();
+        if let Some((marker, length)) = self.fence {
+            if let Some(closing) = p.closing.captures(line) {
+                if closing[1].as_bytes()[0] == marker && closing[1].len() >= length {
+                    self.fence = None;
+                }
+            }
+            return Some(String::new());
+        }
+        if !self.comment {
+            if let Some(opening) = p.fence.captures(line) {
+                if !(opening[1].starts_with('`') && opening[2].contains('`')) {
+                    self.fence = Some((opening[1].as_bytes()[0], opening[1].len()));
+                    return Some(String::new());
+                }
+            }
+        }
+        Some(visible_line(line, &mut self.comment))
+    }
+}
+
 pub fn inspect_memory_text(text: &str, up_next_heading: &str) -> KitResult<MemoryText> {
     inspect_text(text, up_next_heading, None)
 }
@@ -150,32 +211,13 @@ fn inspect_text(
         warnings: Vec::new(),
         complete: true,
     };
-    let mut comment = false;
-    let mut fence: Option<(u8, usize)> = None;
+    let mut visible_lines = visible_memory_lines(text);
     let mut header = true;
     let mut sections = 0;
     let mut in_next = false;
     let mut states = BTreeSet::new();
     let mut bullets = Vec::new();
-    for (index, raw) in text.split('\n').enumerate() {
-        let line = raw.strip_suffix('\r').unwrap_or(raw);
-        if let Some((marker, length)) = fence {
-            if let Some(closing) = p.closing.captures(line) {
-                if closing[1].as_bytes()[0] == marker && closing[1].len() >= length {
-                    fence = None;
-                }
-            }
-            continue;
-        }
-        if !comment {
-            if let Some(opening) = p.fence.captures(line) {
-                if !(opening[1].starts_with('`') && opening[2].contains('`')) {
-                    fence = Some((opening[1].as_bytes()[0], opening[1].len()));
-                    continue;
-                }
-            }
-        }
-        let visible = visible_line(line, &mut comment);
+    for (index, visible) in visible_lines.by_ref().enumerate() {
         for item in p.item.captures_iter(&visible) {
             result.ids.push(ItemOccurrence {
                 id: item[1].into(),
@@ -232,12 +274,7 @@ fn inspect_text(
             }
         }
     }
-    if fence.is_some() {
-        result.warnings.push("unclosed-fence");
-    }
-    if comment {
-        result.warnings.push("unclosed-comment");
-    }
+    result.warnings.extend(visible_lines.warnings());
     if sections > 1 {
         result.warnings.push("duplicate-up-next");
     }

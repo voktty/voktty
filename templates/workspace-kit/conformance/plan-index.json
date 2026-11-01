@@ -1,0 +1,704 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "plain inline",
+      "text": "[Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "table and fragment",
+      "text": "| [Topic](./topic.md#goal) | open |",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "bounded parent resolution",
+      "text": "[Topic](../plans/topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "quoted title",
+      "text": "[Topic](topic.md \"A title\")",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "percent encoded spaces",
+      "text": "[Topic](my%20plan.md)",
+      "plans": {
+        "plans/my plan.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/my plan.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "angle spaces",
+      "text": "[Topic](<my plan.md>)",
+      "plans": {
+        "plans/my plan.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/my plan.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "percent UTF8",
+      "text": "[Topic](caf%C3%A9.md)",
+      "plans": {
+        "plans/café.md": "waiting"
+      },
+      "expected": {
+        "linkedPlans": ["plans/café.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "balanced parentheses",
+      "text": "[Topic](topic(one).md)",
+      "plans": {
+        "plans/topic(one).md": "parked"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic(one).md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "inline code label",
+      "text": "[`Topic`](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "image is not a plan entry",
+      "text": "![Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "escaped image marker leaves a real link",
+      "text": "\\![Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "escaped link is literal",
+      "text": "\\[Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "code and comment links do not qualify",
+      "text": "`[Topic](topic.md)`\n<!-- [Topic](topic.md) -->\n```md\n[Topic](topic.md)\n```",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "references are unqualified",
+      "text": "[Topic][ref]\n[ref]: topic.md",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1, 2],
+        "complete": false
+      }
+    },
+    {
+      "name": "HTML is unqualified",
+      "text": "<a href=\"topic.md\">Topic</a>",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "HTML tabs are unqualified",
+      "text": "<a\thref=\"topic.md\">Topic</a>",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "multiline syntax is unqualified",
+      "text": "[Topic]\n(topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1, 2],
+        "complete": false
+      }
+    },
+    {
+      "name": "nested labels are unqualified",
+      "text": "[outer [inner]](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "unterminated link is unqualified",
+      "text": "[Topic](topic.md",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "broken plan target",
+      "text": "[Topic](missing.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": ["plans/missing.md"],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "case is preserved",
+      "text": "[Topic](TOPIC.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": ["plans/TOPIC.md"],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "external links never count",
+      "text": "[Topic](https://example.invalid/topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed plan need not be linked",
+      "text": "",
+      "plans": {
+        "plans/topic.md": "closed"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "unknown plan state remains required",
+      "text": "",
+      "plans": {
+        "plans/topic.md": "unknown"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "self and guide links are not plan entries",
+      "text": "[Here](#open) [Guide](README.md) [Notes](notes.txt)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "root escape",
+      "text": "[Topic](../../topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "encoded traversal",
+      "text": "[Topic](%2e%2e/topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "encoded slash",
+      "text": "[Topic](x%2ftopic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "namespace",
+      "text": "[Topic](remote://fixture/topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "absolute",
+      "text": "[Topic](/plans/topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "local query",
+      "text": "[Topic](topic.md?x=1)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "invalid percent",
+      "text": "[Topic](topic%zz.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "invalid UTF8",
+      "text": "[Topic](topic%ED%A0%80.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "raw angle cannot fake membership",
+      "text": "[Topic](<<topic.md>)",
+      "plans": {
+        "plans/<topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/<topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "duplicate links deduplicate",
+      "text": "[Topic](topic.md) [Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "no plans is a complete observation",
+      "text": "",
+      "plans": {},
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "HTML attributes cannot fake an indexed plan",
+      "text": "<img alt=\"[Topic](topic.md)\">",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "indented code cannot fake an indexed plan",
+      "text": "    [Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "tabbed code cannot fake an indexed plan",
+      "text": "\t[Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "angle filename is not an HTML tag",
+      "text": "[Topic](<a plan.md>)",
+      "plans": {
+        "plans/a plan.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/a plan.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "scalar ordering agrees across UTF8 and UTF16",
+      "text": "[First](.md) [Second](𐀀.md)",
+      "plans": {
+        "plans/.md": "open",
+        "plans/𐀀.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/.md", "plans/𐀀.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "HTML label attributes cannot fabricate another plan link",
+      "text": "[<img alt=\"](topic.md)\">](other.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "mixed tab indentation is unqualified",
+      "text": " \t[Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "code inside a list is unqualified",
+      "text": "-     [Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "code inside nested lists is unqualified",
+      "text": "- -     [Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1],
+        "complete": false
+      }
+    },
+    {
+      "name": "quoted fenced code cannot establish membership",
+      "text": "> ```\n> [Topic](topic.md)\n> ```",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1, 2, 3],
+        "complete": false
+      }
+    },
+    {
+      "name": "container fences invalidate positive evidence",
+      "text": "- ```\n  [Topic](topic.md)\n- ```",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [1, 3],
+        "complete": false
+      }
+    },
+    {
+      "name": "unknown markup invalidates positive evidence",
+      "text": "[Topic](topic.md)\n<img>",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": [],
+        "missingPlans": ["plans/topic.md"],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [2],
+        "complete": false
+      }
+    },
+    {
+      "name": "plain bullet links",
+      "text": "- [Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "plain nested bullet links",
+      "text": "- - [Topic](topic.md)",
+      "plans": {
+        "plans/topic.md": "open"
+      },
+      "expected": {
+        "linkedPlans": ["plans/topic.md"],
+        "missingPlans": [],
+        "unavailablePlanLinks": [],
+        "unverifiedLines": [],
+        "complete": true
+      }
+    }
+  ]
+}
