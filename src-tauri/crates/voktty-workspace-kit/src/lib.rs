@@ -56,10 +56,10 @@ pub use memory::{
 };
 pub use policy::{evaluate_memory_use, MemoryUseDecision};
 pub use preservation::{
-    check_memory_plan_index, compare_memory_archive_files, compare_memory_preservation,
-    snapshot_memory_preservation, MemoryArchiveFileReport, MemoryArchiveMove,
-    MemoryPlanIndexReport, MemoryPreservationComparison, MemoryPreservationFile,
-    MemoryPreservationSnapshot,
+    check_memory_archive_log, check_memory_plan_index, compare_memory_archive_files,
+    compare_memory_preservation, snapshot_memory_preservation, MemoryArchiveFileReport,
+    MemoryArchiveLogReport, MemoryArchiveMove, MemoryPlanIndexReport, MemoryPreservationComparison,
+    MemoryPreservationFile, MemoryPreservationSnapshot,
 };
 pub use scope::{resolve_memory_scope, MemoryScope};
 pub use template::{render_template, FileKind, RenderedFile};

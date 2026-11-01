@@ -11,6 +11,10 @@ pub use plan_index::{check_memory_plan_index, MemoryPlanIndexReport};
 mod archive_files;
 pub use archive_files::{compare_memory_archive_files, MemoryArchiveFileReport, MemoryArchiveMove};
 
+#[path = "archive_log.rs"]
+mod archive_log;
+pub use archive_log::{check_memory_archive_log, MemoryArchiveLogReport};
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPreservationFile {

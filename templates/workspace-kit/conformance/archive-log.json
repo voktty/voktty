@@ -1,0 +1,1499 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "unchanged needs no invented compaction",
+      "before": {},
+      "after": {},
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "new human prose only is not a compaction",
+      "before": {},
+      "after": {
+        "archive/LOG.md": "Human note\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "exact move plus every live size",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "zero and absence remain distinct",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "missing move record",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "missing all size records",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "missing one size record",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": ["CONTEXT.md"],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "no records cannot rescue removed file",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "human description cannot rescue move",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "Moved P.md into archive\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "old records cannot be replayed",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "only newly appended records count",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "Unicode prefix keeps physical line numbers",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "équipe\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "équipe\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [3],
+        "complete": false
+      }
+    },
+    {
+      "name": "duplicate moves retire all evidence",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [2],
+        "complete": false
+      }
+    },
+    {
+      "name": "duplicate sizes retire all evidence",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [8],
+        "complete": false
+      }
+    },
+    {
+      "name": "wrong digest retires all evidence",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t0000000000000000000000000000000000000000000000000000000000000000\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "uppercase digest is outside protocol",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6B3DCE9ED5028497AF5279E3CF8EF0931E1E778AD8F470E8FE6FB08AEE39C1EF\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "wrong target retires all evidence",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-02/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "source must be an observed move",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/Q.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "source traversal never normalizes to a move",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/../plans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "target namespace never normalizes to archive",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tfile:///archive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "wrong byte count",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t33\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "leading zeros",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t032\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "negative count",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t-1\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "scientific count",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t3e1\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "decimal count",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32.0\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "missing moved bytes",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t-\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "oversize count",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t262145\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "leap date",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2000-02-29\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "invalid leap date",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2023-02-29\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "nonleap century",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2100-02-29\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "minimum UTC date",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t1970-01-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "maximum date",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t9999-12-31\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "year before epoch",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t1969-12-31\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "agent ASCII punctuation",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker_1.a-2\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "empty agent",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\t\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "agent with space",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\ttwo agents\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "agent 64 bytes",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "agent 65 bytes",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "agent Unicode remains unsupported",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\téquipe\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "unknown schema is not silently omitted",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-2\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "extra column is not ignored",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\textra\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "space indentation cannot hide reserved records",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": " VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "quoted record is not the raw protocol",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "> VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "inline code is not the raw protocol",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "`VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef`\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [1],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "raw protocol is independent of Markdown fences",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "```text\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n```\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "raw protocol is independent of Markdown comments",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "<!--\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n-->\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "reserved token in appended prose is unqualified",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\nUse VOKTTY-elsewhere\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [8],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "CRLF records preserve original log bytes",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\r\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\r\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\r\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "unterminated old log requires a newline",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "CR boundary may complete CRLF",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\r"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\r\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "mutated old log fails",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "new\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "error": "KIT_ARCHIVE_LOG_NOT_APPEND_ONLY"
+    },
+    {
+      "name": "appending inside the last old line fails",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "oldVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "error": "KIT_ARCHIVE_LOG_NOT_APPEND_ONLY"
+    },
+    {
+      "name": "old newline conversion fails",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\r\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "error": "KIT_ARCHIVE_LOG_NOT_APPEND_ONLY"
+    },
+    {
+      "name": "supplied old bytes must match snapshot",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "suppliedBeforeLog": "invented",
+      "error": "KIT_ARCHIVE_LOG_CHANGED"
+    },
+    {
+      "name": "supplied new bytes must match snapshot",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "suppliedAfterLog": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\ninvented",
+      "error": "KIT_ARCHIVE_LOG_CHANGED"
+    },
+    {
+      "name": "wrong live sizes invalidate record evidence",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t1\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [2],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "zero does not stand for removed file",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [6],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "unknown size path cannot be credited",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tdomains/Unknown.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": ["plans/P.md"],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [2],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "handoff history records exact bytes",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-worker.md": "[T-8] open reference\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-worker.md": "[T-8] open reference\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tcontinuity/handoffs/2030-01-01-0000-worker.md\tarchive/2030-01/2030-01-01-0000-worker.md\t21\t7baf259a9fdea4b097929bd672469a3b130b78e84959c1af423dd1bb76cb7da2\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["continuity/handoffs/2030-01-01-0000-worker.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "exact path plans/计划.md",
+      "before": {
+        "plans/计划.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/计划.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/计划.md\tarchive/2030-01/计划.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/计划.md\t32\t-\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/计划.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "exact path plans/file name.md",
+      "before": {
+        "plans/file name.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "archive/2030-01/file name.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/file name.md\tarchive/2030-01/file name.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/file name.md\t32\t-\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/file name.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "live summary rewrite has before and after sizes",
+      "before": {
+        "CONTEXT.md": "old"
+      },
+      "after": {
+        "CONTEXT.md": "newer",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t3\t5\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "new live file uses absent before size",
+      "before": {},
+      "after": {
+        "plans/P.md": "State: open\n",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t-\t12\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "unmatched claims cannot manufacture a move",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n"
+      },
+      "after": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [
+          "CONTEXT.md",
+          "PROJECT.md",
+          "continuity/CHANGELOG.md",
+          "plans/INDEX.md",
+          "plans/P.md",
+          "plans/TRACKING.md"
+        ],
+        "invalidLines": [],
+        "unmatchedLines": [1, 6],
+        "duplicateLines": [],
+        "complete": false
+      }
+    },
+    {
+      "name": "unterminated old log accepts CRLF separator",
+      "before": {
+        "plans/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old"
+      },
+      "after": {
+        "archive/2030-01/P.md": "State: closed\n[T-1 done] reason\n",
+        "archive/LOG.md": "old\r\nVOKTTY-MOVE-1\t2030-02-01\tworker\tplans/P.md\tarchive/2030-01/P.md\t32\t6b3dce9ed5028497af5279e3cf8ef0931e1e778ad8f470e8fe6fb08aee39c1ef\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/P.md\t32\t-\r\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\r\n"
+      },
+      "expected": {
+        "loggedMoves": ["plans/P.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "empty moved file retains zero bytes",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-worker.md": ""
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-worker.md": "",
+        "archive/LOG.md": "VOKTTY-MOVE-1\t2030-02-01\tworker\tcontinuity/handoffs/2030-01-01-0000-worker.md\tarchive/2030-01/2030-01-01-0000-worker.md\t0\te3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\nVOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": ["continuity/handoffs/2030-01-01-0000-worker.md"],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    },
+    {
+      "name": "sizes count UTF8 bytes rather than characters",
+      "before": {
+        "CONTEXT.md": "é"
+      },
+      "after": {
+        "CONTEXT.md": "中文",
+        "archive/LOG.md": "VOKTTY-SIZE-1\t2030-02-01\tworker\tCONTEXT.md\t2\t6\nVOKTTY-SIZE-1\t2030-02-01\tworker\tPROJECT.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tcontinuity/CHANGELOG.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/INDEX.md\t0\t0\nVOKTTY-SIZE-1\t2030-02-01\tworker\tplans/TRACKING.md\t0\t0\n"
+      },
+      "expected": {
+        "loggedMoves": [],
+        "missingMoves": [],
+        "missingSizes": [],
+        "invalidLines": [],
+        "unmatchedLines": [],
+        "duplicateLines": [],
+        "complete": true
+      }
+    }
+  ]
+}

@@ -114,3 +114,63 @@ fragment verifier establishes intact prior content and append-only preservation.
 Empty diagnostics do not approve compaction. Movement LOG records, age/month
 qualification, fragment checks, baseline authenticity and native ownership remain
 required before exposing an integrated checker.
+
+## Appended archive LOG records
+
+`check_memory_archive_log` and `checkMemoryArchiveLog` bind both supplied LOG
+texts to their respective snapshots by exact SHA-256 and byte size. The new
+text must retain the entire old text as a byte-identical prefix. When the old
+text has no final LF, an append must first add LF or CRLF. Historical records never
+credit a new operation, including a historical last line completed by that newline.
+Only records wholly within the appended suffix count.
+
+The qualified channel consists of raw tab-separated records in `archive/LOG.md`.
+Fields have fixed positions, with no escaping, optional columns, duplicate keys,
+path normalization or URI decoding. Each record occupies one physical line,
+begins in column zero and has one of these layouts (`TAB` means a literal tab):
+
+- `VOKTTY-MOVE-1 TAB date TAB agent TAB source TAB target TAB bytes TAB sha256`
+- `VOKTTY-SIZE-1 TAB date TAB agent TAB path TAB beforeBytes TAB afterBytes`
+
+These are raw records, independent of Markdown rendering. Fences, HTML comments
+and other rendering constructs do not hide a literal record from this channel.
+Keep protocol examples outside the LOG. Within newly appended text, `VOKTTY-`
+is reserved: a line containing it that does not conform
+to a supported record is an invalid line. Historical prose remains untouched;
+new ordinary prose and blank lines are allowed. LF and CRLF records are supported.
+
+Dates use the shared calendar validator, `YYYY-MM-DD`, from 1970 through 9999.
+The claimed agent is 1 through 64 ASCII letters/digits/dots/underscores/hyphens,
+beginning with a letter or digit. Dates and names are syntactic metadata, not
+authenticated authorship, proof of timing or archival age. Counts are canonical
+ASCII decimal integers from 0 through 262144, without leading zeroes. A single
+`-` denotes absence only in SIZE records; it is distinct from an empty file's
+zero bytes. SHA-256 is exactly 64 lowercase hexadecimal characters. Paths must
+match observed snapshot paths exactly; unrecognized paths or encoded aliases
+cannot credit a movement or size. Source/target fields retain the snapshot's
+4096-byte limit. No record causes file or network access.
+
+The checker recomputes whole-file movement evidence rather than accepting a
+caller's movement claims. Each such movement requires one matching MOVE record.
+All live paths in either snapshot require matching SIZE records when factual
+content/inventory changed or any new protocol record was appended. Pure no-ops
+and ordinary prose-only appends do not manufacture a compaction requirement.
+New live paths have an absent prior size; removed live paths have an absent
+current size. The LOG, handoffs and archive data are excluded from SIZE records;
+a moved handoff's exact size is recorded by MOVE.
+
+The report contains logged and missing move sources, missing live-file sizes,
+and one-based invalid, unmatched and duplicate record lines. Any invalid,
+unmatched or duplicate record retires all positive evidence for this operation.
+`complete` describes record qualification, not missing-record absence or an
+overall verdict. Consumers must inspect every diagnostic and still compose the
+archive-file, item, plan-index and remaining checks. Limits are 256 KiB per LOG,
+16 KiB per protocol line and 1024 new protocol-bearing lines. Exhausted aggregate
+limits fail explicitly; malformed or oversized individual records are diagnosed.
+
+This introduces no writer, template migration, persisted baseline or CLI check.
+The content LOG and existing instruction bases remain unchanged until the full
+checker can consume them through the existing reviewed base-update flow. Item
+fragment appends need separate evidence; these records cannot certify them.
+Native inventory authority, authenticated origin, age/month qualification and
+backlinks remain required before accepting compaction.
