@@ -3,6 +3,13 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "memory_links.rs"]
+mod memory_links;
+
+#[path = "archive_links.rs"]
+mod archive_links;
+pub use archive_links::{check_memory_archive_links, MemoryArchiveLinkReport};
+
 #[path = "archive_fragments.rs"]
 mod archive_fragments;
 pub use archive_fragments::{

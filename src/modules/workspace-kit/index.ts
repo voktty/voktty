@@ -21,6 +21,8 @@ export type {
 export { memoryProjectKey } from "@/modules/workspace-kit/lib/identity";
 export { handoffCreatedAtMs } from "@/modules/workspace-kit/lib/handoff";
 export { checkMemoryPlanIndex } from "@/modules/workspace-kit/lib/planIndex";
+export { checkMemoryArchiveLinks } from "@/modules/workspace-kit/lib/archiveLinks";
+export type { MemoryArchiveLinkReport } from "@/modules/workspace-kit/lib/archiveLinks";
 export type { MemoryPlanIndexReport } from "@/modules/workspace-kit/lib/planIndex";
 export { compareMemoryArchiveFiles } from "@/modules/workspace-kit/lib/archiveFiles";
 export type {

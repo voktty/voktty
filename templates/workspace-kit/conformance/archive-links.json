@@ -1,0 +1,1428 @@
+{
+  "schema": 1,
+  "nowMs": 1898553600000,
+  "afterDays": 30,
+  "cases": [
+    {
+      "name": "PROJECT.md inline",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "[Archived](archive/2030-01/PROJECT.md)\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [
+          "PROJECT.md#L1"
+        ],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "PROJECT.md missing",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "Archived.\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "PROJECT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "PROJECT.md image",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "![Archived](archive/2030-01/PROJECT.md)\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "PROJECT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "PROJECT.md code",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "`[Archived](archive/2030-01/PROJECT.md)`\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "PROJECT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "PROJECT.md comment",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "<!-- [Archived](archive/2030-01/PROJECT.md) -->\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "PROJECT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "PROJECT.md wrong month",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "[Archived](archive/2029-12/PROJECT.md)\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "PROJECT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "PROJECT.md unsupported",
+      "before": {
+        "PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "[Archived](archive/2030-01/PROJECT.md)\n> unqualified\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "PROJECT.md#L1"
+        ],
+        "unverifiedDocuments": [
+          "PROJECT.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md inline",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "[Archived](archive/2030-01/CONTEXT.md)\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md missing",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "Archived.\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md image",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "![Archived](archive/2030-01/CONTEXT.md)\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md code",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "`[Archived](archive/2030-01/CONTEXT.md)`\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md comment",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "<!-- [Archived](archive/2030-01/CONTEXT.md) -->\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md wrong month",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "[Archived](archive/2029-12/CONTEXT.md)\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "CONTEXT.md unsupported",
+      "before": {
+        "CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "CONTEXT.md": "[Archived](archive/2030-01/CONTEXT.md)\n> unqualified\n",
+        "archive/2030-01/CONTEXT.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "CONTEXT.md#L1"
+        ],
+        "unverifiedDocuments": [
+          "CONTEXT.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md inline",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[Archived](../archive/2030-01/TRACKING.md)\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md missing",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "Archived.\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md image",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "![Archived](../archive/2030-01/TRACKING.md)\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md code",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "`[Archived](../archive/2030-01/TRACKING.md)`\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md comment",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "<!-- [Archived](../archive/2030-01/TRACKING.md) -->\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md wrong month",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[Archived](../archive/2029-12/TRACKING.md)\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/TRACKING.md unsupported",
+      "before": {
+        "plans/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "plans/TRACKING.md": "[Archived](../archive/2030-01/TRACKING.md)\n> unqualified\n",
+        "archive/2030-01/TRACKING.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "plans/TRACKING.md#L1"
+        ],
+        "unverifiedDocuments": [
+          "plans/TRACKING.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md inline",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "[Archived](../archive/2030-01/build.md)\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [
+          "domains/build.md#L1"
+        ],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md missing",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "Archived.\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "domains/build.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md image",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "![Archived](../archive/2030-01/build.md)\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "domains/build.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md code",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "`[Archived](../archive/2030-01/build.md)`\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "domains/build.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md comment",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "<!-- [Archived](../archive/2030-01/build.md) -->\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "domains/build.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md wrong month",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "[Archived](../archive/2029-12/build.md)\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "domains/build.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "domains/build.md unsupported",
+      "before": {
+        "domains/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "domains/build.md": "[Archived](../archive/2030-01/build.md)\n> unqualified\n",
+        "archive/2030-01/build.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "domains/build.md#L1"
+        ],
+        "unverifiedDocuments": [
+          "domains/build.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md inline",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "[Archived](../archive/2030-01/CHANGELOG.md)\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md missing",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "Archived.\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md image",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "![Archived](../archive/2030-01/CHANGELOG.md)\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md code",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "`[Archived](../archive/2030-01/CHANGELOG.md)`\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md comment",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "<!-- [Archived](../archive/2030-01/CHANGELOG.md) -->\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md wrong month",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "[Archived](../archive/2029-12/CHANGELOG.md)\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "continuity/CHANGELOG.md unsupported",
+      "before": {
+        "continuity/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "continuity/CHANGELOG.md": "[Archived](../archive/2030-01/CHANGELOG.md)\n> unqualified\n",
+        "archive/2030-01/CHANGELOG.md": "- [T-1 done] Done · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [
+          "continuity/CHANGELOG.md#L1"
+        ],
+        "unverifiedDocuments": [
+          "continuity/CHANGELOG.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 1
+    },
+    {
+      "name": "plans/topic.md inline",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n",
+        "plans/INDEX.md": "[Archived](../archive/2030-01/topic.md)\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "plans/topic.md missing",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n",
+        "plans/INDEX.md": "Archived.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "plans/topic.md wrong owner",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n",
+        "plans/TRACKING.md": "[Archived](../archive/2030-01/topic.md)\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "plans/topic.md reference",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n",
+        "plans/INDEX.md": "[Archived][ref]\n[ref]: ../archive/2030-01/topic.md\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "plans/topic.md escaped separator",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n",
+        "plans/INDEX.md": "[Archived](..%2farchive/2030-01/topic.md)\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "plans/topic.md fragment",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n",
+        "plans/INDEX.md": "[Archived](../archive/2030-01/topic.md#done)\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "continuity/handoffs/2030-01-01-0000-solo.md inline",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "# Handoff\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "# Handoff\n",
+        "plans/TRACKING.md": "[Archived](../archive/2030-01/2030-01-01-0000-solo.md)\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "continuity/handoffs/2030-01-01-0000-solo.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "continuity/handoffs/2030-01-01-0000-solo.md missing",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "# Handoff\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "# Handoff\n",
+        "plans/TRACKING.md": "Archived.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "continuity/handoffs/2030-01-01-0000-solo.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "continuity/handoffs/2030-01-01-0000-solo.md wrong owner",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "# Handoff\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "# Handoff\n",
+        "plans/INDEX.md": "[Archived](../archive/2030-01/2030-01-01-0000-solo.md)\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "continuity/handoffs/2030-01-01-0000-solo.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "continuity/handoffs/2030-01-01-0000-solo.md reference",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "# Handoff\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "# Handoff\n",
+        "plans/TRACKING.md": "[Archived][ref]\n[ref]: ../archive/2030-01/2030-01-01-0000-solo.md\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "continuity/handoffs/2030-01-01-0000-solo.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/TRACKING.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "continuity/handoffs/2030-01-01-0000-solo.md escaped separator",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "# Handoff\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "# Handoff\n",
+        "plans/TRACKING.md": "[Archived](..%2farchive/2030-01/2030-01-01-0000-solo.md)\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "continuity/handoffs/2030-01-01-0000-solo.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/TRACKING.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "continuity/handoffs/2030-01-01-0000-solo.md fragment",
+      "before": {
+        "continuity/handoffs/2030-01-01-0000-solo.md": "# Handoff\n"
+      },
+      "after": {
+        "archive/2030-01/2030-01-01-0000-solo.md": "# Handoff\n",
+        "plans/TRACKING.md": "[Archived](../archive/2030-01/2030-01-01-0000-solo.md#done)\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "continuity/handoffs/2030-01-01-0000-solo.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup balanced title",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](../archive/2030-01/topic.md \"Done\")\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup angle",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](<../archive/2030-01/topic.md>)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup plain dot",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](./../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup encoded dot",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](%2e%2e/archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup root escape",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](../../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup absolute",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](/archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup namespace",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](file:../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup query",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](../archive/2030-01/topic.md?x=1)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup remote",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](https://example.com/archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup self",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](#topic)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup case",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](../Archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup html after valid",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](../archive/2030-01/topic.md)\n<div>\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup reference after valid",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "[Archived](../archive/2030-01/topic.md)\n[ref]: topic.md\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup list",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "- [Archived](../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup indent",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "    [Archived](../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [
+          "plans/INDEX.md"
+        ],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup escaped image",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "\\![Archived](../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [
+          "plans/topic.md"
+        ],
+        "missingMoves": [],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup image",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "![Archived](../archive/2030-01/topic.md)\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "qualified markup code fence",
+      "before": {
+        "plans/topic.md": "State: closed 2030-01-01\n"
+      },
+      "after": {
+        "plans/INDEX.md": "```md\n[Archived](../archive/2030-01/topic.md)\n```\n",
+        "archive/2030-01/topic.md": "State: closed 2030-01-01\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [
+          "plans/topic.md"
+        ],
+        "linkedFragments": [],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 0
+    },
+    {
+      "name": "one destination link covers distinct intact units",
+      "before": {
+        "PROJECT.md": "- [T-1 done] First · closed 2030-01-01\nReason.\n\n- [T-2 done] Second · closed 2030-01-01\nReason.\n"
+      },
+      "after": {
+        "PROJECT.md": "Archived: [history](archive/2030-01/PROJECT.md)\n",
+        "archive/2030-01/PROJECT.md": "- [T-1 done] First · closed 2030-01-01\nReason.\n\n- [T-2 done] Second · closed 2030-01-01\nReason.\n"
+      },
+      "expected": {
+        "linkedMoves": [],
+        "missingMoves": [],
+        "linkedFragments": [
+          "PROJECT.md#L1",
+          "PROJECT.md#L4"
+        ],
+        "missingFragments": [],
+        "unverifiedDocuments": [],
+        "missingDocuments": []
+      },
+      "fragmentCount": 2
+    }
+  ]
+}

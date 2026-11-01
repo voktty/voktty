@@ -357,3 +357,39 @@ matter even when every fragment record matched. No overall approval flag, LOG
 writer, template migration, persisted baseline, IPC or CLI check is introduced.
 Backlinks, native inventory/clock/config authority, root-bound baseline origin
 and full composition remain required before accepting compaction.
+
+## Source-bound archive navigation
+
+`check_memory_archive_links` and `checkMemoryArchiveLinks` bind both complete
+source inventories to their snapshots through the fragment verifier, then
+rebuild whole-file moves from those source bytes. Mutable plan metadata cannot
+fabricate an eligible move. TypeScript captures the inventories and expected
+hash identities before asynchronous work. This is comparison evidence without
+filesystem access, inventory authority or authenticated baseline origin.
+
+Each exact moved plan requires a link in `plans/INDEX.md`; each exact moved
+handoff requires one in `plans/TRACKING.md`. Each intact archived fragment
+requires a link in its retained live source. A link in another document cannot
+substitute for that owner. Links resolve from the owner's parent directory
+inside the kit, using the same qualified inline-link reader as the plan index.
+The reader retains its syntax, visibility, strict decoding and resource limits.
+Any unverified syntax withdraws all positive links from that owner, including
+links encountered before it. Inspection is cached once per owner document.
+
+The exact archive file destination must match, preserving case. Optional
+fragments do not verify heading existence: this channel establishes file-level
+navigation only. One file link may cover several intact fragments from the
+same source and month. Labels do not authenticate item identity, authorship or
+semantic preservation. Images, code, comments, remote links and self fragments
+cannot establish archive navigation.
+
+The report separates linked/missing move sources and linked/missing fragment
+keys, plus missing or unverified owner documents. It retains the full independent
+fragment report; rejected byte evidence cannot be rescued by a link. Missing
+required inventory documents fail before navigation; a removed optional owner
+remains an explicit diagnostic if a verified fragment requires it. There is no
+overall approval flag. Whole-file, temporal, preservation, index, LOG and all
+fragment diagnostics still matter, even when navigation arrays are empty.
+No writer, template migration, baseline persistence, IPC or CLI check is added.
+Native inventory/config/clock ownership, authentic root-bound baselines and
+full composition remain required before accepting compaction.
