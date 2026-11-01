@@ -25,6 +25,10 @@ static ACTIVE_READS: AtomicUsize = AtomicUsize::new(0);
 mod measurement;
 pub use measurement::{measure_local_memory, NativeMemoryMeasurements};
 
+#[path = "preservation.rs"]
+mod preservation;
+pub use preservation::NativeMemoryPreservation;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadError {
     InvalidInput,

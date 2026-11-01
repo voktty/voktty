@@ -13,14 +13,14 @@ pub struct NativeMemoryMeasurements {
     pub report: MemoryMeasurements,
 }
 
-struct PinnedDirectory {
-    path: PathBuf,
-    directory: platform::Directory,
+pub(super) struct PinnedDirectory {
+    pub(super) path: PathBuf,
+    pub(super) directory: platform::Directory,
     revision: (i64, i64, i64, i64),
 }
 
 impl PinnedDirectory {
-    fn new(path: PathBuf, directory: platform::Directory) -> Result<Self, ReadError> {
+    pub(super) fn new(path: PathBuf, directory: platform::Directory) -> Result<Self, ReadError> {
         let revision = directory.revision().map_err(|_| ReadError::Io)?;
         Ok(Self {
             path,
@@ -29,7 +29,7 @@ impl PinnedDirectory {
         })
     }
 
-    fn child(
+    pub(super) fn child(
         &self,
         name: &str,
         access: &dyn MemoryReadAccess,
@@ -59,7 +59,7 @@ impl PinnedDirectory {
         Self::new(path, directory).map(Some)
     }
 
-    fn verify(
+    pub(super) fn verify(
         &self,
         access: &dyn MemoryReadAccess,
         control: &ReadControl,

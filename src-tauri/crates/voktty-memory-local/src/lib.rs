@@ -41,7 +41,7 @@ mod reader_windows;
 pub use reader::{
     inspect_local_memory_scope, measure_local_memory, resolve_local_memory_directory,
     LocalMemoryWorkspace, MemoryReadAccess, NativeContextObservation, NativeMemoryMeasurements,
-    ReadControl, ReadError,
+    NativeMemoryPreservation, ReadControl, ReadError,
 };
 
 const STORE: &str = "memory-local.json";
