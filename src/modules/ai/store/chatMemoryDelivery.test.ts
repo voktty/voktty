@@ -358,3 +358,43 @@ it("rejects a late native context read after retirement without starting the mod
   expect(io.stream).not.toHaveBeenCalled();
   expect(() => getChatProjectKitMemory(f.chat)).toThrow("cancelled");
 });
+
+it("toggles model delivery without closing context or reviving a previously prepared request", async () => {
+  const f = await enabled();
+  const source = getChatProjectKitMemory(f.chat);
+  if (!source?.prepare || !f.scope.delivery)
+    throw new Error("Missing API delivery");
+  const prepared = await source.prepare("ollama-local", () => {});
+  f.scope.delivery.disable(() => true);
+  expect(f.scope.status()).toBe("ready");
+  expect(getChatProjectKitMemory(f.chat)).toBeUndefined();
+  await f.chat.sendMessage({ text: "ordinary request while disabled" });
+  expect(io.stream).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).not.toContain(text);
+  const fresh = await f.scope.read();
+  if (!fresh?.packet) throw new Error("Missing fresh packet");
+  await f.scope.delivery.enable(fresh.packet, () => true);
+  expect(prepared.acknowledge()).toBe(false);
+  prepared.settle();
+  expect(f.scope.delivery.getSnapshot().receipt).toBeNull();
+  await f.chat.sendMessage({ text: "new enabled request" });
+  expect(io.stream).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify(io.stream.mock.calls[1][0].prompt)).toContain(
+    "PROJECT MEMORY (.voktty)",
+  );
+  expect(f.scope.delivery.getSnapshot().receipt?.method).toBe("model-response");
+});
+
+it("preserves the explicit disabled choice after its root retires", async () => {
+  const f = await enabled();
+  f.scope.delivery?.disable(() => true);
+  publish("/other");
+  publish("/project");
+  expect(f.scope.isCurrent()).toBe(false);
+  expect(getChatProjectKitMemory(f.chat)).toBeUndefined();
+  await f.chat.sendMessage({
+    text: "ordinary request after disable and root change",
+  });
+  expect(io.stream).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).not.toContain(text);
+});

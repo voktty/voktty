@@ -173,3 +173,86 @@ it("retains failed cleanup for retry without closing a successor", async () => {
   await old.close();
   expect(await next.read()).toEqual(packet);
 });
+
+async function deliveryFixture() {
+  const manager = createMemoryConversations((_conversation, onReceipt) => ({
+    capture: (assertCurrent: () => void) => ({ assertCurrent, onReceipt }),
+  }));
+  const owner = {};
+  const scope = manager.capture(
+    owner,
+    "/project",
+    "/project",
+    () => true,
+    true,
+  );
+  scopes.push(scope);
+  await bind(scope);
+  if (!packet.packet || !scope.delivery) throw new Error("Missing delivery");
+  await scope.delivery.enable(packet.packet, () => true);
+  return {
+    manager,
+    owner,
+    scope,
+    delivery: scope.delivery,
+    input: packet.packet,
+  };
+}
+
+it("disables future delivery without native writes, losing the binding or affecting siblings", async () => {
+  const f = await deliveryFixture();
+  const sibling = await deliveryFixture();
+  const source = f.manager.turnSource(f.owner, () => undefined);
+  expect(source).toBeDefined();
+  const calls = invoke.mock.calls.length;
+  f.delivery.disable(() => true);
+  expect(invoke.mock.calls).toHaveLength(calls);
+  expect(f.scope.status()).toBe("ready");
+  expect(f.delivery.getSnapshot().enabled).toBe(false);
+  expect(f.manager.turnSource(f.owner, () => undefined)).toBeUndefined();
+  expect(sibling.delivery.getSnapshot().enabled).toBe(true);
+  expect(await f.scope.read()).toEqual(packet);
+  await f.delivery.enable(f.input, () => true);
+  expect(f.delivery.getSnapshot().enabled).toBe(true);
+  expect(() => source?.assertCurrent()).toThrowError("cancelled");
+  expect(() =>
+    f.manager.turnSource(f.owner, () => undefined)?.assertCurrent(),
+  ).not.toThrow();
+});
+
+it("withdraws an in-flight enable when disabled and requires a new native check", async () => {
+  const f = await deliveryFixture();
+  const read = deferred<unknown>();
+  const started = deferred<void>();
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) => {
+    if (command === "project_memory_context_read") {
+      started.resolve();
+      return read.promise;
+    }
+    return original?.(command, args);
+  });
+  const enabling = f.delivery
+    .enable(f.input, () => true)
+    .catch((error: unknown) => error);
+  await started.promise;
+  f.delivery.disable(() => true);
+  read.resolve(packet);
+  expect(await enabling).toMatchObject({ code: "cancelled" });
+  expect(f.delivery.getSnapshot().enabled).toBe(false);
+  expect(f.scope.status()).toBe("ready");
+  if (!original) throw new Error("Missing native fixture");
+  invoke.mockImplementation(original);
+  await f.delivery.enable(f.input, () => true);
+  expect(f.delivery.getSnapshot().enabled).toBe(true);
+});
+
+it("refuses disable from a retired presentation or caller", async () => {
+  const f = await deliveryFixture();
+  let visible = true;
+  const view = qualifyMemoryConversation(f.scope, () => visible);
+  expect(() => view.delivery?.disable(() => false)).toThrowError("cancelled");
+  visible = false;
+  expect(() => view.delivery?.disable(() => true)).toThrowError("cancelled");
+  expect(f.delivery.getSnapshot().enabled).toBe(true);
+});

@@ -748,3 +748,71 @@ it("requires a new gesture to enable a packet changed since its preview", async 
   await click("projectMemory.deliveryEnable");
   expect(f.scope.delivery?.getSnapshot().enabled).toBe(true);
 });
+
+it("can disable and re-enable future delivery in the same panel while preserving the accepted receipt", async () => {
+  const f = await prepare(true);
+  await click("projectMemory.deliveryEnable");
+  const source = f.manager.turnSource(f.owner, () => {});
+  if (!source) throw new Error("Missing delivery source");
+  const prepared = await source.prepare({}, "provider-thread", () => {});
+  await act(async () => expect(prepared?.acknowledge()).toBe(true));
+  const receipt = f.scope.delivery?.getSnapshot().receipt;
+  const writes = invoke.mock.calls.length;
+  await click("projectMemory.conversationDisable");
+  expect(invoke.mock.calls).toHaveLength(writes);
+  expect(f.scope.status()).toBe("ready");
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
+  expect(f.scope.delivery?.getSnapshot().receipt).toBe(receipt);
+  expect(document.body.textContent).not.toContain(
+    "projectMemory.conversationRetired",
+  );
+  expect(document.body.textContent).not.toContain(
+    "projectMemory.deliveryEnabled",
+  );
+  expect(button("common.copy").disabled).toBe(false);
+  await click("projectMemory.deliveryEnable");
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(true);
+  expect(() => source.assertCurrent()).toThrowError("cancelled");
+  await click("common.close");
+  await open();
+  expect(document.body.textContent).toContain("projectMemory.deliveryEnabled");
+});
+
+it("does not acknowledge an old prepared turn after disabling and re-enabling delivery", async () => {
+  const f = await prepare(true);
+  await click("projectMemory.deliveryEnable");
+  const source = f.manager.turnSource(f.owner, () => {});
+  if (!source) throw new Error("Missing delivery source");
+  const prepared = await source.prepare({}, "old-thread", () => {});
+  await click("projectMemory.conversationDisable");
+  await click("projectMemory.deliveryEnable");
+  expect(prepared?.acknowledge()).toBe(false);
+  expect(f.scope.delivery?.getSnapshot().receipt).toBeNull();
+  expect(document.body.textContent).not.toContain(
+    "projectMemory.deliveryLastAccepted",
+  );
+  const fresh = f.manager.turnSource(f.owner, () => {});
+  if (!fresh) throw new Error("Missing fresh delivery source");
+  const next = await fresh.prepare({}, "new-thread", () => {});
+  await act(async () => expect(next?.acknowledge()).toBe(true));
+  expect(document.body.textContent).toContain("new-thread");
+});
+
+it("keeps delivery disabled when project policy changes before re-enabling", async () => {
+  const f = await prepare(true);
+  await click("projectMemory.deliveryEnable");
+  await click("projectMemory.conversationDisable");
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_read"
+      ? Promise.resolve(packet("KIT_MEMORY_POLICY_NEVER"))
+      : original?.(command, args),
+  );
+  await click("projectMemory.deliveryEnable");
+  expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
+  expect(f.manager.turnSource(f.owner, () => {})).toBeUndefined();
+  expect(document.body.textContent).toContain(
+    "projectMemory.conversationPolicyBlocked",
+  );
+  expect(document.body.textContent).not.toContain("<script>context</script>");
+});

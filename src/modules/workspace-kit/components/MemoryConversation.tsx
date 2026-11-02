@@ -282,7 +282,7 @@ export function MemoryConversation({
                 {t("projectMemory.conversationRead")}
               </Button>
             ) : null}
-            {status === "ready" ? (
+            {status === "ready" && (!delivery.supported || delivery.enabled) ? (
               <Button
                 variant="outline"
                 size="sm"

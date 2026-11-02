@@ -103,6 +103,7 @@ export function createMemoryConversations<Source = never>(
       let admission: (() => boolean) | null = null;
       let reading: Promise<MemoryContextResult | null> | null = null;
       let enabling = false;
+      let deliveryPermit = {};
       let deliveryState: MemoryDeliveryState = Object.freeze({
         ...inactiveMemoryDelivery,
         supported: supportsDelivery && createDelivery !== undefined,
@@ -164,11 +165,13 @@ export function createMemoryConversations<Source = never>(
               fail("cancelled");
             if (enabling) fail("busy");
             enabling = true;
+            const permit = deliveryPermit;
             const expected = { ...packet };
             entry.pending += 1;
             const assertCurrent = () => {
               check();
               if (!isCallerCurrent()) fail("cancelled");
+              if (permit !== deliveryPermit) fail("cancelled");
               check();
             };
             try {
@@ -199,6 +202,14 @@ export function createMemoryConversations<Source = never>(
               entry.pending -= 1;
               collect(entry);
             }
+          },
+          disable(isCallerCurrent: () => boolean) {
+            check();
+            if (!isCallerCurrent()) fail("cancelled");
+            check();
+            deliveryPermit = {};
+            deliveryState = Object.freeze({ ...deliveryState, enabled: false });
+            notify(entry);
           },
         }),
         async bind(input: Binding, isActionCurrent = () => true) {
@@ -284,13 +295,16 @@ export function createMemoryConversations<Source = never>(
       sessions.set(owner, {
         entry,
         receipt,
-        source: (assertCurrent) =>
-          deliveryState.enabled && current() && delivery
+        source: (assertCurrent) => {
+          const permit = deliveryPermit;
+          return deliveryState.enabled && current() && delivery
             ? delivery.capture(() => {
                 assertCurrent();
-                if (!deliveryState.enabled) fail("cancelled");
+                if (!deliveryState.enabled || permit !== deliveryPermit)
+                  fail("cancelled");
               })
-            : undefined,
+            : undefined;
+        },
       });
       return receipt;
     },
@@ -344,6 +358,10 @@ export function qualifyMemoryConversation(
               );
               check();
               return result;
+            },
+            disable(isCallerCurrent: () => boolean) {
+              check();
+              delivery.disable(() => isActionCurrent() && isCallerCurrent());
             },
           }),
         }

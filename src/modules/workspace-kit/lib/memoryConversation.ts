@@ -67,6 +67,7 @@ export type MemoryConversation = Readonly<{
       packet: MemoryContextPacket,
       isCallerCurrent: () => boolean,
     ) => Promise<MemoryContextResult>;
+    disable: (isCallerCurrent: () => boolean) => void;
   }>;
 }>;
 

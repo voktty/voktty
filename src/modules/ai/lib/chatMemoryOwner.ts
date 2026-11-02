@@ -92,9 +92,8 @@ export function registerChatMemoryOwner(
         releaseDelivery?.();
         const captured = conversation;
         releaseDelivery = captured.subscribe(() => {
-          if (captured.delivery?.getSnapshot().enabled) requested = true;
-          else if (!retired && captured.status() === "retired")
-            requested = false;
+          const enabled = captured.delivery?.getSnapshot().enabled === true;
+          if (!retired) requested = enabled;
         });
         if (!unsubscribe && deps.subscribeRoot) {
           try {

@@ -204,6 +204,10 @@ export function createMemoryConversationPanel(
     disable() {
       return run(async () => {
         if (!current()) return;
+        if (conversation.delivery?.getSnapshot().supported) {
+          conversation.delivery.disable(current);
+          return;
+        }
         await conversation.close();
         if (!entry.retired) {
           state = { status: "closed" };
