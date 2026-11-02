@@ -1,6 +1,7 @@
 import type { NativeMemorySelection } from "@/modules/workspace-kit/lib/nativeMemory";
 import type { KitConfig } from "@/modules/workspace-kit/lib/configTypes";
 import type { InstructionFingerprint } from "@/modules/workspace-kit/lib/context";
+import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
 import {
   bindNativeMemoryContext,
   type NativeMemoryContext,
@@ -49,6 +50,7 @@ type Review = {
   cancellation: Promise<boolean> | null;
 };
 type Owner = {
+  contextTransport?: () => MemoryTransport;
   checkSelection: (selection: NativeMemorySelection) => void;
   canRequest: () => boolean;
   request: <T>(
@@ -268,6 +270,7 @@ export function createNativeMemoryTrustClient(owner: Owner) {
                   checkContext();
                 },
               ),
+            owner.contextTransport,
           );
           bound = true;
           check(expected);

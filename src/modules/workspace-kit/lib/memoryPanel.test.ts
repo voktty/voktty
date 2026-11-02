@@ -221,10 +221,22 @@ it("retains failed cleanup in the shared capacity until its actual acknowledgeme
   await replacement.dispose();
 });
 
-it("rejects remote namespaces and nonlocal environments without reinterpreting paths", () => {
+it("admits SSH routing while rejecting malformed paths and unsupported transports", () => {
   expect(supportedMemoryPanelTarget(target)).toBe(true);
+  expect(
+    supportedMemoryPanelTarget({ ...target, path: "remote://host/project" }),
+  ).toBe(true);
+  expect(
+    supportedMemoryPanelTarget({
+      ...target,
+      environment: {
+        kind: "ssh",
+        root: "/project",
+        connection: { id: "ssh", name: "SSH", host: "host" },
+      },
+    }),
+  ).toBe(true);
   for (const unsupported of [
-    { ...target, path: "remote://host/project" },
     { ...target, path: "bad\npath" },
     { ...target, path: "" },
     { ...target, environment: { kind: "wsl" as const, distro: "ubuntu" } },

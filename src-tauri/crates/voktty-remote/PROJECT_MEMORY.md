@@ -108,3 +108,34 @@ worker can adopt those resources; reconnecting creates a new helper owner.
 
 Tests cover the native workflow and framed stdio using isolated project and
 private directories. Those tests are not a real SSH or Desktop UI smoke test.
+
+## Desktop client ownership
+
+The shared memory manager and indicator route explicit SSH workspaces and saved
+SSH project namespaces through this service. Namespace resolution captures its
+saved project and profile before asynchronous work; an attached SSH descriptor
+must agree with that profile and contain the project root. Neither ambient
+workspace selection nor a borrowed numeric session ID chooses the host. POSIX
+host directories stay inside the captured root; this client does not support
+WSL, Docker, serial or Windows SSH host paths. Local Desktop paths retain their
+native commands. Unknown namespaces and older helpers fail without local IO.
+
+Each client family owns a pooled helper lease and checks its capability and exact
+session membership. Requests explicitly map the shared command DTOs into this
+protocol and validate response correlation, envelopes and size limits. Display
+roots retain their original namespace; instruction bytes and digests are not
+rewritten. Saved profile/project changes permanently retire namespace receipts,
+including changes immediately reversed. Existing direct SSH descriptors remain
+pinned to their original connection. A new helper cannot reuse old receipts.
+
+An accepted context retains a separate owner on the same lease. Presentation
+close cannot release that context's helper. Cleanup addresses the original
+helper even after source retirement, waits for its admitted requests to settle,
+and retains failed cleanup for exact retry. The final owner releases and closes
+its lease without closing sibling consumers. Client families and outstanding
+requests per family are each capped at 256, including retired unsettled work.
+
+This transport integration does not enable remote conversation delivery by
+itself. Conversation source matching and provider acceptance remain separate
+requirements; transport tests or a prepared context are not real SSH acceptance
+or evidence of model use.

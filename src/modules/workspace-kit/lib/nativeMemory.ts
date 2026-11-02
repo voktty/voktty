@@ -6,6 +6,7 @@ import type { KitLock } from "@/modules/workspace-kit/lib/configTypes";
 import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 import { createNativeMemoryPolicyClient } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
 import { loadMemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
+import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
 
 type Handle = Readonly<{ id: number; token: string }>;
 const selectionBrand = Symbol("native-memory-selection");
@@ -84,7 +85,8 @@ function cancelled(): never {
   });
 }
 
-export function createNativeMemoryPresentation() {
+export function createNativeMemoryPresentation(transport?: MemoryTransport) {
+  const issue = transport?.invoke ?? invoke;
   let closed = false;
   let revision = 0;
   let opening: Promise<Handle> | null = null;
@@ -92,6 +94,7 @@ export function createNativeMemoryPresentation() {
   let reviewRevision = 0;
   let review: Review | null = null;
   let unsettled = 0;
+  let acknowledged = false;
   let current: {
     receipt: NativeMemorySelection;
     token: string;
@@ -101,14 +104,16 @@ export function createNativeMemoryPresentation() {
 
   function handle() {
     if (closed) cancelled();
+    transport?.check();
     opening ??= Promise.resolve().then(() =>
-      invoke<Handle>("project_memory_open"),
+      issue<Handle>("project_memory_open"),
     );
     return opening;
   }
 
   function capture(receipt: NativeMemorySelection) {
     if (closed || !current || current.receipt !== receipt) cancelled();
+    transport?.check();
     return current;
   }
 
@@ -134,7 +139,7 @@ export function createNativeMemoryPresentation() {
         const selected = capture(receipt);
         const owner = await handle();
         check();
-        const result = await invoke<T>(command, {
+        const result = await issue<T>(command, {
           handle: owner,
           selection: selected.token,
           ...args,
@@ -159,7 +164,7 @@ export function createNativeMemoryPresentation() {
     const owner = await handle();
     capture(receipt);
     try {
-      const result = await invoke<T>(command, {
+      const result = await issue<T>(command, {
         handle: owner,
         selection: selected.token,
         ...args,
@@ -178,6 +183,7 @@ export function createNativeMemoryPresentation() {
     },
     canRequest: () => unsettled < 256,
     request: reviewRequest,
+    contextTransport: transport ? () => transport.retain() : undefined,
   });
   const policy = createNativeMemoryPolicyClient({
     checkSelection: (receipt) => {
@@ -205,11 +211,12 @@ export function createNativeMemoryPresentation() {
       const inspectAncestors = options.inspectAncestors === true;
       const check = () => {
         if (closed || revision !== requested) cancelled();
+        transport?.check();
       };
       try {
         const owner = await handle();
         check();
-        const token = await invoke<string>("project_memory_select", {
+        const token = await issue<string>("project_memory_select", {
           handle: owner,
           path,
           environment: capturedEnvironment,
@@ -369,21 +376,34 @@ export function createNativeMemoryPresentation() {
       }
     },
     isCurrent(receipt: NativeMemorySelection) {
-      return !closed && current?.receipt === receipt;
+      try {
+        capture(receipt);
+        return true;
+      } catch {
+        return false;
+      }
     },
     isLocalSelection(receipt: NativeMemorySelection, path: string) {
-      return (
-        !closed &&
-        current?.receipt === receipt &&
-        current.local &&
-        current.path === path &&
-        !path.startsWith("remote://")
-      );
+      try {
+        const selected = capture(receipt);
+        return (
+          selected.local &&
+          selected.path === path &&
+          !path.startsWith("remote://")
+        );
+      } catch {
+        return false;
+      }
     },
     isReviewCurrent(
       receipt: NativeMemorySelection,
       accepted: NativeMemoryReview,
     ) {
+      try {
+        capture(receipt);
+      } catch {
+        return false;
+      }
       return (
         !closed &&
         current?.receipt === receipt &&
@@ -400,22 +420,30 @@ export function createNativeMemoryPresentation() {
       trust.retire();
       policy.retire();
       closing = (async () => {
-        if (!opening) return;
-        let owner: Handle;
-        try {
-          owner = await opening;
-        } catch {
-          return;
+        if (!acknowledged && opening) {
+          let owner: Handle | null = null;
+          try {
+            owner = await opening;
+          } catch {
+            // A rejected open returned no addressable resource.
+          }
+          if (owner) {
+            try {
+              await issue<void>("project_memory_close", { handle: owner });
+            } catch (error) {
+              if (
+                !error ||
+                typeof error !== "object" ||
+                !("code" in error) ||
+                error.code !== "cancelled"
+              )
+                throw error;
+            }
+          }
         }
-        await invoke<void>("project_memory_close", { handle: owner });
+        acknowledged = true;
+        await transport?.release();
       })().catch((error: unknown) => {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          error.code === "cancelled"
-        )
-          return;
         closing = null;
         throw error;
       });

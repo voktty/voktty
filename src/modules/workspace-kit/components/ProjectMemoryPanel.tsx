@@ -319,7 +319,9 @@ function MemoryObservation({
     state.status === "loading"
       ? "projectMemory.checking"
       : state.status === "error"
-        ? "projectMemory.error"
+        ? state.code === "unsupported"
+          ? "projectMemory.unsupported"
+          : "projectMemory.error"
         : state.observation.scope.state === "ready"
           ? "projectMemory.found"
           : state.observation.scope.state === "absent" ||
@@ -341,7 +343,10 @@ function MemoryObservation({
             {t("common.error")}: <code>{state.code}</code>
           </p>
         ) : null}
-        {state.status === "error" && state.code === "denied" ? (
+        {state.status === "error" &&
+        state.code === "denied" &&
+        target.environment.kind === "local" &&
+        !target.path.startsWith("remote://") ? (
           <Button
             size="sm"
             onClick={() => void controller.current?.authorize()}

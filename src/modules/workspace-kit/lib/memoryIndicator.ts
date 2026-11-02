@@ -1,8 +1,9 @@
-import {
+import type {
   createNativeMemoryPresentation,
-  type NativeMemoryScope,
-  type NativeMemorySelection,
+  NativeMemoryScope,
+  NativeMemorySelection,
 } from "@/modules/workspace-kit/lib/nativeMemory";
+import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
 import {
   supportedMemoryPanelTarget,
   type MemoryPanelTarget,
@@ -78,7 +79,7 @@ function close(entry: Entry): Promise<void> {
 export function createMemoryIndicator(
   target: MemoryPanelTarget,
   publish: (state: MemoryIndicatorState) => void,
-  createClient: () => Client = createNativeMemoryPresentation,
+  createClient: () => Client = () => createMemoryClient(target),
 ) {
   if (!supportedMemoryPanelTarget(target))
     throw new Error("Unsupported memory indicator target");

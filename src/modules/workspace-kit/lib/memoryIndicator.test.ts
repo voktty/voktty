@@ -126,7 +126,7 @@ it("does not interpret read failure as absence or admit unsupported transports",
   await indicator.dispose();
   const create = vi.fn(() => api);
   for (const input of [
-    { ...target, path: "remote://host/project" },
+    { ...target, path: "bad\npath" },
     { ...target, environment: { kind: "wsl" as const, distro: "owned" } },
   ])
     expect(() => createMemoryIndicator(input, notify, create)).toThrow();

@@ -1,13 +1,14 @@
 import type { WorkspaceEnv } from "@/modules/workspace/env";
 import type { MemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
 import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
-import {
+import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
+import type {
   createNativeMemoryPresentation,
-  type NativeMemoryScope,
-  type NativeMemorySelection,
-  type NativeMemoryReview,
-  type NativeMemoryPublication,
-  type NativeMemoryDeploymentError,
+  NativeMemoryScope,
+  NativeMemorySelection,
+  NativeMemoryReview,
+  NativeMemoryPublication,
+  NativeMemoryDeploymentError,
 } from "@/modules/workspace-kit/lib/nativeMemory";
 import type {
   NativeMemoryTrustReview,
@@ -113,10 +114,12 @@ function closeEntry(entry: Entry): Promise<boolean> {
 export function createMemoryPanelController(
   target: MemoryPanelTarget,
   publish: (state: MemoryPanelState) => void,
-  createClient: () => Client = createNativeMemoryPresentation,
-  authorizeDirectory: (
-    path: string,
-  ) => Promise<string> = authorizeNativeMemoryDirectory,
+  createClient: () => Client = () => createMemoryClient(target),
+  authorizeDirectory: (path: string) => Promise<string> = (path) => {
+    if (target.environment.kind !== "local" || path.startsWith("remote://"))
+      return Promise.reject({ code: "unsupported" });
+    return authorizeNativeMemoryDirectory(path);
+  },
 ) {
   for (const entry of entries) if (entry.retired) void closeEntry(entry);
   if (entries.size >= MAX_PANELS)
@@ -217,7 +220,11 @@ export function createMemoryPanelController(
   function deploy(
     work: (receipt: NativeMemorySelection) => Promise<void>,
     operation:
-      "deployment" | "trust" | "policy" | "documents" | "setup" = "deployment",
+      | "deployment"
+      | "trust"
+      | "policy"
+      | "documents"
+      | "setup" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
@@ -301,6 +308,8 @@ export function createMemoryPanelController(
       if (
         state.status !== "error" ||
         state.code !== "denied" ||
+        captured.environment.kind !== "local" ||
+        captured.path.startsWith("remote://") ||
         !supportedMemoryPanelTarget(captured)
       )
         return Promise.resolve();
@@ -530,8 +539,8 @@ export function canReviewMemoryPolicy(observation: NativeMemoryScope) {
 
 export function supportedMemoryPanelTarget(target: MemoryPanelTarget) {
   return (
-    target.environment.kind === "local" &&
-    !target.path.startsWith("remote://") &&
+    (target.environment.kind === "local" ||
+      target.environment.kind === "ssh") &&
     target.path.length > 0 &&
     target.path.length <= 4096 &&
     !/[\x00-\x1f\x7f]/.test(target.path)

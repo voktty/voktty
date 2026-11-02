@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
+import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
 
 type Handle = Readonly<{ id: number; token: string }>;
 const brand = Symbol("native-memory-context");
@@ -15,6 +16,7 @@ type Binding = (
     instructionDigest: string;
   }>,
   issue: (handle: Handle, check: () => void) => Promise<unknown>,
+  acquireTransport?: () => MemoryTransport,
 ) => Promise<() => void>;
 const bindings = new WeakMap<NativeMemoryContext, Binding>();
 let resources = 0;
@@ -121,9 +123,12 @@ export function bindNativeMemoryContext(
     instructionDigest: string;
   }>,
   issue: (handle: Handle, check: () => void) => Promise<unknown>,
+  acquireTransport?: () => MemoryTransport,
 ): Promise<() => void> {
   const bind = bindings.get(context);
-  return bind ? bind(identity, issue) : Promise.reject({ code: "cancelled" });
+  return bind
+    ? bind(identity, issue, acquireTransport)
+    : Promise.reject({ code: "cancelled" });
 }
 
 export function createNativeMemoryContext(
@@ -138,6 +143,9 @@ export function createNativeMemoryContext(
   let reserved = false;
   let binding = false;
   let acknowledged = false;
+  let transport: MemoryTransport | undefined;
+  const request = <T>(command: string, args?: Record<string, unknown>) =>
+    transport ? transport.invoke<T>(command, args) : invoke<T>(command, args);
   let expectedPacket: Readonly<{
     projectKey: string;
     instructionDigest: string;
@@ -147,6 +155,7 @@ export function createNativeMemoryContext(
       retired = true;
       fail("cancelled");
     }
+    transport?.check();
   }
   function release() {
     if (reserved && acknowledged && !binding && !reading) {
@@ -166,7 +175,7 @@ export function createNativeMemoryContext(
         }
         if (handle) {
           try {
-            await invoke("project_memory_context_close", { handle });
+            await request("project_memory_context_close", { handle });
           } catch (error) {
             if (
               !error ||
@@ -178,6 +187,7 @@ export function createNativeMemoryContext(
           }
           handle = null;
         }
+        await transport?.release();
         acknowledged = true;
         release();
       })
@@ -200,7 +210,7 @@ export function createNativeMemoryContext(
         reading = Promise.resolve().then(async () => {
           try {
             check();
-            const reply = await invoke("project_memory_context_read", {
+            const reply = await request("project_memory_context_read", {
               handle: captured,
             });
             check();
@@ -229,7 +239,7 @@ export function createNativeMemoryContext(
     },
     close,
   });
-  bindings.set(context, async (identity, issue) => {
+  bindings.set(context, async (identity, issue, acquireTransport) => {
     check();
     if (phase !== "empty") fail("cancelled");
     if (resources >= 256) fail("busy");
@@ -239,7 +249,9 @@ export function createNativeMemoryContext(
     binding = true;
     opening = Promise.resolve().then(async () => {
       check();
-      const reply = record(await invoke("project_memory_context_open"));
+      transport = acquireTransport?.();
+      check();
+      const reply = record(await request("project_memory_context_open"));
       if (
         !Number.isSafeInteger(reply.id) ||
         (reply.id as number) < 0 ||
