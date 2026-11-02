@@ -7,6 +7,10 @@ use voktty_workspace_kit::{render_template, PathFact};
 #[path = "selection_tests.rs"]
 mod selection_tests;
 
+#[cfg(any(target_os = "linux", windows))]
+#[path = "initialization_flow_tests.rs"]
+mod initialization_flow_tests;
+
 #[path = "owners_tests.rs"]
 mod owners_tests;
 

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ProjectMemoryPanel from "@/modules/workspace-kit/components/ProjectMemoryPanel";
+import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -58,6 +59,7 @@ async function click(label: string) {
 }
 async function configure() {
   await click("projectMemory.initialize");
+  await click("projectMemory.prepare");
   await click("projectMemory.next");
 }
 async function reviewFiles() {
@@ -271,7 +273,7 @@ it("continues from first local setup through installation to managing the discov
       return;
     }
     if (command === "project_memory_discover") {
-      if (!prepared) throw { code: "missingState" };
+      if (!args?.inspectionOnly && !prepared) throw { code: "missingState" };
       if (installed)
         return {
           schema: 1,
@@ -285,11 +287,10 @@ it("continues from first local setup through installation to managing the discov
     return result;
   });
   await click("common.refresh");
-  expect(container.textContent).toContain("projectMemory.prepareDescription");
-  await click("projectMemory.prepare");
-  expect(prepared).toBe(true);
+  expect(prepared).toBe(false);
   await click("projectMemory.inspectAncestors");
   await reviewFiles();
+  expect(prepared).toBe(true);
   await act(async () =>
     container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click(),
   );
@@ -356,3 +357,179 @@ it("offers explicit authorization when native selection rejects an unregistered 
   expect(container.textContent).toContain("projectMemory.inspectDescription");
   expect(invoke.mock.calls.some(([command]) => command === "project_memory_initialize_local_state" || command === "project_memory_confirm_trust")).toBe(false);
 });
+
+it("leaves the authorization loop and offers initialization when private settings deny access but project markers are readable", async () => {
+  let authorized = false;
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "workspace_authorize") {
+      authorized = true;
+      return "C:/projects/example";
+    }
+    if (command === "project_memory_select" && !authorized)
+      throw { code: "denied" };
+    if (command === "project_memory_discover") {
+      if (!args?.inspectionOnly) throw { code: "denied" };
+      return {
+        schema: 1,
+        root: null,
+        blockedCount: 0,
+        scope: { state: "reserved", ancestryComplete: true },
+      };
+    }
+    return original?.(command, args);
+  });
+  await act(async () =>
+    root.render(
+      <ProjectMemoryPanel
+        key="private-settings-denied"
+        target={{ ...target, path: "c:/projects/example" }}
+      />,
+    ),
+  );
+  await click("git.authorizeDirectory");
+  expect(container.textContent).not.toContain("denied");
+  expect(button("projectMemory.initialize").disabled).toBe(false);
+  expect(
+    invoke.mock.calls.filter(([command]) => command === "workspace_authorize"),
+  ).toHaveLength(1);
+  const inspections = invoke.mock.calls.filter(
+    ([command]) => command === "project_memory_discover",
+  );
+  expect(inspections.length).toBeGreaterThan(0);
+  expect(inspections.every(([, args]) => args.inspectionOnly === true)).toBe(
+    true,
+  );
+  expect(
+    invoke.mock.calls.some(
+      ([command]) =>
+        command === "project_memory_initialize_local_state" ||
+        command === "project_memory_confirm_preview",
+    ),
+  ).toBe(false);
+});
+
+it("keeps the authorized canonical selection from setup through installation and use settings", async () => {
+  let prepared = false;
+  let installed = false;
+  const canonical = "C:/projects/example";
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "workspace_authorize") return canonical;
+    if (command === "project_memory_select" && args.path !== canonical)
+      throw { code: "denied" };
+    if (command === "project_memory_initialize_local_state") {
+      prepared = true;
+      return;
+    }
+    if (command === "project_memory_discover") {
+      if (!args.inspectionOnly && !prepared) throw { code: "denied" };
+      return {
+        schema: 1,
+        root: installed ? canonical : null,
+        blockedCount: 0,
+        scope: {
+          state: installed ? "ready" : "reserved",
+          ancestryComplete: true,
+        },
+      };
+    }
+    if (command === "project_memory_preview") {
+      expect(prepared).toBe(true);
+      return { ...structuredClone(preview), root: canonical };
+    }
+    if (command === "project_memory_confirm_preview") installed = true;
+    return original?.(command, args);
+  });
+  await act(async () =>
+    root.render(
+      <ProjectMemoryPanel
+        key="canonical-installation"
+        target={{ ...target, path: "c:/projects/example" }}
+      />,
+    ),
+  );
+  await click("git.authorizeDirectory");
+  await reviewFiles();
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')
+      ?.click(),
+  );
+  await click("projectMemory.initialize");
+  await click("projectMemory.next");
+  expect(container.textContent).toContain("projectMemory.found");
+  expect(container.textContent).not.toContain("denied");
+  expect(button("projectMemory.reviewTrust")).toBeDefined();
+  expect(button("projectMemory.policyConfigure")).toBeDefined();
+  expect(
+    invoke.mock.calls.filter(([command]) => command === "workspace_authorize"),
+  ).toHaveLength(1);
+});
+
+it("can prepare this computer's missing settings before trusting an existing project memory", async () => {
+  let prepared = false;
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "project_memory_discover")
+      return {
+        schema: 1,
+        root: "/canonical/owned",
+        blockedCount: 0,
+        scope: { state: "ready", ancestryComplete: true },
+      };
+    if (command === "project_memory_review_trust") {
+      if (!prepared) throw { code: "missingState" };
+      return { ...trustReply(args.request.revision), root: "/canonical/owned" };
+    }
+    if (command === "project_memory_initialize_local_state") {
+      prepared = true;
+      return;
+    }
+    return original?.(command, args);
+  });
+  await click("common.refresh");
+  await click("projectMemory.reviewTrust");
+  expect(prepared).toBe(false);
+  expect(container.textContent).toContain("projectMemory.prepareDescription");
+  await click("projectMemory.prepare");
+  expect(prepared).toBe(true);
+  await click("projectMemory.reviewTrust");
+  expect(container.textContent).toContain("projectMemory.trustAccept");
+  expect(
+    invoke.mock.calls.some(([command]) =>
+      /project_memory_(preview|confirm_preview|confirm_trust|confirm_policy)/.test(
+        command,
+      ),
+    ),
+  ).toBe(false);
+});
+
+it.each(["denied", "invalidState", "unsupported"])(
+  "does not offer missing-settings recovery for an existing memory's %s error",
+  async (code) => {
+    const original = invoke.getMockImplementation();
+    invoke.mockImplementation(async (command, args) => {
+      if (command === "project_memory_discover")
+        return {
+          schema: 1,
+          root: "/canonical/owned",
+          blockedCount: 0,
+          scope: { state: "ready", ancestryComplete: true },
+        };
+      if (command === "project_memory_review_trust") throw { code };
+      return original?.(command, args);
+    });
+    await click("common.refresh");
+    await click("projectMemory.reviewTrust");
+    expect(container.textContent).toContain("projectMemory.trustFailed");
+    expect(container.textContent).not.toContain(
+      "projectMemory.prepareDescription",
+    );
+    expect(
+      invoke.mock.calls.some(
+        ([command]) => command === "project_memory_initialize_local_state",
+      ),
+    ).toBe(false);
+  },
+);

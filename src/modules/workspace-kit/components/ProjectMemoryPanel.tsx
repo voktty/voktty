@@ -116,6 +116,27 @@ export default function ProjectMemoryPanel({
   );
 }
 
+function MemorySettingsRecovery({
+  code,
+  onPrepare,
+}: {
+  code?: string;
+  onPrepare: () => void;
+}) {
+  const { t } = useTranslation();
+  if (code !== "missingState" && code !== "unavailable") return null;
+  return (
+    <div className="space-y-3 rounded-lg border border-border p-3">
+      <p className="text-xs text-muted-foreground">
+        {t("projectMemory.prepareDescription")}
+      </p>
+      <Button variant="outline" size="sm" onClick={onPrepare}>
+        {t("projectMemory.prepare")}
+      </Button>
+    </div>
+  );
+}
+
 function MemoryObservation({
   target,
   onReload,
@@ -185,6 +206,12 @@ function MemoryObservation({
             void controller.current?.backPolicy();
           }}
         />
+        <MemorySettingsRecovery
+          code={state.status === "policyError" ? state.code : undefined}
+          onPrepare={() => {
+            void controller.current?.prepare();
+          }}
+        />
         <DialogFooter>
           <Button
             variant="outline"
@@ -218,6 +245,12 @@ function MemoryObservation({
             void controller.current?.backTrust();
           }}
         />
+        <MemorySettingsRecovery
+          code={state.status === "trustError" ? state.code : undefined}
+          onPrepare={() => {
+            void controller.current?.prepare();
+          }}
+        />
         <DialogFooter>
           <Button
             variant="outline"
@@ -243,6 +276,9 @@ function MemoryObservation({
         <MemoryInitialization
           state={state}
           directory={target.path}
+          onPrepare={() => {
+            void controller.current?.prepareInitialization();
+          }}
           onPreview={(values, links) => {
             void controller.current?.preview(values, links);
           }}
@@ -255,7 +291,12 @@ function MemoryObservation({
         />
         <DialogFooter>
           {state.status === "published" ? (
-            <Button size="sm" onClick={onReload}>
+            <Button
+              size="sm"
+              onClick={() => {
+                void controller.current?.load();
+              }}
+            >
               {t("projectMemory.next")}
             </Button>
           ) : null}
@@ -263,7 +304,9 @@ function MemoryObservation({
             variant="outline"
             size="sm"
             disabled={
-              state.status === "previewing" || state.status === "publishing"
+              state.status === "previewing" ||
+              state.status === "publishing" ||
+              state.status === "preparingInitialization"
             }
             onClick={onReload}
           >

@@ -36,6 +36,7 @@ function fixture() {
     select: vi.fn(async () => selected),
     isCurrent: vi.fn(() => true),
     discover: vi.fn(async () => observation),
+    inspect: vi.fn(async () => observation),
     documents: vi.fn(),
     initializeLocalState: vi.fn(),
     close: vi.fn(async () => {}),
@@ -106,7 +107,7 @@ it("blocks instruction review for ambiguous, incomplete, unavailable or unrooted
     })),
   ]) {
     const f = fixture();
-    f.api.discover.mockResolvedValue(invalid);
+    f.api.inspect.mockResolvedValue(invalid);
     await f.panel.load();
     await f.panel.reviewTrust();
     expect(f.api.reviewTrust).not.toHaveBeenCalled();

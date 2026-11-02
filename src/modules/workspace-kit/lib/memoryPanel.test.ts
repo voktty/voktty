@@ -29,6 +29,7 @@ function client() {
     select: vi.fn(async () => selected),
     isCurrent: vi.fn(() => true),
     discover: vi.fn(async () => observation),
+    inspect: vi.fn(async () => observation),
     documents: vi.fn(),
     initializeLocalState: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
@@ -54,7 +55,7 @@ it("reads display documents only by action and never changes trust, policy or st
     blockedCount: 0,
     scope: { state: "ready", ancestryComplete: true },
   } as NativeMemoryScope;
-  api.discover.mockResolvedValue(ready);
+  api.inspect.mockResolvedValue(ready);
   const snapshot = {
     schema: 1,
     root: "/project",
@@ -93,7 +94,7 @@ it("reads display documents only by action and never changes trust, policy or st
 
 it("withdraws document admission if a loading observer retires its panel", async () => {
   const api = client();
-  api.discover.mockResolvedValue({
+  api.inspect.mockResolvedValue({
     ...observation,
     blockedCount: 0,
     scope: { state: "ready", ancestryComplete: true },
@@ -125,7 +126,8 @@ it("starts no work on creation, coalesces reads, and prepares only on explicit a
   expect(panel.load()).toBe(load);
   await load;
   expect(api.initializeLocalState).not.toHaveBeenCalled();
-  expect(api.discover).toHaveBeenCalledWith(selected);
+  expect(api.inspect).toHaveBeenCalledWith(selected);
+  expect(api.discover).not.toHaveBeenCalled();
   expect(states[states.length - 1]).toEqual({ status: "ready", observation });
   await panel.prepare();
   expect(api.initializeLocalState).toHaveBeenCalledOnce();
@@ -153,7 +155,7 @@ it("cannot publish a read after closing and does not prepare from a stale select
   const api = client();
   const read = deferred<NativeMemoryScope>();
   const started = deferred<void>();
-  api.discover.mockImplementation(() => {
+  api.inspect.mockImplementation(() => {
     started.resolve();
     return read.promise;
   });
@@ -174,7 +176,7 @@ it("cannot publish a read after closing and does not prepare from a stale select
 it("requires a retained selected source before offering private-state preparation", async () => {
   const api = client();
   const publish = vi.fn();
-  api.discover.mockRejectedValueOnce({ code: "missingState" });
+  api.inspect.mockRejectedValueOnce({ code: "missingState" });
   const panel = createMemoryPanelController(target, publish, () => api);
   await panel.load();
   expect(publish).toHaveBeenLastCalledWith({

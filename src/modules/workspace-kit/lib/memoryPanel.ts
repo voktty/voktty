@@ -41,6 +41,8 @@ export type MemoryPanelState =
   | { status: "ready"; observation: NativeMemoryScope }
   | { status: "error"; code: string; canPrepare: boolean }
   | { status: "configuring" }
+  | { status: "initializationSetup"; code?: string }
+  | { status: "preparingInitialization" }
   | { status: "previewing" }
   | { status: "review" | "publishing"; review: NativeMemoryReview }
   | { status: "published"; root: string; report: NativeMemoryPublication }
@@ -65,6 +67,7 @@ type Client = Pick<
   | "select"
   | "isCurrent"
   | "discover"
+  | "inspect"
   | "documents"
   | "initializeLocalState"
   | "close"
@@ -170,7 +173,9 @@ export function createMemoryPanelController(
             await entry.client.initializeLocalState(receipt);
             if (!current()) return;
           }
-          const observed = await entry.client.discover(receipt);
+          const observed = prepare
+            ? await entry.client.discover(receipt)
+            : await entry.client.inspect(receipt);
           if (!current()) return;
           observation = observed;
           notify({ status: "ready", observation: observed });
@@ -211,7 +216,8 @@ export function createMemoryPanelController(
   }
   function deploy(
     work: (receipt: NativeMemorySelection) => Promise<void>,
-    operation: "deployment" | "trust" | "policy" | "documents" = "deployment",
+    operation:
+      "deployment" | "trust" | "policy" | "documents" | "setup" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
@@ -231,13 +237,30 @@ export function createMemoryPanelController(
               ? (error as NativeMemoryDeploymentError)
               : { code: "unavailable" };
           notify(
-            operation === "documents"
-              ? { status: "documentsError", code: failure.code }
-              : operation === "trust"
-                ? { status: "trustError", code: failure.code }
-                : operation === "policy"
-                  ? { status: "policyError", code: failure.code }
-                  : { status: "deploymentError", error: failure },
+            operation === "setup"
+              ? {
+                  status: "initializationSetup",
+                  code: [
+                    "denied",
+                    "missingState",
+                    "invalidState",
+                    "unsupported",
+                    "unavailable",
+                    "timeout",
+                    "busy",
+                    "limit",
+                    "stale",
+                  ].includes(failure.code)
+                    ? failure.code
+                    : "unavailable",
+                }
+              : operation === "documents"
+                ? { status: "documentsError", code: failure.code }
+                : operation === "trust"
+                  ? { status: "trustError", code: failure.code }
+                  : operation === "policy"
+                    ? { status: "policyError", code: failure.code }
+                    : { status: "deploymentError", error: failure },
           );
         }
       })
@@ -407,7 +430,16 @@ export function createMemoryPanelController(
         state.status === "ready" &&
         canInitializeMemory(state.observation)
       )
-        notify({ status: "configuring" });
+        notify({ status: "initializationSetup" });
+    },
+    prepareInitialization() {
+      if (state.status !== "initializationSetup") return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "preparingInitialization" });
+        if (!current()) return;
+        await entry.client.initializeLocalState(receipt);
+        if (current()) notify({ status: "configuring" });
+      }, "setup");
     },
     preview(
       inputs: Readonly<Record<string, string>>,
@@ -453,7 +485,10 @@ export function createMemoryPanelController(
         notify({ status: "configuring" });
         return Promise.resolve();
       }
-      if (state.status === "configuring") {
+      if (
+        state.status === "configuring" ||
+        state.status === "initializationSetup"
+      ) {
         notify({ status: "ready", observation });
         return Promise.resolve();
       }

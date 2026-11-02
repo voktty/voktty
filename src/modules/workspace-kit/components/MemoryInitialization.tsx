@@ -22,6 +22,7 @@ export function MemoryInitialization({
   state,
   directory,
   onPreview,
+  onPrepare,
   onConfirm,
   onBack,
 }: {
@@ -31,6 +32,7 @@ export function MemoryInitialization({
     values: Record<string, string>,
     links: { agents: boolean; claude: boolean },
   ) => void;
+  onPrepare: () => void;
   onConfirm: (review: NativeMemoryReview) => void;
   onBack: () => void;
 }) {
@@ -54,6 +56,34 @@ export function MemoryInitialization({
   }));
   const [links, setLinks] = useState({ agents: false, claude: false });
   const [accepted, setAccepted] = useState<NativeMemoryReview | null>(null);
+  if (
+    state.status === "initializationSetup" ||
+    state.status === "preparingInitialization"
+  ) {
+    const busy = state.status === "preparingInitialization";
+    return (
+      <div className="space-y-3 text-sm" aria-busy={busy}>
+        <h3 className="font-medium">{t("projectMemory.prepare")}</h3>
+        <p className="text-xs text-muted-foreground">
+          {t("projectMemory.prepareDescription")}
+        </p>
+        {state.status === "initializationSetup" && state.code ? (
+          <p role="alert">
+            {t("common.error")}: <code>{state.code}</code>
+          </p>
+        ) : null}
+        {busy ? <p role="status">{t("projectMemory.checking")}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={busy} onClick={onBack}>
+            {t("common.back")}
+          </Button>
+          <Button size="sm" disabled={busy} onClick={onPrepare}>
+            {t("projectMemory.prepare")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
   if (state.status === "configuring")
     return (
       <form

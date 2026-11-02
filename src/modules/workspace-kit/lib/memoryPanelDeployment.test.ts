@@ -41,6 +41,7 @@ function fixture() {
     select: vi.fn(async () => selected),
     isCurrent: vi.fn(() => true),
     discover: vi.fn(async () => observation),
+    inspect: vi.fn(async () => observation),
     documents: vi.fn(),
     initializeLocalState: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
@@ -97,7 +98,7 @@ it("requires complete absence, and never interprets a kit or incomplete scope as
 });
 it("inspects ancestors only by explicit action with a fresh selection and no state initialization", async () => {
   const f = fixture();
-  f.api.discover.mockResolvedValueOnce({
+  f.api.inspect.mockResolvedValueOnce({
     ...observation,
     scope: {
       ...observation.scope,
@@ -107,6 +108,7 @@ it("inspects ancestors only by explicit action with a fresh selection and no sta
   });
   await f.panel.load();
   f.panel.configure();
+  await f.panel.prepareInitialization();
   expect(f.states[f.states.length - 1]?.status).toBe("ready");
   await f.panel.inspectAncestors();
   expect(f.api.select).toHaveBeenLastCalledWith(
@@ -116,6 +118,7 @@ it("inspects ancestors only by explicit action with a fresh selection and no sta
   );
   expect(f.api.initializeLocalState).not.toHaveBeenCalled();
   f.panel.configure();
+  await f.panel.prepareInitialization();
   expect(f.states[f.states.length - 1]?.status).toBe("configuring");
   await f.panel.dispose();
 });
@@ -123,6 +126,7 @@ it("captures preview inputs, requires the exact displayed review, and consumes c
   const f = fixture();
   await f.panel.load();
   f.panel.configure();
+  await f.panel.prepareInitialization();
   const values = { project_name: "original" };
   const links = { agents: false, claude: false };
   const pending = f.panel.preview(values, links);
@@ -145,10 +149,66 @@ it("captures preview inputs, requires the exact displayed review, and consumes c
   expect(f.states[f.states.length - 1]?.status).toBe("published");
   await f.panel.dispose();
 });
+
+it("requires explicit local setup before preview and keeps a setup denial separate from project authorization", async () => {
+  const f = fixture();
+  await f.panel.load();
+  f.panel.configure();
+  expect(f.states[f.states.length - 1]).toEqual({
+    status: "initializationSetup",
+  });
+  await f.panel.preview({}, { agents: false, claude: false });
+  expect(f.api.preview).not.toHaveBeenCalled();
+  expect(f.api.initializeLocalState).not.toHaveBeenCalled();
+  f.api.initializeLocalState.mockRejectedValueOnce({ code: "denied" });
+  await f.panel.prepareInitialization();
+  expect(f.states[f.states.length - 1]).toEqual({
+    status: "initializationSetup",
+    code: "denied",
+  });
+  expect(f.api.preview).not.toHaveBeenCalled();
+  await f.panel.authorize();
+  expect(f.api.select).toHaveBeenCalledTimes(1);
+  await f.panel.prepareInitialization();
+  expect(f.states[f.states.length - 1]).toEqual({ status: "configuring" });
+  await f.panel.dispose();
+});
+
+it.each(["preparingInitialization", "settlement"])(
+  "retires local setup after %s without starting preview or publishing late state",
+  async (phase) => {
+    const f = fixture();
+    const started = deferred<void>();
+    const setup = deferred<void>();
+    f.api.initializeLocalState.mockImplementation(() => {
+      started.resolve();
+      return setup.promise;
+    });
+    await f.panel.load();
+    f.panel.configure();
+    if (phase === "preparingInitialization")
+      f.publish.mockImplementation((state) => {
+        if (state.status === "preparingInitialization") void f.panel.dispose();
+      });
+    const pending = f.panel.prepareInitialization();
+    if (phase === "settlement") {
+      await started.promise;
+      await f.panel.dispose();
+      setup.resolve();
+    }
+    await pending;
+    expect(f.api.preview).not.toHaveBeenCalled();
+    expect(
+      f.publish.mock.calls[f.publish.mock.calls.length - 1]?.[0].status,
+    ).toBe("preparingInitialization");
+    await f.panel.dispose();
+  },
+);
 it("withdraws confirmation admission when a publication observer closes the panel", async () => {
   const f = fixture();
   await f.panel.load();
   f.panel.configure();
+  await f.panel.prepareInitialization();
   await f.panel.preview({}, { agents: false, claude: false });
   f.publish.mockImplementation((state) => {
     if (state.status === "publishing") void f.panel.dispose();
@@ -171,6 +231,7 @@ it("blocks conflicts, native blockers and retired reviews before publication", a
     f.api.preview.mockResolvedValueOnce(blocked);
     await f.panel.load();
     f.panel.configure();
+    await f.panel.prepareInitialization();
     await f.panel.preview({}, { agents: false, claude: false });
     if (snapshot === review.snapshot)
       f.api.isReviewCurrent.mockReturnValue(false);
@@ -189,6 +250,7 @@ it("suppresses a late preview after disposal and never confirms it", async () =>
   });
   await f.panel.load();
   f.panel.configure();
+  await f.panel.prepareInitialization();
   const pending = f.panel.preview({}, { agents: false, claude: false });
   await started.promise;
   await f.panel.dispose();
@@ -203,6 +265,7 @@ it("retires a reviewed preview before returning to editable setup and never retr
   const f = fixture();
   await f.panel.load();
   f.panel.configure();
+  await f.panel.prepareInitialization();
   await f.panel.preview({}, { agents: false, claude: false });
   await f.panel.back();
   expect(f.api.cancelPreview).toHaveBeenCalledWith(selected);

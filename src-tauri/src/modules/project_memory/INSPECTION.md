@@ -40,6 +40,21 @@ reply is the existing `scope`, `root` and `blockedCount` envelope; instruction
 bodies, raw facts, blocked paths, preferences and installation identity stay
 native. Directory keys are observation-local, not persistent project identities.
 
+The management panel uses that same state-free inspection for opening, refresh,
+directory authorization recovery and accepted ancestor inspection. A private
+settings error must not be presented as a reason to authorize the project again.
+Initialization first presents an explicit local-settings preparation step before
+the project-values and file-preview steps. That action creates or opens the
+private installation state under its existing native checks; it grants neither
+instruction trust nor conversation delivery. A failure remains in that step with
+a bounded error code and an explicit retry. Project publication still requires
+its separate exact file review. Continuing after publication retains the original
+authorized selection rather than reopening the caller's unqualified path.
+For an existing kit, a trust or policy review that reports missing or unavailable
+local settings offers that same explicit preparation action. Access denial,
+invalid state and unsupported transports do not offer this recovery or change
+the original authorization requirements.
+
 Green means a valid marker was found with complete ancestry and no blocked
 observations. It does not mean that an agent received memory, instruction trust
 was accepted or context delivery is enabled. Confirmed absence is neutral;

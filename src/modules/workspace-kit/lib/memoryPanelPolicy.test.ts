@@ -46,6 +46,7 @@ function fixture() {
     select: vi.fn(async () => selected),
     isCurrent: vi.fn(() => true),
     discover: vi.fn(async () => observation),
+    inspect: vi.fn(async () => observation),
     documents: vi.fn(),
     initializeLocalState: vi.fn(),
     close: vi.fn(async () => {}),
@@ -161,7 +162,7 @@ it("requires complete, unambiguous native memory before offering policy choices"
     })),
   ]) {
     const f = fixture();
-    f.api.discover.mockResolvedValue(invalid);
+    f.api.inspect.mockResolvedValue(invalid);
     await f.panel.load();
     f.panel.configurePolicy();
     await f.panel.reviewPolicy("always");
