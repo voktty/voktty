@@ -21,6 +21,7 @@ type InitializationState = Exclude<
 export function MemoryInitialization({
   state,
   directory,
+  remote = false,
   onPreview,
   onPrepare,
   onConfirm,
@@ -28,6 +29,7 @@ export function MemoryInitialization({
 }: {
   state: InitializationState;
   directory: string;
+  remote?: boolean;
   onPreview: (
     values: Record<string, string>,
     links: { agents: boolean; claude: boolean },
@@ -63,9 +65,19 @@ export function MemoryInitialization({
     const busy = state.status === "preparingInitialization";
     return (
       <div className="space-y-3 text-sm" aria-busy={busy}>
-        <h3 className="font-medium">{t("projectMemory.prepare")}</h3>
+        <h3 className="font-medium">
+          {t(
+            remote
+              ? "projectMemory.sshSettings.prepare"
+              : "projectMemory.prepare",
+          )}
+        </h3>
         <p className="text-xs text-muted-foreground">
-          {t("projectMemory.prepareDescription")}
+          {t(
+            remote
+              ? "projectMemory.sshSettings.prepareDescription"
+              : "projectMemory.prepareDescription",
+          )}
         </p>
         {state.status === "initializationSetup" && state.code ? (
           <p role="alert">
@@ -78,7 +90,11 @@ export function MemoryInitialization({
             {t("common.back")}
           </Button>
           <Button size="sm" disabled={busy} onClick={onPrepare}>
-            {t("projectMemory.prepare")}
+            {t(
+              remote
+                ? "projectMemory.sshSettings.prepare"
+                : "projectMemory.prepare",
+            )}
           </Button>
         </div>
       </div>

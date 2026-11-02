@@ -6,10 +6,12 @@ import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/native
 
 export function MemoryTrust({
   state,
+  remote = false,
   onConfirm,
   onBack,
 }: {
   state: MemoryTrustState;
+  remote?: boolean;
   onConfirm: (review: NativeMemoryTrustReview) => void;
   onBack: () => void;
 }) {
@@ -23,7 +25,11 @@ export function MemoryTrust({
     <div className="space-y-3 text-sm" aria-busy={busy}>
       <h3 className="font-medium">{t("projectMemory.trustTitle")}</h3>
       <p className="text-xs text-muted-foreground">
-        {t("projectMemory.trustDescription")}
+        {t(
+          remote
+            ? "projectMemory.sshSettings.trustDescription"
+            : "projectMemory.trustDescription",
+        )}
       </p>
       {state.status === "trustLoading" ? (
         <p role="status">{t("projectMemory.checking")}</p>
@@ -98,7 +104,13 @@ export function MemoryTrust({
                 setAccepted(event.target.checked ? state.review : null)
               }
             />
-            <span>{t("projectMemory.trustAccept")}</span>
+            <span>
+              {t(
+                remote
+                  ? "projectMemory.sshSettings.trustAccept"
+                  : "projectMemory.trustAccept",
+              )}
+            </span>
           </label>
         </>
       ) : null}

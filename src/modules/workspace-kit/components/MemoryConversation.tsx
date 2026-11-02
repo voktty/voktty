@@ -20,6 +20,9 @@ export function MemoryConversation({
   environment: WorkspaceEnv;
 }) {
   const { t } = useTranslation();
+  const remote =
+    conversation.cwd.startsWith("remote://") ||
+    (conversation.environment ?? environment).kind === "ssh";
   const status = useSyncExternalStore(
     conversation.subscribe,
     conversation.status,
@@ -191,7 +194,9 @@ export function MemoryConversation({
                       ? "projectMemory.deliveryPrepared"
                       : "projectMemory.conversationPrepared"
                     : result.decision.reason === "KIT_MEMORY_POLICY_NEVER"
-                      ? "projectMemory.conversationPolicyBlocked"
+                      ? remote
+                        ? "projectMemory.sshSettings.conversationPolicyBlocked"
+                        : "projectMemory.conversationPolicyBlocked"
                       : "projectMemory.conversationTrustBlocked",
                 )}
               </p>
@@ -234,7 +239,11 @@ export function MemoryConversation({
                       </div>
                     ) : (
                       <p className="text-xs">
-                        {t("projectMemory.deliveryUnsupported")}
+                        {t(
+                          remote
+                            ? "projectMemory.sshSettings.deliveryUnsupported"
+                            : "projectMemory.deliveryUnsupported",
+                        )}
                       </p>
                     )
                   ) : null}

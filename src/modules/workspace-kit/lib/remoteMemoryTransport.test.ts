@@ -283,37 +283,130 @@ it("captures the saved source before any delayed load and never adopts a new pro
   expect(io.acquire).not.toHaveBeenCalled();
 });
 
-it("renders the shared manager for a connected Harness namespace and reviews host instructions", async () => {
-  initialized = true;
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const element = document.createElement("div");
-  document.body.append(element);
-  const root = createRoot(element);
-  try {
-    await act(async () =>
-      root.render(
-        createElement(ProjectMemoryPanel, { target: connectedNamespace }),
-      ),
-    );
-    expect(element.textContent).toContain("projectMemory.found");
-    expect(element.textContent).not.toContain("projectMemory.unsupported");
-    const review = [...element.querySelectorAll("button")].find(
-      (button) => button.textContent === "projectMemory.reviewTrust",
-    );
-    expect(review).toBeDefined();
-    await act(async () => review?.click());
-    expect(
-      [...element.querySelectorAll("pre")].map((pre) => pre.textContent),
-    ).toContain(trustReply().instructions.files[0].fact.text);
-    expect(element.textContent).toContain(namespace.path);
-    expect(io.native).not.toHaveBeenCalled();
-  } finally {
-    await act(async () => root.unmount());
-    element.remove();
-    vi.unstubAllGlobals();
-  }
-  await vi.waitFor(() => expect(close).toHaveBeenCalledExactlyOnceWith(7));
-});
+it.each([target, namespace, connectedNamespace])(
+  "renders SSH trust and policy effects for $source",
+  async (input) => {
+    initialized = true;
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    try {
+      await act(async () =>
+        root.render(createElement(ProjectMemoryPanel, { target: input })),
+      );
+      expect(element.textContent).toContain("projectMemory.found");
+      expect(element.textContent).not.toContain("projectMemory.unsupported");
+      const review = [...element.querySelectorAll("button")].find(
+        (button) => button.textContent === "projectMemory.reviewTrust",
+      );
+      expect(review).toBeDefined();
+      await act(async () => review?.click());
+      expect(
+        [...element.querySelectorAll("pre")].map((pre) => pre.textContent),
+      ).toContain(trustReply().instructions.files[0].fact.text);
+      expect(element.textContent).toContain(input.path);
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.trustDescription",
+      );
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.trustAccept",
+      );
+      expect(element.textContent).not.toContain(
+        "projectMemory.trustDescription",
+      );
+      const click = async (label: string) => {
+        const button = [...element.querySelectorAll("button")].find(
+          (item) => item.textContent === label,
+        );
+        expect(button).toBeDefined();
+        await act(async () => button?.click());
+      };
+      await click("common.back");
+      await click("projectMemory.policyConfigure");
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.policyTitle",
+      );
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.policyDescription",
+      );
+      const never = element.querySelector<HTMLInputElement>(
+        'input[value="never"]',
+      );
+      expect(never).not.toBeNull();
+      await act(async () => never?.click());
+      await click("projectMemory.policyReview");
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.policyCurrent",
+      );
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.policyRequested",
+      );
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.policySaveEffects",
+      );
+      await click("projectMemory.sshSettings.policyConfirm");
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.policySaved",
+      );
+      expect(io.native).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => root.unmount());
+      element.remove();
+      vi.unstubAllGlobals();
+    }
+    await vi.waitFor(() => expect(close).toHaveBeenCalledExactlyOnceWith(7));
+  },
+);
+
+it.each([target, namespace, connectedNamespace])(
+  "prepares private settings on SSH only after the labeled choice for $source",
+  async (input) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    const click = async (label: string) => {
+      const button = [...element.querySelectorAll("button")].find(
+        (item) => item.textContent === label,
+      );
+      expect(button).toBeDefined();
+      await act(async () => button?.click());
+    };
+    try {
+      await act(async () =>
+        root.render(createElement(ProjectMemoryPanel, { target: input })),
+      );
+      await click("projectMemory.initialize");
+      expect(element.textContent).toContain(
+        "projectMemory.sshSettings.prepareDescription",
+      );
+      expect(element.textContent).not.toContain(
+        "projectMemory.prepareDescription",
+      );
+      expect(
+        io.request.mock.calls.some(
+          ([, request]) => request.params.operation === "initialize",
+        ),
+      ).toBe(false);
+      await click("projectMemory.sshSettings.prepare");
+      expect(
+        io.request.mock.calls.some(
+          ([, request]) => request.params.operation === "initialize",
+        ),
+      ).toBe(true);
+      expect(io.native).not.toHaveBeenCalled();
+      expect(open).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ host: "original.invalid" }),
+        "/project",
+      );
+    } finally {
+      await act(async () => root.unmount());
+      element.remove();
+      vi.unstubAllGlobals();
+    }
+  },
+);
 
 it("rejects a namespace paired with another host before opening a helper", async () => {
   const input = {

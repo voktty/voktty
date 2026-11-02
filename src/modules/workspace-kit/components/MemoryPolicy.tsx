@@ -20,11 +20,13 @@ const descriptions = {
 
 export function MemoryPolicy({
   state,
+  remote = false,
   onReview,
   onConfirm,
   onBack,
 }: {
   state: MemoryPolicyState;
+  remote?: boolean;
   onReview: (choice: NativeMemoryPolicy) => void;
   onConfirm: (review: NativeMemoryPolicyReview) => void;
   onBack: () => void;
@@ -36,9 +38,19 @@ export function MemoryPolicy({
     state.status === "policyLoading" || state.status === "policyAccepting";
   return (
     <div className="space-y-3 text-sm" aria-busy={busy}>
-      <h3 className="font-medium">{t("projectMemory.policyTitle")}</h3>
+      <h3 className="font-medium">
+        {t(
+          remote
+            ? "projectMemory.sshSettings.policyTitle"
+            : "projectMemory.policyTitle",
+        )}
+      </h3>
       <p className="text-xs text-muted-foreground">
-        {t("projectMemory.policyDescription")}
+        {t(
+          remote
+            ? "projectMemory.sshSettings.policyDescription"
+            : "projectMemory.policyDescription",
+        )}
       </p>
       <p className="text-xs text-muted-foreground">
         {t("projectMemory.policyDeliveryPending")}
@@ -97,9 +109,14 @@ export function MemoryPolicy({
           {state.status === "policyAccepted" ? (
             <div role="status" className="space-y-2">
               <p>
-                {t("projectMemory.policySaved", {
-                  policy: t(labels[state.report.preference.policy]),
-                })}
+                {t(
+                  remote
+                    ? "projectMemory.sshSettings.policySaved"
+                    : "projectMemory.policySaved",
+                  {
+                    policy: t(labels[state.report.preference.policy]),
+                  },
+                )}
               </p>
               <p className="break-all font-mono text-xs" dir="auto">
                 {state.root}
@@ -120,7 +137,11 @@ export function MemoryPolicy({
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
-                    {t("projectMemory.policyCurrent")}
+                    {t(
+                      remote
+                        ? "projectMemory.sshSettings.policyCurrent"
+                        : "projectMemory.policyCurrent",
+                    )}
                   </dt>
                   <dd>
                     {t(
@@ -132,7 +153,11 @@ export function MemoryPolicy({
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
-                    {t("projectMemory.policyRequested")}
+                    {t(
+                      remote
+                        ? "projectMemory.sshSettings.policyRequested"
+                        : "projectMemory.policyRequested",
+                    )}
                   </dt>
                   <dd className="font-medium">
                     {t(labels[state.review.snapshot.policy])}
@@ -143,7 +168,11 @@ export function MemoryPolicy({
                 {t(descriptions[state.review.snapshot.policy])}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t("projectMemory.policySaveEffects")}
+                {t(
+                  remote
+                    ? "projectMemory.sshSettings.policySaveEffects"
+                    : "projectMemory.policySaveEffects",
+                )}
               </p>
             </>
           ) : null}
@@ -169,8 +198,12 @@ export function MemoryPolicy({
               >
                 {t(
                   state.status === "policyAccepting"
-                    ? "projectMemory.policySaving"
-                    : "projectMemory.policyConfirm",
+                    ? remote
+                      ? "projectMemory.sshSettings.policySaving"
+                      : "projectMemory.policySaving"
+                    : remote
+                      ? "projectMemory.sshSettings.policyConfirm"
+                      : "projectMemory.policyConfirm",
                 )}
               </Button>
             ) : null}

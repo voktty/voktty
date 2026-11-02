@@ -1,5 +1,21 @@
 export const en = {
   projectMemory: {
+    sshSettings: {
+      prepare: "Prepare settings on the SSH host",
+      prepareDescription: "Creates private project-memory settings on the SSH host for this directory. Project files and agent permissions stay unchanged.",
+      trustDescription: "Review the configuration and every instruction file before trusting them on the SSH host for this project. This saves instruction trust only; use policy, session choices and capture permissions stay unchanged.",
+      trustAccept: "I reviewed these instructions and trust this exact version on the SSH host for this project.",
+      policyTitle: "Memory use policy on the SSH host",
+      policyDescription: "Saved on the SSH host for this project until you change it. Project files, instruction trust and capture permissions stay unchanged.",
+      policyCurrent: "Current policy on the SSH host",
+      policyRequested: "New policy on the SSH host",
+      policySaveEffects: "Save only the reviewed policy on the SSH host. Closing during saving may leave this policy changed.",
+      policySaved: "Policy saved on the SSH host: {policy}.",
+      policySaving: "Saving policy on the SSH host...",
+      policyConfirm: "Save policy on the SSH host",
+      conversationPolicyBlocked: "The policy on this project's SSH host prevents using memory. Review the project policy below before trying again.",
+      deliveryUnsupported: "Automatic memory delivery is unavailable for this conversation's remote runtime. You can still inspect and copy this context.",
+    },
     conversationTitle: "Memory for this conversation",
     manageConversationDirectory: "Manage memory in the conversation directory",
     manageBrowsedDirectory: "Return to memory in the browsed directory",

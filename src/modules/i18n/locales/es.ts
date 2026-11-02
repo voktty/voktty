@@ -2,6 +2,22 @@ import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   projectMemory: {
+    sshSettings: {
+      prepare: "Preparar ajustes en el host SSH",
+      prepareDescription: "Crea ajustes privados de memoria del proyecto en el host SSH de este directorio. Los archivos del proyecto y los permisos de los agentes se conservan.",
+      trustDescription: "Revisa la configuración y cada archivo de instrucciones antes de confiar en ellos en el host SSH de este proyecto. Solo se guarda la confianza; la política de uso, las decisiones de sesión y los permisos de captura se conservan.",
+      trustAccept: "He revisado estas instrucciones y confío en esta versión exacta en el host SSH de este proyecto.",
+      policyTitle: "Política de uso de memoria en el host SSH",
+      policyDescription: "Se guarda en el host SSH para este proyecto hasta que la cambies. Los archivos del proyecto, la confianza en instrucciones y los permisos de captura se conservan.",
+      policyCurrent: "Política actual en el host SSH",
+      policyRequested: "Nueva política en el host SSH",
+      policySaveEffects: "Guarda solo la política revisada en el host SSH. Cerrar durante el guardado puede dejar esta política cambiada.",
+      policySaved: "Política guardada en el host SSH: {policy}.",
+      policySaving: "Guardando política en el host SSH...",
+      policyConfirm: "Guardar política en el host SSH",
+      conversationPolicyBlocked: "La política en el host SSH de este proyecto impide usar memoria. Revisa la política del proyecto debajo antes de reintentar.",
+      deliveryUnsupported: "La entrega automática de memoria no está disponible para el runtime remoto de esta conversación. Puedes seguir inspeccionando y copiando este contexto.",
+    },
     conversationTitle: "Memoria para esta conversación",
     manageConversationDirectory: "Gestionar memoria del directorio de la conversación",
     manageBrowsedDirectory: "Volver a la memoria del directorio explorado",

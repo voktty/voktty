@@ -128,9 +128,11 @@ export default function ProjectMemoryPanel({
 
 function MemorySettingsRecovery({
   code,
+  remote,
   onPrepare,
 }: {
   code?: string;
+  remote: boolean;
   onPrepare: () => void;
 }) {
   const { t } = useTranslation();
@@ -138,10 +140,18 @@ function MemorySettingsRecovery({
   return (
     <div className="space-y-3 rounded-lg border border-border p-3">
       <p className="text-xs text-muted-foreground">
-        {t("projectMemory.prepareDescription")}
+        {t(
+          remote
+            ? "projectMemory.sshSettings.prepareDescription"
+            : "projectMemory.prepareDescription",
+        )}
       </p>
       <Button variant="outline" size="sm" onClick={onPrepare}>
-        {t("projectMemory.prepare")}
+        {t(
+          remote
+            ? "projectMemory.sshSettings.prepare"
+            : "projectMemory.prepare",
+        )}
       </Button>
     </div>
   );
@@ -156,6 +166,8 @@ function MemoryObservation({
 }) {
   const { t } = useTranslation();
   const [state, setState] = useState<MemoryPanelState>({ status: "loading" });
+  const remote =
+    target.environment.kind === "ssh" || target.path.startsWith("remote://");
   const controller = useRef<ReturnType<
     typeof createMemoryPanelController
   > | null>(null);
@@ -204,6 +216,7 @@ function MemoryObservation({
     return (
       <>
         <MemoryPolicy
+          remote={remote}
           key={state.status === "policyConfiguring" ? "configure" : "operation"}
           state={state}
           onReview={(choice) => {
@@ -217,6 +230,7 @@ function MemoryObservation({
           }}
         />
         <MemorySettingsRecovery
+          remote={remote}
           code={state.status === "policyError" ? state.code : undefined}
           onPrepare={() => {
             void controller.current?.prepare();
@@ -247,6 +261,7 @@ function MemoryObservation({
     return (
       <>
         <MemoryTrust
+          remote={remote}
           state={state}
           onConfirm={(review) => {
             void controller.current?.confirmTrust(review);
@@ -256,6 +271,7 @@ function MemoryObservation({
           }}
         />
         <MemorySettingsRecovery
+          remote={remote}
           code={state.status === "trustError" ? state.code : undefined}
           onPrepare={() => {
             void controller.current?.prepare();
@@ -284,6 +300,7 @@ function MemoryObservation({
     return (
       <>
         <MemoryInitialization
+          remote={remote}
           state={state}
           directory={target.path}
           onPrepare={() => {
@@ -377,14 +394,22 @@ function MemoryObservation({
         {state.status === "error" && state.canPrepare ? (
           <div className="space-y-3 rounded-lg border border-border p-3">
             <p className="text-xs text-muted-foreground">
-              {t("projectMemory.prepareDescription")}
+              {t(
+                remote
+                  ? "projectMemory.sshSettings.prepareDescription"
+                  : "projectMemory.prepareDescription",
+              )}
             </p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => void controller.current?.prepare()}
             >
-              {t("projectMemory.prepare")}
+              {t(
+                remote
+                  ? "projectMemory.sshSettings.prepare"
+                  : "projectMemory.prepare",
+              )}
             </Button>
           </div>
         ) : null}

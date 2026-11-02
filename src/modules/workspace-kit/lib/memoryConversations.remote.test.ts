@@ -533,6 +533,73 @@ it("does not offer remote managed delivery to a provider without a remote transp
   expect(capture().conversation.delivery?.getSnapshot().supported).toBe(true);
 });
 
+it.each(["policy", "runtime"] as const)(
+  "explains the SSH conversation's %s restriction without claiming a local limitation",
+  async (restriction) => {
+    const { conversation } = capture(
+      root,
+      restriction === "runtime" ? "gemini" : "codex",
+    );
+    await bind(conversation);
+    if (restriction === "policy") {
+      const original = io.request.getMockImplementation();
+      io.request.mockImplementation(async (id, request) => {
+        if (request.params.operation !== "contextRead")
+          return original?.(id, request);
+        const value = packet();
+        return {
+          protocol: 2,
+          id: request.id,
+          ok: true,
+          result: {
+            schema: 1,
+            ok: true,
+            result: {
+              ...value,
+              packet: null,
+              decision: {
+                ...value.decision,
+                policy: "never",
+                contextAllowed: false,
+                reason: "KIT_MEMORY_POLICY_NEVER",
+              },
+            },
+          },
+        };
+      });
+    }
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const node = document.createElement("div");
+    document.body.append(node);
+    const view = createRoot(node);
+    try {
+      await act(async () =>
+        view.render(
+          createElement(ProjectMemoryPanel, { target, conversation }),
+        ),
+      );
+      const read = [...node.querySelectorAll("button")].find(
+        (button) => button.textContent === "projectMemory.conversationRead",
+      );
+      expect(read).toBeDefined();
+      await act(async () => read?.click());
+      const message =
+        restriction === "policy"
+          ? "conversationPolicyBlocked"
+          : "deliveryUnsupported";
+      expect(node.textContent).toContain(
+        `projectMemory.sshSettings.${message}`,
+      );
+      expect(node.textContent).not.toContain(`projectMemory.${message}`);
+      expect(conversation.delivery?.getSnapshot().enabled).toBe(false);
+      expect(io.native).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => view.unmount());
+      node.remove();
+    }
+  },
+);
+
 it("renders remote conversation review and requires consent before preparing and enabling", async () => {
   environment();
   const { conversation } = capture();
