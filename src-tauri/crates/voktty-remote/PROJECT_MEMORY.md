@@ -46,8 +46,9 @@ installation identity and raw discovery facts are never included in errors.
 | `contextRead` | `context` | Recheck current scope, policy and trust before preparing a packet |
 | `contextClose` | `context` | Retire only that context and release its resources |
 
-Handles contain a safe integer `id` and a random UUID-v4 `token`. Selection and
-review tokens are independently generated UUIDs. A helper admits at most 64
+Handles contain a positive unsigned 32-bit `id` and a random UUID-v4 `token`.
+IDs increase without reuse; exhaustion rejects new resources with `limit`.
+Selection and review tokens are independently generated UUIDs. A helper admits at most 64
 combined presentations and contexts. Selection and review revisions increase
 within their original owners and stay within JavaScript's safe integer range.
 An invalid newer selection still retires the previous source. Confirmations
@@ -71,7 +72,10 @@ from the accepted plan's create, replace, staging and recovery requirements,
 under the captured workspace and secret-path rules. Reserved data is preserved.
 
 Context modes are `enabled`, `disabled` or `inherit`. Binding does not write trust
-or policy. An enabled session cannot override missing trust or `never` policy.
+or policy. A successful binding returns `{"schema":1,"root":"/host/project"}`,
+where `root` is the native bound memory root, which may be an authorized ancestor
+of the selected directory. An enabled session cannot override missing trust or
+`never` policy.
 Context packets retain the shared 24 KiB limit and grant no capture permission.
 Preparing or copying a packet is not provider acceptance or evidence of reading.
 Binding transfers the original source out of the presentation, so closing the

@@ -143,11 +143,12 @@ fn real_native_flow_preserves_reserved_data_and_binds_context_after_exact_review
         json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":2,"role":null}),
     );
     let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
-    ok(
+    let bound = ok(
         &mut server,
         root,
         json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
     );
+    assert_eq!(bound, json!({"schema":1,"root":root}));
     ok(
         &mut server,
         root,
@@ -223,6 +224,42 @@ fn invalid_reselection_and_reset_retire_old_reviews_and_never_publish_to_a_new_o
     let replacement = ok(&mut server, root, json!({"operation":"open"}));
     assert_ne!(replacement, handle);
     assert!(!root.join(".voktty").exists());
+}
+
+#[test]
+fn context_binding_reports_the_native_memory_root_for_a_nested_selection() {
+    let (project, _private, mut server) = fixture();
+    let root = project.path();
+    let handle = ok(&mut server, root, json!({"operation":"open"}));
+    let selection = select(&mut server, root, &handle, 1);
+    initialize(&mut server, root, &handle, &selection);
+    let nested = root.join("nested");
+    fs::create_dir(&nested).unwrap();
+    let selection = ok(
+        &mut server,
+        root,
+        json!({"operation":"select","handle":handle,"path":nested,"revision":2,"inspectAncestors":true}),
+    );
+    let review = ok(
+        &mut server,
+        root,
+        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}),
+    );
+    assert_eq!(review["root"], json!(root));
+    let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
+    let bound = ok(
+        &mut server,
+        root,
+        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
+    );
+    assert_eq!(bound, json!({"schema":1,"root":root}));
+    assert_ne!(bound["root"], json!(nested));
+    error(
+        &mut server,
+        root,
+        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
+        "cancelled",
+    );
 }
 
 #[test]
@@ -332,6 +369,27 @@ fn resource_limit_and_unforgeable_handles_hold_across_helpers() {
         json!({"operation":"close","handle":first}),
     );
     ok(&mut server, root, json!({"operation":"open"}));
+}
+
+#[test]
+fn handle_ids_fit_the_shared_client_and_exhaust_without_reuse() {
+    let (project, private, mut server) = fixture();
+    let root = project.path();
+    server.next_id = u64::from(u32::MAX) - 1;
+    let last = ok(&mut server, root, json!({"operation":"contextOpen"}));
+    assert_eq!(last["id"], u32::MAX);
+    for operation in ["open", "contextOpen"] {
+        error(&mut server, root, json!({"operation":operation}), "limit");
+    }
+    ok(
+        &mut server,
+        root,
+        json!({"operation":"contextClose","context":last}),
+    );
+    server.reset();
+    error(&mut server, root, json!({"operation":"open"}), "limit");
+    assert_eq!(fs::read_dir(private.path()).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(root).unwrap().count(), 0);
 }
 
 #[test]

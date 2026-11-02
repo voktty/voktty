@@ -160,7 +160,8 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
     let trust = helper
         .ok(json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":2}));
     let context = helper.ok(json!({"operation":"contextOpen"}));
-    helper.ok(json!({"operation":"contextBind","handle":handle,"selection":selection,"review":trust["review"],"context":context,"mode":"enabled"}));
+    let bound = helper.ok(json!({"operation":"contextBind","handle":handle,"selection":selection,"review":trust["review"],"context":context,"mode":"enabled"}));
+    assert_eq!(bound, json!({"schema":1,"root":root}));
     helper.ok(json!({"operation":"close","handle":handle}));
     let context_reply = helper.ok(json!({"operation":"contextRead","context":context}));
     assert_eq!(context_reply["decision"]["contextAllowed"], true);

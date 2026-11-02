@@ -162,7 +162,7 @@ impl MemoryServer {
         let next = self
             .next_id
             .checked_add(1)
-            .filter(|next| *next <= 9_007_199_254_740_991)
+            .filter(|next| *next <= u64::from(u32::MAX))
             .ok_or(Error::new("limit"))?;
         self.next_id = next;
         Ok((next, uuid::Uuid::new_v4().to_string()))
@@ -584,10 +584,11 @@ impl MemoryServer {
                 };
                 let review = self.selected(&handle, &selection)?.trust.take(&review)?;
                 let bound = MemoryContextSession::bind(review, mode, control)?;
+                let result = json!({"schema":1,"root":bound.root()});
                 let source = self.selected(&handle, &selection)?.source.clone();
                 self.context(&context)?.bound = Some((bound, source));
                 self.presentation(&handle)?.selected = None;
-                Ok(Value::Null)
+                Ok(result)
             }
             Request::ContextRead { context } => {
                 let (bound, _) = self
