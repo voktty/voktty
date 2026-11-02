@@ -6,12 +6,16 @@ import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConve
 import { createMemoryConversations } from "@/modules/workspace-kit/lib/memoryConversations";
 import { createAiMemoryDelivery } from "@/modules/ai/lib/aiMemoryDelivery";
 import type { AiProjectKitMemorySource } from "@/modules/ai/lib/projectKitMemory";
+import { createMemoryInheritance } from "@/modules/workspace-kit/lib/memoryInheritance";
 
 type Owner = {
   capture: () => MemoryConversation | null;
   reconcile: (getRoot?: () => AiFileRootContext | null) => void;
   retire: () => void;
   source: () => AiProjectKitMemorySource | undefined;
+  prepare: (
+    assertCurrent: () => void,
+  ) => Promise<AiProjectKitMemorySource | undefined>;
 };
 const owners = new WeakMap<object, Owner>();
 
@@ -38,6 +42,7 @@ export function registerChatMemoryOwner(
     typeof createMemoryConversations<AiProjectKitMemorySource>
   > | null = null;
   let conversation: MemoryConversation | null = null;
+  let inheritance: ReturnType<typeof createMemoryInheritance> | null = null;
   let capturing = false;
   let unsubscribe: (() => void) | null = null;
   let releaseDelivery: (() => void) | null = null;
@@ -89,6 +94,7 @@ export function registerChatMemoryOwner(
           "model-response",
         );
         conversation = manager.capture(chat, root, root, current, true);
+        inheritance = createMemoryInheritance(conversation);
         releaseDelivery?.();
         const captured = conversation;
         releaseDelivery = captured.subscribe(() => {
@@ -117,6 +123,21 @@ export function registerChatMemoryOwner(
       if (root !== null) current(getRoot);
     },
     retire,
+    async prepare(assertCurrent) {
+      assertCurrent();
+      const source = owner.source();
+      if (source) return source;
+      if (conversation && !conversation.isCurrent()) {
+        if (inheritance?.needsPreparation())
+          throw new Error("Project memory: cancelled");
+        return undefined;
+      }
+      const captured = owner.capture();
+      if (!captured) return undefined;
+      await inheritance?.prepare(assertCurrent);
+      assertCurrent();
+      return owner.source();
+    },
     source() {
       if (!current()) {
         if (requested) throw new Error("Project memory: cancelled");
@@ -157,4 +178,13 @@ export function getChatProjectKitMemory(
   const owner = owners.get(chat);
   if (!owner) throw new Error("Project memory: cancelled");
   return owner.source();
+}
+
+export async function prepareChatProjectKitMemory(
+  chat: object,
+  assertCurrent: () => void,
+): Promise<AiProjectKitMemorySource | undefined> {
+  const owner = owners.get(chat);
+  if (!owner) throw new Error("Project memory: cancelled");
+  return owner.prepare(assertCurrent);
 }

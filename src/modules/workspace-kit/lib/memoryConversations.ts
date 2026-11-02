@@ -154,6 +154,10 @@ export function createMemoryConversations<Source = never>(
                 ? "binding"
                 : "inactive",
         delivery: Object.freeze({
+          capturePermit() {
+            const permit = deliveryPermit;
+            return () => permit === deliveryPermit;
+          },
           getSnapshot: () =>
             current() ? deliveryState : inactiveMemoryDelivery,
           async enable(
@@ -343,6 +347,10 @@ export function qualifyMemoryConversation(
     ...(delivery
       ? {
           delivery: Object.freeze({
+            capturePermit() {
+              check();
+              return delivery.capturePermit();
+            },
             getSnapshot: () =>
               isActionCurrent()
                 ? delivery.getSnapshot()

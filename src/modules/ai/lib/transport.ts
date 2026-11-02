@@ -56,6 +56,9 @@ type Deps = {
   onFinishMeta?: (info: { hitStepCap: boolean; finishReason: string }) => void;
   getPlanMode?: () => boolean;
   getProjectKitMemory?: () => AiProjectKitMemorySource | undefined;
+  prepareProjectKitMemory?: (
+    assertCurrent: () => void,
+  ) => Promise<AiProjectKitMemorySource | undefined>;
 };
 
 type SendOptions = {
@@ -156,9 +159,10 @@ export function createContextAwareTransport(deps: Deps) {
       };
       legacyMemoryNamespace = kitMemory.context;
     }
-    const snapshot = kitMemory
-      ? captureAiMessageSnapshot(options.messages)
-      : null;
+    const snapshot =
+      kitMemory || deps.prepareProjectKitMemory
+        ? captureAiMessageSnapshot(options.messages)
+        : null;
     let snapshotHandedOff = false;
     let preparedMemory: PreparedAiMemoryInput | undefined;
     try {
@@ -210,6 +214,22 @@ export function createContextAwareTransport(deps: Deps) {
         isCurrent: requestActive,
         ...(kitMemory ? { isToolRunCurrent: requestActive } : {}),
       };
+      if (!kitMemory && deps.prepareProjectKitMemory) {
+        kitMemory = await deps.prepareProjectKitMemory(assertCurrent);
+        assertCurrent();
+        assertAiProjectKitMemoryTarget(kitMemory, boundary);
+        if (kitMemory) {
+          if (lastKitContext && kitMemory.context !== lastKitContext.context) {
+            calls.retireAll();
+            lifetime = calls.captureLifetime();
+          }
+          lastKitContext = {
+            context: kitMemory.context,
+            isCurrent: kitContextCurrent,
+          };
+          legacyMemoryNamespace = kitMemory.context;
+        }
+      }
       const projectMemory = await projectMemoryReader.read(
         boundary,
         assertCurrent,
@@ -268,6 +288,7 @@ export function createContextAwareTransport(deps: Deps) {
         }
         const result = await runAgentStream({
           ...captured,
+          ...(kitMemory ? { isToolRunCurrent: requestActive } : {}),
           abortSignal: kitAbort?.signal ?? abortSignal,
           projectMemory,
           uiMessages: messagesForRun,

@@ -133,7 +133,8 @@ the conversation's execution cwd, including a worktree, rather than the folder
 currently browsed by the project panel. Review and confirmation do not save trust
 or policy. The panel reads fresh native policy and trust results and labels an
 allowed packet as prepared but not sent, with an escaped preview and an initial
-content indicator. An explicit disable closes only that exact memory context.
+content indicator. Manual-only contexts close on explicit disable. Supported
+delivery channels disable future delivery while retaining their prepared context.
 Closing the panel releases caller subscriptions and its presentation, preserving
 an accepted engine binding. Pending admission cannot outlive the original caller.
 Panel resources retain their bounded slots through pending physical work and
@@ -143,7 +144,13 @@ project management to the conversation directory and can return to the original
 browsed directory. This lets worktree instruction trust be reviewed for its own
 root without silently redirecting project management or granting session use.
 
-Harness/internal-agent/CLI delivery remains to be connected. A view, path or
+Harness, internal-agent and CLI delivery have independent consumer lifecycles.
+The Voktty AI launch preparer can consume an existing native review in `inherit`
+mode after observing stored Always and matching saved instruction trust. This
+does not persist session consent or confirm the review as newly accepted trust.
+The native binding and packet readers retain the checks described above; their
+review receipt alone never authorizes delivery. See `docs/architecture/ai-subsystem.md`
+for the frontend inheritance and response-observation contract. A view, path or
 provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet

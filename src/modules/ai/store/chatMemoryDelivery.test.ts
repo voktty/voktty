@@ -398,3 +398,206 @@ it("preserves the explicit disabled choice after its root retires", async () => 
   expect(io.stream).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).not.toContain(text);
 });
+
+function automaticPolicy(mode: "manual" | "always" | "never", trusted = true) {
+  const original = io.invoke.getMockImplementation();
+  io.invoke.mockImplementation((command, args) => {
+    const preference = {
+      projectKey: "a".repeat(64),
+      policy: mode,
+      instructionDigest: trusted ? "b".repeat(64) : null,
+    };
+    if (command === "project_memory_discover")
+      return Promise.resolve({
+        schema: 1,
+        root: "/canonical/project",
+        blockedCount: 0,
+        scope: { schema: 1, state: "ready", ancestryComplete: true },
+      });
+    if (command === "project_memory_review_policy")
+      return Promise.resolve({
+        schema: 1,
+        root: "/canonical/project",
+        projectKey: preference.projectKey,
+        policy: args.request.policy,
+        preference,
+        revision: args.request.revision,
+        review: "00000000-0000-4000-8000-000000000001",
+      });
+    if (command === "project_memory_review_trust")
+      return Promise.resolve({
+        ...trustReply(args.request.revision),
+        preference,
+      });
+    if (command === "project_memory_context_read") {
+      const result = packet();
+      result.decision.policy = mode;
+      return Promise.resolve(result);
+    }
+    return original?.(command, args);
+  });
+}
+
+it("uses accepted Always on the first model request without opening the panel or writing consent", async () => {
+  automaticPolicy("always");
+  const f = owner();
+  expect(io.invoke).not.toHaveBeenCalled();
+  await f.chat.sendMessage({ text: "first automatic task" });
+  expect(io.stream).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).toContain(
+    "PROJECT MEMORY (.voktty)",
+  );
+  expect(f.scope.delivery?.getSnapshot().receipt?.method).toBe(
+    "model-response",
+  );
+  expect(
+    io.invoke.mock.calls.find(
+      ([command]) => command === "project_memory_context_bind",
+    )?.[1].request.mode,
+  ).toBe("inherit");
+  expect(
+    io.invoke.mock.calls.some(([command]) =>
+      /confirm|initialize/.test(command),
+    ),
+  ).toBe(false);
+  f.scope.delivery?.disable(() => true);
+  io.stream.mockClear();
+  await f.chat.sendMessage({ text: "ordinary disabled task" });
+  expect(io.stream).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).not.toContain(
+    "PROJECT MEMORY (.voktty)",
+  );
+});
+
+it.each(["manual", "never"] as const)(
+  "keeps first model requests ordinary under stored %s",
+  async (mode) => {
+    automaticPolicy(mode);
+    const f = owner();
+    await f.chat.sendMessage({ text: "ordinary first task" });
+    expect(io.stream).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).not.toContain(
+      "PROJECT MEMORY (.voktty)",
+    );
+    expect(
+      io.invoke.mock.calls.some(
+        ([command]) =>
+          command === "project_memory_review_trust" ||
+          command === "project_memory_context_open",
+      ),
+    ).toBe(false);
+  },
+);
+
+it("blocks untrusted Always before a model request without silently using ordinary input", async () => {
+  automaticPolicy("always", false);
+  const f = owner();
+  await f.chat.sendMessage({ text: "must review trust" });
+  expect(io.stream).not.toHaveBeenCalled();
+  expect(
+    io.invoke.mock.calls.some(
+      ([command]) => command === "project_memory_context_bind",
+    ),
+  ).toBe(false);
+});
+
+function heldAutomaticReview() {
+  let finish!: (value: unknown) => void;
+  let start!: () => void;
+  const held = new Promise<unknown>((resolve) => {
+    finish = resolve;
+  });
+  const started = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  const original = io.invoke.getMockImplementation();
+  io.invoke.mockImplementation((command, args) => {
+    if (command === "project_memory_review_trust") {
+      start();
+      return held;
+    }
+    return original?.(command, args);
+  });
+  return {
+    started,
+    finish: () =>
+      finish({
+        ...trustReply(),
+        preference: {
+          projectKey: "a".repeat(64),
+          policy: "always",
+          instructionDigest: "b".repeat(64),
+        },
+      }),
+  };
+}
+
+it("does not start a model after Stop during automatic instruction preparation", async () => {
+  automaticPolicy("always");
+  const held = heldAutomaticReview();
+  const f = owner();
+  const pending = f.chat.sendMessage({ text: "stopped automatic task" });
+  await held.started;
+  await f.chat.stop();
+  held.finish();
+  await pending;
+  expect(io.stream).not.toHaveBeenCalled();
+  expect(
+    io.invoke.mock.calls.some(
+      ([command]) => command === "project_memory_context_bind",
+    ),
+  ).toBe(false);
+});
+
+it("retains the submitted model and message snapshot across automatic preparation", async () => {
+  automaticPolicy("always");
+  const held = heldAutomaticReview();
+  const f = owner();
+  const pending = f.chat.sendMessage({ text: "original automatic task" });
+  await held.started;
+  useChatStore.setState({ selectedModelId: "harness-claude" });
+  const part = f.chat.messages[0]?.parts[0];
+  if (part?.type !== "text") throw new Error("Missing submitted text");
+  part.text = "replacement text after admission";
+  held.finish();
+  await pending;
+  expect(io.stream).toHaveBeenCalledTimes(1);
+  const prompt = JSON.stringify(io.stream.mock.calls[0][0].prompt);
+  expect(prompt).toContain("original automatic task");
+  expect(prompt).not.toContain("replacement text after admission");
+  expect(f.scope.delivery?.getSnapshot().receipt).toMatchObject({
+    modelId: "ollama-local",
+  });
+});
+
+it("retries denied inherited context before a later request instead of falling back to ordinary input", async () => {
+  automaticPolicy("always");
+  io.denied = true;
+  const f = owner();
+  await f.chat.sendMessage({ text: "denied first task" });
+  expect(io.stream).not.toHaveBeenCalled();
+  expect(f.scope.status()).toBe("ready");
+  await f.chat.sendMessage({ text: "still denied" });
+  expect(io.stream).not.toHaveBeenCalled();
+  io.denied = false;
+  await f.chat.sendMessage({ text: "retry after trust and policy restored" });
+  expect(io.stream).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(io.stream.mock.calls[0][0].prompt)).toContain(
+    "PROJECT MEMORY (.voktty)",
+  );
+});
+
+it("does not silently fall back after a known Always binding fails", async () => {
+  automaticPolicy("always");
+  const original = io.invoke.getMockImplementation();
+  io.invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_bind"
+      ? Promise.reject({ code: "stale" })
+      : original?.(command, args),
+  );
+  const f = owner();
+  await f.chat.sendMessage({ text: "binding failed" });
+  expect(f.scope.status()).toBe("retired");
+  await f.chat.sendMessage({ text: "must still require memory" });
+  expect(io.stream).not.toHaveBeenCalled();
+});

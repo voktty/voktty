@@ -7,6 +7,7 @@ import { getModel, providerNeedsKey, type ModelId } from "../config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   getChatProjectKitMemory,
+  prepareChatProjectKitMemory,
   registerChatMemoryOwner,
 } from "@/modules/ai/lib/chatMemoryOwner";
 import { subscribeAiFileRoot } from "@/modules/ai/lib/aiRootObservation";
@@ -64,6 +65,8 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     getKeys: () => useChatStore.getState().apiKeys,
     toolContext,
     getProjectKitMemory: () => getChatProjectKitMemory(chat),
+    prepareProjectKitMemory: (assertCurrent) =>
+      prepareChatProjectKitMemory(chat, assertCurrent),
     getModelId: () => useChatStore.getState().selectedModelId,
     getCustomInstructions: () =>
       usePreferencesStore.getState().customInstructions,
