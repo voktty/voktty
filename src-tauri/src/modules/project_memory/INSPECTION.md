@@ -50,6 +50,10 @@ instruction trust nor conversation delivery. A failure remains in that step with
 a bounded error code and an explicit retry. Project publication still requires
 its separate exact file review. Continuing after publication retains the original
 authorized selection rather than reopening the caller's unqualified path.
+Native storage failures log the operation, first failing storage/security stage,
+bounded error description and optional numeric Windows status. Diagnostics are
+per operation and contain no paths, account identifiers, ACLs or document data;
+they do not change the IPC error or relax any access checks.
 For an existing kit, a trust or policy review that reports missing or unavailable
 local settings offers that same explicit preparation action. Access denial,
 invalid state and unsupported transports do not offer this recovery or change

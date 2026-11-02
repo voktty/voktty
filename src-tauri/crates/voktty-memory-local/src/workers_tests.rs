@@ -466,3 +466,88 @@ fn cancellation_keeps_its_cause_when_a_blocked_worker_outlives_the_response_dead
         drain(&workers).await;
     });
 }
+
+#[cfg(any(unix, windows))]
+#[test]
+fn storage_diagnostics_distinguish_failures_without_changing_errors_or_existing_data() {
+    runtime().block_on(async {
+        let workers = workers();
+        let directory =
+            tempfile::tempdir_in(std::fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+                .unwrap();
+        }
+        let parent = directory.path().join("application");
+        let control = ReadControl::default().with_storage_diagnostics();
+        assert!(workers
+            .store(
+                parent.clone(),
+                MemoryStoreMode::OpenExisting,
+                control.clone()
+            )
+            .unwrap()
+            .finish()
+            .await
+            .is_err());
+        assert_eq!(
+            control.storage_failure().unwrap().stage,
+            crate::StorageStage::ApplicationParent
+        );
+        assert!(!parent.exists());
+
+        LocalMemoryStore::prepare_application_parent(&parent, &ReadControl::default()).unwrap();
+        let child = parent.join(crate::bootstrap::PRIVATE_DIRECTORY);
+        std::fs::write(&child, b"existing collision").unwrap();
+        let control = ReadControl::default().with_storage_diagnostics();
+        assert!(workers
+            .store(parent.clone(), MemoryStoreMode::Initialize, control.clone())
+            .unwrap()
+            .finish()
+            .await
+            .is_err());
+        assert_eq!(
+            control.storage_failure().unwrap().stage,
+            crate::StorageStage::PrivateDirectory
+        );
+        assert_eq!(std::fs::read(&child).unwrap(), b"existing collision");
+        std::fs::remove_file(&child).unwrap();
+
+        let control = ReadControl::default().with_storage_diagnostics();
+        workers
+            .store(parent.clone(), MemoryStoreMode::Initialize, control.clone())
+            .unwrap()
+            .finish()
+            .await
+            .unwrap();
+        assert_eq!(control.storage_failure(), None);
+        let record = child.join(crate::STORE);
+        std::fs::write(&record, b"invalid preferences").unwrap();
+        let control = ReadControl::default().with_storage_diagnostics();
+        assert!(matches!(
+            workers
+                .store(parent.clone(), MemoryStoreMode::Initialize, control.clone())
+                .unwrap()
+                .finish()
+                .await,
+            Err(MemoryWorkError::Read(ReadError::Store(
+                crate::StoreError::InvalidStore
+            )))
+        ));
+        assert_eq!(
+            control.storage_failure().unwrap().stage,
+            crate::StorageStage::Preferences
+        );
+        assert_eq!(std::fs::read(&record).unwrap(), b"invalid preferences");
+
+        let control = ReadControl::default().with_storage_diagnostics();
+        control.cancel();
+        assert!(matches!(
+            workers.store(parent, MemoryStoreMode::Initialize, control.clone()),
+            Err(MemoryWorkError::Read(ReadError::Cancelled))
+        ));
+        assert_eq!(control.storage_failure(), None);
+    });
+}

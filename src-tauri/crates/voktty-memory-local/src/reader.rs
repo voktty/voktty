@@ -94,6 +94,7 @@ pub struct ReadControl {
     cancelled: Arc<AtomicBool>,
     started: Instant,
     timeout: Duration,
+    diagnostics: crate::storage_diagnostics::StorageDiagnostics,
 }
 
 impl Default for ReadControl {
@@ -108,6 +109,7 @@ impl ReadControl {
             cancelled,
             started: Instant::now(),
             timeout,
+            diagnostics: Default::default(),
         }
     }
     pub fn new(timeout: Duration) -> Self {
@@ -115,7 +117,25 @@ impl ReadControl {
             cancelled: Arc::new(AtomicBool::new(false)),
             started: Instant::now(),
             timeout: timeout.min(Duration::from_secs(5)),
+            diagnostics: Default::default(),
         }
+    }
+
+    pub fn with_storage_diagnostics(mut self) -> Self {
+        self.diagnostics = crate::storage_diagnostics::StorageDiagnostics::enabled();
+        self
+    }
+
+    pub fn storage_failure(&self) -> Option<crate::StorageFailure> {
+        self.diagnostics.failure()
+    }
+
+    pub(crate) fn record_storage_failure(
+        &self,
+        stage: crate::StorageStage,
+        windows_error: Option<u32>,
+    ) {
+        self.diagnostics.record(stage, windows_error);
     }
 
     pub fn cancel(&self) {

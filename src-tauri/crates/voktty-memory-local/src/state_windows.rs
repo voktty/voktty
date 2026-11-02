@@ -123,11 +123,18 @@ fn installer_sid() -> Result<Vec<u64>, ReadError> {
 }
 
 pub(super) fn qualify(file: &File, private: bool) -> Result<(), ReadError> {
-    qualify_access(file, private, false)
+    qualify_access(file, private, false, &ReadControl::default())
 }
 
-fn qualify_access(file: &File, private: bool, ancestor: bool) -> Result<(), ReadError> {
-    let user_storage = user()?;
+fn qualify_access(
+    file: &File,
+    private: bool,
+    ancestor: bool,
+    control: &ReadControl,
+) -> Result<(), ReadError> {
+    use crate::StorageStage;
+    let user_storage =
+        user().inspect_err(|_| control.record_storage_failure(StorageStage::WindowsToken, None))?;
     let current = unsafe { (*(user_storage.as_ptr().cast::<TOKEN_USER>())).User.Sid };
     let installer = if ancestor {
         Some(installer_sid()?)
@@ -156,9 +163,11 @@ fn qualify_access(file: &File, private: bool, ancestor: bool) -> Result<(), Read
         )
     };
     let _descriptor = Descriptor(descriptor);
-    if status != 0
-        || owner.is_null()
-        || acl.is_null()
+    if status != 0 {
+        control.record_storage_failure(StorageStage::WindowsSecurityQuery, Some(status));
+        return Err(ReadError::Denied);
+    }
+    if owner.is_null()
         || unsafe {
             IsValidSid(owner) == 0
                 || (if ancestor {
@@ -166,9 +175,13 @@ fn qualify_access(file: &File, private: bool, ancestor: bool) -> Result<(), Read
                 } else {
                     EqualSid(owner, current) == 0
                 })
-                || IsValidAcl(acl) == 0
         }
     {
+        control.record_storage_failure(StorageStage::WindowsOwner, None);
+        return Err(ReadError::Denied);
+    }
+    if acl.is_null() || unsafe { IsValidAcl(acl) == 0 } {
+        control.record_storage_failure(StorageStage::WindowsAcl, None);
         return Err(ReadError::Denied);
     }
     let destructive = DELETE
@@ -182,6 +195,7 @@ fn qualify_access(file: &File, private: bool, ancestor: bool) -> Result<(), Read
     for index in 0..unsafe { (*acl).AceCount } {
         let mut pointer = std::ptr::null_mut();
         if unsafe { GetAce(acl, index.into(), &mut pointer) } == 0 || pointer.is_null() {
+            control.record_storage_failure(StorageStage::WindowsAcl, None);
             return Err(ReadError::Denied);
         }
         let header = unsafe { &*pointer.cast::<ACE_HEADER>() };
@@ -194,11 +208,13 @@ fn qualify_access(file: &File, private: bool, ancestor: bool) -> Result<(), Read
             continue;
         }
         if header.AceType != 0 || (header.AceSize as usize) < size_of::<ACCESS_ALLOWED_ACE>() {
+            control.record_storage_failure(StorageStage::WindowsAcl, None);
             return Err(ReadError::Denied);
         }
         let ace = unsafe { &*pointer.cast::<ACCESS_ALLOWED_ACE>() };
         let sid = (&ace.SidStart as *const u32).cast_mut().cast();
         if !allowed(sid) && (private && ace.Mask != 0 || ace.Mask & destructive != 0) {
+            control.record_storage_failure(StorageStage::WindowsGrant, None);
             return Err(ReadError::Denied);
         }
     }
@@ -210,12 +226,18 @@ impl Directory {
         control.check()?;
         let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
         let (file, observed) = open_kind(Some(parent), OsStr::new("."), OpenKind::PrivateDirectory)
-            .map_err(|_| ReadError::Denied)?;
+            .map_err(|error| {
+                control.record_storage_failure(
+                    crate::StorageStage::WindowsDirectoryOpen,
+                    error.raw_os_error().map(|code| code as u32),
+                );
+                ReadError::Denied
+            })?;
         if (observed.volume, observed.id) != self.identity() {
             return Err(ReadError::StaleRoot);
         }
         validate_requested_root(&final_path(&file)?)?;
-        qualify_access(&file, false, true)?;
+        qualify_access(&file, false, true, control)?;
         control.check()
     }
 
@@ -227,12 +249,18 @@ impl Directory {
         control.check()?;
         let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
         let (file, observed) = open_kind(Some(parent), OsStr::new("."), OpenKind::PrivateDirectory)
-            .map_err(|_| ReadError::Denied)?;
+            .map_err(|error| {
+                control.record_storage_failure(
+                    crate::StorageStage::WindowsDirectoryOpen,
+                    error.raw_os_error().map(|code| code as u32),
+                );
+                ReadError::Denied
+            })?;
         if (observed.volume, observed.id) != self.identity() {
             return Err(ReadError::StaleRoot);
         }
         validate_requested_root(&final_path(&file)?)?;
-        qualify(&file, private)?;
+        qualify_access(&file, private, false, control)?;
         control.check()
     }
 }
@@ -310,10 +338,15 @@ mod tests {
     fn broad_parent_control_is_refused_before_creating_state() {
         let parent = tempfile::tempdir().unwrap();
         private_acl(parent.path(), "(A;;FA;;;WD)");
+        let control = ReadControl::default().with_storage_diagnostics();
         assert!(matches!(
-            crate::LocalMemoryStore::create_private(parent.path(), &ReadControl::default()),
+            crate::LocalMemoryStore::create_private(parent.path(), &control),
             Err(ReadError::Denied)
         ));
+        assert_eq!(
+            control.storage_failure().unwrap().stage,
+            crate::StorageStage::WindowsGrant
+        );
         assert!(!parent
             .path()
             .join(crate::bootstrap::PRIVATE_DIRECTORY)

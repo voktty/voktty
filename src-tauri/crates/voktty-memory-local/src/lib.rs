@@ -19,12 +19,14 @@ pub mod path_policy;
 mod preferences;
 mod publication;
 mod reader;
+mod storage_diagnostics;
 mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, PublicationError,
     PublicationFailure, PublicationReport, PublicationWriteRequirements, RecoveryFile,
 };
+pub use storage_diagnostics::{StorageFailure, StorageStage};
 pub use workers::{
     MemoryContextRead, MemoryContextSession, MemoryContextSessionJob, MemoryDeploymentJob,
     MemoryDeploymentWorkError, MemoryJob, MemoryPolicyError, MemoryPolicyJob, MemoryPolicyReview,

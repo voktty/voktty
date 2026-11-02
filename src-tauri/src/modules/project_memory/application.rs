@@ -305,6 +305,8 @@ impl NativeMemoryApplication {
         mode: MemoryStoreMode,
         control: ReadControl,
     ) -> Result<Arc<LocalMemoryStore>, MemoryWorkError> {
+        let control = control.with_storage_diagnostics();
+        let diagnostics = control.clone();
         let job = self.with_owners(window, |owners, receipt| {
             if !owners.is_window_current(receipt) {
                 return Err(ReadError::Cancelled.into());
@@ -316,6 +318,16 @@ impl NativeMemoryApplication {
             }
         })?;
         let result = job.finish().await;
+        if let (Err(error), Some(failure)) = (&result, diagnostics.storage_failure()) {
+            let mode = match mode {
+                MemoryStoreMode::OpenExisting => "open",
+                MemoryStoreMode::Initialize => "initialize",
+            };
+            log::warn!(
+                "project memory storage failed: mode={mode} stage={} windows_error={:?} error={error}",
+                failure.stage.as_str(), failure.windows_error
+            );
+        }
         self.with_owners(window, |owners, receipt| {
             if !owners.is_window_current(receipt) {
                 return Err(ReadError::Cancelled.into());

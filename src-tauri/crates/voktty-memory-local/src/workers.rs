@@ -213,17 +213,26 @@ impl MemoryWorkers {
                 MemoryStoreMode::Initialize => {
                     LocalMemoryStore::prepare_application_parent(&parent, &control)
                 }
-            }?;
+            }
+            .inspect_err(|_| {
+                control.record_storage_failure(crate::StorageStage::ApplicationParent, None)
+            })?;
             let store = match mode {
-                MemoryStoreMode::OpenExisting => LocalMemoryStore::open_private(&parent, &control)?,
-                MemoryStoreMode::Initialize => LocalMemoryStore::create_private(&parent, &control)?,
-            };
+                MemoryStoreMode::OpenExisting => LocalMemoryStore::open_private(&parent, &control),
+                MemoryStoreMode::Initialize => LocalMemoryStore::create_private(&parent, &control),
+            }
+            .inspect_err(|_| {
+                control.record_storage_failure(crate::StorageStage::PrivateDirectory, None)
+            })?;
             control.check()?;
             match mode {
                 MemoryStoreMode::OpenExisting => store.load(),
                 MemoryStoreMode::Initialize => store.initialize(),
             }
-            .map_err(ReadError::Store)?;
+            .map_err(ReadError::Store)
+            .inspect_err(|_| {
+                control.record_storage_failure(crate::StorageStage::Preferences, None)
+            })?;
             control.check()?;
             Ok(Arc::new(store))
         })
