@@ -10,14 +10,14 @@ be removed by an earlier receipt's cleanup. Conversation capture remains an
 explicit panel-opening action under the existing Harness session guards.
 
 The indicator lazily loads its observer and waits 200 ms before inspecting a
-stable local destination. It refreshes on window focus and after the management
+stable destination. It refreshes on window focus and after the management
 dialog closes, without polling, instruction reads or recursive watches. Target
 replacement removes the prior status immediately and suppresses late results.
 At most 256 observers remain admitted, including retired native requests until
 they settle and their exact resource-close operation is acknowledged. Failed
 cleanup remains charged and is retried when another observer is created.
 
-The typed client's `inspect` method uses the existing
+For local targets, the typed client's `inspect` method uses the existing
 `project_memory_discover` command with `inspectionOnly: true`. The optional flag
 defaults to false, retaining the original existing-private-state discovery
 contract. Inspection requires the same current native window, presentation and
@@ -64,8 +64,11 @@ observations. It does not mean that an agent received memory, instruction trust
 was accepted or context delivery is enabled. Confirmed absence is neutral;
 incomplete, conflicting or inaccessible observations require review. Errors
 never become absence. The panel retains separate trust, policy, conversation
-preparation and delivery controls. Unsupported remote, WSL and Docker targets
-remain explicit and do not invoke local inspection as a fallback.
+preparation and delivery controls. Explicit SSH workspaces and saved SSH project
+namespaces use the shared client's independently leased `memory.manage` helper
+transport; see its [contract](../../../crates/voktty-remote/PROJECT_MEMORY.md).
+Unknown namespaces and unsupported WSL, Docker and serial targets remain explicit
+and do not invoke local inspection as a fallback.
 
 Explicit document browsing uses the separate display-only contract described in
 [DOCUMENTS.md](DOCUMENTS.md). Marker observation never starts that content read.

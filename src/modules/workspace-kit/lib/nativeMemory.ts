@@ -395,6 +395,21 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
         return false;
       }
     },
+    isSourceSelection(
+      receipt: NativeMemorySelection,
+      path: string,
+      key: string,
+    ) {
+      try {
+        return (
+          capture(receipt).path === path &&
+          typeof key === "string" &&
+          transport?.selectionKey === key
+        );
+      } catch {
+        return false;
+      }
+    },
     isReviewCurrent(
       receipt: NativeMemorySelection,
       accepted: NativeMemoryReview,

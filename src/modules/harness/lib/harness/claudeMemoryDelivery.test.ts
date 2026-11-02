@@ -369,13 +369,13 @@ it("sanitizes a failed version probe", async () => {
   ).rejects.toThrow("Unable to verify the Claude CLI version");
   expect(bridge.children[0].args).toEqual([]);
 });
-it("rejects remote memory before probing or spawning a local CLI", async () => {
+it("rejects remote memory without owned version verification before probing or spawning a local CLI", async () => {
   const cwd = "remote://synthetic/project";
   const f = fixture();
   const source = { ...f.source, cwd };
   await expect(
     sendClaudeTurn({ ...base, cwd, projectMemory: source }),
-  ).rejects.toThrow("requires a local CLI");
+  ).rejects.toThrow("Unable to verify the Claude CLI version");
   expect(bridge.version).not.toHaveBeenCalled();
   expect(bridge.children[0].args).toEqual([]);
   expect(f.read).not.toHaveBeenCalled();

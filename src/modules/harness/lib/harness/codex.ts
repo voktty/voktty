@@ -6,6 +6,7 @@ import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import {
   assertHarnessMemoryTarget,
+  createHarnessMemoryProviderContext,
   type HarnessMemoryTurnSource,
   type PreparedHarnessMemory,
 } from "@/modules/harness/lib/harnessMemoryDelivery";
@@ -802,7 +803,9 @@ async function prepareCodexMemory(
   live: Live,
   source: HarnessMemoryTurnSource,
 ): Promise<PreparedHarnessMemory & { issued: () => void }> {
-  live.memoryContext ??= {};
+  live.memoryContext ??= createHarnessMemoryProviderContext(
+    live.child.handle.assertMemorySource,
+  );
   const context = live.memoryContext;
   const generation = live.turnGeneration;
   const turnId = live.activeTurnId;

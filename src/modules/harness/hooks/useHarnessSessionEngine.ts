@@ -426,6 +426,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           executionLifetime.current === lifetime &&
           contextOwners.current.get(id) === owner,
         getHarness(session.harness)?.projectMemory === "managed-turn",
+        session.harness,
       );
     },
     [updateSession],

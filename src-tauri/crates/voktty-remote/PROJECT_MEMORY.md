@@ -135,7 +135,25 @@ and retains failed cleanup for exact retry. The final owner releases and closes
 its lease without closing sibling consumers. Client families and outstanding
 requests per family are each capped at 256, including retired unsettled work.
 
-This transport integration does not enable remote conversation delivery by
-itself. Conversation source matching and provider acceptance remain separate
-requirements; transport tests or a prepared context are not real SSH acceptance
-or evidence of model use.
+The shared panel can manually bind and separately enable memory for a captured
+Harness conversation on a saved SSH project namespace. Selection matching uses
+the captured project, profile, connection and directory, rather than a POSIX
+path alone. Namespace metadata and Harness environment changes retire the
+conversation even when immediately reversed. The accepted context keeps its own
+helper owner after presentation or originating-view closure.
+
+Remote delivery additionally requires a provider context tied to its actual raw
+child's captured source. Codex and Claude recheck that source around preparation
+and acceptance; an existing process cannot receive a new host's memory merely
+because its namespace string was reused. A child without that proof cannot take
+remote memory. Local delivery keeps its existing local-selection contract.
+Claude memory admissions verify stable CLI 2.1.312 or newer with `agent.probe`
+on an owned helper before enabling replay input, then spawn using that same
+captured connection, root and lease. Missing version support has no local probe
+or unverified execution fallback. Probe cleanup retains unfinished work and
+failed helper cleanup under the original child owner.
+
+Preparation and enabling do not start a model or prove delivery. Codex requires
+its turn RPC acknowledgement; Claude requires the exact replay echo and completed
+write. Native Windows, real SSH and actual model reading remain runtime
+acceptance requirements, independent of transport and provider-adapter tests.

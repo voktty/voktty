@@ -113,11 +113,13 @@ no native IO. The shared 256-entry receipt budget includes inactive captures,
 pending retired binds and reads, and failed cleanup until exact retry succeeds.
 Later explicit captures retry retained cleanup without background polling.
 
-Binding checks that the presentation selected the original execution cwd with a
-local environment. This compares frontend input provenance, not canonical paths
+Binding checks that the presentation selected the original execution cwd and
+filesystem origin. Local contexts retain their local-selection check. SSH
+contexts also match the captured profile, connection, authorized root and saved
+namespace identity. This compares frontend input provenance, not canonical paths
 or filesystem authority; Rust still validates the actual source and scope. A
-different path, filesystem or unresolved remote namespace cannot supply the
-binding. The view facade holds its original persistence permit through activation
+different path, host, filesystem or unresolved remote namespace cannot supply
+the binding. The view facade holds its original persistence permit through activation
 and read publication, including after close cancellation. After accepted binding,
 closing the panel or originating view does not retire the engine-owned context.
 Memory receipts and native handles are not added to serializable Session data.
@@ -155,5 +157,13 @@ provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet
 preparation does not demonstrate provider delivery, reading or comprehension.
-SSH, WSL, Docker and native platform runtime qualification retain their existing
-unsupported or unverified states.
+The shared frontend selects SSH context transport from the exact reviewed
+presentation. The context retains a separate owner on the original helper lease;
+panel close cannot release it. Namespace profile/project changes and Harness
+environment replacement retire conversation ownership, including round trips.
+Provider contexts independently prove their actual raw child's captured source
+before accepting remote packets. See the helper's
+[contract](../../../crates/voktty-remote/PROJECT_MEMORY.md) for transport,
+version-probe and cleanup limits. WSL, Docker and unqualified native platform
+runtimes retain their unsupported or unverified states. Automated provider
+acceptance tests do not substitute for real SSH or model-reading evidence.

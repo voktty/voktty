@@ -4,11 +4,13 @@ import type {
   MemoryContextResult,
 } from "@/modules/workspace-kit/lib/context";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
-import {
+import type {
   createNativeMemoryPresentation,
-  type NativeMemorySelection,
+  NativeMemorySelection,
 } from "@/modules/workspace-kit/lib/nativeMemory";
 import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
+import { supportedMemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 
 export type MemoryConversationPanelState =
   | { status: "idle" | "reviewing" | "reading" | "closed" | "error" }
@@ -56,9 +58,16 @@ export function createMemoryConversationPanel(
   for (const entry of entries) if (entry.retired) void close(entry);
   if (entries.size >= 256)
     throw new RangeError("Memory conversation panels are busy");
-  const capturedEnvironment = structuredClone(environment);
+  const capturedEnvironment = structuredClone(
+    conversation.environment ?? environment,
+  );
+  const target = {
+    path: conversation.cwd,
+    environment: capturedEnvironment,
+    source: "conversation",
+  };
   const entry: Entry = {
-    client: createNativeMemoryPresentation(),
+    client: createMemoryClient(target),
     retired: false,
     pending: null,
     closing: null,
@@ -102,8 +111,7 @@ export function createMemoryConversationPanel(
     review() {
       if (
         conversation.status() !== "inactive" ||
-        capturedEnvironment.kind !== "local" ||
-        conversation.cwd.startsWith("remote://")
+        !supportedMemoryPanelTarget(target)
       )
         return Promise.resolve();
       return run(async () => {

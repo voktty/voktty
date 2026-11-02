@@ -60,8 +60,15 @@ function useHarnessMemorySource(cwd: string) {
   const captureConversation = useCallback(() => {
     const permit = admission.getOwner()?.capture();
     if (
-      ownerId === undefined || !captureMemorySession || !views || !holds ||
-      !projects || !permit || environment.env.kind !== "local" || !isCurrent()
+      ownerId === undefined ||
+      !captureMemorySession ||
+      !views ||
+      !holds ||
+      !projects ||
+      !permit ||
+      environment.error ||
+      environment.connecting ||
+      !isCurrent()
     )
       return null;
     const current = (sessionId?: string) => {
@@ -76,7 +83,7 @@ function useHarnessMemorySource(cwd: string) {
         (!sessionId || !holds.hasAny(sessionId)) &&
         !env.error &&
         !env.connecting &&
-        env.env.kind === "local" &&
+        JSON.stringify(env) === environmentKey &&
         surface.kind === "harness" &&
         surface.ownerId === ownerId &&
         surface.project === cwd &&
@@ -121,7 +128,9 @@ function useHarnessMemorySource(cwd: string) {
     projects,
     cwd,
     directory,
-    environment.env.kind,
+    environmentKey,
+    environment.connecting,
+    environment.error,
     isCurrent,
   ]);
   const targetKey = JSON.stringify(
@@ -171,7 +180,8 @@ export function HarnessActiveMemorySource() {
   const { target, captureConversation, isCurrent, source } =
     useHarnessMemorySource(project ?? "");
   useLayoutEffect(() => {
-    if (!project || !isCurrent() || retiredRevision.current === revision) return;
+    if (!project || !isCurrent() || retiredRevision.current === revision)
+      return;
     const release = memorySurfaceRegistry.publish({
       source,
       target,

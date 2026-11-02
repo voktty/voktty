@@ -16,6 +16,8 @@ import {
   createNativeMemoryContext,
   type NativeMemoryContext,
 } from "@/modules/workspace-kit/lib/nativeMemoryContext";
+import type { WorkspaceEnv } from "@/modules/workspace/env";
+import { captureRemoteMemorySource } from "@/modules/workspace-kit/lib/remoteMemorySource";
 
 type Binding = MemoryConversationBinding;
 type DeliveryFactory<Source> = (
@@ -30,6 +32,7 @@ type Entry = {
   acknowledged: boolean;
   closing: Promise<void> | null;
   listeners: Set<() => void>;
+  disposeOrigin: () => void;
 };
 const entries = new Set<Entry>();
 function notify(entry: Entry) {
@@ -46,8 +49,10 @@ function fail(code: "cancelled" | "busy"): never {
   throw Object.assign(new Error(`Memory conversation ${code}`), { code });
 }
 function collect(entry: Entry) {
-  if (entry.retired && entry.acknowledged && entry.pending === 0)
+  if (entry.retired && entry.acknowledged && entry.pending === 0) {
+    entry.disposeOrigin();
     entries.delete(entry);
+  }
 }
 function close(entry: Entry): Promise<void> {
   const first = !entry.retired;
@@ -83,6 +88,7 @@ export function createMemoryConversations<Source = never>(
       entry: Entry;
       receipt: MemoryConversation;
       source: (assertCurrent: () => void) => Source | undefined;
+      targetKey: string;
     }
   >();
   return {
@@ -92,12 +98,45 @@ export function createMemoryConversations<Source = never>(
       cwd: string,
       isOwnerCurrent: () => boolean,
       supportsDelivery = false,
+      environment: WorkspaceEnv = { kind: "local" },
     ): MemoryConversation {
       if (disposed || !isOwnerCurrent() || disposed) fail("cancelled");
       const existing = sessions.get(owner);
-      if (existing && !existing.entry.retired) return existing.receipt;
+      const capturedEnvironment = structuredClone(environment);
+      const targetKey = JSON.stringify([projectCwd, cwd, capturedEnvironment]);
+      if (existing) {
+        if (existing.targetKey === targetKey && existing.entry.isCurrent())
+          return existing.receipt;
+        retire(existing.entry);
+        sessions.delete(owner);
+      }
       for (const entry of entries) if (entry.retired) retire(entry);
       if (entries.size >= 256) fail("busy");
+      if (
+        capturedEnvironment.kind !== "local" &&
+        capturedEnvironment.kind !== "ssh"
+      )
+        fail("cancelled");
+      let retireOrigin = () => {};
+      const origin =
+        capturedEnvironment.kind === "ssh" || cwd.startsWith("remote://")
+          ? captureRemoteMemorySource(
+              {
+                path: cwd,
+                environment: capturedEnvironment,
+                source: "conversation",
+              },
+              () => retireOrigin(),
+            )
+          : null;
+      const originCurrent = () => {
+        try {
+          origin?.check();
+          return true;
+        } catch {
+          return false;
+        }
+      };
       let bound = false;
       let binding = false;
       let admission: (() => boolean) | null = null;
@@ -113,6 +152,7 @@ export function createMemoryConversations<Source = never>(
         !disposed &&
         !entry.retired &&
         isOwnerCurrent() &&
+        originCurrent() &&
         !disposed &&
         !entry.retired;
       const entry: Entry = {
@@ -125,7 +165,9 @@ export function createMemoryConversations<Source = never>(
         acknowledged: false,
         closing: null,
         listeners: new Set(),
+        disposeOrigin: () => origin?.dispose(),
       };
+      retireOrigin = () => retire(entry);
       const check = () => {
         if (!current()) {
           retire(entry);
@@ -135,6 +177,16 @@ export function createMemoryConversations<Source = never>(
       const receipt: MemoryConversation = Object.freeze({
         projectCwd,
         cwd,
+        ...(origin ? { sourceKey: origin.selectionKey } : {}),
+        environment:
+          capturedEnvironment.kind === "ssh"
+            ? Object.freeze({
+                ...capturedEnvironment,
+                connection: Object.freeze({
+                  ...capturedEnvironment.connection,
+                }),
+              })
+            : Object.freeze({ kind: "local" as const }),
         isCurrent: current,
         subscribe(listener: () => void) {
           if (!current()) return () => undefined;
@@ -228,7 +280,15 @@ export function createMemoryConversations<Source = never>(
             const { presentation, selection, review, mode } = input;
             if (!isActionCurrent()) fail("cancelled");
             check();
-            if (!presentation.isLocalSelection(selection, cwd))
+            if (
+              !(origin
+                ? presentation.isSourceSelection?.(
+                    selection,
+                    cwd,
+                    origin.selectionKey,
+                  ) === true
+                : presentation.isLocalSelection(selection, cwd))
+            )
               fail("cancelled");
             check();
             admission = isActionCurrent;
@@ -290,15 +350,25 @@ export function createMemoryConversations<Source = never>(
         },
         close: () => close(entry),
       });
-      const delivery = createDelivery?.(receipt, (accepted) => {
-        if (!current() || accepted.method !== channel) return;
-        deliveryState = Object.freeze({ ...deliveryState, receipt: accepted });
-        notify(entry);
-      });
+      let delivery: ReturnType<DeliveryFactory<Source>> | undefined;
+      try {
+        delivery = createDelivery?.(receipt, (accepted) => {
+          if (!current() || accepted.method !== channel) return;
+          deliveryState = Object.freeze({
+            ...deliveryState,
+            receipt: accepted,
+          });
+          notify(entry);
+        });
+      } catch (error) {
+        origin?.dispose();
+        throw error;
+      }
       entries.add(entry);
       sessions.set(owner, {
         entry,
         receipt,
+        targetKey,
         source: (assertCurrent) => {
           const permit = deliveryPermit;
           return deliveryState.enabled && current() && delivery

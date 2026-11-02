@@ -23,6 +23,16 @@ export type HarnessMemoryTurnSource = Readonly<{
   ) => Promise<PreparedHarnessMemory | null>;
 }>;
 
+const providerSources = new WeakMap<object, (key: string) => void>();
+
+export function createHarnessMemoryProviderContext(
+  assertSource?: (key: string) => void,
+): object {
+  const context = {};
+  if (assertSource) providerSources.set(context, assertSource);
+  return context;
+}
+
 let pending = 0;
 function fail(code: string): never {
   throw Object.assign(new Error(`Project memory: ${code}`), { code });
@@ -71,6 +81,11 @@ export function createHarnessMemoryDelivery(
           const current = () => {
             check();
             assertTransportCurrent();
+            if (conversation.sourceKey) {
+              const assertSource = providerSources.get(providerContext);
+              if (!assertSource) fail("cancelled");
+              assertSource(conversation.sourceKey);
+            }
             check();
           };
           current();

@@ -84,6 +84,7 @@ export function createRemoteMemoryTransport(
       checkSource();
     };
     return Object.freeze({
+      selectionKey: source.selectionKey,
       check,
       retain() {
         check();

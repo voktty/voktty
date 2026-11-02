@@ -96,16 +96,24 @@ function resolve(target: MemoryPanelTarget) {
   };
 }
 
-export function captureRemoteMemorySource(target: MemoryPanelTarget) {
+export function captureRemoteMemorySource(
+  target: MemoryPanelTarget,
+  onRetire?: () => void,
+) {
   const captured = structuredClone(target);
   const source = resolve(captured);
   let retired = false;
+  function retire() {
+    if (retired) return;
+    retired = true;
+    onRetire?.();
+  }
   function observe() {
     if (retired || source.environmentId === null) return;
     try {
-      if (resolve(captured).identity !== source.identity) retired = true;
+      if (resolve(captured).identity !== source.identity) retire();
     } catch {
-      retired = true;
+      retire();
     }
   }
   const unsubscribe =
@@ -115,6 +123,7 @@ export function captureRemoteMemorySource(target: MemoryPanelTarget) {
   if (source.environmentId !== null && typeof window !== "undefined")
     window.addEventListener(REMOTE_PROJECTS_CHANGED, observe);
   return {
+    selectionKey: JSON.stringify([captured.path, source.identity]),
     key: Object.freeze({ profileId: source.profileId, root: source.root }),
     connection: source.connection,
     check() {

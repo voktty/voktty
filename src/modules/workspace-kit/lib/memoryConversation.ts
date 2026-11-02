@@ -7,12 +7,19 @@ import type {
   NativeMemorySelection,
 } from "@/modules/workspace-kit/lib/nativeMemory";
 import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import type { WorkspaceEnv } from "@/modules/workspace/env";
 
 export type MemoryConversationBinding = Readonly<{
   presentation: Pick<
     ReturnType<typeof createNativeMemoryPresentation>,
     "bindContext" | "isLocalSelection"
-  >;
+  > &
+    Partial<
+      Pick<
+        ReturnType<typeof createNativeMemoryPresentation>,
+        "isSourceSelection"
+      >
+    >;
   selection: NativeMemorySelection;
   review: NativeMemoryTrustReview;
   mode: "inherit" | "enabled" | "disabled";
@@ -52,6 +59,8 @@ export const inactiveMemoryDelivery: MemoryDeliveryState = Object.freeze({
 export type MemoryConversation = Readonly<{
   projectCwd: string;
   cwd: string;
+  environment?: WorkspaceEnv;
+  sourceKey?: string;
   isCurrent: () => boolean;
   status: () => "inactive" | "binding" | "ready" | "retired";
   subscribe: (listener: () => void) => () => void;

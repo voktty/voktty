@@ -23,6 +23,7 @@ export function createMemoryClient(target: MemoryPanelTarget) {
   return createNativeMemoryPresentation(
     usesRemote
       ? {
+          selectionKey: remote?.selectionKey,
           invoke: <T>(command: string, args?: Record<string, unknown>) =>
             Promise.resolve().then(() => backend().invoke<T>(command, args)),
           check: () => backend().check(),

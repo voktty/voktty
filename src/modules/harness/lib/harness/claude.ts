@@ -5,6 +5,7 @@ import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import { loadClaudeHooks } from "../settings";
 import {
   assertHarnessMemoryTarget,
+  createHarnessMemoryProviderContext,
   type HarnessMemoryTurnSource,
   type PreparedHarnessMemory,
 } from "@/modules/harness/lib/harnessMemoryDelivery";
@@ -682,12 +683,23 @@ async function startLive(
       ? { path: "claude" }
       : await resolveClaudeBinaryImpl();
     guardUsable(admission);
+    const handle = admission.handle;
+    if (!handle) throw new Error("Claude session was retired");
     if (admission.replay) {
-      if (isRemote)
-        throw new Error("Claude project memory requires a local CLI.");
       let version: string;
       try {
-        version = await execChild(path, ["--version"]);
+        if (isRemote) {
+          if (!handle.probeRemote)
+            throw new Error(
+              "Remote provider version verification is unavailable",
+            );
+          const probe = await handle.probeRemote("claude", input.cwd);
+          if (typeof probe.version !== "string")
+            throw new Error(
+              "Remote provider version verification is unavailable",
+            );
+          version = probe.version;
+        } else version = await execChild(path, ["--version"]);
       } catch {
         guardUsable(admission);
         throw new Error(
@@ -700,8 +712,6 @@ async function startLive(
           "Claude Code 2.1.312 or newer is required for acknowledged project memory input.",
         );
     }
-    const handle = admission.handle;
-    if (!handle) throw new Error("Claude session was retired");
     const claudeSessionId =
       canResume && resume ? resume.sessionId : crypto.randomUUID();
     const retained = tasksByThread.get(input.sessionId);
@@ -834,7 +844,10 @@ function retireMemoryInputs(live: Live): void {
 
 function invalidateMemoryContext(live: Live): void {
   retireMemoryInputs(live);
-  if (live.memoryContext) live.memoryContext = {};
+  if (live.memoryContext)
+    live.memoryContext = createHarnessMemoryProviderContext(
+      live.admission.handle?.assertMemorySource,
+    );
 }
 
 function acknowledgeMemoryInput(live: Live, input: MemoryInput): void {
@@ -855,7 +868,9 @@ async function prepareMemoryInput(
 ): Promise<MemoryInput | undefined> {
   guardOperation(live, generation);
   assertHarnessMemoryTarget(source, live.cwd);
-  live.memoryContext ??= {};
+  live.memoryContext ??= createHarnessMemoryProviderContext(
+    live.admission.handle?.assertMemorySource,
+  );
   const context = live.memoryContext;
   const providerSessionId = live.claudeSessionId;
   const prepared = await source.prepare(

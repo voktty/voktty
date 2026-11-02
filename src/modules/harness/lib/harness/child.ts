@@ -25,7 +25,11 @@ import {
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
-import { checkRemoteAgentProbe } from "./remoteAgents";
+import { checkRemoteAgentProbe, type RemoteAgentProbe } from "./remoteAgents";
+import {
+  captureRemoteMemorySource,
+  type RemoteMemorySource,
+} from "@/modules/workspace-kit/lib/remoteMemorySource";
 
 export interface ChildBackend {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
@@ -144,6 +148,8 @@ export interface RawChildHandle {
   readonly nativeId: string;
   readonly logicalSessionId: string;
   readonly retired: boolean;
+  assertMemorySource?: (key: string) => void;
+  probeRemote?: (command: string, cwd: string) => Promise<RemoteAgentProbe>;
   spawn(
     command: string,
     args: string[],
@@ -178,6 +184,14 @@ type RawChildOwner = {
   closing?: Promise<void>;
   cleaned: boolean;
   lease?: RemoteSessionLease;
+  memorySource?: RemoteMemorySource;
+  remoteProbe?: {
+    command: string;
+    cwd: string;
+    connection: RemoteSshConnection;
+    relative: string;
+    operation: Promise<RemoteAgentProbe>;
+  };
   watcher?: RawWatcher;
   frames: Array<{ stream: "stdout" | "stderr"; line: string }>;
   exits: ExitPayload[];
@@ -288,6 +302,8 @@ function closeRawChild(owner: RawChildOwner): Promise<void> {
       owner.lease = undefined;
     }
     owner.cleaned = true;
+    owner.memorySource?.dispose();
+    owner.memorySource = undefined;
     owner.operation = undefined;
     owner.pid = undefined;
     rawChildren.delete(owner.nativeId);
@@ -340,12 +356,91 @@ export function reserveRawChild(logicalSessionId: string): RawChildHandle {
     get retired() {
       return owner.retired;
     },
+    assertMemorySource(key) {
+      assertRawActive(owner);
+      if (!owner.memorySource || owner.memorySource.selectionKey !== key)
+        throw new Error("Project memory provider source changed");
+      owner.memorySource.check();
+    },
+    probeRemote(command, cwd) {
+      assertRawActive(owner);
+      if (owner.spawned)
+        return Promise.reject(new Error("Harness child was already started."));
+      if (owner.remoteProbe) {
+        if (
+          owner.remoteProbe.command !== command ||
+          owner.remoteProbe.cwd !== cwd
+        )
+          return Promise.reject(
+            new Error("Project memory provider source changed"),
+          );
+        return owner.remoteProbe.operation;
+      }
+      const source = captureRemoteMemorySource({
+        path: cwd,
+        environment: { kind: "local" },
+        source: "provider",
+      });
+      const parsed = parseRemotePath(cwd);
+      const relative = parsed
+        ? relativeWithinProject(source.key.root, parsed.hostPath)
+        : undefined;
+      if (relative === undefined) {
+        source.dispose();
+        return Promise.reject(new Error("Invalid remote provider directory"));
+      }
+      owner.memorySource = source;
+      const operation = Promise.resolve().then(async () => {
+        assertRawActive(owner);
+        source.check();
+        const lease = await remoteSessions.acquire(
+          source.key,
+          source.connection,
+        );
+        owner.lease = lease;
+        assertRawActive(owner);
+        source.check();
+        if (!lease.info.capabilities.includes("agent.probe"))
+          throw new Error(
+            "Remote provider version verification is unavailable",
+          );
+        const result = await probeRemoteAgent(lease.info.session_id, command);
+        assertRawActive(owner);
+        source.check();
+        checkRemoteAgentProbe(command, result);
+        return result;
+      });
+      owner.remoteProbe = {
+        command,
+        cwd,
+        relative,
+        connection: source.connection,
+        operation,
+      };
+      owner.operation = operation.then(() => undefined);
+      void owner.operation.catch(() => undefined);
+      return operation.catch((reason: unknown) => {
+        void closeRawChild(owner).catch(() => undefined);
+        throw reason;
+      });
+    },
     spawn: (command, args, cwd, networkAllowlist, account) => {
       if (owner.retired)
         return Promise.reject(new Error("Harness child was retired."));
       if (owner.spawned)
         return Promise.reject(new Error("Harness child was already started."));
       owner.spawned = true;
+      if (!owner.memorySource && parseRemotePath(cwd)) {
+        try {
+          owner.memorySource = captureRemoteMemorySource({
+            path: cwd,
+            environment: { kind: "local" },
+            source: "provider",
+          });
+        } catch {
+          // Legacy agent transports remain usable but cannot prove memory ownership.
+        }
+      }
       const capturedArgs = args.slice();
       const capturedNetwork =
         networkAllowlist == null ? networkAllowlist : networkAllowlist.slice();
@@ -746,7 +841,25 @@ async function startChild(
   let execCommand = command;
 
   const remote = parseRemotePath(cwd);
-  if (remote) {
+  if (owner?.remoteProbe) {
+    const probe = owner.remoteProbe;
+    if (
+      !remote ||
+      probe.cwd !== cwd ||
+      probe.command !== cleanRemoteCommand(command)
+    )
+      throw new Error("Project memory provider source changed");
+    await probe.operation;
+    assertRawActive(owner);
+    owner.memorySource?.check();
+    if (!owner.lease) throw new Error("Remote provider session was retired");
+    remoteConnection = probe.connection;
+    remoteCwd = remote.hostPath;
+    execCommand = cleanRemoteCommand(command);
+    remoteSessionId = owner.lease.info.session_id;
+    remoteRoot = owner.lease.info.workspace_root;
+    remoteRelativeCwd = probe.relative;
+  } else if (remote) {
     remoteConnection = await resolveRemoteSshConnection(remote.environmentId);
     if (owner) assertRawActive(owner);
     remoteCwd = remote.hostPath;

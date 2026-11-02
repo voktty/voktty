@@ -297,13 +297,12 @@ it("ignores rejected deltas and keeps an exact current binding", async () => {
   expect(capture(f.engine())).toBe(scope);
   expect(await scope.read()).toEqual(packet());
 });
-it.each(["path", "filesystem", "namespace"])(
+it.each(["path", "filesystem"])(
   "refuses another execution %s before opening native context",
   async (kind) => {
     const f = mount([
       chat("source", {
-        worktreeCwd:
-          kind === "namespace" ? "remote://host/project" : "/project/worktree",
+        worktreeCwd: "/project/worktree",
       }),
     ]);
     const scope = capture(f.engine());
@@ -323,6 +322,15 @@ it.each(["path", "filesystem", "namespace"])(
     ).toBe(false);
   },
 );
+it("rejects an unowned execution namespace at capture without opening native context", () => {
+  const f = mount([chat("source", { worktreeCwd: "remote://host/project" })]);
+  act(() => {
+    expect(() => f.engine().captureMemorySession("source")).toThrowError(
+      "unsupported",
+    );
+  });
+  expect(invoke).not.toHaveBeenCalled();
+});
 it("retires binding when the initiating view closes before native open finishes", async () => {
   const f = mount();
   const raw = capture(f.engine());

@@ -30,22 +30,31 @@ export default function ProjectMemoryPanel({
   const { t } = useTranslation();
   const [revision, setRevision] = useState(0);
   const [manageConversation, setManageConversation] = useState(false);
+  const conversationTarget = useMemo(
+    () =>
+      target && conversation
+        ? {
+            ...target,
+            path: conversation.cwd,
+            environment: conversation.environment ?? target.environment,
+          }
+        : null,
+    [target, conversation],
+  );
+  const canManageConversation =
+    conversationTarget !== null &&
+    supportedMemoryPanelTarget(conversationTarget);
   const managementTarget = useMemo(
     () =>
-      manageConversation && target && conversation
-        ? { ...target, path: conversation.cwd }
-        : target,
-    [manageConversation, target, conversation],
+      manageConversation && conversationTarget ? conversationTarget : target,
+    [manageConversation, target, conversationTarget],
   );
   return (
     <>
-      {conversation &&
-      target &&
-      target.environment.kind === "local" &&
-      !conversation.cwd.startsWith("remote://") ? (
+      {conversation && conversationTarget && canManageConversation ? (
         <MemoryConversation
           conversation={conversation}
-          environment={target.environment}
+          environment={conversationTarget.environment}
         />
       ) : null}
       {conversationError ? (
@@ -53,9 +62,10 @@ export default function ProjectMemoryPanel({
       ) : null}
       {conversation &&
       target &&
-      conversation.cwd !== target.path &&
-      target.environment.kind === "local" &&
-      !conversation.cwd.startsWith("remote://") ? (
+      canManageConversation &&
+      (conversation.cwd !== target.path ||
+        JSON.stringify(conversation.environment ?? target.environment) !==
+          JSON.stringify(target.environment)) ? (
         <Button
           variant="outline"
           size="sm"

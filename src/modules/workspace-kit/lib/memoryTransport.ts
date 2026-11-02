@@ -1,5 +1,6 @@
 /** A resource owner pinned to one native backend incarnation. */
 export type MemoryTransport = Readonly<{
+  selectionKey?: string;
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
   check: () => void;
   retain: () => MemoryTransport;
