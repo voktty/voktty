@@ -71,3 +71,21 @@ it("captures explicit inspection before opening and cannot deliver an old select
   });
   await owner.close();
 });
+
+it("requests stateless marker inspection explicitly and cannot inspect a replaced selection", async () => {
+  invoke.mockImplementation(async (command) => {
+    if (command === "project_memory_open") return handle;
+    if (command === "project_memory_select") return "selection";
+    if (command === "project_memory_discover") return { schema: 1, root: null };
+  });
+  const owner = createNativeMemoryPresentation();
+  const selected = await owner.select("/project", { kind: "local" });
+  await owner.inspect(selected);
+  expect(invoke).toHaveBeenLastCalledWith("project_memory_discover", {
+    handle, selection: "selection", inspectionOnly: true,
+  });
+  expect(invoke.mock.calls.some(([command]) => command === "project_memory_initialize_local_state")).toBe(false);
+  await owner.select("/replacement", { kind: "local" });
+  await expect(owner.inspect(selected)).rejects.toMatchObject({ code: "cancelled" });
+  await owner.close();
+});

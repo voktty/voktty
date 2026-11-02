@@ -5,6 +5,7 @@ import { expect, it, vi } from "vitest";
 import { StatusBar } from "@/modules/statusbar/StatusBar";
 import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 import { asTabKey, asWorkspaceScopeId } from "@/modules/tabs/lib/tabIdentity";
+import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
 
 const { captured } = vi.hoisted(() => ({
   captured: { target: null as MemoryPanelTarget | null },
@@ -110,6 +111,23 @@ it("uses the active leaf directory and environment instead of the toolkit or an 
     root.render(<StatusBar {...props} activeLeafId={undefined} />),
   );
   expect(captured.target).toBeNull();
+  const harness = {
+    id: 20, kind: "harness" as const, title: "Harness", cwd: "/project",
+    tabKey: asTabKey("harness-key"), workspaceScopeId: asWorkspaceScopeId("scope"), spaceId: "default",
+  };
+  const memoryTarget: MemoryPanelTarget = {
+    path: "/project/active-folder", environment: { kind: "local" }, source: "harness:20:harness-key",
+  };
+  let current = true;
+  const release = memorySurfaceRegistry.publish({
+    source: memoryTarget.source, target: memoryTarget, isCurrent: () => current, captureConversation: () => null,
+  });
+  await act(async () => root.render(<StatusBar {...props} tabs={[harness]} toolkitSourceKey="harness-key" />));
+  expect(captured.target).toEqual(memoryTarget);
+  current = false;
+  await act(async () => root.render(<StatusBar {...props} tabs={[harness]} toolkitSourceKey="harness-key" />));
+  expect(captured.target).toBeNull();
+  await act(async () => release());
   await act(async () => root.unmount());
   node.remove();
   vi.unstubAllGlobals();

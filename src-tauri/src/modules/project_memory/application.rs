@@ -252,6 +252,20 @@ impl NativeMemoryApplication {
         .unwrap_or(false)
     }
 
+    pub fn inspect_scope(
+        &self,
+        window: &NativeMemoryWindow,
+        presentation: &NativeMemoryPresentationReceipt,
+        selected: &NativeMemorySelectionReceipt,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRead<NativeScopeObservation>, MemoryWorkError> {
+        self.with_owners(window, |owners, receipt| {
+            owners
+                .selection(receipt, presentation)?
+                .inspect_scope(selected, control)
+        })
+    }
+
     pub fn discover(
         &self,
         window: &NativeMemoryWindow,

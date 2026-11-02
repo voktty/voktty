@@ -305,7 +305,10 @@ async fn discover(
         .finish()
         .await;
     resource.check(app, token)?;
-    let observation = result?;
+    scope_reply(result?)
+}
+
+fn scope_reply(observation: NativeScopeObservation) -> Result<ScopeReply, MemoryCommandError> {
     let root = observation
         .scope
         .root_key
@@ -338,9 +341,33 @@ pub async fn project_memory_discover(
     app: State<'_, NativeMemoryApplication>,
     handle: PresentationHandle,
     selection: String,
+    inspection_only: Option<bool>,
 ) -> Result<ScopeReply, MemoryCommandError> {
     let resource = presentation(&window, &handle)?;
-    discover(&app, &resource, &selection).await
+    if inspection_only == Some(true) {
+        inspect(&app, &resource, &selection).await
+    } else {
+        discover(&app, &resource, &selection).await
+    }
+}
+
+async fn inspect(
+    app: &NativeMemoryApplication,
+    resource: &PresentationResource,
+    token: &str,
+) -> Result<ScopeReply, MemoryCommandError> {
+    let selected = resource.check(app, token)?;
+    let result = app
+        .inspect_scope(
+            &resource.window,
+            &resource.receipt,
+            &selected,
+            DiscoveryControl::new(std::time::Duration::from_secs(5)),
+        )?
+        .finish()
+        .await;
+    resource.check(app, token)?;
+    scope_reply(result?)
 }
 
 #[tauri::command]
@@ -379,3 +406,7 @@ pub mod context;
 #[cfg(test)]
 #[path = "commands_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "commands_inspection_tests.rs"]
+mod inspection_tests;

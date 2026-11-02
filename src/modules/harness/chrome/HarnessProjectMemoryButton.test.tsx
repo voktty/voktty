@@ -2,7 +2,8 @@
 import { act, type ContextType } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { HarnessProjectMemoryButton } from "@/modules/harness/chrome/HarnessProjectMemoryButton";
+import { HarnessActiveMemorySource, HarnessProjectMemoryButton } from "@/modules/harness/chrome/HarnessProjectMemoryButton";
+import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
 import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
 import { publishActiveSurface } from "@/modules/surfaces/lib/activeSurfaceStore";
 import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
@@ -105,12 +106,13 @@ it("captures the registered conversation by gesture using its worktree and retir
             value={{ ownerId: 20, tabKey: asTabKey("harness-key") }}
           >
             <HarnessProjectMemoryButton cwd="/harness" />
+            <HarnessActiveMemorySource />
           </HarnessProjectOwner>
         </HarnessWindowContext>,
       ),
     );
     expect(captureMemorySession).not.toHaveBeenCalled();
-    const capture = captured.captureConversation?.();
+    const capture = memorySurfaceRegistry.getSnapshot()?.captureConversation();
     if (!capture) throw new Error("Missing conversation capture");
     expect(captureMemorySession).toHaveBeenCalledWith("conversation");
     expect(capture.conversation.cwd).toBe("/worktree");
@@ -140,6 +142,63 @@ it("captures the registered conversation by gesture using its worktree and retir
     await act(async () => root.unmount());
     manager.dispose();
     await session.close();
+  }
+});
+
+it("publishes the focused Harness to the footer without rail visibility or native work and retires source round trips", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const surface = { kind: "harness" as const, ownerId: 20, projectCwd: "/project", focusFolder: "/project/sub" };
+  const render = () => <HarnessProjectOwner value={{ ownerId: 20, tabKey: asTabKey("owned") }}><HarnessActiveMemorySource /></HarnessProjectOwner>;
+  publishActiveSurface(surface);
+  try {
+    await act(async () => root.render(render()));
+    const first = memorySurfaceRegistry.getSnapshot();
+    expect(first?.source).toBe("harness:20:owned");
+    expect(first?.target?.path).toBe("/project/sub");
+    expect(first?.isCurrent()).toBe(true);
+    await act(async () => root.render(render()));
+    expect(memorySurfaceRegistry.getSnapshot()).toBe(first);
+    await act(async () => {
+      publishActiveSurface({ kind: "terminal", ownerId: 1, cwd: "/elsewhere" });
+      publishActiveSurface(surface);
+    });
+    expect(first?.isCurrent()).toBe(false);
+    expect(memorySurfaceRegistry.getSnapshot()?.revision).toBeGreaterThan(first?.revision ?? 0);
+    await act(async () => publishActiveSurface({ ...surface, ownerId: 21 }));
+    expect(memorySurfaceRegistry.getSnapshot()).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+  }
+  expect(memorySurfaceRegistry.getSnapshot()).toBeNull();
+});
+
+it("keeps the footer publication across ordinary runtime metadata updates", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const value = {
+    engine: { captureMemorySession: vi.fn(() => null) },
+    views: createHarnessWindowViews(),
+    holds: createHarnessWindowSessionHolds(),
+    projects: createHarnessProjectReservations(),
+  } as unknown as NonNullable<ContextType<typeof HarnessWindowContext>>;
+  const render = (runtime: typeof value) => (
+    <HarnessWindowContext value={runtime}>
+      <HarnessProjectOwner value={{ ownerId: 20, tabKey: asTabKey("owned") }}>
+        <HarnessActiveMemorySource />
+      </HarnessProjectOwner>
+    </HarnessWindowContext>
+  );
+  publishActiveSurface({ kind: "harness", ownerId: 20, projectCwd: "/project" });
+  try {
+    await act(async () => root.render(render(value)));
+    const receipt = memorySurfaceRegistry.getSnapshot();
+    expect(receipt?.target?.path).toBe("/project");
+    await act(async () => root.render(render({ ...value, engine: { ...value.engine, sessions: [] } })));
+    expect(memorySurfaceRegistry.getSnapshot()).toBe(receipt);
+    expect(receipt?.isCurrent()).toBe(true);
+  } finally {
+    await act(async () => root.unmount());
   }
 });
 

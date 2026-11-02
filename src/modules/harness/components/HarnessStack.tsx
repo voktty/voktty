@@ -46,6 +46,11 @@ const LazyNativeAiView = lazy(() =>
     default: module.HarnessNativeAiView,
   })),
 );
+const LazyMemorySource = lazy(() =>
+  import("@/modules/harness/chrome/HarnessProjectMemoryButton").then((module) => ({
+    default: module.HarnessActiveMemorySource,
+  })),
+);
 
 function HarnessWorkbench({
   tab,
@@ -118,6 +123,9 @@ function HarnessWorkbench({
       ) : null}
       <div className="min-h-0 flex-1" hidden={nativeVisible}>
         <HarnessProjectOwner value={{ ownerId: tab.id, tabKey: tab.tabKey }}>
+        <Suspense fallback={null}>
+          <LazyMemorySource />
+        </Suspense>
         <HarnessTerminalOwner
           value={{
             tabKey: tab.tabKey,

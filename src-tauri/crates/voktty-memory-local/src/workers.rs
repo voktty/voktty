@@ -163,6 +163,18 @@ fn resolve_ready_memory(
 }
 
 impl MemoryWorkers {
+    pub fn inspect_scope(
+        &self,
+        requested: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        control: DiscoveryControl,
+    ) -> Result<MemoryJob<NativeScopeObservation>, MemoryWorkError> {
+        validate_path(&requested)?;
+        self.spawn(Control::Scope(control.clone()), move || {
+            crate::inspect_local_memory_scope(&requested, access.as_ref(), &control)
+        })
+    }
+
     /// `parent` must come from the native application's directory resolver.
     /// Neither repository data nor webview paths may select private state.
     pub fn store(

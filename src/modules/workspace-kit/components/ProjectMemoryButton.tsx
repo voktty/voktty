@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useState } from "react";
+import { lazy, Suspense, useId, useLayoutEffect, useMemo, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import BrainIcon from "@hugeicons/core-free-icons/BrainIcon";
 import { Button } from "@/components/ui/button";
@@ -18,18 +18,23 @@ import { cn } from "@/lib/utils";
 const Panel = lazy(
   () => import("@/modules/workspace-kit/components/ProjectMemoryPanel"),
 );
+const Indicator = lazy(() => import("@/modules/workspace-kit/components/MemoryIndicator"));
 
 export function ProjectMemoryButton({
   target,
   rail = false,
   captureConversation,
+  observe = false,
 }: {
   target: MemoryPanelTarget | null;
   rail?: boolean;
   captureConversation?: () => MemoryConversationCapture | null;
+  observe?: boolean;
 }) {
   const { t } = useTranslation();
+  const descriptionId = useId();
   const key = JSON.stringify(target);
+  const observedTarget = useMemo(() => JSON.parse(key) as MemoryPanelTarget | null, [key]);
   const [opened, setOpened] = useState<{
     key: string;
     target: MemoryPanelTarget | null;
@@ -75,6 +80,7 @@ export function ProjectMemoryButton({
           size={rail ? "default" : "icon"}
           title={t("projectMemory.title")}
           aria-label={t("projectMemory.title")}
+          aria-describedby={observe ? descriptionId : undefined}
           className={cn(
             rail
               ? "h-8 w-full justify-start gap-2 px-2 text-content/50 hover:bg-content/10 hover:text-content"
@@ -82,12 +88,16 @@ export function ProjectMemoryButton({
             open && "bg-accent text-foreground",
           )}
         >
-          <HugeiconsIcon
+          {observe ? (
+            <Suspense fallback={<span id={descriptionId} role="img" className="size-3.5 animate-pulse rounded-full bg-muted" aria-label={t("projectMemory.checking")} />}>
+              <Indicator key={key} target={observedTarget} active={!open} descriptionId={descriptionId} />
+            </Suspense>
+          ) : <HugeiconsIcon
             icon={BrainIcon}
             size={rail ? 16 : 14}
             strokeWidth={1.75}
             aria-hidden
-          />
+          />}
           {rail ? (
             <span className="truncate text-sm font-medium">
               {t("projectMemory.title")}

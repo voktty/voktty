@@ -149,7 +149,7 @@ export function createNativeMemoryPresentation() {
     })();
   }
 
-  async function request<T>(command: string, receipt: NativeMemorySelection) {
+  async function request<T>(command: string, receipt: NativeMemorySelection, args: Record<string, unknown> = {}) {
     const selected = capture(receipt);
     const owner = await handle();
     capture(receipt);
@@ -157,6 +157,7 @@ export function createNativeMemoryPresentation() {
       const result = await invoke<T>(command, {
         handle: owner,
         selection: selected.token,
+        ...args,
       });
       capture(receipt);
       return result;
@@ -226,6 +227,9 @@ export function createNativeMemoryPresentation() {
     },
     discover(receipt: NativeMemorySelection) {
       return request<NativeMemoryScope>("project_memory_discover", receipt);
+    },
+    inspect(receipt: NativeMemorySelection) {
+      return request<NativeMemoryScope>("project_memory_discover", receipt, { inspectionOnly: true });
     },
     initializeLocalState(receipt: NativeMemorySelection) {
       return request<void>("project_memory_initialize_local_state", receipt);

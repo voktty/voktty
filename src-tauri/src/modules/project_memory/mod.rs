@@ -164,6 +164,20 @@ impl NativeMemorySource {
         Ok(Self { requested, access })
     }
 
+    pub fn inspect_scope(
+        &self,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRead<NativeScopeObservation>, MemoryWorkError> {
+        Ok(NativeMemoryRead {
+            job: MemoryWorkers::default().inspect_scope(
+                self.requested.clone(),
+                self.access.clone(),
+                control,
+            )?,
+            access: self.access.clone(),
+        })
+    }
+
     pub fn scope(
         &self,
         store: Arc<LocalMemoryStore>,

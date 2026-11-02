@@ -127,6 +127,14 @@ impl NativeMemorySelection {
             .ok_or_else(|| ReadError::Cancelled.into())
     }
 
+    pub fn inspect_scope(
+        &self,
+        receipt: &NativeMemorySelectionReceipt,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRead<NativeScopeObservation>, MemoryWorkError> {
+        self.current(receipt)?.inspect_scope(control)
+    }
+
     pub fn scope(
         &self,
         receipt: &NativeMemorySelectionReceipt,
