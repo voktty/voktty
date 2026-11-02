@@ -336,11 +336,28 @@ fn resource_limit_and_unforgeable_handles_hold_across_helpers() {
 
 #[test]
 fn capability_requires_handshake_and_rehandshake_retires_all_receipts() {
+    fn dispatch(server: &mut crate::RemoteServer, params: Value) -> RemoteResponse {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let sink: crate::proc_host::FrameSink = Arc::new(move |frame| {
+            sender
+                .send(frame)
+                .map_err(|_| std::io::Error::other("test response receiver closed"))
+        });
+        server
+            .start_memory(request(params), sink)
+            .unwrap_or_else(|| {
+                let voktty_remote_protocol::Frame::Response(response) =
+                    receiver.recv_timeout(Duration::from_secs(3)).unwrap()
+                else {
+                    panic!("expected a memory response");
+                };
+                response
+            })
+    }
     let (project, _, _) = fixture();
     let mut server = crate::RemoteServer::new();
     assert_eq!(
-        server
-            .handle(request(json!({"operation":"open"})))
+        dispatch(&mut server, json!({"operation":"open"}))
             .error
             .unwrap()
             .code,
@@ -358,13 +375,12 @@ fn capability_requires_handshake_and_rehandshake_retires_all_receipts() {
         .unwrap()
         .iter()
         .any(|value| value == METHOD_MEMORY_MANAGE));
-    let handle = server
-        .handle(request(json!({"operation":"open"})))
+    let handle = dispatch(&mut server, json!({"operation":"open"}))
         .result
         .unwrap()["result"]
         .clone();
     server.handle(handshake());
-    let rejected = server.handle(request(json!({"operation":"close","handle":handle})));
+    let rejected = dispatch(&mut server, json!({"operation":"close","handle":handle}));
     assert_eq!(rejected.result.unwrap()["error"]["code"], "cancelled");
 }
 

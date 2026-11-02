@@ -23,6 +23,14 @@ const MAX_RESOURCES: usize = 64;
 const MAX_REQUEST_BYTES: usize = 512 * 1024;
 const MAX_REPLY_BYTES: usize = 8 * 1024 * 1024;
 
+pub(super) fn request_control(request: &RemoteRequest) -> DiscoveryControl {
+    if request.params["operation"] == "inspect" {
+        DiscoveryControl::new(Duration::from_secs(5))
+    } else {
+        DiscoveryControl::default()
+    }
+}
+
 struct Review<T> {
     revision: u64,
     current: Option<(String, T)>,
@@ -207,7 +215,18 @@ impl MemoryServer {
         Ok(Arc::new(store))
     }
 
+    #[cfg(test)]
     pub fn handle(&mut self, root: Option<&Path>, request: RemoteRequest) -> RemoteResponse {
+        let control = request_control(&request);
+        self.handle_with_control(root, request, &control)
+    }
+
+    pub fn handle_with_control(
+        &mut self,
+        root: Option<&Path>,
+        request: RemoteRequest,
+        control: &DiscoveryControl,
+    ) -> RemoteResponse {
         let Some(root) = root else {
             return RemoteResponse::failure(
                 request.id,
@@ -232,7 +251,7 @@ impl MemoryServer {
                 )
             }
         };
-        let result = match self.execute(root, params) {
+        let result = match self.execute(root, params, control) {
             Ok(result) if result.to_string().len() <= MAX_REPLY_BYTES => {
                 json!({"schema":1,"ok":true,"result":result})
             }
@@ -242,8 +261,13 @@ impl MemoryServer {
         RemoteResponse::success(request.id, result)
     }
 
-    fn execute(&mut self, root: &Path, request: Request) -> Result<Value, Error> {
-        let control = DiscoveryControl::default();
+    fn execute(
+        &mut self,
+        root: &Path,
+        request: Request,
+        control: &DiscoveryControl,
+    ) -> Result<Value, Error> {
+        control.read_control()?;
         let value = match request {
             Request::Open {} => {
                 let (id, token) = self.allocate()?;
@@ -294,11 +318,8 @@ impl MemoryServer {
             }
             Request::Inspect { handle, selection } => {
                 let source = &self.selected(&handle, &selection)?.source;
-                let observed = inspect_local_memory_scope(
-                    &source.requested,
-                    source.as_ref(),
-                    &DiscoveryControl::new(Duration::from_secs(5)),
-                )?;
+                let observed =
+                    inspect_local_memory_scope(&source.requested, source.as_ref(), control)?;
                 let memory = observed
                     .scope
                     .root_key
@@ -328,7 +349,7 @@ impl MemoryServer {
                     source.as_ref(),
                     &control.read_control()?,
                 )?;
-                let observed = workspace.observe_scope(DiscoveryPurpose::Discover, &control)?;
+                let observed = workspace.observe_scope(DiscoveryPurpose::Discover, control)?;
                 let memory = observed
                     .scope
                     .root_key
@@ -385,7 +406,7 @@ impl MemoryServer {
                         agents: links.agents,
                         claude: links.claude,
                     },
-                    &control,
+                    control,
                 )?
                 .into_owned(store.clone(), source.clone(), source.clone())?;
                 let mut result = json!({"schema":1,"root":source.requested,"revision":revision,
@@ -407,7 +428,7 @@ impl MemoryServer {
                     source: &selected.source,
                     requirements: preview.write_requirements(),
                 };
-                match preview.publish(&access, &control) {
+                match preview.publish(&access, control) {
                     Ok(report) => Ok(
                         json!({"schema":1,"created":report.created,"skipped":report.skipped,
                         "migrated":report.migrated,"cleaned":report.cleaned}),
@@ -443,7 +464,7 @@ impl MemoryServer {
                     &source.requested,
                     &root,
                     source.as_ref(),
-                    &control,
+                    control,
                 )?;
                 serde_json::to_value(documents).map_err(|_| Error::new("unavailable"))
             }
@@ -464,7 +485,7 @@ impl MemoryServer {
                     source.requested.clone(),
                     source,
                     role,
-                    &control,
+                    control,
                 )?;
                 let observed = review.observation();
                 let mut result = json!({"schema":1,"revision":revision,"root":review.root(),
@@ -481,7 +502,7 @@ impl MemoryServer {
             } => {
                 let review = self.selected(&handle, &selection)?.trust.take(&review)?;
                 let key = review.observation().project_key.clone();
-                let snapshot = review.accept(&control)?;
+                let snapshot = review.accept(control)?;
                 Ok(json!({"schema":1,"preference":snapshot.project(&key)}))
             }
             Request::CancelTrust {
@@ -510,7 +531,7 @@ impl MemoryServer {
                     source.requested.clone(),
                     source,
                     policy,
-                    &control,
+                    control,
                 )?;
                 let mut result = json!({"schema":1,"revision":revision,"root":review.root(),
                     "projectKey":review.project_key(),"policy":review.policy(),"preference":review.preference()});
@@ -524,7 +545,7 @@ impl MemoryServer {
                 review,
             } => {
                 let review = self.selected(&handle, &selection)?.policy.take(&review)?;
-                Ok(json!({"schema":1,"preference":review.accept(&control)?}))
+                Ok(json!({"schema":1,"preference":review.accept(control)?}))
             }
             Request::CancelPolicy {
                 handle,
@@ -562,7 +583,7 @@ impl MemoryServer {
                     _ => return Err(Error::new("invalidInput")),
                 };
                 let review = self.selected(&handle, &selection)?.trust.take(&review)?;
-                let bound = MemoryContextSession::bind(review, mode, &control)?;
+                let bound = MemoryContextSession::bind(review, mode, control)?;
                 let source = self.selected(&handle, &selection)?.source.clone();
                 self.context(&context)?.bound = Some((bound, source));
                 self.presentation(&handle)?.selected = None;
@@ -574,7 +595,7 @@ impl MemoryServer {
                     .bound
                     .as_ref()
                     .ok_or(Error::new("cancelled"))?;
-                serde_json::to_value(bound.read(&control)?).map_err(|_| Error::new("unavailable"))
+                serde_json::to_value(bound.read(control)?).map_err(|_| Error::new("unavailable"))
             }
             Request::ContextClose { context } => {
                 self.context(&context)?;

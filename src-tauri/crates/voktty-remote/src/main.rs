@@ -8,6 +8,7 @@ mod opencode_service;
 mod owned_search;
 mod proc_host;
 mod project_memory;
+mod project_memory_host;
 mod pty_activity;
 mod search;
 
@@ -124,7 +125,7 @@ struct RemoteServer {
     search: RemoteSearchState,
     owned_search: OwnedSearchState,
     proc_host: Option<ProcHost>,
-    memory: project_memory::MemoryServer,
+    memory: project_memory_host::MemoryHost,
 }
 
 type SharedOutput = Arc<Mutex<BufWriter<io::Stdout>>>;
@@ -165,7 +166,7 @@ impl RemoteServer {
             search: RemoteSearchState::default(),
             owned_search: OwnedSearchState::default(),
             proc_host: None,
-            memory: project_memory::MemoryServer::default(),
+            memory: project_memory_host::MemoryHost::default(),
         }
     }
 
@@ -361,7 +362,6 @@ impl RemoteServer {
                 self.proc_control(request)
             }
             METHOD_AGENT_PROBE => self.agent_probe(request),
-            METHOD_MEMORY_MANAGE => self.memory.handle(self.root.as_deref(), request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -433,6 +433,10 @@ impl RemoteServer {
                 ]
             }),
         )
+    }
+
+    fn start_memory(&mut self, request: RemoteRequest, sink: FrameSink) -> Option<RemoteResponse> {
+        self.memory.submit(self.root.clone(), request, sink)
     }
 
     fn list_dir(&self, request: RemoteRequest) -> RemoteResponse {
@@ -2841,6 +2845,12 @@ fn run_stdio() -> io::Result<()> {
                         METHOD_PROC_ATTACH => server.proc_attach(request, sink.clone()),
                         METHOD_WATCH_ADD => server.add_watch(request, stdout.clone()),
                         METHOD_WATCH_TREE_ADD => server.add_watch_tree(request, stdout.clone()),
+                        METHOD_MEMORY_MANAGE => {
+                            if let Some(response) = server.start_memory(request, sink.clone()) {
+                                send_frame(&stdout, &Frame::Response(response))?;
+                            }
+                            continue;
+                        }
                         METHOD_GREP => {
                             if let Some(response) = server.start_grep(request, stdout.clone()) {
                                 send_frame(&stdout, &Frame::Response(response))?;

@@ -78,13 +78,29 @@ Binding transfers the original source out of the presentation, so closing the
 panel does not close accepted context. Context close and successful rehandshake
 retire the old resources; a new helper cannot adopt an earlier helper's receipts.
 
-The current helper dispatch serializes these operations with other synchronous
-RPCs. Shared native read/discovery controls retain their five/fifteen-second
-cooperative budgets. They do not interrupt a blocked OS syscall. Closing or
-reselecting is applied when its request is processed; it does not roll back an
-already admitted publication. Desktop integration must retain original source
-guards through response and close settlement, and must account for this dispatch
-behavior before enabling management alongside interactive terminal traffic.
+The helper owns one lazy serial memory worker outside its interactive protocol
+loop. Filesystem RPCs and terminal input do not wait for memory processing.
+At most four memory requests, including queued, running and output-pending work,
+remain admitted. A full queue returns `busy`; retirement does not release a slot
+until its original work and output settle. An unused helper starts no memory
+thread. Native state and review operations remain serialized on that worker.
+
+Read/discovery controls retain their five/fifteen-second cooperative budgets
+from admission, including queue time. Inspection uses five seconds. Rehandshake
+retires the original generation immediately, cancels its controls and wakes the
+worker for cleanup without waiting in the protocol loop. Queued retired or
+expired work starts no native reads. A worker rechecks its generation before
+output admission; packets from a retired generation cannot become a later
+generation's result. Output already admitted cannot be retracted. Clients must
+retain their own original-source guards through response and close settlement.
+
+Closing or reselecting a presentation is applied in memory-request order; it
+does not roll back an already admitted publication. Cooperative cancellation
+does not interrupt a blocked OS syscall. Helper shutdown cancels queued/running
+work and joins the exact worker through actual settlement before dropping its
+state. A processor panic or observed output failure closes memory admission for
+that helper, cancels remaining work and retires native state. No replacement
+worker can adopt those resources; reconnecting creates a new helper owner.
 
 Tests cover the native workflow and framed stdio using isolated project and
 private directories. Those tests are not a real SSH or Desktop UI smoke test.
