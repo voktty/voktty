@@ -21,6 +21,11 @@ acknowledged relative paths and possible recovery files. Already published files
 are preserved. Transport/protocol and malformed-request failures retain the
 ordinary remote error envelope. Arbitrary OS messages, private storage paths,
 installation identity and raw discovery facts are never included in errors.
+Storage failures may additionally contain `storage: { stage, windowsError }`.
+The stage is a fixed native storage/security stage and the nullable Windows
+status is an unsigned 32-bit integer. Clients validate and copy only those two
+fields, preserve the original error code and ignore unknown diagnostic values.
+Older helpers without this optional field retain their existing error behavior.
 
 | Operation | Required fields besides `operation` | Effect |
 | --- | --- | --- |

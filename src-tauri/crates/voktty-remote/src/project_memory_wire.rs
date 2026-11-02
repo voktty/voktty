@@ -129,6 +129,7 @@ pub(super) enum Request {
 pub(super) struct Error {
     pub code: &'static str,
     pub changes: Option<Value>,
+    pub storage: Option<Value>,
 }
 
 impl Error {
@@ -136,12 +137,16 @@ impl Error {
         Self {
             code,
             changes: None,
+            storage: None,
         }
     }
     pub fn value(self) -> Value {
         let mut value = json!({"code":self.code});
         if let Some(changes) = self.changes {
             value["changes"] = changes;
+        }
+        if let Some(storage) = self.storage {
+            value["storage"] = storage;
         }
         value
     }

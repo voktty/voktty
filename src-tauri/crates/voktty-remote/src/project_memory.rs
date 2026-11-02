@@ -196,22 +196,39 @@ impl MemoryServer {
         control: &ReadControl,
     ) -> Result<Arc<LocalMemoryStore>, Error> {
         let parent = self.parent.as_deref().ok_or(Error::new("unavailable"))?;
-        if initialize {
-            LocalMemoryStore::prepare_application_parent(parent, control)?;
-        } else {
-            LocalMemoryStore::check_application_parent(parent, control)?;
-        }
-        let store = if initialize {
-            LocalMemoryStore::create_private(parent, control)?
-        } else {
-            LocalMemoryStore::open_private(parent, control)?
+        let control = control.clone().with_storage_diagnostics();
+        let diagnostic = |error: ReadError, fallback: voktty_memory_local::StorageStage| {
+            let failure = control.storage_failure();
+            let mut error = Error::from(error);
+            error.storage = Some(json!({
+                "stage": failure.map_or(fallback, |failure| failure.stage).as_str(),
+                "windowsError": failure.and_then(|failure| failure.windows_error),
+            }));
+            error
         };
+        if initialize {
+            LocalMemoryStore::prepare_application_parent(parent, &control)
+        } else {
+            LocalMemoryStore::check_application_parent(parent, &control)
+        }
+        .map_err(|error| diagnostic(error, voktty_memory_local::StorageStage::ApplicationParent))?;
+        let store = if initialize {
+            LocalMemoryStore::create_private(parent, &control)
+        } else {
+            LocalMemoryStore::open_private(parent, &control)
+        }
+        .map_err(|error| diagnostic(error, voktty_memory_local::StorageStage::PrivateDirectory))?;
         if initialize {
             store.initialize()
         } else {
             store.load()
         }
-        .map_err(ReadError::Store)?;
+        .map_err(|error| {
+            diagnostic(
+                ReadError::Store(error),
+                voktty_memory_local::StorageStage::Preferences,
+            )
+        })?;
         Ok(Arc::new(store))
     }
 
@@ -633,3 +650,7 @@ fn validate_directory(root: &Path, path: &str, control: &ReadControl) -> Result<
 #[cfg(all(test, target_os = "linux"))]
 #[path = "project_memory_tests.rs"]
 mod tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "project_memory_setup_tests.rs"]
+mod setup_tests;

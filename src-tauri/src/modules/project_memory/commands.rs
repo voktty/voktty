@@ -376,20 +376,13 @@ pub async fn project_memory_initialize_local_state(
     app: State<'_, NativeMemoryApplication>,
     handle: PresentationHandle,
     selection: String,
-) -> Result<(), MemoryCommandError> {
+) -> Result<(), setup::MemorySetupError> {
     let resource = presentation(&window, &handle)?;
-    resource.check(&app, &selection)?;
-    let result = app
-        .store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
-        )
-        .await;
-    resource.check(&app, &selection)?;
-    result?;
-    Ok(())
+    setup::initialize(&app, &resource, &selection).await
 }
+
+#[path = "commands_setup.rs"]
+mod setup;
 
 #[path = "commands_deployment.rs"]
 pub mod deployment;

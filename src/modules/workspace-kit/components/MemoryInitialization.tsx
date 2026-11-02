@@ -81,7 +81,11 @@ export function MemoryInitialization({
         </p>
         {state.status === "initializationSetup" && state.code ? (
           <p role="alert">
-            {t("common.error")}: <code>{state.code}</code>
+            {t("common.error")}:{" "}
+            <code>
+              {state.code}
+              {state.diagnostic ? ` (${state.diagnostic})` : ""}
+            </code>
           </p>
         ) : null}
         {busy ? <p role="status">{t("projectMemory.checking")}</p> : null}

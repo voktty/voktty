@@ -2,6 +2,7 @@ import {
   memoryFailure,
   type RemoteMemorySource,
 } from "@/modules/workspace-kit/lib/remoteMemorySource";
+import { parseMemoryStorageDiagnostic } from "@/modules/workspace-kit/lib/memoryStorageDiagnostic";
 
 export function memoryRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -160,8 +161,10 @@ export function remoteMemoryError(value: unknown): Error {
       });
     }
   }
+  const storage = parseMemoryStorageDiagnostic(error);
   return Object.assign(new Error(`Project memory ${code}`), {
     code,
+    ...(storage ? { storage } : {}),
     ...(changes ? { changes } : {}),
   });
 }

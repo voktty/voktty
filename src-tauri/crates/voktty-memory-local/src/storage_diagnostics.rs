@@ -44,6 +44,12 @@ impl StorageDiagnostics {
         Self(Some(Arc::new(OnceLock::new())))
     }
 
+    pub(crate) fn enable(&mut self) {
+        if self.0.is_none() {
+            *self = Self::enabled();
+        }
+    }
+
     pub(crate) fn failure(&self) -> Option<StorageFailure> {
         self.0.as_ref().and_then(|failure| failure.get().copied())
     }
@@ -61,6 +67,15 @@ impl StorageDiagnostics {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enabling_diagnostics_again_keeps_the_original_callers_observer() {
+        let control = crate::ReadControl::default().with_storage_diagnostics();
+        let worker = control.clone().with_storage_diagnostics();
+        worker.record_storage_failure(StorageStage::WindowsDirectoryOpen, Some(5));
+        assert_eq!(control.storage_failure(), worker.storage_failure());
+        assert_eq!(control.storage_failure().unwrap().windows_error, Some(5));
+    }
 
     #[test]
     fn only_the_first_failure_is_retained_across_clones() {

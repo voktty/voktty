@@ -55,8 +55,13 @@ its separate exact file review. Continuing after publication retains the origina
 authorized selection rather than reopening the caller's unqualified path.
 Native storage failures log the operation, first failing storage/security stage,
 bounded error description and optional numeric Windows status. Diagnostics are
-per operation and contain no paths, account identifiers, ACLs or document data;
-they do not change the IPC error or relax any access checks.
+per operation and contain no paths, account identifiers, ACLs or document data.
+The setup command preserves its existing error code and may also return
+`storage: { stage, windowsError }`. The stage comes from the fixed native stage
+enum and the optional Windows status is an unsigned 32-bit integer. The panel
+validates both before displaying them beside the code; arbitrary OS messages
+and storage paths are never displayed. Retired selections receive cancellation
+without a diagnostic from their predecessor. This does not relax access checks.
 For an existing kit, a trust or policy review that reports missing or unavailable
 local settings offers that same explicit preparation action. Access denial,
 invalid state and unsupported transports do not offer this recovery or change

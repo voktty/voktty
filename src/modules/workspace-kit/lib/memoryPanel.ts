@@ -2,6 +2,7 @@ import type { WorkspaceEnv } from "@/modules/workspace/env";
 import type { MemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
 import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
 import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
+import { memoryStorageDiagnostic } from "@/modules/workspace-kit/lib/memoryStorageDiagnostic";
 import type {
   createNativeMemoryPresentation,
   NativeMemoryScope,
@@ -42,7 +43,7 @@ export type MemoryPanelState =
   | { status: "ready"; observation: NativeMemoryScope }
   | { status: "error"; code: string; canPrepare: boolean }
   | { status: "configuring" }
-  | { status: "initializationSetup"; code?: string }
+  | { status: "initializationSetup"; code?: string; diagnostic?: string }
   | { status: "preparingInitialization" }
   | { status: "previewing" }
   | { status: "review" | "publishing"; review: NativeMemoryReview }
@@ -247,6 +248,7 @@ export function createMemoryPanelController(
             operation === "setup"
               ? {
                   status: "initializationSetup",
+                  diagnostic: memoryStorageDiagnostic(error),
                   code: [
                     "denied",
                     "missingState",

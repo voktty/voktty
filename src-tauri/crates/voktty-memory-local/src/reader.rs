@@ -122,7 +122,7 @@ impl ReadControl {
     }
 
     pub fn with_storage_diagnostics(mut self) -> Self {
-        self.diagnostics = crate::storage_diagnostics::StorageDiagnostics::enabled();
+        self.diagnostics.enable();
         self
     }
 
