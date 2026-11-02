@@ -47,3 +47,6 @@ incomplete, conflicting or inaccessible observations require review. Errors
 never become absence. The panel retains separate trust, policy, conversation
 preparation and delivery controls. Unsupported remote, WSL and Docker targets
 remain explicit and do not invoke local inspection as a fallback.
+
+Explicit document browsing uses the separate display-only contract described in
+[DOCUMENTS.md](DOCUMENTS.md). Marker observation never starts that content read.

@@ -1,4 +1,5 @@
 import type { WorkspaceEnv } from "@/modules/workspace/env";
+import type { MemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
 import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
 import {
   createNativeMemoryPresentation,
@@ -33,6 +34,7 @@ export type MemoryTrustState =
   | { status: "trustAccepted"; root: string; report: NativeMemoryTrustAccepted }
   | { status: "trustError"; code: string };
 export type MemoryPanelState =
+  | MemoryDocumentsState
   | MemoryPolicyState
   | MemoryTrustState
   | { status: "loading" }
@@ -43,6 +45,10 @@ export type MemoryPanelState =
   | { status: "review" | "publishing"; review: NativeMemoryReview }
   | { status: "published"; root: string; report: NativeMemoryPublication }
   | { status: "deploymentError"; error: NativeMemoryDeploymentError };
+export type MemoryDocumentsState =
+  | { status: "documentsLoading" }
+  | { status: "documentsReady"; snapshot: MemoryDocuments }
+  | { status: "documentsError"; code: string };
 export type MemoryPolicyState =
   | { status: "policyConfiguring" }
   | { status: "policyLoading" }
@@ -59,6 +65,7 @@ type Client = Pick<
   | "select"
   | "isCurrent"
   | "discover"
+  | "documents"
   | "initializeLocalState"
   | "close"
   | "preview"
@@ -104,7 +111,9 @@ export function createMemoryPanelController(
   target: MemoryPanelTarget,
   publish: (state: MemoryPanelState) => void,
   createClient: () => Client = createNativeMemoryPresentation,
-  authorizeDirectory: (path: string) => Promise<string> = authorizeNativeMemoryDirectory,
+  authorizeDirectory: (
+    path: string,
+  ) => Promise<string> = authorizeNativeMemoryDirectory,
 ) {
   for (const entry of entries) if (entry.retired) void closeEntry(entry);
   if (entries.size >= MAX_PANELS)
@@ -172,8 +181,19 @@ export function createMemoryPanelController(
             error !== null &&
             "code" in error &&
             typeof error.code === "string" &&
-            ["invalidInput", "denied", "cancelled", "timeout", "busy", "limit",
-              "unsupported", "missingState", "invalidState", "stale", "unavailable"].includes(error.code)
+            [
+              "invalidInput",
+              "denied",
+              "cancelled",
+              "timeout",
+              "busy",
+              "limit",
+              "unsupported",
+              "missingState",
+              "invalidState",
+              "stale",
+              "unavailable",
+            ].includes(error.code)
               ? error.code
               : "unavailable";
           notify({
@@ -191,7 +211,7 @@ export function createMemoryPanelController(
   }
   function deploy(
     work: (receipt: NativeMemorySelection) => Promise<void>,
-    operation: "deployment" | "trust" | "policy" = "deployment",
+    operation: "deployment" | "trust" | "policy" | "documents" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
@@ -211,11 +231,13 @@ export function createMemoryPanelController(
               ? (error as NativeMemoryDeploymentError)
               : { code: "unavailable" };
           notify(
-            operation === "trust"
-              ? { status: "trustError", code: failure.code }
-              : operation === "policy"
-                ? { status: "policyError", code: failure.code }
-                : { status: "deploymentError", error: failure },
+            operation === "documents"
+              ? { status: "documentsError", code: failure.code }
+              : operation === "trust"
+                ? { status: "trustError", code: failure.code }
+                : operation === "policy"
+                  ? { status: "policyError", code: failure.code }
+                  : { status: "deploymentError", error: failure },
           );
         }
       })
@@ -226,11 +248,39 @@ export function createMemoryPanelController(
   }
   return {
     load: () => run(false),
+    browseDocuments() {
+      if (
+        !observation ||
+        !canReviewMemoryTrust(observation) ||
+        !["ready", "documentsReady", "documentsError"].includes(state.status)
+      )
+        return Promise.resolve();
+      const root = observation.root;
+      if (!root) return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "documentsLoading" });
+        if (!current()) return;
+        const snapshot = await entry.client.documents(receipt, root);
+        if (current() && observation?.root === root)
+          notify({ status: "documentsReady", snapshot });
+      }, "documents");
+    },
+    backDocuments() {
+      if (
+        !pending &&
+        current() &&
+        observation &&
+        (state.status === "documentsReady" || state.status === "documentsError")
+      )
+        notify({ status: "ready", observation });
+    },
     authorize() {
       if (
-        state.status !== "error" || state.code !== "denied" ||
+        state.status !== "error" ||
+        state.code !== "denied" ||
         !supportedMemoryPanelTarget(captured)
-      ) return Promise.resolve();
+      )
+        return Promise.resolve();
       return run(false, false, true);
     },
     configurePolicy() {

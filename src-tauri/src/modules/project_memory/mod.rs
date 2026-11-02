@@ -115,6 +115,22 @@ impl<T> NativeMemoryRead<T> {
 }
 
 impl NativeMemorySource {
+    pub fn documents(
+        &self,
+        root: String,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRead<voktty_memory_local::NativeMemoryDocuments>, MemoryWorkError> {
+        Ok(NativeMemoryRead {
+            job: MemoryWorkers::default().documents(
+                self.requested.clone(),
+                root,
+                self.access.clone(),
+                control,
+            )?,
+            access: self.access.clone(),
+        })
+    }
+
     pub fn capture(
         registry: &WorkspaceRegistry,
         requested: PathBuf,

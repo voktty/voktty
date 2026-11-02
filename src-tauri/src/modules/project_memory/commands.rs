@@ -403,6 +403,9 @@ pub mod policy;
 #[path = "commands_context.rs"]
 pub mod context;
 
+#[path = "commands_documents.rs"]
+pub mod documents;
+
 #[cfg(test)]
 #[path = "commands_tests.rs"]
 mod tests;

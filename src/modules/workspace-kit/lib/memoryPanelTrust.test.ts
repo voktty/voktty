@@ -36,6 +36,7 @@ function fixture() {
     select: vi.fn(async () => selected),
     isCurrent: vi.fn(() => true),
     discover: vi.fn(async () => observation),
+    documents: vi.fn(),
     initializeLocalState: vi.fn(),
     close: vi.fn(async () => {}),
     preview: vi.fn(),

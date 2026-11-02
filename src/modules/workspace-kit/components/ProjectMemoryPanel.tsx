@@ -6,6 +6,7 @@ import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryI
 import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
 import { MemoryPolicy } from "@/modules/workspace-kit/components/MemoryPolicy";
 import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
+import { MemoryDocuments } from "@/modules/workspace-kit/components/MemoryDocuments";
 import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   createMemoryPanelController,
@@ -148,6 +149,20 @@ function MemoryObservation({
     }
   }, [target]);
   if (
+    state.status === "documentsLoading" ||
+    state.status === "documentsReady" ||
+    state.status === "documentsError"
+  )
+    return (
+      <MemoryDocuments
+        state={state}
+        onBack={() => controller.current?.backDocuments()}
+        onRefresh={() => {
+          void controller.current?.browseDocuments();
+        }}
+      />
+    );
+  if (
     state.status === "policyConfiguring" ||
     state.status === "policyLoading" ||
     state.status === "policyReview" ||
@@ -284,7 +299,10 @@ function MemoryObservation({
           </p>
         ) : null}
         {state.status === "error" && state.code === "denied" ? (
-          <Button size="sm" onClick={() => void controller.current?.authorize()}>
+          <Button
+            size="sm"
+            onClick={() => void controller.current?.authorize()}
+          >
             {t("git.authorizeDirectory")}
           </Button>
         ) : null}
@@ -333,6 +351,17 @@ function MemoryObservation({
         {state.status === "ready" && canInitializeMemory(state.observation) ? (
           <Button size="sm" onClick={() => controller.current?.configure()}>
             {t("projectMemory.initialize")}
+          </Button>
+        ) : null}
+        {state.status === "ready" && canReviewMemoryTrust(state.observation) ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void controller.current?.browseDocuments();
+            }}
+          >
+            {t("common.browse")}
           </Button>
         ) : null}
         {state.status === "ready" && canReviewMemoryTrust(state.observation) ? (

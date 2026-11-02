@@ -5,6 +5,7 @@ import type { KitDeploymentEntry } from "@/modules/workspace-kit/lib/deployment"
 import type { KitLock } from "@/modules/workspace-kit/lib/configTypes";
 import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 import { createNativeMemoryPolicyClient } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
+import { loadMemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
 
 type Handle = Readonly<{ id: number; token: string }>;
 const selectionBrand = Symbol("native-memory-selection");
@@ -149,7 +150,11 @@ export function createNativeMemoryPresentation() {
     })();
   }
 
-  async function request<T>(command: string, receipt: NativeMemorySelection, args: Record<string, unknown> = {}) {
+  async function request<T>(
+    command: string,
+    receipt: NativeMemorySelection,
+    args: Record<string, unknown> = {},
+  ) {
     const selected = capture(receipt);
     const owner = await handle();
     capture(receipt);
@@ -229,7 +234,17 @@ export function createNativeMemoryPresentation() {
       return request<NativeMemoryScope>("project_memory_discover", receipt);
     },
     inspect(receipt: NativeMemorySelection) {
-      return request<NativeMemoryScope>("project_memory_discover", receipt, { inspectionOnly: true });
+      return request<NativeMemoryScope>("project_memory_discover", receipt, {
+        inspectionOnly: true,
+      });
+    },
+    async documents(receipt: NativeMemorySelection, root: string) {
+      capture(receipt);
+      const result = await loadMemoryDocuments(root, () =>
+        request("project_memory_documents", receipt, { root }),
+      );
+      capture(receipt);
+      return result;
     },
     initializeLocalState(receipt: NativeMemorySelection) {
       return request<void>("project_memory_initialize_local_state", receipt);

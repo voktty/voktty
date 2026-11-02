@@ -1,0 +1,178 @@
+[
+  {
+    "path": "AGENTS.md",
+    "valid": true
+  },
+  {
+    "path": "CLAUDE.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/kit.json",
+    "valid": true
+  },
+  {
+    "path": ".voktty/kit.lock.json",
+    "valid": true
+  },
+  {
+    "path": ".voktty/PROJECT.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/plans/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/plans/deep/á.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/domains/nested/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/architecture/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/rituals/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/external/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/archive/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/capture/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/team/roles/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/continuity/handoffs/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/state/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/sessions/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/tasks/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/mailbox/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/locks/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/tasks.json",
+    "valid": false
+  },
+  {
+    "path": ".voktty/tools.json",
+    "valid": false
+  },
+  {
+    "path": ".voktty/team/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/continuity/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a.json",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a.MD",
+    "valid": false
+  },
+  {
+    "path": ".voktty/custom.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/.ssh/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/.git/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/../a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans//a.md",
+    "valid": false
+  },
+  {
+    "path": "/.voktty/plans/a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty\\plans\\a.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a%20.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a:stream.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a?.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a#.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/a\n.md",
+    "valid": false
+  },
+  {
+    "path": "",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/plans/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+    "valid": false
+  },
+  {
+    "path": ".voktty/plans/d/d/d/d/d/d/d/d/d/d/d/d/d/a.md",
+    "valid": true
+  },
+  {
+    "path": ".voktty/plans/d/d/d/d/d/d/d/d/d/d/d/d/d/d/a.md",
+    "valid": false
+  }
+]

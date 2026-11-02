@@ -163,6 +163,27 @@ fn resolve_ready_memory(
 }
 
 impl MemoryWorkers {
+    pub fn documents(
+        &self,
+        requested: PathBuf,
+        expected_root: String,
+        access: Arc<dyn MemoryReadAccess>,
+        control: DiscoveryControl,
+    ) -> Result<MemoryJob<crate::NativeMemoryDocuments>, MemoryWorkError> {
+        validate_path(&requested)?;
+        if expected_root.len() > 4096 {
+            return Err(ReadError::Limit.into());
+        }
+        self.spawn(Control::Scope(control.clone()), move || {
+            crate::read_local_memory_documents(
+                &requested,
+                &expected_root,
+                access.as_ref(),
+                &control,
+            )
+        })
+    }
+
     pub fn inspect_scope(
         &self,
         requested: PathBuf,

@@ -7,6 +7,7 @@ import type {
   MemoryPanelState,
   MemoryTrustState,
   MemoryPolicyState,
+  MemoryDocumentsState,
 } from "@/modules/workspace-kit/lib/memoryPanel";
 import type { NativeMemoryReview } from "@/modules/workspace-kit/lib/nativeMemory";
 
@@ -15,6 +16,7 @@ type InitializationState = Exclude<
   | { status: "loading" | "ready" | "error" }
   | MemoryTrustState
   | MemoryPolicyState
+  | MemoryDocumentsState
 >;
 export function MemoryInitialization({
   state,

@@ -69,6 +69,21 @@ impl Drop for NativeMemoryWindow {
 }
 
 impl NativeMemoryApplication {
+    pub fn documents(
+        &self,
+        window: &NativeMemoryWindow,
+        presentation: &NativeMemoryPresentationReceipt,
+        selected: &NativeMemorySelectionReceipt,
+        root: String,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRead<voktty_memory_local::NativeMemoryDocuments>, MemoryWorkError> {
+        self.with_owners(window, |owners, receipt| {
+            owners
+                .selection(receipt, presentation)?
+                .documents(selected, root, control)
+        })
+    }
+
     #[cfg(test)]
     pub(super) fn test_origin(storage: NativeMemoryStorage) -> (Self, Arc<NativeMemoryWindow>) {
         let app = Self {

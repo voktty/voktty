@@ -21,6 +21,15 @@ pub struct NativeMemorySelectionReceipt {
 }
 
 impl NativeMemorySelection {
+    pub fn documents(
+        &self,
+        receipt: &NativeMemorySelectionReceipt,
+        root: String,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRead<voktty_memory_local::NativeMemoryDocuments>, MemoryWorkError> {
+        self.current(receipt)?.documents(root, control)
+    }
+
     pub fn bind_context_session(
         &mut self,
         target: &NativeMemoryContextReceipt,

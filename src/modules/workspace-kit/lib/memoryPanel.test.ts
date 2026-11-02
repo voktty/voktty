@@ -29,6 +29,7 @@ function client() {
     select: vi.fn(async () => selected),
     isCurrent: vi.fn(() => true),
     discover: vi.fn(async () => observation),
+    documents: vi.fn(),
     initializeLocalState: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
     preview: vi.fn(),
@@ -45,6 +46,71 @@ function client() {
     isPolicyReviewCurrent: vi.fn(() => true),
   };
 }
+
+it("reads display documents only by action and never changes trust, policy or state", async () => {
+  const api = client();
+  const ready = {
+    ...observation,
+    blockedCount: 0,
+    scope: { state: "ready", ancestryComplete: true },
+  } as NativeMemoryScope;
+  api.discover.mockResolvedValue(ready);
+  const snapshot = {
+    schema: 1,
+    root: "/project",
+    complete: true,
+    blockedCount: 0,
+    files: [],
+  };
+  api.documents.mockResolvedValue(snapshot);
+  const publish = vi.fn();
+  const panel = createMemoryPanelController(target, publish, () => api);
+  await panel.browseDocuments();
+  await panel.load();
+  expect(api.documents).not.toHaveBeenCalled();
+  await Promise.all([panel.browseDocuments(), panel.browseDocuments()]);
+  expect(api.documents).toHaveBeenCalledExactlyOnceWith(selected, "/project");
+  expect(publish).toHaveBeenLastCalledWith({
+    status: "documentsReady",
+    snapshot,
+  });
+  panel.backDocuments();
+  expect(publish).toHaveBeenLastCalledWith({
+    status: "ready",
+    observation: ready,
+  });
+  for (const method of [
+    api.initializeLocalState,
+    api.reviewTrust,
+    api.confirmTrust,
+    api.reviewPolicy,
+    api.confirmPolicy,
+    api.preview,
+  ])
+    expect(method).not.toHaveBeenCalled();
+  await panel.dispose();
+});
+
+it("withdraws document admission if a loading observer retires its panel", async () => {
+  const api = client();
+  api.discover.mockResolvedValue({
+    ...observation,
+    blockedCount: 0,
+    scope: { state: "ready", ancestryComplete: true },
+  } as NativeMemoryScope);
+  let panel: ReturnType<typeof createMemoryPanelController>;
+  panel = createMemoryPanelController(
+    target,
+    (state) => {
+      if (state.status === "documentsLoading") void panel.dispose();
+    },
+    () => api,
+  );
+  await panel.load();
+  await panel.browseDocuments();
+  expect(api.documents).not.toHaveBeenCalled();
+  await panel.dispose();
+});
 
 it("starts no work on creation, coalesces reads, and prepares only on explicit action", async () => {
   const api = client();
@@ -169,14 +235,25 @@ it("recovers denied selection only after explicit directory authorization and re
   api.select.mockRejectedValueOnce({ code: "denied" });
   const authorize = vi.fn(async () => "/canonical/project");
   const publish = vi.fn();
-  const panel = createMemoryPanelController(target, publish, () => api, authorize);
+  const panel = createMemoryPanelController(
+    target,
+    publish,
+    () => api,
+    authorize,
+  );
   await panel.authorize();
   await panel.load();
   expect(authorize).not.toHaveBeenCalled();
-  expect(publish).toHaveBeenLastCalledWith({ status: "error", code: "denied", canPrepare: false });
+  expect(publish).toHaveBeenLastCalledWith({
+    status: "error",
+    code: "denied",
+    canPrepare: false,
+  });
   await Promise.all([panel.authorize(), panel.authorize()]);
   expect(authorize).toHaveBeenCalledExactlyOnceWith("/project");
-  expect(api.select).toHaveBeenLastCalledWith("/canonical/project", { kind: "local" });
+  expect(api.select).toHaveBeenLastCalledWith("/canonical/project", {
+    kind: "local",
+  });
   expect(publish).toHaveBeenLastCalledWith({ status: "ready", observation });
   expect(api.initializeLocalState).not.toHaveBeenCalled();
   expect(api.confirmTrust).not.toHaveBeenCalled();
@@ -190,9 +267,17 @@ it("never selects or publishes a directory after its authorization owner retires
   api.select.mockRejectedValueOnce({ code: "denied" });
   const result = deferred<string>();
   const started = deferred<void>();
-  const authorize = vi.fn(() => { started.resolve(); return result.promise; });
+  const authorize = vi.fn(() => {
+    started.resolve();
+    return result.promise;
+  });
   const publish = vi.fn();
-  const panel = createMemoryPanelController(target, publish, () => api, authorize);
+  const panel = createMemoryPanelController(
+    target,
+    publish,
+    () => api,
+    authorize,
+  );
   await panel.load();
   const pending = panel.authorize();
   await started.promise;
@@ -208,14 +293,28 @@ it("redacts unknown error codes and never offers authorization for an unsupporte
   const publish = vi.fn();
   const authorize = vi.fn();
   api.select.mockRejectedValueOnce({ code: "private error details" });
-  const panel = createMemoryPanelController(target, publish, () => api, authorize);
+  const panel = createMemoryPanelController(
+    target,
+    publish,
+    () => api,
+    authorize,
+  );
   await panel.load();
-  expect(publish).toHaveBeenLastCalledWith({ status: "error", code: "unavailable", canPrepare: false });
+  expect(publish).toHaveBeenLastCalledWith({
+    status: "error",
+    code: "unavailable",
+    canPrepare: false,
+  });
   await panel.authorize();
   expect(authorize).not.toHaveBeenCalled();
   await panel.dispose();
   api.select.mockRejectedValueOnce({ code: "denied" });
-  const remote = createMemoryPanelController({ ...target, environment: { kind: "wsl", distro: "owned" } }, publish, () => api, authorize);
+  const remote = createMemoryPanelController(
+    { ...target, environment: { kind: "wsl", distro: "owned" } },
+    publish,
+    () => api,
+    authorize,
+  );
   await remote.load();
   await remote.authorize();
   expect(authorize).not.toHaveBeenCalled();
