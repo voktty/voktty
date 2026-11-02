@@ -17,6 +17,10 @@ mod migration;
 #[path = "state_unix.rs"]
 mod state;
 
+#[cfg(target_os = "linux")]
+#[path = "root_birth_linux.rs"]
+mod root_birth;
+
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
     Ok(())
 }
@@ -398,10 +402,13 @@ impl Directory {
         (self.metadata.dev(), self.metadata.ino().into())
     }
     pub(crate) fn root_instance(&self) -> Option<crate::preferences::RootInstance> {
+        let created = self.metadata.created().ok();
+        #[cfg(target_os = "linux")]
+        let created = created.or_else(|| root_birth::read(&self.file, &self.metadata));
         crate::preferences::RootInstance::unix(
             self.metadata.dev(),
             self.metadata.ino().into(),
-            self.metadata.created().ok(),
+            created,
         )
     }
     pub(crate) fn canonical_root(&self, root: &Path) -> Result<PathBuf, ReadError> {

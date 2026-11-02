@@ -130,6 +130,14 @@ OS-reported identities, not protection against privileged metadata forgery or
 restoring the entire private state and filesystem identity. Native Windows and
 Apple runtime qualification remains pending. Bindings never enter the IPC reply.
 
+On Linux, when the standard library cannot report creation time (including
+musl builds), the reader queries `statx` through the retained directory
+descriptor with `AT_EMPTY_PATH`. The result must include directory type, inode
+and birth time and match the original device and inode. Missing kernel or
+filesystem support, mismatched identity and invalid timestamps leave binding
+unavailable. Modification and change times never substitute for creation time;
+the persisted `unix-v1` identity format stays the same.
+
 Policy and trust are separate mutations. Native trust acceptance preserves the
 effective policy; changing policy preserves the current root's trusted digest;
 revocation clears only trust.
