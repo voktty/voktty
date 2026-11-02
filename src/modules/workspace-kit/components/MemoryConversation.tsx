@@ -130,6 +130,20 @@ export function MemoryConversation({
             <p role="alert">{t("projectMemory.conversationError")}</p>
           ) : null}
           {busy ? <p role="status">{t("projectMemory.checking")}</p> : null}
+          {state.status === "inspectionRequired" ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {t("projectMemory.inspectDescription")}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void controller.current?.inspectAncestors()}
+              >
+                {t("projectMemory.inspectAncestors")}
+              </Button>
+            </div>
+          ) : null}
           {review ? (
             <>
               <p className="break-all font-mono text-xs" dir="auto">
@@ -271,7 +285,9 @@ export function MemoryConversation({
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            {status === "inactive" && !review ? (
+            {status === "inactive" &&
+            !review &&
+            state.status !== "inspectionRequired" ? (
               <Button
                 variant="outline"
                 size="sm"

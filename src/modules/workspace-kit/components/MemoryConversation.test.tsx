@@ -236,6 +236,128 @@ it("captures by gesture, reviews the execution cwd and prepares escaped context 
   expect(await f.scope.read()).not.toBeNull();
 });
 
+function requireAncestorInspection() {
+  const original = invoke.getMockImplementation();
+  const inspected = new Set<number>();
+  invoke.mockImplementation((command, args) => {
+    if (command === "project_memory_select") {
+      if (args.inspectAncestors === true) inspected.add(args.handle.id);
+      else inspected.delete(args.handle.id);
+    }
+    if (command === "project_memory_discover" && !inspected.has(args.handle.id))
+      return Promise.resolve({
+        schema: 1,
+        root: "/project",
+        blockedCount: 1,
+        scope: { state: "incomplete", ancestryComplete: false },
+      });
+    if (
+      command === "project_memory_review_trust" &&
+      !inspected.has(args.handle.id)
+    )
+      return Promise.reject({ code: "unavailable" });
+    return original?.(command, args);
+  });
+}
+
+it("requires the conversation's own ancestor inspection before reading instructions", async () => {
+  requireAncestorInspection();
+  await mount();
+  await open();
+  await click("projectMemory.inspectAncestors");
+  await click("projectMemory.conversationReview");
+  const section = document.querySelector("section");
+  expect(section?.textContent).toContain("projectMemory.inspectDescription");
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_review_trust",
+    ),
+  ).toBe(false);
+  await click("projectMemory.inspectAncestors");
+  expect(button("projectMemory.conversationPrepare").disabled).toBe(true);
+  const selected = invoke.mock.calls.filter(
+    ([command]) => command === "project_memory_select",
+  );
+  expect(selected[selected.length - 1][1]).toMatchObject({
+    path: "/project/worktree",
+    inspectAncestors: true,
+  });
+  expect(
+    invoke.mock.calls.some(
+      ([command]) =>
+        command.includes("confirm_trust") || command.includes("context_bind"),
+    ),
+  ).toBe(false);
+});
+
+it("does not read instructions after a consented inspection remains incomplete", async () => {
+  requireAncestorInspection();
+  await mount();
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_discover"
+      ? Promise.resolve({
+          schema: 1,
+          root: "/project",
+          blockedCount: 1,
+          scope: { state: "incomplete", ancestryComplete: false },
+        })
+      : original?.(command, args),
+  );
+  await open();
+  await click("projectMemory.conversationReview");
+  const inspect = document.querySelector<HTMLButtonElement>("section button");
+  expect(inspect?.textContent).toBe("projectMemory.inspectAncestors");
+  await act(async () => inspect?.click());
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_review_trust",
+    ),
+  ).toBe(false);
+  expect(document.querySelector("section")?.textContent).toContain(
+    "projectMemory.inspectDescription",
+  );
+});
+
+it("suppresses an inspection result after the captured conversation loses focus", async () => {
+  requireAncestorInspection();
+  const f = await mount();
+  await open();
+  await click("projectMemory.conversationReview");
+  const pending = deferred<unknown>();
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_discover"
+      ? pending.promise
+      : original?.(command, args),
+  );
+  const inspect = document.querySelector<HTMLButtonElement>("section button");
+  expect(inspect?.textContent).toBe("projectMemory.inspectAncestors");
+  await act(async () => inspect?.click());
+  await act(async () =>
+    f.view.update({
+      ...f.input,
+      report: { ...f.input.report, activeSessionId: null },
+    }),
+  );
+  await act(async () =>
+    pending.resolve({
+      schema: 1,
+      root: "/project",
+      blockedCount: 0,
+      scope: { state: "ready", ancestryComplete: true },
+    }),
+  );
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_review_trust",
+    ),
+  ).toBe(false);
+  expect(document.body.textContent).toContain(
+    "projectMemory.conversationRetired",
+  );
+});
+
 it("manages a worktree's trust only after selecting its directory and can return to the browsed directory", async () => {
   await mount();
   await open();

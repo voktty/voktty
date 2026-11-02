@@ -13,7 +13,15 @@ import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
 import { supportedMemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 
 export type MemoryConversationPanelState =
-  | { status: "idle" | "reviewing" | "reading" | "closed" | "error" }
+  | {
+      status:
+        | "idle"
+        | "reviewing"
+        | "reading"
+        | "closed"
+        | "error"
+        | "inspectionRequired";
+    }
   | { status: "review" | "binding"; review: NativeMemoryTrustReview }
   | {
       status: "prepared";
@@ -107,25 +115,47 @@ export function createMemoryConversationPanel(
     if (result) notify({ status: "prepared", result });
     else notify({ status: "error" });
   };
-  return {
-    review() {
+  const reviewContext = (inspectAncestors: boolean) => {
+    if (
+      conversation.status() !== "inactive" ||
+      !supportedMemoryPanelTarget(target)
+    )
+      return Promise.resolve();
+    return run(async () => {
+      notify({ status: "reviewing" });
+      if (!current()) return;
+      selection = await entry.client.select(
+        conversation.cwd,
+        capturedEnvironment,
+        ...(inspectAncestors ? ([{ inspectAncestors: true }] as const) : []),
+      );
+      if (!current()) return;
+      const observation = await entry.client.inspect(selection);
+      if (!current()) return;
       if (
-        conversation.status() !== "inactive" ||
-        !supportedMemoryPanelTarget(target)
-      )
-        return Promise.resolve();
-      return run(async () => {
-        notify({ status: "reviewing" });
-        if (!current()) return;
-        selection = await entry.client.select(
-          conversation.cwd,
-          capturedEnvironment,
-        );
-        if (!current()) return;
-        const review = await entry.client.reviewTrust(selection);
-        if (current() && entry.client.isTrustReviewCurrent(selection, review))
-          notify({ status: "review", review });
-      });
+        observation.scope.state === "incomplete" &&
+        !observation.scope.ancestryComplete
+      ) {
+        notify({ status: "inspectionRequired" });
+        return;
+      }
+      if (
+        observation.scope.state !== "ready" ||
+        !observation.scope.ancestryComplete
+      ) {
+        notify({ status: "error" });
+        return;
+      }
+      const review = await entry.client.reviewTrust(selection);
+      if (current() && entry.client.isTrustReviewCurrent(selection, review))
+        notify({ status: "review", review });
+    });
+  };
+  return {
+    review: () => reviewContext(false),
+    inspectAncestors() {
+      if (state.status !== "inspectionRequired") return Promise.resolve();
+      return reviewContext(true);
     },
     confirm(review: NativeMemoryTrustReview) {
       if (state.status !== "review" || state.review !== review || !selection)
