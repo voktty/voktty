@@ -292,6 +292,47 @@ fn open(parent: Option<&File>, name: &OsStr, directory: bool) -> io::Result<(Fil
     )
 }
 
+fn reopen_directory(file: &File, kind: OpenKind) -> io::Result<(File, FileState)> {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        ReOpenFile, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, READ_CONTROL,
+    };
+
+    let access = FILE_READ_ATTRIBUTES
+        | FILE_TRAVERSE
+        | match kind {
+            OpenKind::PrivateDirectory => READ_CONTROL,
+            OpenKind::Enumerate => FILE_LIST_DIRECTORY,
+            _ => return Err(io::ErrorKind::InvalidInput.into()),
+        };
+    // NT relative lookup does not normalize ".". Reopen the captured object
+    // itself, without resolving its path again or allowing write/delete sharing.
+    let handle = unsafe {
+        ReOpenFile(
+            file.as_raw_handle(),
+            access,
+            FILE_SHARE_READ,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    let reopened = unsafe { File::from_raw_handle(handle) };
+    let observed = state(&reopened)?;
+    if !observed.directory
+        || observed.delete_pending
+        || observed.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
+    let original = state(file)?;
+    if (original.volume, original.id) != (observed.volume, observed.id) {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
+    Ok((reopened, observed))
+}
+
 pub(crate) struct Directory {
     // Keep the ancestor objects alive; child lookup is relative to these handles,
     // never an absolute path assembled from names that could change underneath us.
@@ -394,8 +435,9 @@ impl Directory {
         if !access.allows_enumeration(path) {
             return Err(ReadError::Denied);
         }
-        let (file, state) = open_kind(self.ancestors.last(), OsStr::new("."), OpenKind::Enumerate)
-            .map_err(|_| ReadError::Io)?;
+        let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
+        let (file, state) =
+            reopen_directory(parent, OpenKind::Enumerate).map_err(|_| ReadError::Io)?;
         if (state.volume, state.id) != self.identity() {
             return Err(ReadError::StaleRoot);
         }

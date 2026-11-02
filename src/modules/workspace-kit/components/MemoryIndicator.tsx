@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import BrainIcon from "@hugeicons/core-free-icons/BrainIcon";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
+import { subscribeMemoryIndicatorRefresh } from "@/modules/workspace-kit/lib/memoryIndicatorRefresh";
 import {
   createMemoryIndicator,
   type MemoryIndicatorState,
@@ -15,6 +16,7 @@ import {
 const messages = {
   checking: "projectMemory.checking",
   found: "projectMemory.found",
+  foundReview: "projectMemory.found",
   absent: "projectMemory.absent",
   review: "projectMemory.review",
   error: "projectMemory.error",
@@ -56,10 +58,12 @@ export default function MemoryIndicator({
       clearTimeout(timer);
       void controller.load();
     };
+    const unsubscribe = subscribeMemoryIndicatorRefresh(refresh);
     window.addEventListener("focus", refresh);
     return () => {
       live = false;
       clearTimeout(timer);
+      unsubscribe();
       window.removeEventListener("focus", refresh);
       void controller.dispose();
     };
@@ -71,7 +75,10 @@ export default function MemoryIndicator({
       : observed.key === key
         ? observed.state
         : "checking";
-  const message = t(messages[current]);
+  const message =
+    current === "foundReview"
+      ? `${t(messages[current])} ${t("projectMemory.review")}`
+      : t(messages[current]);
   return (
     <span
       data-memory-state={current}
@@ -79,7 +86,10 @@ export default function MemoryIndicator({
       className={cn(
         "inline-flex",
         current === "found" && "text-emerald-500",
-        (current === "review" || current === "error") && "text-amber-500",
+        (current === "review" ||
+          current === "foundReview" ||
+          current === "error") &&
+          "text-amber-500",
         current === "checking" && "animate-pulse",
       )}
     >

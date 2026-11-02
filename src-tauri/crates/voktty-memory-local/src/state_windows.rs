@@ -225,8 +225,8 @@ impl Directory {
     pub(crate) fn qualify_ancestor(&self, control: &ReadControl) -> Result<(), ReadError> {
         control.check()?;
         let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
-        let (file, observed) = open_kind(Some(parent), OsStr::new("."), OpenKind::PrivateDirectory)
-            .map_err(|error| {
+        let (file, observed) =
+            reopen_directory(parent, OpenKind::PrivateDirectory).map_err(|error| {
                 control.record_storage_failure(
                     crate::StorageStage::WindowsDirectoryOpen,
                     error.raw_os_error().map(|code| code as u32),
@@ -248,8 +248,8 @@ impl Directory {
     ) -> Result<(), ReadError> {
         control.check()?;
         let parent = self.ancestors.last().ok_or(ReadError::InvalidInput)?;
-        let (file, observed) = open_kind(Some(parent), OsStr::new("."), OpenKind::PrivateDirectory)
-            .map_err(|error| {
+        let (file, observed) =
+            reopen_directory(parent, OpenKind::PrivateDirectory).map_err(|error| {
                 control.record_storage_failure(
                     crate::StorageStage::WindowsDirectoryOpen,
                     error.raw_os_error().map(|code| code as u32),
@@ -316,6 +316,52 @@ mod tests {
             },
             0
         );
+    }
+
+    #[test]
+    fn captured_directory_can_be_reopened_for_security_and_listing() {
+        struct Access;
+        impl MemoryReadAccess for Access {
+            fn allows_metadata(&self, _: &Path) -> bool {
+                true
+            }
+            fn allows_read(&self, _: &Path) -> bool {
+                false
+            }
+            fn allows_enumeration(&self, _: &Path) -> bool {
+                true
+            }
+        }
+        let parent = tempfile::tempdir().unwrap();
+        private_acl(parent.path(), "");
+        std::fs::write(parent.path().join("existing.txt"), "preserved").unwrap();
+        let control = ReadControl::default().with_storage_diagnostics();
+        let directory = Directory::open_root(parent.path(), &control).unwrap();
+        directory.qualify_ancestor(&control).unwrap();
+        directory.qualify_state(true, &control).unwrap();
+        for _ in 0..2 {
+            let listing = directory
+                .entries(parent.path(), &Access, &control, 128)
+                .unwrap();
+            assert!(listing.complete);
+            assert_eq!(listing.entries.len(), 1);
+            assert_eq!(listing.entries[0].name, "existing.txt");
+            assert!(matches!(listing.entries[0].kind, EntryKind::File));
+        }
+        assert!(control.storage_failure().is_none());
+        assert_eq!(
+            std::fs::read(parent.path().join("existing.txt")).unwrap(),
+            b"preserved"
+        );
+        assert!(std::fs::rename(parent.path(), parent.path().with_extension("moved")).is_err());
+    }
+
+    #[test]
+    fn directory_reopen_refuses_a_regular_file() {
+        let file = tempfile::tempfile().unwrap();
+        for kind in [OpenKind::PrivateDirectory, OpenKind::Enumerate] {
+            assert!(reopen_directory(&file, kind).is_err());
+        }
     }
 
     #[test]

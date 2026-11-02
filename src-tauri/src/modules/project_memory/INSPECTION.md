@@ -13,6 +13,9 @@ The indicator lazily loads its observer and waits 200 ms before inspecting a
 stable destination. It refreshes on window focus and after the management
 dialog closes, without polling, instruction reads or recursive watches. Target
 replacement removes the prior status immediately and suppresses late results.
+Closing a separate Harness rail panel also refreshes active indicators through a
+window-local notification. It carries no path, observation or permission; each
+indicator re-inspects its own current source under its existing authority.
 At most 256 observers remain admitted, including retired native requests until
 they settle and their exact resource-close operation is acknowledged. Failed
 cleanup remains charged and is retried when another observer is created.
@@ -62,7 +65,10 @@ the original authorization requirements.
 Green means a valid marker was found with complete ancestry and no blocked
 observations. It does not mean that an agent received memory, instruction trust
 was accepted or context delivery is enabled. Confirmed absence is neutral;
-incomplete, conflicting or inaccessible observations require review. Errors
+an incomplete scope with exactly one observed kit has an amber indicator that
+reports both the found memory and the need for review. It neither treats the
+scope as usable nor retains the management panel's ancestor inspection grant.
+Other incomplete, conflicting or inaccessible observations require review. Errors
 never become absence. The panel retains separate trust, policy, conversation
 preparation and delivery controls. Explicit SSH workspaces and saved SSH project
 namespaces use the shared client's independently leased `memory.manage` helper

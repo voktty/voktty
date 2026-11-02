@@ -14,6 +14,7 @@ import { useTranslation } from "@/modules/i18n";
 import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 import type { MemoryConversationCapture } from "@/modules/workspace-kit/lib/memoryConversation";
 import { cn } from "@/lib/utils";
+import { refreshMemoryIndicators } from "@/modules/workspace-kit/lib/memoryIndicatorRefresh";
 
 const Panel = lazy(
   () => import("@/modules/workspace-kit/components/ProjectMemoryPanel"),
@@ -56,6 +57,7 @@ export function ProjectMemoryButton({
         if (!value) {
           opened?.capture?.release();
           setOpened(null);
+          if (open) refreshMemoryIndicators();
           return;
         }
         if (open) return;

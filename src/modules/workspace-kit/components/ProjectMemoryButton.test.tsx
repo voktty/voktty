@@ -166,3 +166,48 @@ it("closes with Escape and returns keyboard focus to its original trigger", asyn
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(trigger);
 });
+
+it("refreshes the footer after closing a separate rail panel", async () => {
+  let installed = false;
+  invoke.mockImplementation(async (command: string) => {
+    if (command === "project_memory_open") return { id: 1, token: "handle" };
+    if (command === "project_memory_select") return "selection";
+    if (command === "project_memory_discover")
+      return {
+        schema: 1,
+        root: installed ? "/owned" : null,
+        blockedCount: 0,
+        scope: {
+          schema: 1,
+          state: installed ? "ready" : "absent",
+          ancestryComplete: true,
+        },
+      };
+  });
+  await act(async () =>
+    root.render(
+      <>
+        <ProjectMemoryButton target={target} rail />
+        <ProjectMemoryButton target={target} observe />
+      </>,
+    ),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  await vi.waitFor(() =>
+    expect(
+      document
+        .querySelector("[data-memory-state]")
+        ?.getAttribute("data-memory-state"),
+    ).toBe("absent"),
+  );
+  await open();
+  installed = true;
+  await act(async () => button("common.close").click());
+  await vi.waitFor(() =>
+    expect(
+      document
+        .querySelector("[data-memory-state]")
+        ?.getAttribute("data-memory-state"),
+    ).toBe("found"),
+  );
+});

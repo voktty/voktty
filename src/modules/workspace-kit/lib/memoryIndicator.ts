@@ -12,6 +12,7 @@ import {
 export type MemoryIndicatorState =
   | "checking"
   | "found"
+  | "foundReview"
   | "absent"
   | "review"
   | "error"
@@ -29,8 +30,20 @@ export function memoryIndicatorState(
     typeof observation.scope.ancestryComplete !== "boolean"
   )
     return "error";
-  if (observation.blockedCount > 0 || !observation.scope.ancestryComplete)
+  if (observation.blockedCount > 0 || !observation.scope.ancestryComplete) {
+    const kits = observation.scope.ancestorKits;
+    if (
+      observation.scope.state === "incomplete" &&
+      Array.isArray(kits) &&
+      kits.length === 1 &&
+      typeof kits[0] === "string" &&
+      kits[0].length > 0 &&
+      kits[0].length <= 4096 &&
+      !/[\x00-\x1f\x7f]/.test(kits[0])
+    )
+      return "foundReview";
     return "review";
+  }
   if (observation.scope.state === "ready")
     return typeof observation.root === "string" &&
       observation.root.length > 0 &&

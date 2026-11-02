@@ -109,6 +109,39 @@ it("withdraws old green state immediately and rejects a late old-folder observat
   expect(state()).toBe("noTarget");
 });
 
+it("explains an observed kit with unverified parents in amber without granting inspection", async () => {
+  invoke.mockImplementation(async (command) => {
+    if (command === "project_memory_open") return { id: 1, token: "handle" };
+    if (command === "project_memory_select") return "selection";
+    if (command === "project_memory_discover")
+      return {
+        schema: 1,
+        root: null,
+        blockedCount: 1,
+        scope: {
+          schema: 1,
+          state: "incomplete",
+          ancestryComplete: false,
+          ancestorKits: ["observed-kit"],
+        },
+      };
+  });
+  await act(async () => render());
+  await act(async () => vi.advanceTimersByTimeAsync(200));
+  expect(state()).toBe("foundReview");
+  const indicator = node.querySelector("[data-memory-state]");
+  expect(indicator?.className).toContain("text-amber-500");
+  expect(indicator?.className).not.toContain("text-emerald-500");
+  expect(indicator?.getAttribute("title")).toBe(
+    "projectMemory.found projectMemory.review",
+  );
+  expect(invoke.mock.calls.map(([command]) => command)).toEqual([
+    "project_memory_open",
+    "project_memory_select",
+    "project_memory_discover",
+  ]);
+});
+
 it("starts no native work for remote, unsupported, inactive or rapidly replaced destinations", async () => {
   for (const input of [
     null,

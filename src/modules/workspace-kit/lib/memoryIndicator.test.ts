@@ -89,6 +89,32 @@ it("only inspects on load, captures the original target and coalesces refreshes"
   await indicator.dispose();
 });
 
+it("reports an observed kit separately from incomplete ancestry without confirming a usable scope", () => {
+  const incomplete = {
+    ...scope("incomplete", null),
+    blockedCount: 1,
+    scope: {
+      ...scope("incomplete", null).scope,
+      ancestryComplete: false,
+      ancestorKits: ["observed-kit"],
+    },
+  };
+  expect(memoryIndicatorState(incomplete)).toBe("foundReview");
+  for (const kits of [[], [""], ["first", "second"], ["bad\nkey"]])
+    expect(
+      memoryIndicatorState({
+        ...incomplete,
+        scope: { ...incomplete.scope, ancestorKits: kits },
+      }),
+    ).toBe("review");
+  expect(
+    memoryIndicatorState({
+      ...incomplete,
+      scope: { ...incomplete.scope, state: "ambiguous" },
+    }),
+  ).toBe("review");
+});
+
 it("suppresses late observations and does not select after its original owner retires", async () => {
   const api = client();
   const notify = vi.fn();
