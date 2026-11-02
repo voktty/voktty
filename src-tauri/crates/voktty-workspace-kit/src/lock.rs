@@ -52,6 +52,12 @@ pub fn parse_kit_lock(text: &str) -> KitResult<KitLock> {
                     | "tasks"
                     | "tasks.json"
                     | "tools.json"
+                    | "servers"
+                    | "shell-integration"
+                    | "proc"
+                    | "extensions"
+                    | "history.json"
+                    | "trusted-roots.json"
                     | "kit.lock.json"
             )
         {

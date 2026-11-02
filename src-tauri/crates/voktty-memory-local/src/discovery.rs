@@ -223,6 +223,19 @@ impl Phase<'_> {
             let Some(name) = entry.name.to_str() else {
                 return Ok("partial");
             };
+            if entry.kind == EntryKind::Directory
+                && matches!(
+                    name.to_ascii_lowercase().as_str(),
+                    "servers" | "shell-integration" | "proc" | "extensions"
+                )
+                || entry.kind == EntryKind::File
+                    && matches!(
+                        name.to_ascii_lowercase().as_str(),
+                        "history.json" | "trusted-roots.json"
+                    )
+            {
+                continue;
+            }
             if !matches!(
                 name.to_ascii_lowercase().as_str(),
                 ".gitignore"

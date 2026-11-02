@@ -174,7 +174,7 @@ export function parseKitLock(text: string): KitLock {
     const path = ["bases", index, "path"];
     if (
       parts.some((part) => part === "." || part === "..") ||
-      /^(?:state|mailbox|locks|sessions|tasks|tasks\.json|tools\.json|kit\.lock\.json)$/i.test(
+      /^(?:state|mailbox|locks|sessions|tasks|tasks\.json|tools\.json|servers|shell-integration|proc|extensions|history\.json|trusted-roots\.json|kit\.lock\.json)$/i.test(
         parts[1],
       )
     )

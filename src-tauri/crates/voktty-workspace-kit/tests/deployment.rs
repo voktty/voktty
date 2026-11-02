@@ -5,6 +5,42 @@ use voktty_workspace_kit::{
 };
 
 #[test]
+fn helper_runtime_cannot_be_published_or_recorded_as_a_base() {
+    for name in [
+        "servers",
+        "shell-integration",
+        "proc",
+        "Servers",
+        "Shell-Integration",
+        "Proc",
+        "extensions",
+        "Extensions",
+        "history.json",
+        "History.json",
+        "trusted-roots.json",
+        "Trusted-Roots.json",
+    ] {
+        let path = format!(".voktty/{name}/data.md");
+        let files = [RenderedFile {
+            path: path.clone(),
+            kind: voktty_workspace_kit::FileKind::Base,
+            text: "overwrite".into(),
+        }];
+        let facts = BTreeMap::from([(path.clone(), PathFact::Absent)]);
+        assert_eq!(
+            plan_deployment(&files, &facts, RootLinks::default()).unwrap_err()[0].code,
+            "KIT_DEPLOYMENT_PATH_INVALID"
+        );
+        let lock =
+            json!({"schema":1,"bases":[{"path":path,"version":"1.0.0","sha256":"a".repeat(64)}]});
+        assert_eq!(
+            voktty_workspace_kit::parse_kit_lock(&lock.to_string()).unwrap_err()[0].code,
+            "KIT_LOCK_PATH_INVALID"
+        );
+    }
+}
+
+#[test]
 fn every_shared_deployment_case_matches_complete_output() {
     let corpus: Value = serde_json::from_str(include_str!(
         "../../../../templates/workspace-kit/conformance/deployment.json"

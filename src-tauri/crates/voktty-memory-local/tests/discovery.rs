@@ -276,6 +276,116 @@ fn partial_invalid_and_denied_markers_are_not_absence() {
     assert_eq!(denied.facts["stop"], "authorization");
 }
 
+#[test]
+fn helper_runtime_ancestor_does_not_become_partial_project_memory() {
+    for name in ["servers", "shell-integration", "proc", "extensions"] {
+        let f = fixture(true);
+        let runtime = f.project.path().join(".voktty").join(name);
+        fs::create_dir_all(runtime.join("private")).unwrap();
+        fs::write(runtime.join("private/data"), "not project memory").unwrap();
+        fs::write(
+            f.project.path().join(".voktty/history.json"),
+            "private history",
+        )
+        .unwrap();
+        fs::write(
+            f.project.path().join(".voktty/trusted-roots.json"),
+            "private trust",
+        )
+        .unwrap();
+        let child = f.project.path().join("project");
+        fs::create_dir(&child).unwrap();
+        let workspace =
+            LocalMemoryWorkspace::open(&f.store, &child, &f.access, &ReadControl::default())
+                .unwrap();
+        let observed = workspace
+            .observe_scope(DiscoveryPurpose::Initialize, &DiscoveryControl::default())
+            .unwrap();
+        assert_eq!(
+            observed.facts["ancestors"][1]["state"], "reserved",
+            "{name}"
+        );
+        assert!(f.access.reads.lock().unwrap().is_empty());
+        assert!(!f
+            .access
+            .metadata
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|p| p != &runtime && p.starts_with(&runtime)));
+        fs::write(f.project.path().join(".voktty/INIT.md"), "unfinished kit").unwrap();
+        let partial = workspace
+            .observe_scope(DiscoveryPurpose::Discover, &DiscoveryControl::default())
+            .unwrap();
+        assert_eq!(partial.facts["ancestors"][1]["state"], "partial");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn helper_runtime_names_do_not_authorize_following_links() {
+    for name in ["servers", "shell-integration", "proc", "extensions"] {
+        let f = fixture(false);
+        fs::create_dir(f.project.path().join(".voktty")).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), f.project.path().join(".voktty").join(name))
+            .unwrap();
+        let observed = open(&f)
+            .observe_scope(DiscoveryPurpose::Discover, &DiscoveryControl::default())
+            .unwrap();
+        assert_eq!(observed.facts["ancestors"][0]["state"], "unavailable");
+        assert!(f.access.reads.lock().unwrap().is_empty());
+        fs::remove_file(f.project.path().join(".voktty").join(name)).unwrap();
+        fs::write(
+            f.project.path().join(".voktty").join(name),
+            "not a runtime directory",
+        )
+        .unwrap();
+        let observed = open(&f)
+            .observe_scope(DiscoveryPurpose::Discover, &DiscoveryControl::default())
+            .unwrap();
+        assert_eq!(observed.facts["ancestors"][0]["state"], "partial");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_json_files_are_reserved_without_reading_or_following_links() {
+    for name in ["history.json", "trusted-roots.json"] {
+        let f = fixture(false);
+        fs::create_dir(f.project.path().join(".voktty")).unwrap();
+        let path = f.project.path().join(".voktty").join(name);
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        std::os::unix::fs::symlink(outside.path(), &path).unwrap();
+        assert_eq!(
+            open(&f)
+                .observe_scope(DiscoveryPurpose::Discover, &DiscoveryControl::default())
+                .unwrap()
+                .facts["ancestors"][0]["state"],
+            "unavailable"
+        );
+        fs::remove_file(&path).unwrap();
+        fs::write(&path, "private runtime bytes").unwrap();
+        assert_eq!(
+            open(&f)
+                .observe_scope(DiscoveryPurpose::Discover, &DiscoveryControl::default())
+                .unwrap()
+                .facts["ancestors"][0]["state"],
+            "reserved"
+        );
+        assert!(f.access.reads.lock().unwrap().is_empty());
+        fs::remove_file(&path).unwrap();
+        fs::create_dir(&path).unwrap();
+        assert_eq!(
+            open(&f)
+                .observe_scope(DiscoveryPurpose::Discover, &DiscoveryControl::default())
+                .unwrap()
+                .facts["ancestors"][0]["state"],
+            "partial"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn directory_links_stop_the_scan_without_following_targets_or_inventing_keys() {

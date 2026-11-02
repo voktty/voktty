@@ -125,7 +125,19 @@ fn validate_paths(files: &[RenderedFile]) -> KitResult<()> {
         let reserved = parts.get(1).is_some_and(|part| {
             matches!(
                 part.to_ascii_lowercase().as_str(),
-                "state" | "mailbox" | "locks" | "sessions" | "tasks" | "tasks.json" | "tools.json"
+                "state"
+                    | "mailbox"
+                    | "locks"
+                    | "sessions"
+                    | "tasks"
+                    | "tasks.json"
+                    | "tools.json"
+                    | "servers"
+                    | "shell-integration"
+                    | "proc"
+                    | "extensions"
+                    | "history.json"
+                    | "trusted-roots.json"
             )
         });
         if (!root_link && (parts.len() < 2 || parts[0] != ".voktty" || reserved))

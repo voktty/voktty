@@ -31,6 +31,12 @@ const reserved = new Set([
   "tasks",
   "tasks.json",
   "tools.json",
+  "servers",
+  "shell-integration",
+  "proc",
+  "extensions",
+  "history.json",
+  "trusted-roots.json",
 ]);
 
 function isMarkerLine(text: string, offset: number, marker: string): boolean {

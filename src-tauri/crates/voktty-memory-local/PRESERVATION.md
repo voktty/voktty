@@ -96,11 +96,22 @@ The fixed path list is supplied by the packaged pure core, never repository data
 The pure protected contract is in [PROTECTED.md](../voktty-workspace-kit/PROTECTED.md).
 
 The root listing may inspect metadata for reserved `state`, `mailbox`, `locks`,
-`sessions`, `tasks`, `tasks.json` and `tools.json` entries, but shared capture never
+`sessions`, `tasks`, `tasks.json`, `tools.json`, `servers`, `shell-integration`,
+`proc`, `extensions`, `history.json` and `trusted-roots.json` entries, but shared capture never
 enumerates their descendants or reads their bodies. Root-rule capture observes
 only `AGENTS.md` and `CLAUDE.md`, not other project files. Every protected read,
 including absence, requires its own native read grant. Metadata grants do not
 substitute for enumeration, read or workspace-root authority.
+
+Ancestor discovery recognizes directories named `servers`, `shell-integration`,
+`proc` and `extensions`, and regular files named `history.json` and
+`trusted-roots.json`, as runtime data when no kit configuration is present. These are the
+SSH helper, shell integration, supervised-process, extension, history and
+workspace-trust storage locations, not
+project memory. It does not enumerate their contents. Links remain unavailable,
+entries of the wrong type remain partial, and instruction files or invalid
+kit configurations still block initialization. Deployment and base-integrity
+records reject these reserved paths, including case variants.
 
 Factual and protected observations share the existing 128-file and 4 MiB body
 budgets; absent fixed protected paths count toward that combined file limit.

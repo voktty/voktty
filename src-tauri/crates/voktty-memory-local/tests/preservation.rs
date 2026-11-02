@@ -172,6 +172,44 @@ fn missing_and_denied_factual_inputs_never_publish_a_partial_baseline() {
 }
 
 #[test]
+fn shared_capture_never_enumerates_or_reads_helper_runtime() {
+    let fixture = Fixture::new();
+    for name in ["servers", "shell-integration", "proc", "extensions"] {
+        fixture.write(&format!("{name}/private/data.md"), "runtime-only bytes");
+    }
+    fixture.write("history.json", "private history");
+    fixture.write("trusted-roots.json", "private trust");
+    fixture
+        .open()
+        .observe_shared_preservation(&DiscoveryControl::default())
+        .unwrap();
+    for name in [
+        "servers",
+        "shell-integration",
+        "proc",
+        "extensions",
+        "history.json",
+        "trusted-roots.json",
+    ] {
+        let runtime = fixture.access.root.join(".voktty").join(name);
+        assert!(!fixture
+            .access
+            .enumerated
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|p| p.starts_with(&runtime)));
+        assert!(!fixture
+            .access
+            .reads
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|p| p.starts_with(&runtime)));
+    }
+}
+
+#[test]
 fn nested_live_layouts_and_invalid_archive_months_are_explicitly_unsupported() {
     for path in [
         "plans/nested/work.md",

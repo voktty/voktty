@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, expect, it } from "vitest";
 import { loadKitTemplate } from "@/modules/workspace-kit/lib/resources";
+import { parseKitLock } from "@/modules/workspace-kit/lib/validation";
 import {
   renderKitTemplate,
   type KitFile,
@@ -14,6 +15,36 @@ import {
 } from "@/modules/workspace-kit/lib/deployment";
 
 let files: readonly KitFile[];
+it.each([
+  "servers",
+  "shell-integration",
+  "proc",
+  "Servers",
+  "Shell-Integration",
+  "Proc",
+  "extensions",
+  "Extensions",
+  "history.json",
+  "History.json",
+  "trusted-roots.json",
+  "Trusted-Roots.json",
+])("protects helper runtime %s from deployment and base ownership", (name) => {
+  const path = `.voktty/${name}/data.md`;
+  expect(() =>
+    planKitDeployment(
+      [{ path, kind: "base", text: "overwrite" }],
+      new Map([[path, { kind: "absent" }]]),
+    ),
+  ).toThrow("Invalid deployment path");
+  expect(() =>
+    parseKitLock(
+      JSON.stringify({
+        schema: 1,
+        bases: [{ path, version: "1.0.0", sha256: "a".repeat(64) }],
+      }),
+    ),
+  ).toThrow("KIT_LOCK_PATH_INVALID");
+});
 beforeAll(async () => {
   files = renderKitTemplate(await loadKitTemplate(), {
     project_name: "Fixture",

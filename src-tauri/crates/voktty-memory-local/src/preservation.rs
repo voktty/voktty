@@ -120,6 +120,12 @@ impl Inventory<'_> {
                         | "tasks"
                         | "tasks.json"
                         | "tools.json"
+                        | "servers"
+                        | "shell-integration"
+                        | "proc"
+                        | "extensions"
+                        | "history.json"
+                        | "trusted-roots.json"
                 )
             {
                 continue;
