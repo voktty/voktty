@@ -132,7 +132,8 @@ it("explains narrow inspection and never initializes memory or private settings 
   const selects = invoke.mock.calls.filter(
     ([command]) => command === "project_memory_select",
   );
-  expect(selects[selects.length - 1][1]).not.toHaveProperty("inspectAncestors");
+  expect(selects).toHaveLength(2);
+  expect(selects[selects.length - 1][1]).toHaveProperty("inspectAncestors", true);
 });
 it("shows exact canonical preview and requires explicit acceptance before a token-only confirmation", async () => {
   await click("projectMemory.inspectAncestors");
@@ -258,4 +259,100 @@ it("never describes unreadable current bytes as a missing file", async () => {
   expect(container.textContent).toContain("projectMemory.currentUnavailable");
   expect(container.textContent).not.toContain("projectMemory.missingFile");
   expect(button("projectMemory.initialize").disabled).toBe(true);
+});
+
+it("continues from first local setup through installation to managing the discovered kit", async () => {
+  let prepared = false;
+  let installed = false;
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "project_memory_initialize_local_state") {
+      prepared = true;
+      return;
+    }
+    if (command === "project_memory_discover") {
+      if (!prepared) throw { code: "missingState" };
+      if (installed)
+        return {
+          schema: 1,
+          root: "/canonical/owned",
+          blockedCount: 0,
+          scope: { state: "ready", ancestryComplete: true },
+        };
+    }
+    const result = await original?.(command, args);
+    if (command === "project_memory_confirm_preview") installed = true;
+    return result;
+  });
+  await click("common.refresh");
+  expect(container.textContent).toContain("projectMemory.prepareDescription");
+  await click("projectMemory.prepare");
+  expect(prepared).toBe(true);
+  await click("projectMemory.inspectAncestors");
+  await reviewFiles();
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click(),
+  );
+  await click("projectMemory.initialize");
+  expect(container.textContent).toContain("projectMemory.installed");
+  await click("projectMemory.next");
+  expect(container.textContent).toContain("projectMemory.found");
+  expect(container.textContent).toContain("/canonical/owned");
+  expect(button("projectMemory.reviewTrust")).toBeDefined();
+  expect(button("projectMemory.policyConfigure")).toBeDefined();
+  expect(invoke.mock.calls.filter(([command]) => command === "project_memory_confirm_preview")).toHaveLength(1);
+  expect(invoke.mock.calls.some(([command]) =>
+    command === "project_memory_confirm_trust" ||
+    command === "project_memory_confirm_policy" ||
+    command === "project_memory_confirm_context",
+  )).toBe(false);
+});
+
+it("reconnects to existing memory on refresh without dropping ancestor inspection or installing files", async () => {
+  await click("projectMemory.inspectAncestors");
+  const selects = invoke.mock.calls.filter(([command]) => command === "project_memory_select").length;
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation(async (command, args) =>
+    command === "project_memory_discover"
+      ? {
+          schema: 1,
+          root: "/canonical/parent",
+          blockedCount: 0,
+          scope: { state: "ready", ancestryComplete: true },
+        }
+      : original?.(command, args),
+  );
+  await click("common.refresh");
+  expect(container.textContent).toContain("/canonical/parent");
+  expect(container.textContent).toContain("projectMemory.found");
+  expect(container.textContent).not.toContain("projectMemory.initialize");
+  expect(button("projectMemory.reviewTrust")).toBeDefined();
+  expect(button("projectMemory.policyConfigure")).toBeDefined();
+  expect(invoke.mock.calls.filter(([command]) => command === "project_memory_select")).toHaveLength(selects);
+  expect(invoke.mock.calls.some(([command]) => command === "project_memory_preview" || command === "project_memory_confirm_preview")).toBe(false);
+});
+
+it("offers explicit authorization when native selection rejects an unregistered local directory", async () => {
+  let authorized = false;
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "workspace_authorize") {
+      authorized = true;
+      return "/canonical/owned";
+    }
+    if (command === "project_memory_select" && !authorized) throw { code: "denied" };
+    return original?.(command, args);
+  });
+  await act(async () => root.render(<ProjectMemoryPanel key="denied-selection" target={target} />));
+  expect(container.textContent).toContain("denied");
+  expect(invoke.mock.calls.some(([command]) => command === "workspace_authorize")).toBe(false);
+  await click("git.authorizeDirectory");
+  expect(invoke).toHaveBeenCalledWith("workspace_authorize", {
+    path: "/owned", workspace: { kind: "local" },
+  });
+  expect(invoke).toHaveBeenCalledWith("project_memory_select", expect.objectContaining({
+    path: "/canonical/owned", environment: { kind: "local" },
+  }));
+  expect(container.textContent).toContain("projectMemory.inspectDescription");
+  expect(invoke.mock.calls.some(([command]) => command === "project_memory_initialize_local_state" || command === "project_memory_confirm_trust")).toBe(false);
 });

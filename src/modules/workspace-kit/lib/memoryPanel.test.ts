@@ -163,3 +163,61 @@ it("rejects remote namespaces and nonlocal environments without reinterpreting p
   ])
     expect(supportedMemoryPanelTarget(unsupported)).toBe(false);
 });
+
+it("recovers denied selection only after explicit directory authorization and retains its canonical target", async () => {
+  const api = client();
+  api.select.mockRejectedValueOnce({ code: "denied" });
+  const authorize = vi.fn(async () => "/canonical/project");
+  const publish = vi.fn();
+  const panel = createMemoryPanelController(target, publish, () => api, authorize);
+  await panel.authorize();
+  await panel.load();
+  expect(authorize).not.toHaveBeenCalled();
+  expect(publish).toHaveBeenLastCalledWith({ status: "error", code: "denied", canPrepare: false });
+  await Promise.all([panel.authorize(), panel.authorize()]);
+  expect(authorize).toHaveBeenCalledExactlyOnceWith("/project");
+  expect(api.select).toHaveBeenLastCalledWith("/canonical/project", { kind: "local" });
+  expect(publish).toHaveBeenLastCalledWith({ status: "ready", observation });
+  expect(api.initializeLocalState).not.toHaveBeenCalled();
+  expect(api.confirmTrust).not.toHaveBeenCalled();
+  expect(api.confirmPolicy).not.toHaveBeenCalled();
+  expect(api.confirmPreview).not.toHaveBeenCalled();
+  await panel.dispose();
+});
+
+it("never selects or publishes a directory after its authorization owner retires", async () => {
+  const api = client();
+  api.select.mockRejectedValueOnce({ code: "denied" });
+  const result = deferred<string>();
+  const started = deferred<void>();
+  const authorize = vi.fn(() => { started.resolve(); return result.promise; });
+  const publish = vi.fn();
+  const panel = createMemoryPanelController(target, publish, () => api, authorize);
+  await panel.load();
+  const pending = panel.authorize();
+  await started.promise;
+  await panel.dispose();
+  result.resolve("/canonical/project");
+  await pending;
+  expect(api.select).toHaveBeenCalledOnce();
+  expect(publish).toHaveBeenLastCalledWith({ status: "loading" });
+});
+
+it("redacts unknown error codes and never offers authorization for an unsupported target", async () => {
+  const api = client();
+  const publish = vi.fn();
+  const authorize = vi.fn();
+  api.select.mockRejectedValueOnce({ code: "private error details" });
+  const panel = createMemoryPanelController(target, publish, () => api, authorize);
+  await panel.load();
+  expect(publish).toHaveBeenLastCalledWith({ status: "error", code: "unavailable", canPrepare: false });
+  await panel.authorize();
+  expect(authorize).not.toHaveBeenCalled();
+  await panel.dispose();
+  api.select.mockRejectedValueOnce({ code: "denied" });
+  const remote = createMemoryPanelController({ ...target, environment: { kind: "wsl", distro: "owned" } }, publish, () => api, authorize);
+  await remote.load();
+  await remote.authorize();
+  expect(authorize).not.toHaveBeenCalled();
+  await remote.dispose();
+});

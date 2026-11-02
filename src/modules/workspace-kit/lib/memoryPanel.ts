@@ -1,4 +1,5 @@
 import type { WorkspaceEnv } from "@/modules/workspace/env";
+import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
 import {
   createNativeMemoryPresentation,
   type NativeMemoryScope,
@@ -103,6 +104,7 @@ export function createMemoryPanelController(
   target: MemoryPanelTarget,
   publish: (state: MemoryPanelState) => void,
   createClient: () => Client = createNativeMemoryPresentation,
+  authorizeDirectory: (path: string) => Promise<string> = authorizeNativeMemoryDirectory,
 ) {
   for (const entry of entries) if (entry.retired) void closeEntry(entry);
   if (entries.size >= MAX_PANELS)
@@ -120,6 +122,7 @@ export function createMemoryPanelController(
   let pending: Promise<void> | null = null;
   let state: MemoryPanelState = { status: "loading" };
   let observation: NativeMemoryScope | null = null;
+  let selectionPath = captured.path;
   const current = () =>
     !entry.retired && selected !== null && entry.client.isCurrent(selected);
   const notify = (next: MemoryPanelState) => {
@@ -128,7 +131,7 @@ export function createMemoryPanelController(
       publish(next);
     }
   };
-  function run(prepare: boolean, inspectAncestors = false) {
+  function run(prepare: boolean, inspectAncestors = false, authorize = false) {
     if (entry.retired) return Promise.resolve();
     if (pending) return pending;
     pending = Promise.resolve()
@@ -137,10 +140,16 @@ export function createMemoryPanelController(
         notify({ status: "loading" });
         if (entry.retired) return;
         try {
+          if (authorize) {
+            selected = null;
+            const path = await authorizeDirectory(captured.path);
+            if (entry.retired) return;
+            selectionPath = path;
+          }
           if (inspectAncestors) selected = null;
           if (!selected)
             selected = await entry.client.select(
-              captured.path,
+              selectionPath,
               captured.environment,
               ...(inspectAncestors
                 ? ([{ inspectAncestors: true }] as const)
@@ -162,7 +171,9 @@ export function createMemoryPanelController(
             typeof error === "object" &&
             error !== null &&
             "code" in error &&
-            typeof error.code === "string"
+            typeof error.code === "string" &&
+            ["invalidInput", "denied", "cancelled", "timeout", "busy", "limit",
+              "unsupported", "missingState", "invalidState", "stale", "unavailable"].includes(error.code)
               ? error.code
               : "unavailable";
           notify({
@@ -215,6 +226,13 @@ export function createMemoryPanelController(
   }
   return {
     load: () => run(false),
+    authorize() {
+      if (
+        state.status !== "error" || state.code !== "denied" ||
+        !supportedMemoryPanelTarget(captured)
+      ) return Promise.resolve();
+      return run(false, false, true);
+    },
     configurePolicy() {
       if (
         !pending &&
@@ -352,7 +370,7 @@ export function createMemoryPanelController(
         notify({ status: "previewing" });
         if (!current()) return;
         const review = await entry.client.preview(receipt, {
-          destination: captured.path,
+          destination: selectionPath,
           environment: captured.environment,
           inputs: values,
           links: choices,

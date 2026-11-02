@@ -23,6 +23,7 @@ import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { useHarnessProjectSelection } from "@/modules/harness/hooks/useHarnessProjectSelection";
 
 const mounts = vi.hoisted(() => ({
+  aiAvailable: true,
   harness: vi.fn(),
   native: vi.fn(),
   release: vi.fn(),
@@ -33,6 +34,9 @@ const mounts = vi.hoisted(() => ({
   create: undefined as CreateHarnessNavigationView | undefined,
   registrations: vi.fn(),
   failedOwnerId: null as number | null,
+}));
+vi.mock("@/modules/ai/lib/runtimeAvailability", () => ({
+  useAiAvailable: () => mounts.aiAvailable,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(null),
@@ -131,6 +135,7 @@ afterEach(async () => {
   vi.clearAllMocks();
   mounts.create = undefined;
   mounts.failedOwnerId = null;
+  mounts.aiAvailable = true;
   vi.unstubAllGlobals();
 });
 it("keeps Harness sessions mounted and releases native chat when the tab loses focus", async () => {
@@ -159,6 +164,29 @@ it("keeps Harness sessions mounted and releases native chat when the tab loses f
   });
   expect(container.querySelector("[data-native]")).toBeNull();
   expect(mounts.harness).toHaveBeenCalledTimes(1);
+});
+it("hides the inner selector without AI and returns to Harness when AI disconnects", async () => {
+  mounts.aiAvailable = false;
+  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
+  expect(container.querySelector('[role="group"]')).toBeNull();
+  expect(container.querySelector('[data-harness]')).not.toBeNull();
+  expect(mounts.native).not.toHaveBeenCalled();
+  mounts.aiAvailable = true;
+  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
+  const nativeButton = container.querySelectorAll<HTMLButtonElement>('[role="group"] button')[1];
+  await act(async () => nativeButton.click());
+  expect(container.querySelector('[data-native]')).not.toBeNull();
+  mounts.aiAvailable = false;
+  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
+  expect(container.querySelector('[role="group"]')).toBeNull();
+  expect(container.querySelector('[data-native]')).toBeNull();
+  expect(container.querySelector('[data-harness]')?.parentElement?.hidden).toBe(false);
+  expect(mounts.harness).toHaveBeenCalledOnce();
+  expect(mounts.release).toHaveBeenCalledOnce();
+  mounts.aiAvailable = true;
+  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
+  expect(container.querySelector('[data-native]')).toBeNull();
+  expect(container.querySelector('[role="group"] button')?.getAttribute('aria-pressed')).toBe('true');
 });
 it("keeps owner reports when hidden and removes only the unmounted owner", async () => {
   const otherTab = { id: 2, kind: "harness", cwd: "/other" } as HarnessTab;

@@ -239,6 +239,11 @@ function MemoryObservation({
           }}
         />
         <DialogFooter>
+          {state.status === "published" ? (
+            <Button size="sm" onClick={onReload}>
+              {t("projectMemory.next")}
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -273,6 +278,16 @@ function MemoryObservation({
         className="space-y-3 text-sm"
       >
         <p role={state.status === "error" ? "alert" : "status"}>{t(message)}</p>
+        {state.status === "error" ? (
+          <p className="text-xs text-muted-foreground">
+            {t("common.error")}: <code>{state.code}</code>
+          </p>
+        ) : null}
+        {state.status === "error" && state.code === "denied" ? (
+          <Button size="sm" onClick={() => void controller.current?.authorize()}>
+            {t("git.authorizeDirectory")}
+          </Button>
+        ) : null}
         {state.status === "ready" && state.observation.root ? (
           <div>
             <p className="text-xs text-muted-foreground">
@@ -347,7 +362,10 @@ function MemoryObservation({
           variant="outline"
           size="sm"
           disabled={state.status === "loading"}
-          onClick={onReload}
+          onClick={() => {
+            if (state.status === "ready") void controller.current?.load();
+            else onReload();
+          }}
         >
           {t("common.refresh")}
         </Button>

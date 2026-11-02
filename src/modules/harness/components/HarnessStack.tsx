@@ -3,6 +3,7 @@ import { HarnessRestoreContext } from "@/modules/harness/hooks/harnessRestoreCon
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useTranslation } from "@/modules/i18n";
+import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 import { removeHarnessSurface } from "@/modules/surfaces";
@@ -66,13 +67,18 @@ function HarnessWorkbench({
   layoutKey?: string;
 }) {
   const { t } = useTranslation();
+  const aiAvailable = useAiAvailable();
   const restored = useContext(HarnessRestoreContext);
   const [bootView] = useState(() => restored && !restored.claimed.has(tab.tabKey)
     ? restored.views.get(tab.tabKey) : undefined);
   useLayoutEffect(() => { restored?.claimed.add(tab.tabKey); }, [restored, tab.tabKey]);
   const [view, setView] = useState<"harness" | "native">("harness");
+  const nativeVisible = aiAvailable && view === "native";
+  useLayoutEffect(() => {
+    if (!aiAvailable) setView("harness");
+  }, [aiAvailable]);
   const activate = useHarnessViewActivation(
-    focused && view === "harness",
+    focused && !nativeVisible,
     () => {
       setView("harness");
       onActivate();
@@ -84,6 +90,7 @@ function HarnessWorkbench({
   useEffect(() => () => removeHarnessSurface(tab.id), [tab.id]);
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {aiAvailable ? (
       <div
         role="group"
         aria-label={t("harness.agentDevelopment")}
@@ -108,12 +115,13 @@ function HarnessWorkbench({
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1" hidden={view !== "harness"}>
+      ) : null}
+      <div className="min-h-0 flex-1" hidden={nativeVisible}>
         <HarnessProjectOwner value={{ ownerId: tab.id, tabKey: tab.tabKey }}>
         <HarnessTerminalOwner
           value={{
             tabKey: tab.tabKey,
-            visible: visible && view === "harness",
+            visible: visible && !nativeVisible,
             layoutKey,
             onFocus: () => {
               setView("harness");
@@ -126,8 +134,8 @@ function HarnessWorkbench({
             initialCwd={tab.cwd}
             initialSessionId={tab.sessionId}
             surfaceOwnerId={tab.id}
-            visible={visible && view === "harness"}
-            focused={focused && view === "harness"}
+            visible={visible && !nativeVisible}
+            focused={focused && !nativeVisible}
             onActivate={activate}
             projectRequest={projectRequest}
             onProjectRequestHandled={onProjectRequestHandled}
@@ -136,7 +144,7 @@ function HarnessWorkbench({
         </HarnessTerminalOwner>
         </HarnessProjectOwner>
       </div>
-      {view === "native" && (
+      {nativeVisible && (
         <div className="min-h-0 flex-1">
           {focused ? (
             <Suspense fallback={null}>
