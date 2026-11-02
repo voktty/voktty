@@ -9227,6 +9227,7 @@ name = "voktty-remote"
 version = "1.0.19"
 dependencies = [
  "base64 0.23.1",
+ "dirs 7.0.0",
  "globset",
  "grep-matcher",
  "grep-regex",
@@ -9239,8 +9240,11 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "uuid",
+ "voktty-memory-local",
  "voktty-remote-protocol",
  "voktty-workspace-edit",
+ "voktty-workspace-kit",
 ]
 
 [[package]]

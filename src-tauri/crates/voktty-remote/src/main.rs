@@ -7,6 +7,7 @@ mod line_metrics;
 mod opencode_service;
 mod owned_search;
 mod proc_host;
+mod project_memory;
 mod pty_activity;
 mod search;
 
@@ -35,8 +36,8 @@ use voktty_remote_protocol::{
     METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
     METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GLOB, METHOD_GREP,
     METHOD_GREP_CANCEL, METHOD_GREP_INDEPENDENT, METHOD_HANDSHAKE, METHOD_LIST_DIR,
-    METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH, METHOD_PROC_CLOSE, METHOD_PROC_DETACH,
-    METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN, METHOD_PTY_CLOSE,
+    METHOD_MEMORY_MANAGE, METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH, METHOD_PROC_CLOSE,
+    METHOD_PROC_DETACH, METHOD_PROC_KILL, METHOD_PROC_LIST, METHOD_PROC_SPAWN, METHOD_PTY_CLOSE,
     METHOD_PTY_GET_ACTIVITY, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
     METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_READ_FILE_PREVIEW, METHOD_RENAME,
     METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_SEARCH_NAMES, METHOD_STAT,
@@ -123,6 +124,7 @@ struct RemoteServer {
     search: RemoteSearchState,
     owned_search: OwnedSearchState,
     proc_host: Option<ProcHost>,
+    memory: project_memory::MemoryServer,
 }
 
 type SharedOutput = Arc<Mutex<BufWriter<io::Stdout>>>;
@@ -163,6 +165,7 @@ impl RemoteServer {
             search: RemoteSearchState::default(),
             owned_search: OwnedSearchState::default(),
             proc_host: None,
+            memory: project_memory::MemoryServer::default(),
         }
     }
 
@@ -358,6 +361,7 @@ impl RemoteServer {
                 self.proc_control(request)
             }
             METHOD_AGENT_PROBE => self.agent_probe(request),
+            METHOD_MEMORY_MANAGE => self.memory.handle(self.root.as_deref(), request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -373,6 +377,7 @@ impl RemoteServer {
             Ok(root) => root,
             Err(error) => return RemoteResponse::failure(request.id, "invalid_root", error),
         };
+        self.memory.reset();
         self.root = Some(root.clone());
         RemoteResponse::success(
             request.id,
@@ -423,7 +428,8 @@ impl RemoteServer {
                     METHOD_PROC_KILL,
                     METHOD_PROC_CLOSE,
                     METHOD_PROC_LIST,
-                    METHOD_AGENT_PROBE
+                    METHOD_AGENT_PROBE,
+                    METHOD_MEMORY_MANAGE
                 ]
             }),
         )
