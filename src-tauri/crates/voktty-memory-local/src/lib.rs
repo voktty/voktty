@@ -45,7 +45,8 @@ pub use reader::{
     inspect_local_memory_scope, is_memory_document_path, measure_local_memory,
     read_local_memory_documents, resolve_local_memory_directory, LocalMemoryWorkspace,
     MemoryReadAccess, NativeContextObservation, NativeMemoryDocument, NativeMemoryDocuments,
-    NativeMemoryMeasurements, NativeMemoryPreservation, ReadControl, ReadError,
+    NativeMemoryMeasurements, NativeMemoryPreservation, ProjectMemoryWorkspace, ReadControl,
+    ReadError,
 };
 
 const STORE: &str = "memory-local.json";

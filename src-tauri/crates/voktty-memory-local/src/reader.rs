@@ -21,6 +21,11 @@ use crate::{LocalMemorySnapshot, LocalMemoryStore, ProjectPreference, StoreError
 
 static ACTIVE_READS: AtomicUsize = AtomicUsize::new(0);
 
+#[path = "project_reader.rs"]
+mod project_reader;
+pub use project_reader::ProjectMemoryWorkspace;
+use project_reader::{checked_project_root, collect_project_facts, deployment_inventory};
+
 #[path = "documents.rs"]
 mod documents;
 pub use documents::{
@@ -211,6 +216,17 @@ pub fn resolve_local_memory_directory(
 
 fn resolve_memory_directory(requested: &Path, control: &ReadControl) -> Result<PathBuf, ReadError> {
     control.check()?;
+    if !crate::path_policy::readable(requested.to_str().ok_or(ReadError::InvalidInput)?) {
+        return Err(ReadError::Denied);
+    }
+    resolve_project_directory(requested, control).map(|(root, _)| root)
+}
+
+fn resolve_project_directory(
+    requested: &Path,
+    control: &ReadControl,
+) -> Result<(PathBuf, platform::Directory), ReadError> {
+    control.check()?;
     platform::ensure_supported()?;
     let text = requested.to_str().ok_or(ReadError::InvalidInput)?;
     if text.contains("://")
@@ -223,7 +239,7 @@ fn resolve_memory_directory(requested: &Path, control: &ReadControl) -> Result<P
     if text.as_bytes().get(1) == Some(&b':') || text.contains('\\') {
         return Err(ReadError::Unsupported);
     }
-    if !requested.is_absolute() || !crate::path_policy::readable(text) {
+    if !requested.is_absolute() {
         return Err(ReadError::Denied);
     }
     if text.len() > 4096 || requested.components().count() > 128 {
@@ -236,6 +252,9 @@ fn resolve_memory_directory(requested: &Path, control: &ReadControl) -> Result<P
     let directory = platform::Directory::open_root(&root, control)?;
     #[cfg(unix)]
     directory.qualify_project_filesystem(control)?;
+    if !crate::path_policy::readable(text) {
+        return Err(ReadError::Denied);
+    }
     let root = directory.canonical_root(&root)?;
     let text = root.to_str().ok_or(ReadError::InvalidInput)?;
     if !crate::path_policy::readable(text) {
@@ -245,7 +264,7 @@ fn resolve_memory_directory(requested: &Path, control: &ReadControl) -> Result<P
         return Err(ReadError::Limit);
     }
     control.check()?;
-    Ok(root)
+    Ok((root, directory))
 }
 
 /// Metadata/configuration discovery without an installation identity. Directory
@@ -255,29 +274,8 @@ pub fn inspect_local_memory_scope(
     access: &dyn MemoryReadAccess,
     control: &crate::DiscoveryControl,
 ) -> Result<crate::NativeScopeObservation, ReadError> {
-    let phase = control.read_control()?;
-    let _permit = ReadPermit::acquire(&phase)?;
-    if !access.allows_workspace_root(requested) {
-        return Err(ReadError::Denied);
-    }
-    let root = resolve_memory_directory(requested, &phase)?;
-    if !access.allows_workspace_root(&root) {
-        return Err(ReadError::Denied);
-    }
-    let original = platform::Directory::open_root(&root, &phase)?;
-    let result = crate::discovery::gather(
-        &root,
-        &uuid::Uuid::new_v4().to_string(),
-        access,
-        crate::DiscoveryPurpose::Discover,
-        control,
-    )?;
-    let current = platform::Directory::open_root(&root, &control.read_control()?)?;
-    if current.identity() != original.identity() || !access.allows_workspace_root(&root) {
-        return Err(ReadError::StaleRoot);
-    }
-    control.read_control()?;
-    Ok(result)
+    ProjectMemoryWorkspace::open(requested, access, &control.read_control()?)?
+        .observe_scope(crate::DiscoveryPurpose::Discover, control)
 }
 
 /// Captures an authorized local execution root, not a resolved memory scope.
@@ -398,41 +396,19 @@ impl<'a> LocalMemoryWorkspace<'a> {
     ) -> Result<Self, ReadError> {
         platform::ensure_supported()?;
         let _permit = ReadPermit::acquire(control)?;
-        if !requested.is_absolute() {
-            return Err(ReadError::InvalidInput);
-        }
-        if !access.allows_workspace_root(requested) {
-            return Err(ReadError::Denied);
-        }
-        platform::validate_requested_root(requested)?;
-        let root = std::fs::canonicalize(requested).map_err(|_| ReadError::Io)?;
-        control.check()?;
-        if !access.allows_workspace_root(&root) {
-            return Err(ReadError::Denied);
-        }
-        if root.components().count() > 128
-            || root.to_str().ok_or(ReadError::InvalidInput)?.len() > 4096
-        {
-            return Err(ReadError::Limit);
-        }
-        let directory = platform::Directory::open_root(&root, control)?;
-        #[cfg(unix)]
-        directory.qualify_project_filesystem(control)?;
+        let project = ProjectMemoryWorkspace::open_inner(requested, access, control)?;
         let local = store.load().map_err(ReadError::Store)?;
         control.check()?;
-        let resolved = directory.canonical_root(&root)?;
-        resolved.to_str().ok_or(ReadError::InvalidInput)?;
-        let canonical_root = voktty_paths::canonical_display_path(&resolved);
         let identity = json!({
             "schema":1, "kind":"local", "machineId":local.installation_id(),
-            "filesystemId":directory.filesystem_id(), "canonicalRoot":canonical_root,
+            "filesystemId":project.filesystem_id, "canonicalRoot":project.canonical_root,
         });
         let project_key = memory_project_key(&identity.to_string()).map_err(ReadError::Contract)?;
         control.check()?;
         Ok(Self {
-            root,
-            root_id: directory.identity(),
-            root_instance: directory.root_instance(),
+            root: project.root,
+            root_id: project.root_id,
+            root_instance: project.root_instance,
             identity,
             project_key,
             store,
@@ -502,15 +478,7 @@ impl<'a> LocalMemoryWorkspace<'a> {
         links: RootLinks,
         control: &ReadControl,
     ) -> Result<BTreeMap<String, PathFact>, ReadError> {
-        let mut paths = inventory(false);
-        paths.insert(".voktty/kit.lock.json".into());
-        if links.agents || links.claude {
-            paths.insert("AGENTS.md".into());
-        }
-        if links.claude {
-            paths.insert("CLAUDE.md".into());
-        }
-        self.collect(&paths, 1024 * 1024, control)
+        self.collect(&deployment_inventory(links), 1024 * 1024, control)
             .map(|(facts, _)| facts)
     }
 
@@ -586,26 +554,16 @@ impl<'a> LocalMemoryWorkspace<'a> {
         &self,
         control: &ReadControl,
     ) -> Result<platform::Directory, ReadError> {
-        control.check()?;
-        if !self.access.allows_workspace_root(&self.root) {
-            return Err(ReadError::Denied);
-        }
-        let directory =
-            platform::Directory::open_root(&self.root, control).map_err(|error| match error {
-                ReadError::Cancelled | ReadError::Timeout => error,
-                _ => ReadError::StaleRoot,
-            })?;
-        #[cfg(unix)]
-        directory.qualify_project_filesystem(control)?;
-        let resolved = directory.canonical_root(&self.root)?;
-        control.check()?;
-        if directory.identity() != self.root_id
-            || directory.root_instance() != self.root_instance
-            || voktty_paths::canonical_display_path(&resolved) != self.identity["canonicalRoot"]
-        {
-            return Err(ReadError::StaleRoot);
-        }
-        Ok(directory)
+        checked_project_root(
+            &self.root,
+            self.root_id,
+            &self.root_instance,
+            self.identity["canonicalRoot"]
+                .as_str()
+                .ok_or(ReadError::InvalidInput)?,
+            self.access,
+            control,
+        )
     }
 
     pub(crate) fn trust_instructions(
@@ -642,22 +600,14 @@ impl<'a> LocalMemoryWorkspace<'a> {
         if self.identity["machineId"] != local.installation_id() {
             return Err(ReadError::StaleInstallation);
         }
-        if paths.len() > 128 {
-            return Err(ReadError::Limit);
-        }
-        let mut bytes = 0usize;
-        let mut facts = BTreeMap::new();
-        for path in paths {
-            control.check()?;
-            let fact = directory.read_text(&self.root, path, self.access, control)?;
-            if let PathFact::File { text } = &fact {
-                bytes = bytes
-                    .checked_add(text.len())
-                    .filter(|n| *n <= max_bytes)
-                    .ok_or(ReadError::Limit)?;
-            }
-            facts.insert(path.clone(), fact);
-        }
+        let facts = collect_project_facts(
+            &directory,
+            &self.root,
+            self.access,
+            paths,
+            max_bytes,
+            control,
+        )?;
         self.checked_root(control)?;
         let current = self.store.load().map_err(ReadError::Store)?;
         if current.installation_id() != local.installation_id() {

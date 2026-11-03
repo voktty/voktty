@@ -400,6 +400,50 @@ mod tests {
     }
 
     #[test]
+    fn project_observation_does_not_require_private_storage_acl_qualification() {
+        struct ProjectAccess;
+        impl MemoryReadAccess for ProjectAccess {
+            fn allows_metadata(&self, _: &Path) -> bool {
+                true
+            }
+            fn allows_read(&self, _: &Path) -> bool {
+                true
+            }
+        }
+        let parent = tempfile::tempdir().unwrap();
+        private_acl(parent.path(), "(A;;FA;;;WD)");
+        std::fs::create_dir(parent.path().join(".voktty")).unwrap();
+        let document = parent.path().join(".voktty/PROJECT.md");
+        std::fs::write(&document, "owner project").unwrap();
+        let control = ReadControl::default().with_storage_diagnostics();
+        assert!(matches!(
+            crate::LocalMemoryStore::create_private(parent.path(), &control),
+            Err(ReadError::Denied)
+        ));
+        assert_eq!(
+            control.storage_failure().unwrap().stage,
+            crate::StorageStage::WindowsGrant
+        );
+        let project = crate::ProjectMemoryWorkspace::open(
+            parent.path(),
+            &ProjectAccess,
+            &ReadControl::default(),
+        )
+        .unwrap();
+        let facts = project
+            .observe_deployment(Default::default(), &ReadControl::default())
+            .unwrap();
+        assert!(
+            matches!(&facts[".voktty/PROJECT.md"], PathFact::File { text } if text == "owner project")
+        );
+        assert_eq!(std::fs::read_to_string(document).unwrap(), "owner project");
+        assert!(!parent
+            .path()
+            .join(crate::bootstrap::PRIVATE_DIRECTORY)
+            .exists());
+    }
+
+    #[test]
     fn broad_child_reads_are_refused_without_repairing_or_deleting_existing_data() {
         let parent = tempfile::tempdir().unwrap();
         private_acl(parent.path(), "");
