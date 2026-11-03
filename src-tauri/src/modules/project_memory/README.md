@@ -364,8 +364,8 @@ successor or another presentation. No ownership lock spans an await; queued and
 running work retains the shared native worker budget until physical settlement.
 Cancellation or missing delivery never establishes rollback. Restoration preserves
 the interrupted intent and requires a fresh initialization review before subsequent
-publication. The IPC below exposes these native application APIs; the panel,
-CLI and authenticated remote protocol remain pending. Windows runtime qualification
+publication. The IPC and native-local panel below expose these application APIs;
+CLI and authenticated remote protocol restoration remain pending. Windows runtime qualification
 and complete product acceptance remain pending.
 
 ## Restoration IPC
@@ -428,8 +428,44 @@ match every reviewed target and moved backup, with no skipped or migrated paths,
 before the client acknowledges restoration. Malformed replies cannot restore
 acceptance. Cancellation retires local delivery before IPC, including before a
 token exists, validates its boolean response and permits retry after failed
-cleanup. Native admitted writes retain their no-rollback semantics. Panel, CLI
-and remote-helper restoration integration remain pending.
+cleanup. Native admitted writes retain their no-rollback semantics. The panel
+below exposes local restoration; CLI and remote-helper integration remain pending.
+
+## Manual original-restoration panel
+
+The shared terminal and Harness management panel offers an explicit recovery
+review for native-local partial, invalid or ambiguous scopes, blocked incomplete
+scopes, and deployment recovery errors. Scope alone never asserts that backups
+exist. Only the native review identifies recoverable originals. SSH, unresolved
+remote namespaces, WSL and Docker cannot fall back to local restoration while
+their helper integration is pending. Opening or refreshing still reads metadata
+only; it never starts recovery or initializes private state automatically.
+
+The lazy recovery view displays the canonical root, each destination and recorded
+backup, and the exact original text without interpreting markup. A separate
+unchecked checkbox accepts only that review object. Confirmation, back and the
+checkbox are disabled through restoration settlement. Closing retires the original
+presentation without promising rollback. Failed operations retain available
+acknowledged changes and candidate paths, require another manual review, and
+never display success or retry automatically.
+
+Back cancels the exact recovery review before fresh metadata inspection. Successful
+restoration retains its movement report separately from initialization success.
+Continuing re-inspects the current source and opens editable initialization details,
+requiring a new native preview and its independent publication acceptance. No
+previous plan or checkbox can publish implicitly. Partial scopes also offer manual
+review of a pending initialization without creating private state or asserting
+that an intent exists. The native preview must still match the exact recorded
+intent, root identities and bytes.
+
+The recovery initialization form exposes the original creation date as well as
+the existing project details and persistent-link choices, so a previous day's
+intent can be reviewed without silently replacing its date. Values are not
+reconstructed from the private journal; the user must retain the original settings
+and the native core refuses mismatches. English and Spanish copy describes the
+move, preserved existing targets, independent trust and policy, partial failures
+and the required subsequent review. Other locales use the English fallback.
+Native WebView, Windows and full remote runtime acceptance remain separate gates.
 
 ## Native policy ownership
 

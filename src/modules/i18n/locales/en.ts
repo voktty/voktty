@@ -1,5 +1,21 @@
 export const en = {
   projectMemory: {
+    recovery: {
+      title: "Restore saved originals",
+      review: "Review recovery originals",
+      effects: "Review the saved originals before moving them back to their missing paths. Existing files are preserved. This does not finish initialization or change trust or use policy. Closing during restoration may leave completed moves.",
+      target: "Restore to",
+      backup: "Saved original",
+      accept: "I reviewed these originals and want to move them back to the paths shown.",
+      confirm: "Restore originals",
+      restoring: "Restoring originals...",
+      restored: "Originals restored. Review initialization again before publishing project memory.",
+      failed: "Recovery could not be completed. Review again before retrying.",
+      continue: "Review initialization again",
+      reviewInitialization: "Review pending initialization",
+      matchInitialization: "Use the same project details, creation date and persistent links as the interrupted initialization. A new native review must match its recorded files before anything is written.",
+      createdAt: "Original creation date",
+    },
     sshSettings: {
       prepare: "Prepare settings on the SSH host",
       prepareDescription: "Creates private project-memory settings on the SSH host for this directory. Project files and agent permissions stay unchanged.",

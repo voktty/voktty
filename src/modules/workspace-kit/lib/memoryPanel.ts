@@ -1,25 +1,26 @@
 import type { WorkspaceEnv } from "@/modules/workspace/env";
-import type { MemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
-import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
 import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
 import { memoryStorageDiagnostic } from "@/modules/workspace-kit/lib/memoryStorageDiagnostic";
 import type {
   createNativeMemoryPresentation,
+  NativeMemoryDeploymentError,
+  NativeMemoryPublication,
+  NativeMemoryReview,
   NativeMemoryScope,
   NativeMemorySelection,
-  NativeMemoryReview,
-  NativeMemoryPublication,
-  NativeMemoryDeploymentError,
 } from "@/modules/workspace-kit/lib/nativeMemory";
-import type {
-  NativeMemoryTrustReview,
-  NativeMemoryTrustAccepted,
-} from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
+import type { MemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
 import type {
   NativeMemoryPolicy,
-  NativeMemoryPolicyReview,
   NativeMemoryPolicyAccepted,
+  NativeMemoryPolicyReview,
 } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
+import type { NativeMemoryRecoveryReview } from "@/modules/workspace-kit/lib/nativeMemoryRecovery";
+import type {
+  NativeMemoryTrustAccepted,
+  NativeMemoryTrustReview,
+} from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 
 export type MemoryPanelTarget = Readonly<{
   path: string;
@@ -36,19 +37,33 @@ export type MemoryTrustState =
   | { status: "trustAccepted"; root: string; report: NativeMemoryTrustAccepted }
   | { status: "trustError"; code: string };
 export type MemoryPanelState =
+  | MemoryRecoveryState
   | MemoryDocumentsState
   | MemoryPolicyState
   | MemoryTrustState
   | { status: "loading" }
   | { status: "ready"; observation: NativeMemoryScope }
   | { status: "error"; code: string; canPrepare: boolean }
-  | { status: "configuring" }
+  | { status: "configuring"; recovering?: boolean }
   | { status: "initializationSetup"; code?: string; diagnostic?: string }
   | { status: "preparingInitialization" }
   | { status: "previewing" }
   | { status: "review" | "publishing"; review: NativeMemoryReview }
   | { status: "published"; root: string; report: NativeMemoryPublication }
   | { status: "deploymentError"; error: NativeMemoryDeploymentError };
+export type MemoryRecoveryState =
+  | { status: "recoveryLoading" }
+  | {
+      status: "recoveryReview";
+      review: NativeMemoryRecoveryReview;
+    }
+  | { status: "recoveryRestoring"; review: NativeMemoryRecoveryReview }
+  | {
+      status: "recoveryRestored";
+      root: string;
+      report: NativeMemoryPublication;
+    }
+  | { status: "recoveryError"; error: NativeMemoryDeploymentError };
 export type MemoryDocumentsState =
   | { status: "documentsLoading" }
   | { status: "documentsReady"; snapshot: MemoryDocuments }
@@ -77,6 +92,10 @@ type Client = Pick<
   | "confirmPreview"
   | "cancelPreview"
   | "isReviewCurrent"
+  | "reviewRecovery"
+  | "confirmRecovery"
+  | "cancelRecovery"
+  | "isRecoveryReviewCurrent"
   | "reviewTrust"
   | "confirmTrust"
   | "cancelTrust"
@@ -139,6 +158,7 @@ export function createMemoryPanelController(
   let state: MemoryPanelState = { status: "loading" };
   let observation: NativeMemoryScope | null = null;
   let selectionPath = captured.path;
+  let recoveringInitialization = false;
   const current = () =>
     !entry.retired && selected !== null && entry.client.isCurrent(selected);
   const notify = (next: MemoryPanelState) => {
@@ -225,6 +245,7 @@ export function createMemoryPanelController(
       | "trust"
       | "policy"
       | "documents"
+      | "recovery"
       | "setup" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
@@ -263,13 +284,15 @@ export function createMemoryPanelController(
                     ? failure.code
                     : "unavailable",
                 }
-              : operation === "documents"
-                ? { status: "documentsError", code: failure.code }
-                : operation === "trust"
-                  ? { status: "trustError", code: failure.code }
-                  : operation === "policy"
-                    ? { status: "policyError", code: failure.code }
-                    : { status: "deploymentError", error: failure },
+              : operation === "recovery"
+                ? { status: "recoveryError", error: failure }
+                : operation === "documents"
+                  ? { status: "documentsError", code: failure.code }
+                  : operation === "trust"
+                    ? { status: "trustError", code: failure.code }
+                    : operation === "policy"
+                      ? { status: "policyError", code: failure.code }
+                      : { status: "deploymentError", error: failure },
           );
         }
       })
@@ -280,6 +303,101 @@ export function createMemoryPanelController(
   }
   return {
     load: () => run(false),
+    configureInterruptedInitialization() {
+      if (
+        pending ||
+        !current() ||
+        state.status !== "ready" ||
+        !canReviewMemoryRecovery(captured, state.observation)
+      )
+        return;
+      recoveringInitialization = true;
+      notify({ status: "configuring", recovering: true });
+    },
+    reviewRecovery() {
+      if (
+        !supportsMemoryRecovery(captured) ||
+        !(
+          (state.status === "ready" &&
+            canReviewMemoryRecovery(captured, state.observation)) ||
+          (state.status === "deploymentError" &&
+            ["recoveryRequired", "pendingRecovery"].includes(
+              state.error.code,
+            )) ||
+          (state.status === "review" &&
+            state.review.snapshot.publicationBlocker === "recoveryRequired") ||
+          state.status === "recoveryError"
+        )
+      )
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "recoveryLoading" });
+        if (!current()) return;
+        const review = await entry.client.reviewRecovery(receipt, {
+          destination: selectionPath,
+          environment: captured.environment,
+        });
+        if (current() && entry.client.isRecoveryReviewCurrent(receipt, review))
+          notify({ status: "recoveryReview", review });
+      }, "recovery");
+    },
+    confirmRecovery(accepted: NativeMemoryRecoveryReview) {
+      if (
+        state.status !== "recoveryReview" ||
+        state.review !== accepted ||
+        !selected ||
+        !entry.client.isRecoveryReviewCurrent(selected, accepted)
+      )
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "recoveryRestoring", review: accepted });
+        if (
+          !current() ||
+          !entry.client.isRecoveryReviewCurrent(receipt, accepted)
+        )
+          return;
+        const report = await entry.client.confirmRecovery(receipt, accepted);
+        if (current()) {
+          observation = null;
+          notify({
+            status: "recoveryRestored",
+            root: accepted.snapshot.root,
+            report,
+          });
+        }
+      }, "recovery");
+    },
+    resumeInitialization() {
+      if (state.status !== "recoveryRestored") return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "recoveryLoading" });
+        if (!current()) return;
+        const observed = await entry.client.inspect(receipt);
+        if (!current()) return;
+        observation = observed;
+        recoveringInitialization = true;
+        notify({ status: "configuring", recovering: true });
+      }, "recovery");
+    },
+    backRecovery() {
+      if (
+        pending ||
+        !current() ||
+        !["recoveryReview", "recoveryError"].includes(state.status)
+      )
+        return Promise.resolve();
+      return deploy(async (receipt) => {
+        notify({ status: "recoveryLoading" });
+        if (!current()) return;
+        await entry.client.cancelRecovery(receipt);
+        if (!current()) return;
+        const observed = await entry.client.inspect(receipt);
+        if (current()) {
+          observation = observed;
+          notify({ status: "ready", observation: observed });
+        }
+      }, "recovery");
+    },
     browseDocuments() {
       if (
         !observation ||
@@ -493,7 +611,10 @@ export function createMemoryPanelController(
     back() {
       if (pending || !current() || !observation) return Promise.resolve();
       if (state.status === "deploymentError") {
-        notify({ status: "configuring" });
+        notify({
+          status: "configuring",
+          ...(recoveringInitialization ? { recovering: true } : {}),
+        });
         return Promise.resolve();
       }
       if (
@@ -522,6 +643,26 @@ export function canInitializeMemory(observation: NativeMemoryScope) {
     !observation.root &&
     (observation.scope.state === "absent" ||
       observation.scope.state === "reserved")
+  );
+}
+
+export function supportsMemoryRecovery(target: MemoryPanelTarget) {
+  return (
+    target.environment.kind === "local" &&
+    !target.path.startsWith("remote://") &&
+    supportedMemoryPanelTarget(target)
+  );
+}
+
+export function canReviewMemoryRecovery(
+  target: MemoryPanelTarget,
+  observation: NativeMemoryScope,
+) {
+  return (
+    supportsMemoryRecovery(target) &&
+    (["partial", "invalid", "ambiguous"].includes(observation.scope?.state) ||
+      (observation.scope?.state === "incomplete" &&
+        observation.blockedCount > 0))
   );
 }
 

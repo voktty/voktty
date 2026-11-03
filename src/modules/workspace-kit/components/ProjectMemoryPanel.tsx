@@ -1,22 +1,35 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { useTranslation } from "@/modules/i18n";
-import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
-import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
-import { MemoryPolicy } from "@/modules/workspace-kit/components/MemoryPolicy";
 import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
 import { MemoryDocuments } from "@/modules/workspace-kit/components/MemoryDocuments";
+import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
+import { MemoryPolicy } from "@/modules/workspace-kit/components/MemoryPolicy";
+import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
 import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
-  createMemoryPanelController,
   canInitializeMemory,
-  canReviewMemoryTrust,
   canReviewMemoryPolicy,
-  supportedMemoryPanelTarget,
+  canReviewMemoryRecovery,
+  canReviewMemoryTrust,
+  createMemoryPanelController,
   type MemoryPanelState,
   type MemoryPanelTarget,
+  supportedMemoryPanelTarget,
+  supportsMemoryRecovery,
 } from "@/modules/workspace-kit/lib/memoryPanel";
+import {
+  lazy,
+  Suspense,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+const MemoryRecovery = lazy(
+  () => import("@/modules/workspace-kit/components/MemoryRecovery"),
+);
 
 export default function ProjectMemoryPanel({
   target,
@@ -192,6 +205,32 @@ function MemoryObservation({
     }
   }, [target]);
   if (
+    state.status === "recoveryLoading" ||
+    state.status === "recoveryReview" ||
+    state.status === "recoveryRestoring" ||
+    state.status === "recoveryRestored" ||
+    state.status === "recoveryError"
+  )
+    return (
+      <Suspense fallback={<p role="status">{t("projectMemory.checking")}</p>}>
+        <MemoryRecovery
+          state={state}
+          onConfirm={(review) => {
+            void controller.current?.confirmRecovery(review);
+          }}
+          onBack={() => {
+            void controller.current?.backRecovery();
+          }}
+          onReview={() => {
+            void controller.current?.reviewRecovery();
+          }}
+          onContinue={() => {
+            void controller.current?.resumeInitialization();
+          }}
+        />
+      </Suspense>
+    );
+  if (
     state.status === "documentsLoading" ||
     state.status === "documentsReady" ||
     state.status === "documentsError"
@@ -317,6 +356,24 @@ function MemoryObservation({
           }}
         />
         <DialogFooter>
+          {supportsMemoryRecovery(target) &&
+          ((state.status === "deploymentError" &&
+            ["recoveryRequired", "pendingRecovery"].includes(
+              state.error.code,
+            )) ||
+            (state.status === "review" &&
+              state.review.snapshot.publicationBlocker ===
+                "recoveryRequired")) ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void controller.current?.reviewRecovery();
+              }}
+            >
+              {t("projectMemory.recovery.review")}
+            </Button>
+          ) : null}
           {state.status === "published" ? (
             <Button
               size="sm"
@@ -435,6 +492,29 @@ function MemoryObservation({
           <Button size="sm" onClick={() => controller.current?.configure()}>
             {t("projectMemory.initialize")}
           </Button>
+        ) : null}
+        {state.status === "ready" &&
+        canReviewMemoryRecovery(target, state.observation) ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void controller.current?.reviewRecovery();
+              }}
+            >
+              {t("projectMemory.recovery.review")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                controller.current?.configureInterruptedInitialization();
+              }}
+            >
+              {t("projectMemory.recovery.reviewInitialization")}
+            </Button>
+          </>
         ) : null}
         {state.status === "ready" && canReviewMemoryTrust(state.observation) ? (
           <Button

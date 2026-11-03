@@ -1,15 +1,16 @@
-import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/modules/i18n";
 import type {
-  MemoryPanelState,
-  MemoryTrustState,
-  MemoryPolicyState,
   MemoryDocumentsState,
+  MemoryPanelState,
+  MemoryPolicyState,
+  MemoryRecoveryState,
+  MemoryTrustState,
 } from "@/modules/workspace-kit/lib/memoryPanel";
 import type { NativeMemoryReview } from "@/modules/workspace-kit/lib/nativeMemory";
+import { useId, useState } from "react";
 
 type InitializationState = Exclude<
   MemoryPanelState,
@@ -17,6 +18,7 @@ type InitializationState = Exclude<
   | MemoryTrustState
   | MemoryPolicyState
   | MemoryDocumentsState
+  | MemoryRecoveryState
 >;
 export function MemoryInitialization({
   state,
@@ -131,6 +133,28 @@ export function MemoryInitialization({
         </h3>
         {step === "values" ? (
           <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
+            {state.recovering ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {t("projectMemory.recovery.matchInitialization")}
+                </p>
+                <label
+                  className="block space-y-1 text-xs"
+                  htmlFor={`${id}-created-at`}
+                >
+                  <span>{t("projectMemory.recovery.createdAt")}</span>
+                  <Input
+                    id={`${id}-created-at`}
+                    type="date"
+                    required
+                    value={values.created_at}
+                    onChange={(event) =>
+                      setValues({ ...values, created_at: event.target.value })
+                    }
+                  />
+                </label>
+              </>
+            ) : null}
             {(
               [
                 "project_name",

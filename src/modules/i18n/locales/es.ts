@@ -2,6 +2,22 @@ import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   projectMemory: {
+    recovery: {
+      title: "Restaurar originales guardados",
+      review: "Revisar originales recuperables",
+      effects: "Revisa los originales guardados antes de moverlos a sus rutas ausentes. Los archivos existentes se conservan. Esto no termina la inicialización ni cambia la confianza o la política de uso. Cerrar durante la restauración puede dejar movimientos completados.",
+      target: "Restaurar en",
+      backup: "Original guardado",
+      accept: "He revisado estos originales y quiero moverlos a las rutas indicadas.",
+      confirm: "Restaurar originales",
+      restoring: "Restaurando originales...",
+      restored: "Originales restaurados. Revisa de nuevo la inicialización antes de publicar la memoria del proyecto.",
+      failed: "No se pudo completar la recuperación. Revisa de nuevo antes de reintentar.",
+      continue: "Revisar de nuevo la inicialización",
+      reviewInitialization: "Revisar inicialización pendiente",
+      matchInitialization: "Usa los mismos datos del proyecto, fecha de creación y enlaces persistentes que en la inicialización interrumpida. Una nueva revisión nativa debe coincidir con los archivos registrados antes de escribir.",
+      createdAt: "Fecha de creación original",
+    },
     sshSettings: {
       prepare: "Preparar ajustes en el host SSH",
       prepareDescription: "Crea ajustes privados de memoria del proyecto en el host SSH de este directorio. Los archivos del proyecto y los permisos de los agentes se conservan.",
