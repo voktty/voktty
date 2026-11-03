@@ -141,6 +141,7 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
             vec!["init", "--preview", "--project", ".", "--json"],
             vec!["use", "--always", "--json"],
             vec!["trust", "--preview", "--json"],
+            vec!["recover", "--preview", "--json"],
             vec!["run", "--session", "codex"],
             vec!["run", "codex"],
         ] {

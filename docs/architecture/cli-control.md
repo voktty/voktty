@@ -21,6 +21,8 @@ voktty memory status [--project <directory>] [--json]
 voktty memory init [--project <directory>] [--set <name=value>]...
                    [--link-agents] [--link-claude]
                    [--preview | --yes [--accept-plan <sha256>]] [--json]
+voktty memory recover [--project <directory>]
+                      --preview | --accept-review <sha256> [--json]
 voktty memory use --always|--never|--manual [--project <directory>]
                   [--preview] [--json]
 voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]
@@ -70,6 +72,65 @@ The digest covers the native origin and destination identities, installation-bou
 Publication retains the existing installation-wide deployment lock, descendant-scope checks, no-replace creation, platform-specific migrations, marker-last ordering and partial recovery contract. Linked, unverified, overlapping or incomplete scopes cannot be forced. Windows and other non-Linux/Android targets retain their existing explicit migration blocker. Local Linux process tests cover the implemented flow; other native platform runtime qualification remains outstanding.
 
 Successful `--json` output uses the normal `ok/result` envelope with schema 1, root, plan digest and acknowledged `created`, `skipped`, `migrated` and `cleaned` paths. `contextActivated`, `capturesActivated` and `policyChanged` are false: initialization preserves existing policy and trust and starts no model. A publication failure exits 5 and writes one `ok: false` stderr envelope with its redacted error and acknowledged changes plus possible recovery paths. It preserves partial files and private recovery state; a failure is not proof that no write occurred. Preparation, scope, stale-review, unsupported migration and consent errors also fail explicitly. Reload and obtain a new concrete review before retrying.
+
+## Standalone restoration of saved originals
+
+`memory recover` requires exactly one explicit `--preview` or
+`--accept-review <sha256>` choice, on both interactive and noninteractive
+terminals. There is no force, blind `--yes` or automatic acceptance. The command
+uses its process directory or `--project` as the exact native execution and
+restoration root; it cannot select a different journal destination or translate
+a remote namespace into local IO. It opens only existing private state in the
+Desktop storage origin. Missing state never creates directories, an installation
+identity or a journal. Existing cooperating locks may be acquired. The legacy
+origin guard applies to recovery as it does to initialization and trust.
+
+The shared `OwnedRecoveryReview` reads the installation-bound journal and reviews
+one to three saved originals whose targets are missing. The JSON preview contains
+schema 1, canonical `root`, a native `reviewDigest`, complete literal `entries`
+with relative `target`, `backup` and original `text`, and false
+`originalsRestored`, `initializationCompleted`, `policyChanged`, `trustChanged`,
+`contextActivated` and `capturesActivated`. Human output escapes terminal controls
+and bidi overrides without truncating the bounded original text. Preview changes
+no project files, policy or trust and exposes no private storage path or
+installation identity.
+
+Acceptance constructs a fresh native review for the same root and compares its
+digest before restoration. The digest binds the complete intent, root instances,
+installation, preference revision and exact restoration entries. It is an
+acceptance check, not a durable write capability or a remembered session grant.
+Changes to root instances, reviewed bytes, target presence, preference revision
+or journal facts require another review. The native object retains its
+120-second lifetime and revalidates under
+the existing deployment lock before and between moves. CLI write authority
+permits only the reviewed missing targets and exact original backups; it grants
+no replacements, directory creation, arbitrary staging or secret-file access.
+
+Success reports schema 1, `root`, `reviewDigest`, `created`, `cleaned`, empty
+`skipped` and `migrated`, and `originalsRestored: true`. Other effect flags remain
+false and describe this operation. Original objects are moved back, preserving
+their native metadata under the qualified filesystem contract. Existing targets
+are preserved. Private preferences and the interrupted journal remain unchanged;
+the command never finishes initialization or starts an agent. Resuming requires
+editable matching inputs, a fresh `memory init --preview` and separate publication
+acceptance. Restored, now-present targets are no longer recovery candidates.
+
+Usage errors exit 2 before IO. Unavailable or refused native/state reads use the
+existing redacted errors and exit 3. Missing matching recovery, stale acceptance,
+conflicts and restoration failures exit 5. An admitted restoration failure uses
+one `ok: false` stderr envelope with `error` and top-level acknowledged `changes`
+(`created`, `migrated`, `cleaned`, `possibleRecoveryFiles`); stdout remains empty.
+Some moves may already have completed. Reload and review again; no automatic
+rollback or repair occurs. Corrupt state and foreign or linked artifacts are
+preserved without exposing their bodies in errors.
+
+Status capabilities include `recovery: { preview, restoreOriginals }`. The latter
+reflects compiled native restoration support on Linux, Android and Windows, not
+runtime qualification. Linux process tests cover preview, exact acceptance,
+metadata, unchanged private state, changed facts, malformed input, terminal
+escaping and separately reviewed resumption. Other platform and filesystem
+runtime qualification remains outstanding. The SSH helper retains its own host
+storage contract; this local command does not migrate or combine host settings.
 
 ## Persistent memory policy
 
@@ -180,6 +241,11 @@ Launcher directories for exited processes are removed at the next control-server
 `tauri.conf.json` declares `binaries/voktty-cli` as an external binary. Tauri selects the file with the current target-triple suffix and signs or packages it with the app. The release workflow passes its explicit Rust target to `scripts/build-cli.mjs`, which prevents an x86_64 macOS release from accidentally bundling an arm64 helper from the host.
 
 The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust measured 9,289,008 bytes and Unix agent launch measured 9,299,784 bytes and the qualified Codex initial-prompt channel measured 9,386,032 bytes. The shared Codex/Claude initial-prompt build measured 9,388,760 bytes; standalone memory measurement brings the measured Linux x86_64 build to 9,453,896 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
+
+Reviewed restoration measures 9,519,920 bytes in the Linux x86_64 GNU release
+sidecar built by `build-cli.mjs`. It reuses the existing native recovery core
+without adding a dependency. Other targets require their own builds and runtime
+qualification.
 
 ## Current limits
 

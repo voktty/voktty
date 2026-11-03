@@ -117,8 +117,8 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
     Ok(MemoryCommand::Init(options))
 }
 
-struct InitReadAccess {
-    marker: MarkerAccess,
+pub(super) struct InitReadAccess {
+    pub(super) marker: MarkerAccess,
 }
 impl MemoryReadAccess for InitReadAccess {
     fn allows_metadata(&self, path: &Path) -> bool {
