@@ -132,7 +132,7 @@ ironrdp-session = "0.8"
 ironrdp-graphics = "0.8"
 ironrdp-cliprdr = "0.7"
 ironrdp-tls = { version = "0.2", features = ["rustls"] }
-rusqlite = { version = "0.33", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 regex = "1"
 chrono = "0.4"
 # Native SSH transport for SFTP, port forwarding, metrics and remote processes.
