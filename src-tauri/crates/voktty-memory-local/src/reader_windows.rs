@@ -292,33 +292,59 @@ fn open(parent: Option<&File>, name: &OsStr, directory: bool) -> io::Result<(Fil
     )
 }
 
-fn reopen_directory(file: &File, kind: OpenKind) -> io::Result<(File, FileState)> {
-    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
-    use windows_sys::Win32::Storage::FileSystem::{
-        ReOpenFile, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, READ_CONTROL,
-    };
-
+fn reopen_directory_handle(file: &File, kind: OpenKind) -> io::Result<File> {
+    use windows_sys::Win32::Storage::FileSystem::READ_CONTROL;
     let access = FILE_READ_ATTRIBUTES
         | FILE_TRAVERSE
+        | SYNCHRONIZE
         | match kind {
             OpenKind::PrivateDirectory => READ_CONTROL,
             OpenKind::Enumerate => FILE_LIST_DIRECTORY,
             _ => return Err(io::ErrorKind::InvalidInput.into()),
         };
-    // NT relative lookup does not normalize ".". Reopen the captured object
-    // itself, without resolving its path again or allowing write/delete sharing.
-    let handle = unsafe {
-        ReOpenFile(
-            file.as_raw_handle(),
+    // An empty native name reopens the pinned object itself. ReOpenFile can
+    // reject directory handles, and "." is not normalized by NT lookup.
+    let empty = UNICODE_STRING::default();
+    let attributes = OBJECT_ATTRIBUTES {
+        Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
+        RootDirectory: file.as_raw_handle(),
+        ObjectName: &empty,
+        ..Default::default()
+    };
+    let mut status = IO_STATUS_BLOCK::default();
+    let mut handle = std::ptr::null_mut();
+    let result = unsafe {
+        NtCreateFile(
+            &mut handle,
             access,
+            &attributes,
+            &mut status,
+            std::ptr::null(),
+            0,
             FILE_SHARE_READ,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            FILE_OPEN,
+            FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+            std::ptr::null(),
+            0,
         )
     };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
+    if result < 0 {
+        return Err(io::Error::from_raw_os_error(
+            unsafe { RtlNtStatusToDosError(result) } as i32,
+        ));
+    }
+    if handle.is_null() {
+        return Err(io::ErrorKind::Other.into());
     }
     let reopened = unsafe { File::from_raw_handle(handle) };
+    if result != 0 {
+        return Err(io::ErrorKind::Other.into());
+    }
+    Ok(reopened)
+}
+
+fn reopen_directory(file: &File, kind: OpenKind) -> io::Result<(File, FileState)> {
+    let reopened = reopen_directory_handle(file, kind)?;
     let observed = state(&reopened)?;
     if !observed.directory
         || observed.delete_pending
@@ -675,5 +701,49 @@ impl Directory {
             });
         }
         Err(ReadError::InvalidInput)
+    }
+}
+
+#[cfg(test)]
+mod reopen_tests {
+    use super::*;
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    };
+
+    #[test]
+    fn directory_objects_reopen_for_security_and_listing_without_a_path_lookup() {
+        let directory = tempfile::tempdir().unwrap();
+        let original = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(directory.path())
+            .unwrap();
+        for kind in [OpenKind::PrivateDirectory, OpenKind::Enumerate] {
+            let reopened = reopen_directory_handle(&original, kind).unwrap();
+            assert_eq!(
+                unsafe { GetFileType(reopened.as_raw_handle()) },
+                FILE_TYPE_DISK
+            );
+            let basic: FILE_BASIC_INFO = information(&reopened, FileBasicInfo).unwrap();
+            assert_ne!(basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY, 0);
+            assert!(
+                std::fs::rename(directory.path(), directory.path().with_extension("moved"))
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn directory_handle_reopen_never_accepts_a_file_or_create_mode() {
+        let file = tempfile::tempfile().unwrap();
+        for kind in [
+            OpenKind::PrivateDirectory,
+            OpenKind::Enumerate,
+            OpenKind::CreateDirectory,
+        ] {
+            assert!(reopen_directory_handle(&file, kind).is_err());
+        }
     }
 }

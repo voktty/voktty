@@ -426,6 +426,11 @@ owned until the batch ends. Sharing flags alone are not a no-reparse guarantee:
 attribute-only operations may bypass write sharing, so child lookup must remain
 relative to handles rather than reconstructing an absolute path.
 
+Security inspection and enumeration reopen the pinned directory with an empty
+native name relative to its handle. This avoids `ReOpenFile` directory rejection
+and NT lookup of a literal dot. Reopened handles still refuse write/delete
+sharing and must match the original volume, full file ID and directory state.
+
 `FileCaseSensitiveInfo` selects native name-lookup case behavior per directory;
 unknown flags or unavailable queries fail, without guessing a case policy.
 [`FILE_ID_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)

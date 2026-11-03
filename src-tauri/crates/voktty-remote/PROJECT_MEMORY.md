@@ -119,14 +119,17 @@ private directories. Those tests are not a real SSH or Desktop UI smoke test.
 The shared memory manager and indicator route explicit SSH workspaces and saved
 SSH project namespaces through this service. Namespace resolution captures its
 saved project and profile before asynchronous work; an attached SSH descriptor
-must agree with that profile and contain the project root. Neither ambient
+must agree with that profile and contain the project root, using the owned
+helper's canonical root when the saved path is an alias. Neither ambient
 workspace selection nor a borrowed numeric session ID chooses the host. POSIX
 host directories stay inside the captured root; this client does not support
 WSL, Docker, serial or Windows SSH host paths. Local Desktop paths retain their
 native commands. Unknown namespaces and older helpers fail without local IO.
 
 Each client family owns a pooled helper lease and checks its capability and exact
-session membership. Requests explicitly map the shared command DTOs into this
+session membership. The lease's authenticated canonical root maps saved path
+aliases into bounded host paths; a changed root permanently retires the source.
+Requests explicitly map the shared command DTOs into this
 protocol and validate response correlation, envelopes and size limits. Display
 roots retain their original namespace; instruction bytes and digests are not
 rewritten. Saved profile/project changes permanently retire namespace receipts,

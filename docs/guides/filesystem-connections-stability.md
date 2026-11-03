@@ -18,6 +18,12 @@ Asynchronous resources use the same visible lifecycle: `connecting`, `ready`, `e
 
 MCP and collaboration use the same lifecycle vocabulary at their own server/session boundary; they do not masquerade as terminal workspaces.
 
+Saved SSH project aliases retain their visible namespace when the project's own
+helper opens a canonical directory. Directory listing, text reads/writes, metadata
+and creation use paths relative to that helper, including Harness session storage.
+Returned paths must stay inside its canonical root and are mapped back to the saved
+alias. Other Git operations still require an exact saved-root match.
+
 ## Long AI conversations
 
 Long histories preserve the complete canonical conversation while rendering only messages near the viewport. Scroll and bottom-lock are restored per session, historical messages do not replay entrance animations, finalized code highlighting is cached within a fixed budget, and token estimates update only the trailing streamed message when possible.

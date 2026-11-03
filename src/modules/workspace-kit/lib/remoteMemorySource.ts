@@ -65,7 +65,6 @@ function resolve(target: MemoryPanelTarget) {
       env.kind === "ssh" &&
       (env.connection.id !== profile.id ||
         !directory(env.root) ||
-        !within(env.root.replace(/\/+$/, "") || "/", root) ||
         JSON.stringify(normalizedRemoteSessionConnection(env.connection)) !==
           JSON.stringify(connection))
     )
@@ -76,6 +75,10 @@ function resolve(target: MemoryPanelTarget) {
       root,
       path: parsed.hostPath,
       environmentId: parsed.environmentId,
+      attachedRoot:
+        env.kind === "ssh" && !within(env.root.replace(/\/+$/, "") || "/", root)
+          ? env.root.replace(/\/+$/, "") || "/"
+          : null,
       identity: JSON.stringify([project, profile.id, connection]),
     };
   }
@@ -92,6 +95,7 @@ function resolve(target: MemoryPanelTarget) {
     root,
     path: target.path,
     environmentId: null,
+    attachedRoot: null,
     identity: JSON.stringify([env.connection.id, root, connection]),
   };
 }
@@ -103,6 +107,15 @@ export function captureRemoteMemorySource(
   const captured = structuredClone(target);
   const source = resolve(captured);
   let retired = false;
+  let canonicalRoot: string | null = null;
+  const remap = (path: string, from: string, to: string) => {
+    if (!within(from, path)) memoryFailure("denied");
+    const suffix =
+      path === from ? "" : path.slice(from === "/" ? 1 : from.length + 1);
+    const result = suffix ? `${to === "/" ? "" : to}/${suffix}` : to;
+    if (!directory(result)) memoryFailure("unavailable");
+    return result;
+  };
   function retire() {
     if (retired) return;
     retired = true;
@@ -126,6 +139,23 @@ export function captureRemoteMemorySource(
     selectionKey: JSON.stringify([captured.path, source.identity]),
     key: Object.freeze({ profileId: source.profileId, root: source.root }),
     connection: source.connection,
+    bindRoot(root: string) {
+      if (retired) memoryFailure("cancelled");
+      if (!directory(root)) memoryFailure("unavailable");
+      const normalized = root.replace(/\/+$/, "") || "/";
+      if (canonicalRoot !== null && canonicalRoot !== normalized) {
+        retire();
+        memoryFailure("cancelled");
+      }
+      if (
+        source.attachedRoot !== null &&
+        !within(source.attachedRoot, normalized)
+      ) {
+        canonicalRoot = normalized;
+        memoryFailure("denied");
+      }
+      canonicalRoot = normalized;
+    },
     check() {
       observe();
       if (retired) memoryFailure("cancelled");
@@ -164,7 +194,7 @@ export function captureRemoteMemorySource(
           JSON.stringify(source.connection)
       )
         memoryFailure("denied");
-      return source.path;
+      return remap(source.path, source.root, canonicalRoot ?? source.root);
     },
     hostRoot(root: unknown) {
       if (typeof root !== "string") memoryFailure("unavailable");
@@ -178,19 +208,20 @@ export function captureRemoteMemorySource(
           parseRemotePath(root)?.environmentId !== source.environmentId)
       )
         memoryFailure("denied");
-      return host;
+      return remap(host, source.root, canonicalRoot ?? source.root);
     },
     displayRoot(root: unknown) {
       if (
         typeof root !== "string" ||
         !directory(root) ||
-        !within(source.root, root)
+        !within(canonicalRoot ?? source.root, root)
       )
         memoryFailure("denied");
+      const display = remap(root, canonicalRoot ?? source.root, source.root);
       const path =
         source.environmentId === null
-          ? root
-          : remotePath(source.environmentId, root);
+          ? display
+          : remotePath(source.environmentId, display);
       if (path.length > 4096) memoryFailure("limit");
       return path;
     },

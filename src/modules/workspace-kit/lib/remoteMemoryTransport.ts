@@ -110,12 +110,19 @@ export function createRemoteMemoryTransport(
           if (!cleanup) check();
           if (!captured.info.capabilities.includes("memory.manage"))
             memoryFailure("unsupported");
+          if (!cleanup) source.bindRoot(captured.info.workspace_root);
+          const mapped = remoteMemoryRequest(source, command, args);
+          if (
+            new TextEncoder().encode(JSON.stringify(mapped)).length >
+            512 * 1024
+          )
+            memoryFailure("limit");
           const id = nextRemoteRequestId();
           const response = await requestRemote(captured.info.session_id, {
             protocol: REMOTE_PROTOCOL_VERSION,
             id,
             method: "memory.manage",
-            params,
+            params: mapped,
           });
           if (
             response?.protocol !== REMOTE_PROTOCOL_VERSION ||

@@ -114,6 +114,15 @@ const PATH_RESULTS = new Set([
 /** Commands whose result entries carry a `path`. */
 const ENTRY_RESULTS = new Set(["list_dir", "list_project_files", "stat_files"]);
 
+// These requests stay relative to the saved project's independently acquired helper.
+const PROFILE_ALIAS_FS_COMMANDS = new Set([
+  "list_dir",
+  "read_text_file",
+  "write_text_file",
+  "stat_files",
+  "create_path",
+]);
+
 const PROFILE_HELPER_COMMANDS = new Set([
   "list_dir",
   "list_project_files",
@@ -2574,10 +2583,15 @@ async function runProfileFileCommand(
   supportsUntrackedLineCounts: boolean,
   supportsFilePreview: boolean,
   relativePath: (value: unknown) => string,
+  displayRoot: string,
 ): Promise<unknown> {
   if (!PROFILE_HELPER_COMMANDS.has(command))
     throw new Error(PROFILE_UNAVAILABLE);
-  const remoteResultPath = (value: string) => remotePath(environmentId, value);
+  const remoteResultPath = (value: string) =>
+    remotePath(
+      environmentId,
+      joinRemotePath(displayRoot, relativeToRemoteRoot(root, value)),
+    );
   if (command === "git_history") {
     return nativeProfileGitHistory(
       sessionId,
@@ -3286,7 +3300,10 @@ async function runNativeProfileCommand(
     remoteSshConnectionForProfile(profile),
     async (session) => {
       const sessionRoot = normalizeRemoteAbsolute(session.workspace_root);
-      if (sessionRoot !== normalizedProjectRoot) {
+      if (
+        sessionRoot !== normalizedProjectRoot &&
+        !PROFILE_ALIAS_FS_COMMANDS.has(command)
+      ) {
         throw new Error(
           "The native SSH helper did not open the saved project root.",
         );
@@ -3317,8 +3334,9 @@ async function runNativeProfileCommand(
               "Files can only be accessed within one remote project.",
             );
           }
-          return relativeToRemoteRoot(sessionRoot, parsed.hostPath);
+          return relativeToRemoteRoot(normalizedProjectRoot, parsed.hostPath);
         },
+        normalizedProjectRoot,
       );
     },
   );
