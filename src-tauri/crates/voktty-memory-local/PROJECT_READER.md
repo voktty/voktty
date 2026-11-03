@@ -69,5 +69,46 @@ operation. Private legacy journals are not read or declared recovered by this
 API. Publication and migration journal handling remain separate integration work.
 
 Neither preparation nor revalidation creates directories, kit files, preferences,
-installation identity, trust or session consent. This review is not yet connected
-to Desktop, CLI or the SSH protocol and has no publication method.
+installation identity, trust or session consent. Desktop, CLI and SSH wiring is
+separate from these native APIs.
+
+## Publication
+
+`publish` consumes the original review with its matching digest and an independent
+native `MemoryWriteAccess`. `write_requirements` describes the exact project
+creates, the three supported rule/ignore migrations and recoverable artifacts;
+the display data itself cannot grant access. Creation, replacement and cleanup
+permissions are checked separately before the first write and again by the native
+writers. An identical kit needs no write permissions and creates no record.
+
+A mutating publication creates `.voktty/.initialization.json` exclusively before
+changing kit files. This bounded operation record contains the transaction UUID,
+review digest, hashed native root bindings, relative paths and expected/proposed
+content hashes. It contains no absolute paths, original document text, private
+preferences, instruction trust or installation identity. Another record cannot
+be overwritten or borrowed. Its presence makes an unfinished root visible to
+scope discovery; ancestor and descendant transactions are rechecked before the
+final kit marker and after publication.
+
+Cooperating publishers and original-restoration operations share a nonblocking
+process-wide exclusion guard through physical settlement. Project records also
+prevent independent processes using this publisher from starting on the same
+root. The existing persistent publisher retains its private journal and OS lock;
+the process guard is shared with it and does not acknowledge or recover a legacy
+private transaction.
+
+The publisher reuses the existing native exclusive creator and original-preserving
+migration backends. It verifies expected bytes before mutation, publishes
+`kit.json` last, verifies the complete kit and only then removes known originals
+and its exact operation record through separately authorized cleanup. Failures
+report acknowledged creates/migrations/cleanup and possible recovery paths.
+They can leave files, preserved originals or a record in place; cancellation
+does not promise rollback. A retained record requires explicit recovery even
+when the final marker already exists. Reading that record never grants trust.
+
+Mutating publication currently uses Linux/Android and Windows native migration
+and cleanup primitives. Other platforms report unavailable before writes; the
+existing persistent publication route is unchanged. Windows sources are checked
+by cross-compilation, which does not qualify native NTFS runtime behavior.
+`MemoryWorkers::publish_project` uses the same four-slot worker lifetime and
+original cancellation deadline as preparation.

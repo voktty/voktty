@@ -2,6 +2,11 @@ use super::*;
 use crate::reader::OwnedProjectMemoryWorkspace;
 use crate::ProjectMemoryWorkspace;
 
+#[path = "project_publication.rs"]
+mod publication;
+
+pub const PROJECT_INITIALIZATION_RECORD: &str = ".voktty/.initialization.json";
+
 /// Native-owned roots and read authorities. No private preference store or
 /// renderer-supplied observation can stand in for the captured project IO.
 pub struct ProjectInitializationRequest {
@@ -13,8 +18,8 @@ pub struct ProjectInitializationRequest {
     pub links: RootLinks,
 }
 
-/// A read-only native review. This type neither writes a kit nor grants write
-/// authority, persistent instruction trust or session consent.
+/// Native-owned initialization review. Preparation grants no write authority,
+/// persistent instruction trust or session consent. Publication consumes it.
 pub struct OwnedProjectInitializationPreview {
     origin: OwnedProjectMemoryWorkspace,
     destination: OwnedProjectMemoryWorkspace,
@@ -22,6 +27,7 @@ pub struct OwnedProjectInitializationPreview {
     links: RootLinks,
     observation_identity: String,
     created_at: Instant,
+    transaction: String,
 }
 
 impl OwnedProjectInitializationPreview {
@@ -71,6 +77,7 @@ impl OwnedProjectInitializationPreview {
             links: request.links,
             observation_identity: uuid::Uuid::new_v4().to_string(),
             created_at: Instant::now(),
+            transaction: uuid::Uuid::new_v4().to_string(),
         };
         preview.revalidate(control)?;
         Ok(preview)
@@ -96,6 +103,16 @@ impl OwnedProjectInitializationPreview {
     }
 
     pub fn publication_blocker(&self) -> Option<PublicationError> {
+        if self
+            .prepared
+            .plan
+            .entries
+            .iter()
+            .any(|entry| entry.action != DeploymentAction::Skip)
+            && !cfg!(any(target_os = "linux", target_os = "android", windows))
+        {
+            return Some(PublicationError::Unsupported);
+        }
         publication_blocker(&self.prepared)
     }
 

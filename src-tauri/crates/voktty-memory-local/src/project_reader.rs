@@ -185,6 +185,7 @@ impl<'a> ProjectMemoryWorkspace<'a> {
                 let comparable = name.to_ascii_lowercase();
                 if comparable.starts_with(".voktty-migration-")
                     || comparable.starts_with(".voktty-stage-")
+                    || (prefix == ".voktty/" && comparable == ".initialization.json")
                 {
                     if found.len() == 128 {
                         return Err(ReadError::Limit);
@@ -216,7 +217,27 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         Ok(found)
     }
 
-    fn checked_root(&self, control: &ReadControl) -> Result<platform::Directory, ReadError> {
+    pub(crate) fn access(&self) -> &dyn MemoryReadAccess {
+        self.access
+    }
+
+    pub(crate) fn read_artifact(
+        &self,
+        path: &str,
+        control: &ReadControl,
+    ) -> Result<PathFact, ReadError> {
+        let _permit = ReadPermit::acquire(control)?;
+        let directory = self.checked_root(control)?;
+        let fact = directory.read_text(&self.root, path, self.access, control)?;
+        self.checked_root(control)?;
+        control.check()?;
+        Ok(fact)
+    }
+
+    pub(crate) fn checked_root(
+        &self,
+        control: &ReadControl,
+    ) -> Result<platform::Directory, ReadError> {
         checked_project_root(
             &self.root,
             self.root_id,

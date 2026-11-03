@@ -197,6 +197,7 @@ impl OwnedRecoveryReview {
             if digest != self.acceptance_digest() {
                 return Err(PublicationError::StalePreview);
             }
+            let _publication = publication_guard()?;
             let origin = self.origin.borrow();
             let destination = self.destination.borrow();
             let store = destination.store();

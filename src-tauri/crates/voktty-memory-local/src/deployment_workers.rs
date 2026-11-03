@@ -66,6 +66,24 @@ impl<T> MemoryDeploymentJob<T> {
 }
 
 impl MemoryWorkers {
+    pub fn publish_project(
+        &self,
+        preview: OwnedProjectInitializationPreview,
+        digest: String,
+        access: Arc<dyn MemoryWriteAccess>,
+        control: DiscoveryControl,
+    ) -> Result<MemoryDeploymentJob<PublicationReport>, MemoryDeploymentWorkError> {
+        if !crate::digest(&digest) {
+            return Err(ReadError::InvalidInput.into());
+        }
+        let job = self.submit(Control::Scope(control.clone()), move || {
+            preview
+                .publish(&digest, access.as_ref(), &control)
+                .map_err(MemoryDeploymentWorkError::Publication)
+        })?;
+        Ok(MemoryDeploymentJob { job })
+    }
+
     pub fn preview_project(
         &self,
         request: ProjectInitializationRequest,

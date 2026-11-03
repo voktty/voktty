@@ -30,7 +30,17 @@ pub use recovery::{OwnedRecoveryReview, RecoveryRestore};
 
 #[path = "project_initialization.rs"]
 mod project_initialization;
+pub use project_initialization::PROJECT_INITIALIZATION_RECORD;
 pub use project_initialization::{OwnedProjectInitializationPreview, ProjectInitializationRequest};
+
+static PUBLICATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn publication_guard() -> Result<std::sync::MutexGuard<'static, ()>, PublicationError> {
+    PUBLICATION.try_lock().map_err(|error| match error {
+        std::sync::TryLockError::WouldBlock => ReadError::Busy.into(),
+        std::sync::TryLockError::Poisoned(_) => ReadError::Unavailable.into(),
+    })
+}
 
 /// Native workspace authorization, including secret-path protections. Read and
 /// metadata authorization never imply permission to create files/directories.
@@ -715,6 +725,7 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
         report: &mut PublicationReport,
     ) -> Result<(), PublicationError> {
         supported()?;
+        let _publication = publication_guard()?;
         self.revalidate(control)?;
         let store = self.destination.store();
         let _lock = store.try_lock_deployment()?;
