@@ -151,6 +151,8 @@ enum OpenKind {
     CreateDirectory,
     CreatePrivateDirectory,
     CreateFile,
+    MigrationFile,
+    CreateMigrationFile,
 }
 
 impl OpenKind {
@@ -168,7 +170,10 @@ impl OpenKind {
     fn create(self) -> bool {
         matches!(
             self,
-            Self::CreateDirectory | Self::CreatePrivateDirectory | Self::CreateFile
+            Self::CreateDirectory
+                | Self::CreatePrivateDirectory
+                | Self::CreateFile
+                | Self::CreateMigrationFile
         )
     }
 }
@@ -225,6 +230,20 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
             OpenKind::File => FILE_READ_DATA,
             OpenKind::Metadata => 0,
             OpenKind::CreateFile => FILE_READ_DATA | FILE_WRITE_DATA | DELETE,
+            OpenKind::MigrationFile => {
+                FILE_READ_DATA
+                    | DELETE
+                    | windows_sys::Win32::Storage::FileSystem::FILE_READ_EA
+                    | windows_sys::Win32::Storage::FileSystem::READ_CONTROL
+            }
+            OpenKind::CreateMigrationFile => {
+                FILE_READ_DATA
+                    | FILE_WRITE_DATA
+                    | DELETE
+                    | windows_sys::Win32::Storage::FileSystem::FILE_READ_EA
+                    | windows_sys::Win32::Storage::FileSystem::READ_CONTROL
+                    | windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES
+            }
         };
     let options = FILE_OPEN_REPARSE_POINT
         | FILE_SYNCHRONOUS_IO_NONALERT
@@ -234,7 +253,10 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
             | OpenKind::Enumerate
             | OpenKind::CreatePrivateDirectory
             | OpenKind::CreateDirectory => FILE_DIRECTORY_FILE,
-            OpenKind::File | OpenKind::CreateFile => FILE_NON_DIRECTORY_FILE,
+            OpenKind::File
+            | OpenKind::CreateFile
+            | OpenKind::MigrationFile
+            | OpenKind::CreateMigrationFile => FILE_NON_DIRECTORY_FILE,
             OpenKind::Metadata => 0,
         };
     // Relative calls carry exactly one component. FILE_OPEN_REPARSE_POINT opens

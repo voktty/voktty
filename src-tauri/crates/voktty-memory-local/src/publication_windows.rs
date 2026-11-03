@@ -6,6 +6,9 @@ use windows_sys::Wdk::Storage::FileSystem::{
     FILE_DISPOSITION_INFORMATION, FILE_RENAME_INFORMATION,
 };
 
+#[path = "migration_windows.rs"]
+mod migration;
+
 fn nt_result(status: i32) -> io::Result<()> {
     if status == 0 {
         Ok(())

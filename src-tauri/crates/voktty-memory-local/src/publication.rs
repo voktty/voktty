@@ -119,7 +119,7 @@ pub struct PublicationWriteRequirements {
     pub recovery: Vec<String>,
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "android", windows))]
 pub(crate) struct Migration<'a> {
     pub path: &'a str,
     pub expected: &'a str,
@@ -295,7 +295,7 @@ fn publication_blocker(prepared: &PreparedDeployment) -> Option<PublicationError
         .iter()
         .any(|entry| {
             entry.action == DeploymentAction::Migrate
-                && !cfg!(any(target_os = "linux", target_os = "android"))
+                && !cfg!(any(target_os = "linux", target_os = "android", windows))
         })
         .then_some(PublicationError::MigrationUnsupported)
 }
@@ -824,7 +824,7 @@ fn cleanup(
     access: &dyn MemoryWriteAccess,
     control: &DiscoveryControl,
 ) -> Result<(), PublicationError> {
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(any(target_os = "linux", target_os = "android", windows))]
     {
         workspace.checked_root(&phase(control))?.cleanup_migration(
             workspace.root(),
@@ -834,7 +834,7 @@ fn cleanup(
             &phase(control),
         )
     }
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    #[cfg(not(any(target_os = "linux", target_os = "android", windows)))]
     {
         let _ = (workspace, file, access, control);
         Err(PublicationError::MigrationUnsupported)
@@ -848,7 +848,7 @@ fn migrate(
     access: &dyn MemoryWriteAccess,
     control: &DiscoveryControl,
 ) -> Result<(), PublicationError> {
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(any(target_os = "linux", target_os = "android", windows))]
     {
         workspace.checked_root(&phase(control))?.replace_text(
             workspace.root(),
@@ -866,7 +866,7 @@ fn migrate(
             &phase(control),
         )
     }
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    #[cfg(not(any(target_os = "linux", target_os = "android", windows)))]
     {
         let _ = (workspace, entry, backup, access, control);
         Err(PublicationError::MigrationUnsupported)

@@ -125,6 +125,10 @@ impl WriteScope {
                 return Err(ReadError::Denied);
             }
             let path = relative_path(&scope.root, &relative)?;
+            budget.insert(
+                &mut scope.stage_parents,
+                path.parent().ok_or(ReadError::InvalidInput)?.to_owned(),
+            )?;
             budget.insert(&mut scope.replace, path)?;
         }
         for relative in requirements.create {

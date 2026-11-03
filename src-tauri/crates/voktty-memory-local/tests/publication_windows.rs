@@ -288,32 +288,186 @@ fn parent_handles_refuse_rename_and_late_denial_only_deletes_own_stage() {
 }
 
 #[test]
-fn unsupported_migration_is_visible_and_refused_before_any_project_write() {
+fn legacy_ignore_and_selected_rules_migrate_without_changing_sessions_or_preferences() {
     let f = fixture();
+    fs::create_dir_all(f.access.root.join(".voktty/sessions")).unwrap();
+    fs::write(
+        f.access.root.join(".voktty/sessions/kept.json"),
+        b"session\0\xff",
+    )
+    .unwrap();
+    fs::write(f.access.root.join(".voktty/.gitignore"), "*\r\n").unwrap();
     fs::write(f.access.root.join("AGENTS.md"), "User rules\r\n").unwrap();
+    fs::write(f.access.root.join("CLAUDE.md"), "User Claude rules\r\n").unwrap();
     let workspace = open(&f);
     let first = preview(
         &workspace,
         RootLinks {
             agents: true,
-            claude: false,
+            claude: true,
         },
     );
+    assert_eq!(first.publication_blocker(), None);
+    let before = f.store.load().unwrap();
+    let expected = first.deployment().plan.entries.clone();
+    let report = first
+        .publish(
+            &MigrationAccess {
+                access: &f.access,
+                mode: 0,
+            },
+            &DiscoveryControl::default(),
+        )
+        .unwrap();
+    assert_eq!(report.migrated.len(), 3);
+    assert_eq!(report.cleaned.len(), 3);
+    for entry in expected {
+        assert_eq!(
+            fs::read(f.access.root.join(entry.path)).unwrap(),
+            entry.proposed.as_bytes()
+        );
+    }
     assert_eq!(
-        first.publication_blocker(),
-        Some(PublicationError::MigrationUnsupported)
+        fs::read(f.access.root.join(".voktty/sessions/kept.json")).unwrap(),
+        b"session\0\xff"
     );
-    let failure = first
-        .publish(&f.access, &DiscoveryControl::default())
-        .unwrap_err();
-    assert_eq!(failure.error, PublicationError::MigrationUnsupported);
+    assert_eq!(f.store.load().unwrap(), before);
+    assert!(!f.state.path().join("memory-deployment.json").exists());
+    no_staging(&f.access.root);
+}
+
+struct MigrationAccess<'a> {
+    access: &'a Access,
+    mode: usize,
+}
+
+#[test]
+fn creation_grants_never_imply_replacement_or_recovery_cleanup() {
+    let f = fixture();
+    fs::write(f.access.root.join("AGENTS.md"), "Owner rules\n").unwrap();
+    let workspace = open(&f);
+    let failure = preview(
+        &workspace,
+        RootLinks {
+            agents: true,
+            claude: false,
+        },
+    )
+    .publish(&f.access, &DiscoveryControl::default())
+    .unwrap_err();
+    assert_eq!(failure.error, PublicationError::Read(ReadError::Denied));
     assert!(failure.created.is_empty());
+    assert!(failure.migrated.is_empty());
     assert_eq!(
         fs::read(f.access.root.join("AGENTS.md")).unwrap(),
-        b"User rules\r\n"
+        b"Owner rules\n"
     );
     assert!(!f.access.root.join(".voktty").exists());
     assert!(!f.state.path().join("memory-deployment.json").exists());
+}
+impl MemoryWriteAccess for MigrationAccess<'_> {
+    fn allows_create(&self, path: &Path) -> bool {
+        self.access.allows_create(path)
+    }
+    fn allows_replace(&self, path: &Path) -> bool {
+        if !path.starts_with(&self.access.root) {
+            return false;
+        }
+        let backup_exists = fs::read_dir(self.access.root.join(".voktty"))
+            .ok()
+            .is_some_and(|entries| {
+                entries.filter_map(Result::ok).any(|entry| {
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".voktty-migration-")
+                })
+            });
+        if backup_exists && path.ends_with(".gitignore") {
+            if self.mode == 1 {
+                return false;
+            }
+            if self.mode == 2 && !path.exists() {
+                fs::write(path, "foreign racing ignore\n").unwrap();
+            }
+        }
+        true
+    }
+    fn allows_remove_staging(&self, path: &Path) -> bool {
+        path.starts_with(&self.access.root)
+    }
+}
+
+#[test]
+fn a_denial_or_racing_target_after_preservation_never_discards_original_or_foreign_bytes() {
+    for mode in [1, 2] {
+        let f = fixture();
+        fs::create_dir(f.access.root.join(".voktty")).unwrap();
+        fs::write(f.access.root.join(".voktty/.gitignore"), "*\n").unwrap();
+        let workspace = open(&f);
+        let failure = preview(&workspace, RootLinks::default())
+            .publish(
+                &MigrationAccess {
+                    access: &f.access,
+                    mode,
+                },
+                &DiscoveryControl::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            failure.error,
+            PublicationError::RecoveryRequired(_)
+        ));
+        let backup = failure
+            .possible_recovery_files
+            .iter()
+            .find(|path| f.access.root.join(path).exists())
+            .unwrap();
+        assert_eq!(fs::read(f.access.root.join(backup)).unwrap(), b"*\n");
+        let target = f.access.root.join(".voktty/.gitignore");
+        if mode == 1 {
+            assert!(!target.exists());
+        } else {
+            assert_eq!(fs::read(target).unwrap(), b"foreign racing ignore\n");
+        }
+        assert!(!f.access.root.join(".voktty/kit.json").exists());
+        assert!(f.state.path().join("memory-deployment.json").exists());
+        no_staging(&f.access.root);
+    }
+}
+
+#[test]
+fn named_streams_are_preserved_without_migration() {
+    let f = fixture();
+    fs::write(f.access.root.join("AGENTS.md"), "Owner rules\n").unwrap();
+    let stream = f.access.root.join("AGENTS.md:kept");
+    fs::write(&stream, "named stream bytes").unwrap();
+    let workspace = open(&f);
+    let failure = preview(
+        &workspace,
+        RootLinks {
+            agents: true,
+            claude: false,
+        },
+    )
+    .publish(
+        &MigrationAccess {
+            access: &f.access,
+            mode: 0,
+        },
+        &DiscoveryControl::default(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        failure.error,
+        PublicationError::Read(ReadError::Unsupported)
+    );
+    assert_eq!(fs::read(&stream).unwrap(), b"named stream bytes");
+    assert_eq!(
+        fs::read(f.access.root.join("AGENTS.md")).unwrap(),
+        b"Owner rules\n"
+    );
+    assert!(!f.access.root.join(".voktty/kit.json").exists());
 }
 
 #[test]

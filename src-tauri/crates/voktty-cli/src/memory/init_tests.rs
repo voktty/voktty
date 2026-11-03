@@ -54,6 +54,9 @@ fn publication_authority_grants_only_reviewed_paths_and_their_parents() {
     assert!(!access.allows_create(&root.with_extension("sibling")));
     assert!(!access.allows_replace(&root.join(".voktty/plans/INDEX.md")));
     assert!(access.allows_replace(&root.join("AGENTS.md")));
+    assert!(access.allows_create(&root.join(".voktty-stage-11111111-1111-4111-8111-111111111111")));
+    assert!(!access.allows_create(&root.join(".voktty-stage-not-a-uuid")));
+    assert!(!access.allows_create(&root.join("unreviewed.txt")));
     assert!(!access.allows_replace(&root.join("CLAUDE.md")));
     assert!(access.allows_remove_staging(&root.join(".voktty/.voktty-migration-fixture")));
     assert!(!access.allows_remove_staging(&root.join(".voktty/plans/INDEX.md")));

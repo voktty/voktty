@@ -141,6 +141,10 @@ fn migration_authority_names_only_exact_transaction_backups_and_selected_rules()
         let authority = capture(&f, preview, &live);
         assert!(authority.allows_replace(&f.root.join("AGENTS.md")));
         assert!(authority.allows_replace(&f.root.join(".voktty/.gitignore")));
+        let staging = format!(".voktty-stage-{}", uuid::Uuid::new_v4());
+        assert!(authority.allows_create(&f.root.join(&staging)));
+        assert!(!authority.allows_create(&f.root.join("unreviewed.txt")));
+        assert!(!authority.allows_create(&f.root.join(".voktty/sessions").join(&staging)));
         assert!(!authority.allows_replace(&f.root.join("CLAUDE.md")));
         assert!(!authority.allows_replace(&f.root.join(".voktty/INIT.md")));
         for backup in requirements.recovery {

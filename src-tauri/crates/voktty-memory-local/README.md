@@ -594,8 +594,8 @@ from the native rendered plan. The Unix writer supports `create` and `skip`.
 Linux/Android also implement the known private-ignore and root-rule migrations
 described below. Other Unix targets expose `MigrationUnsupported` through
 `publication_blocker` and reject migrations before project writes. Windows
-supports `create` and `skip`; its migrations still return `MigrationUnsupported`
-before project writes. Windows runtime qualification remains pending.
+supports `create`, `skip` and the bounded migrations described below. Windows
+runtime qualification remains pending.
 
 Unix creates missing directories relative to owned descriptors without following
 links and refuses cross-device parents. A unique exclusive temporary file in the
@@ -624,9 +624,9 @@ staging disposition can leave an unknown staging entry for explicit recovery.
 
 Windows-specific regression sources cover exact publication and idempotence,
 partial intent recovery, racing files/case aliases/hardlinks, parent rename
-refusal, late permission denial and rejection of unsupported migrations before
-writes. Cross-compilation is not execution of those tests or native platform
-qualification. The writer remains unwired to application, IPC and CLI consumers.
+refusal, late permission denial, known migrations and preserved recovery originals.
+Cross-compilation is not execution of those tests or native platform qualification.
+Desktop and CLI use the shared native publisher and their own write authorities.
 
 Before the first project change, a bounded, private `memory-deployment.json`
 records native cwd/destination keys and file identities, and the exact proposed
@@ -713,5 +713,33 @@ Linux tests exercise the three real migrations, CRLF/Unicode outside root blocks
 reserved binary data, mode/owner/group and user attributes, idempotence, recovery
 before/after exchange, invalid transaction IDs, cleanup denial/edits and late
 foreign replacements/in-place writes. Android shares the implementation but has
-not been compiled or run here. Other Unix replacement backends and native Windows
-migrations remain pending.
+not been compiled or run here. Other Unix replacement backends remain pending.
+
+Windows migrates these same three paths using two directory-relative renames with
+replacement disabled. Before moving the original, it stages complete synced text,
+requires a single-link regular file on the captured volume, and checks bounded
+native stream and extended-attribute information. Named streams, EAs, readonly,
+compressed, encrypted and other unqualified attributes are refused. The staging
+object must already match the original owner, group, DACL, integrity label,
+resource attributes, central access policy, process trust label and access filter
+as returned by the native security query. Its supported DOS attributes are
+preserved. There is no ACL repair, privilege elevation or metadata-query fallback.
+Per-file audit SACL preservation and filesystems with hidden security metadata
+are not qualified.
+
+The original is first renamed to its exact journalled recovery name. The staged
+proposal is then renamed to the now-vacant target, preserving any racing target.
+An interruption between these calls can leave the target absent; the original
+remains at the recovery name and `RecoveryRequired` prevents automatic cleanup
+or blind rollback. Automatic resumption of this intermediate state remains
+pending. After successful publication, the original stays recoverable until the
+whole inventory verifies and separately authorized cleanup removes that exact
+opened object. Changed bytes, links, unsupported metadata and cancelled or denied
+cleanup preserve the recovery file. No atomic exchange or power-loss durability
+is claimed for Windows.
+
+Windows regression sources cover ordinary legacy-ignore/root-rule migration,
+reserved session bytes, unchanged preferences, named streams and a denied or
+racing target after original preservation. Native Windows execution remains a
+release requirement. Wine can exercise individual handle operations but does not
+implement every metadata query needed to qualify the migration workflow.

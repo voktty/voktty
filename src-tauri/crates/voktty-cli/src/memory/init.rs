@@ -158,6 +158,7 @@ impl AcceptedWriteAccess {
                 .create
                 .iter()
                 .filter(|entry| !self.requirements.recovery.contains(entry))
+                .chain(self.requirements.replace.iter())
                 .any(|entry| self.requirements.root.join(entry).parent() == path.parent())
     }
 }
