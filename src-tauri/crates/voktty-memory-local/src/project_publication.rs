@@ -48,7 +48,7 @@ impl OwnedProjectInitializationPreview {
     fn record_text(&self) -> Result<String, PublicationError> {
         let fingerprint = |text: &str| hex::encode(Sha256::digest(text.as_bytes()));
         let record = serde_json::json!({
-            "schema":1,"operation":"initialize-project","transaction":self.transaction,
+            "schema":2,"operation":"initialize-project","scope":self.placement.name(),"transaction":self.transaction,
             "reviewDigest":self.acceptance_digest(),
             "originBinding":fingerprint(&self.origin.review_binding()?.to_string()),
             "destinationBinding":fingerprint(&self.destination.review_binding()?.to_string()),
@@ -249,32 +249,15 @@ impl OwnedProjectInitializationPreview {
         if !unknown.is_empty() {
             return Err(PublicationError::RecoveryRequired(unknown));
         }
-        if source.root() != target.root()
+        if matches!(self.placement, InitializationPlacement::Resolved(_))
+            && source.root() != target.root()
             && !source
                 .recovery_artifacts(&control.read_control()?)?
                 .is_empty()
         {
             return Err(PublicationError::PendingIntent);
         }
-        let origin = source.observe_scope_with_identity(
-            DiscoveryPurpose::Discover,
-            &self.observation_identity,
-            control,
-        )?;
-        let destination = target.observe_scope_with_identity(
-            DiscoveryPurpose::Initialize,
-            &self.observation_identity,
-            control,
-        )?;
-        let key = destination
-            .directories
-            .iter()
-            .find(|directory| directory.path == target.root())
-            .map(|directory| directory.directory_key.as_str())
-            .ok_or(PublicationError::Scope)?;
-        if !scopes_allow_target(&origin, &destination, key, true, true) {
-            return Err(PublicationError::Scope);
-        }
+        self.validate_placement(&source, &target, true, control)?;
         let facts = target.observe_deployment(self.links, &control.read_control()?)?;
         for (index, entry) in self.prepared.plan.entries.iter().enumerate() {
             let expected = if completed.contains(&index) {

@@ -90,12 +90,37 @@ impl MemoryWorkers {
         control: DiscoveryControl,
     ) -> Result<MemoryDeploymentJob<OwnedProjectInitializationPreview>, MemoryDeploymentWorkError>
     {
+        self.prepare_project_review(request, control, OwnedProjectInitializationPreview::prepare)
+    }
+
+    pub fn preview_project_at_root(
+        &self,
+        request: ProjectInitializationRequest,
+        control: DiscoveryControl,
+    ) -> Result<MemoryDeploymentJob<OwnedProjectInitializationPreview>, MemoryDeploymentWorkError>
+    {
+        self.prepare_project_review(
+            request,
+            control,
+            OwnedProjectInitializationPreview::prepare_at_project_root,
+        )
+    }
+
+    fn prepare_project_review(
+        &self,
+        request: ProjectInitializationRequest,
+        control: DiscoveryControl,
+        prepare: fn(
+            ProjectInitializationRequest,
+            &DiscoveryControl,
+        ) -> Result<OwnedProjectInitializationPreview, PublicationError>,
+    ) -> Result<MemoryDeploymentJob<OwnedProjectInitializationPreview>, MemoryDeploymentWorkError>
+    {
         validate_path(&request.origin)?;
         validate_path(&request.destination)?;
         validate_inputs(&request.inputs)?;
         let job = self.submit(Control::Scope(control.clone()), move || {
-            OwnedProjectInitializationPreview::prepare(request, &control)
-                .map_err(MemoryDeploymentWorkError::Preview)
+            prepare(request, &control).map_err(MemoryDeploymentWorkError::Preview)
         })?;
         Ok(MemoryDeploymentJob { job })
     }

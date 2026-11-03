@@ -72,6 +72,24 @@ Neither preparation nor revalidation creates directories, kit files, preferences
 installation identity, trust or session consent. Desktop, CLI and SSH wiring is
 separate from these native APIs.
 
+### Explicit placement at a project root
+
+`prepare_at_project_root` and `MemoryWorkers::preview_project_at_root` prepare a
+kit at the explicitly selected native directory without resolving an instruction
+delivery scope. They inspect only the fixed deployment inventory and bounded
+recovery listings at that destination. They do not scan ancestors, dependencies,
+Git internals or nested projects. Matching partial template files can be completed;
+conflicting bytes and pending recovery still block creation. A root inside a
+`.voktty` directory is refused. Secret-path, native root identity, original
+authority, review lifetime and independent write checks remain mandatory.
+
+Explicit placement grants no instruction trust, delivery scope or session consent.
+The original `prepare` API retains its complete scope checks. Review digests and
+operation records use schema 2 and bind the placement mode, so an acceptance for
+a resolved scope cannot be reused for explicit placement. Publication revalidates
+the chosen mode through physical settlement. Desktop and remote callers have not
+yet been connected to this explicit placement API.
+
 ## Publication
 
 `publish` consumes the original review with its matching digest and an independent
@@ -87,8 +105,9 @@ review digest, hashed native root bindings, relative paths and expected/proposed
 content hashes. It contains no absolute paths, original document text, private
 preferences, instruction trust or installation identity. Another record cannot
 be overwritten or borrowed. Its presence makes an unfinished root visible to
-scope discovery; ancestor and descendant transactions are rechecked before the
-final kit marker and after publication.
+scope discovery. Resolved-scope publication rechecks ancestor and descendant
+transactions before the final kit marker and after publication; explicit placement
+checks its captured destination without claiming a resolved delivery scope.
 
 Cooperating publishers and original-restoration operations share a nonblocking
 process-wide exclusion guard through physical settlement. Project records also

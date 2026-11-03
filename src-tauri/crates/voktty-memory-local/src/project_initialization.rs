@@ -7,6 +7,20 @@ mod publication;
 
 pub const PROJECT_INITIALIZATION_RECORD: &str = ".voktty/.initialization.json";
 
+enum InitializationPlacement {
+    Resolved(String),
+    ProjectRoot,
+}
+
+impl InitializationPlacement {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Resolved(_) => "resolved-memory-scope",
+            Self::ProjectRoot => "explicit-project-root",
+        }
+    }
+}
+
 /// Native-owned roots and read authorities. No private preference store or
 /// renderer-supplied observation can stand in for the captured project IO.
 pub struct ProjectInitializationRequest {
@@ -25,7 +39,7 @@ pub struct OwnedProjectInitializationPreview {
     destination: OwnedProjectMemoryWorkspace,
     prepared: PreparedDeployment,
     links: RootLinks,
-    observation_identity: String,
+    placement: InitializationPlacement,
     created_at: Instant,
     transaction: String,
 }
@@ -34,6 +48,27 @@ impl OwnedProjectInitializationPreview {
     pub fn prepare(
         request: ProjectInitializationRequest,
         control: &DiscoveryControl,
+    ) -> Result<Self, PublicationError> {
+        Self::prepare_with_placement(
+            request,
+            control,
+            InitializationPlacement::Resolved(uuid::Uuid::new_v4().to_string()),
+        )
+    }
+
+    /// Places the kit at an explicitly selected native project root. This does
+    /// not resolve a delivery scope or inspect unrelated ancestors/descendants.
+    pub fn prepare_at_project_root(
+        request: ProjectInitializationRequest,
+        control: &DiscoveryControl,
+    ) -> Result<Self, PublicationError> {
+        Self::prepare_with_placement(request, control, InitializationPlacement::ProjectRoot)
+    }
+
+    fn prepare_with_placement(
+        request: ProjectInitializationRequest,
+        control: &DiscoveryControl,
+        placement: InitializationPlacement,
     ) -> Result<Self, PublicationError> {
         supported()?;
         control.read_control()?;
@@ -54,7 +89,7 @@ impl OwnedProjectInitializationPreview {
         destination.review_binding()?;
         let source = origin.borrow();
         let target = destination.borrow();
-        check_recovery(&source, &target, control)?;
+        check_placement_recovery(&placement, &source, &target, control)?;
         let facts = target.observe_deployment(request.links, &control.read_control()?)?;
         let files = render_template(&request.inputs).map_err(ReadError::Contract)?;
         let manifest: Value =
@@ -75,7 +110,7 @@ impl OwnedProjectInitializationPreview {
             destination,
             prepared,
             links: request.links,
-            observation_identity: uuid::Uuid::new_v4().to_string(),
+            placement,
             created_at: Instant::now(),
             transaction: uuid::Uuid::new_v4().to_string(),
         };
@@ -93,8 +128,9 @@ impl OwnedProjectInitializationPreview {
 
     pub fn acceptance_digest(&self) -> String {
         let review = serde_json::json!({
-            "schema":1,
+            "schema":2,
             "operation":"initialize-project",
+            "scope":self.placement.name(),
             "origin":self.origin.review_binding().expect("qualified native root"),
             "destination":self.destination.review_binding().expect("qualified native root"),
             "deployment":self.prepared,
@@ -121,26 +157,8 @@ impl OwnedProjectInitializationPreview {
         control.read_control()?;
         let source = self.origin.borrow();
         let target = self.destination.borrow();
-        check_recovery(&source, &target, control)?;
-        let source_scope = source.observe_scope_with_identity(
-            DiscoveryPurpose::Discover,
-            &self.observation_identity,
-            control,
-        )?;
-        let target_scope = target.observe_scope_with_identity(
-            DiscoveryPurpose::Initialize,
-            &self.observation_identity,
-            control,
-        )?;
-        let key = target_scope
-            .directories
-            .iter()
-            .find(|directory| directory.path == target.root())
-            .map(|directory| directory.directory_key.as_str())
-            .ok_or(PublicationError::Scope)?;
-        if !scopes_allow_target(&source_scope, &target_scope, key, false, true) {
-            return Err(PublicationError::Scope);
-        }
+        check_placement_recovery(&self.placement, &source, &target, control)?;
+        self.validate_placement(&source, &target, false, control)?;
         let facts = target.observe_deployment(self.links, &control.read_control()?)?;
         if self
             .prepared
@@ -151,12 +169,65 @@ impl OwnedProjectInitializationPreview {
         {
             return Err(PublicationError::StalePreview);
         }
-        // A source can retire or be replaced while destination discovery runs.
         source.validate_root(&control.read_control()?)?;
         target.validate_root(&control.read_control()?)?;
         ensure_fresh(self.created_at, Instant::now())?;
         control.read_control()?;
         Ok(())
+    }
+
+    fn validate_placement(
+        &self,
+        source: &ProjectMemoryWorkspace<'_>,
+        target: &ProjectMemoryWorkspace<'_>,
+        allow_partial: bool,
+        control: &DiscoveryControl,
+    ) -> Result<(), PublicationError> {
+        source.validate_root(&control.read_control()?)?;
+        target.validate_root(&control.read_control()?)?;
+        let InitializationPlacement::Resolved(identity) = &self.placement else {
+            return validate_project_root(target.root());
+        };
+        let source_scope =
+            source.observe_scope_with_identity(DiscoveryPurpose::Discover, identity, control)?;
+        let target_scope =
+            target.observe_scope_with_identity(DiscoveryPurpose::Initialize, identity, control)?;
+        let key = target_scope
+            .directories
+            .iter()
+            .find(|directory| directory.path == target.root())
+            .map(|directory| directory.directory_key.as_str())
+            .ok_or(PublicationError::Scope)?;
+        if !scopes_allow_target(&source_scope, &target_scope, key, allow_partial, true) {
+            return Err(PublicationError::Scope);
+        }
+        Ok(())
+    }
+}
+
+fn validate_project_root(root: &Path) -> Result<(), PublicationError> {
+    if root.components().any(|part| {
+        part.as_os_str()
+            .to_str()
+            .is_some_and(|name| name.eq_ignore_ascii_case(".voktty"))
+    }) {
+        return Err(ReadError::Denied.into());
+    }
+    Ok(())
+}
+
+fn check_placement_recovery(
+    placement: &InitializationPlacement,
+    source: &ProjectMemoryWorkspace<'_>,
+    target: &ProjectMemoryWorkspace<'_>,
+    control: &DiscoveryControl,
+) -> Result<(), PublicationError> {
+    match placement {
+        InitializationPlacement::Resolved(_) => check_recovery(source, target, control),
+        InitializationPlacement::ProjectRoot => {
+            validate_project_root(target.root())?;
+            check_recovery(target, target, control)
+        }
     }
 }
 

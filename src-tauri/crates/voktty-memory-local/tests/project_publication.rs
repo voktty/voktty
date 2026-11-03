@@ -405,8 +405,9 @@ fn interrupted_copy_retains_a_metadata_only_record_and_never_publishes_the_marke
         &fs::read(project.path().join(PROJECT_INITIALIZATION_RECORD)).unwrap(),
     )
     .unwrap();
-    assert_eq!(record.as_object().unwrap().len(), 7);
-    assert_eq!(record["schema"], 1);
+    assert_eq!(record.as_object().unwrap().len(), 8);
+    assert_eq!(record["schema"], 2);
+    assert_eq!(record["scope"], "resolved-memory-scope");
     assert_eq!(record["operation"], "initialize-project");
     assert_eq!(record["destinationBinding"].as_str().unwrap().len(), 64);
     assert_eq!(record["reviewDigest"], digest);
