@@ -28,6 +28,10 @@ const PREVIEW_LIFETIME: Duration = Duration::from_secs(120);
 mod recovery;
 pub use recovery::{OwnedRecoveryReview, RecoveryRestore};
 
+#[path = "project_initialization.rs"]
+mod project_initialization;
+pub use project_initialization::{OwnedProjectInitializationPreview, ProjectInitializationRequest};
+
 /// Native workspace authorization, including secret-path protections. Read and
 /// metadata authorization never imply permission to create files/directories.
 pub trait MemoryWriteAccess: Send + Sync {
@@ -442,13 +446,29 @@ fn scopes_allow(
     resuming: bool,
     identical: bool,
 ) -> bool {
+    scopes_allow_target(
+        origin,
+        destination,
+        destination_key,
+        resuming,
+        resuming || identical,
+    )
+}
+
+fn scopes_allow_target(
+    origin: &NativeScopeObservation,
+    destination: &NativeScopeObservation,
+    destination_key: &str,
+    allow_partial_target: bool,
+    allow_valid_target: bool,
+) -> bool {
     let ancestors_ok = |observation: &NativeScopeObservation| {
         observation.scope.ancestry_complete
             && observation.directories.iter().all(|entry| {
                 matches!(entry.state, "absent" | "reserved")
                     || (entry.directory_key == destination_key
-                        && ((resuming && matches!(entry.state, "partial" | "valid"))
-                            || (identical && entry.state == "valid")))
+                        && ((allow_partial_target && entry.state == "partial")
+                            || (allow_valid_target && entry.state == "valid")))
             })
     };
     ancestors_ok(origin)

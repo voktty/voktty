@@ -11,7 +11,59 @@ pub struct ProjectMemoryWorkspace<'a> {
     access: &'a dyn MemoryReadAccess,
 }
 
+pub(crate) struct OwnedProjectMemoryWorkspace {
+    root: PathBuf,
+    root_id: (u64, u128),
+    root_instance: Option<RootInstance>,
+    canonical_root: String,
+    filesystem_id: String,
+    access: Arc<dyn MemoryReadAccess>,
+}
+
+impl OwnedProjectMemoryWorkspace {
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(crate) fn borrow(&self) -> ProjectMemoryWorkspace<'_> {
+        ProjectMemoryWorkspace {
+            root: self.root.clone(),
+            root_id: self.root_id,
+            root_instance: self.root_instance.clone(),
+            canonical_root: self.canonical_root.clone(),
+            filesystem_id: self.filesystem_id.clone(),
+            access: self.access.as_ref(),
+        }
+    }
+
+    pub(crate) fn review_binding(&self) -> Result<Value, ReadError> {
+        let instance = self.root_instance.as_ref().ok_or(ReadError::Unsupported)?;
+        Ok(json!({
+            "root":self.canonical_root,
+            "filesystem":self.filesystem_id,
+            "instance":instance,
+        }))
+    }
+}
+
 impl<'a> ProjectMemoryWorkspace<'a> {
+    pub(crate) fn retain(
+        self,
+        access: Arc<dyn MemoryReadAccess>,
+    ) -> Result<OwnedProjectMemoryWorkspace, ReadError> {
+        if !std::ptr::addr_eq(self.access, access.as_ref()) {
+            return Err(ReadError::Denied);
+        }
+        Ok(OwnedProjectMemoryWorkspace {
+            root: self.root,
+            root_id: self.root_id,
+            root_instance: self.root_instance,
+            canonical_root: self.canonical_root,
+            filesystem_id: self.filesystem_id,
+            access,
+        })
+    }
+
     pub fn open(
         requested: &Path,
         access: &'a dyn MemoryReadAccess,
@@ -57,6 +109,10 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         &self.root
     }
 
+    pub(crate) fn validate_root(&self, control: &ReadControl) -> Result<(), ReadError> {
+        self.checked_root(control).map(|_| ())
+    }
+
     /// Scope keys belong only to this observation. They cannot identify a
     /// persistent preference or establish instruction trust.
     pub fn observe_scope(
@@ -64,12 +120,21 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         purpose: crate::DiscoveryPurpose,
         control: &crate::DiscoveryControl,
     ) -> Result<crate::NativeScopeObservation, ReadError> {
+        self.observe_scope_with_identity(purpose, &uuid::Uuid::new_v4().to_string(), control)
+    }
+
+    pub(crate) fn observe_scope_with_identity(
+        &self,
+        purpose: crate::DiscoveryPurpose,
+        observation_identity: &str,
+        control: &crate::DiscoveryControl,
+    ) -> Result<crate::NativeScopeObservation, ReadError> {
         let phase = control.read_control()?;
         let _permit = ReadPermit::acquire(&phase)?;
         self.checked_root(&phase)?;
         let observation = crate::discovery::gather(
             &self.root,
-            &uuid::Uuid::new_v4().to_string(),
+            observation_identity,
             self.access,
             purpose,
             control,
@@ -97,6 +162,58 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         self.checked_root(control)?;
         control.check()?;
         Ok(facts)
+    }
+
+    pub(crate) fn recovery_artifacts(
+        &self,
+        control: &ReadControl,
+    ) -> Result<Vec<String>, ReadError> {
+        let _permit = ReadPermit::acquire(control)?;
+        let root = self.checked_root(control)?;
+        let mut found = Vec::new();
+        let mut inspect = |directory: &platform::Directory,
+                           path: &Path,
+                           prefix: &str,
+                           limit|
+         -> Result<(), ReadError> {
+            let listing = directory.entries(path, self.access, control, limit)?;
+            if !listing.complete {
+                return Err(ReadError::Limit);
+            }
+            for entry in listing.entries {
+                let name = entry.name.to_string_lossy();
+                let comparable = name.to_ascii_lowercase();
+                if comparable.starts_with(".voktty-migration-")
+                    || comparable.starts_with(".voktty-stage-")
+                {
+                    if found.len() == 128 {
+                        return Err(ReadError::Limit);
+                    }
+                    found.push(format!("{prefix}{name}"));
+                }
+            }
+            Ok(())
+        };
+        inspect(&root, &self.root, "", 20000)?;
+        let kit_path = self.root.join(".voktty");
+        if !self.access.allows_metadata(&kit_path) {
+            return Err(ReadError::Denied);
+        }
+        match root
+            .probe(std::ffi::OsStr::new(".voktty"))
+            .map_err(|_| ReadError::Io)?
+        {
+            None => {}
+            Some(crate::discovery::EntryKind::Directory) => {
+                let kit = root.open_child(std::ffi::OsStr::new(".voktty"), &kit_path, control)?;
+                inspect(&kit, &kit_path, ".voktty/", 128)?;
+            }
+            _ => return Err(ReadError::Denied),
+        }
+        self.checked_root(control)?;
+        found.sort();
+        control.check()?;
+        Ok(found)
     }
 
     fn checked_root(&self, control: &ReadControl) -> Result<platform::Directory, ReadError> {

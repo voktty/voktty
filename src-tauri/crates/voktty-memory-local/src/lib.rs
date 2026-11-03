@@ -20,10 +20,12 @@ mod preferences;
 mod publication;
 mod reader;
 mod storage_diagnostics;
+mod template_inputs;
 mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
-    InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, OwnedRecoveryReview,
+    InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview,
+    OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,
     PublicationError, PublicationFailure, PublicationReport, PublicationWriteRequirements,
     RecoveryFile, RecoveryRestore,
 };

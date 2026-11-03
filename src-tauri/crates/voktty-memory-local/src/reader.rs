@@ -23,6 +23,7 @@ static ACTIVE_READS: AtomicUsize = AtomicUsize::new(0);
 
 #[path = "project_reader.rs"]
 mod project_reader;
+pub(crate) use project_reader::OwnedProjectMemoryWorkspace;
 pub use project_reader::ProjectMemoryWorkspace;
 use project_reader::{checked_project_root, collect_project_facts, deployment_inventory};
 

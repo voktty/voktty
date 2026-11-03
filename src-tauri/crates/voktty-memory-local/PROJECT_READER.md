@@ -34,3 +34,40 @@ This API only observes the project. It does not publish a kit, provide an IPC
 command, enable a conversation or repair Windows ACLs. Desktop, CLI and SSH
 initialization must retain native review ownership and explicit write authority
 when they consume these observations.
+
+## Initialization reviews
+
+`OwnedProjectInitializationPreview::prepare` renders the embedded kit and its lock
+from native project observations. `ProjectInitializationRequest` owns the origin,
+destination, original read authorities, template inputs and optional instruction
+links. It has no private-store argument. `MemoryWorkers::preview_project` runs
+preparation behind the existing four-slot worker budget and retains its slot
+through physical settlement.
+
+The review holds the exact original authorities and native root-instance bindings.
+Its digest covers both roots and the complete proposed deployment, including
+expected existing bytes. A display snapshot or digest does not authorize writes.
+Revalidation uses the existing 120-second review lifetime, the original request
+deadline, complete ancestor and descendant inspection and current document bytes.
+Documents are checked after scope discovery so an edit during that scan cannot
+pass as the earlier reviewed content. Both original roots must still be current
+and authorized when revalidation returns.
+
+An absent or runtime-only target can be reviewed. An existing valid kit at the
+exact captured destination can be completed when the shared planner accepts its
+existing bytes. A partial target, another ancestor kit, a nested kit, incomplete
+enumeration or conflicting template bytes blocks preparation. The persistent
+publisher retains its previous scope rules; no recovery permission is inferred
+from the independent review.
+
+Preparation also inspects bounded directory listings for existing migration or
+staging artifacts at the origin and destination. The limits are 20,000 root
+entries, 128 immediate kit entries and 128 reported artifacts per root. It reads
+no artifact contents, restores nothing and never deletes a candidate. A candidate
+at the destination requires explicit recovery; origin candidates report a pending
+operation. Private legacy journals are not read or declared recovered by this
+API. Publication and migration journal handling remain separate integration work.
+
+Neither preparation nor revalidation creates directories, kit files, preferences,
+installation identity, trust or session consent. This review is not yet connected
+to Desktop, CLI or the SSH protocol and has no publication method.
