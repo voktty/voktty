@@ -404,6 +404,33 @@ subsequent initialization review. Its result checks the original source, command
 native review and presentation after settlement. Retirement can suppress delivery
 but does not imply rollback. No command or ownership mutex spans an await.
 
+## Typed restoration client
+
+The presentation's `reviewRecovery`, `confirmRecovery`, `cancelRecovery` and
+`isRecoveryReviewCurrent` use the same deployment revision counter, exclusive
+review owner and 256 unsettled-request budget as publication. Capacity rejection
+preserves admitted work. Superseded requests, including retired reads, remain
+counted until actual transport settlement. Selection replacement and presentation
+close permanently retire delivery. A cancellation of the other operation kind
+cannot cancel the current review; old cleanup cannot borrow a successor's revision.
+
+The recovery validator checks UUIDs, matching revision, digest, bounded Unicode
+root text and the exact three-target migration vocabulary. Original text is
+bounded to 256 KiB per entry; backup names must have the matching parent, one
+shared transaction UUID and distinct inventory indices below 128. Unknown fields
+are discarded and display snapshots are copied and deeply frozen. The native
+token and digest stay private to the exact receipt; copied or foreign receipts
+cannot confirm. These display checks grant no filesystem authority or trust.
+
+Confirmation sends only the retained UUID and digest, coalesces duplicates until
+settlement and consumes acceptance on success or failure. A success report must
+match every reviewed target and moved backup, with no skipped or migrated paths,
+before the client acknowledges restoration. Malformed replies cannot restore
+acceptance. Cancellation retires local delivery before IPC, including before a
+token exists, validates its boolean response and permits retry after failed
+cleanup. Native admitted writes retain their no-rollback semantics. Panel, CLI
+and remote-helper restoration integration remain pending.
+
 ## Native policy ownership
 
 `NativeMemorySelection` reserves one policy operation before private-state IO.

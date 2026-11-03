@@ -1,12 +1,18 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { WorkspaceEnv } from "@/modules/workspace/env";
-import type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
-import type { KitDeploymentEntry } from "@/modules/workspace-kit/lib/deployment";
 import type { KitLock } from "@/modules/workspace-kit/lib/configTypes";
-import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
-import { createNativeMemoryPolicyClient } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
-import { loadMemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
+import type { KitDeploymentEntry } from "@/modules/workspace-kit/lib/deployment";
 import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
+import { loadMemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
+import { createNativeMemoryPolicyClient } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
+import {
+  memoryRecoveryReview,
+  memoryRestorationReport,
+  type NativeMemoryRecoveryInput,
+  type NativeMemoryRecoveryReview,
+} from "@/modules/workspace-kit/lib/nativeMemoryRecovery";
+import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
+import { invoke } from "@tauri-apps/api/core";
 
 type Handle = Readonly<{ id: number; token: string }>;
 const selectionBrand = Symbol("native-memory-selection");
@@ -63,11 +69,13 @@ type PreviewReply = NativeMemoryPreviewSnapshot & {
   revision: number;
 };
 type Review = {
+  kind: "preview" | "recovery";
   selection: NativeMemorySelection;
   revision: number;
-  receipt: NativeMemoryReview | null;
+  receipt: NativeMemoryReview | NativeMemoryRecoveryReview | null;
   token: string | null;
-  phase: "opening" | "ready" | "publishing" | "consumed";
+  digest: string | null;
+  phase: "opening" | "ready" | "publishing" | "restoring" | "consumed";
   confirmation: Promise<NativeMemoryPublication> | null;
   cancellation: Promise<boolean> | null;
 };
@@ -120,6 +128,48 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
   function checkReview(expected: Review) {
     capture(expected.selection);
     if (review !== expected || expected.phase === "consumed") cancelled();
+  }
+
+  function cancelDeployment(
+    receipt: NativeMemorySelection,
+    kind: Review["kind"],
+  ): Promise<boolean> {
+    try {
+      capture(receipt);
+      const expected = review;
+      if (!expected || expected.selection !== receipt || expected.kind !== kind)
+        return Promise.resolve(false);
+      if (expected.cancellation) return expected.cancellation;
+      expected.phase = "consumed";
+      expected.cancellation = reviewRequest<unknown>(
+        expected.selection,
+        kind === "preview"
+          ? "project_memory_cancel_preview"
+          : "project_memory_cancel_recovery",
+        { revision: expected.revision },
+        () => {
+          capture(receipt);
+          if (review !== expected) cancelled();
+        },
+      )
+        .then((reply) => {
+          capture(receipt);
+          if (review !== expected) cancelled();
+          if (typeof reply !== "boolean")
+            throw Object.assign(
+              new Error("Memory cancellation reply is unavailable"),
+              { code: "unavailable" },
+            );
+          return reply;
+        })
+        .catch((error: unknown) => {
+          expected.cancellation = null;
+          throw error;
+        });
+      return expected.cancellation;
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   function reviewRequest<T>(
@@ -269,10 +319,12 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       const requested = ++reviewRevision;
       if (!Number.isSafeInteger(requested)) cancelled();
       const expected: Review = {
+        kind: "preview",
         selection: receipt,
         revision: requested,
         receipt: null,
         token: null,
+        digest: null,
         phase: "opening",
         confirmation: null,
         cancellation: null,
@@ -324,7 +376,7 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
         capture(receipt);
         const expected = review;
         if (
-          !expected ||
+          expected?.kind !== "preview" ||
           expected.selection !== receipt ||
           expected.receipt !== accepted
         )
@@ -351,29 +403,117 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       }
     },
     cancelPreview(receipt: NativeMemorySelection): Promise<boolean> {
+      return cancelDeployment(receipt, "preview");
+    },
+    async reviewRecovery(
+      receipt: NativeMemorySelection,
+      input: NativeMemoryRecoveryInput,
+    ) {
+      capture(receipt);
+      if (unsettled >= 256)
+        throw Object.assign(new Error("Memory requests are busy"), {
+          code: "busy",
+        });
+      const captured = structuredClone(input);
+      const requested = ++reviewRevision;
+      if (!Number.isSafeInteger(requested)) cancelled();
+      const expected: Review = {
+        kind: "recovery",
+        selection: receipt,
+        revision: requested,
+        receipt: null,
+        token: null,
+        digest: null,
+        phase: "opening",
+        confirmation: null,
+        cancellation: null,
+      };
+      review = expected;
+      try {
+        const reply = await reviewRequest<unknown>(
+          receipt,
+          "project_memory_review_recovery",
+          {
+            request: {
+              revision: requested,
+              destination: captured.destination,
+              environment: nativeEnvironment(captured.environment),
+            },
+          },
+          () => checkReview(expected),
+        );
+        checkReview(expected);
+        const result = memoryRecoveryReview(reply, requested);
+        expected.receipt = result.receipt;
+        expected.token = result.token;
+        expected.digest = result.digest;
+        expected.phase = "ready";
+        return result.receipt;
+      } catch (error) {
+        checkReview(expected);
+        throw error;
+      }
+    },
+    confirmRecovery(
+      receipt: NativeMemorySelection,
+      accepted: NativeMemoryRecoveryReview,
+    ): Promise<NativeMemoryPublication> {
       try {
         capture(receipt);
         const expected = review;
-        if (!expected || expected.selection !== receipt)
-          return Promise.resolve(false);
-        if (expected.cancellation) return expected.cancellation;
-        expected.phase = "consumed";
-        expected.cancellation = reviewRequest<boolean>(
-          expected.selection,
-          "project_memory_cancel_preview",
-          { revision: expected.revision },
-          () => {
-            capture(receipt);
-            if (review !== expected) cancelled();
+        if (
+          expected?.kind !== "recovery" ||
+          expected.selection !== receipt ||
+          expected.receipt !== accepted
+        )
+          cancelled();
+        if (expected.phase === "restoring" && expected.confirmation)
+          return expected.confirmation;
+        if (expected.phase !== "ready" || !expected.token || !expected.digest)
+          cancelled();
+        expected.phase = "restoring";
+        expected.confirmation = reviewRequest<unknown>(
+          receipt,
+          "project_memory_confirm_recovery",
+          {
+            confirmation: { review: expected.token, digest: expected.digest },
           },
-        ).catch((error: unknown) => {
-          expected.cancellation = null;
-          throw error;
-        });
-        return expected.cancellation;
+          () => checkReview(expected),
+        )
+          .then((value) => {
+            checkReview(expected);
+            return memoryRestorationReport(value, accepted);
+          })
+          .finally(() => {
+            try {
+              checkReview(expected);
+            } finally {
+              expected.phase = "consumed";
+            }
+          });
+        return expected.confirmation;
       } catch (error) {
         return Promise.reject(error);
       }
+    },
+    cancelRecovery(receipt: NativeMemorySelection): Promise<boolean> {
+      return cancelDeployment(receipt, "recovery");
+    },
+    isRecoveryReviewCurrent(
+      receipt: NativeMemorySelection,
+      accepted: NativeMemoryRecoveryReview,
+    ) {
+      try {
+        capture(receipt);
+      } catch {
+        return false;
+      }
+      return (
+        review?.kind === "recovery" &&
+        review.selection === receipt &&
+        review.receipt === accepted &&
+        (review.phase === "ready" || review.phase === "restoring")
+      );
     },
     isCurrent(receipt: NativeMemorySelection) {
       try {
@@ -423,6 +563,7 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
         !closed &&
         current?.receipt === receipt &&
         review?.selection === receipt &&
+        review.kind === "preview" &&
         review.receipt === accepted &&
         (review.phase === "ready" || review.phase === "publishing")
       );
