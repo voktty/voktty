@@ -39,6 +39,9 @@ Older helpers without this optional field retain their existing error behavior.
 | `preview` | `handle`, `selection`, `revision`, `inputs`, `links` | Retain an exact native initialization review at the selected directory |
 | `confirm` | `handle`, `selection`, `review` | Consume and publish that review after native revalidation |
 | `cancel` | `handle`, `selection`, `revision` | Retire the matching initialization review or fence an earlier arrival |
+| `reviewRecovery` | `handle`, `selection`, `revision` | Review complete saved originals for missing targets at the selected directory |
+| `confirmRecovery` | `handle`, `selection`, `review`, `digest` | Consume that exact review and restore only its missing targets |
+| `cancelRecovery` | `handle`, `selection`, `revision` | Retire or fence the shared deployment review |
 | `documents` | `handle`, `selection`, `root` | Display the shared native document inventory for the expected root |
 | `reviewTrust` | `handle`, `selection`, `revision`; optional `role` | Display native instructions and retain their exact review |
 | `confirmTrust` | `handle`, `selection`, `review` | Accept only that native instruction review |
@@ -61,8 +64,36 @@ consume reviews, including when native revalidation or publication fails.
 Cancellation cannot revive an older request. Native reviews retain their own
 120-second lifetime and filesystem/preference revision checks.
 
-The host resolves private storage through `dirs::data_local_dir()/dev.voktty`,
-matching the standalone CLI. Clients cannot choose that path. Marker inspection
+Initialization and restoration share one deployment review slot and monotonic
+revision per selection. A newer review invalidates the previous review even if
+its preparation fails. Confirmation checks the review kind and exact token
+before consuming it; an initialization token cannot restore originals and a
+restoration token cannot publish initialization. A mismatched token or kind does
+not consume the current review. A matching restoration confirmation consumes its
+review even when its digest or native revalidation fails. Stale cancellation
+cannot retire a newer review; a future cancellation fences earlier arrivals.
+
+Recovery replies include `schema`, host-native `root`, `revision`, `review`,
+native SHA-256 `digest` and one to three literal `entries` with relative `target`,
+`backup` and full original `text`. The native journal binds the root instances,
+installation and preferences; display data is not write authority. Restoration
+uses the shared native recovery core with authority limited to creating exact
+missing targets and consuming exact original backups beneath the original
+authenticated workspace. It permits no replacements, directory creation,
+arbitrary staging or secret paths. Success returns the normal publication
+report; partial failure preserves acknowledged `changes`. Restoration leaves
+the journal and preferences unchanged and never publishes the kit. Resuming
+initialization requires fresh inspection, editable inputs, preview and separate
+acceptance. The worker retains its existing lifetime, generation, queue and
+output-settlement rules for all three operations. Older `memory.manage` helpers
+may reject these additive operations; clients report the rejection without
+falling back to Desktop IO.
+
+The host retains private storage at `dirs::data_local_dir()/dev.voktty`.
+Desktop and the standalone CLI now use `app.voktty.voktty` on their execution
+machine; the helper's existing host state is not silently moved or merged.
+CLI/helper state interoperability on the SSH host requires separate qualification.
+Clients cannot choose that path. Marker inspection
 and empty resource reservation create neither that directory nor an identity.
 Preparation is explicit. The shared store qualifies its local filesystem,
 ownership, permissions and complete ancestor chain and retains process locks and

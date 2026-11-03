@@ -669,11 +669,7 @@ export function canInitializeMemory(observation: NativeMemoryScope) {
 }
 
 export function supportsMemoryRecovery(target: MemoryPanelTarget) {
-  return (
-    target.environment.kind === "local" &&
-    !target.path.startsWith("remote://") &&
-    supportedMemoryPanelTarget(target)
-  );
+  return supportedMemoryPanelTarget(target);
 }
 
 export function canReviewMemoryRecovery(

@@ -58,6 +58,26 @@ export function remoteMemoryRequest(
       return { operation: "confirm", ...selected, review };
     case "project_memory_cancel_preview":
       return { operation: "cancel", ...selected, revision };
+    case "project_memory_review_recovery": {
+      const request = memoryRecord(args.request);
+      source.checkSelection(request.destination, request.environment);
+      return {
+        operation: "reviewRecovery",
+        ...selected,
+        revision: request.revision,
+      };
+    }
+    case "project_memory_confirm_recovery": {
+      const confirmation = memoryRecord(args.confirmation);
+      return {
+        operation: "confirmRecovery",
+        ...selected,
+        review: confirmation.review,
+        digest: confirmation.digest,
+      };
+    }
+    case "project_memory_cancel_recovery":
+      return { operation: "cancelRecovery", ...selected, revision };
     case "project_memory_review_trust": {
       const request = memoryRecord(args.request);
       return {

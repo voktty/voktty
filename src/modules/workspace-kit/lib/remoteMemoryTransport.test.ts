@@ -83,6 +83,15 @@ const publication = {
   migrated: [],
   cleaned: [],
 };
+const recoveryBackup =
+  ".voktty/.voktty-migration-00000000-0000-4000-8000-000000000004-0";
+const restoration = {
+  schema: 1,
+  created: [".voktty/.gitignore"],
+  skipped: [],
+  migrated: [],
+  cleaned: [recoveryBackup],
+};
 let pool: RemoteSessionPool;
 let open: Mock<RemoteSessionPoolDeps["open"]>;
 let close: Mock<RemoteSessionPoolDeps["close"]>;
@@ -157,6 +166,23 @@ function operation(params: Record<string, unknown>): unknown {
     case "confirm":
       initialized = true;
       return publication;
+    case "reviewRecovery":
+      return {
+        schema: 1,
+        root: "/project",
+        revision: params.revision,
+        review: trustReply().review,
+        digest: "d".repeat(64),
+        entries: [
+          {
+            target: ".voktty/.gitignore",
+            backup: recoveryBackup,
+            text: "*\r\n",
+          },
+        ],
+      };
+    case "confirmRecovery":
+      return restoration;
     case "reviewTrust":
       return { ...trustReply(params.revision as number), root: "/project" };
     case "confirmTrust":
@@ -204,6 +230,7 @@ function operation(params: Record<string, unknown>): unknown {
     case "cancel":
     case "cancelTrust":
     case "cancelPolicy":
+    case "cancelRecovery":
       return true;
     default:
       return null;
@@ -506,6 +533,181 @@ it("maps trust and policy receipts without changing instruction bytes or digests
 });
 
 it.each([target, namespace, connectedNamespace])(
+  "reviews and restores through the captured SSH helper for $source",
+  async (input) => {
+    const owner = client(input);
+    const selected = await owner.select(input.path, input.environment);
+    const review = await owner.reviewRecovery(selected, {
+      destination: input.path,
+      environment: input.environment,
+    });
+    expect(review.snapshot.root).toBe(input.path);
+    expect(review.snapshot.entries).toEqual([
+      { target: ".voktty/.gitignore", backup: recoveryBackup, text: "*\r\n" },
+    ]);
+    expect(last(io.request.mock.calls)?.[1].params).toEqual({
+      operation: "reviewRecovery",
+      handle,
+      selection: "00000000-0000-4000-8000-000000000003",
+      revision: 1,
+    });
+    expect(await owner.confirmRecovery(selected, review)).toEqual(restoration);
+    expect(last(io.request.mock.calls)?.[1].params).toEqual({
+      operation: "confirmRecovery",
+      handle,
+      selection: "00000000-0000-4000-8000-000000000003",
+      review: trustReply().review,
+      digest: "d".repeat(64),
+    });
+    await expect(owner.confirmRecovery(selected, review)).rejects.toMatchObject(
+      {
+        code: "cancelled",
+      },
+    );
+    expect(io.native).not.toHaveBeenCalled();
+  },
+);
+
+it("maps recovery cancellation on the shared deployment revision and retires its receipt", async () => {
+  const owner = client(namespace);
+  const selected = await owner.select(namespace.path, namespace.environment);
+  const review = await owner.reviewRecovery(selected, {
+    destination: namespace.path,
+    environment: namespace.environment,
+  });
+  expect(await owner.cancelRecovery(selected)).toBe(true);
+  expect(last(io.request.mock.calls)?.[1].params).toEqual({
+    operation: "cancelRecovery",
+    handle,
+    selection: "00000000-0000-4000-8000-000000000003",
+    revision: 1,
+  });
+  await expect(owner.confirmRecovery(selected, review)).rejects.toMatchObject({
+    code: "cancelled",
+  });
+  const fresh = await owner.reviewRecovery(selected, {
+    destination: namespace.path,
+    environment: namespace.environment,
+  });
+  expect(last(io.request.mock.calls)?.[1].params.revision).toBe(2);
+  expect(await owner.confirmRecovery(selected, fresh)).toEqual(restoration);
+});
+
+it.each([target, namespace, connectedNamespace])(
+  "restores from a partial SSH scope through the panel without initializing private state for $source",
+  async (input) => {
+    let restored = false;
+    io.request.mockImplementation(
+      async (_id: number, request: RemoteRequest) => {
+        if (request.params?.operation === "confirmRecovery") restored = true;
+        const result =
+          request.params?.operation === "inspect" && !restored
+            ? {
+                schema: 1,
+                root: null,
+                blockedCount: 1,
+                scope: { schema: 1, state: "partial", ancestryComplete: true },
+              }
+            : operation(request.params ?? {});
+        return response(request, result);
+      },
+    );
+    const states: MemoryPanelState[] = [];
+    const panel = createMemoryPanelController(input, (state) =>
+      states.push(state),
+    );
+    try {
+      await panel.load();
+      expect(last(states)).toMatchObject({
+        status: "ready",
+        observation: { scope: { state: "partial" } },
+      });
+      await panel.reviewRecovery();
+      const reviewed = last(states);
+      expect(reviewed?.status).toBe("recoveryReview");
+      if (reviewed?.status !== "recoveryReview")
+        throw new Error("Missing recovery review");
+      await panel.confirmRecovery(reviewed.review);
+      expect(last(states)).toEqual({
+        status: "recoveryRestored",
+        root: input.path,
+        report: restoration,
+      });
+      await panel.resumeInitialization();
+      expect(last(states)).toEqual({ status: "configuring", recovering: true });
+      expect(
+        io.request.mock.calls.map(([, request]) => request.params.operation),
+      ).toEqual([
+        "open",
+        "select",
+        "inspect",
+        "reviewRecovery",
+        "confirmRecovery",
+        "inspect",
+      ]);
+      expect(io.native).not.toHaveBeenCalled();
+    } finally {
+      await panel.dispose();
+    }
+  },
+);
+
+it("rejects a late recovery review after a profile round trip and cleans up the original helper", async () => {
+  const owner = client(namespace);
+  const selected = await owner.select(namespace.path, namespace.environment);
+  const gate = deferred<void>();
+  const started = deferred<void>();
+  io.request.mockImplementation(async (_id: number, request: RemoteRequest) => {
+    if (request.params?.operation === "reviewRecovery") {
+      started.resolve();
+      await gate.promise;
+    }
+    return response(request, operation(request.params ?? {}));
+  });
+  const pending = owner.reviewRecovery(selected, {
+    destination: namespace.path,
+    environment: namespace.environment,
+  });
+  const rejected = expect(pending).rejects.toMatchObject({ code: "cancelled" });
+  await started.promise;
+  usePreferencesStore.setState({ sshConnections: [] });
+  usePreferencesStore.setState({ sshConnections: [profile] });
+  gate.resolve();
+  await rejected;
+  expect(
+    io.request.mock.calls.some(
+      ([, request]) => request.params.operation === "confirmRecovery",
+    ),
+  ).toBe(false);
+  await owner.close();
+  expect(close).toHaveBeenCalledExactlyOnceWith(7);
+  expect(io.native).not.toHaveBeenCalled();
+});
+
+it("keeps an older helper's recovery rejection on SSH without native fallback", async () => {
+  const owner = client();
+  const selected = await owner.select(target.path, target.environment);
+  io.request.mockImplementationOnce(
+    async (_id: number, request: RemoteRequest) => ({
+      protocol: 2,
+      id: request.id,
+      ok: false,
+      error: { code: "invalid_params", message: "untrusted host details" },
+    }),
+  );
+  await expect(
+    owner.reviewRecovery(selected, {
+      destination: target.path,
+      environment: target.environment,
+    }),
+  ).rejects.toMatchObject({
+    code: "unavailable",
+    message: "Project memory unavailable",
+  });
+  expect(io.native).not.toHaveBeenCalled();
+});
+
+it.each([target, namespace, connectedNamespace])(
   "retains the original helper for accepted context after panel closure for $source",
   async (input) => {
     const owner = client(input);
@@ -777,6 +979,16 @@ it("rejects foreign destinations, host roots and commands before remote IO", asy
       },
     ],
     ["project_memory_documents", { root: "remote://other/project" }],
+    [
+      "project_memory_review_recovery",
+      {
+        request: {
+          destination: "remote://other/project",
+          environment: { kind: "local" },
+          revision: 1,
+        },
+      },
+    ],
   ] as const)
     await expect(transport.invoke(command, args)).rejects.toHaveProperty(
       "code",

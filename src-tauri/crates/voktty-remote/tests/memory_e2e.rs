@@ -5,10 +5,16 @@ use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use voktty_memory_local::{
+    DiscoveryControl, InitializationPreview, LocalMemoryStore, LocalMemoryWorkspace,
+    MemoryReadAccess, MemoryWriteAccess, ReadControl,
+};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_HANDSHAKE,
     METHOD_MEMORY_MANAGE, PROTOCOL_VERSION,
@@ -187,4 +193,108 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
         fs::read_to_string(root.join(".voktty/sessions/kept.json")).unwrap(),
         "reserved conversation"
     );
+}
+
+struct RecoveryFixtureAccess(PathBuf);
+impl MemoryReadAccess for RecoveryFixtureAccess {
+    fn allows_metadata(&self, _path: &Path) -> bool {
+        true
+    }
+    fn allows_read(&self, path: &Path) -> bool {
+        path.starts_with(&self.0) || path.ends_with(".voktty/kit.json")
+    }
+    fn allows_enumeration(&self, path: &Path) -> bool {
+        path.starts_with(&self.0)
+            || self
+                .0
+                .ancestors()
+                .any(|ancestor| path == ancestor.join(".voktty"))
+    }
+}
+impl MemoryWriteAccess for RecoveryFixtureAccess {
+    fn allows_create(&self, path: &Path) -> bool {
+        path.starts_with(&self.0)
+            && !(path.ends_with("RULES.md") && self.0.join(".voktty/INIT.md").exists())
+    }
+    fn allows_replace(&self, path: &Path) -> bool {
+        path.starts_with(&self.0)
+    }
+    fn allows_remove_staging(&self, path: &Path) -> bool {
+        path.starts_with(&self.0)
+    }
+}
+
+#[test]
+fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake_receipt() {
+    let project = tempfile::tempdir_in("/dev/shm").unwrap();
+    let private = tempfile::tempdir().unwrap();
+    fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    let data = private.path().join("data");
+    let parent = data.join("dev.voktty");
+    let root = project.path();
+    fs::create_dir(root.join(".voktty")).unwrap();
+    fs::write(root.join(".voktty/.gitignore"), b"*\r\n").unwrap();
+    let control = ReadControl::default();
+    LocalMemoryStore::prepare_application_parent(&parent, &control).unwrap();
+    let store = Arc::new(LocalMemoryStore::create_private(&parent, &control).unwrap());
+    store.initialize().unwrap();
+    let access = Arc::new(RecoveryFixtureAccess(root.to_owned()));
+    let workspace = LocalMemoryWorkspace::open(&store, root, access.as_ref(), &control).unwrap();
+    let preview = InitializationPreview::prepare(
+        &workspace,
+        &workspace,
+        json!({"project_name":"Framed recovery","created_at":"2026-11-03"})
+            .as_object()
+            .unwrap(),
+        voktty_workspace_kit::RootLinks::default(),
+        &DiscoveryControl::default(),
+    )
+    .unwrap()
+    .into_owned(store.clone(), access.clone(), access.clone())
+    .unwrap();
+    let failure = preview
+        .publish(access.as_ref(), &DiscoveryControl::default())
+        .unwrap_err();
+    assert_eq!(failure.possible_recovery_files.len(), 1);
+    let backup = &failure.possible_recovery_files[0];
+    fs::remove_file(root.join(".voktty/.gitignore")).unwrap();
+    let intent_path = parent.join("project-memory/memory-deployment.json");
+    let state_path = parent.join("project-memory/memory-local.json");
+    let intent = fs::read(&intent_path).unwrap();
+    let state = fs::read(&state_path).unwrap();
+    let mut helper = Helper::start(&data);
+    helper.handshake(root);
+    let handle = helper.ok(json!({"operation":"open"}));
+    let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
+    let review = helper.ok(
+        json!({"operation":"reviewRecovery","handle":handle,"selection":selection,"revision":1}),
+    );
+    assert_eq!(
+        review["entries"],
+        json!([{"target":".voktty/.gitignore","backup":backup,"text":"*\r\n"}])
+    );
+    assert!(!root.join(".voktty/.gitignore").exists());
+    helper.handshake(root);
+    let rejected = helper.memory(
+        json!({"operation":"confirmRecovery","handle":handle,"selection":selection,
+        "review":review["review"],"digest":review["digest"]}),
+    );
+    assert_eq!(rejected["error"]["code"], "cancelled");
+    assert!(!root.join(".voktty/.gitignore").exists());
+    let handle = helper.ok(json!({"operation":"open"}));
+    let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
+    let review = helper.ok(
+        json!({"operation":"reviewRecovery","handle":handle,"selection":selection,"revision":1}),
+    );
+    let report = helper.ok(
+        json!({"operation":"confirmRecovery","handle":handle,"selection":selection,
+        "review":review["review"],"digest":review["digest"]}),
+    );
+    assert_eq!(report["created"], json!([".voktty/.gitignore"]));
+    assert_eq!(report["cleaned"], json!([backup]));
+    assert_eq!(fs::read(root.join(".voktty/.gitignore")).unwrap(), b"*\r\n");
+    assert!(!root.join(backup).exists());
+    assert!(!root.join(".voktty/kit.json").exists());
+    assert_eq!(fs::read(intent_path).unwrap(), intent);
+    assert_eq!(fs::read(state_path).unwrap(), state);
 }

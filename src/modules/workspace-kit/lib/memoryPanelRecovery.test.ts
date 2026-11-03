@@ -359,17 +359,10 @@ it("retains partial failures, requires a new review and waits for exact cancella
   await f.panel.dispose();
 });
 
-it("never offers recovery through local fallback for remote, WSL, Docker or denied sources", async () => {
+it("never offers recovery for WSL, Docker or malformed sources", async () => {
   for (const location of [
-    { ...target, path: "remote://machine/project" },
-    {
-      ...target,
-      environment: {
-        kind: "ssh",
-        root: "/owned",
-        connection: { id: "ssh", name: "SSH", host: "host" },
-      },
-    },
+    { ...target, path: "" },
+    { ...target, path: "/owned\0invalid" },
     { ...target, environment: { kind: "wsl", distro: "Ubuntu" } },
     {
       ...target,

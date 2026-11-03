@@ -3,7 +3,7 @@ mod access;
 #[path = "project_memory_wire.rs"]
 mod wire;
 
-use access::{AcceptedWrites, Access};
+use access::{AcceptedRestoration, AcceptedWrites, Access};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -13,7 +13,7 @@ use voktty_memory_local::{
     inspect_local_memory_scope, read_local_memory_documents, resolve_local_memory_directory,
     DiscoveryControl, DiscoveryPurpose, InitializationPreview, LocalMemoryStore,
     LocalMemoryWorkspace, MemoryContextSession, MemoryPolicyReview, MemorySessionUse,
-    MemoryTrustReview, OwnedInitializationPreview, ReadControl, ReadError,
+    MemoryTrustReview, OwnedInitializationPreview, OwnedRecoveryReview, ReadControl, ReadError,
 };
 use voktty_remote_protocol::{RemoteRequest, RemoteResponse};
 use voktty_workspace_kit::RootLinks;
@@ -59,11 +59,15 @@ impl<T> Review<T> {
     }
 
     fn take(&mut self, token: &str) -> Result<T, Error> {
+        self.take_if(token, |_| true)
+    }
+
+    fn take_if(&mut self, token: &str, accepts: impl FnOnce(&T) -> bool) -> Result<T, Error> {
         if token.len() != 36
             || !self
                 .current
                 .as_ref()
-                .is_some_and(|(current, _)| current == token)
+                .is_some_and(|(current, value)| current == token && accepts(value))
         {
             return Err(Error::new("cancelled"));
         }
@@ -88,10 +92,15 @@ impl<T> Review<T> {
     }
 }
 
+enum DeploymentReview {
+    Preview(Box<OwnedInitializationPreview>),
+    Recovery(Box<OwnedRecoveryReview>),
+}
+
 struct Selection {
     token: String,
     source: Arc<Access>,
-    preview: Review<OwnedInitializationPreview>,
+    deployment: Review<DeploymentReview>,
     trust: Review<MemoryTrustReview>,
     policy: Review<MemoryPolicyReview>,
 }
@@ -327,7 +336,7 @@ impl MemoryServer {
                 presentation.selected = Some(Selection {
                     token: token.clone(),
                     source: Arc::new(Access::new(root.to_owned(), requested, inspect_ancestors)),
-                    preview: Review::default(),
+                    deployment: Review::default(),
                     trust: Review::default(),
                     policy: Review::default(),
                 });
@@ -391,7 +400,7 @@ impl MemoryServer {
             } => {
                 let source = {
                     let selected = self.selected(&handle, &selection)?;
-                    selected.preview.reserve(revision)?;
+                    selected.deployment.reserve(revision)?;
                     selected.source.clone()
                 };
                 let mut bytes = 0;
@@ -430,7 +439,10 @@ impl MemoryServer {
                     "deployment":preview.deployment(),"isResuming":preview.is_resuming(),
                     "publicationBlocker":preview.publication_blocker().map(|error| Error::from(error).code),
                     "recoveryFiles":preview.recovery_files().iter().map(|file| json!({"path":file.path,"text":file.text})).collect::<Vec<_>>()});
-                let token = self.selected(&handle, &selection)?.preview.put(preview);
+                let token = self
+                    .selected(&handle, &selection)?
+                    .deployment
+                    .put(DeploymentReview::Preview(Box::new(preview)));
                 result["review"] = json!(token);
                 Ok(result)
             }
@@ -440,7 +452,13 @@ impl MemoryServer {
                 review,
             } => {
                 let selected = self.selected(&handle, &selection)?;
-                let preview = selected.preview.take(&review)?;
+                let DeploymentReview::Preview(preview) =
+                    selected.deployment.take_if(&review, |value| {
+                        matches!(value, DeploymentReview::Preview(_))
+                    })?
+                else {
+                    return Err(Error::new("cancelled"));
+                };
                 let access = AcceptedWrites {
                     source: &selected.source,
                     requirements: preview.write_requirements(),
@@ -466,7 +484,83 @@ impl MemoryServer {
                 revision,
             } => Ok(json!(self
                 .selected(&handle, &selection)?
-                .preview
+                .deployment
+                .cancel(revision)?)),
+            Request::ReviewRecovery {
+                handle,
+                selection,
+                revision,
+            } => {
+                let source = {
+                    let selected = self.selected(&handle, &selection)?;
+                    selected.deployment.reserve(revision)?;
+                    selected.source.clone()
+                };
+                let store = self.store(false, &control.read_control()?)?;
+                let workspace = LocalMemoryWorkspace::open(
+                    &store,
+                    &source.requested,
+                    source.as_ref(),
+                    &control.read_control()?,
+                )?;
+                let review = OwnedRecoveryReview::prepare(
+                    &workspace,
+                    &workspace,
+                    store.clone(),
+                    source.clone(),
+                    source.clone(),
+                    control,
+                )?;
+                let mut result = json!({"schema":1,"root":source.requested,"revision":revision,
+                    "digest":review.acceptance_digest(),
+                    "entries":review.entries().iter().map(|entry| json!({
+                        "target":entry.target,"backup":entry.backup,"text":entry.text
+                    })).collect::<Vec<_>>()});
+                let token = self
+                    .selected(&handle, &selection)?
+                    .deployment
+                    .put(DeploymentReview::Recovery(Box::new(review)));
+                result["review"] = json!(token);
+                Ok(result)
+            }
+            Request::ConfirmRecovery {
+                handle,
+                selection,
+                review,
+                digest,
+            } => {
+                let selected = self.selected(&handle, &selection)?;
+                let DeploymentReview::Recovery(review) =
+                    selected.deployment.take_if(&review, |value| {
+                        matches!(value, DeploymentReview::Recovery(_))
+                    })?
+                else {
+                    return Err(Error::new("cancelled"));
+                };
+                let access = AcceptedRestoration(AcceptedWrites {
+                    source: &selected.source,
+                    requirements: review.write_requirements(),
+                });
+                match review.restore(&digest, &access, control) {
+                    Ok(report) => Ok(json!({"schema":1,"created":report.created,
+                        "skipped":report.skipped,"migrated":report.migrated,"cleaned":report.cleaned})),
+                    Err(failure) => {
+                        let mut error = Error::from(failure.error);
+                        error.changes = Some(
+                            json!({"created":failure.created,"migrated":failure.migrated,
+                            "cleaned":failure.cleaned,"possibleRecoveryFiles":failure.possible_recovery_files}),
+                        );
+                        Err(error)
+                    }
+                }
+            }
+            Request::CancelRecovery {
+                handle,
+                selection,
+                revision,
+            } => Ok(json!(self
+                .selected(&handle, &selection)?
+                .deployment
                 .cancel(revision)?)),
             Request::Documents {
                 handle,
@@ -654,3 +748,7 @@ mod tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "project_memory_setup_tests.rs"]
 mod setup_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "project_memory_recovery_tests.rs"]
+mod recovery_tests;

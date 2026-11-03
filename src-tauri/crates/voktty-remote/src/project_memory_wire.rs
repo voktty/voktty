@@ -72,6 +72,22 @@ pub(super) enum Request {
         selection: String,
         revision: u64,
     },
+    ReviewRecovery {
+        handle: Handle,
+        selection: String,
+        revision: u64,
+    },
+    ConfirmRecovery {
+        handle: Handle,
+        selection: String,
+        review: String,
+        digest: String,
+    },
+    CancelRecovery {
+        handle: Handle,
+        selection: String,
+        revision: u64,
+    },
     Documents {
         handle: Handle,
         selection: String,

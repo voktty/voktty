@@ -141,3 +141,21 @@ impl MemoryWriteAccess for AcceptedWrites<'_> {
                 .any(|entry| path == self.requirements.root.join(entry))
     }
 }
+
+pub(super) struct AcceptedRestoration<'a>(pub AcceptedWrites<'a>);
+
+impl MemoryWriteAccess for AcceptedRestoration<'_> {
+    fn allows_create(&self, path: &Path) -> bool {
+        self.0.allowed(path)
+            && self
+                .0
+                .requirements
+                .create
+                .iter()
+                .any(|entry| path == self.0.requirements.root.join(entry))
+    }
+
+    fn allows_remove_staging(&self, path: &Path) -> bool {
+        self.0.allows_remove_staging(path)
+    }
+}
