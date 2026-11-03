@@ -364,9 +364,45 @@ successor or another presentation. No ownership lock spans an await; queued and
 running work retains the shared native worker budget until physical settlement.
 Cancellation or missing delivery never establishes rollback. Restoration preserves
 the interrupted intent and requires a fresh initialization review before subsequent
-publication. These native application APIs do not expose recovery through IPC,
-the panel, CLI or authenticated remote protocol yet. Windows runtime qualification
+publication. The IPC below exposes these native application APIs; the panel,
+CLI and authenticated remote protocol remain pending. Windows runtime qualification
 and complete product acceptance remain pending.
+
+## Restoration IPC
+
+`project_memory_review_recovery` requires the calling presentation, current
+selection and a strict request containing only `revision`, `destination` and
+`environment`. It reserves native ownership before opening existing private state;
+missing state never initializes identity. Destination input is bounded to 4 KiB
+UTF-8 and 128 components before private-state IO. Nonlocal environments cannot
+fall back to local IO. Review reads the original recorded backups and performs
+no project writes, instruction delivery or preference changes.
+
+Publication and restoration share one exclusive command-review state and one
+safe-integer revision counter per selection. A new request of either kind retires
+the other kind; a delayed old request cannot replace it.
+`project_memory_cancel_recovery` and `project_memory_cancel_preview` use that
+shared revision domain, including tombstones recorded before a review
+token exists. Asynchronous cleanup additionally matches the original token, so
+old failure or cancellation cannot retire a successor of either kind.
+
+The schema-1 review reply contains only `root`, opaque `review` UUID, `revision`,
+acceptance `digest` and `entries` with `target`, `backup` and exact original `text`.
+The native intent and reader constrain the inventory to three known migration
+targets, 256-byte relative names and 256 KiB per original; no private installation
+identity, unrelated preferences, filesystem grant or executable plan is returned.
+Display edits cannot modify the retained native artifact.
+
+`project_memory_confirm_recovery` takes a strict `confirmation` object containing
+only that review UUID and digest. A publication token cannot confirm restoration,
+and a restoration token cannot publish. The ready state is consumed before digest
+validation, write-authority capture and worker admission; any failure requires a
+fresh review. The schema-1 publication report describes acknowledged restored and
+moved backup names; redacted errors preserve available partial-change reports.
+Restoration keeps the private intent and never publishes a kit or accepts the
+subsequent initialization review. Its result checks the original source, command,
+native review and presentation after settlement. Retirement can suppress delivery
+but does not imply rollback. No command or ownership mutex spans an await.
 
 ## Native policy ownership
 

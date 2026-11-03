@@ -166,23 +166,69 @@ enum Phase {
     Opening,
     Ready,
     Publishing,
+    Restoring,
 }
 
 #[derive(Clone)]
-struct ReviewCapture {
+struct ReviewCapture<T = NativeMemoryPreviewReceipt> {
     token: String,
     revision: u64,
     selection: NativeMemorySelectionReceipt,
-    receipt: NativeMemoryPreviewReceipt,
+    receipt: T,
 }
-struct CommandReview {
-    capture: ReviewCapture,
+struct CommandReview<T = NativeMemoryPreviewReceipt> {
+    capture: ReviewCapture<T>,
     phase: Phase,
+}
+
+enum DeploymentReview {
+    Preview(CommandReview),
+    Recovery(CommandReview<NativeMemoryRecoveryReceipt>),
+}
+impl DeploymentReview {
+    fn preview_mut(&mut self) -> Option<&mut CommandReview> {
+        match self {
+            Self::Preview(review) => Some(review),
+            _ => None,
+        }
+    }
+    fn matches(&self, revision: u64, token: Option<&str>) -> bool {
+        let (current_revision, current_token) = match self {
+            Self::Preview(review) => (review.capture.revision, review.capture.token.as_str()),
+            Self::Recovery(review) => (review.capture.revision, review.capture.token.as_str()),
+        };
+        current_revision == revision && token.is_none_or(|token| token == current_token)
+    }
+    fn cancel(
+        self,
+        app: &NativeMemoryApplication,
+        resource: &PresentationResource,
+    ) -> Result<(), DeploymentCommandError> {
+        match self {
+            Self::Preview(review) => {
+                app.cancel_preview(
+                    &resource.window,
+                    &resource.receipt,
+                    &review.capture.selection,
+                    &review.capture.receipt,
+                )?;
+            }
+            Self::Recovery(review) => {
+                app.cancel_recovery(
+                    &resource.window,
+                    &resource.receipt,
+                    &review.capture.selection,
+                    &review.capture.receipt,
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 #[derive(Default)]
 pub(super) struct CommandReviews {
     revision: u64,
-    current: Option<CommandReview>,
+    current: Option<DeploymentReview>,
 }
 
 impl PresentationResource {
@@ -240,10 +286,10 @@ impl PresentationResource {
             selection: selected.receipt.clone(),
             receipt,
         };
-        selected.reviews.current = Some(CommandReview {
+        selected.reviews.current = Some(DeploymentReview::Preview(CommandReview {
             capture: capture.clone(),
             phase: Phase::Opening,
-        });
+        }));
         Ok(capture)
     }
 
@@ -259,6 +305,7 @@ impl PresentationResource {
             .reviews
             .current
             .as_mut()
+            .and_then(DeploymentReview::preview_mut)
             .filter(|review| {
                 review.capture.token == capture.token
                     && review.capture.revision == capture.revision
@@ -316,29 +363,21 @@ impl PresentationResource {
             // A cancel can arrive before its preview command on the transport.
             selected.reviews.revision = revision;
             if let Some(review) = selected.reviews.current.take() {
-                app.cancel_preview(
-                    &self.window,
-                    &self.receipt,
-                    &review.capture.selection,
-                    &review.capture.receipt,
-                )?;
+                review.cancel(app, self)?;
                 return Ok(true);
             }
             return Ok(false);
         }
-        if !selected.reviews.current.as_ref().is_some_and(|review| {
-            review.capture.revision == revision
-                && token.is_none_or(|token| token == review.capture.token)
-        }) {
+        if !selected
+            .reviews
+            .current
+            .as_ref()
+            .is_some_and(|review| review.matches(revision, token))
+        {
             return Ok(false);
         }
         let review = selected.reviews.current.take().ok_or_else(cancelled)?;
-        app.cancel_preview(
-            &self.window,
-            &self.receipt,
-            &review.capture.selection,
-            &review.capture.receipt,
-        )?;
+        review.cancel(app, self)?;
         Ok(true)
     }
 
@@ -361,6 +400,7 @@ impl PresentationResource {
             .reviews
             .current
             .as_mut()
+            .and_then(DeploymentReview::preview_mut)
             .filter(|review| {
                 token.len() == 36 && review.capture.token == token && review.phase == Phase::Ready
             })
@@ -398,6 +438,9 @@ impl PresentationResource {
         Ok(())
     }
 }
+
+#[path = "commands_recovery.rs"]
+pub mod recovery;
 
 async fn preview(
     app: &NativeMemoryApplication,
