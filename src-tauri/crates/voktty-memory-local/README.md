@@ -769,6 +769,17 @@ never removes the intent, publishes a kit marker, changes policy/trust or accept
 the subsequent deployment. A fresh initialization review is required. Desktop,
 remote protocol and CLI integration of this restoration API remains pending.
 
+`MemoryWorkers::review_recovery` opens the captured native sources off-thread
+and returns that owned review without writing. `MemoryRecoveryRequest` contains
+only the original store, paths and independent read authorities, with the same
+4 KiB/128-component path limits as deployment. `restore_originals` consumes the
+review, validates the bounded acceptance digest before scheduling and uses a
+separate native write authority. Both operations share the existing four-slot
+deployment budget, discovery deadline and settlement rules above. Dropping a
+queued restoration prevents IO but retains capacity until the queued work settles.
+Failed admission consumes the restoration review; retry needs a fresh review.
+These workers provide no window receipt, IPC authorization or user acceptance.
+
 Windows regression sources cover ordinary legacy-ignore/root-rule migration,
 reserved session bytes, unchanged preferences, named streams and a denied or
 racing target after original preservation. Native Windows execution remains a

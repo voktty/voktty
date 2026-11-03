@@ -170,6 +170,245 @@ async fn preview(f: &Fixture, workers: &MemoryWorkers) -> OwnedInitializationPre
         .unwrap()
 }
 
+struct MigrationAccess(Arc<Access>);
+impl MemoryWriteAccess for MigrationAccess {
+    fn allows_create(&self, path: &Path) -> bool {
+        self.0.allows_create(path)
+    }
+    fn allows_replace(&self, path: &Path) -> bool {
+        self.0.allows_read(path)
+    }
+    fn allows_remove_staging(&self, path: &Path) -> bool {
+        self.0.allows_read(path)
+    }
+}
+
+fn recovery_request(f: &Fixture) -> MemoryRecoveryRequest {
+    MemoryRecoveryRequest {
+        store: f.store.clone(),
+        origin: f.access.root.clone(),
+        origin_access: f.access.clone(),
+        destination: f.access.root.clone(),
+        destination_access: f.access.clone(),
+    }
+}
+
+async fn interrupted_original(f: &Fixture, workers: &MemoryWorkers) -> String {
+    fs::create_dir(f.access.root.join(".voktty")).unwrap();
+    fs::write(f.access.root.join(".voktty/.gitignore"), "*\r\n").unwrap();
+    let review = preview(f, workers).await;
+    f.access.deny_rules.store(true, Ordering::Release);
+    let error = workers
+        .publish(
+            review,
+            Arc::new(MigrationAccess(f.access.clone())),
+            DiscoveryControl::default(),
+        )
+        .unwrap()
+        .finish()
+        .await
+        .unwrap_err();
+    let MemoryDeploymentWorkError::Publication(failure) = error else {
+        panic!("interrupted migration required")
+    };
+    let backup = failure.possible_recovery_files[0].clone();
+    assert_eq!(fs::read(f.access.root.join(&backup)).unwrap(), b"*\r\n");
+    fs::remove_file(f.access.root.join(".voktty/.gitignore")).unwrap();
+    backup
+}
+
+#[test]
+fn recovery_workers_preserve_intent_and_report_exact_restoration_off_thread() {
+    let f = fixture();
+    let caller = std::thread::current().id();
+    runtime().block_on(async {
+        let workers = workers();
+        let backup = interrupted_original(&f, &workers).await;
+        let intent = fs::read(f.state.path().join("memory-deployment.json")).unwrap();
+        let preferences = fs::read(f.state.path().join("memory-local.json")).unwrap();
+        let job = workers
+            .review_recovery(recovery_request(&f), DiscoveryControl::default())
+            .unwrap();
+        ready(&job).await;
+        assert_eq!(workers.active.load(Ordering::Acquire), 1);
+        assert!(!f.access.root.join(".voktty/.gitignore").exists());
+        let review = job.finish().await.unwrap();
+        assert_eq!(review.entries()[0].backup, backup);
+        let digest = review.acceptance_digest();
+        let report = workers
+            .restore_originals(
+                review,
+                digest,
+                Arc::new(MigrationAccess(f.access.clone())),
+                DiscoveryControl::default(),
+            )
+            .unwrap()
+            .finish()
+            .await
+            .unwrap();
+        assert_eq!(report.created, vec![".voktty/.gitignore"]);
+        assert_eq!(report.cleaned, vec![backup]);
+        assert_eq!(
+            fs::read(f.access.root.join(".voktty/.gitignore")).unwrap(),
+            b"*\r\n"
+        );
+        assert_eq!(
+            fs::read(f.state.path().join("memory-deployment.json")).unwrap(),
+            intent
+        );
+        assert_eq!(
+            fs::read(f.state.path().join("memory-local.json")).unwrap(),
+            preferences
+        );
+        assert!(!f.access.root.join(".voktty/kit.json").exists());
+        assert_eq!(workers.active.load(Ordering::Acquire), 0);
+    });
+    assert_ne!(f.access.reads.lock().unwrap().unwrap(), caller);
+    assert_ne!(f.access.writes.lock().unwrap().unwrap(), caller);
+}
+
+#[test]
+fn recovery_worker_rejects_changed_digest_or_retired_authority_without_losing_backup() {
+    for retired in [false, true] {
+        let f = fixture();
+        runtime().block_on(async {
+            let workers = workers();
+            let backup = interrupted_original(&f, &workers).await;
+            let review = workers
+                .review_recovery(recovery_request(&f), DiscoveryControl::default())
+                .unwrap()
+                .finish()
+                .await
+                .unwrap();
+            let digest = if retired {
+                review.acceptance_digest()
+            } else {
+                "0".repeat(64)
+            };
+            f.access.retired.store(retired, Ordering::Release);
+            let error = workers
+                .restore_originals(
+                    review,
+                    digest,
+                    Arc::new(MigrationAccess(f.access.clone())),
+                    DiscoveryControl::default(),
+                )
+                .unwrap()
+                .finish()
+                .await
+                .unwrap_err();
+            assert!(matches!(error, MemoryDeploymentWorkError::Publication(_)));
+            assert_eq!(fs::read(f.access.root.join(backup)).unwrap(), b"*\r\n");
+            assert!(!f.access.root.join(".voktty/.gitignore").exists());
+            assert!(f.state.path().join("memory-deployment.json").exists());
+        });
+    }
+}
+
+#[test]
+fn recovery_admission_validates_paths_runtime_control_and_shared_capacity_before_io() {
+    let f = fixture();
+    let workers = workers();
+    assert!(matches!(
+        workers.review_recovery(recovery_request(&f), DiscoveryControl::default()),
+        Err(MemoryDeploymentWorkError::Worker(
+            MemoryWorkError::RuntimeUnavailable
+        ))
+    ));
+    for destination in [false, true] {
+        let mut request = recovery_request(&f);
+        if destination {
+            request.destination = PathBuf::from("relative");
+        } else {
+            request.origin = PathBuf::from("relative");
+        }
+        assert!(matches!(
+            workers.review_recovery(request, DiscoveryControl::default()),
+            Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
+                ReadError::InvalidInput
+            )))
+        ));
+    }
+    let control = DiscoveryControl::default();
+    control.cancel();
+    assert!(matches!(
+        workers.review_recovery(recovery_request(&f), control),
+        Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
+            ReadError::Cancelled
+        )))
+    ));
+    runtime().block_on(async {
+        let mut held = Vec::new();
+        for _ in 0..4 {
+            held.push(
+                workers
+                    .spawn(Control::Read(ReadControl::default()), || Ok(()))
+                    .unwrap(),
+            );
+        }
+        assert!(matches!(
+            workers.review_recovery(recovery_request(&f), DiscoveryControl::default()),
+            Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
+                ReadError::Busy
+            )))
+        ));
+        for job in held {
+            job.finish().await.unwrap();
+        }
+    });
+    assert!(f.access.reads.lock().unwrap().is_none());
+    assert_eq!(workers.active.load(Ordering::Acquire), 0);
+}
+
+#[test]
+fn queued_retired_restoration_retains_capacity_until_settlement_and_never_moves_original() {
+    let runtime = Builder::new_current_thread()
+        .enable_time()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    let f = fixture();
+    runtime.block_on(async {
+        let workers = workers();
+        let backup = interrupted_original(&f, &workers).await;
+        let review = workers
+            .review_recovery(recovery_request(&f), DiscoveryControl::default())
+            .unwrap()
+            .finish()
+            .await
+            .unwrap();
+        let digest = review.acceptance_digest();
+        let gate = Arc::new(Gate::new());
+        let release = Release(gate.clone());
+        let (started, observed) = mpsc::channel();
+        let occupied = tokio::task::spawn_blocking(move || {
+            started.send(()).unwrap();
+            gate.wait();
+        });
+        observed.recv_timeout(Duration::from_secs(3)).unwrap();
+        let control = DiscoveryControl::default();
+        let job = workers
+            .restore_originals(
+                review,
+                digest,
+                Arc::new(MigrationAccess(f.access.clone())),
+                control.clone(),
+            )
+            .unwrap();
+        drop(job);
+        assert_eq!(
+            control.phase(Duration::from_secs(1)).check(),
+            Err(ReadError::Cancelled)
+        );
+        assert_eq!(workers.active.load(Ordering::Acquire), 1);
+        drop(release);
+        occupied.await.unwrap();
+        drain(&workers).await;
+        assert_eq!(fs::read(f.access.root.join(backup)).unwrap(), b"*\r\n");
+        assert!(!f.access.root.join(".voktty/.gitignore").exists());
+    });
+}
+
 #[test]
 fn exact_preview_and_publication_run_off_thread_without_changing_preferences() {
     let f = fixture();
