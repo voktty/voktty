@@ -21,6 +21,101 @@ pub struct NativeMemorySelectionReceipt {
 }
 
 impl NativeMemorySelection {
+    pub fn reserve_recovery(
+        &mut self,
+        receipt: &NativeMemorySelectionReceipt,
+        registry: &WorkspaceRegistry,
+        target: NativeMemoryRecoveryTarget,
+    ) -> Result<NativeMemoryRecoveryReceipt, MemoryDeploymentWorkError> {
+        self.current(receipt)?;
+        self.deployment.clear();
+        let inspection = self.current(receipt)?.access.ancestor_inspection.clone();
+        let destination = NativeMemorySource::capture_with_inspection(
+            registry,
+            target.destination,
+            &target.environment,
+            inspection,
+        )?;
+        Ok(self
+            .deployment
+            .reserve_recovery(destination, target.control))
+    }
+
+    pub(super) fn recovery_store_control(
+        &self,
+        selection: &NativeMemorySelectionReceipt,
+        reserved: &NativeMemoryRecoveryReceipt,
+    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.recovery_store_control(reserved)
+    }
+
+    pub fn start_recovery(
+        &mut self,
+        selection: &NativeMemorySelectionReceipt,
+        reserved: &NativeMemoryRecoveryReceipt,
+        store: Arc<LocalMemoryStore>,
+    ) -> Result<NativeMemoryRecoveryRead, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.prepare_recovery(
+            self.source.as_ref().ok_or(ReadError::Cancelled)?,
+            reserved,
+            store,
+        )
+    }
+
+    pub fn accept_recovery(
+        &mut self,
+        selection: &NativeMemorySelectionReceipt,
+        prepared: NativeMemoryPreparedRecovery,
+    ) -> Result<NativeMemoryRecoveryReceipt, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.accept_recovery(prepared)
+    }
+
+    pub fn recovery_snapshot(
+        &self,
+        selection: &NativeMemorySelectionReceipt,
+        receipt: &NativeMemoryRecoveryReceipt,
+    ) -> Result<NativeMemoryRecoverySnapshot, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.recovery_snapshot(receipt)
+    }
+
+    pub fn is_recovery_current(
+        &self,
+        selection: &NativeMemorySelectionReceipt,
+        receipt: &NativeMemoryRecoveryReceipt,
+    ) -> bool {
+        self.is_current(selection) && self.deployment.is_recovery_current(receipt)
+    }
+
+    pub fn cancel_recovery(
+        &mut self,
+        selection: &NativeMemorySelectionReceipt,
+        receipt: &NativeMemoryRecoveryReceipt,
+    ) -> bool {
+        self.is_current(selection) && self.deployment.cancel_recovery(receipt)
+    }
+
+    pub fn confirm_recovery(
+        &mut self,
+        selection: &NativeMemorySelectionReceipt,
+        receipt: &NativeMemoryRecoveryReceipt,
+        registry: &WorkspaceRegistry,
+        digest: String,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryRestoration, MemoryDeploymentWorkError> {
+        self.current(selection)?;
+        self.deployment.confirm_recovery(
+            self.source.as_ref().ok_or(ReadError::Cancelled)?,
+            receipt,
+            registry,
+            digest,
+            control,
+        )
+    }
+
     pub fn documents(
         &self,
         receipt: &NativeMemorySelectionReceipt,

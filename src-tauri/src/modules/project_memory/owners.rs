@@ -209,6 +209,9 @@ impl NativeMemoryOwners {
 #[path = "owner_reviews.rs"]
 mod reviews;
 
+#[path = "owner_recovery.rs"]
+mod recovery;
+
 #[path = "owner_trust.rs"]
 mod trust;
 

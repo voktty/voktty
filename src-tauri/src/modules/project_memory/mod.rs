@@ -266,9 +266,11 @@ pub use context::{
 mod deployment;
 mod write_authority;
 pub use deployment::{
-    NativeMemoryPreparedPreview, NativeMemoryPreviewRead, NativeMemoryPreviewReceipt,
-    NativeMemoryPreviewRequest, NativeMemoryPreviewSnapshot, NativeMemoryPreviewTarget,
-    NativeMemoryPreviewValues, NativeMemoryPublication,
+    NativeMemoryPreparedPreview, NativeMemoryPreparedRecovery, NativeMemoryPreviewRead,
+    NativeMemoryPreviewReceipt, NativeMemoryPreviewRequest, NativeMemoryPreviewSnapshot,
+    NativeMemoryPreviewTarget, NativeMemoryPreviewValues, NativeMemoryPublication,
+    NativeMemoryRecoveryConfirmation, NativeMemoryRecoveryRead, NativeMemoryRecoveryReceipt,
+    NativeMemoryRecoverySnapshot, NativeMemoryRecoveryTarget, NativeMemoryRestoration,
 };
 
 mod storage;

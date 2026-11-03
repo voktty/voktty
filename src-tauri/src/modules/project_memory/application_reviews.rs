@@ -2,7 +2,7 @@ use super::*;
 use voktty_memory_local::{MemoryDeploymentWorkError, MemoryWriteAccess};
 
 impl NativeMemoryApplication {
-    fn with_deployment<T>(
+    pub(super) fn with_deployment<T>(
         &self,
         window: &NativeMemoryWindow,
         action: impl FnOnce(

@@ -1,5 +1,7 @@
 use super::*;
-use crate::modules::project_memory::tests::{populate, project, runtime, store};
+use crate::modules::project_memory::tests::project;
+#[cfg(unix)]
+use crate::modules::project_memory::tests::{populate, runtime, store};
 use std::fs;
 
 fn inspecting(registry: &WorkspaceRegistry, root: &Path) -> NativeMemorySource {

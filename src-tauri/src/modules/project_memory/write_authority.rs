@@ -2,7 +2,8 @@ use super::*;
 use std::collections::BTreeSet;
 use std::sync::Weak;
 use voktty_memory_local::{
-    MemoryWriteAccess, OwnedInitializationPreview, PublicationWriteRequirements,
+    MemoryWriteAccess, OwnedInitializationPreview, OwnedRecoveryReview,
+    PublicationWriteRequirements,
 };
 
 #[derive(Default)]
@@ -179,9 +180,44 @@ impl NativeMemoryWriteAuthority {
         destination: Arc<Access>,
         review: &Arc<AtomicBool>,
     ) -> Result<Self, MemoryWorkError> {
+        Self::capture_scope(
+            registry,
+            WriteScope::build(preview.write_requirements())?,
+            origin,
+            destination,
+            review,
+        )
+    }
+
+    pub(super) fn capture_recovery(
+        registry: &WorkspaceRegistry,
+        original: &OwnedRecoveryReview,
+        origin: Arc<Access>,
+        destination: Arc<Access>,
+        review: &Arc<AtomicBool>,
+    ) -> Result<Self, MemoryWorkError> {
+        let requirements = original.write_requirements();
+        let targets = requirements.create.clone();
+        let mut scope = WriteScope::build(requirements)?;
+        scope.stage_parents.clear();
+        scope.create.retain(|path| {
+            targets
+                .iter()
+                .any(|target| *path == scope.root.join(target))
+        });
+        Self::capture_scope(registry, scope, origin, destination, review)
+    }
+
+    fn capture_scope(
+        registry: &WorkspaceRegistry,
+        scope: WriteScope,
+        origin: Arc<Access>,
+        destination: Arc<Access>,
+        review: &Arc<AtomicBool>,
+    ) -> Result<Self, MemoryWorkError> {
         let authority = Self {
             roots: authorized_roots(registry)?,
-            scope: WriteScope::build(preview.write_requirements())?,
+            scope,
             origin,
             destination,
             review: Arc::downgrade(review),

@@ -7,6 +7,9 @@ use std::time::Duration;
 use voktty_memory_local::{PublicationError, StoreError};
 use voktty_workspace_kit::RootLinks;
 
+#[path = "application_recovery_tests.rs"]
+mod recovery;
+
 struct Fixture {
     _project: tempfile::TempDir,
     parent: tempfile::TempDir,

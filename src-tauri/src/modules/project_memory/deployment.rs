@@ -68,7 +68,19 @@ enum ReviewState {
     Opening,
     Ready(Box<OwnedInitializationPreview>),
     Publishing,
+    RecoveryReserved,
+    RecoveryOpening,
+    RecoveryReady(Box<voktty_memory_local::OwnedRecoveryReview>),
+    Restoring,
 }
+
+#[path = "deployment_recovery.rs"]
+mod recovery;
+pub use recovery::{
+    NativeMemoryPreparedRecovery, NativeMemoryRecoveryConfirmation, NativeMemoryRecoveryRead,
+    NativeMemoryRecoveryReceipt, NativeMemoryRecoverySnapshot, NativeMemoryRecoveryTarget,
+    NativeMemoryRestoration,
+};
 
 impl Drop for Review {
     fn drop(&mut self) {
@@ -150,12 +162,21 @@ impl NativeMemoryDeployment {
         destination: NativeMemorySource,
         control: DiscoveryControl,
     ) -> NativeMemoryPreviewReceipt {
+        self.reserve_state(destination, control, ReviewState::Reserved)
+    }
+
+    fn reserve_state(
+        &mut self,
+        destination: NativeMemorySource,
+        control: DiscoveryControl,
+        state: ReviewState,
+    ) -> NativeMemoryPreviewReceipt {
         self.clear();
         let review = Review {
             live: Arc::new(AtomicBool::new(true)),
             destination,
             control,
-            state: ReviewState::Reserved,
+            state,
         };
         let receipt = NativeMemoryPreviewReceipt {
             live: Arc::downgrade(&review.live),

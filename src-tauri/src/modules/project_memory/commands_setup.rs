@@ -62,6 +62,7 @@ pub(super) async fn initialize(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::modules::project_memory::tests::{project, runtime};
     use serde_json::json;
 
