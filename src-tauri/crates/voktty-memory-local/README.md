@@ -709,6 +709,12 @@ recorded proposal requires explicit recovery; neither copy is deleted or
 automatically migrated again. Unrecognized creation-stage
 leftovers and explicit conflict export/abandonment UI remain pending.
 
+Preparation checks a pending intent's project and root bindings before deriving
+a replacement plan. If an observed migration target is absent, it returns
+`RecoveryRequired` with the recorded candidate recovery names. It does not infer
+that those artifacts exist, regenerate missing user rules from the template,
+restore files or rewrite the private intent during this read-only operation.
+
 Linux tests exercise the three real migrations, CRLF/Unicode outside root blocks,
 reserved binary data, mode/owner/group and user attributes, idempotence, recovery
 before/after exchange, invalid transaction IDs, cleanup denial/edits and late

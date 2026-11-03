@@ -161,8 +161,10 @@ fn missing_migrated_ignore_does_not_rebase_its_intent_or_remove_original() {
     let f = fixture();
     let workspace = open(&f);
     let backup = interrupt(&f, &workspace);
-    let original = f.access.root.join(backup);
+    let original = f.access.root.join(&backup);
     let target = f.access.root.join(".voktty/.gitignore");
+    let intent_path = f._state.path().join("memory-deployment.json");
+    let intent_before = fs::read(&intent_path).unwrap();
     fs::remove_file(&target).unwrap();
     assert!(matches!(
         InitializationPreview::prepare(
@@ -174,8 +176,9 @@ fn missing_migrated_ignore_does_not_rebase_its_intent_or_remove_original() {
             RootLinks::default(),
             &DiscoveryControl::default(),
         ),
-        Err(PublicationError::PendingIntent)
+        Err(PublicationError::RecoveryRequired(paths)) if paths == vec![backup]
     ));
+    assert_eq!(fs::read(&intent_path).unwrap(), intent_before);
     assert_eq!(fs::read(&original).unwrap(), b"*\n");
     assert!(!target.exists());
     assert!(!f.access.root.join(".voktty/kit.json").exists());

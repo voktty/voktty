@@ -175,6 +175,18 @@ impl Intent {
                     && (new.original.is_none() || new.original == old.original)
             })
     }
+
+    fn missing_originals(&self, facts: &BTreeMap<String, PathFact>) -> Vec<String> {
+        self.files
+            .iter()
+            .enumerate()
+            .filter_map(|(index, file)| {
+                (file.original.is_some() && matches!(facts.get(&file.path), Some(PathFact::Absent)))
+                    .then(|| self.backup(index))
+                    .flatten()
+            })
+            .collect()
+    }
 }
 
 /// Native-owned review artifact. It cannot be constructed/deserialized by IPC.
@@ -487,6 +499,22 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
             serde_json::from_str(resource("manifest.json").expect("embedded manifest"))
                 .expect("validated manifest");
         let facts = destination.observe_deployment(links, &phase(control))?;
+        let pending = load_intent(store)?;
+        if let Some(pending) = &pending {
+            if pending.origin != origin.project_key()
+                || pending.destination != destination.project_key()
+                || pending.origin_id != binding(origin, control)?
+                || pending.destination_id != binding(destination, control)?
+            {
+                return Err(PublicationError::PendingIntent);
+            }
+            let missing = pending.missing_originals(&facts);
+            if !missing.is_empty() {
+                // Do not render replacement rules from a missing target: their
+                // original text belongs to the interrupted native transaction.
+                return Err(PublicationError::RecoveryRequired(missing));
+            }
+        }
         let prepared = prepare_deployment(
             manifest["version"].as_str().expect("manifest version"),
             &files,
@@ -531,7 +559,6 @@ impl<'w, 'store> InitializationPreview<'w, 'store> {
                 .any(|entry| entry.action == DeploymentAction::Migrate)
                 .then(|| uuid::Uuid::new_v4().to_string()),
         };
-        let pending = load_intent(store)?;
         if pending
             .as_ref()
             .is_some_and(|pending| !pending.matches_proposals(&intent))
@@ -934,6 +961,37 @@ fn create(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_original_rules_require_recovery_before_rendering_a_new_plan() {
+        let intent = Intent {
+            schema: 2,
+            origin: "origin".into(),
+            destination: "destination".into(),
+            origin_id: "origin-id".into(),
+            destination_id: "destination-id".into(),
+            transaction: Some("11111111-1111-4111-8111-111111111111".into()),
+            files: vec![IntentFile {
+                path: "AGENTS.md".into(),
+                original: Some("owner rules".into()),
+                proposed: "owner rules plus link".into(),
+            }],
+        };
+        let mut facts = BTreeMap::from([("AGENTS.md".into(), PathFact::Absent)]);
+        assert_eq!(
+            intent.missing_originals(&facts),
+            vec![intent.backup(0).unwrap()]
+        );
+        facts.insert(
+            "AGENTS.md".into(),
+            PathFact::File {
+                text: "foreign rules".into(),
+            },
+        );
+        assert!(intent.missing_originals(&facts).is_empty());
+        facts.clear();
+        assert!(intent.missing_originals(&facts).is_empty());
+    }
 
     #[test]
     fn native_acceptance_expires_at_the_review_lifetime() {
