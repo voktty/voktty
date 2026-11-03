@@ -24,6 +24,10 @@ const INTENT: &str = "memory-deployment.json";
 const MAX_INTENT_BYTES: u64 = 2 * 1024 * 1024;
 const PREVIEW_LIFETIME: Duration = Duration::from_secs(120);
 
+#[path = "recovery.rs"]
+mod recovery;
+pub use recovery::{OwnedRecoveryReview, RecoveryRestore};
+
 /// Native workspace authorization, including secret-path protections. Read and
 /// metadata authorization never imply permission to create files/directories.
 pub trait MemoryWriteAccess: Send + Sync {

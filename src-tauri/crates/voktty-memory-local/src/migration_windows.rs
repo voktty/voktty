@@ -236,6 +236,68 @@ fn preserve_uncertain_stage(staging: &mut Staging, expected: &Path) {
 }
 
 impl Directory {
+    pub(crate) fn restore_original(
+        &self,
+        root: &Path,
+        entry: &crate::RecoveryRestore,
+        reads: &dyn MemoryReadAccess,
+        writes: &dyn MemoryWriteAccess,
+        control: &ReadControl,
+    ) -> Result<(), PublicationError> {
+        if !matches!(
+            entry.target.as_str(),
+            ".voktty/.gitignore" | "AGENTS.md" | "CLAUDE.md"
+        ) || Path::new(&entry.target).parent() != Path::new(&entry.backup).parent()
+        {
+            return Err(ReadError::InvalidInput.into());
+        }
+        let parent = self.migration_parent(root, &entry.backup, reads, control)?;
+        let name = Path::new(&entry.backup)
+            .file_name()
+            .ok_or(ReadError::InvalidInput)?;
+        let target_name = Path::new(&entry.target)
+            .file_name()
+            .ok_or(ReadError::InvalidInput)?;
+        let backup = root.join(&entry.backup);
+        let actual_backup = parent.actual.join(name);
+        let target = root.join(&entry.target);
+        let actual_target = parent.actual.join(target_name);
+        if !authorized(reads, &backup, &actual_backup)
+            || !authorized(reads, &target, &actual_target)
+            || !writes.allows_create(&target)
+            || !writes.allows_create(&actual_target)
+            || !writes.allows_remove_staging(&backup)
+            || !writes.allows_remove_staging(&actual_backup)
+        {
+            return Err(ReadError::Denied.into());
+        }
+        let (file, before) = open_kind(Some(parent.file()), name, OpenKind::MigrationFile)
+            .map_err(|_| PublicationError::Conflict)?;
+        if checked_text(&file, control)?.0 != entry.text {
+            return Err(PublicationError::Conflict);
+        }
+        parent.validate(reads, control)?;
+        if state(&file).map_err(|_| PublicationError::Io)? != before
+            || !authorized(reads, &backup, &final_path(&file)?)
+            || !writes.allows_create(&target)
+            || !writes.allows_create(&actual_target)
+            || !writes.allows_remove_staging(&backup)
+            || !writes.allows_remove_staging(&actual_backup)
+        {
+            return Err(PublicationError::Conflict);
+        }
+        control.check()?;
+        rename_new(&file, parent.file(), target_name).map_err(|_| PublicationError::Conflict)?;
+        if final_path(&file)? != actual_target || checked_text(&file, control)?.0 != entry.text {
+            return Err(PublicationError::RecoveryRequired(vec![
+                entry.backup.clone(),
+                entry.target.clone(),
+            ]));
+        }
+        control.check()?;
+        Ok(())
+    }
+
     fn migration_parent(
         &self,
         root: &Path,

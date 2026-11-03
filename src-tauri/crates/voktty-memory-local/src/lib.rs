@@ -23,8 +23,9 @@ mod storage_diagnostics;
 mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use publication::{
-    InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, PublicationError,
-    PublicationFailure, PublicationReport, PublicationWriteRequirements, RecoveryFile,
+    InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview, OwnedRecoveryReview,
+    PublicationError, PublicationFailure, PublicationReport, PublicationWriteRequirements,
+    RecoveryFile, RecoveryRestore,
 };
 pub use storage_diagnostics::{StorageFailure, StorageStage};
 pub use workers::{

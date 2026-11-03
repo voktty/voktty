@@ -188,6 +188,82 @@ impl Drop for Staging<'_> {
 }
 
 impl Directory {
+    pub(crate) fn restore_original(
+        &self,
+        root: &Path,
+        entry: &crate::RecoveryRestore,
+        reads: &dyn MemoryReadAccess,
+        writes: &dyn MemoryWriteAccess,
+        control: &ReadControl,
+    ) -> Result<(), PublicationError> {
+        if !matches!(
+            entry.target.as_str(),
+            ".voktty/.gitignore" | "AGENTS.md" | "CLAUDE.md"
+        ) || Path::new(&entry.target).parent() != Path::new(&entry.backup).parent()
+        {
+            return Err(ReadError::InvalidInput.into());
+        }
+        let target = root.join(&entry.target);
+        let backup = root.join(&entry.backup);
+        if !reads.allows_read(&target)
+            || !reads.allows_read(&backup)
+            || !reads.allows_metadata(&target)
+            || !reads.allows_metadata(&backup)
+            || !writes.allows_create(&target)
+            || !writes.allows_remove_staging(&backup)
+        {
+            return Err(ReadError::Denied.into());
+        }
+        let (parent, parent_path, source_name) =
+            self.migration_parent(root, &entry.backup, reads, control)?;
+        let file = open_at(&parent, OsStr::from_bytes(source_name.as_bytes()), false)
+            .map_err(|_| PublicationError::Conflict)?;
+        let (text, before) = checked_text(&file, control)?;
+        if text != entry.text {
+            return Err(PublicationError::Conflict);
+        }
+        self.revalidate_parent(root, &parent, &parent_path, reads, control)?;
+        if !entry_is(&parent, &source_name, &before)
+            || !same_file(&before, &file.metadata().map_err(|_| PublicationError::Io)?)
+            || !writes.allows_create(&target)
+            || !writes.allows_remove_staging(&backup)
+        {
+            return Err(PublicationError::Conflict);
+        }
+        let target_name = CString::new(
+            Path::new(&entry.target)
+                .file_name()
+                .ok_or(ReadError::InvalidInput)?
+                .as_bytes(),
+        )
+        .map_err(|_| ReadError::InvalidInput)?;
+        control.check()?;
+        if unsafe {
+            libc::syscall(
+                libc::SYS_renameat2,
+                parent.as_raw_fd(),
+                source_name.as_ptr(),
+                parent.as_raw_fd(),
+                target_name.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        } != 0
+        {
+            return Err(PublicationError::Conflict);
+        }
+        parent.sync_all().map_err(|_| PublicationError::Io)?;
+        if !entry_is(&parent, &target_name, &before)
+            || checked_text(&file, control)?.0 != entry.text
+        {
+            return Err(PublicationError::RecoveryRequired(vec![
+                entry.backup.clone(),
+                entry.target.clone(),
+            ]));
+        }
+        control.check()?;
+        Ok(())
+    }
+
     fn migration_parent(
         &self,
         root: &Path,

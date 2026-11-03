@@ -744,6 +744,31 @@ opened object. Changed bytes, links, unsupported metadata and cancelled or denie
 cleanup preserve the recovery file. No atomic exchange or power-loss durability
 is claimed for Windows.
 
+## Explicit original restoration
+
+`OwnedRecoveryReview::prepare` reads an existing interrupted intent and retains
+the exact native workspaces, store and read authorities. It reviews only absent
+targets with readable, single-link original backups matching the recorded text.
+The review binds both project/root identities, installation, preference revision,
+intent and exact restoration inventory. Its digest changes when that inventory
+changes; revalidation and the 120-second lifetime apply before writes.
+
+`restore` consumes the review and requires its matching digest plus independent
+creation permission for each target and recovery-removal permission for its
+backup. Linux/Android use relative `renameat2(RENAME_NOREPLACE)`; Windows uses the
+owned-handle relative rename with replacement disabled. Original objects and
+their metadata are moved without cloning permissions. Existing or racing targets
+are preserved. Native root bindings, bytes and intent are checked again after
+each move. Unsupported platforms refuse restoration.
+
+The publication report's `created` names are restored targets and `cleaned` names
+are backup entries removed by moving those objects, not discarded originals.
+Failures retain acknowledged changes and candidate recovery names; an IO failure
+can leave additional unacknowledged moves. Reload before retrying. Restoration
+never removes the intent, publishes a kit marker, changes policy/trust or accepts
+the subsequent deployment. A fresh initialization review is required. Desktop,
+remote protocol and CLI integration of this restoration API remains pending.
+
 Windows regression sources cover ordinary legacy-ignore/root-rule migration,
 reserved session bytes, unchanged preferences, named streams and a denied or
 racing target after original preservation. Native Windows execution remains a
