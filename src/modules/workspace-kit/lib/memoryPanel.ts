@@ -53,6 +53,7 @@ export type MemoryPanelState =
   | { status: "deploymentError"; error: NativeMemoryDeploymentError };
 export type MemoryRecoveryState =
   | { status: "recoveryLoading" }
+  | { status: "recoveryInspection" }
   | {
       status: "recoveryReview";
       review: NativeMemoryRecoveryReview;
@@ -312,7 +313,11 @@ export function createMemoryPanelController(
       )
         return;
       recoveringInitialization = true;
-      notify({ status: "configuring", recovering: true });
+      notify(
+        state.observation.scope.ancestryComplete
+          ? { status: "configuring", recovering: true }
+          : { status: "recoveryInspection" },
+      );
     },
     reviewRecovery() {
       if (
@@ -376,14 +381,20 @@ export function createMemoryPanelController(
         if (!current()) return;
         observation = observed;
         recoveringInitialization = true;
-        notify({ status: "configuring", recovering: true });
+        notify(
+          observed.scope.ancestryComplete
+            ? { status: "configuring", recovering: true }
+            : { status: "recoveryInspection" },
+        );
       }, "recovery");
     },
     backRecovery() {
       if (
         pending ||
         !current() ||
-        !["recoveryReview", "recoveryError"].includes(state.status)
+        !["recoveryReview", "recoveryError", "recoveryInspection"].includes(
+          state.status,
+        )
       )
         return Promise.resolve();
       return deploy(async (receipt) => {
@@ -544,6 +555,17 @@ export function createMemoryPanelController(
     },
     prepare: () => run(true),
     inspectAncestors() {
+      if (state.status === "recoveryInspection") {
+        if (pending) return pending;
+        return run(false, true).then(() => {
+          if (!current() || state.status !== "ready") return;
+          notify(
+            state.observation.scope.ancestryComplete
+              ? { status: "configuring", recovering: true }
+              : { status: "recoveryInspection" },
+          );
+        });
+      }
       if (
         state.status !== "ready" ||
         state.observation.scope?.state !== "incomplete" ||

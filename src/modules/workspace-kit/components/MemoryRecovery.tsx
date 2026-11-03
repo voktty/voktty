@@ -10,12 +10,14 @@ export default function MemoryRecovery({
   onBack,
   onReview,
   onContinue,
+  onInspect,
 }: {
   state: MemoryRecoveryState;
   onConfirm: (review: NativeMemoryRecoveryReview) => void;
   onBack: () => void;
   onReview: () => void;
   onContinue: () => void;
+  onInspect: () => void;
 }) {
   const { t } = useTranslation();
   const [accepted, setAccepted] = useState<NativeMemoryRecoveryReview | null>(
@@ -35,6 +37,11 @@ export default function MemoryRecovery({
       </p>
       {state.status === "recoveryLoading" ? (
         <p role="status">{t("projectMemory.checking")}</p>
+      ) : null}
+      {state.status === "recoveryInspection" ? (
+        <p className="text-xs text-muted-foreground">
+          {t("projectMemory.inspectDescription")}
+        </p>
       ) : null}
       {review ? (
         <>
@@ -116,6 +123,11 @@ export default function MemoryRecovery({
         </div>
       ) : null}
       <div className="flex justify-end gap-2">
+        {state.status === "recoveryInspection" ? (
+          <Button size="sm" onClick={onInspect}>
+            {t("projectMemory.inspectAncestors")}
+          </Button>
+        ) : null}
         {state.status !== "recoveryRestored" ? (
           <Button variant="outline" size="sm" disabled={busy} onClick={onBack}>
             {t("common.back")}

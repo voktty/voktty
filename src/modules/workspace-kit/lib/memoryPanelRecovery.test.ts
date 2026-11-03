@@ -148,6 +148,72 @@ it("allows explicit review of pending initialization without creating private st
   await f.panel.dispose();
 });
 
+it.each(["restored", "pending"] as const)(
+  "requires explicit ancestor inspection before reviewing %s initialization",
+  async (phase) => {
+    const f = fixture();
+    f.api.inspect.mockResolvedValue({
+      ...partial,
+      scope: { ...partial.scope, ancestryComplete: false },
+    });
+    await f.panel.load();
+    if (phase === "restored") {
+      await f.panel.reviewRecovery();
+      await f.panel.confirmRecovery(review);
+      await f.panel.resumeInitialization();
+    } else f.panel.configureInterruptedInitialization();
+    expect(f.publish).toHaveBeenLastCalledWith({
+      status: "recoveryInspection",
+    });
+    expect(f.api.select).toHaveBeenCalledExactlyOnceWith(
+      target.path,
+      target.environment,
+    );
+    await f.panel.preview({}, { agents: false, claude: false });
+    expect(f.api.preview).not.toHaveBeenCalled();
+    f.api.inspect.mockResolvedValue(partial);
+    await f.panel.inspectAncestors();
+    expect(f.api.select).toHaveBeenLastCalledWith(
+      target.path,
+      target.environment,
+      { inspectAncestors: true },
+    );
+    expect(f.publish).toHaveBeenLastCalledWith({
+      status: "configuring",
+      recovering: true,
+    });
+    expect(f.api.initializeLocalState).not.toHaveBeenCalled();
+    expect(f.api.confirmPreview).not.toHaveBeenCalled();
+    await f.panel.dispose();
+  },
+);
+
+it.each(["incomplete", "denied", "retired"] as const)(
+  "does not enter resumed configuration after %s ancestor inspection",
+  async (result) => {
+    const f = fixture();
+    f.api.inspect.mockResolvedValue({
+      ...partial,
+      scope: { ...partial.scope, ancestryComplete: false },
+    });
+    await f.panel.load();
+    f.panel.configureInterruptedInitialization();
+    if (result === "denied")
+      f.api.select.mockRejectedValueOnce({ code: "denied" });
+    if (result === "retired")
+      f.publish.mockImplementation((state) => {
+        if (state.status === "ready") void f.panel.dispose();
+      });
+    await f.panel.inspectAncestors();
+    expect(f.states.some((state) => state.status === "configuring")).toBe(
+      false,
+    );
+    expect(f.api.preview).not.toHaveBeenCalled();
+    expect(f.api.confirmPreview).not.toHaveBeenCalled();
+    await f.panel.dispose();
+  },
+);
+
 it.each(["failure", "blocker"] as const)(
   "offers recovery after a native deployment %s without automatically restoring",
   async (kind) => {

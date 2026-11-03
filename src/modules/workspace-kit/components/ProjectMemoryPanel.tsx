@@ -206,6 +206,7 @@ function MemoryObservation({
   }, [target]);
   if (
     state.status === "recoveryLoading" ||
+    state.status === "recoveryInspection" ||
     state.status === "recoveryReview" ||
     state.status === "recoveryRestoring" ||
     state.status === "recoveryRestored" ||
@@ -226,6 +227,9 @@ function MemoryObservation({
           }}
           onContinue={() => {
             void controller.current?.resumeInitialization();
+          }}
+          onInspect={() => {
+            void controller.current?.inspectAncestors();
           }}
         />
       </Suspense>

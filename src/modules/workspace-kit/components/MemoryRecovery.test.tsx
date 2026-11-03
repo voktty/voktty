@@ -223,6 +223,53 @@ it("permits a pending initialization review with its original date without initi
   ).toBe(false);
 });
 
+it.each(["restored", "pending"] as const)(
+  "offers explicit parent inspection before configuring %s initialization",
+  async (phase) => {
+    const previous = invoke.getMockImplementation();
+    let complete = false;
+    invoke.mockImplementation((command, args) => {
+      if (command === "project_memory_select" && args?.inspectAncestors)
+        complete = true;
+      if (command === "project_memory_discover")
+        return Promise.resolve({
+          schema: 1,
+          root: null,
+          blockedCount: 1,
+          scope: { state: "partial", ancestryComplete: complete },
+        });
+      return previous?.(command, args);
+    });
+    if (phase === "restored") {
+      await click("projectMemory.recovery.review");
+      await accept();
+      await click("projectMemory.recovery.confirm");
+      await click("projectMemory.recovery.continue");
+    } else {
+      await click("common.refresh");
+      await click("projectMemory.recovery.reviewInitialization");
+    }
+    expect(container.textContent).toContain("projectMemory.inspectDescription");
+    expect(container.querySelector("form")).toBeNull();
+    expect(complete).toBe(false);
+    await click("projectMemory.inspectAncestors");
+    expect(invoke).toHaveBeenCalledWith(
+      "project_memory_select",
+      expect.objectContaining({ inspectAncestors: true }),
+    );
+    expect(container.textContent).toContain("projectMemory.valuesTitle");
+    expect(container.querySelector('input[type="date"]')).not.toBeNull();
+    expect(
+      invoke.mock.calls.some(
+        ([command]) =>
+          command === "project_memory_preview" ||
+          command === "project_memory_confirm_preview" ||
+          command === "project_memory_initialize_local_state",
+      ),
+    ).toBe(false);
+  },
+);
+
 it("shows partial failure paths and requires another review without repeating a write", async () => {
   const previous = invoke.getMockImplementation();
   invoke.mockImplementation((command, args) =>
