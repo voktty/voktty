@@ -94,9 +94,7 @@ pub(super) fn run(options: UseOptions, as_json: bool) -> Result<ExitCode, CliErr
     {
         return Err(CliError::new("memory_scope_unavailable","policy requires one ready kit with complete ancestor discovery; project files and preferences were not changed",EXIT_REQUEST));
     }
-    let parent = dirs::data_local_dir()
-        .ok_or_else(|| usage_error("native application data directory is unavailable"))?
-        .join("dev.voktty");
+    let parent = super::origin::required_parent()?;
     let phase = control.read_control().map_err(map_error)?;
     LocalMemoryStore::prepare_application_parent(&parent, &phase).map_err(map_error)?;
     let store = Arc::new(LocalMemoryStore::create_private(&parent, &phase).map_err(map_error)?);

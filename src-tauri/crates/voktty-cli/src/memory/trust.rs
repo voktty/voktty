@@ -159,9 +159,7 @@ pub(super) fn run(options: TrustOptions, as_json: bool) -> Result<ExitCode, CliE
         .ok_or_else(|| map_error(ReadError::Unavailable))?
         .to_owned();
     let access = Arc::new(TrustReadAccess::new(marker.root, memory));
-    let parent = dirs::data_local_dir()
-        .ok_or_else(|| usage_error("native application data directory is unavailable"))?
-        .join("dev.voktty");
+    let parent = super::origin::required_parent()?;
     let phase = control.read_control().map_err(map_error)?;
     LocalMemoryStore::prepare_application_parent(&parent, &phase).map_err(map_error)?;
     let store = Arc::new(LocalMemoryStore::create_private(&parent, &phase).map_err(map_error)?);

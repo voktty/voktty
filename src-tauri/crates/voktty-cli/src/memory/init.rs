@@ -357,9 +357,7 @@ pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, C
                 .join(", ")
         ))
     })?;
-    let parent = dirs::data_local_dir()
-        .ok_or_else(|| map_error(ReadError::Unavailable))?
-        .join("dev.voktty");
+    let parent = super::origin::required_parent()?;
     let preview = prepare(&root, &parent, &options)?;
     let value = review(&root, &preview);
     if options.preview {

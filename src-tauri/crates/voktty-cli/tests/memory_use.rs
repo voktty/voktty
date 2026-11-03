@@ -55,7 +55,7 @@ impl Fixture {
     }
     fn store_path(&self) -> PathBuf {
         self.data
-            .join("dev.voktty/project-memory/memory-local.json")
+            .join("app.voktty.voktty/project-memory/memory-local.json")
     }
     fn use_mode(&self, mode: &str) -> Output {
         self.run(&self.project, &["memory", "use", mode])
@@ -283,7 +283,8 @@ fn policy_preserves_an_accepted_digest_without_retrusting_changed_instructions()
     f.init();
     result(&f.use_mode("--always"));
     let control = ReadControl::default();
-    let store = LocalMemoryStore::open_private(&f.data.join("dev.voktty"), &control).unwrap();
+    let store =
+        LocalMemoryStore::open_private(&f.data.join("app.voktty.voktty"), &control).unwrap();
     let access = Access {
         root: fs::canonicalize(&f.project).unwrap(),
     };

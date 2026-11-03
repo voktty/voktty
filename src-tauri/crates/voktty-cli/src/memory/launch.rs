@@ -71,7 +71,7 @@ pub(super) fn run(options: RunOptions, as_json: bool) -> Result<ExitCode, CliErr
         resolve_local_memory_directory(&requested, &control.read_control().map_err(map_error)?)
             .map_err(map_error)?;
     if !options.disabled {
-        let parent = dirs::data_local_dir().map(|path| path.join("dev.voktty"));
+        let parent = super::origin::parent()?;
         let observation = status(&root, parent.as_deref())?;
         let state = observation["scope"]["state"]
             .as_str()

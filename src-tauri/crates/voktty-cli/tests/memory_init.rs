@@ -130,7 +130,11 @@ fn preview_is_read_only_for_the_project_and_explicit_creation_matches_the_shared
     assert!(!f.project.join("AGENTS.md").exists());
     assert!(!f.project.join("CLAUDE.md").exists());
     let private: Value = serde_json::from_slice(
-        &fs::read(f.data.join("dev.voktty/project-memory/memory-local.json")).unwrap(),
+        &fs::read(
+            f.data
+                .join("app.voktty.voktty/project-memory/memory-local.json"),
+        )
+        .unwrap(),
     )
     .unwrap();
     assert_eq!(private["projects"], json!([]));

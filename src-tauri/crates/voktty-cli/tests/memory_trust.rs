@@ -63,7 +63,7 @@ impl Fixture {
     fn state(&self) -> Vec<u8> {
         fs::read(
             self.data
-                .join("dev.voktty/project-memory/memory-local.json"),
+                .join("app.voktty.voktty/project-memory/memory-local.json"),
         )
         .unwrap()
     }

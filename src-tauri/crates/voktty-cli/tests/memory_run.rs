@@ -93,7 +93,7 @@ impl Fixture {
     }
     fn state(&self) -> PathBuf {
         self.data
-            .join("dev.voktty/project-memory/memory-local.json")
+            .join("app.voktty.voktty/project-memory/memory-local.json")
     }
 }
 fn value(output: &Output) -> Value {
@@ -219,7 +219,9 @@ fn a_signal_sent_to_the_wrapper_reaches_the_exact_agent_process() {
 fn stored_manual_and_never_do_not_read_or_accept_instruction_content() {
     let f = Fixture::new();
     f.init();
-    let state = f.data.join("dev.voktty/project-memory/memory-local.json");
+    let state = f
+        .data
+        .join("app.voktty.voktty/project-memory/memory-local.json");
     fs::remove_file(f.project.join(".voktty/INIT.md")).unwrap();
     std::os::unix::fs::symlink(
         "/unavailable-secret-fixture",

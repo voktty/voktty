@@ -17,6 +17,7 @@ mod tests;
 mod init;
 mod launch;
 mod measure;
+mod origin;
 mod policy;
 mod trust;
 
@@ -293,7 +294,7 @@ pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, Cli
                     .map_err(|_| map_error(ReadError::Unavailable))?
                     .join(project)
             };
-            let parent = dirs::data_local_dir().map(|path| path.join("dev.voktty"));
+            let parent = origin::parent()?;
             let result = status(&project, parent.as_deref())?;
             let available = matches!(
                 result["scope"]["state"].as_str(),
