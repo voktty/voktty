@@ -224,10 +224,16 @@ fn explicit_storage_actions_require_the_current_application_and_window() {
             .await
             .is_err());
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+        let control = ReadControl::default().with_storage_diagnostics();
         let initialized = app
-            .store(&owner, MemoryStoreMode::Initialize, ReadControl::default())
+            .store(&owner, MemoryStoreMode::Initialize, control.clone())
             .await
-            .unwrap();
+            .unwrap_or_else(|error| {
+                panic!(
+                    "storage initialization failed: {error}; {:?}",
+                    control.storage_failure()
+                )
+            });
         let snapshot = initialized.load().unwrap();
         let reopened = app
             .store(

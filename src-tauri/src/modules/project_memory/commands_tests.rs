@@ -6,12 +6,7 @@ pub(super) fn fixture() -> (
     NativeMemoryApplication,
     Arc<PresentationResource>,
 ) {
-    let state = tempfile::tempdir().unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(state.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
+    let state = crate::modules::project_memory::tests::storage_parent();
     let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
         state.path().to_path_buf(),
     ));

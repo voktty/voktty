@@ -9,13 +9,7 @@ fn runtime() -> Runtime {
     Builder::new_current_thread().enable_time().build().unwrap()
 }
 fn parent() -> tempfile::TempDir {
-    let dir = tempfile::tempdir_in(fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    dir
+    crate::modules::project_memory::tests::storage_parent()
 }
 
 #[test]

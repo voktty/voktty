@@ -17,29 +17,30 @@ const source = fileURLToPath(
   new URL("../../../../templates/workspace-kit/", import.meta.url),
 );
 
-it("preserves bundled template and contract bytes across Git checkout EOL settings", () => {
-  const manifest = JSON.parse(
-    readFileSync(join(source, "manifest.json"), "utf8"),
-  ) as { files: { source: string }[] };
-  const paths = [
-    "manifest.json",
-    "placeholders.json",
-    ...manifest.files.map((file) => file.source),
-    ...readdirSync(join(source, "contracts")).map(
-      (file) => `contracts/${file}`,
-    ),
-  ];
-  const expected = new Map(
-    paths.map((path) => [path, readFileSync(join(source, path))]),
-  );
-  for (const bytes of expected.values()) {
-    expect(bytes.includes(13)).toBe(false);
-    expect(bytes.includes(10)).toBe(true);
-  }
-  const root = mkdtempSync(join(tmpdir(), "voktty-kit-eol-"));
-  const attributes = join(source, ".gitattributes");
-  try {
-    for (const controlled of [false, true]) {
+it.each([false, true])(
+  "checks bundled template and contract checkout bytes with LF attributes=%s",
+  (controlled) => {
+    const manifest = JSON.parse(
+      readFileSync(join(source, "manifest.json"), "utf8"),
+    ) as { files: { source: string }[] };
+    const paths = [
+      "manifest.json",
+      "placeholders.json",
+      ...manifest.files.map((file) => file.source),
+      ...readdirSync(join(source, "contracts")).map(
+        (file) => `contracts/${file}`,
+      ),
+    ];
+    const expected = new Map(
+      paths.map((path) => [path, readFileSync(join(source, path))]),
+    );
+    for (const bytes of expected.values()) {
+      expect(bytes.includes(13)).toBe(false);
+      expect(bytes.includes(10)).toBe(true);
+    }
+    const root = mkdtempSync(join(tmpdir(), "voktty-kit-eol-"));
+    const attributes = join(source, ".gitattributes");
+    try {
       const repository = join(root, controlled ? "controlled" : "uncontrolled");
       const output = join(root, controlled ? "lf" : "crlf");
       mkdirSync(repository);
@@ -65,7 +66,7 @@ it("preserves bundled template and contract bytes across Git checkout EOL settin
             "core.safecrlf=false",
             ...args,
           ],
-          { cwd: repository, stdio: "pipe" },
+          { cwd: repository, stdio: "pipe", timeout: 5_000 },
         );
       git("init", "--quiet");
       git("add", "--", ...paths, ...(controlled ? [".gitattributes"] : []));
@@ -78,8 +79,8 @@ it("preserves bundled template and contract bytes across Git checkout EOL settin
           expect(actual.equals(original), path).toBe(false);
         }
       }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+  },
+);
