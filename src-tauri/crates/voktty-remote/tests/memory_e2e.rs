@@ -176,7 +176,17 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
         .as_str()
         .unwrap()
         .contains("Helper integration"));
-    let stored = fs::read(data.join("dev.voktty/project-memory/memory-local.json")).unwrap();
+    let legacy = data.join("dev.voktty");
+    fs::create_dir(&legacy).unwrap();
+    fs::create_dir(legacy.join("project-memory")).unwrap();
+    assert_eq!(
+        helper.memory(json!({"operation":"contextRead","context":context}))["error"]["code"],
+        "legacyStateRequiresReview"
+    );
+    helper.ok(json!({"operation":"contextClose","context":context}));
+    fs::remove_dir(legacy.join("project-memory")).unwrap();
+    fs::remove_dir(legacy).unwrap();
+    let stored = fs::read(data.join("app.voktty.voktty/project-memory/memory-local.json")).unwrap();
     drop(helper);
 
     let mut replacement = Helper::start(&data);
@@ -186,7 +196,7 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
         "cancelled"
     );
     assert_eq!(
-        fs::read(data.join("dev.voktty/project-memory/memory-local.json")).unwrap(),
+        fs::read(data.join("app.voktty.voktty/project-memory/memory-local.json")).unwrap(),
         stored
     );
     assert_eq!(
@@ -230,7 +240,7 @@ fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake
     let private = tempfile::tempdir().unwrap();
     fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let data = private.path().join("data");
-    let parent = data.join("dev.voktty");
+    let parent = data.join("app.voktty.voktty");
     let root = project.path();
     fs::create_dir(root.join(".voktty")).unwrap();
     fs::write(root.join(".voktty/.gitignore"), b"*\r\n").unwrap();
@@ -297,4 +307,50 @@ fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake
     assert!(!root.join(".voktty/kit.json").exists());
     assert_eq!(fs::read(intent_path).unwrap(), intent);
     assert_eq!(fs::read(state_path).unwrap(), state);
+}
+
+#[test]
+fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
+    let project = tempfile::tempdir_in("/dev/shm").unwrap();
+    let private = tempfile::tempdir().unwrap();
+    fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    let data = private.path();
+    let legacy = data.join("dev.voktty/project-memory");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(
+        legacy.join("memory-local.json"),
+        b"unchanged legacy sentinel",
+    )
+    .unwrap();
+    let root = project.path();
+    let mut helper = Helper::start(data);
+    helper.handshake(root);
+    let handle = helper.ok(json!({"operation":"open"}));
+    let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
+    let inspection =
+        helper.ok(json!({"operation":"inspect","handle":handle,"selection":selection}));
+    assert_eq!(inspection["scope"]["state"], "absent");
+    for operation in ["initialize", "discover", "reviewRecovery"] {
+        let extra = if operation == "reviewRecovery" {
+            json!({"revision":1})
+        } else {
+            json!({})
+        };
+        let mut params = json!({"operation":operation,"handle":handle,"selection":selection});
+        params
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        assert_eq!(
+            helper.memory(params),
+            json!({"schema":1,"ok":false,"error":{"code":"legacyStateRequiresReview"}})
+        );
+    }
+    helper.ok(json!({"operation":"close","handle":handle}));
+    assert_eq!(
+        fs::read(legacy.join("memory-local.json")).unwrap(),
+        b"unchanged legacy sentinel"
+    );
+    assert!(!data.join("app.voktty.voktty").exists());
+    assert_eq!(fs::read_dir(root).unwrap().count(), 0);
 }

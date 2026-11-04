@@ -33,7 +33,7 @@ impl Fixture {
         let private = tempfile::tempdir().unwrap();
         fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
         let mut server = MemoryServer {
-            parent: Some(private.path().join("application")),
+            data_directory: Some(private.path().to_owned()),
             ..Default::default()
         };
         let root = project.path();
@@ -116,7 +116,7 @@ impl Fixture {
         fs::read(
             self.private
                 .path()
-                .join("application/project-memory")
+                .join("app.voktty.voktty/project-memory")
                 .join(name),
         )
         .unwrap()

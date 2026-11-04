@@ -37,7 +37,7 @@ fn fixture() -> (tempfile::TempDir, tempfile::TempDir, MemoryServer) {
     let private = tempfile::tempdir().unwrap();
     fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let server = MemoryServer {
-        parent: Some(private.path().join("application")),
+        data_directory: Some(private.path().to_owned()),
         ..Default::default()
     };
     (project, private, server)

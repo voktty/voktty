@@ -15,6 +15,7 @@ mod apple_acl;
 mod application;
 mod bootstrap;
 mod discovery;
+mod origin;
 pub mod path_policy;
 mod preferences;
 mod publication;
@@ -23,6 +24,7 @@ mod storage_diagnostics;
 mod template_inputs;
 mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
+pub use origin::{resolve_memory_application_parent, MemoryOriginError, MEMORY_APPLICATION_ID};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview,
     OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,

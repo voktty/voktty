@@ -129,8 +129,10 @@ reflects compiled native restoration support on Linux, Android and Windows, not
 runtime qualification. Linux process tests cover preview, exact acceptance,
 metadata, unchanged private state, changed facts, malformed input, terminal
 escaping and separately reviewed resumption. Other platform and filesystem
-runtime qualification remains outstanding. The SSH helper retains its own host
-storage contract; this local command does not migrate or combine host settings.
+runtime qualification remains outstanding. The SSH helper uses the same native
+origin resolver and storage on its execution host. Its legacy-state refusal is
+`legacyStateRequiresReview`; this local command does not migrate or combine
+settings. Desktop on another machine retains its separate installation.
 
 ## Persistent memory policy
 

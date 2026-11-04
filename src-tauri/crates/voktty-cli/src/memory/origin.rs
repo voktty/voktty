@@ -1,8 +1,8 @@
 use super::{map_error, CliError, EXIT_REQUEST};
 use std::path::{Path, PathBuf};
-use voktty_memory_local::ReadError;
-
-const APPLICATION_ID: &str = "app.voktty.voktty";
+use voktty_memory_local::{
+    resolve_memory_application_parent, MemoryOriginError, ReadControl, ReadError,
+};
 
 pub(super) fn parent() -> Result<Option<PathBuf>, CliError> {
     dirs::data_local_dir()
@@ -18,18 +18,10 @@ fn resolve(base: &Path) -> Result<PathBuf, CliError> {
     if !base.is_absolute() {
         return Err(map_error(ReadError::Unavailable));
     }
-    let legacy = base.join("dev.voktty");
-    match std::fs::symlink_metadata(&legacy) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Ok(metadata) if metadata.is_dir() && !is_link(&metadata) => {
-            match std::fs::symlink_metadata(legacy.join("project-memory")) {
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                _ => return Err(legacy_error()),
-            }
-        }
-        _ => return Err(legacy_error()),
-    }
-    Ok(base.join(APPLICATION_ID))
+    resolve_memory_application_parent(base, &ReadControl::default()).map_err(|error| match error {
+        MemoryOriginError::Read(error) => map_error(error),
+        MemoryOriginError::LegacyStateRequiresReview => legacy_error(),
+    })
 }
 
 fn legacy_error() -> CliError {
@@ -40,20 +32,10 @@ fn legacy_error() -> CliError {
     )
 }
 
-fn is_link(metadata: &std::fs::Metadata) -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-    }
-    #[cfg(not(windows))]
-    metadata.file_type().is_symlink()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use voktty_memory_local::MEMORY_APPLICATION_ID as APPLICATION_ID;
 
     #[test]
     fn origin_matches_the_desktop_local_data_identifier_without_creating_state() {

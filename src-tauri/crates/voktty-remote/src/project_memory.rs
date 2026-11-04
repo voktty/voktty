@@ -141,7 +141,7 @@ impl Drop for Context {
 
 /// Owned by one authenticated helper incarnation. Rehandshake drops its receipts.
 pub(super) struct MemoryServer {
-    parent: Option<PathBuf>,
+    data_directory: Option<PathBuf>,
     next_id: u64,
     presentations: HashMap<u64, Presentation>,
     contexts: HashMap<u64, Context>,
@@ -150,7 +150,7 @@ pub(super) struct MemoryServer {
 impl Default for MemoryServer {
     fn default() -> Self {
         Self {
-            parent: dirs::data_local_dir().map(|path| path.join("dev.voktty")),
+            data_directory: dirs::data_local_dir(),
             next_id: 0,
             presentations: HashMap::new(),
             contexts: HashMap::new(),
@@ -159,6 +159,21 @@ impl Default for MemoryServer {
 }
 
 impl MemoryServer {
+    fn state_parent(&self, control: &ReadControl) -> Result<PathBuf, Error> {
+        let base = self
+            .data_directory
+            .as_deref()
+            .ok_or(Error::new("unavailable"))?;
+        voktty_memory_local::resolve_memory_application_parent(base, control).map_err(|error| {
+            match error {
+                voktty_memory_local::MemoryOriginError::Read(error) => Error::from(error),
+                voktty_memory_local::MemoryOriginError::LegacyStateRequiresReview => {
+                    Error::new("legacyStateRequiresReview")
+                }
+            }
+        })
+    }
+
     pub fn reset(&mut self) {
         self.presentations.clear();
         self.contexts.clear();
@@ -204,7 +219,8 @@ impl MemoryServer {
         initialize: bool,
         control: &ReadControl,
     ) -> Result<Arc<LocalMemoryStore>, Error> {
-        let parent = self.parent.as_deref().ok_or(Error::new("unavailable"))?;
+        let parent = self.state_parent(control)?;
+        let parent = parent.as_path();
         let control = control.clone().with_storage_diagnostics();
         let diagnostic = |error: ReadError, fallback: voktty_memory_local::StorageStage| {
             let failure = control.storage_failure();
@@ -459,8 +475,10 @@ impl MemoryServer {
                 else {
                     return Err(Error::new("cancelled"));
                 };
+                let source = selected.source.clone();
+                self.state_parent(&control.read_control()?)?;
                 let access = AcceptedWrites {
-                    source: &selected.source,
+                    source: &source,
                     requirements: preview.write_requirements(),
                 };
                 match preview.publish(&access, control) {
@@ -537,8 +555,10 @@ impl MemoryServer {
                 else {
                     return Err(Error::new("cancelled"));
                 };
+                let source = selected.source.clone();
+                self.state_parent(&control.read_control()?)?;
                 let access = AcceptedRestoration(AcceptedWrites {
-                    source: &selected.source,
+                    source: &source,
                     requirements: review.write_requirements(),
                 });
                 match review.restore(&digest, &access, control) {
@@ -612,6 +632,7 @@ impl MemoryServer {
                 review,
             } => {
                 let review = self.selected(&handle, &selection)?.trust.take(&review)?;
+                self.state_parent(&control.read_control()?)?;
                 let key = review.observation().project_key.clone();
                 let snapshot = review.accept(control)?;
                 Ok(json!({"schema":1,"preference":snapshot.project(&key)}))
@@ -656,6 +677,7 @@ impl MemoryServer {
                 review,
             } => {
                 let review = self.selected(&handle, &selection)?.policy.take(&review)?;
+                self.state_parent(&control.read_control()?)?;
                 Ok(json!({"schema":1,"preference":review.accept(control)?}))
             }
             Request::CancelPolicy {
@@ -694,6 +716,7 @@ impl MemoryServer {
                     _ => return Err(Error::new("invalidInput")),
                 };
                 let review = self.selected(&handle, &selection)?.trust.take(&review)?;
+                self.state_parent(&control.read_control()?)?;
                 let bound = MemoryContextSession::bind(review, mode, control)?;
                 let result = json!({"schema":1,"root":bound.root()});
                 let source = self.selected(&handle, &selection)?.source.clone();
@@ -702,6 +725,7 @@ impl MemoryServer {
                 Ok(result)
             }
             Request::ContextRead { context } => {
+                self.state_parent(&control.read_control()?)?;
                 let (bound, _) = self
                     .context(&context)?
                     .bound

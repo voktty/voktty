@@ -135,6 +135,7 @@ const errorCodes = new Set([
   "unsupported",
   "missingState",
   "invalidState",
+  "legacyStateRequiresReview",
   "stale",
   "unavailable",
   "scope",

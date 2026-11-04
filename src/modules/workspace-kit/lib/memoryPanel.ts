@@ -221,6 +221,7 @@ export function createMemoryPanelController(
               "unsupported",
               "missingState",
               "invalidState",
+              "legacyStateRequiresReview",
               "stale",
               "unavailable",
             ].includes(error.code)
@@ -275,6 +276,7 @@ export function createMemoryPanelController(
                     "denied",
                     "missingState",
                     "invalidState",
+                    "legacyStateRequiresReview",
                     "unsupported",
                     "unavailable",
                     "timeout",

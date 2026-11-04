@@ -89,15 +89,26 @@ output-settlement rules for all three operations. Older `memory.manage` helpers
 may reject these additive operations; clients report the rejection without
 falling back to Desktop IO.
 
-The host retains private storage at `dirs::data_local_dir()/dev.voktty`.
-Desktop and the standalone CLI now use `app.voktty.voktty` on their execution
-machine; the helper's existing host state is not silently moved or merged.
-CLI/helper state interoperability on the SSH host requires separate qualification.
-Clients cannot choose that path. Marker inspection
+The host and standalone CLI use the shared native origin resolver:
+`dirs::data_local_dir()/app.voktty.voktty/project-memory`, matching Desktop on
+that execution machine. They share its installation identity, preference
+revisions and process locks. Clients cannot choose that path. Older helpers
+and CLI builds used `dev.voktty/project-memory`. Any existing legacy entry,
+including empty, corrupt, linked or inaccessible state, blocks private-state
+operations with `legacyStateRequiresReview`; neither store is opened or created.
+A linked, inaccessible or non-directory legacy application parent also blocks.
+An ordinary legacy application directory without project-memory does not block.
+No identity, policy, trust or interrupted journal is moved, merged or discarded.
+Reviewed migration remains unavailable. Do not delete legacy state to bypass
+this refusal. Marker inspection
 and empty resource reservation create neither that directory nor an identity.
 Preparation is explicit. The shared store qualifies its local filesystem,
 ownership, permissions and complete ancestor chain and retains process locks and
-revision checks. Host and Desktop installations do not copy consent or trust.
+revision checks. Origins are rechecked when opening state and before consuming
+context or accepting a previously prepared review. A late legacy conflict
+consumes a matching confirmation without performing its write. Stateless
+inspection, document display, cancellation and exact resource cleanup remain
+available. Host and Desktop on different machines do not copy consent or trust.
 
 Ancestor inspection is a narrow, explicit choice for a selection. It permits
 only ancestor metadata, immediate `.voktty` entry metadata/enumeration and
