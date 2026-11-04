@@ -112,7 +112,13 @@ function Expand-Archive([string] $LiteralPath, [string] $DestinationPath) {
     );
   const file = join(fixtureDirectory, badChecksum ? "bad.ps1" : "install.ps1");
   writeFileSync(file, script);
-  const launch = `try { & ([ScriptBlock]::Create([IO.File]::ReadAllText(${psQuote(file)}))) } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }`;
+  const launch = `try { & ([ScriptBlock]::Create([IO.File]::ReadAllText(${psQuote(file)}))) } catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  [Console]::Error.WriteLine($_.Exception.GetType().FullName)
+  [Console]::Error.WriteLine($_.InvocationInfo.PositionMessage)
+  [Console]::Error.WriteLine($_.ScriptStackTrace)
+  exit 1
+}`;
   return {
     base,
     downloads,
