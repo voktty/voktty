@@ -400,13 +400,25 @@ fn enumeration_is_independent_authority_and_is_rechecked_before_publication() {
 
 #[test]
 fn changed_configuration_or_replaced_kit_cannot_publish_old_facts() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
     for replace in [false, true] {
         let fixture = Fixture::new();
         let root = fixture.access.root.clone();
+        let expected_context = std::fs::read_to_string(root.join(".voktty/CONTEXT.md")).unwrap();
+        let attempted = Arc::new(AtomicBool::new(false));
+        let mutation_attempted = attempted.clone();
         *fixture.access.mutate.lock().unwrap() = Some(Box::new(move || {
+            mutation_attempted.store(true, Ordering::SeqCst);
             let kit = root.join(".voktty");
             if replace {
-                std::fs::rename(&kit, root.join("previous-kit")).unwrap();
+                let renamed = std::fs::rename(&kit, root.join("previous-kit"));
+                if cfg!(windows) {
+                    assert!(renamed.is_err());
+                    return;
+                }
+                renamed.unwrap();
                 std::fs::create_dir(&kit).unwrap();
                 std::fs::copy(root.join("previous-kit/kit.json"), kit.join("kit.json")).unwrap();
             } else {
@@ -416,10 +428,20 @@ fn changed_configuration_or_replaced_kit_cannot_publish_old_facts() {
                 std::fs::write(path, text).unwrap();
             }
         }));
-        assert!(fixture
+        let observed = fixture
             .open()
-            .observe_preservation(&DiscoveryControl::default())
-            .is_err());
+            .observe_preservation(&DiscoveryControl::default());
+        assert!(attempted.load(Ordering::SeqCst));
+        if replace && cfg!(windows) {
+            let baseline = observed.unwrap();
+            assert!(!fixture.access.root.join("previous-kit").exists());
+            assert!(
+                matches!(&baseline.sources()["CONTEXT.md"], PathFact::File { text }
+                if text == &expected_context)
+            );
+        } else {
+            assert!(observed.is_err());
+        }
     }
 }
 

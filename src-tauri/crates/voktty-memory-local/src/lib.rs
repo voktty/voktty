@@ -364,18 +364,8 @@ impl LocalMemoryStore {
         if bytes.len() as u64 > MAX_BYTES {
             return Err(StoreError::Limit);
         }
-        let mut builder = tempfile::Builder::new();
-        builder.prefix(".memory-local-");
-        #[cfg(not(windows))]
-        let mut staging = builder
-            .tempfile_in(&self.directory)
-            .map_err(|_| StoreError::Io)?;
-        #[cfg(windows)]
-        let mut staging = builder
-            .make_in(&self.directory, |path| {
-                reader_windows::create_state_file(path, true)
-            })
-            .map_err(|_| StoreError::Io)?;
+        let mut staging =
+            private_staging(&self.directory, ".memory-local-").map_err(|_| StoreError::Io)?;
         staging.write_all(&bytes).map_err(|_| StoreError::Io)?;
         staging.as_file().sync_all().map_err(|_| StoreError::Io)?;
         staging
@@ -386,6 +376,21 @@ impl LocalMemoryStore {
             .and_then(|directory| directory.sync_all())
             .map_err(|_| StoreError::Io)?;
         Ok(())
+    }
+}
+
+fn private_staging(directory: &Path, prefix: &str) -> std::io::Result<tempfile::NamedTempFile> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(prefix);
+    #[cfg(windows)]
+    {
+        builder.make_in(directory, |path| {
+            reader_windows::create_state_file(path, true)
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        builder.tempfile_in(directory)
     }
 }
 

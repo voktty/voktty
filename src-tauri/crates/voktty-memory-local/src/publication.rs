@@ -416,9 +416,7 @@ fn save_intent(store: &LocalMemoryStore, intent: &Intent) -> Result<(), Publicat
     if bytes.len() as u64 > MAX_INTENT_BYTES {
         return Err(PublicationError::InvalidIntent);
     }
-    let mut staging = tempfile::Builder::new()
-        .prefix(".memory-deployment-")
-        .tempfile_in(&store.directory)
+    let mut staging = crate::private_staging(&store.directory, ".memory-deployment-")
         .map_err(|_| PublicationError::Io)?;
     staging
         .write_all(&bytes)
@@ -996,6 +994,37 @@ fn create(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn private_recovery_intent_reopens_without_replacement_or_identity_creation() {
+        let directory = crate::memory_parent::memory_parent();
+        let store = LocalMemoryStore::open(directory.path()).unwrap();
+        let intent = Intent {
+            schema: 1,
+            origin: "origin".into(),
+            destination: "destination".into(),
+            origin_id: "origin-id".into(),
+            destination_id: "destination-id".into(),
+            transaction: None,
+            files: vec![IntentFile {
+                path: ".voktty/INIT.md".into(),
+                proposed: "reviewed text".into(),
+                original: None,
+            }],
+        };
+        save_intent(&store, &intent).unwrap();
+        assert_eq!(load_intent(&store).unwrap(), Some(intent.clone()));
+        let before = fs::read(directory.path().join(INTENT)).unwrap();
+        let mut different = intent.clone();
+        different.files[0].proposed = "different text".into();
+        assert_eq!(
+            save_intent(&store, &different),
+            Err(PublicationError::PendingIntent)
+        );
+        assert_eq!(load_intent(&store).unwrap(), Some(intent));
+        assert_eq!(fs::read(directory.path().join(INTENT)).unwrap(), before);
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
 
     #[test]
     fn missing_original_rules_require_recovery_before_rendering_a_new_plan() {

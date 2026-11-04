@@ -41,9 +41,9 @@ unavailable queries and unknown or object-specific grant entries fail closed.
 Deny entries do not excuse a broad allow entry. No ACL is repaired automatically.
 Every Windows preferences or lock-file open also checks its actual owner and
 private DACL; directory permissions alone cannot establish file access policy.
-New lock and preferences staging files receive the same private descriptor and
-explicit current-user owner at creation. Opening an existing file never replaces
-its security descriptor.
+New lock files, preferences staging files and deployment recovery records receive
+the same private descriptor and explicit current-user owner at creation. Opening
+an existing file never replaces its security descriptor.
 Both backends reject links/reparse
 points and cross-device/volume children, and compare the parent and child
 identities again before returning the store. Existing corrupt preferences stay
