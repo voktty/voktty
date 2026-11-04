@@ -75,6 +75,11 @@ impl Drop for Staging {
 }
 
 fn write_error(error: io::Error) -> ReadError {
+    #[cfg(test)]
+    eprintln!(
+        "Windows memory publication OS error: {:?}",
+        error.raw_os_error()
+    );
     match error.kind() {
         io::ErrorKind::AlreadyExists => ReadError::Unavailable,
         io::ErrorKind::PermissionDenied => ReadError::Denied,
@@ -232,6 +237,43 @@ mod tests {
         fn allows_create(&self, path: &Path) -> bool {
             !path.starts_with(&self.denied)
         }
+    }
+
+    #[test]
+    fn creates_exact_project_text_and_refuses_to_replace_an_existing_target() {
+        let project = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(project.path()).unwrap();
+        let access = Access {
+            denied: root.join("blocked"),
+        };
+        let control = ReadControl::default();
+        let directory = Directory::open_root(&root, &control).unwrap();
+        directory
+            .create_text(
+                &root,
+                ".voktty/INIT.md",
+                "reviewed bytes",
+                &access,
+                &access,
+                &control,
+            )
+            .unwrap();
+        assert_eq!(
+            directory.create_text(
+                &root,
+                ".voktty/INIT.md",
+                "replacement",
+                &access,
+                &access,
+                &control
+            ),
+            Err(ReadError::Unavailable)
+        );
+        assert_eq!(
+            std::fs::read(root.join(".voktty/INIT.md")).unwrap(),
+            b"reviewed bytes"
+        );
+        assert_eq!(std::fs::read_dir(root.join(".voktty")).unwrap().count(), 1);
     }
 
     #[test]

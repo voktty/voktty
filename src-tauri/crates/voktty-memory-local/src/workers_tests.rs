@@ -472,14 +472,7 @@ fn cancellation_keeps_its_cause_when_a_blocked_worker_outlives_the_response_dead
 fn storage_diagnostics_distinguish_failures_without_changing_errors_or_existing_data() {
     runtime().block_on(async {
         let workers = workers();
-        let directory =
-            tempfile::tempdir_in(std::fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
-                .unwrap();
-        }
+        let directory = crate::memory_parent::memory_parent();
         let parent = directory.path().join("application");
         let control = ReadControl::default().with_storage_diagnostics();
         assert!(workers

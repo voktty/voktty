@@ -4,14 +4,11 @@ use voktty_memory_local::{
     LocalMemoryStore, MemoryStoreMode, MemoryWorkers, ReadControl, ReadError,
 };
 
+#[path = "../../../test_support/memory_parent.rs"]
+mod memory_parent;
+
 fn parent() -> tempfile::TempDir {
-    let dir = tempfile::tempdir_in(fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    dir
+    memory_parent::memory_parent()
 }
 
 #[test]

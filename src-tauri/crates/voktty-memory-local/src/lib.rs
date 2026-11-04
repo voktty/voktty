@@ -15,6 +15,9 @@ mod apple_acl;
 mod application;
 mod bootstrap;
 mod discovery;
+#[cfg(test)]
+#[path = "../../../test_support/memory_parent.rs"]
+mod memory_parent;
 mod origin;
 pub mod path_policy;
 mod preferences;
@@ -361,9 +364,17 @@ impl LocalMemoryStore {
         if bytes.len() as u64 > MAX_BYTES {
             return Err(StoreError::Limit);
         }
-        let mut staging = tempfile::Builder::new()
-            .prefix(".memory-local-")
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(".memory-local-");
+        #[cfg(not(windows))]
+        let mut staging = builder
             .tempfile_in(&self.directory)
+            .map_err(|_| StoreError::Io)?;
+        #[cfg(windows)]
+        let mut staging = builder
+            .make_in(&self.directory, |path| {
+                reader_windows::create_state_file(path, true)
+            })
             .map_err(|_| StoreError::Io)?;
         staging.write_all(&bytes).map_err(|_| StoreError::Io)?;
         staging.as_file().sync_all().map_err(|_| StoreError::Io)?;
@@ -393,7 +404,15 @@ fn regular_file(path: &Path, write: bool, create: bool) -> Result<File, StoreErr
         use std::os::windows::fs::OpenOptionsExt;
         options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
     }
-    let file = options.open(path).map_err(|error| {
+    #[cfg(windows)]
+    let opened = if create {
+        reader_windows::create_state_file(path, false)
+    } else {
+        options.open(path)
+    };
+    #[cfg(not(windows))]
+    let opened = options.open(path);
+    let file = opened.map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             StoreError::Missing
         } else {

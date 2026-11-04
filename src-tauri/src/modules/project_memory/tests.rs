@@ -4,6 +4,9 @@ use std::fs;
 use tokio::runtime::{Builder, Runtime};
 use voktty_workspace_kit::{render_template, PathFact};
 
+#[path = "../../../test_support/memory_parent.rs"]
+mod memory_parent;
+
 #[path = "selection_tests.rs"]
 mod selection_tests;
 
@@ -32,18 +35,7 @@ pub(super) fn project() -> tempfile::TempDir {
     }
 }
 pub(super) fn storage_parent() -> tempfile::TempDir {
-    // Windows runners keep their general temp directory on a shared data drive.
-    #[cfg(windows)]
-    let base = dirs::data_local_dir().unwrap();
-    #[cfg(not(windows))]
-    let base = std::env::temp_dir();
-    let dir = tempfile::tempdir_in(fs::canonicalize(base).unwrap()).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    dir
+    memory_parent::memory_parent()
 }
 
 #[cfg(not(windows))]

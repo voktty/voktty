@@ -98,6 +98,42 @@ pub(super) fn creation_descriptor() -> Result<Descriptor, ReadError> {
     Ok(Descriptor(descriptor))
 }
 
+pub(super) fn create_state_file(path: &Path, exclusive: bool) -> io::Result<File> {
+    use windows_sys::Win32::Foundation::{GENERIC_READ, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_SHARE_DELETE, FILE_SHARE_WRITE, OPEN_ALWAYS,
+    };
+    let wide: Vec<_> = path.as_os_str().encode_wide().collect();
+    if wide.is_empty() || wide.len() >= 32767 || wide.contains(&0) {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
+    let wide = wide.into_iter().chain(Some(0)).collect::<Vec<_>>();
+    let descriptor = creation_descriptor().map_err(|_| io::ErrorKind::PermissionDenied)?;
+    let security = SECURITY_ATTRIBUTES {
+        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor.0,
+        bInheritHandle: 0,
+    };
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            &security,
+            if exclusive { CREATE_NEW } else { OPEN_ALWAYS },
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(unsafe { File::from_raw_handle(handle) })
+    }
+}
+
 fn installer_sid() -> Result<Vec<u64>, ReadError> {
     let mut name = "TRUSTEDINSTALLER".encode_utf16().collect::<Vec<_>>();
     let name = UNICODE_STRING {
@@ -286,7 +322,7 @@ mod tests {
         assert!(length < 256);
         let sid = unsafe { String::from_utf16(std::slice::from_raw_parts(text, length)).unwrap() };
         unsafe { LocalFree(text.cast()) };
-        let sddl = format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{sid}){extra}");
+        let sddl = format!("O:{sid}D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{sid}){extra}");
         let wide = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
         let mut descriptor = std::ptr::null_mut();
         assert_ne!(
@@ -310,12 +346,36 @@ mod tests {
             unsafe {
                 SetFileSecurityW(
                     wide.as_ptr(),
-                    DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                    OWNER_SECURITY_INFORMATION
+                        | DACL_SECURITY_INFORMATION
+                        | PROTECTED_DACL_SECURITY_INFORMATION,
                     descriptor.0,
                 )
             },
             0
         );
+    }
+
+    #[test]
+    fn new_state_files_have_explicit_private_ownership_without_repairing_existing_files() {
+        let parent = crate::memory_parent::memory_parent();
+        private_acl(parent.path(), "");
+        let path = parent.path().join("state");
+        let mut file = create_state_file(&path, true).unwrap();
+        qualify(&file, true).unwrap();
+        std::io::Write::write_all(&mut file, b"preserved").unwrap();
+        drop(file);
+        assert_eq!(
+            create_state_file(&path, true).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        qualify(&create_state_file(&path, false).unwrap(), true).unwrap();
+        private_acl(&path, "(A;;GR;;;WD)");
+        assert!(matches!(
+            qualify(&create_state_file(&path, false).unwrap(), true),
+            Err(ReadError::Denied)
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), b"preserved");
     }
 
     #[test]
@@ -332,7 +392,7 @@ mod tests {
                 true
             }
         }
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "");
         std::fs::write(parent.path().join("existing.txt"), "preserved").unwrap();
         let control = ReadControl::default().with_storage_diagnostics();
@@ -366,7 +426,7 @@ mod tests {
 
     #[test]
     fn private_acl_allows_creation_and_preserves_installation_identity() {
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "");
         let store = crate::LocalMemoryStore::create_private(parent.path(), &ReadControl::default())
             .unwrap();
@@ -382,7 +442,7 @@ mod tests {
 
     #[test]
     fn broad_parent_control_is_refused_before_creating_state() {
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "(A;;FA;;;WD)");
         let control = ReadControl::default().with_storage_diagnostics();
         assert!(matches!(
@@ -410,7 +470,7 @@ mod tests {
                 true
             }
         }
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "(A;;FA;;;WD)");
         std::fs::create_dir(parent.path().join(".voktty")).unwrap();
         let document = parent.path().join(".voktty/PROJECT.md");
@@ -445,7 +505,7 @@ mod tests {
 
     #[test]
     fn broad_child_reads_are_refused_without_repairing_or_deleting_existing_data() {
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "");
         let store = crate::LocalMemoryStore::create_private(parent.path(), &ReadControl::default())
             .unwrap();
@@ -467,7 +527,7 @@ mod tests {
     #[test]
     fn broad_record_or_lock_access_is_refused_inside_an_otherwise_private_directory() {
         for name in ["memory-local.json", "memory-local.lock"] {
-            let parent = tempfile::tempdir().unwrap();
+            let parent = crate::memory_parent::memory_parent();
             private_acl(parent.path(), "");
             let store =
                 crate::LocalMemoryStore::create_private(parent.path(), &ReadControl::default())
@@ -490,7 +550,7 @@ mod tests {
 
     #[test]
     fn application_suffixes_get_private_acls_without_inheriting_broad_parent_reads() {
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "(A;OICI;GR;;;WD)");
         let application = parent.path().join("data/application");
         crate::LocalMemoryStore::prepare_application_parent(&application, &ReadControl::default())
@@ -507,7 +567,7 @@ mod tests {
 
     #[test]
     fn an_unsafe_existing_ancestor_blocks_preparation_before_creating_descendants() {
-        let parent = tempfile::tempdir().unwrap();
+        let parent = crate::memory_parent::memory_parent();
         private_acl(parent.path(), "");
         let shared = parent.path().join("shared");
         let leaf = shared.join("private");

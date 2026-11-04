@@ -36,6 +36,10 @@ pub(crate) fn qualify_state_file(file: &File) -> Result<(), ReadError> {
     state_security::qualify(file, true)
 }
 
+pub(crate) fn create_state_file(path: &Path, exclusive: bool) -> io::Result<File> {
+    state_security::create_state_file(path, exclusive)
+}
+
 pub(crate) fn ensure_supported() -> Result<(), ReadError> {
     Ok(())
 }
