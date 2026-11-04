@@ -7,21 +7,21 @@
       "description": "Human name of the project.",
       "required": true,
       "default": null,
-      "source": "Folder name, editable in the setup dialog."
+      "source": "Folder name by default; editable in the project files."
     },
     {
       "name": "project_summary",
       "description": "One or two sentences on what the project is and who uses it.",
       "required": false,
       "default": "Describe the project here in one or two sentences.",
-      "source": "Setup dialog."
+      "source": "Project description when available; otherwise the seed text for initial reading."
     },
     {
       "name": "owner_title",
       "description": "How the documents refer to the human who decides: product, releases, irreversible actions.",
       "required": false,
       "default": "the owner",
-      "source": "Setup dialog."
+      "source": "Default title; editable in the project files."
     },
     {
       "name": "primary_branch",
@@ -42,7 +42,7 @@
       "description": "BCP 47 tag of the project language: the language agents write project content in (context, plans, tracking, handoffs, cards). Base files stay in English.",
       "required": true,
       "default": "en",
-      "source": "Chosen when the folder is set up; defaults to the Voktty interface language."
+      "source": "Existing project language or the Voktty interface language by default; editable in the project files."
     },
     {
       "name": "created_at",

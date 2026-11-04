@@ -1,7 +1,9 @@
 # Capture: initial reading of the project
 
-Run once, when `.voktty/` is set up in a folder that already has code. Write
-in the project language (`../kit.json`, `language`).
+Follow this when the project map or context still contains seed text and
+the user's work includes implementation or initial project analysis with
+documentation. Write in the project language (`../kit.json`, `language`).
+For a read-only request, report what is missing without filling it in.
 
 ## Goal
 
@@ -22,7 +24,8 @@ project.
 4. Run the cheapest checks you can (type check, lint, a focused test) to
    confirm the verification commands. Do not run full suites, browsers or
    anything that loads the machine without the heavy-test lock.
-5. Write, holding the `memory` lock:
+5. Reserve the affected paths and `memory` resource (`../team/MESSAGING.md`),
+   re-read the current documents and write what is relevant:
    - `PROJECT.md`: what it is, the map, stack and environment, the
      verification commands you confirmed, build and release as far as you
      could see, and traps you found (for example, a step the README gets
@@ -30,10 +33,9 @@ project.
    - `domains/<COMPONENT>.md` for each component, from `domains/_TEMPLATE.md`.
    - `CONTEXT.md`: what seems in progress (open branches, recent commits,
      TODO lists), active risks you saw.
-6. Do not change `team/agents.json` yourself. If the components suggest a
-   different team (for example, one agent per component), propose the
-   roster to {owner_title} in your answer.
-7. Write a handoff (`handoff.md`).
+6. Leave team configuration alone unless it is part of the user's task.
+   Reading a project does not require creating or starting a team.
+7. Write a handoff (`handoff.md`), update tracking and release your reservations.
 
 ## Rules
 

@@ -10,8 +10,8 @@ and a change of provider.
 
 ## Where to start
 
-- Agents: `INIT.md`, when the user enables memory for the session or asks
-  you to read it. Installing the kit alone does not enable an integration.
+- Agents: `INIT.md`, through the project's usual agent instructions. Follow
+  its pointers to context, active work, reservations, notes and handoffs.
 - People: `PROJECT.md` for what the project is, `INDEX.md` for the map of
   this folder, `plans/TRACKING.md` for what is happening now.
 
@@ -25,13 +25,14 @@ other agents and the record of who owns what. `INIT.md` says what belongs in
 each of them.
 
 Platform, user and runtime instructions retain precedence. Existing agent
-files are not replaced or reduced to adapters. Links from those files are
-optional persistent edits, separate from session permission. A single agent
-can use this memory without a roster, orchestrator or automatic messages.
+files are not replaced or reduced to adapters. Their links point to this
+memory while preserving their existing rules. A single agent can work
+without a roster or orchestrator; independent agents coordinate through
+`team/MESSAGING.md` using files in this project.
 
-Reading context and writing captures require separate permission. Automatic
-captures also require accepted model cost and an integration that supports
-the trigger; direct CLI sessions can use a manually requested capture.
+During ordinary implementation, agents keep context, plans and handoffs
+current. Read-only requests remain read-only. The guides in `capture/`
+describe that work; they do not start agents or paid background jobs.
 
 ## How it travels
 
@@ -42,8 +43,10 @@ decisions included. Keep that in mind, or use a private repository.
 
 ## What is not here
 
-Per-machine runtime state (session ids, mailboxes, locks, Voktty's own
-conversation records) stays out of Git through `.gitignore`. Secrets never
-go in this folder.
+Live coordination and runtime state (session ids, mailboxes, locks,
+Voktty's own conversation records) stays out of Git through `.gitignore`.
+Agents sharing this working directory see those files, including over SSH.
+Separate Git clones share documents, not live reservations or mailbox
+delivery. Secrets never go in this folder.
 
 Created with the Voktty Workspace Kit {kit_version} on {created_at}.

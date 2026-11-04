@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "templateVersion": "1.1.0",
+  "templateVersion": "1.2.0",
   "values": {
     "project_name": "Conformance fixture",
     "language": "es",
@@ -20,37 +20,37 @@
         {
           "path": ".voktty/INIT.md",
           "kind": "base",
-          "sha256": "047b428f1c66acdb290f3d06964fabf584897e9a0f983d9fb793467245b666a6"
+          "sha256": "68762854b779f16cd00ccc07da6fb21b4550296102228311524f602316235069"
         },
         {
           "path": ".voktty/RULES.md",
           "kind": "base",
-          "sha256": "a0ec49371c8aa3f40f1419fa837fd53eb00c6d469fb36f7b63716bb6a3e7de81"
+          "sha256": "ac2acec1924549d22828308a36c79426df0aedbbc3cca82d9ef3440d7fc51b5f"
         },
         {
           "path": ".voktty/INDEX.md",
           "kind": "base",
-          "sha256": "e02b065deb7dfa0c8978dc217d45450379d1f6b9f9e30d914664ed3b02bef720"
+          "sha256": "3103eeea98369cdfe1656e096cf1d3421e3d62b089b68a17e579299a57ce1d27"
         },
         {
           "path": ".voktty/README.md",
           "kind": "base",
-          "sha256": "fb0f884786275f739d7eb1fa867f0cd8f54fb924952324b507d377d5947d5949"
+          "sha256": "11e957e117e0f83ea692ffccb70cf4b433f40895a182d75be6c753bce32059db"
         },
         {
           "path": ".voktty/PROJECT.md",
           "kind": "content",
-          "sha256": "a5c3c718cde514c84be4406f2f878115598ed40edd6fa92f30d440a8daef985a"
+          "sha256": "94d63a813ffcdee3e2655115c142cce1efbce3a8ba6497d9a60397608c0e8d1f"
         },
         {
           "path": ".voktty/CONTEXT.md",
           "kind": "content",
-          "sha256": "ce1376825eebbf41b20187de0c3e99193e1631f3e6722a1124fa2939bf1c713a"
+          "sha256": "7f37a561672d36a63b0dfb7b62f8004fdbf59019c6fb2233f126d886e5e4e7ea"
         },
         {
           "path": ".voktty/kit.json",
           "kind": "content",
-          "sha256": "93ebf3d143cd27f773cb090bea2ac0550c7f57e86520611c50b0482a9ede8be5"
+          "sha256": "412c472bfbb1574e846989298abaec25790bf73c10d553b8f44b604581742bc1"
         },
         {
           "path": ".voktty/kit.schema.json",
@@ -70,7 +70,7 @@
         {
           "path": ".voktty/plans/TRACKING.md",
           "kind": "content",
-          "sha256": "0c170af90b2d6d89f6ebbc8d87e327d8e50d937db8dc1dc02b5b1ee4ea78ffc5"
+          "sha256": "f8d52db66f5b1bee43ae938478edf987d18da1c36f5a48aca116967557f80fc6"
         },
         {
           "path": ".voktty/team/agents.json",
@@ -85,62 +85,62 @@
         {
           "path": ".voktty/team/MESSAGING.md",
           "kind": "base",
-          "sha256": "4385dcc9e2a1ba94a5ece267276fa73131071707a62447fa816c3504991bbc14"
+          "sha256": "e12f58c4e2e5e2302e39a2d1c23905321a4bca2890db1ba593d2110c9c06b916"
         },
         {
           "path": ".voktty/team/roles/orchestrator.md",
           "kind": "base",
-          "sha256": "6be05b807d980408c99dd4ff01873f233d0b9d42b16a29e9b9bfd84e000de9ea"
+          "sha256": "0f6aaddefc62b24d3494dcf61053585d17d3f32dcfb5a6b4d681ce481aba7010"
         },
         {
           "path": ".voktty/team/roles/developer.md",
           "kind": "base",
-          "sha256": "641090d6b98f72561fb17f23e54e47ff61be0d2b6008158c6e3230b0f57ae790"
+          "sha256": "6b74d8760b87ff8fbf41021736176ded98b656ac5009a31cd0386240f6d1b3fe"
         },
         {
           "path": ".voktty/team/roles/verifier.md",
           "kind": "base",
-          "sha256": "62fa72e871f858c3b3321dbfe9be1d8800bc00ce87f45a608a3cfa52469f293a"
+          "sha256": "d47ecf4d6881de756f4a503d9154c569d7702b55e98f5dc3bf850aaed3e10d28"
         },
         {
           "path": ".voktty/capture/README.md",
           "kind": "base",
-          "sha256": "0d29393861d20cb4b2477e95aa8195620e870b071f6c8bcf887d17f9d6be1acf"
+          "sha256": "9e2f2057f47cfba5da4b3991b9f22263051340e67192bb51884e2222f09cab7f"
         },
         {
           "path": ".voktty/capture/initial.md",
           "kind": "base",
-          "sha256": "b5de0d51b4c3635db6df3dfc15084396a93f7e7d542b09e77d23acc513626f3e"
+          "sha256": "909311ae1063c5ec392905b2f67db3f2393e6f38bc7ad0efc2933a3abae0b79e"
         },
         {
           "path": ".voktty/capture/milestone.md",
           "kind": "base",
-          "sha256": "474c489935d8790909edcee0507e70bcd171c16c8e8e7fffd2d9e5bb37b7e829"
+          "sha256": "f0b3a19ccc6c9fc4dbd504d9fa514f77aae38a95c7bb3b73782bde0156853e79"
         },
         {
           "path": ".voktty/capture/handoff.md",
           "kind": "base",
-          "sha256": "9739270da35a60aff48600d9be78e0e532a478dc79a7b092256964e714c6dcf0"
+          "sha256": "ee7cadedc17377f10a21e169f9bda82a806cb4691f67014e0ff0f86c2106b5a1"
         },
         {
           "path": ".voktty/capture/refresh.md",
           "kind": "base",
-          "sha256": "a4624825e929e71924f15750f15d10b7b35e1b65c6515392ed3cb71450887bfc"
+          "sha256": "bee4d9e3567e519e8639dcc1a34f18cfffddead6891f91122d9454fcce028ab9"
         },
         {
           "path": ".voktty/capture/compact.md",
           "kind": "base",
-          "sha256": "f3c54d2e0697005451104dff70f95e77a769393604d6cfe6f26e47c966718ab2"
+          "sha256": "47c116860b42c34aa00e83930ed88e7bd37230cd4745cabce9672004f8b55998"
         },
         {
           "path": ".voktty/continuity/README.md",
           "kind": "base",
-          "sha256": "4eeeeb714c14108b204352a3734ca7cc535e25e1dd086cdcc06586b84fd5d0b0"
+          "sha256": "bb7f4acb4e50a53f82788b5d1ea2b1bcbdea46ff5cdd51031462a0e5a1e3aedf"
         },
         {
           "path": ".voktty/continuity/CHANGELOG.md",
           "kind": "content",
-          "sha256": "25b364c93288c12ef571075c0c92f0ad64d6b8e730a034e78c218b4a44156b1b"
+          "sha256": "ea0c7f7e7e0ff306153239a11872eff99703610c9d70bd6d7425844674298258"
         },
         {
           "path": ".voktty/continuity/handoffs/README.md",
@@ -165,12 +165,12 @@
         {
           "path": ".voktty/rituals/README.md",
           "kind": "base",
-          "sha256": "2e4957de228943d776ae6e6fa2094f69ce0b8b503b2e9bbc5e3079c1d52e7b5b"
+          "sha256": "c73501093b88d34263d4308bd0fad7a3d39c7109f5b580281ee9a35a3b3031a2"
         },
         {
           "path": ".voktty/rituals/SCHEDULE.md",
           "kind": "content",
-          "sha256": "8bafc85353802cf7fc3ea85c63e362f3f88118729f59ea99bd23e89314c47891"
+          "sha256": "73aa2dbc3b60d842517642e078b7c4594fe21f1377e938e76358d52a5c7c05b4"
         },
         {
           "path": ".voktty/external/README.md",
@@ -195,7 +195,7 @@
         {
           "path": "AGENTS.md",
           "kind": "link",
-          "sha256": "4729ee9b0a8551df4bab5e68a0fbeec31a0cae98be69c574b02b235275236f2d"
+          "sha256": "4d4382ce69db384af5a2a959ea9661a8c62a95cf7d19687be91c16ae460df0a7"
         },
         {
           "path": "CLAUDE.md",
@@ -222,37 +222,37 @@
         {
           "path": ".voktty/INIT.md",
           "kind": "base",
-          "sha256": "e1a6eb088152538e0b22f9d09bc36f6b682b6a94c87a0b557c87f6fb7c2bb500"
+          "sha256": "1eee0875276947967cc855b8f2dad532635650d5f156c29f8972cea5fda5099a"
         },
         {
           "path": ".voktty/RULES.md",
           "kind": "base",
-          "sha256": "a0ec49371c8aa3f40f1419fa837fd53eb00c6d469fb36f7b63716bb6a3e7de81"
+          "sha256": "ac2acec1924549d22828308a36c79426df0aedbbc3cca82d9ef3440d7fc51b5f"
         },
         {
           "path": ".voktty/INDEX.md",
           "kind": "base",
-          "sha256": "e02b065deb7dfa0c8978dc217d45450379d1f6b9f9e30d914664ed3b02bef720"
+          "sha256": "3103eeea98369cdfe1656e096cf1d3421e3d62b089b68a17e579299a57ce1d27"
         },
         {
           "path": ".voktty/README.md",
           "kind": "base",
-          "sha256": "ac4adfce3f442471304ce71c2b2c2c1e14d07554f5ed4c21da18df2bb4330146"
+          "sha256": "b6257209f3e00afa32a915569a9dcd2dd32e9e201887b7945a21e64c628fbced"
         },
         {
           "path": ".voktty/PROJECT.md",
           "kind": "content",
-          "sha256": "7bf458ff132942284509753d0ed9e3e9f500a3c2f30dd0e786ec04bf932caa3c"
+          "sha256": "42611c759a4cf62604343f12f8ae5a896050e73c22e42833a0bfe4625d93e552"
         },
         {
           "path": ".voktty/CONTEXT.md",
           "kind": "content",
-          "sha256": "ce1376825eebbf41b20187de0c3e99193e1631f3e6722a1124fa2939bf1c713a"
+          "sha256": "7f37a561672d36a63b0dfb7b62f8004fdbf59019c6fb2233f126d886e5e4e7ea"
         },
         {
           "path": ".voktty/kit.json",
           "kind": "content",
-          "sha256": "9e87e861c551f9919e5afb9a7d32fe187d59f454bd00afa511e520a03e29ffb1"
+          "sha256": "22fd724d6c38dbdd24cca6dfa7b1e8cc5b2e1d628f7c6ca53af20a5d569b7181"
         },
         {
           "path": ".voktty/kit.schema.json",
@@ -272,7 +272,7 @@
         {
           "path": ".voktty/plans/TRACKING.md",
           "kind": "content",
-          "sha256": "0c170af90b2d6d89f6ebbc8d87e327d8e50d937db8dc1dc02b5b1ee4ea78ffc5"
+          "sha256": "f8d52db66f5b1bee43ae938478edf987d18da1c36f5a48aca116967557f80fc6"
         },
         {
           "path": ".voktty/team/agents.json",
@@ -287,62 +287,62 @@
         {
           "path": ".voktty/team/MESSAGING.md",
           "kind": "base",
-          "sha256": "4385dcc9e2a1ba94a5ece267276fa73131071707a62447fa816c3504991bbc14"
+          "sha256": "e12f58c4e2e5e2302e39a2d1c23905321a4bca2890db1ba593d2110c9c06b916"
         },
         {
           "path": ".voktty/team/roles/orchestrator.md",
           "kind": "base",
-          "sha256": "6be05b807d980408c99dd4ff01873f233d0b9d42b16a29e9b9bfd84e000de9ea"
+          "sha256": "0f6aaddefc62b24d3494dcf61053585d17d3f32dcfb5a6b4d681ce481aba7010"
         },
         {
           "path": ".voktty/team/roles/developer.md",
           "kind": "base",
-          "sha256": "641090d6b98f72561fb17f23e54e47ff61be0d2b6008158c6e3230b0f57ae790"
+          "sha256": "6b74d8760b87ff8fbf41021736176ded98b656ac5009a31cd0386240f6d1b3fe"
         },
         {
           "path": ".voktty/team/roles/verifier.md",
           "kind": "base",
-          "sha256": "62fa72e871f858c3b3321dbfe9be1d8800bc00ce87f45a608a3cfa52469f293a"
+          "sha256": "d47ecf4d6881de756f4a503d9154c569d7702b55e98f5dc3bf850aaed3e10d28"
         },
         {
           "path": ".voktty/capture/README.md",
           "kind": "base",
-          "sha256": "0d29393861d20cb4b2477e95aa8195620e870b071f6c8bcf887d17f9d6be1acf"
+          "sha256": "9e2f2057f47cfba5da4b3991b9f22263051340e67192bb51884e2222f09cab7f"
         },
         {
           "path": ".voktty/capture/initial.md",
           "kind": "base",
-          "sha256": "b5de0d51b4c3635db6df3dfc15084396a93f7e7d542b09e77d23acc513626f3e"
+          "sha256": "909311ae1063c5ec392905b2f67db3f2393e6f38bc7ad0efc2933a3abae0b79e"
         },
         {
           "path": ".voktty/capture/milestone.md",
           "kind": "base",
-          "sha256": "474c489935d8790909edcee0507e70bcd171c16c8e8e7fffd2d9e5bb37b7e829"
+          "sha256": "f0b3a19ccc6c9fc4dbd504d9fa514f77aae38a95c7bb3b73782bde0156853e79"
         },
         {
           "path": ".voktty/capture/handoff.md",
           "kind": "base",
-          "sha256": "9739270da35a60aff48600d9be78e0e532a478dc79a7b092256964e714c6dcf0"
+          "sha256": "ee7cadedc17377f10a21e169f9bda82a806cb4691f67014e0ff0f86c2106b5a1"
         },
         {
           "path": ".voktty/capture/refresh.md",
           "kind": "base",
-          "sha256": "a4624825e929e71924f15750f15d10b7b35e1b65c6515392ed3cb71450887bfc"
+          "sha256": "bee4d9e3567e519e8639dcc1a34f18cfffddead6891f91122d9454fcce028ab9"
         },
         {
           "path": ".voktty/capture/compact.md",
           "kind": "base",
-          "sha256": "f3c54d2e0697005451104dff70f95e77a769393604d6cfe6f26e47c966718ab2"
+          "sha256": "47c116860b42c34aa00e83930ed88e7bd37230cd4745cabce9672004f8b55998"
         },
         {
           "path": ".voktty/continuity/README.md",
           "kind": "base",
-          "sha256": "4eeeeb714c14108b204352a3734ca7cc535e25e1dd086cdcc06586b84fd5d0b0"
+          "sha256": "bb7f4acb4e50a53f82788b5d1ea2b1bcbdea46ff5cdd51031462a0e5a1e3aedf"
         },
         {
           "path": ".voktty/continuity/CHANGELOG.md",
           "kind": "content",
-          "sha256": "25b364c93288c12ef571075c0c92f0ad64d6b8e730a034e78c218b4a44156b1b"
+          "sha256": "ea0c7f7e7e0ff306153239a11872eff99703610c9d70bd6d7425844674298258"
         },
         {
           "path": ".voktty/continuity/handoffs/README.md",
@@ -367,12 +367,12 @@
         {
           "path": ".voktty/rituals/README.md",
           "kind": "base",
-          "sha256": "2e4957de228943d776ae6e6fa2094f69ce0b8b503b2e9bbc5e3079c1d52e7b5b"
+          "sha256": "c73501093b88d34263d4308bd0fad7a3d39c7109f5b580281ee9a35a3b3031a2"
         },
         {
           "path": ".voktty/rituals/SCHEDULE.md",
           "kind": "content",
-          "sha256": "8bafc85353802cf7fc3ea85c63e362f3f88118729f59ea99bd23e89314c47891"
+          "sha256": "73aa2dbc3b60d842517642e078b7c4594fe21f1377e938e76358d52a5c7c05b4"
         },
         {
           "path": ".voktty/external/README.md",
@@ -397,7 +397,7 @@
         {
           "path": "AGENTS.md",
           "kind": "link",
-          "sha256": "4729ee9b0a8551df4bab5e68a0fbeec31a0cae98be69c574b02b235275236f2d"
+          "sha256": "4d4382ce69db384af5a2a959ea9661a8c62a95cf7d19687be91c16ae460df0a7"
         },
         {
           "path": "CLAUDE.md",

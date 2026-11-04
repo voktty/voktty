@@ -1,9 +1,9 @@
 # {project_name}
 
 What this project is, how it is built and checked, and the rules that apply
-only here. Written in the project language by the orchestrator (or by the
-only agent, when working alone). Filled in on the first capture
-(`capture/initial.md`) and kept current by later ones.
+only here. Written in the project language by the agent doing the work,
+respecting reservations and any explicitly assigned owner. Filled in during
+the initial reading (`capture/initial.md`) and kept current as work happens.
 
 ## What it is
 

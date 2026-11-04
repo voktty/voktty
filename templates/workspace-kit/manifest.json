@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "files": [
     { "source": "dot-voktty/.gitignore", "kind": "base" },
     { "source": "dot-voktty/INIT.md", "kind": "base" },

@@ -1,48 +1,36 @@
-# Capture
+# Capture guides
 
-A freshly deployed `.voktty/` is mostly empty: what the project is only
-becomes clear as work happens. The memory fills up and stays true because
-specific moments trigger a capture. Each file here is the instruction an
-agent follows at one of those moments. Automatic delivery requires an enabled
-memory session, separate capture consent (including model cost), an available
-agent and a supported integration. The settings below do not grant consent.
-Without that integration, use these instructions only on request; direct CLI
-launches do not guarantee turn, session-end or compaction detection. Reading
-project memory alone does not authorize captures or start another agent.
+A freshly deployed `.voktty/` is mostly empty. These guides tell the agent
+what to write as it learns about the project and completes work. Context,
+plans and handoffs are part of ordinary implementation, not a separate
+memory permission workflow. Read-only requests remain read-only.
+
+The files are usable without Voktty or a scheduling service. Follow them
+at the relevant point in your work; do not wait for a background trigger.
+Do not start another agent or paid turn merely because a setting exists.
 
 | Trigger | Instruction | Who runs it | Files it writes |
 |---|---|---|---|
-| A folder with existing code is set up | `initial.md` | orchestrator, or the only agent | `PROJECT.md`, `CONTEXT.md`, `domains/*.md`, `team/agents.json` (proposal only) |
-| A milestone or a plan closes | `milestone.md` | the agent that closed it, then the orchestrator | the plan, `plans/INDEX.md`, `plans/TRACKING.md`, `CONTEXT.md`, `continuity/CHANGELOG.md` when there is impact |
+| Project context still contains seed text | `initial.md` | the agent doing the initial reading | `PROJECT.md`, `CONTEXT.md`, relevant `domains/*.md` |
+| A milestone or a plan closes | `milestone.md` | the agent that closed it, or an explicitly assigned summary owner | the plan, `plans/INDEX.md`, `plans/TRACKING.md`, `CONTEXT.md`, `continuity/CHANGELOG.md` when there is impact |
 | A session ends, or the agent is about to compact its context | `handoff.md` | every agent | one new file in `continuity/handoffs/`, the agent's own row in `plans/TRACKING.md` |
-| Periodic (turns, minutes or commits) or the "Save context" button | `refresh.md` | the agent asked; shared files only by the orchestrator | `CONTEXT.md`, `PROJECT.md`, `plans/TRACKING.md`, the active plan |
-| A live file passes its limit, the weekly ritual, or the "Compact memory" button | `compact.md` | orchestrator, or the only agent | live files over their limit, `archive/YYYY-MM/`, `archive/LOG.md` |
+| A work block changes facts or reveals stale context | `refresh.md` | the agent doing the work, respecting reservations and assigned owners | `CONTEXT.md`, `PROJECT.md`, `plans/TRACKING.md`, the active plan |
+| The user requests compacting or archiving | `compact.md` | the assigned agent, respecting reservations | live files, `archive/YYYY-MM/`, `archive/LOG.md` |
 
-Settings live in `../kit.json` under `capture`:
-
-- `onSessionEnd`: send `handoff.md` when a session that changed files ends.
-- `beforeCompaction`: send `handoff.md` when the agent's context use passes
-  `compactionThresholdPercent`, so the handoff is written while the agent
-  still remembers.
-- `every`: periodic `refresh.md` after a number of `turns`, `minutes` or
-  `commits` (0 turns that one off).
-- `staleAfterCommits`: warn when the project has this many commits since
-  `CONTEXT.md` or `PROJECT.md` last changed.
-
-Size limits per live file are under `limits`, and archiving under
-`archive`. The planned Voktty integration measures them: when a limit is
-passed, an authorized capture can queue `compact.md` for the orchestrator
-or the only agent. Until implemented, measurement and capture are manual.
+`../kit.json` contains project language, size limits and existing capture
+preferences. Those values are configuration, not evidence that a runtime
+observes turn counts, session end, timers or context compaction. Automatic
+trigger delivery is separate integration work; it is not needed to follow
+these guides. Do not claim that a capture ran without checking its files.
 
 ## Two writers, one file
 
-With a team, shared files have one writer: the orchestrator (`RULES.md`,
-"Who writes the memory"). Other agents capture into their own handoffs and
-send the orchestrator a message with what should change. Rewriting a shared
-file takes the `memory` lock for the minutes it lasts. Voktty also runs at
-most one capture at a time per project once that integration is available.
-Without an active team, the authorized single agent writes shared files.
-Local locks do not serialize writers on other machines or hosts.
+Reserve affected paths and the `memory` resource before rewriting shared
+summaries or indexes (`../team/MESSAGING.md`). Re-read the files after taking
+the reservation. Respect an explicitly assigned summary owner and send it
+your findings when needed. Without that assignment, the agent doing the
+work can update summaries itself. Each agent writes a uniquely named handoff.
+These reservations coordinate the same working directory, not separate clones.
 
 ## What a capture never does
 

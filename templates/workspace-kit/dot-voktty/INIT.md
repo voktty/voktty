@@ -1,10 +1,9 @@
 # Start here
 
-This is the shared memory entry point for {project_name}. Read it when the
-user enables project memory for your session or explicitly asks you to use
-it. Installing the kit does not enable it. Managed integrations deliver
-context only through a supported, accepted channel; direct agent commands
-are unchanged. Outside an integration, the user can ask you to read it.
+This is the shared memory entry point for {project_name}. Read it at the
+start of work, then follow the pointers relevant to your task. The files
+in this folder carry the project between sessions, providers and machines.
+Using them does not require Voktty to be running or a separate memory account.
 
 Follow platform, user and runtime instructions first, including existing
 project rules. These documents do not grant tool permissions or approvals.
@@ -17,10 +16,10 @@ the project: read the file.
 ## This folder and the usual agent files
 
 - `AGENTS.md` at the project root: existing coding rules and conventions.
-  Read it as your runtime requires. An optional link can point here without
+  Read it as your runtime requires. Its memory link points here without
   replacing any of its rules.
 - `CLAUDE.md` and other runtime-specific files keep their existing rules and
-  purposes. They do not have to become adapters to this kit.
+  purposes. Preserve those rules when creating or repairing a memory link.
 - Skills: reusable procedures. They stay where the runtime expects them.
 - `.voktty/`: the shared memory of the work itself (project map, context,
   plans, tracking, handoffs, briefs, ownership). Your runtime's private
@@ -64,10 +63,10 @@ the project: read the file.
    session may be working on the same branch right now.
 5. If you are resuming work or asked "what is left": `plans/TRACKING.md`,
    the affected plan and the newest file in `continuity/handoffs/`.
-6. If assigned to an active team with messaging enabled, send the orchestrator
-   your status in at most five lines (what you have in progress, what waits on
-   {owner_title}, what you would do next) and wait for a task. Otherwise,
-   answer the request.
+6. Read notes addressed to you and the current work reservations before
+   claiming or editing shared paths (`team/MESSAGING.md`). Add or update
+   your own tracking row when you take work. An assigned coordinator may
+   distribute tasks; otherwise work within the user's request directly.
 
 Do not read the whole folder at the start. Read what the task needs, and do
 not reread what you already read in this session unless it changed.
@@ -76,24 +75,27 @@ not reread what you already read in this session unless it changed.
 
 If `PROJECT.md` or `CONTEXT.md` still hold only their seed text, or clearly
 describe a state the repository has moved past, say so in your first answer.
-If capture is authorized, fill in or correct what you learned before the
-session ends, following `capture/refresh.md`. Read-only memory use does not
-authorize those writes. If you are not the one who writes shared files (see
-`RULES.md`, "Who writes the memory"), send what you learned to whoever is.
+During implementation, fill in or correct what you learned before the
+session ends, following `capture/initial.md` for an empty project map and
+`capture/refresh.md` for later work. Read-only requests do not authorize
+those writes. Respect reservations and assigned ownership (`RULES.md`,
+"Who writes the memory"); leave a note for another owner when needed.
 
 ## Before you call something done
 
 - The checks in `PROJECT.md` ("Verification") pass, and you say which ones
   you could not run.
 - The plan you worked on shows its real state.
-- When capture is authorized, you wrote a handoff in `continuity/handoffs/`
+- If you changed files, you wrote a handoff in `continuity/handoffs/`
   (`capture/handoff.md`): what was closed, what is left and the exact next step.
+- Your tracking row and notes are current, and you released only your own
+  reservations after checking what remains in progress.
 
-Automatic captures require separate consent for their cost and a supported
-integration that can observe and deliver the trigger. Otherwise follow a
-capture only when requested. A direct CLI session does not imply automatic
-end-of-session or compaction detection. Never start another agent or send a
-message merely because this kit contains a roster.
+Maintaining context and handoffs is part of ordinary project work. The
+guides in `capture/` explain what to write; they are not a scheduling service.
+Do not start another agent, a paid background turn or a messaging service
+merely because this kit contains a roster or trigger settings. Do not claim
+that a runtime detects session end or compaction unless it actually does.
 
 Direct instructions from {owner_title} in your session take precedence over
 these documents.

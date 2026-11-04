@@ -1,6 +1,6 @@
 # Index
 
-`INIT.md` is the entry point when memory use is enabled. This index maps the
+`INIT.md` is the entry point for project work. This index maps the
 folder; it does not depend on any agent's memory.
 
 ## Base and content
@@ -22,10 +22,10 @@ folder; it does not depend on any agent's memory.
 | `RULES.md` | working rules and their reasons | every session |
 | `PROJECT.md` | what the project is, map, verification, project rules, traps | every session |
 | `CONTEXT.md` | one page: priorities, risks, active decisions | every session |
-| `team/` | optional roster, roles, messaging protocol | when assigned a team role or explicitly delegating |
+| `team/` | file coordination guide, optional roster and roles | before taking shared work; roles only when assigned |
 | `plans/` | plan guide, plan index, tracking board | when planning, resuming or asked "what is left" |
 | `continuity/` | handoffs and impact changelog | when starting and closing a session |
-| `capture/` | what to write at each trigger: setup, milestone, handoff, refresh, compaction | when the trigger fires |
+| `capture/` | guides for setup, milestone, handoff, refresh and compaction | when that work is needed |
 | `domains/` | one card per component | only the card of the component you touch |
 | `architecture/` | cross-cutting standards | when creating a component or crossing two |
 | `rituals/` | recurring tasks and their schedule | when a ritual is due |
@@ -42,6 +42,7 @@ folder; it does not depend on any agent's memory.
 | Who the agents are and what they own | `team/agents.json` |
 | What a role does | `team/roles/<role>.md` |
 | How agents communicate | `team/MESSAGING.md` |
+| Live work reservations and transient notes | `locks/` and `mailbox/`, following `team/MESSAGING.md` |
 | How a component fits with the rest | `domains/<COMPONENT>.md` |
 | Cross-cutting standards | `architecture/<STANDARD>.md` |
 | Work that spans sessions | a plan, listed in `plans/INDEX.md` |

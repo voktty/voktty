@@ -7,7 +7,8 @@ updated when a priority, a risk or an active rule changes.
   something, saying what was closed, what is left, the exact next step and
   references. How to write one: `../capture/handoff.md`.
 - `CHANGELOG.md`: milestones with impact on architecture, contracts, data,
-  security or flows between components. Written by the orchestrator.
+  security or flows between components. Updated under a reservation by the
+  agent doing the work or its assigned summary owner.
 
 Routes, decisions and contracts that already live in `../domains/`,
 `../architecture/` or a plan are linked here, not copied. Handoffs and the

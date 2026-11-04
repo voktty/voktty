@@ -8,12 +8,13 @@ the last milestone of a plan closes. Write in the project language.
 1. In the plan: state `done` with the date, and a Log entry with what was
    done, what turned out different and how it was verified.
 2. Your own row in `plans/TRACKING.md`.
-3. A `verdict` to the orchestrator (`team/MESSAGING.md`). Working alone,
-   continue with the next section yourself.
+3. A `verdict` note to the reviewer or assigned coordinator, if there is
+   one (`../team/MESSAGING.md`). Otherwise record the result in your handoff.
 
-## The orchestrator
+## Shared summaries
 
-Holding the `memory` lock:
+The agent doing the work, or an explicitly assigned summary owner, reserves
+the affected paths and `memory` resource before updating these files:
 
 1. `plans/TRACKING.md`: move the item, reorder "Up next", add what now waits
    on {owner_title}, add the work to the release list if it is ready to

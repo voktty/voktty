@@ -18,7 +18,8 @@
 
 ## Your verdict
 
-Send one `verdict` to the orchestrator per piece of work:
+Leave one `verdict` note for the requester or assigned coordinator per piece
+of work (`../MESSAGING.md`), and record durable findings in your handoff:
 
 - passing or not, and on which commit;
 - what you ran, with counts;

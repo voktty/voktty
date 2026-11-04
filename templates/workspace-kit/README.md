@@ -5,9 +5,10 @@ coding agents and a human owner. It keeps instructions, plans, tracking,
 handoffs, roles and the agent roster inside the repository, so any agent on
 any machine can pick up the work where the last one stopped.
 
-The planned Voktty integration deploys it as a `.voktty/` folder. Today you
-can copy it by hand into a repository and explicitly ask an agent to use it,
-with or without Voktty.
+The project keeps this structure in `.voktty/`, with links from the files
+its agents normally read, such as `AGENTS.md` and `CLAUDE.md`. The documents
+work with or without Voktty. One agent can work alone; several independent
+sessions coordinate through reservations, notes and handoffs in the project.
 
 ## Why this exists
 
@@ -28,7 +29,7 @@ end up rediscovering the same rules:
   for bigger changes.
 
 This kit turns those rules into files with fixed places and an explicit
-start sequence for enabled sessions. `RULES.md`
+start sequence for project work. `RULES.md`
 explains each rule and why it exists.
 
 ## What it adds, and what it does not replace
@@ -54,12 +55,16 @@ handoffs and decisions included.
 
 ## Status
 
-The template is published ahead of the Voktty features that deploy it.
-The memory panel, automatic context delivery, capture scheduling and commands
-such as `voktty agent`, `voktty lock` and `voktty memory check` are not
-implemented by this template. They arrive with those features. Until then,
-use the documents manually; file mailboxes need an explicitly coordinated
-reader, and local lock files do not coordinate different machines.
+Template 1.2.0 defines the file-based workflow below. The existing Desktop,
+CLI and SSH memory integrations do not yet implement that simpler workflow
+end to end: their settings-backed initialization and UI are being adapted.
+This template update does not itself remove that dependency from the app.
+
+The documents do not implement an agent board, a scheduling service or the
+`voktty agent`, `voktty lock` or `voktty memory check` commands. File notes
+need a reader, and reservations need exclusive filesystem operations as
+described in `team/MESSAGING.md`. Do not claim automatic delivery or locking
+merely because a directory or guide exists.
 
 ## Layout
 
@@ -70,7 +75,7 @@ templates/workspace-kit/
   manifest.json        versioned resource list and base/content/link roles
   contracts/           shared core schemas, not deployed project documents
   dot-voktty/          deployed as <project>/.voktty/
-  root/                optional pointers deployed at the project root
+  root/                pointers merged into the project's agent instructions
 ```
 
 Inside `dot-voktty/` (that is, `.voktty/` once deployed):
@@ -78,13 +83,13 @@ Inside `dot-voktty/` (that is, `.voktty/` once deployed):
 | Path | Purpose | Kind |
 |---|---|---|
 | `README.md` | What the folder is, for people opening the repository | base |
-| `INIT.md` | The start sequence for a session with memory enabled | base |
+| `INIT.md` | The start sequence for project work | base |
 | `RULES.md` | Working rules, each with its reason | base |
 | `INDEX.md` | Map of the folder, base and content, single owner of each fact | base |
 | `PROJECT.md` | What the project is, map, verification, project rules, traps | content |
 | `CONTEXT.md` | One page of current context: priorities, risks, decisions | content |
 | `kit.json` | Kit settings: version, project language, capture triggers, size limits, archiving | content |
-| `kit.schema.json` | Structural configuration contract; local consent is never stored here | base |
+| `kit.schema.json` | Structural configuration contract; it grants no tool permissions | base |
 | `team/agents.json` | Agent roster: who exists, which runtime, which folders they own | content |
 | `team/agents.schema.json` | JSON Schema for the roster | base |
 | `team/MESSAGING.md` | How agents talk to each other and to the owner | base |
@@ -103,42 +108,35 @@ translated or edited by the project, so a kit update can replace them
 safely. **Content** is the project's own memory, written in the project
 language.
 
-## Using it with Voktty
+## Using the project files
 
-The following is the planned flow, not an available panel yet:
+Initialize by copying and adapting the template and merging its links into
+the project's normal agent instructions. Preserve existing rules and project
+content. When memory already exists, use it; when a base or link is missing,
+repair only that piece. An existing different file is a real conflict, not
+permission to overwrite it.
 
-1. Open Project Memory using the brain button in the terminal's lower
-   controls or the equivalent Harness button. Opening a folder, changing cwd
-   or detecting an agent never creates a kit, opens a proposal or starts AI.
-2. Choose Initialize Memory, select the project language and review the
-   deployment preview. Existing files are preserved. Persistent links from
-   `AGENTS.md` or `CLAUDE.md` are separate opt-ins, unchecked by default.
-3. Separately enable context for this session or choose a local always/never
-   policy for this project. Cloned or changed instruction bases require
-   local trust review. Installation alone is not permission to use them.
-4. Optionally authorize captures and their model cost. Initial project
-   analysis writes `PROJECT.md`, `CONTEXT.md` and cards only when accepted.
+At work start, the agent reads `INIT.md`, current context, tracking and
+relevant notes. During implementation it updates facts and leaves a handoff
+so the next session can continue. Read-only requests remain read-only.
+Independent agents reserve their paths and communicate through files;
+neither an active orchestrator nor Voktty's global memory settings are part
+of this document workflow.
 
-Managed launches deliver context only when enabled and supported by their
-adapter and transport. Direct `codex`, `claude` or other agent commands keep
-their original arguments and behavior; detection never types a prompt into
-them. Unsupported integrations offer a manual message or optional native
-link. Delivery is not proof that an agent read or followed the documents.
-
-One agent can use the memory without a roster or active orchestrator.
-Existing user and runtime rules retain precedence; `.voktty/` never grants
-tool approvals. Agents write project content in the project language and
-talk to you in yours. Folders without the kit work exactly as before.
+The intended brain-button flow is initialize, use or repair with sensible
+defaults and questions only for actual conflicts. The app still needs the
+integration changes noted in Status. Opening a folder or changing cwd must
+not install files or start an agent. Existing tools, filesystem permissions
+and runtime approvals remain authoritative; the memory grants none of them.
 
 ## Keeping the memory full and small
 
-A new `.voktty/` is mostly empty. The planned capture integration uses the
-instructions in `capture/`: the first reading of an existing project, the
-close of a milestone or plan, the end of a session or the moment before an
-agent compacts its context, a periodic refresh, and a "Save context" button.
-These require separate capture consent and a capable integration; direct
-CLI sessions do not guarantee automatic trigger detection. Without the
-integration, request a capture manually. Read-only use does not enable writes.
+A new `.voktty/` is mostly empty. The agent follows `capture/initial.md` to
+read the project and `capture/refresh.md` to keep facts current as it works.
+It follows `capture/handoff.md` before leaving changed work and
+`capture/milestone.md` when verified work closes. This maintenance is part of
+the task, not another memory permission workflow. The guides do not start
+paid background turns or implement automatic runtime trigger detection.
 
 Live files are reread by every session, so they have size limits in
 `kit.json`. The planned integration measures them; when one is passed, closed
@@ -149,17 +147,15 @@ plan or decision was lost.
 ## Using it without Voktty
 
 1. Copy `dot-voktty/` to `<project>/.voktty/`.
-2. Optionally review the persistent links in `root/`. Do not overwrite an
-   existing `AGENTS.md` or `CLAUDE.md`. Add a link only with separate consent,
-   preserving existing rules. No root-file edit is needed for manual use.
+2. Merge the links in `root/` into `AGENTS.md` and `CLAUDE.md`, preserving
+   existing rules and avoiding duplicate blocks. Do not replace those files.
 3. Replace every `{placeholder}` using `placeholders.json` as the reference.
-4. For a session you want to enable, ask: "Read `.voktty/INIT.md` subject to
-   my instructions and your runtime's rules." Assign a role only if wanted.
-   Separately say whether writing captures is authorized.
+4. Start the agent normally in this project. Its usual instruction reader
+   follows the memory link. For a runtime without that reader, explicitly
+   ask it to read `.voktty/INIT.md`. Assign a role only if wanted.
 
-A persistent link may still be read by a runtime when Voktty's integration
-is disabled. Local policy cannot remove context already sent to a model or
-undo a root-file edit; review the link or start a new session as needed.
+Project files stay subject to user and runtime rules. Keeping a link means
+the runtime may read it independently of any Voktty integration setting.
 
 ## Placeholders
 
@@ -169,6 +165,11 @@ them with its meaning and default. A deployment that leaves an unknown or
 required placeholder unfilled is an error, not a silent gap.
 
 ## Versioning
+
+Version 1.2.0 makes ordinary file-based work and coordination the template's
+starting point. It removes the separate memory-enablement/capture prompts
+from the guides and no longer requires an agent board to coordinate work.
+It does not automatically rewrite a deployed project's bases or runtime settings.
 
 The source-only `.gitattributes` keeps bundled Markdown, JSON, text and
 `.gitignore` resources in LF across Git checkout settings, preserving shared

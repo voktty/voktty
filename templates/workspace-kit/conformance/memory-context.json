@@ -34,7 +34,7 @@
     "config": {
       "$schema": "./kit.schema.json",
       "kit": "voktty-workspace-kit",
-      "kitVersion": "1.1.0",
+      "kitVersion": "1.2.0",
       "schema": 1,
       "project": "Fixture",
       "language": "en",
@@ -49,7 +49,7 @@
         "verify_commands": "# Add the type check, lint and test commands of this project here.",
         "language": "en",
         "created_at": "2026-10-28",
-        "kit_version": "1.1.0",
+        "kit_version": "1.2.0",
         "default_runtime": "claude-code",
         "default_model": ""
       },
@@ -1671,22 +1671,22 @@
             "project",
             "text"
           ],
-          "value": "# Fixture\n\nWhat this project is, how it is built and checked, and the rules that apply\nonly here. Written in the project language by the orchestrator (or by the\nonly agent, when working alone). Filled in on the first capture\n(`capture/initial.md`) and kept current by later ones.\n\n## What it is\n\nDescribe the project here in one or two sentences.\n\n## Map\n\nThe main components, where their code lives and who owns each one. One line\nper component; detail goes in `domains/<COMPONENT>.md`.\n\n| Component | Path | Owner | Card |\n|---|---|---|---|\n| | | | |\n\n## Stack and environment\n\nLanguages, frameworks, package managers, runtimes and the tools an agent can\nexpect on the machine.\n\n## Verification\n\nThe checks that must pass before work is called done:\n\n```\n# Add the type check, lint and test commands of this project here.\n```\n\n## Build and release\n\nHow the project is built and released, and who may release.\n\n## Project rules\n\nRules that apply only to this project, each with its reason and date. A rule\nhere takes precedence over `RULES.md`.\n\n## Traps\n\nWhat cost a session once and will cost it again: the symptom, the cause and\nhow to avoid it. Search by keyword before touching an area.\n"
+          "value": "# Fixture\n\nWhat this project is, how it is built and checked, and the rules that apply\nonly here. Written in the project language by the agent doing the work,\nrespecting reservations and any explicitly assigned owner. Filled in during\nthe initial reading (`capture/initial.md`) and kept current as work happens.\n\n## What it is\n\nDescribe the project here in one or two sentences.\n\n## Map\n\nThe main components, where their code lives and who owns each one. One line\nper component; detail goes in `domains/<COMPONENT>.md`.\n\n| Component | Path | Owner | Card |\n|---|---|---|---|\n| | | | |\n\n## Stack and environment\n\nLanguages, frameworks, package managers, runtimes and the tools an agent can\nexpect on the machine.\n\n## Verification\n\nThe checks that must pass before work is called done:\n\n```\n# Add the type check, lint and test commands of this project here.\n```\n\n## Build and release\n\nHow the project is built and released, and who may release.\n\n## Project rules\n\nRules that apply only to this project, each with its reason and date. A rule\nhere takes precedence over `RULES.md`.\n\n## Traps\n\nWhat cost a session once and will cost it again: the symptom, the cause and\nhow to avoid it. Search by keyword before touching an area.\n"
         },
         {
           "path": [
             "context",
             "text"
           ],
-          "value": "# Current context\n\nShort reading at the start of every session: one page (see the limit in\n`kit.json`). It does not replace the canonical documents; it points at them.\nWritten by the orchestrator in the project language, when a priority, a risk\nor an active rule changes.\n\nLast review: 2026-10-28.\n\n## Now\n\n- Nothing in progress yet. The project is described in `PROJECT.md`; the\n  first capture fills both files.\n\n## Waiting on the owner\n\n- None yet. Items waiting on the owner live in `plans/TRACKING.md`.\n\n## Active risks\n\n- None recorded yet.\n\n## Decisions that shape the work\n\nOnly decisions every session must know, each with an id, date and reason,\nfor example \"[D-1] 2030-01-10: uploads keep the old endpoint until 1.4,\nbecause two clients still call it.\" Product detail belongs in `domains/` and\nplans.\n"
+          "value": "# Current context\n\nShort reading at the start of every session: one page (see the limit in\n`kit.json`). It does not replace the canonical documents; it points at them.\nUpdated in the project language when a priority, a risk or an active rule\nchanges, respecting reservations and any explicitly assigned owner.\n\nLast review: 2026-10-28.\n\n## Now\n\n- Nothing in progress yet. The project is described in `PROJECT.md`; the\n  first capture fills both files.\n\n## Waiting on the owner\n\n- None yet. Items waiting on the owner live in `plans/TRACKING.md`.\n\n## Active risks\n\n- None recorded yet.\n\n## Decisions that shape the work\n\nOnly decisions every session must know, each with an id, date and reason,\nfor example \"[D-1] 2030-01-10: uploads keep the old endpoint until 1.4,\nbecause two clients still call it.\" Product detail belongs in `domains/` and\nplans.\n"
         }
       ],
       "packet": {
         "schema": 1,
         "projectKey": "6a8e6d6b5f277411202bc52b8e78c0ec280eec8aae7be2c9f4a80c016b26ae85",
         "instructionDigest": "2db421b6d28b3dd31ba59936ca337e7f12cf2ae853c21bbb7b9b298eff77b9f3",
-        "digest": "6387d6ddaa9838d0b61bb8c897ad71a9044cc64c6d54a936c1294fcc4a2a65a2",
-        "bytes": 3110,
+        "digest": "c3196b2d84f0ffbfb19b48ff1c3e4e781090a5f49a194d49bcac7e3ed14a9228",
+        "bytes": 3180,
         "contentState": "initial"
       },
       "modes": [

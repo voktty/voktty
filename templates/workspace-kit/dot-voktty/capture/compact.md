@@ -1,13 +1,14 @@
 # Capture: compact and archive
 
 Live files are reread by every session, so their size is paid on every
-start. When a live file passes its limit (`../kit.json`, `limits`), on the
-periodic ritual, or when someone presses "Compact memory", the memory is
-compacted: closed history moves to the archive and the live file is
-rewritten as the current state.
+start. When asked to compact or archive memory, use the limits in
+`../kit.json` to identify candidates. Closed history moves to the archive
+and live files describe the current state. A configured limit does not mean
+a background compaction service exists.
 
-Only the orchestrator runs this, or the only agent when working alone,
-holding the `memory` lock for the whole run. Write in the project language.
+Respect assigned ownership, reserve the affected paths and `memory` resource
+for the work (`../team/MESSAGING.md`) and keep a recoverable before-copy.
+Write in the project language.
 
 ## Item ids
 
@@ -49,9 +50,11 @@ the size of each live file before and after.
 
 ## Check
 
-Run the memory check (`voktty memory check`, or the check Voktty runs after
-every compaction). It compares the ids and open plans from before the run
-with the ones after: every open item must still be in a live file, every
-other id must be live or archived, and every plan not closed must be listed
-in `plans/INDEX.md`. If the check fails, restore from Git and report; do not
-fix the check by editing it.
+Compare the before-copy with the result: every open item must still be in
+a live file, every other id must be live or archived, and every plan not
+closed must be listed in `plans/INDEX.md`. Check the reasons, links and
+archived bytes as well as the IDs. Use a verified checker when available;
+do not assume that a `voktty memory check` command is installed. Record
+manual and automated checks separately. If something was lost, restore
+only your changes from the before-copy without overwriting concurrent work,
+report the failure and release your reservations. Do not weaken the check.

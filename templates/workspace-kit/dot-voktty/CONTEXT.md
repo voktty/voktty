@@ -2,8 +2,8 @@
 
 Short reading at the start of every session: one page (see the limit in
 `kit.json`). It does not replace the canonical documents; it points at them.
-Written by the orchestrator in the project language, when a priority, a risk
-or an active rule changes.
+Updated in the project language when a priority, a risk or an active rule
+changes, respecting reservations and any explicitly assigned owner.
 
 Last review: {created_at}.
 

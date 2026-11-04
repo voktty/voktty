@@ -1,8 +1,8 @@
 # Tracking
 
-What happens next, who does it and what waits on {owner_title}. Maintained
-by the orchestrator; each agent updates only its own row. Plans hold the
-detail; this board holds the order. Written in the project language.
+What happens next, who does it and what waits on {owner_title}. Each agent
+updates its own row under a reservation; shared ordering follows `../RULES.md`.
+Plans hold the detail; this board holds the order. Written in the project language.
 
 Every item carries an id (`[T-n]` task, `[Q-n]` waiting on {owner_title}),
 never reused, so compaction can be checked (`../capture/compact.md`).
@@ -21,11 +21,14 @@ the plan it blocks.
 
 ## Agents
 
+Add a row when you take work; a role in the bundled roster is not a running
+agent. Include the task and reservation so another session knows which
+paths are busy (`../team/MESSAGING.md`).
+
 | Agent | Working on | State | Last update |
 |---|---|---|---|
-| orchestrator | | idle | {created_at} |
-| developer | | idle | {created_at} |
-| verifier | | idle | {created_at} |
+
+No work claimed yet. Tracking started on {created_at}.
 
 ## Release list
 

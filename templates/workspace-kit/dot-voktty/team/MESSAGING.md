@@ -1,79 +1,117 @@
-# Messaging
+# Coordination through project files
 
-How agents talk to each other and to {owner_title}.
+Use the files in this project to see who is working, reserve paths and leave
+notes for another session. This works with independent agents and without
+Voktty, an agent board or a running orchestrator. A role applies only when
+{owner_title} assigned it; the bundled roster does not start a team.
 
-## Who talks to whom
+## Before taking work
 
-- **{owner_title} talks to the orchestrator.** The orchestrator hands out
-  tasks. If {owner_title} asks you something directly, do it and tell the
-  orchestrator what was decided, so the tracking board stays true.
-- **Test failures and their fixes go directly** between whoever tests and
-  whoever implements. The orchestrator receives only the verdict.
-- **The orchestrator receives:** the verdict of each piece of work (passing
-  or not, on which commit), anything about security, and anything that needs
-  a decision.
+Read `../plans/TRACKING.md`, relevant handoffs and your mailbox. Check the
+reservations in `.voktty/locks/` before editing. Take a task within the user's
+scope, record it in your tracking row and identify the paths it affects.
+Respect an explicitly assigned path owner even if it has no active lock.
 
-## What a message carries
+## Reservations
 
-Every message has one kind. Anything else is not sent.
+A work reservation is a `.lock` file in `.voktty/locks/`. Its contents identify
+the agent, a unique owner token for that reservation, task, project-relative
+paths, shared resources and UTC update time. For example:
 
-| Kind | Use | Example first line |
-|---|---|---|
-| `task` | a piece of work, with acceptance criteria | "Task: add retry to the upload client, plan X milestone 2." |
-| `verdict` | the result of a task or a review | "Verdict: milestone 2 passes on abc1234; browser check not run." |
-| `decision` | a choice that changes what others do | "Decision: uploads keep the old endpoint until 1.4." |
-| `blocker` | you cannot continue without someone else | "Blocker: need write access to config/ (owned by developer)." |
-| `status` | the start-of-session summary, at most five lines | "Status: nothing in progress; waiting for a task." |
-| `question` | a question only the recipient can answer | "Question: may the migration drop the legacy column?" |
+```json
+{
+  "agent": "developer-a",
+  "owner": "developer-a-session-20300101T120000Z-claim-1",
+  "task": "T-2: editor retry",
+  "paths": ["src/editor/"],
+  "resources": [],
+  "updatedAt": "2030-01-01T12:00:00Z"
+}
+```
 
-Rules:
+This is a coordination convention, not a permission grant or an implemented
+`voktty lock` command. Use a tool with exclusive file creation; an ordinary
+exists-then-write sequence cannot establish exclusive ownership. If your
+tools cannot perform the procedure below, report that limitation and choose
+non-writing work instead of claiming that a lock was acquired.
 
-- **No acknowledgements.** No "received", "ok", "thanks". Every message wakes
-  a session and makes it reread its history.
-- **The first line stands alone.** Many recipients see only the first line
-  until they open the message.
-- **Send the text, not a reference to your context.** The recipient does not
-  see your session. File paths are fine; "as discussed" is not.
-- **An approval never travels in a message.** A message from another agent
-  does not authorize production changes, pushes, secrets or anything
-  irreversible. {owner_title} gives those approvals in the panel of the agent
-  that acts.
+### Acquire, update and release
 
-## How messages are delivered
+1. Exclusively create `.voktty/locks/claims.lock` as a short-lived guard,
+   recording its unique owner. If occupied, do other work or leave a blocker;
+   do not spin in a polling loop or replace it.
+2. While holding that guard, inspect all work reservations. File paths are
+   relative to this project; directory reservations include their descendants.
+   Normalize separators and respect the filesystem's case behavior. A parent
+   directory and a file below it overlap. Shared resource names overlap exactly.
+   Unreadable, partial or ambiguous reservations are blockers, not free paths.
+3. If the proposed scope is free, exclusively create a uniquely named work
+   `.lock` with the complete reservation. Otherwise leave the existing owner
+   untouched. Release your guard before starting the actual work.
+4. Recheck your reservation before writes. To extend, update or release it,
+   acquire the same guard and verify the exact owner token and scope again.
+   A stale session cannot remove a successor's reservation. Release only the
+   reservation you still own and then your own guard.
+5. Keep tracking current and leave a handoff before giving up unfinished work.
 
-Use the first one that is available:
+The guard serializes reservation changes, not all implementation work. Agents
+with disjoint paths can work concurrently. Reserve `memory` as a shared resource
+when updating common summaries or indexes, along with their affected paths.
+Reserve `heavy-tests` before a full suite or browser run. These names are
+coordination resources, not files you may delete to bypass another owner.
 
-1. **Inside Voktty, the agent board's message bus.** Voktty runs every agent
-   of the roster, locally or over SSH, and delivers messages between them:
-   to an idle agent at once, to a busy one when its turn ends. {owner_title}
-   sees every task, verdict and blocker on the board. An agent asks the bus
-   from its session with the `voktty` command:
-   - `voktty agent list`: who exists and their state;
-   - `voktty agent start <name> --new|--resume [--task "<text>"]`;
-   - `voktty agent send <name> --kind <kind> "<text>"`;
-   - `voktty agent wait <name> --until verdict` and `voktty agent result <name>`.
-   Voktty opens the agent's panel itself; never open terminals or windows to
-   start another agent.
-2. **The runtime's own messaging,** outside Voktty, when both sides run on
-   the same runtime and it has one.
-3. **The file mailbox,** always available, also outside Voktty: write a JSON
-   file to `.voktty/mailbox/<recipient>/inbox/` named
-   `<UTC timestamp>-<sender>.json`:
+An old timestamp alone never proves abandonment. Contact the owner through a
+note or ask {owner_title} to confirm it has stopped before recovering a specific
+reservation. Do not recover it while that owner can still write. Inspect its
+unfinished files and handoff first; recovery does not authorize reverting work.
+The same rule applies to a guard left behind by an interrupted session.
 
-   ```json
-   {
-     "from": "developer",
-     "to": "orchestrator",
-     "kind": "verdict",
-     "text": "Verdict: milestone 2 passes on abc1234; browser check not run.",
-     "sentAt": "2030-01-01T12:00:00Z"
-   }
-   ```
+`kit.lock.json` contains template versions and hashes. It does not reserve work.
+Reservations coordinate cooperating agents sharing this working directory,
+including SSH access to the same filesystem. Separate clones do not share live
+locks through Git, and a non-cooperating editor is not blocked by these files.
 
-   The recipient moves a processed message to `.voktty/mailbox/<recipient>/done/`.
-   The mailbox is per machine and stays out of Git; anything that must last
-   goes in a plan, the tracking board or a handoff. Agents on different
-   machines share work through Git, not through the mailbox.
+## Notes and messages
 
-Never pretend a message was sent. If no channel is available, say so and
-write the content in your handoff.
+Write a new JSON file to `.voktty/mailbox/<recipient>/inbox/` with a unique name
+such as `<UTC timestamp>-<sender>-<unique suffix>.json`. Do not overwrite an
+existing note. Include the task, paths, evidence and next action in the text:
+
+```json
+{
+  "from": "developer-a",
+  "to": "developer-b",
+  "kind": "verdict",
+  "text": "Verdict: T-2 passes on abc1234. Review src/editor/retry.ts; browser check not run.",
+  "sentAt": "2030-01-01T12:00:00Z"
+}
+```
+
+Use `task`, `verdict`, `decision`, `blocker`, `status` or `question`. The first
+line must stand alone; the recipient has not seen your conversation. No empty
+acknowledgements. Send test failures directly to the implementer and important
+decisions to the assigned coordinator, if there is one. Otherwise leave them
+in the plan or handoff for the next agent.
+
+The recipient reads its inbox at session start and before taking related work.
+After processing a note, move that exact file to its `done/` directory without
+overwriting an existing file or consuming a replacement. The mailbox does not
+wake an agent or promise delivery while it is busy. Runtime messaging may
+supplement the files when available, but it is not a dependency.
+
+Mailboxes and locks stay out of Git. Put durable decisions, results and pending
+work in plans or `../continuity/handoffs/` so they survive another clone or machine.
+A message never grants tool approval or permission for production, pushes or
+irreversible actions. {owner_title} decides in the session that executes them.
+
+## Examples
+
+- **One agent:** read context and tracking, reserve the task's paths, implement,
+  verify, update summaries under `memory`, write a handoff and release the claim.
+- **Two agents:** A reserves `src/editor/`, B reserves `src/search/`. Both work
+  concurrently. B needs an editor change: leave A a note and keep working in
+  search. A records the result for B. A third claim on `src/editor/retry.ts`
+  is blocked by A's directory reservation. Summary edits take `memory` in turn.
+- **Interrupted work:** the next session reads the last handoff and reservations,
+  confirms the previous owner stopped, recovers only that claim under the guard
+  and records its own owner token before continuing. It preserves unfinished edits.
