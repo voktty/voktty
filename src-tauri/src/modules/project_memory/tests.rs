@@ -143,7 +143,11 @@ fn nonlocal_environments_and_namespaces_never_fall_back_to_local_authority() {
         ));
     }
     assert!(matches!(
-        NativeMemorySource::capture(&registry, root.join(".."), &WorkspaceEnv::Local),
+        NativeMemorySource::capture(
+            &registry,
+            PathBuf::from(format!("{}{}..", root.display(), std::path::MAIN_SEPARATOR)),
+            &WorkspaceEnv::Local
+        ),
         Err(MemoryWorkError::Read(ReadError::InvalidInput))
     ));
 }

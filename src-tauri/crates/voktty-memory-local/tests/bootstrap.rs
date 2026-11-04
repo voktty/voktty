@@ -87,7 +87,14 @@ fn invalid_missing_or_cancelled_parents_do_not_create_directories() {
     )
     .is_err());
     assert!(matches!(
-        LocalMemoryStore::create_private(&parent.path().join(".."), &ReadControl::default()),
+        LocalMemoryStore::create_private(
+            &std::path::PathBuf::from(format!(
+                "{}{}..",
+                parent.path().display(),
+                std::path::MAIN_SEPARATOR
+            )),
+            &ReadControl::default()
+        ),
         Err(ReadError::InvalidInput)
     ));
     assert_eq!(fs::read_dir(parent.path()).unwrap().count(), 0);

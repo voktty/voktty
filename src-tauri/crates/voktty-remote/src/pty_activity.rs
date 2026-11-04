@@ -185,6 +185,9 @@ mod tests {
             foreground_job(&pty),
             Err("Multiplexer foreground activity is unavailable")
         );
+        // portable-pty sends SIGHUP, which an interactive macOS shell may ignore.
+        let child: &mut dyn portable_pty::Child = child.as_mut();
+        let child = child.downcast_mut::<std::process::Child>().unwrap();
         child.kill().unwrap();
         child.wait().unwrap();
         if let Err(error) = result {

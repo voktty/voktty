@@ -100,7 +100,11 @@ fn cancelled_expired_and_invalid_preparation_never_creates_a_suffix() {
     ));
     assert!(matches!(
         LocalMemoryStore::prepare_application_parent(
-            &dir.path().join("absent/../application"),
+            &std::path::PathBuf::from(format!(
+                "{root}{sep}absent{sep}..{sep}application",
+                root = dir.path().display(),
+                sep = std::path::MAIN_SEPARATOR
+            )),
             &ReadControl::default()
         ),
         Err(ReadError::InvalidInput)

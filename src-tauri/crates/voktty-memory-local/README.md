@@ -41,6 +41,9 @@ unavailable queries and unknown or object-specific grant entries fail closed.
 Deny entries do not excuse a broad allow entry. No ACL is repaired automatically.
 Every Windows preferences or lock-file open also checks its actual owner and
 private DACL; directory permissions alone cannot establish file access policy.
+New lock and preferences staging files receive the same private descriptor and
+explicit current-user owner at creation. Opening an existing file never replaces
+its security descriptor.
 Both backends reject links/reparse
 points and cross-device/volume children, and compare the parent and child
 identities again before returning the store. Existing corrupt preferences stay
@@ -420,16 +423,20 @@ opens with exactly one component and `FILE_OPEN_REPARSE_POINT`, checking each
 returned entry for a reparse attribute before proceeding. It does not rely on
 absolute prefix checks or `OBJ_DONT_REPARSE`. The root drive is opened through
 its native DOS device name; subsequent lookup stays relative to captured handles.
-Directories request metadata/traverse access, files request read access, all
-handles are noninheritable, and none allow write/delete sharing. The objects stay
-owned until the batch ends. Sharing flags alone are not a no-reparse guarantee:
-attribute-only operations may bypass write sharing, so child lookup must remain
-relative to handles rather than reconstructing an absolute path.
+Directories request metadata/traverse access, files request read access, and all
+handles are noninheritable. Files refuse write/delete sharing. Directory handles
+allow write sharing so native rename can open the destination for `FILE_ADD_FILE`,
+but refuse delete sharing, preserving directory rename and deletion protection.
+The objects stay owned until the batch ends. Sharing flags alone are not a
+no-reparse guarantee: attribute-only operations may bypass write sharing. Child
+lookup must remain relative to handles rather than reconstructing an absolute
+path.
 
 Security inspection and enumeration reopen the pinned directory with an empty
 native name relative to its handle. This avoids `ReOpenFile` directory rejection
-and NT lookup of a literal dot. Reopened handles still refuse write/delete
-sharing and must match the original volume, full file ID and directory state.
+and NT lookup of a literal dot. Reopened directory handles allow write sharing
+and refuse delete sharing, and must match the original volume, full file ID and
+directory state.
 
 `FileCaseSensitiveInfo` selects native name-lookup case behavior per directory;
 unknown flags or unavailable queries fail, without guessing a case policy.
@@ -609,7 +616,9 @@ files and unknown files are not overwritten or deleted.
 
 The Windows creator opens missing directories and exclusive staging files with
 directory-relative `NtCreateFile`, retaining ancestor and parent handles without
-write/delete sharing. It checks both requested and normalized handle-parent
+delete sharing. Directory write sharing permits the native rename destination
+lookup; staging files still refuse write/delete sharing. It checks both requested
+and normalized handle-parent
 paths against native authority, rejects reparse points and cross-volume parents,
 and flushes complete staging bytes before publication.
 [`NtSetInformationFile`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile)

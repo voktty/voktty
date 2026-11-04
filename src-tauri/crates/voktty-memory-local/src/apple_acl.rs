@@ -87,7 +87,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let _clear = Clear(dir.path().to_path_buf());
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-        chmod(dir.path(), &["+a", "everyone allow write_security"]);
+        chmod(dir.path(), &["+a", "everyone allow writesecurity"]);
         let file = File::open(dir.path()).unwrap();
         assert!(matches!(
             restrictive_only(&file),

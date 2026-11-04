@@ -3,14 +3,11 @@ use std::fs;
 use voktty_memory_local::ReadControl;
 use voktty_workspace_kit::render_template;
 
+#[path = "../../../test_support/memory_parent.rs"]
+mod memory_parent;
+
 fn private_parent() -> tempfile::TempDir {
-    let parent = tempfile::tempdir_in(fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(parent.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    parent
+    memory_parent::memory_parent()
 }
 
 fn kit(root: &Path) {

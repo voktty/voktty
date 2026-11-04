@@ -64,7 +64,7 @@ fn failed_selection_retires_the_old_destination_without_authorizing_the_new_one(
             ReadError::Unsupported,
         ),
         (
-            root.join(".."),
+            PathBuf::from(format!("{}{}..", root.display(), std::path::MAIN_SEPARATOR)),
             WorkspaceEnv::Local,
             ReadError::InvalidInput,
         ),

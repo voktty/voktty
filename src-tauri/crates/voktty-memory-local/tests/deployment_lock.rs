@@ -83,9 +83,10 @@ fn deployment_child() {
 #[test]
 fn one_stable_lock_covers_all_destinations_and_does_not_lock_preferences() {
     let (directory, store) = setup();
-    let lock = store.try_lock_deployment().unwrap();
+    drop(store.try_lock_deployment().unwrap());
     assert!(!directory.path().join("memory-local.json").exists());
     let before = fs::read(directory.path().join(LOCK)).unwrap();
+    let lock = store.try_lock_deployment().unwrap();
     let other = LocalMemoryStore::open(directory.path()).unwrap();
     let start = Instant::now();
     assert!(matches!(other.try_lock_deployment(), Err(StoreError::Busy)));
@@ -95,8 +96,9 @@ fn one_stable_lock_covers_all_destinations_and_does_not_lock_preferences() {
     other.set_policy(0, &key, MemoryPolicy::Never).unwrap();
     assert_eq!(store.load().unwrap().revision(), 1);
     drop(lock);
-    let _second = other.try_lock_deployment().unwrap();
+    let second = other.try_lock_deployment().unwrap();
     assert!(matches!(store.try_lock_deployment(), Err(StoreError::Busy)));
+    drop(second);
     assert_eq!(fs::read(directory.path().join(LOCK)).unwrap(), before);
     assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 3);
 }

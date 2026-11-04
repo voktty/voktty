@@ -50,7 +50,7 @@ fn inputs() -> Map<String, Value> {
 }
 
 fn fixture(populated: bool) -> Fixture {
-    let project = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir_in(fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
     let state = tempfile::tempdir().unwrap();
     fs::set_permissions(state.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let store = LocalMemoryStore::open(state.path()).unwrap();

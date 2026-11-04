@@ -46,7 +46,8 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let project = tempfile::tempdir().unwrap();
+        let project =
+            tempfile::tempdir_in(std::fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
         let state = tempfile::tempdir().unwrap();
         #[cfg(unix)]
         {

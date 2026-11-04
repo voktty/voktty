@@ -768,7 +768,11 @@ mod tests {
             assert_eq!(result["hits"][0]["rel"], "literal\\file.txt");
             assert_eq!(
                 result["hits"][0]["path"],
-                nested.join("literal\\file.txt").to_str().unwrap()
+                std::fs::canonicalize(&nested)
+                    .unwrap()
+                    .join("literal\\file.txt")
+                    .to_str()
+                    .unwrap()
             );
         }
     }
