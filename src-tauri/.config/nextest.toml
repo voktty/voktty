@@ -12,6 +12,11 @@ test-group = 'mcp-transport-fixtures'
 filter = 'test(windows_background_process_captures_output)'
 threads-required = "num-test-threads"
 
+# Large filesystem inventories must not starve deadline-bound publication fixtures.
+[[profile.default.overrides]]
+filter = 'test(entry_depth_and_finding_limits_block_incomplete_initialization) | test(an_exhausted_inventory_limit_never_publishes_a_partial_count_as_complete) | test(a_large_dependency_tree_does_not_consume_the_creation_scan_budget)'
+threads-required = "num-test-threads"
+
 # Retain phase output instead of waiting indefinitely for a native PTY fixture.
 [[profile.default.overrides]]
 filter = 'test(pty_activity::tests::activity_observes_a_real_foreground_job_and_returns_to_idle)'
