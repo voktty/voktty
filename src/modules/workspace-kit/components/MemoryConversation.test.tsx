@@ -69,7 +69,10 @@ function button(label: string) {
   return value;
 }
 async function click(label: string) {
-  await act(async () => button(label).click());
+  await act(async () => {
+    button(label).click();
+    await vi.dynamicImportSettled();
+  });
 }
 async function open() {
   await act(async () => {
@@ -637,11 +640,7 @@ it("copies the exact preview after a fresh native read without claiming agent de
   expect(writeText).not.toHaveBeenCalled();
   await click("common.copy");
   expect(reads()).toBe(before + 1);
-  await act(async () => {
-    await vi.waitFor(() =>
-      expect(writeText).toHaveBeenCalledExactlyOnceWith(packet().packet?.text),
-    );
-  });
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(packet().packet?.text);
   expect(document.body.textContent).toContain("common.copied");
   expect(document.body.textContent).toContain(
     "projectMemory.conversationPrepared",
