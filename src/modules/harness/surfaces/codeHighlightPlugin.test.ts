@@ -1,5 +1,6 @@
 import type { HighlightResult } from "@streamdown/code";
 import * as shiki from "shiki";
+import * as core from "shiki/core";
 import type { BundledLanguage } from "shiki";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { describe, expect, it, vi } from "vitest";
@@ -8,9 +9,9 @@ import {
   type BoundedCodePlugin,
 } from "./codeHighlightPlugin";
 
-vi.mock("shiki", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("shiki")>();
-  return { ...actual, createHighlighter: vi.fn(actual.createHighlighter) };
+vi.mock("shiki/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("shiki/core")>();
+  return { ...actual, createHighlighterCore: vi.fn(actual.createHighlighterCore) };
 });
 
 function highlight(
@@ -168,7 +169,7 @@ describe("bounded code highlight plugin", () => {
       engine: createJavaScriptRegexEngine({ forgiving: true }),
     });
     const createHighlighter = vi
-      .mocked(shiki.createHighlighter)
+      .mocked(core.createHighlighterCore)
       .mockClear()
       .mockResolvedValueOnce(highlighter);
     const codeToTokens = vi.spyOn(highlighter, "codeToTokens");

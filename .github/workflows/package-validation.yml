@@ -11,6 +11,9 @@ concurrency:
   group: package-validation-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
 jobs:
   build-remote-helper:
     strategy:

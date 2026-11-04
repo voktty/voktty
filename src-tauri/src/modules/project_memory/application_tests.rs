@@ -198,12 +198,7 @@ fn native_destroy_and_application_exit_retire_admitted_discovery() {
 
 #[test]
 fn explicit_storage_actions_require_the_current_application_and_window() {
-    let dir = tempfile::tempdir().unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
+    let dir = super::super::tests::storage_parent();
     let mut app = application();
     app.storage = Ok(NativeMemoryStorage::test_origin(dir.path().to_path_buf()));
     let foreign = application();

@@ -3,13 +3,13 @@ import type {
   HighlightResult,
   ThemeInput,
 } from "@streamdown/code";
+import type { BundledLanguage, BundledTheme, GrammarState } from "shiki";
+import { createHighlighterCore } from "shiki/core";
 import {
   bundledLanguages,
   bundledLanguagesInfo,
-  createHighlighter,
-  type BundledLanguage,
-  type GrammarState,
-} from "shiki";
+} from "shiki/langs";
+import { bundledThemes } from "shiki/themes";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
 /**
@@ -31,7 +31,7 @@ const DEFAULT_THEMES: [ThemeInput, ThemeInput] = [
 const MAX_ENTRIES = 100;
 const MAX_CACHED_CHARS = 500_000;
 
-type Highlighter = Awaited<ReturnType<typeof createHighlighter>>;
+type Highlighter = Awaited<ReturnType<typeof createHighlighterCore>>;
 type HighlightCallback = (result: HighlightResult) => void;
 
 export type BoundedCodePlugin = CodeHighlighterPlugin & {
@@ -84,7 +84,13 @@ export function createBoundedCodePlugin(
     const key = `${themeName(pair[0])}\u0000${themeName(pair[1])}`;
     let highlighter = highlighters.get(key);
     if (!highlighter) {
-      highlighter = createHighlighter({ themes: pair, langs: [], engine });
+      highlighter = createHighlighterCore({
+        themes: pair.map((theme) =>
+          typeof theme === "string" ? bundledThemes[theme as BundledTheme] : theme,
+        ),
+        langs: [],
+        engine,
+      });
       highlighters.set(key, highlighter);
       highlighter.catch(() => highlighters.delete(key));
     }
@@ -135,7 +141,7 @@ export function createBoundedCodePlugin(
             supported.has(lang) &&
             !highlighter.getLoadedLanguages().includes(lang)
           ) {
-            await highlighter.loadLanguage(lang as BundledLanguage);
+            await highlighter.loadLanguage(bundledLanguages[lang as BundledLanguage]);
           }
           const usable = highlighter.getLoadedLanguages().includes(lang)
             ? lang

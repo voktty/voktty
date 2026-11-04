@@ -1,4 +1,10 @@
 // @vitest-environment happy-dom
+// These ownership fixtures use POSIX paths regardless of the runner's OS.
+vi.mock("@/modules/harness/lib/platform", async (original) => ({
+  ...(await original<typeof import("@/modules/harness/lib/platform")>()),
+  IS_WINDOWS: false,
+  IS_WIN: false,
+}));
 import {
   act,
   Component,

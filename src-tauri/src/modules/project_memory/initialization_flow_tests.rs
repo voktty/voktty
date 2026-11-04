@@ -5,12 +5,7 @@ use voktty_workspace_kit::RootLinks;
 #[test]
 fn authorize_initialize_reserved_directory_and_use_reviewed_memory_without_touching_sessions() {
     let project = project();
-    let state = tempfile::tempdir().unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(state.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    }
+    let state = storage_parent();
     let root = fs::canonicalize(project.path()).unwrap();
     fs::create_dir_all(root.join(".voktty/sessions")).unwrap();
     fs::write(
