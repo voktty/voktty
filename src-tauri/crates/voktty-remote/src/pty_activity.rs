@@ -134,6 +134,7 @@ mod tests {
     #[test]
     fn activity_observes_a_real_foreground_job_and_returns_to_idle() {
         use std::time::{Duration, Instant};
+        eprintln!("pty-activity-test: open");
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: 24,
@@ -144,6 +145,7 @@ mod tests {
             .unwrap();
         let mut command = CommandBuilder::new("/bin/sh");
         command.arg("-i");
+        eprintln!("pty-activity-test: spawn");
         let mut child = pair.slave.spawn_command(command).unwrap();
         drop(pair.slave);
         let mut pty = RemotePty {
@@ -154,20 +156,24 @@ mod tests {
             child_pid: child.process_id(),
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            eprintln!("pty-activity-test: wait-shell");
             let deadline = Instant::now() + Duration::from_secs(3);
             while foreground_job(&pty) != Ok(false) {
                 assert!(Instant::now() < deadline, "shell did not acquire its PTY");
                 std::thread::sleep(Duration::from_millis(5));
             }
+            eprintln!("pty-activity-test: write-job");
             pty.writer
                 .lock()
                 .unwrap()
                 .write_all(b"sleep 0.4\r")
                 .unwrap();
+            eprintln!("pty-activity-test: wait-busy");
             while foreground_job(&pty) != Ok(true) {
                 assert!(Instant::now() < deadline, "foreground job was not detected");
                 std::thread::sleep(Duration::from_millis(5));
             }
+            eprintln!("pty-activity-test: wait-idle");
             while foreground_job(&pty) != Ok(false) {
                 assert!(Instant::now() < deadline, "shell did not return to idle");
                 std::thread::sleep(Duration::from_millis(5));
@@ -185,11 +191,20 @@ mod tests {
             foreground_job(&pty),
             Err("Multiplexer foreground activity is unavailable")
         );
+        eprintln!("pty-activity-test: close-writer");
+        // The writer sends EOF on drop and must close while the slave is alive.
+        let writer = std::mem::replace(pty.writer.get_mut().unwrap(), Box::new(std::io::sink()));
+        drop(writer);
         // portable-pty sends SIGHUP, which an interactive macOS shell may ignore.
         let child: &mut dyn portable_pty::Child = child.as_mut();
         let child = child.downcast_mut::<std::process::Child>().unwrap();
+        eprintln!("pty-activity-test: kill-child");
         child.kill().unwrap();
+        eprintln!("pty-activity-test: close-master");
+        drop(pty);
+        eprintln!("pty-activity-test: wait-exit");
         child.wait().unwrap();
+        eprintln!("pty-activity-test: complete");
         if let Err(error) = result {
             std::panic::resume_unwind(error);
         }

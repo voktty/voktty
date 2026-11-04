@@ -11,3 +11,8 @@ test-group = 'mcp-transport-fixtures'
 [[profile.default.overrides]]
 filter = 'test(windows_background_process_captures_output)'
 threads-required = "num-test-threads"
+
+# Retain phase output instead of waiting indefinitely for a native PTY fixture.
+[[profile.default.overrides]]
+filter = 'test(pty_activity::tests::activity_observes_a_real_foreground_job_and_returns_to_idle)'
+slow-timeout = { period = "10s", terminate-after = 3, grace-period = "5s" }
