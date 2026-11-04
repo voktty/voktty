@@ -14,6 +14,10 @@ use voktty_workspace_kit::PathFact;
 #[path = "migration_unix.rs"]
 mod migration;
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[path = "origin_migration_linux.rs"]
+pub(crate) mod origin;
+
 #[path = "state_unix.rs"]
 mod state;
 

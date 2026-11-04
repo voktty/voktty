@@ -25,6 +25,8 @@ mod template_inputs;
 mod workers;
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use origin::{resolve_memory_application_parent, MemoryOriginError, MEMORY_APPLICATION_ID};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub use origin::{OriginMigrationFailure, OriginMigrationReview, OriginMigrationSummary};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview,
     OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,

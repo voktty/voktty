@@ -3,10 +3,22 @@ use std::path::{Path, PathBuf};
 
 pub const MEMORY_APPLICATION_ID: &str = "app.voktty.voktty";
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub use crate::reader_unix::origin::{
+    OriginMigrationFailure, OriginMigrationReview, OriginMigrationSummary,
+};
+
 #[derive(Debug)]
 pub enum MemoryOriginError {
     Read(ReadError),
     LegacyStateRequiresReview,
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn accepted_marker(base: &Path, control: &ReadControl) -> Result<bool, MemoryOriginError> {
+    let accepted = crate::reader_unix::origin::is_migrated(base, control).unwrap_or(false);
+    control.check().map_err(MemoryOriginError::Read)?;
+    Ok(accepted)
 }
 
 /// The base must come from the native local application-data resolver.
@@ -23,6 +35,11 @@ pub fn resolve_memory_application_parent(
         Ok(metadata) if metadata.is_dir() && !is_link(&metadata) => {
             match std::fs::symlink_metadata(legacy.join(bootstrap::PRIVATE_DIRECTORY)) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                Ok(metadata)
+                    if metadata.is_file()
+                        && !is_link(&metadata)
+                        && accepted_marker(base, control)? => {}
                 _ => return Err(MemoryOriginError::LegacyStateRequiresReview),
             }
         }

@@ -17,6 +17,7 @@ mod tests;
 mod init;
 mod launch;
 mod measure;
+mod migrate_storage;
 mod origin;
 mod policy;
 mod recovery;
@@ -32,6 +33,7 @@ pub(super) enum MemoryCommand {
     Run(launch::RunOptions),
     Measure(measure::MeasureOptions),
     Recover(recovery::RecoveryOptions),
+    MigrateStorage(migrate_storage::MigrationOptions),
 }
 
 pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
@@ -77,8 +79,9 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
         "run" => launch::parse(args.collect()),
         "measure" => measure::parse(args.collect()),
         "recover" => recovery::parse(args.collect()),
+        "migrate-storage" => migrate_storage::parse(args.collect()),
         _ => Err(usage_error(
-            "available memory commands: status|init|recover|use|trust|run|measure; use memory --help",
+            "available memory commands: status|init|recover|use|trust|run|measure|migrate-storage; use memory --help",
         )),
     }
 }
@@ -277,6 +280,7 @@ fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
 pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, CliError> {
     match command {
         MemoryCommand::Help => {
+            println!("Storage migration: voktty memory migrate-storage --preview | --accept-review <sha256> [--json]\nReviews this machine's entire legacy memory installation before moving it to Desktop storage.\nLinux and Android only. Preserves identity, policy, stored trust and recovery bytes.\nRefuses an existing destination store; never merges installations. Leaves a permanent\nmarker to block old writers. No project path, force, automatic acceptance or model launch.\n");
             println!("Recovery: voktty memory recover [--project <directory>]\n                              --preview | --accept-review <sha256> [--json]\nReviews complete saved originals before restoring their missing paths.\nRequires existing private recovery state; does not initialize settings or finish a kit.\nNo force or automatic migration. Obtain a fresh init preview before publishing afterward.\n");
             println!("Measure: voktty memory measure [--project <directory>] [--up-next-heading <heading>] [--json]\nReports configured character, Up next and handoff limits without private state or writes.\nThe default heading is Up next; pass the exact translated heading when needed.\nUnknown or exceeded metrics exit 5. This command does not compact or archive files.\n");
             println!("Launch: voktty memory run [--project <directory>] [--session|--no-memory]\n                          codex|claude|agy [-- <agent-args...>]\nWithout memory, Unix launch preserves all agent arguments and terminal IO.\nOn Linux, trusted memory with --session or Always can prefix the initial user prompt\nin Codex 0.165.0 or Claude 2.1.312, preserving verified interactive options and the request.\nNative agent approvals remain in force. Context argv may be visible in local process listings.\nResume, remote/cwd overrides, other versions and unverified modes require the manual\nstartup-message alternative. Run never initializes state or grants captures. Wrapper\n--json is unavailable; agent --json is forwarded only without integration. Windows launch is unavailable.\n");
@@ -291,6 +295,7 @@ pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, Cli
         MemoryCommand::Run(options) => launch::run(options, as_json),
         MemoryCommand::Measure(options) => measure::run(options, as_json),
         MemoryCommand::Recover(options) => recovery::run(options, as_json),
+        MemoryCommand::MigrateStorage(options) => migrate_storage::run(options, as_json),
         MemoryCommand::Status { project } => {
             let project = project.unwrap_or_else(|| PathBuf::from("."));
             let project = if project.is_absolute() {

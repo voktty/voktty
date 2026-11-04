@@ -1,5 +1,8 @@
 #![cfg(target_os = "linux")]
 
+#[path = "support/memory_origin_migration.rs"]
+mod origin_migration;
+
 use serde_json::{json, Value};
 use std::fs;
 use std::io::Write;

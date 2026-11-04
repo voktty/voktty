@@ -23,6 +23,7 @@ voktty memory init [--project <directory>] [--set <name=value>]...
                    [--preview | --yes [--accept-plan <sha256>]] [--json]
 voktty memory recover [--project <directory>]
                       --preview | --accept-review <sha256> [--json]
+voktty memory migrate-storage --preview | --accept-review <sha256> [--json]
 voktty memory use --always|--never|--manual [--project <directory>]
                   [--preview] [--json]
 voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]
@@ -51,13 +52,51 @@ Rust handles `ping`, `capabilities`, authentication, and file validation directl
 
 Discovery works without private state. The native stateless inspector uses invocation-local directory keys for the common pure resolver; these keys are omitted from CLI output and cannot identify a persistent project or grant trust. If a ready kit has existing private state, the CLI opens the fixed `app.voktty.voktty/project-memory` directory beneath the native local application-data directory, matching Tauri's `app_local_data_dir` and configured identifier. It observes only that root's effective policy and whether an accepted instruction digest is stored, including native root-instance checks and final revalidation. Existing state may acquire its normal preferences lock; the command creates no application directories, installation identity or project files. Missing state reports the default `manual` policy separately from an unavailable state origin. Corrupt or inaccessible existing state is preserved and fails explicitly.
 
-All state-dependent CLI memory commands use this Desktop origin. Earlier CLI builds used `dev.voktty/project-memory`. If that legacy entry exists, including an empty, corrupt or linked entry, the CLI refuses with `memory_legacy_state_requires_review` and exit 5 before opening either store or launching an agent. An inaccessible, linked or non-directory legacy application parent also refuses inspection. An ordinary legacy application directory without a `project-memory` entry does not block memory. The CLI never moves or merges installation identities, recovery journals, policies or trust, and cannot silently discard a legacy Never choice or inherit legacy Always/trust. Automatic migration is unavailable; legacy state requires separate explicit review. Desktop retains its existing origin and behavior. `memory measure`, help and explicit `memory run --no-memory` remain independent of private state. The identifier equality is checked against the actual Desktop configuration by a regression test; platform bases remain native local data, including LocalAppData on Windows rather than roaming data.
+Ordinary state-dependent CLI memory commands use this Desktop origin. Earlier builds used `dev.voktty/project-memory`. An existing legacy entry, including empty, corrupt or linked state, refuses with `memory_legacy_state_requires_review` and exit 5 before opening either store or launching an agent. Inaccessible, linked or non-directory legacy application parents also refuse inspection. An ordinary legacy application directory without a `project-memory` entry does not block memory. Explicit `migrate-storage` is the only operation that moves legacy state; ordinary commands never move, merge or discard installation identities, recovery journals, policies or trust. After reviewed migration, a qualified permanent legacy marker permits the matching canonical store. Automatic migration is unavailable. Desktop retains its existing origin and behavior. `memory measure`, help and explicit `memory run --no-memory` remain independent of private state. The identifier equality is checked against the actual Desktop configuration by a regression test; platform bases remain native local data, including LocalAppData on Windows rather than roaming data.
 
 Trust reports `not_checked`, `not_accepted` or `stored_not_checked`. The last value confirms only a stored digest, not that current instructions still match it. The command never prints instruction text, persistent project keys, installation IDs or other projects' preferences. Capabilities declare discovery, explicit initialization, persistent policy management and Linux initial-prompt delivery. `initialPromptLaunch` qualifies the latter by platform and adapter version; it does not probe the installed agent or grant permission. Capture, managed resume and compaction remain unavailable.
 
 With `--json`, stdout contains `{ "ok": true, "result": { "schema": 1, ... } }` for a completed observation. The result includes `transport`, canonical `directory`, a uniquely resolved `root` or null, `scope`, `policy`, `trust` and `capabilities`. `scope` includes state, ancestry completeness, ancestor-kit paths, blocked count and `descendantsChecked: false`. An ambiguous scope lists every observed ancestor kit and returns no selected root. Exit 0 means a complete `ready`, `absent` or `reserved` observation; exit 5 means an invalid, partial, ambiguous or incomplete scope, with the observation still on stdout. Usage errors exit 2; unavailable or refused native/state IO exits 3. Errors use the existing `{ "ok": false, "error": { "code", "message" } }` stderr envelope with redacted messages. `memory --help` describes the currently available command; unsupported subcommands fail before filesystem or control-plane IO.
 
 The local binary does not translate `remote://`, UNC, WSL or Docker destinations into local paths. Running a compatible CLI inside another environment uses that process's own native filesystem and installation state; it does not borrow the desktop's authorization or state. Native Windows and macOS runtime qualification remains required.
+
+## Explicit private storage migration
+
+`memory migrate-storage` acts on this execution machine's complete legacy memory
+installation, including every project's stored preference. It requires exactly
+one `--preview` or `--accept-review <sha256>`, including on a TTY. There is no
+project selection, application-path override, force or blind acceptance option.
+Linux and Android have the native atomic exchange implementation; other platforms
+refuse before storage IO. Linux runtime tests qualify the implemented flow;
+Android, other platforms and additional filesystems remain unqualified.
+
+Preview opens only existing legacy state. It can acquire/create the ordinary
+preference and deployment lock files, but creates no destination, identity or
+project files. Its schema-1 result includes `reviewDigest`, policy counts, stored
+instruction-digest count, journal presence and pending-reservation status.
+Installation IDs, project keys, account paths and file bodies are not printed.
+Journal presence does not certify its validity for later project recovery.
+
+Acceptance requires the matching fresh native review. It preserves the directory
+and file objects, installation identity, exact preferences and journal bytes,
+including Never and accepted instruction digests. It grants no new trust, session
+permission, tools, context delivery or captures. An existing destination memory
+directory, even an empty one, blocks migration; two installations are never
+merged. Unknown artifacts, corrupt preferences, links, hardlinks, unsafe
+permissions, changed facts and unavailable filesystem identity block without
+discarding data. The destination application directory's unrelated files remain
+untouched. See the [native origin contract](../../src-tauri/crates/voktty-memory-local/ORIGIN.md).
+
+The single directory exchange leaves a permanent marker at the legacy memory
+path, blocking old writers. Keep this marker. A qualified interrupted reservation
+can be reviewed again and completed. There is no automatic rollback or cleanup
+of foreign or invalid artifacts. Errors after admission report
+`applicationParentMayExist`, `reservationCreated` and `stateMoved`; a failure
+does not prove that nothing changed. Reload before retrying. Usage errors exit 2,
+native preparation errors use the existing redacted errors and exit 3, and a
+changed acceptance or admitted failure exits 5 with one stderr error envelope.
+Successful preview or migration exits 0. JSON success flags separately report
+`stateMoved` and false policy, trust, project-file, context and capture changes.
 
 ## Standalone memory initialization
 

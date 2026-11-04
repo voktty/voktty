@@ -27,7 +27,7 @@ fn resolve(base: &Path) -> Result<PathBuf, CliError> {
 fn legacy_error() -> CliError {
     CliError::new(
         "memory_legacy_state_requires_review",
-        "legacy CLI memory state requires explicit review before using the Desktop storage origin; no state was moved, merged or enabled; automatic migration is unavailable; memory run --no-memory bypasses private state",
+        "legacy CLI memory state requires explicit review before using the Desktop storage origin; no state was moved, merged or enabled; review with memory migrate-storage --preview on supported platforms; memory run --no-memory bypasses private state",
         EXIT_REQUEST,
     )
 }
