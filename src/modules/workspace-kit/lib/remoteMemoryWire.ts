@@ -93,19 +93,6 @@ export function remoteMemoryRequest(
       return { operation: "confirmTrust", ...selected, review };
     case "project_memory_cancel_trust":
       return { operation: "cancelTrust", ...selected, revision };
-    case "project_memory_review_policy": {
-      const request = memoryRecord(args.request);
-      return {
-        operation: "reviewPolicy",
-        ...selected,
-        revision: request.revision,
-        policy: request.policy,
-      };
-    }
-    case "project_memory_confirm_policy":
-      return { operation: "confirmPolicy", ...selected, review };
-    case "project_memory_cancel_policy":
-      return { operation: "cancelPolicy", ...selected, revision };
     case "project_memory_context_open":
       return { operation: "contextOpen" };
     case "project_memory_context_close":

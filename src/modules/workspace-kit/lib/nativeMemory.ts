@@ -3,7 +3,6 @@ import type { KitLock } from "@/modules/workspace-kit/lib/configTypes";
 import type { KitDeploymentEntry } from "@/modules/workspace-kit/lib/deployment";
 import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
 import { loadMemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
-import { createNativeMemoryPolicyClient } from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
 import {
   memoryRecoveryReview,
   memoryRestorationReport,
@@ -235,16 +234,8 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
     request: reviewRequest,
     contextTransport: transport ? () => transport.retain() : undefined,
   });
-  const policy = createNativeMemoryPolicyClient({
-    checkSelection: (receipt) => {
-      capture(receipt);
-    },
-    canRequest: () => unsettled < 256,
-    request: reviewRequest,
-  });
   return {
     ...trust.api,
-    ...policy.api,
     async select(
       path: string,
       environment: WorkspaceEnv,
@@ -254,7 +245,6 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       current = null;
       review = null;
       trust.retire();
-      policy.retire();
       const requested = ++revision;
       if (!Number.isSafeInteger(requested)) cancelled();
       const capturedEnvironment = nativeEnvironment(environment);
@@ -574,7 +564,6 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       current = null;
       review = null;
       trust.retire();
-      policy.retire();
       closing = (async () => {
         if (!acknowledged && opening) {
           let owner: Handle | null = null;

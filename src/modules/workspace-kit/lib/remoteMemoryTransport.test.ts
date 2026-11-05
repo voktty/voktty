@@ -210,25 +210,6 @@ function operation(params: Record<string, unknown>): unknown {
           instructionDigest: "b".repeat(64),
         },
       };
-    case "reviewPolicy":
-      return {
-        schema: 1,
-        root: "/project",
-        projectKey: "a".repeat(64),
-        policy: params.policy,
-        preference: null,
-        revision: params.revision,
-        review: trustReply().review,
-      };
-    case "confirmPolicy":
-      return {
-        schema: 1,
-        preference: {
-          projectKey: "a".repeat(64),
-          policy: "never",
-          instructionDigest: null,
-        },
-      };
     case "documents":
       return {
         schema: 1,
@@ -245,7 +226,6 @@ function operation(params: Record<string, unknown>): unknown {
       return packet();
     case "cancel":
     case "cancelTrust":
-    case "cancelPolicy":
     case "cancelRecovery":
       return true;
     default:
@@ -485,7 +465,35 @@ it("uses SSH for the shared indicator and never initializes private state during
   expect(io.native).not.toHaveBeenCalled();
 });
 
-it("maps trust and policy receipts without changing instruction bytes or digests", async () => {
+it.each([target, namespace, connectedNamespace])(
+  "rejects retired policy commands before allocating SSH resources for $source",
+  async (input) => {
+    const owner = client(input);
+    for (const method of [
+      "reviewPolicy",
+      "confirmPolicy",
+      "cancelPolicy",
+      "isPolicyReviewCurrent",
+    ])
+      expect(method in owner).toBe(false);
+    const transport = createRemoteMemoryTransport(input);
+    transports.push(transport);
+    for (const action of ["review", "confirm", "cancel"])
+      await expect(
+        transport.invoke(`project_memory_${action}_policy`, {
+          handle,
+          selection: "selection",
+          request: { revision: 1, policy: "always" },
+          review: trustReply().review,
+        }),
+      ).rejects.toMatchObject({ code: "unsupported" });
+    expect(io.acquire).not.toHaveBeenCalled();
+    expect(io.request).not.toHaveBeenCalled();
+    expect(io.native).not.toHaveBeenCalled();
+  },
+);
+
+it("maps trust receipts without changing instruction bytes or digests", async () => {
   const owner = client(namespace);
   const selected = await owner.select(namespace.path, namespace.environment);
   const trust = await owner.reviewTrust(selected);
@@ -493,10 +501,8 @@ it("maps trust and policy receipts without changing instruction bytes or digests
   expect(trust.snapshot.instructions).toEqual(trustReply().instructions);
   expect(trust.snapshot.fingerprint).toEqual(trustReply().fingerprint);
   await owner.confirmTrust(selected, trust);
-  const policy = await owner.reviewPolicy(selected, "never");
-  await owner.confirmPolicy(selected, policy);
   expect(last(io.request.mock.calls)?.[1].params).toEqual({
-    operation: "confirmPolicy",
+    operation: "confirmTrust",
     handle,
     selection: "00000000-0000-4000-8000-000000000003",
     review: trustReply().review,
