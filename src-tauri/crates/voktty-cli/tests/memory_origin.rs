@@ -23,7 +23,7 @@ impl Fixture {
         fs::create_dir(&project).unwrap();
         fs::create_dir(&bin).unwrap();
         let agent = bin.join("codex");
-        fs::write(&agent, "#!/bin/sh\nprintf 'fixture-agent-started'\n").unwrap();
+        fs::write(&agent, "#!/bin/sh\nif [ \"$1\" = '--version' ]; then printf 'codex-cli 0.165.0\\n'; exit 0; fi\nprintf 'fixture-agent-started'\n").unwrap();
         fs::set_permissions(agent, fs::Permissions::from_mode(0o700)).unwrap();
         let fixture = Self {
             data: owned.path().join("data"),
@@ -86,9 +86,8 @@ fn cli_uses_the_desktop_store_and_preserves_its_installation_policy_and_trust() 
     assert!(status["policy"]["mode"].is_null());
     assert_eq!(status["trust"], "not_checked");
     let launch = f.run(&["run", "--session", "codex"]);
-    assert_eq!(launch.status.code(), Some(5));
-    assert!(String::from_utf8_lossy(&launch.stderr).contains("Never"));
-    assert!(launch.stdout.is_empty());
+    assert!(launch.status.success(), "{launch:?}");
+    assert_eq!(launch.stdout, b"fixture-agent-started");
     assert_eq!(fs::read(state_path).unwrap(), before);
     assert!(!f.legacy().exists());
 }
@@ -144,19 +143,13 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         for args in [
             vec!["use", "--always", "--json"],
             vec!["trust", "--preview", "--json"],
-            vec!["run", "--session", "codex"],
-            vec!["run", "codex"],
         ] {
             let output = f.run(&args);
             assert_eq!(output.status.code(), Some(5), "{mode}: {output:?}");
             assert!(output.stdout.is_empty());
             let text = String::from_utf8(output.stderr).unwrap();
             assert!(
-                text.contains(if args[0] == "run" {
-                    "legacy CLI memory state"
-                } else {
-                    "memory_legacy_state_requires_review"
-                }),
+                text.contains("memory_legacy_state_requires_review"),
                 "{mode}: {args:?}: {text}"
             );
             assert!(!text.contains("sentinel"));
@@ -180,9 +173,15 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         } else {
             assert_eq!(fs::read(state_path).unwrap(), original);
         }
-        let output = f.run(&["run", "--no-memory", "codex"]);
-        assert!(output.status.success(), "{output:?}");
-        assert_eq!(output.stdout, b"fixture-agent-started");
+        for args in [
+            vec!["run", "codex"],
+            vec!["run", "--session", "codex"],
+            vec!["run", "--no-memory", "codex"],
+        ] {
+            let output = f.run(&args);
+            assert!(output.status.success(), "{mode}: {args:?}: {output:?}");
+            assert_eq!(output.stdout, b"fixture-agent-started");
+        }
         let measurement = f.run(&["measure", "--json"]);
         assert!(matches!(measurement.status.code(), Some(0 | 5)));
         let measured: Value = serde_json::from_slice(&measurement.stdout).unwrap();

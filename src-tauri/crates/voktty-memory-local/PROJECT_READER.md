@@ -35,6 +35,24 @@ command, enable a conversation or repair Windows ACLs. Desktop, CLI and SSH
 initialization must retain native review ownership and explicit write authority
 when they consume these observations.
 
+## Explicit context packets
+
+`observe_context` reads configuration, the fixed instruction inventory and
+PROJECT/CONTEXT documents without installation preferences. `read_context_packet`
+uses that observation and the shared pure packet renderer. It retains the
+256 KiB per-file, 128-path and 2 MiB aggregate read limits, four-reader budget,
+phase deadline and cancellation checks; serialized packets remain at most 24 KiB.
+The root and original read authority are checked again before returning.
+
+The packet scope key hashes the captured canonical path, filesystem, native
+object identity and optional root instance. It is stable for that capture and
+contains no installation UUID. It is presentation metadata, not persistent policy
+or permission. A caller must resolve the applicable memory root and retain its
+own operation/conversation lifetime; this method grants no model, tool or write
+access. CLI `--session` resolves ancestors and checks the packet again after
+binary admission. Desktop/helper conversation consumers still use the old global
+contract pending adaptation. Reads are bounded observations, not atomic snapshots.
+
 ## Initialization reviews
 
 `OwnedProjectInitializationPreview::prepare` renders the embedded kit and its lock

@@ -40,8 +40,8 @@ pub fn resource(source: &str) -> Option<&'static str> {
 }
 
 pub use context::{
-    build_memory_context, instruction_fingerprint, InstructionFingerprint, InstructionRecord,
-    MemoryContextPacket, MemoryContextResult,
+    build_memory_context, build_project_memory_packet, instruction_fingerprint,
+    InstructionFingerprint, InstructionRecord, MemoryContextPacket, MemoryContextResult,
 };
 pub use deployment::{
     plan_deployment, DeploymentAction, DeploymentEntry, DeploymentPlan, DeploymentReason, PathFact,

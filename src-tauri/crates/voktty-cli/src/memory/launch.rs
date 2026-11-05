@@ -1,7 +1,4 @@
-use super::{
-    legacy_launch_status, map_error, usage_error, CliError, MemoryCommand, EXIT_REQUEST,
-    EXIT_UNAVAILABLE,
-};
+use super::{map_error, usage_error, CliError, MemoryCommand, EXIT_UNAVAILABLE};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -71,52 +68,22 @@ pub(super) fn run(options: RunOptions, as_json: bool) -> Result<ExitCode, CliErr
     let root =
         resolve_local_memory_directory(&requested, &control.read_control().map_err(map_error)?)
             .map_err(map_error)?;
-    if !options.disabled {
-        let parent = super::origin::parent()?;
-        let observation = legacy_launch_status(&root, parent.as_deref())?;
-        let state = observation["scope"]["state"]
-            .as_str()
-            .unwrap_or("incomplete");
-        if !matches!(state, "ready" | "absent" | "reserved") {
-            return Err(CliError::new("memory_scope_unavailable", "memory scope is invalid, ambiguous or incomplete; inspect memory status before launching", EXIT_REQUEST));
-        }
-        let policy = observation["policy"]["mode"].as_str().unwrap_or("manual");
-        if options.session && state != "ready" {
-            return Err(CliError::new(
-                "memory_scope_unavailable",
-                "session memory requires a ready kit; initialize it explicitly before launching",
-                EXIT_REQUEST,
-            ));
-        }
-        if options.session && policy == "never" {
-            return Err(CliError::new("memory_policy_never", "the stored Never policy blocks session memory; change it explicitly before launching", EXIT_REQUEST));
-        }
-        if options.session || policy == "always" {
-            return with_memory(&root, parent.as_deref(), &observation, &options);
-        }
+    if options.session {
+        return with_memory(&root, &options);
     }
-    eprintln!("Project memory is not connected for this launch. Use memory init, memory trust and memory use to manage it explicitly. Existing agent rule files still apply.");
+    eprintln!("Project memory uses the agent's existing rule files for this launch; no context prefix was added. Use --session for an explicit initial prompt packet.");
     execute(&options.adapter, &options.args, &root)
 }
 
 #[cfg(target_os = "linux")]
-fn with_memory(
-    root: &std::path::Path,
-    parent: Option<&std::path::Path>,
-    observation: &serde_json::Value,
-    options: &RunOptions,
-) -> Result<ExitCode, CliError> {
-    use super::{
-        existing_store,
-        trust::{trust_error, TrustReadAccess},
-    };
+fn with_memory(root: &std::path::Path, options: &RunOptions) -> Result<ExitCode, CliError> {
+    use super::{resolved_root, trust::TrustReadAccess, MarkerAccess, EXIT_REQUEST};
     use std::os::fd::AsRawFd;
     use std::os::unix::{
         fs::{MetadataExt, OpenOptionsExt},
         process::CommandExt,
     };
-    use std::sync::Arc;
-    use voktty_memory_local::{MemoryContextSession, MemorySessionUse, MemoryTrustReview};
+    use voktty_memory_local::{ProjectMemoryWorkspace, ReadError};
     let adapter = adapters::Adapter::parse(&options.adapter).ok_or_else(adapters::unavailable)?;
     adapters::arguments(adapter, &options.args, "")?;
     let directory = std::fs::OpenOptions::new()
@@ -125,45 +92,47 @@ fn with_memory(
         .open(root)
         .map_err(|_| adapters::unavailable())?;
     let directory_identity = directory.metadata().map_err(|_| adapters::unavailable())?;
-    let admitted = adapters::Admission::prepare(root, adapter)?;
     let control = DiscoveryControl::default();
-    let store = parent
-        .map(|parent| existing_store(parent, &control))
-        .transpose()?
-        .flatten()
-        .ok_or_else(adapters::unavailable)?;
-    let memory = observation["root"]
-        .as_str()
-        .map(PathBuf::from)
-        .ok_or_else(adapters::unavailable)?;
-    let access = Arc::new(TrustReadAccess::new(root.to_owned(), memory));
-    let review =
-        MemoryTrustReview::prepare(Arc::new(store), root.to_owned(), access, None, &control)
-            .map_err(trust_error)?;
-    let session = MemoryContextSession::bind(
-        review,
-        if options.session {
-            MemorySessionUse::Enabled
-        } else {
-            MemorySessionUse::Inherit
-        },
-        &control,
+    let marker = MarkerAccess {
+        root: root.to_owned(),
+    };
+    let origin =
+        ProjectMemoryWorkspace::open(root, &marker, &control.read_control().map_err(map_error)?)
+            .map_err(map_error)?;
+    let scope = origin
+        .observe_scope(voktty_memory_local::DiscoveryPurpose::Discover, &control)
+        .map_err(map_error)?;
+    let resolve_scope = |scope: &voktty_memory_local::NativeScopeObservation| {
+        if scope.scope.state != "ready"
+            || !scope.scope.ancestry_complete
+            || !scope.blocked_paths.is_empty()
+        {
+            return Err(CliError::new("memory_scope_unavailable", "session memory requires one ready project kit with complete ancestor discovery; no agent was started", EXIT_REQUEST));
+        }
+        resolved_root(scope)
+            .map(std::path::Path::to_owned)
+            .ok_or_else(|| map_error(ReadError::Unavailable))
+    };
+    let memory = resolve_scope(&scope)?;
+    let access = TrustReadAccess::new(root.to_owned(), memory.clone());
+    let workspace = ProjectMemoryWorkspace::open(
+        &memory,
+        &access,
+        &control.read_control().map_err(map_error)?,
     )
-    .map_err(trust_error)?;
-    let result = session.read(&control).map_err(trust_error)?;
-    let packet = result.packet.ok_or_else(|| {
-        CliError::new(
-            "memory_permission_required",
-            format!(
-                "{}; review memory trust and use before launching; no agent was started",
-                result.decision.reason
-            ),
-            EXIT_REQUEST,
-        )
-    })?;
+    .map_err(map_error)?;
+    let packet = workspace
+        .read_context_packet(None, &control.read_control().map_err(map_error)?)
+        .map_err(map_error)?;
+    let admitted = adapters::Admission::prepare(root, adapter)?;
     let args = adapters::arguments(adapter, &options.args, &packet.text)?;
-    let current = session.read(&control).map_err(trust_error)?;
-    if current.packet.as_ref() != Some(&packet) {
+    let current_scope = origin
+        .observe_scope(voktty_memory_local::DiscoveryPurpose::Discover, &control)
+        .map_err(map_error)?;
+    let current = workspace
+        .read_context_packet(None, &control.read_control().map_err(map_error)?)
+        .map_err(map_error)?;
+    if current != packet || resolve_scope(&current_scope)? != memory {
         return Err(adapters::unavailable());
     }
     let current = std::fs::metadata(root).map_err(|_| adapters::unavailable())?;
@@ -194,12 +163,7 @@ fn with_memory(
 }
 
 #[cfg(not(target_os = "linux"))]
-fn with_memory(
-    _root: &std::path::Path,
-    _parent: Option<&std::path::Path>,
-    _observation: &serde_json::Value,
-    _options: &RunOptions,
-) -> Result<ExitCode, CliError> {
+fn with_memory(_root: &std::path::Path, _options: &RunOptions) -> Result<ExitCode, CliError> {
     Err(CliError::new(
         "memory_launch_unsupported",
         "native memory launch is not available on this platform yet",

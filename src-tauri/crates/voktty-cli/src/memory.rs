@@ -6,8 +6,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use voktty_memory_local::{
     inspect_local_memory_scope, path_policy, resolve_local_memory_directory, DiscoveryControl,
-    DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace, MemoryPolicy, MemoryReadAccess,
-    NativeScopeObservation, ReadError, StoreError,
+    MemoryReadAccess, NativeScopeObservation, ReadError, StoreError,
 };
 
 #[cfg(test)]
@@ -167,27 +166,6 @@ fn resolved_root(observation: &NativeScopeObservation) -> Option<&Path> {
     })
 }
 
-fn existing_store(
-    parent: &Path,
-    control: &DiscoveryControl,
-) -> Result<Option<LocalMemoryStore>, CliError> {
-    for path in [parent.to_path_buf(), parent.join("project-memory")] {
-        match std::fs::symlink_metadata(path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(_) => return Err(map_error(ReadError::Io)),
-            Ok(_) => {}
-        }
-    }
-    let phase = control.read_control().map_err(map_error)?;
-    LocalMemoryStore::check_application_parent(parent, &phase).map_err(map_error)?;
-    let store = LocalMemoryStore::open_private(parent, &phase).map_err(map_error)?;
-    match store.load() {
-        Ok(_) => Ok(Some(store)),
-        Err(StoreError::Missing) => Ok(None),
-        Err(error) => Err(map_error(ReadError::Store(error))),
-    }
-}
-
 fn status(project: &Path) -> Result<Value, CliError> {
     let control = DiscoveryControl::new(Duration::from_secs(5));
     let root = resolve_local_memory_directory(project, &control.read_control().map_err(map_error)?)
@@ -201,77 +179,6 @@ fn status(project: &Path) -> Result<Value, CliError> {
         json!({"state":"not_checked", "mode":null}),
         "not_checked",
     ))
-}
-
-fn legacy_launch_status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
-    let control = DiscoveryControl::new(Duration::from_secs(5));
-    let root = resolve_local_memory_directory(project, &control.read_control().map_err(map_error)?)
-        .map_err(map_error)?;
-    let access = MarkerAccess { root: root.clone() };
-    let mut observation =
-        inspect_local_memory_scope(&root, &access, &control).map_err(map_error)?;
-    let mut policy = json!({"state":"not_checked", "mode":null});
-    let mut trust = "not_checked";
-    if observation.scope.state == "ready" && parent.is_some() {
-        let store = parent
-            .map(|parent| existing_store(parent, &control))
-            .transpose()?
-            .flatten();
-        if let Some(store) = store {
-            let phase = control.read_control().map_err(map_error)?;
-            let workspace =
-                LocalMemoryWorkspace::open(&store, &root, &access, &phase).map_err(map_error)?;
-            observation = workspace
-                .observe_scope(DiscoveryPurpose::Discover, &control)
-                .map_err(map_error)?;
-            if observation.scope.state != "ready" {
-                return Err(map_error(ReadError::StaleRoot));
-            }
-            let memory_root =
-                resolved_root(&observation).ok_or_else(|| map_error(ReadError::Unavailable))?;
-            let memory = LocalMemoryWorkspace::open(&store, memory_root, &access, &phase)
-                .map_err(map_error)?;
-            let (snapshot, preference) = memory.observe_preference(&phase).map_err(map_error)?;
-            let mode = match preference
-                .as_ref()
-                .map(|p| p.policy)
-                .unwrap_or(MemoryPolicy::Manual)
-            {
-                MemoryPolicy::Manual => "manual",
-                MemoryPolicy::Always => "always",
-                MemoryPolicy::Never => "never",
-            };
-            policy = json!({"state":"observed", "mode":mode});
-            trust = if preference
-                .as_ref()
-                .is_some_and(|p| p.instruction_digest.is_some())
-            {
-                "stored_not_checked"
-            } else {
-                "not_accepted"
-            };
-            let verified = workspace
-                .observe_scope(DiscoveryPurpose::Discover, &control)
-                .map_err(map_error)?;
-            let (current, current_preference) =
-                memory.observe_preference(&phase).map_err(map_error)?;
-            if serde_json::to_value(&verified.scope).ok()
-                != serde_json::to_value(&observation.scope).ok()
-                || current.revision() != snapshot.revision()
-                || current.installation_id() != snapshot.installation_id()
-                || current_preference != preference
-            {
-                return Err(map_error(ReadError::StaleRoot));
-            }
-        } else {
-            policy = json!({"state":"uninitialized", "mode":"manual"});
-            trust = "not_accepted";
-        }
-    } else if observation.scope.state == "ready" {
-        policy = json!({"state":"unavailable", "mode":null});
-    }
-    control.read_control().map_err(map_error)?;
-    Ok(status_report(&root, &observation, policy, trust))
 }
 
 fn status_report(
@@ -307,7 +214,7 @@ pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, Cli
             println!("Storage migration: voktty memory migrate-storage --preview | --accept-review <sha256> [--json]\nReviews this machine's entire legacy memory installation before moving it to Desktop storage.\nLinux and Android only. Preserves identity, policy, stored trust and recovery bytes.\nRefuses an existing destination store; never merges installations. Leaves a permanent\nmarker to block old writers. No project path, force, automatic acceptance or model launch.\n");
             println!("Recovery: voktty memory recover [--project <directory>]\n                              --preview | --accept-review <sha256> [--json]\nReviews and completes interrupted initialization from the project's record.\nPreserves project content and original rules; refuses live or unknown operations.\nDoes not open global memory storage, change permissions or start an agent.\nNo force or automatic acceptance; review the complete plan before applying it.\n");
             println!("Measure: voktty memory measure [--project <directory>] [--up-next-heading <heading>] [--json]\nReports configured character, Up next and handoff limits without private state or writes.\nThe default heading is Up next; pass the exact translated heading when needed.\nUnknown or exceeded metrics exit 5. This command does not compact or archive files.\n");
-            println!("Launch: voktty memory run [--project <directory>] [--session|--no-memory]\n                          codex|claude|agy [-- <agent-args...>]\nWithout memory, Unix launch preserves all agent arguments and terminal IO.\nOn Linux, trusted memory with --session or Always can prefix the initial user prompt\nin Codex 0.165.0 or Claude 2.1.312, preserving verified interactive options and the request.\nNative agent approvals remain in force. Context argv may be visible in local process listings.\nResume, remote/cwd overrides, other versions and unverified modes require the manual\nstartup-message alternative. Run never initializes state or grants captures. Wrapper\n--json is unavailable; agent --json is forwarded only without integration. Windows launch is unavailable.\n");
+            println!("Launch: voktty memory run [--project <directory>] [--session|--no-memory]\n                          codex|claude|agy [-- <agent-args...>]\nWithout memory, Unix launch preserves all agent arguments and terminal IO.\nOn Linux, --session reads project files without global storage and prefixes the initial user prompt\nin Codex 0.165.0 or Claude 2.1.312, preserving verified interactive options and the request.\nNative agent approvals remain in force. Context argv may be visible in local process listings.\nResume, remote/cwd overrides, other versions and unverified modes require the manual\nstartup-message alternative. Run never initializes state or grants captures. Wrapper\n--json is unavailable; agent --json is forwarded only without integration. Windows launch is unavailable.\n");
             println!("Trust: voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]\n                          --preview | --accept-review <sha256> [--json]\nReviews complete instructions, then accepts only the matching review on this machine.\nDoes not change use policy, grant tools or enable context delivery or captures.\n");
             println!("Policy: voktty memory use --always|--never|--manual [--project <directory>] [--preview] [--json]\n\nStores this machine's project policy without accepting instructions or enabling captures.\nFor a new compatible launch use memory run --session; use --no-memory to disable integration.\nChanging an existing conversation requires Project Memory in that conversation.\n");
             println!("Usage: voktty memory status [--project <directory>] [--json]\n       voktty memory init [--project <directory>] [--set <name=value>]...\n                          [--preview | --accept-plan <sha256>] [--json]\n\nStatus reads markers without changing project files. Init creates or repairs the\nproject kit and both AGENTS.md/CLAUDE.md links in the current directory.\nUse --project for another directory or --preview to inspect without writing.\nInit never opens application memory storage or starts an agent.\nExisting rules and private-ignore replacements require a reviewed --accept-plan\nor interactive acceptance. Unknown conflicts are never overwritten.\nCompatibility: --yes and --link-agents/--link-claude remain accepted; --yes never\nbypasses the reviewed digest for replacements.\n--set names: project_name, project_summary, owner_title, primary_branch, verify_commands,\n             language, created_at (YYYY-MM-DD), default_runtime, default_model.\nDefaults: folder name, current UTC date, English and the shared template defaults.\nProject memory may be committed to Git; review content before sharing it.");

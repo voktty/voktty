@@ -175,3 +175,42 @@ fn context_document_limits_scalar_validation_and_node_guard_are_distinct() {
         "KIT_DOCUMENT_NODE_LIMIT"
     );
 }
+
+#[test]
+fn explicit_project_packet_reuses_rendering_without_installation_or_policy() {
+    let input = corpus()["baseline"].clone();
+    let legacy = build_memory_context(&input.to_string())
+        .unwrap()
+        .packet
+        .unwrap();
+    let packet = voktty_workspace_kit::build_project_memory_packet(
+        input["identity"]["canonicalRoot"].as_str().unwrap(),
+        &legacy.project_key,
+        &input["config"],
+        &input["instructions"],
+        &input["project"],
+        &input["context"],
+    )
+    .unwrap();
+    assert_eq!(packet, legacy);
+    let mut broken = input["instructions"].clone();
+    broken["files"][0]["fact"] = json!({"kind":"blocked"});
+    assert!(voktty_workspace_kit::build_project_memory_packet(
+        "/project",
+        &legacy.project_key,
+        &input["config"],
+        &broken,
+        &input["project"],
+        &input["context"],
+    )
+    .is_err());
+    assert!(voktty_workspace_kit::build_project_memory_packet(
+        "/project",
+        &legacy.project_key,
+        &input["config"],
+        &input["instructions"],
+        &json!({"kind":"file","text":"x".repeat(256 * 1024 + 1)}),
+        &input["context"],
+    )
+    .is_err());
+}

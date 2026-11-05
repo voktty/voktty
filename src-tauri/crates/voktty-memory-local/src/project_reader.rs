@@ -186,6 +186,35 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         project_context_observation(facts, role, control)
     }
 
+    /// Reads a bounded packet under ordinary native read authority. This grants
+    /// no tools or persistent permissions and never opens application storage.
+    pub fn read_context_packet(
+        &self,
+        role: Option<&str>,
+        control: &ReadControl,
+    ) -> Result<voktty_workspace_kit::MemoryContextPacket, ReadError> {
+        use sha2::{Digest, Sha256};
+        let observed = self.observe_context(role, control)?;
+        let binding = json!({
+            "operation":"project-context-v1", "root":self.canonical_root,
+            "filesystem":self.filesystem_id, "object":[self.root_id.0.to_string(), self.root_id.1.to_string()],
+            "instance":self.root_instance,
+        });
+        let key = hex::encode(Sha256::digest(binding.to_string().as_bytes()));
+        let packet = voktty_workspace_kit::build_project_memory_packet(
+            &self.canonical_root,
+            &key,
+            &observed.config,
+            &observed.instructions,
+            &fact_value(&observed.project),
+            &fact_value(&observed.context),
+        )
+        .map_err(ReadError::Contract)?;
+        self.checked_root(control)?;
+        control.check()?;
+        Ok(packet)
+    }
+
     pub(crate) fn recovery_artifacts(
         &self,
         control: &ReadControl,

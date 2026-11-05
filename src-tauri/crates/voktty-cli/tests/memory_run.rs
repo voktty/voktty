@@ -59,7 +59,6 @@ impl Fixture {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        assert!(self.run(&["memory", "use", "--manual"]).status.success());
     }
     fn verified_codex(&self) {
         self.verified_agent("codex", "codex-cli 0.165.0");
@@ -70,7 +69,7 @@ impl Fixture {
     fn verified_agent(&self, name: &str, version: &str) {
         let path = self.bin.join(name);
         let original = fs::read_to_string(&path).unwrap();
-        let probe = "import os,sys,json,signal\nif sys.argv[1:]==['--version']:\n assert sys.stdin.buffer.read()==b''\n mode=os.getenv('VERSION_FIXTURE','ok')\n if mode=='flood':\n  while True: os.write(1,b'x'*8192)\n if mode=='hang':\n  if os.fork()==0:\n   open(os.environ['PROBE_PID'],'w').write(str(os.getpid()))\n   while True: signal.pause()\n  sys.exit(0)\n if mode=='revoke':\n  path=os.environ['PROBE_STATE']\n  state=json.load(open(path));state['revision']+=1;state['projects'][0]['policy']='never'\n  open(path,'w').write(json.dumps(state))\n if mode=='mutate': os.chmod(sys.argv[0],0o755)\n print('codex-cli '+('0.166.0' if mode=='wrong' else '0.165.0'),flush=True)\n sys.exit(2 if mode=='nonzero' else 0)\n";
+        let probe = "import os,sys,json,signal\nif sys.argv[1:]==['--version']:\n assert sys.stdin.buffer.read()==b''\n mode=os.getenv('VERSION_FIXTURE','ok')\n if mode=='flood':\n  while True: os.write(1,b'x'*8192)\n if mode=='hang':\n  if os.fork()==0:\n   open(os.environ['PROBE_PID'],'w').write(str(os.getpid()))\n   while True: signal.pause()\n  sys.exit(0)\n if mode=='edit-document':\n  open(os.environ['PROBE_DOCUMENT'],'w').write('Changed during admission')\n if mode=='mutate': os.chmod(sys.argv[0],0o755)\n print('codex-cli '+('0.166.0' if mode=='wrong' else '0.165.0'),flush=True)\n sys.exit(2 if mode=='nonzero' else 0)\n";
         fs::write(
             path,
             original.replacen(
@@ -84,13 +83,12 @@ impl Fixture {
         )
         .unwrap();
     }
-    fn trust(&self) {
-        let review = value(&self.run(&["memory", "trust", "--preview", "--json"]));
-        let digest = review["result"]["reviewDigest"].as_str().unwrap();
-        assert!(self
-            .run(&["memory", "trust", "--accept-review", digest])
-            .status
-            .success());
+    fn legacy_state(&self) -> Vec<u8> {
+        let path = self.state();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let bytes = b"legacy state is deliberately unreadable JSON".to_vec();
+        fs::write(path, &bytes).unwrap();
+        bytes
     }
     fn state(&self) -> PathBuf {
         self.data
@@ -131,7 +129,7 @@ fn absent_memory_launches_all_adapters_without_creating_state_or_modifying_argum
             ])
         );
         assert_eq!(value["cwd"].as_str().unwrap(), f.project.to_str().unwrap());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("not connected"));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("existing rule files"));
         assert!(String::from_utf8_lossy(&output.stderr).contains("AGENT STDERR"));
     }
     assert!(!f.data.exists());
@@ -217,46 +215,37 @@ fn a_signal_sent_to_the_wrapper_reaches_the_exact_agent_process() {
 }
 
 #[test]
-fn stored_manual_and_never_do_not_read_or_accept_instruction_content() {
+fn normal_launch_never_reads_legacy_state_or_instruction_content() {
     let f = Fixture::new();
     f.init();
-    let state = f
-        .data
-        .join("app.voktty.voktty/project-memory/memory-local.json");
+    let before = f.legacy_state();
     fs::remove_file(f.project.join(".voktty/INIT.md")).unwrap();
     std::os::unix::fs::symlink(
         "/unavailable-secret-fixture",
         f.project.join(".voktty/INIT.md"),
     )
     .unwrap();
-    for mode in ["--manual", "--never"] {
-        assert!(f.run(&["memory", "use", mode]).status.success());
-        let before = fs::read(&state).unwrap();
-        value(&f.run(&["memory", "run", "codex"]));
-        assert_eq!(fs::read(&state).unwrap(), before);
-    }
+    value(&f.run(&["memory", "run", "codex"]));
+    assert_eq!(fs::read(f.state()).unwrap(), before);
 }
 
 #[test]
-fn requested_memory_fails_before_agent_start_and_explicit_disable_is_transparent() {
+fn requested_memory_requires_project_files_but_no_global_storage() {
     let f = Fixture::new();
     let output = f.run(&["memory", "run", "--session", "codex"]);
     assert_eq!(output.status.code(), Some(5));
     assert!(output.stdout.is_empty());
     assert!(!f.data.exists());
     f.init();
-    assert!(f.run(&["memory", "use", "--always"]).status.success());
-    let output = f.run(&["memory", "run", "codex"]);
-    assert_eq!(output.status.code(), Some(3));
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("copy a startup message"));
+    f.verified_codex();
+    value(&f.run(&["memory", "run", "--session", "codex"]));
+    assert!(!f.data.exists());
+    fs::write(&f.data, "global storage cannot be a directory").unwrap();
+    value(&f.run(&["memory", "run", "--session", "codex"]));
     value(&f.run(&["memory", "run", "--no-memory", "codex"]));
-    assert!(f.run(&["memory", "use", "--never"]).status.success());
     assert_eq!(
-        f.run(&["memory", "run", "--session", "codex"])
-            .status
-            .code(),
-        Some(5)
+        fs::read_to_string(&f.data).unwrap(),
+        "global storage cannot be a directory"
     );
 }
 
@@ -299,9 +288,8 @@ fn session_packet_reaches_the_initial_user_argument_without_consuming_stdin_or_p
         "SYNTHETIC CONTEXT FACTS",
     )
     .unwrap();
-    f.trust();
     f.verified_codex();
-    let before = fs::read(f.state()).unwrap();
+    let before = f.legacy_state();
     let user = "User request with spaces\n$(literal, never a shell)";
     let mut child = f
         .command(&[
@@ -355,35 +343,34 @@ fn session_packet_reaches_the_initial_user_argument_without_consuming_stdin_or_p
 }
 
 #[test]
-fn inherited_always_delivers_current_facts_and_refuses_changed_instruction_trust() {
+fn explicit_project_context_uses_current_instructions_and_ignores_legacy_policy() {
     let f = Fixture::new();
     f.init();
-    f.trust();
     f.verified_codex();
     assert!(f.run(&["memory", "use", "--always"]).status.success());
     let before = fs::read(f.state()).unwrap();
-    let result = value(&f.run(&["memory", "run", "codex"]));
-    assert_eq!(result["args"][0], hex::encode("--"));
+    let native = value(&f.run(&["memory", "run", "codex"]));
+    assert_eq!(native["args"], serde_json::json!([]));
+    let result = value(&f.run(&["memory", "run", "--session", "codex"]));
     let packet =
         String::from_utf8(hex::decode(result["args"][1].as_str().unwrap()).unwrap()).unwrap();
     assert!(packet.contains(".voktty/INIT.md"));
     assert_eq!(fs::read(f.state()).unwrap(), before);
-    fs::write(f.project.join(".voktty/INIT.md"), "Changed after trust").unwrap();
-    let refused = f.run(&["memory", "run", "codex"]);
-    assert_eq!(refused.status.code(), Some(5));
-    assert!(refused.stdout.is_empty());
+    fs::write(f.project.join(".voktty/INIT.md"), "Updated project guide").unwrap();
+    assert!(f.run(&["memory", "use", "--never"]).status.success());
+    let before = fs::read(f.state()).unwrap();
+    let result = value(&f.run(&["memory", "run", "--session", "codex"]));
+    let packet =
+        String::from_utf8(hex::decode(result["args"][1].as_str().unwrap()).unwrap()).unwrap();
+    assert!(packet.contains("Updated project guide"));
     assert_eq!(fs::read(f.state()).unwrap(), before);
 }
 
 #[test]
-fn unverified_versions_modes_and_missing_trust_never_start_an_integrated_agent() {
+fn unverified_versions_and_modes_never_start_an_integrated_agent() {
     let f = Fixture::new();
     f.init();
     f.verified_codex();
-    let output = f.run(&["memory", "run", "--session", "codex"]);
-    assert_eq!(output.status.code(), Some(5));
-    assert!(output.stdout.is_empty());
-    f.trust();
     for args in [
         vec!["resume"],
         vec!["exec"],
@@ -415,27 +402,25 @@ fn unverified_versions_modes_and_missing_trust_never_start_an_integrated_agent()
 }
 
 #[test]
-fn policy_revoked_during_version_admission_blocks_the_packet() {
+fn changed_instructions_during_version_admission_block_the_packet() {
     let f = Fixture::new();
     f.init();
-    f.trust();
     f.verified_codex();
     let output = f
         .command(&["memory", "run", "--session", "codex"])
-        .env("VERSION_FIXTURE", "revoke")
-        .env("PROBE_STATE", f.state())
+        .env("VERSION_FIXTURE", "edit-document")
+        .env("PROBE_DOCUMENT", f.project.join(".voktty/INIT.md"))
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(5));
+    assert_eq!(output.status.code(), Some(3));
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("KIT_MEMORY_POLICY_NEVER"));
+    assert!(!f.data.exists());
 }
 
 #[test]
 fn bounded_version_probe_kills_descendants_holding_its_pipe() {
     let f = Fixture::new();
     f.init();
-    f.trust();
     f.verified_codex();
     let pid_file = f.project.parent().unwrap().join("probe.pid");
     let start = Instant::now();
@@ -479,7 +464,6 @@ fn assert_descendant_settled(pid: &str) {
 fn termination_during_probe_settles_its_group_before_preserving_the_signal() {
     let f = Fixture::new();
     f.init();
-    f.trust();
     f.verified_codex();
     let pid_file = f.project.parent().unwrap().join("cancel-probe.pid");
     let mut child = f
@@ -533,10 +517,9 @@ fn termination_during_probe_settles_its_group_before_preserving_the_signal() {
 fn claude_session_preserves_options_user_request_stdin_pid_and_manual_policy() {
     let f = Fixture::new();
     f.init();
-    f.trust();
     f.verified_claude();
     fs::write(f.project.join(".voktty/CONTEXT.md"), "Shared Claude facts").unwrap();
-    let before = fs::read(f.state()).unwrap();
+    let before = f.legacy_state();
     let user = "Explain the shared facts\nKeep this exact request";
     let mut child = f
         .command(&[
@@ -605,27 +588,19 @@ fn claude_session_preserves_options_user_request_stdin_pid_and_manual_policy() {
 }
 
 #[test]
-fn claude_always_requires_its_own_version_and_current_root_bound_trust() {
+fn claude_session_requires_its_own_version_without_global_trust() {
     let f = Fixture::new();
     f.init();
     f.verified_claude();
-    assert_eq!(
-        f.run(&["memory", "run", "--session", "claude"])
-            .status
-            .code(),
-        Some(5)
-    );
-    f.trust();
-    assert!(f.run(&["memory", "use", "--always"]).status.success());
-    let before = fs::read(f.state()).unwrap();
-    let result = value(&f.run(&["memory", "run", "claude"]));
+    let before = f.legacy_state();
+    let result = value(&f.run(&["memory", "run", "--session", "claude"]));
     assert_eq!(result["args"][0], hex::encode("--"));
     let text =
         String::from_utf8(hex::decode(result["args"][1].as_str().unwrap()).unwrap()).unwrap();
     assert!(text.contains(".voktty/INIT.md"));
     assert_eq!(fs::read(f.state()).unwrap(), before);
     let wrong = f
-        .command(&["memory", "run", "claude"])
+        .command(&["memory", "run", "--session", "claude"])
         .env("VERSION_FIXTURE", "wrong")
         .output()
         .unwrap();
@@ -633,7 +608,7 @@ fn claude_always_requires_its_own_version_and_current_root_bound_trust() {
     assert!(wrong.stdout.is_empty());
     f.verified_codex();
     fs::copy(f.bin.join("codex"), f.bin.join("claude")).unwrap();
-    let wrong_family = f.run(&["memory", "run", "claude"]);
+    let wrong_family = f.run(&["memory", "run", "--session", "claude"]);
     assert_eq!(wrong_family.status.code(), Some(3));
     assert!(wrong_family.stdout.is_empty());
     assert_eq!(fs::read(f.state()).unwrap(), before);
@@ -643,7 +618,6 @@ fn claude_always_requires_its_own_version_and_current_root_bound_trust() {
 fn claude_unverified_modes_are_refused_and_no_memory_keeps_native_arguments() {
     let f = Fixture::new();
     f.init();
-    f.trust();
     f.verified_claude();
     for flags in [
         vec!["--print"],
@@ -664,13 +638,6 @@ fn claude_unverified_modes_are_refused_and_no_memory_keeps_native_arguments() {
         assert_eq!(refused.status.code(), Some(3));
         assert!(refused.stdout.is_empty());
     }
-    assert!(f.run(&["memory", "use", "--never"]).status.success());
-    assert_eq!(
-        f.run(&["memory", "run", "--session", "claude"])
-            .status
-            .code(),
-        Some(5)
-    );
     let native = value(&f.run(&[
         "memory",
         "run",
@@ -684,4 +651,44 @@ fn claude_unverified_modes_are_refused_and_no_memory_keeps_native_arguments() {
         native["args"],
         serde_json::json!([hex::encode("--resume"), hex::encode("fixture id")])
     );
+}
+
+#[test]
+fn project_context_resolves_ancestors_and_rejects_linked_documents_and_ambiguity() {
+    let f = Fixture::new();
+    f.init();
+    f.verified_codex();
+    let nested = f.project.join("source");
+    fs::create_dir(&nested).unwrap();
+    let output = f
+        .command(&["memory", "run", "--session", "codex"])
+        .current_dir(&nested)
+        .output()
+        .unwrap();
+    let result = value(&output);
+    assert_eq!(result["cwd"].as_str().unwrap(), nested.to_str().unwrap());
+    let packet =
+        String::from_utf8(hex::decode(result["args"][1].as_str().unwrap()).unwrap()).unwrap();
+    assert!(packet.contains(f.project.to_str().unwrap()));
+    assert!(!f.data.exists());
+    let context = f.project.join(".voktty/CONTEXT.md");
+    fs::remove_file(&context).unwrap();
+    std::os::unix::fs::symlink("/unavailable-secret-fixture", &context).unwrap();
+    let refused = f.run(&["memory", "run", "--session", "codex"]);
+    assert!(!refused.status.success());
+    assert!(refused.stdout.is_empty());
+    fs::remove_file(&context).unwrap();
+    fs::write(context, "Current context").unwrap();
+    assert!(f
+        .run(&["memory", "init", "--project", nested.to_str().unwrap()])
+        .status
+        .success());
+    let refused = f
+        .command(&["memory", "run", "--session", "codex"])
+        .current_dir(nested)
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(5));
+    assert!(refused.stdout.is_empty());
+    assert!(!f.data.exists());
 }

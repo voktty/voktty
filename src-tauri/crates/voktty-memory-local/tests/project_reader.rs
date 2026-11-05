@@ -119,6 +119,17 @@ fn project_observation_preserves_existing_kit_sessions_and_rule_files() {
         .observe_context(None, &ReadControl::default())
         .unwrap();
     assert_eq!(observed.config["project"], "Project reader");
+    let packet = workspace
+        .read_context_packet(None, &ReadControl::default())
+        .unwrap();
+    assert_eq!(
+        packet,
+        workspace
+            .read_context_packet(None, &ReadControl::default())
+            .unwrap()
+    );
+    assert!(packet.bytes <= 24 * 1024);
+    assert!(packet.text.contains(".voktty/INIT.md"));
     assert!(observed.instructions["files"]
         .as_array()
         .unwrap()
@@ -133,6 +144,11 @@ fn project_observation_preserves_existing_kit_sessions_and_rule_files() {
         .observe_context(None, &ReadControl::default())
         .unwrap();
     assert_eq!(updated.fingerprint, observed.fingerprint);
+    let updated_packet = workspace
+        .read_context_packet(None, &ReadControl::default())
+        .unwrap();
+    assert_eq!(packet.project_key, updated_packet.project_key);
+    assert_ne!(packet.digest, updated_packet.digest);
     assert!(matches!(updated.context, PathFact::File { text } if text == "New project facts\n"));
     fs::write(
         project.path().join(".voktty/INIT.md"),
@@ -172,6 +188,9 @@ fn metadata_grants_cannot_read_documents_and_retirement_denies_later_reads() {
     assert!(matches!(facts[".voktty/PROJECT.md"], PathFact::Blocked));
     assert!(workspace
         .observe_context(None, &ReadControl::default())
+        .is_err());
+    assert!(workspace
+        .read_context_packet(None, &ReadControl::default())
         .is_err());
     authority.active.store(false, Ordering::Release);
     assert!(matches!(
@@ -305,6 +324,10 @@ fn replacing_a_captured_project_or_linking_a_document_never_redirects_reads() {
     ));
     assert!(matches!(
         workspace.observe_context(None, &ReadControl::default()),
+        Err(ReadError::StaleRoot)
+    ));
+    assert!(matches!(
+        workspace.read_context_packet(None, &ReadControl::default()),
         Err(ReadError::StaleRoot)
     ));
 }

@@ -251,6 +251,47 @@ pub fn build_memory_context(source: &str) -> KitResult<MemoryContextResult> {
             packet: None,
         });
     }
+    let packet = context_packet(&input, project_key, config, instructions)?;
+    Ok(MemoryContextResult {
+        schema: 1,
+        decision,
+        packet: Some(packet),
+    })
+}
+
+/// Builds a packet from an explicitly authorized project read, without local
+/// policy or installation identity. The scope key is metadata, not authority.
+pub fn build_project_memory_packet(
+    root: &str,
+    scope_key: &str,
+    config: &Value,
+    instructions: &Value,
+    project: &Value,
+    context: &Value,
+) -> KitResult<MemoryContextPacket> {
+    if root.is_empty()
+        || root.len() > 4096
+        || root.chars().any(char::is_control)
+        || scope_key.len() != 64
+        || !scope_key.bytes().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err(issue("KIT_CONTEXT_PROJECT_MISMATCH"));
+    }
+    let config = parse_kit_config(&encoded(config)?)?;
+    let fingerprint = instruction_fingerprint(&encoded(instructions)?)?;
+    let input = json!({
+        "identity":{"canonicalRoot":root}, "instructions":instructions,
+        "project":project, "context":context, "activePlan":null,
+    });
+    context_packet(&input, scope_key.into(), config, fingerprint)
+}
+
+fn context_packet(
+    input: &Value,
+    project_key: String,
+    config: Value,
+    instructions: InstructionFingerprint,
+) -> KitResult<MemoryContextPacket> {
     let project =
         text(&input["project"]).ok_or_else(|| issue("KIT_CONTEXT_DOCUMENT_UNAVAILABLE"))?;
     let context =
@@ -388,9 +429,5 @@ pub fn build_memory_context(source: &str) -> KitResult<MemoryContextResult> {
         content_state,
         text,
     };
-    Ok(MemoryContextResult {
-        schema: 1,
-        decision,
-        packet: Some(packet),
-    })
+    Ok(packet)
 }
