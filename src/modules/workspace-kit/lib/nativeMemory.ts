@@ -9,7 +9,7 @@ import {
   type NativeMemoryRecoveryInput,
   type NativeMemoryRecoveryReview,
 } from "@/modules/workspace-kit/lib/nativeMemoryRecovery";
-import { createNativeMemoryTrustClient } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import { createNativeProjectContextClient } from "@/modules/workspace-kit/lib/nativeMemoryProjectContext";
 import type { MemoryScope } from "@/modules/workspace-kit/lib/scope";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -226,7 +226,7 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
     }
   }
 
-  const trust = createNativeMemoryTrustClient({
+  const context = createNativeProjectContextClient({
     checkSelection: (receipt) => {
       capture(receipt);
     },
@@ -235,7 +235,7 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
     contextTransport: transport ? () => transport.retain() : undefined,
   });
   return {
-    ...trust.api,
+    ...context.api,
     async select(
       path: string,
       environment: WorkspaceEnv,
@@ -244,7 +244,7 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       if (closed) cancelled();
       current = null;
       review = null;
-      trust.retire();
+      context.retire();
       const requested = ++revision;
       if (!Number.isSafeInteger(requested)) cancelled();
       const capturedEnvironment = nativeEnvironment(environment);
@@ -557,7 +557,7 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       closed = true;
       current = null;
       review = null;
-      trust.retire();
+      context.retire();
       closing = (async () => {
         if (!acknowledged && opening) {
           let owner: Handle | null = null;

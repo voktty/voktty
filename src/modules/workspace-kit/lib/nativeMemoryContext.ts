@@ -13,11 +13,6 @@ export type NativeMemoryContext = Readonly<{
   close: () => Promise<void>;
 }>;
 type Binding = (
-  identity: Readonly<{
-    root: string;
-    projectKey: string;
-    instructionDigest: string;
-  }> | null,
   issue: (handle: Handle, check: () => void) => Promise<unknown>,
   acquireTransport?: () => MemoryTransport,
 ) => Promise<Readonly<{ check: () => void; root: string }>>;
@@ -35,22 +30,6 @@ function record(value: unknown): Record<string, unknown> {
 }
 const digest = (value: unknown): value is string =>
   typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-const deniedReasons = new Set([
-  "KIT_MEMORY_ABSENT",
-  "KIT_MEMORY_RESERVED",
-  "KIT_MEMORY_PARTIAL",
-  "KIT_MEMORY_DENIED",
-  "KIT_MEMORY_INVALID",
-  "KIT_MEMORY_AMBIGUOUS",
-  "KIT_MEMORY_INCOMPLETE",
-  "KIT_MEMORY_POLICY_NEVER",
-  "KIT_MEMORY_SESSION_DISABLED",
-  "KIT_MEMORY_CONSENT_REQUIRED",
-  "KIT_MEMORY_TRUST_REQUIRED",
-  "KIT_MEMORY_INSTRUCTIONS_CHANGED",
-  "KIT_MEMORY_CONTEXT_UNSUPPORTED",
-]);
-
 function packet(value: unknown): MemoryContextPacket {
   const data = record(value);
   if (
@@ -89,19 +68,10 @@ function result(value: unknown): MemoryContextResult {
   if (
     data.schema !== 1 ||
     decision.schema !== 1 ||
-    typeof decision.policy !== "string" ||
-    !["manual", "always", "never"].includes(decision.policy) ||
-    typeof decision.reason !== "string" ||
-    decision.captureAllowed !== false ||
-    typeof decision.contextAllowed !== "boolean"
-  )
-    fail("unavailable");
-  if (!decision.contextAllowed) {
-    if (!deniedReasons.has(decision.reason) || data.packet !== null)
-      fail("unavailable");
-  } else if (
+    decision.policy !== "manual" ||
     decision.reason !== "KIT_MEMORY_READY" ||
-    decision.policy === "never"
+    decision.captureAllowed !== false ||
+    decision.contextAllowed !== true
   )
     fail("unavailable");
   return Object.freeze({
@@ -113,24 +83,8 @@ function result(value: unknown): MemoryContextResult {
       captureAllowed: false,
       reason: decision.reason,
     }),
-    packet: decision.contextAllowed ? packet(data.packet) : null,
+    packet: packet(data.packet),
   }) as MemoryContextResult;
-}
-
-export function bindNativeMemoryContext(
-  context: NativeMemoryContext,
-  identity: Readonly<{
-    root: string;
-    projectKey: string;
-    instructionDigest: string;
-  }>,
-  issue: (handle: Handle, check: () => void) => Promise<unknown>,
-  acquireTransport?: () => MemoryTransport,
-): Promise<() => void> {
-  const bind = bindings.get(context);
-  return bind
-    ? bind(identity, issue, acquireTransport).then(({ check }) => check)
-    : Promise.reject({ code: "cancelled" });
 }
 
 export function bindNativeProjectMemoryContext(
@@ -140,7 +94,7 @@ export function bindNativeProjectMemoryContext(
 ): Promise<Readonly<{ check: () => void; root: string }>> {
   const bind = bindings.get(context);
   return bind
-    ? bind(null, issue, acquireTransport)
+    ? bind(issue, acquireTransport)
     : Promise.reject({ code: "cancelled" });
 }
 
@@ -161,9 +115,7 @@ export function createNativeMemoryContext(
     transport ? transport.invoke<T>(command, args) : invoke<T>(command, args);
   let expectedPacket: Readonly<{
     projectKey: string;
-    instructionDigest?: string;
   }> | null = null;
-  let projectBinding = false;
   function check() {
     if (retired || isOwnerCurrent() !== true || retired) {
       retired = true;
@@ -230,16 +182,9 @@ export function createNativeMemoryContext(
             check();
             const value = result(reply);
             if (
-              value.packet &&
-              (value.packet.projectKey !== expectedPacket?.projectKey ||
-                (expectedPacket?.instructionDigest !== undefined &&
-                  value.packet.instructionDigest !==
-                    expectedPacket.instructionDigest))
-            )
-              fail("unavailable");
-            if (
-              projectBinding &&
-              (!value.packet || value.decision.policy !== "manual")
+              !value.packet ||
+              value.packet.projectKey !== expectedPacket?.projectKey ||
+              value.decision.policy !== "manual"
             )
               fail("unavailable");
             return value;
@@ -259,7 +204,7 @@ export function createNativeMemoryContext(
     },
     close,
   });
-  bindings.set(context, async (identity, issue, acquireTransport) => {
+  bindings.set(context, async (issue, acquireTransport) => {
     check();
     if (phase !== "empty") fail("cancelled");
     if (resources >= 256) fail("busy");
@@ -290,31 +235,21 @@ export function createNativeMemoryContext(
       if (!handle) fail("unavailable");
       const reply = record(await issue(handle, check));
       check();
-      if (identity) {
-        if (reply.schema !== 1 || reply.root !== identity.root)
-          fail("unavailable");
-        expectedPacket = Object.freeze({
-          projectKey: identity.projectKey,
-          instructionDigest: identity.instructionDigest,
-        });
-      } else {
-        if (
-          reply.schema !== 2 ||
-          typeof reply.root !== "string" ||
-          !reply.root ||
-          reply.root.length > 4096 ||
-          /[\x00-\x1f\x7f]/.test(reply.root) ||
-          new TextEncoder().encode(reply.root).length > 4096
-        )
-          fail("unavailable");
-        for (const scalar of reply.root) {
-          const point = scalar.codePointAt(0) ?? 0;
-          if (point >= 0xd800 && point <= 0xdfff) fail("unavailable");
-        }
-        const initial = packet(reply.packet);
-        expectedPacket = Object.freeze({ projectKey: initial.projectKey });
-        projectBinding = true;
+      if (
+        reply.schema !== 2 ||
+        typeof reply.root !== "string" ||
+        !reply.root ||
+        reply.root.length > 4096 ||
+        /[\x00-\x1f\x7f]/.test(reply.root) ||
+        new TextEncoder().encode(reply.root).length > 4096
+      )
+        fail("unavailable");
+      for (const scalar of reply.root) {
+        const point = scalar.codePointAt(0) ?? 0;
+        if (point >= 0xd800 && point <= 0xdfff) fail("unavailable");
       }
+      const initial = packet(reply.packet);
+      expectedPacket = Object.freeze({ projectKey: initial.projectKey });
       phase = "ready";
       return Object.freeze({ check, root: reply.root as string });
     } catch (error) {

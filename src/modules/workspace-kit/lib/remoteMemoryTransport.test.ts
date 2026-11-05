@@ -199,17 +199,6 @@ function operation(params: Record<string, unknown>): unknown {
     case "confirmRecovery":
       initialized = true;
       return restoration;
-    case "reviewTrust":
-      return { ...trustReply(params.revision as number), root: "/project" };
-    case "confirmTrust":
-      return {
-        schema: 1,
-        preference: {
-          projectKey: "a".repeat(64),
-          policy: "manual",
-          instructionDigest: "b".repeat(64),
-        },
-      };
     case "documents":
       return {
         schema: 1,
@@ -220,12 +209,11 @@ function operation(params: Record<string, unknown>): unknown {
       };
     case "contextOpen":
       return contextHandle;
-    case "contextBind":
-      return { schema: 1, root: "/project" };
+    case "contextBindProject":
+      return { schema: 2, root: "/project", packet: packet().packet };
     case "contextRead":
       return packet();
     case "cancel":
-    case "cancelTrust":
     case "cancelRecovery":
       return true;
     default:
@@ -470,6 +458,11 @@ it.each([target, namespace, connectedNamespace])(
   async (input) => {
     const owner = client(input);
     for (const method of [
+      "reviewTrust",
+      "confirmTrust",
+      "cancelTrust",
+      "bindContext",
+      "isTrustReviewCurrent",
       "discover",
       "initializeLocalState",
       "reviewPolicy",
@@ -496,6 +489,23 @@ it.each([target, namespace, connectedNamespace])(
     ).rejects.toMatchObject({ code: "unsupported" });
     for (const action of ["review", "confirm", "cancel"])
       await expect(
+        transport.invoke(`project_memory_${action}_trust`, {
+          handle,
+          selection: "selection",
+          request: { revision: 1 },
+          review: trustReply().review,
+        }),
+      ).rejects.toMatchObject({ code: "unsupported" });
+    await expect(
+      transport.invoke("project_memory_context_bind", {
+        handle,
+        selection: "selection",
+        context: contextHandle,
+        request: { review: trustReply().review, mode: "enabled" },
+      }),
+    ).rejects.toMatchObject({ code: "invalidInput" });
+    for (const action of ["review", "confirm", "cancel"])
+      await expect(
         transport.invoke(`project_memory_${action}_policy`, {
           handle,
           selection: "selection",
@@ -508,22 +518,6 @@ it.each([target, namespace, connectedNamespace])(
     expect(io.native).not.toHaveBeenCalled();
   },
 );
-
-it("maps trust receipts without changing instruction bytes or digests", async () => {
-  const owner = client(namespace);
-  const selected = await owner.select(namespace.path, namespace.environment);
-  const trust = await owner.reviewTrust(selected);
-  expect(trust.snapshot.root).toBe(namespace.path);
-  expect(trust.snapshot.instructions).toEqual(trustReply().instructions);
-  expect(trust.snapshot.fingerprint).toEqual(trustReply().fingerprint);
-  await owner.confirmTrust(selected, trust);
-  expect(last(io.request.mock.calls)?.[1].params).toEqual({
-    operation: "confirmTrust",
-    handle,
-    selection: "00000000-0000-4000-8000-000000000003",
-    review: trustReply().review,
-  });
-});
 
 it.each([target, namespace, connectedNamespace])(
   "reviews and restores through the captured SSH helper for $source",
@@ -710,10 +704,9 @@ it.each([target, namespace, connectedNamespace])(
   async (input) => {
     const owner = client(input);
     const selected = await owner.select(input.path, input.environment);
-    const review = await owner.reviewTrust(selected);
     const context = createNativeMemoryContext(() => true);
     contexts.push(context);
-    await owner.bindContext(selected, review, context, "enabled");
+    await owner.bindProjectContext(selected, context);
     await owner.close();
     expect(close).not.toHaveBeenCalled();
     expect(await context.read()).toEqual(packet());
@@ -741,10 +734,9 @@ it("does not release a sibling lease when closing its last memory owner", async 
 it("retries context lease cleanup after native context close was acknowledged", async () => {
   const owner = client();
   const selected = await owner.select(target.path, target.environment);
-  const review = await owner.reviewTrust(selected);
   const context = createNativeMemoryContext(() => true);
   contexts.push(context);
-  await owner.bindContext(selected, review, context, "enabled");
+  await owner.bindProjectContext(selected, context);
   await owner.close();
   close.mockRejectedValueOnce({ code: "cancelled" });
   await expect(context.close()).rejects.toMatchObject({ code: "cancelled" });
@@ -796,13 +788,12 @@ it("rejects old helpers without sending memory RPCs or falling back locally", as
 it("permanently retires namespace receipts after a saved profile round trip", async () => {
   const owner = client(namespace);
   const selected = await owner.select(namespace.path, namespace.environment);
-  const review = await owner.reviewTrust(selected);
   usePreferencesStore.setState({
     sshConnections: [{ ...profile, host: "other.invalid" }],
   });
   usePreferencesStore.setState({ sshConnections: [profile] });
   const before = io.request.mock.calls.length;
-  await expect(owner.confirmTrust(selected, review)).rejects.toMatchObject({
+  await expect(owner.inspect(selected)).rejects.toMatchObject({
     code: "cancelled",
   });
   expect(owner.isCurrent(selected)).toBe(false);

@@ -535,27 +535,21 @@ admitted filesystem work keeps the existing four-slot native worker budget until
 settlement. Cancelled delivery does not roll back an admitted preferences write.
 All result and error paths recheck their original command, native reservation,
 source and owning window. No ownership or command-state mutex spans an await.
-The typed client exposes these commands to existing conversation-context
-consumers. Additional native platform runtime qualification remains pending.
+These legacy native commands remain pending retirement. The typed frontend
+no longer exposes them or selects legacy context binding.
 
-## Typed instruction trust client
+## Typed project-context client
 
-`nativeMemoryTrust.ts` retains each review's UUID and revision privately, bound
-to its exact selection and receipt object. Display snapshots contain only known
-fields, are cloned and deeply frozen, and cannot be returned as an accepted plan.
-The client checks wire shape and UTF-8 display limits, including 128 files,
-256 KiB per instruction and 2 MiB total. Configuration traversal is bounded to
-16 levels, 8,192 nodes and 256 KiB of strings and keys. These checks do not compute
-trust or replace native schema, scope, authority and fingerprint validation.
+`nativeMemoryProjectContext.ts` binds only the project request `{ schema: 2 }`.
+It retains the original selection, context and transport checks through opening,
+request settlement and adoption. Selection replacement or close retires the
+pending binding without borrowing a successor; known cleanup remains retryable.
 
-Trust and deployment share the existing 256 unsettled-request limit, including
-replaced calls until their actual IPC settlement. Confirmation and cancellation
-coalesce; failed cleanup remains retryable. Selection replacement or close retires
-trust results and errors synchronously, without borrowing a successor's identity.
-Confirmation sends only the retained native UUID and consumes acceptance on either
-success or failure. A malformed acceptance reply is not reported as success and
-does not permit automatic retry. Native admitted writes retain their existing
-settlement and no-rollback semantics.
+The former trust client and its review, confirmation, cancellation and legacy
+binding APIs have been removed. Project binding and deployment retain the shared
+256 unsettled-request budget through physical settlement. The context client
+accepts only bounded schema-2 binding replies and project packets; legacy policy
+or trust responses reject without fallback. This grants no tools or captures.
 
 ## Narrow ancestor inspection
 

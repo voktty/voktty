@@ -79,19 +79,6 @@ export function remoteMemoryRequest(
     }
     case "project_memory_cancel_recovery":
       return { operation: "cancelRecovery", ...selected, revision };
-    case "project_memory_review_trust": {
-      const request = memoryRecord(args.request);
-      return {
-        operation: "reviewTrust",
-        ...selected,
-        revision: request.revision,
-        role: request.role ?? null,
-      };
-    }
-    case "project_memory_confirm_trust":
-      return { operation: "confirmTrust", ...selected, review };
-    case "project_memory_cancel_trust":
-      return { operation: "cancelTrust", ...selected, revision };
     case "project_memory_context_open":
       return { operation: "contextOpen" };
     case "project_memory_context_close":
@@ -100,27 +87,19 @@ export function remoteMemoryRequest(
       return { operation: "contextRead", context: handle };
     case "project_memory_context_bind": {
       const request = memoryRecord(args.request);
-      if (request.schema !== undefined) {
-        if (
-          request.schema !== 2 ||
-          Object.keys(request).some((key) => key !== "schema")
-        )
-          memoryFailure("invalidInput");
-        return {
-          operation: "contextBindProject",
-          schema: 2,
-          ...selected,
-          context: args.context,
-        };
-      }
+      if (
+        request.schema !== 2 ||
+        Object.keys(request).some((key) => key !== "schema")
+      )
+        memoryFailure("invalidInput");
       return {
-        operation: "contextBind",
+        operation: "contextBindProject",
+        schema: 2,
         ...selected,
         context: args.context,
-        review: request.review,
-        mode: request.mode,
       };
     }
+
     default:
       return memoryFailure("unsupported");
   }

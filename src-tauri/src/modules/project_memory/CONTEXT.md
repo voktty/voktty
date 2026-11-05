@@ -127,8 +127,8 @@ grants captures.
 
 The typed frontend context client opens only during explicit binding. Project
 binding requires schema 2, a bounded display root and a valid first packet; later
-reads retain its project key while allowing current instruction digests. Legacy
-binding requires the exact instruction-review receipt and its frozen identity.
+reads retain its project key while allowing current instruction digests. The
+typed frontend no longer exposes trust reviews or legacy context binding.
 The client keeps resource handles private, bounds packets to 24 KiB UTF-8, and
 requires an original-owner validity predicate around asynchronous work. Reads
 coalesce per context. Window-local budgets cap resources and unsettled reads at
