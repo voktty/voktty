@@ -9,6 +9,17 @@ impl NativeMemoryApplication {
         self.with_owners(window, |owners, receipt| owners.open_context(receipt))
     }
 
+    pub fn bind_project_context(
+        &self,
+        window: &NativeMemoryWindow,
+        target: NativeMemoryContextTarget<'_>,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
+        self.with_owners(window, |owners, receipt| {
+            Ok(owners.bind_project_context(receipt, target, control))
+        })?
+    }
+
     pub fn bind_context_session(
         &self,
         window: &NativeMemoryWindow,

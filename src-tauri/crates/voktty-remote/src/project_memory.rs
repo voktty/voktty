@@ -129,6 +129,7 @@ impl Drop for Presentation {
 struct Context {
     token: String,
     bound: Option<(MemoryContextSession, Arc<Access>)>,
+    project_attempted: bool,
 }
 
 impl Drop for Context {
@@ -705,6 +706,7 @@ impl MemoryServer {
                     Context {
                         token: token.clone(),
                         bound: None,
+                        project_attempted: false,
                     },
                 );
                 Ok(json!({"id":id,"token":token}))
@@ -716,7 +718,8 @@ impl MemoryServer {
                 context,
                 mode,
             } => {
-                if self.context(&context)?.bound.is_some() {
+                let resource = self.context(&context)?;
+                if resource.bound.is_some() || resource.project_attempted {
                     return Err(Error::new("cancelled"));
                 }
                 let mode = match mode.as_str() {
@@ -734,8 +737,40 @@ impl MemoryServer {
                 self.presentation(&handle)?.selected = None;
                 Ok(result)
             }
+            Request::ContextBindProject {
+                schema,
+                handle,
+                selection,
+                context,
+            } => {
+                if schema != 2 {
+                    return Err(Error::new("unsupported"));
+                }
+                let resource = self.context(&context)?;
+                if resource.bound.is_some() || resource.project_attempted {
+                    return Err(Error::new("cancelled"));
+                }
+                let source = self.selected(&handle, &selection)?.source.clone();
+                self.context(&context)?.project_attempted = true;
+                let bound = MemoryContextSession::bind_project(
+                    source.requested.clone(),
+                    source.clone(),
+                    None,
+                    control,
+                )?;
+                let packet = bound
+                    .read(control)?
+                    .packet
+                    .ok_or(Error::new("unavailable"))?;
+                let result = json!({"schema":2,"root":bound.root(),"packet":packet});
+                self.context(&context)?.bound = Some((bound, source));
+                self.presentation(&handle)?.selected = None;
+                Ok(result)
+            }
             Request::ContextRead { context } => {
-                self.state_parent(&control.read_control()?)?;
+                if !self.context(&context)?.project_attempted {
+                    self.state_parent(&control.read_control()?)?;
+                }
                 let (bound, _) = self
                     .context(&context)?
                     .bound

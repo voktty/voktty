@@ -33,6 +33,26 @@ impl NativeMemoryOwners {
         Ok(receipt)
     }
 
+    pub fn bind_project_context(
+        &mut self,
+        window: &NativeMemoryWindowReceipt,
+        target: NativeMemoryContextTarget<'_>,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
+        let owner = self.context_owner(window, target.context)?;
+        if owner.context.is_some() {
+            return Err(ReadError::Cancelled.into());
+        }
+        if owner.binding.is_some() {
+            return Err(ReadError::Busy.into());
+        }
+        let binding = self
+            .selection_mut(window, target.presentation)?
+            .bind_project_context(target.context, target.selected, control.clone())?;
+        self.context_owner_mut(window, target.context)?.binding = Some(control);
+        Ok(binding)
+    }
+
     pub fn bind_context_session(
         &mut self,
         window: &NativeMemoryWindowReceipt,

@@ -135,6 +135,12 @@ pub(super) enum Request {
         context: Handle,
         mode: String,
     },
+    ContextBindProject {
+        schema: u8,
+        handle: Handle,
+        selection: String,
+        context: Handle,
+    },
     ContextRead {
         context: Handle,
     },

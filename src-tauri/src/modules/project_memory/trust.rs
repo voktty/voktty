@@ -163,6 +163,7 @@ impl NativeMemorySource {
             job: MemoryWorkers::default().bind_context_session(review.native, choice, control)?,
             access: self.access.clone(),
             live: review.live,
+            project: false,
         })
     }
 

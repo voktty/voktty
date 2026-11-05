@@ -1,5 +1,37 @@
 # Window-owned native memory context
 
+## Project binding without global memory state
+
+`bind_project_context` reserves the exact window context and selected source using
+the shared project-only native session. Its selection-local `ContextControl`
+retains that target identity, cancellation control and operation lifetime; it is
+independent of instruction trust. It cannot borrow a legacy review or manufacture
+one. A busy selection preserves its pending incumbent. Replacing or clearing the
+selection retires the original operation, including ready but unconsumed results.
+
+Promotion checks the original target, source allocation and exact project
+reservation before moving the source into the context. Closing another context
+or replaying cleanup cannot retire the successor. Successful promotion clears
+management selection state while retaining the independently owned conversation
+source. The existing session, worker and resource budgets remain shared with the
+legacy contract below; physical work keeps its slots through settlement.
+
+`project_memory_context_bind` accepts the strict project request `{ "schema": 2 }`
+alongside the existing presentation, selection and already-open context handles.
+No root, policy, trust token or instruction facts are accepted. Unknown schemas
+refuse before binding admission. An admitted failure retires the original context
+resource and requires a fresh opening. Success returns `{ schema: 2, root, packet }`
+with the first bounded native packet; this acknowledges preparation, not provider
+delivery. Ordinary later project edits are read through that same captured source.
+Native workspace authorization, secret-path and root checks remain mandatory.
+
+This path never resolves, opens or initializes global memory storage. The frontend
+conversation panel and typed client still use the legacy review path below until
+their presentation adaptation is connected. The authenticated helper offers the
+matching `contextBindProject` operation without a local fallback.
+
+## Legacy review-bound context
+
 The native application reserves context owners independently of presentations.
 `open_context` creates one empty, window-bound receipt without filesystem access,
 private-state initialization, a resolved root or a context packet. Empty owners

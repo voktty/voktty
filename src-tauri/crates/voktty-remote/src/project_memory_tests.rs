@@ -688,3 +688,93 @@ fn cancellation_fences_out_of_order_reviews_and_changed_instructions_cannot_be_t
         .project(review["projectKey"].as_str().unwrap())
         .is_none());
 }
+
+#[test]
+fn project_context_protocol_binds_and_reads_without_global_storage_or_trust() {
+    let (project, private, mut server) = fixture();
+    let root = project.path();
+    let blocked = private.path().join("global-file");
+    fs::write(&blocked, "preserved global bytes").unwrap();
+    server.data_directory = Some(blocked.clone());
+    let handle = ok(&mut server, root, json!({"operation":"open"}));
+    let selection = select(&mut server, root, &handle, 1);
+    let review = preview(&mut server, root, &handle, &selection, 1);
+    ok(
+        &mut server,
+        root,
+        json!({"operation":"confirm","handle":handle,"selection":selection,"review":review["review"]}),
+    );
+    let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
+    let params = json!({"operation":"contextBindProject","schema":2,"handle":handle,"selection":selection,"context":context});
+    let bound = ok(&mut server, root, params.clone());
+    assert_eq!(bound["schema"], 2);
+    assert_eq!(bound["root"], json!(root));
+    assert!(bound["packet"]["bytes"].as_u64().unwrap() <= 24 * 1024);
+    error(&mut server, root, params, "cancelled");
+    ok(
+        &mut server,
+        root,
+        json!({"operation":"close","handle":handle}),
+    );
+    server.data_directory = None;
+    let current = ok(
+        &mut server,
+        root,
+        json!({"operation":"contextRead","context":context}),
+    );
+    assert_eq!(bound["packet"], current["packet"]);
+    assert_eq!(current["decision"]["captureAllowed"], false);
+    fs::write(root.join(".voktty/INIT.md"), "Current project instructions").unwrap();
+    let current = ok(
+        &mut server,
+        root,
+        json!({"operation":"contextRead","context":context}),
+    );
+    assert!(current["packet"]["text"]
+        .as_str()
+        .unwrap()
+        .contains("Current project instructions"));
+    assert_eq!(
+        fs::read_to_string(blocked).unwrap(),
+        "preserved global bytes"
+    );
+    assert_eq!(fs::read_dir(private.path()).unwrap().count(), 1);
+    server.reset();
+    error(
+        &mut server,
+        root,
+        json!({"operation":"contextRead","context":context}),
+        "cancelled",
+    );
+}
+
+#[test]
+fn project_context_schema_unknown_fields_and_failed_binding_cannot_reuse_authority() {
+    let (project, private, mut server) = fixture();
+    let root = project.path();
+    let handle = ok(&mut server, root, json!({"operation":"open"}));
+    let selection = select(&mut server, root, &handle, 1);
+    let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
+    let params = json!({"operation":"contextBindProject","schema":2,"handle":handle,"selection":selection,"context":context});
+    for schema in [0, 1, 3] {
+        let mut incompatible = params.clone();
+        incompatible["schema"] = json!(schema);
+        error(&mut server, root, incompatible, "unsupported");
+    }
+    for field in ["review", "mode", "root", "store", "captures"] {
+        let mut forged = params.clone();
+        forged[field] = json!(true);
+        assert_eq!(
+            server
+                .handle(Some(root), request(forged))
+                .error
+                .unwrap()
+                .code,
+            "invalid_params"
+        );
+    }
+    error(&mut server, root, params.clone(), "scope");
+    error(&mut server, root, params, "cancelled");
+    assert_eq!(fs::read_dir(private.path()).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(root).unwrap().count(), 0);
+}

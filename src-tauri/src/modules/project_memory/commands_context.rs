@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::atomic::AtomicU8;
 use voktty_memory_local::MemorySessionUse;
-use voktty_workspace_kit::MemoryContextResult;
+use voktty_workspace_kit::{MemoryContextPacket, MemoryContextResult};
 
 const OPEN: u8 = 0;
 const BINDING: u8 = 1;
@@ -33,16 +33,18 @@ impl From<ContextMode> for MemorySessionUse {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ContextBindRequest {
-    review: String,
-    mode: ContextMode,
+#[serde(untagged, deny_unknown_fields)]
+pub enum ContextBindRequest {
+    Project { schema: u8 },
+    Legacy { review: String, mode: ContextMode },
 }
 
 #[derive(Debug, Serialize)]
 pub struct ContextBoundReply {
     schema: u8,
     root: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    packet: Option<MemoryContextPacket>,
 }
 
 pub(super) struct ContextResource {
@@ -164,6 +166,50 @@ fn remove_failed(
     }
 }
 
+async fn bind_project(
+    app: &NativeMemoryApplication,
+    presentation: &PresentationResource,
+    selection: &str,
+    context: &ContextResource,
+) -> Result<(), MemoryCommandError> {
+    let selected = presentation.check(app, selection)?;
+    context.check(app, &presentation.window)?;
+    let binding = app.bind_project_context(
+        &presentation.window,
+        NativeMemoryContextTarget {
+            context: &context.receipt,
+            presentation: &presentation.receipt,
+            selected: &selected,
+        },
+        DiscoveryControl::default(),
+    )?;
+    let prepared = binding.finish().await?;
+    let mut state = presentation.selected.lock().map_err(|_| cancelled())?;
+    if !presentation.live.load(Ordering::Acquire)
+        || !state
+            .selected
+            .as_ref()
+            .is_some_and(|selected| selected.token == selection)
+    {
+        return Err(cancelled());
+    }
+    context.check(app, &presentation.window)?;
+    app.promote_context(
+        &presentation.window,
+        NativeMemoryContextTarget {
+            context: &context.receipt,
+            presentation: &presentation.receipt,
+            selected: &selected,
+        },
+        prepared,
+    )?;
+    state.selected = None;
+    if !presentation.live.load(Ordering::Acquire) {
+        return Err(cancelled());
+    }
+    context.check(app, &presentation.window)
+}
+
 async fn bind(
     app: &NativeMemoryApplication,
     presentation: &PresentationResource,
@@ -171,17 +217,23 @@ async fn bind(
     context: &ContextResource,
     request: ContextBindRequest,
 ) -> Result<ContextBoundReply, MemoryCommandError> {
+    if matches!(request, ContextBindRequest::Project { schema } if schema != 2) {
+        return Err(MemoryCommandError {
+            code: "unsupported",
+        });
+    }
+    let project = matches!(request, ContextBindRequest::Project { .. });
     context.begin(app, &presentation.window)?;
     let result = async {
-        trust::bind_context(
-            app,
-            presentation,
-            selection,
-            &request.review,
-            context,
-            request.mode.into(),
-        )
-        .await?;
+        match request {
+            ContextBindRequest::Project { .. } => {
+                bind_project(app, presentation, selection, context).await?
+            }
+            ContextBindRequest::Legacy { review, mode } => {
+                trust::bind_context(app, presentation, selection, &review, context, mode.into())
+                    .await?
+            }
+        }
         context.check(app, &presentation.window)?;
         let root = app
             .context_root(&context.window, &context.receipt)?
@@ -195,7 +247,22 @@ async fn bind(
             .compare_exchange(BINDING, READY, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| cancelled())?;
         context.check_bound(app)?;
-        Ok(ContextBoundReply { schema: 1, root })
+        let packet = if project {
+            Some(read(app, context).await?.packet.ok_or(MemoryCommandError {
+                code: "unavailable",
+            })?)
+        } else {
+            None
+        };
+        if project && !presentation.live.load(Ordering::Acquire) {
+            return Err(cancelled());
+        }
+        context.check_bound(app)?;
+        Ok(ContextBoundReply {
+            schema: if project { 2 } else { 1 },
+            root,
+            packet,
+        })
     }
     .await;
     if result.is_err() {

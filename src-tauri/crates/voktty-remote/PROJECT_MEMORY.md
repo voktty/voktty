@@ -51,6 +51,7 @@ Older helpers without this optional field retain their existing error behavior.
 | `cancelPolicy` | `handle`, `selection`, `revision` | Retire or fence a policy review |
 | `contextOpen` | none | Reserve an empty context owner |
 | `contextBind` | `handle`, `selection`, `review`, `context`, `mode` | Consume a fresh trust review and move its source into the context owner |
+| `contextBindProject` | `schema: 2`, `handle`, `selection`, `context` | Bind the captured project source without global storage or instruction trust |
 | `contextRead` | `context` | Recheck current scope, policy and trust before preparing a packet |
 | `contextClose` | `context` | Retire only that context and release its resources |
 
@@ -146,6 +147,23 @@ Preparing or copying a packet is not provider acceptance or evidence of reading.
 Binding transfers the original source out of the presentation, so closing the
 panel does not close accepted context. Context close and successful rehandshake
 retire the old resources; a new helper cannot adopt an earlier helper's receipts.
+
+`contextBindProject` is the project-only alternative to the legacy review-bound
+operation above. It requires schema 2 before admission, rejects unknown fields,
+and consumes one binding attempt on an empty context. A failed admitted attempt
+cannot reuse that context; close it and obtain a fresh opening. Success returns
+`{ schema: 2, root, packet }` using the shared native project session. Selection
+and context handles remain scoped to the authenticated helper incarnation and
+workspace. The original source transfers out of the presentation only on success.
+
+Reads on project-bound contexts do not resolve or open global memory storage.
+Missing, inaccessible, corrupt or legacy private state remains untouched and
+cannot block this path. Current project instructions and facts can appear in a
+later packet without a stored trust update. Consumers still need original-source
+and packet-freshness checks before delivery. Legacy contexts retain their old
+private-origin, policy and trust checks. The frontend presentation remains on
+that legacy route until its client adaptation is connected. Older helpers reject
+the new operation instead of falling back to Desktop IO.
 
 The helper owns one lazy serial memory worker outside its interactive protocol
 loop. Filesystem RPCs and terminal input do not wait for memory processing.

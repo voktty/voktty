@@ -12,6 +12,7 @@ pub struct NativeMemorySelection {
     source: Option<NativeMemorySource>,
     deployment: deployment::NativeMemoryDeployment,
     trust_control: Option<trust::TrustControl>,
+    context_control: Option<context::ContextControl>,
     pub(super) policy_control: Option<policy::PolicyControl>,
 }
 
@@ -113,6 +114,28 @@ impl NativeMemorySelection {
         self.current(receipt)?.documents(root, control)
     }
 
+    pub fn bind_project_context(
+        &mut self,
+        target: &NativeMemoryContextReceipt,
+        receipt: &NativeMemorySelectionReceipt,
+        control: DiscoveryControl,
+    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
+        self.current(receipt)?;
+        if self
+            .context_control
+            .as_ref()
+            .is_some_and(|control| control.is_pending())
+        {
+            return Err(ReadError::Busy.into());
+        }
+        self.context_control = None;
+        let (binding, reservation) = self
+            .current(receipt)?
+            .bind_project_context(target, control)?;
+        self.context_control = Some(reservation);
+        Ok(binding)
+    }
+
     pub fn bind_context_session(
         &mut self,
         target: &NativeMemoryContextReceipt,
@@ -137,17 +160,25 @@ impl NativeMemorySelection {
         prepared: NativeMemoryPreparedContext,
     ) -> Result<context::NativeMemoryContext, MemoryTrustError> {
         let source = self.current(receipt)?;
-        if !Arc::ptr_eq(&source.access, &prepared.access)
-            || !prepared.live.load(Ordering::Acquire)
-            || !self.trust_control.as_ref().is_some_and(|control| {
+        let control_matches = if prepared.project {
+            self.context_control
+                .as_ref()
+                .is_some_and(|control| control.matches(&prepared))
+        } else {
+            self.trust_control.as_ref().is_some_and(|control| {
                 Arc::ptr_eq(&control.live, &prepared.live) && control.live.load(Ordering::Acquire)
             })
+        };
+        if !Arc::ptr_eq(&source.access, &prepared.access)
+            || !prepared.live.load(Ordering::Acquire)
+            || !control_matches
         {
             return Err(ReadError::Cancelled.into());
         }
         let source = self.source.take().ok_or(ReadError::Cancelled)?;
         self.deployment.clear();
         self.trust_control = None;
+        self.context_control = None;
         self.policy_control = None;
         Ok(context::NativeMemoryContext {
             source,
@@ -173,6 +204,7 @@ impl NativeMemorySelection {
     ) -> Result<NativeMemorySelectionReceipt, MemoryWorkError> {
         self.deployment.clear();
         self.trust_control = None;
+        self.context_control = None;
         self.policy_control = None;
         self.source = None;
         let inspection = inspect_ancestors
@@ -204,6 +236,7 @@ impl NativeMemorySelection {
         }
         self.deployment.clear();
         self.trust_control = None;
+        self.context_control = None;
         self.policy_control = None;
         self.source = None;
         true

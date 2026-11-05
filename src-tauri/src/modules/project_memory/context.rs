@@ -10,6 +10,7 @@ pub struct NativeMemoryContextBinding {
     pub(super) job: MemoryContextSessionJob,
     pub(super) access: Arc<Access>,
     pub(super) live: Arc<AtomicBool>,
+    pub(super) project: bool,
 }
 impl NativeMemoryContextBinding {
     pub async fn finish(self) -> Result<NativeMemoryPreparedContext, MemoryTrustError> {
@@ -25,6 +26,7 @@ impl NativeMemoryContextBinding {
             native,
             access: self.access,
             live: self.live,
+            project: self.project,
         })
     }
 }
@@ -34,6 +36,7 @@ pub struct NativeMemoryPreparedContext {
     pub(super) native: MemoryContextSession,
     pub(super) access: Arc<Access>,
     pub(super) live: Arc<AtomicBool>,
+    pub(super) project: bool,
 }
 
 #[derive(Clone)]
@@ -45,6 +48,63 @@ pub struct NativeMemoryContextTarget<'a> {
     pub context: &'a NativeMemoryContextReceipt,
     pub presentation: &'a NativeMemoryPresentationReceipt,
     pub selected: &'a NativeMemorySelectionReceipt,
+}
+
+pub(super) struct ContextControl {
+    live: Arc<AtomicBool>,
+    target: NativeMemoryContextReceipt,
+    control: DiscoveryControl,
+}
+impl ContextControl {
+    pub(super) fn is_pending(&self) -> bool {
+        self.target.identity.upgrade().is_some()
+            && self.live.load(Ordering::Acquire)
+            && self.control.read_control().is_ok()
+    }
+    pub(super) fn matches(&self, prepared: &NativeMemoryPreparedContext) -> bool {
+        self.is_pending()
+            && Arc::ptr_eq(&self.live, &prepared.live)
+            && Weak::ptr_eq(&self.target.identity, &prepared.target.identity)
+    }
+}
+impl Drop for ContextControl {
+    fn drop(&mut self) {
+        self.live.store(false, Ordering::Release);
+        self.control.cancel();
+    }
+}
+
+impl NativeMemorySource {
+    pub(super) fn bind_project_context(
+        &self,
+        target: &NativeMemoryContextReceipt,
+        control: DiscoveryControl,
+    ) -> Result<(NativeMemoryContextBinding, ContextControl), MemoryTrustError> {
+        if !self.access.live.load(Ordering::Acquire) || target.identity.upgrade().is_none() {
+            return Err(ReadError::Cancelled.into());
+        }
+        let live = Arc::new(AtomicBool::new(true));
+        let binding = NativeMemoryContextBinding {
+            target: target.clone(),
+            job: MemoryWorkers::default().bind_project_context(
+                self.requested.clone(),
+                self.access.clone(),
+                None,
+                control.clone(),
+            )?,
+            access: self.access.clone(),
+            live: live.clone(),
+            project: true,
+        };
+        Ok((
+            binding,
+            ContextControl {
+                live,
+                target: target.clone(),
+                control,
+            },
+        ))
+    }
 }
 
 pub(super) struct NativeMemoryContext {
@@ -59,3 +119,7 @@ impl NativeMemoryContext {
         MemoryWorkers::default().session_context(&self.native, control)
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "context_project_tests.rs"]
+mod project_tests;

@@ -446,3 +446,153 @@ fn resource_close_and_drop_retire_native_context_even_without_application_state(
     assert!(receipt.identity.upgrade().is_none());
     assert_eq!(context.phase.load(Ordering::Acquire), CLOSED);
 }
+
+fn project_request() -> ContextBindRequest {
+    serde_json::from_value(json!({"schema":2})).unwrap()
+}
+
+#[test]
+fn project_context_transfers_the_original_source_without_opening_global_state() {
+    for corrupt in [false, true] {
+        let (state, app, presentation) = fixture();
+        let dir = project();
+        let (_registry, selected) = select(&app, &presentation, dir.path());
+        let sentinel = state.path().join("project-memory");
+        if corrupt {
+            fs::write(&sentinel, "global path is not a directory").unwrap();
+        }
+        runtime().block_on(async {
+            let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
+            let reply = bind(&app, &presentation, &selected, &context, project_request())
+                .await
+                .unwrap();
+            assert_eq!(reply.schema, 2);
+            assert_eq!(reply.root, dir.path().to_str().unwrap());
+            assert!(reply.packet.as_ref().unwrap().bytes <= 24 * 1024);
+            assert_eq!(reply.packet, read(&app, &context).await.unwrap().packet);
+            assert!(presentation.check(&app, &selected).is_err());
+            presentation.retire();
+            fs::write(
+                dir.path().join(".voktty/INIT.md"),
+                "Updated project instructions",
+            )
+            .unwrap();
+            assert!(read(&app, &context)
+                .await
+                .unwrap()
+                .packet
+                .unwrap()
+                .text
+                .contains("Updated project instructions"));
+            assert_eq!(
+                bind(&app, &presentation, &selected, &context, project_request())
+                    .await
+                    .unwrap_err()
+                    .code,
+                "cancelled"
+            );
+            assert!(read(&app, &context).await.unwrap().packet.is_some());
+            context.retire();
+            assert_eq!(read(&app, &context).await.unwrap_err().code, "cancelled");
+        });
+        if corrupt {
+            assert_eq!(
+                fs::read_to_string(sentinel).unwrap(),
+                "global path is not a directory"
+            );
+        } else {
+            assert_eq!(fs::read_dir(state.path()).unwrap().count(), 0);
+        }
+    }
+}
+
+#[test]
+fn project_context_schema_and_foreign_window_checks_precede_binding_admission() {
+    let (_state, app, presentation) = fixture();
+    let (_other_state, other, other_presentation) = fixture();
+    let dir = project();
+    let (_registry, selected) = select(&app, &presentation, dir.path());
+    runtime().block_on(async {
+        let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
+        for schema in [0, 1, 3] {
+            assert_eq!(
+                bind(
+                    &app,
+                    &presentation,
+                    &selected,
+                    &context,
+                    serde_json::from_value(json!({"schema":schema})).unwrap()
+                )
+                .await
+                .unwrap_err()
+                .code,
+                "unsupported"
+            );
+            assert_eq!(context.phase.load(Ordering::Acquire), OPEN);
+        }
+        let foreign = ContextResource::open(&other, other_presentation.window.clone()).unwrap();
+        assert_eq!(
+            bind(&app, &presentation, &selected, &foreign, project_request())
+                .await
+                .unwrap_err()
+                .code,
+            "cancelled"
+        );
+        assert_eq!(foreign.phase.load(Ordering::Acquire), OPEN);
+        bind(&app, &presentation, &selected, &context, project_request())
+            .await
+            .unwrap();
+    });
+    for field in [
+        "root",
+        "projectKey",
+        "instructions",
+        "review",
+        "mode",
+        "policy",
+        "store",
+        "captures",
+    ] {
+        let mut input = json!({"schema":2});
+        input[field] = json!(true);
+        assert!(serde_json::from_value::<ContextBindRequest>(input).is_err());
+    }
+}
+
+#[test]
+fn queued_project_binding_retires_with_its_exact_context_selection_or_window() {
+    for retire in 0..5 {
+        let (_state, app, presentation) = fixture();
+        let dir = project();
+        let (registry, selected) = select(&app, &presentation, dir.path());
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
+            let (started, observed) = std::sync::mpsc::channel();
+            let (release, blocked) = std::sync::mpsc::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                started.send(()).unwrap();
+                blocked.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
+            });
+            observed.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
+            let pending = bind(&app, &presentation, &selected, &context, project_request());
+            tokio::pin!(pending);
+            tokio::select! { biased; _ = &mut pending => panic!("project binding must be queued"), _ = tokio::task::yield_now() => {} }
+            match retire {
+                0 => context.retire(),
+                1 => presentation.retire(),
+                2 => { presentation.select_with_inspection(&app,&registry,dir.path().join("src"),&WorkspaceEnv::Local,2,true).unwrap(); },
+                3 => presentation.window.retire(),
+                _ => app.shutdown(),
+            }
+            release.send(()).unwrap();
+            blocker.await.unwrap();
+            assert_eq!(pending.await.unwrap_err().code, "cancelled");
+            assert_eq!(context.phase.load(Ordering::Acquire), CLOSED);
+        });
+    }
+}
