@@ -4,11 +4,7 @@ import type {
   MemoryContextResult,
 } from "@/modules/workspace-kit/lib/context";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
-import type {
-  createNativeMemoryPresentation,
-  NativeMemorySelection,
-} from "@/modules/workspace-kit/lib/nativeMemory";
-import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
+import type { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
 import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
 import { supportedMemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 
@@ -17,12 +13,12 @@ export type MemoryConversationPanelState =
       status:
         | "idle"
         | "reviewing"
+        | "binding"
         | "reading"
         | "closed"
         | "error"
         | "inspectionRequired";
     }
-  | { status: "review" | "binding"; review: NativeMemoryTrustReview }
   | {
       status: "prepared";
       result: MemoryContextResult;
@@ -82,7 +78,6 @@ export function createMemoryConversationPanel(
     acknowledged: false,
   };
   entries.add(entry);
-  let selection: NativeMemorySelection | null = null;
   let state: MemoryConversationPanelState = { status: "idle" };
   const current = () => !entry.retired && conversation.isCurrent();
   const notify = (next: MemoryConversationPanelState) => {
@@ -108,10 +103,19 @@ export function createMemoryConversationPanel(
       });
     return entry.pending;
   };
-  const read = async () => {
+  const read = async (enable = false) => {
     notify({ status: "reading" });
     if (!current()) return;
-    const result = await conversation.read();
+    let result = await conversation.read();
+    if (!current()) return;
+    if (
+      enable &&
+      result?.packet &&
+      conversation.delivery?.getSnapshot().supported
+    ) {
+      result = await conversation.delivery.enable(result.packet, current);
+      if (!current()) return;
+    }
     if (result) notify({ status: "prepared", result });
     else notify({ status: "error" });
   };
@@ -124,7 +128,7 @@ export function createMemoryConversationPanel(
     return run(async () => {
       notify({ status: "reviewing" });
       if (!current()) return;
-      selection = await entry.client.select(
+      const selection = await entry.client.select(
         conversation.cwd,
         capturedEnvironment,
         ...(inspectAncestors ? ([{ inspectAncestors: true }] as const) : []),
@@ -146,36 +150,20 @@ export function createMemoryConversationPanel(
         notify({ status: "error" });
         return;
       }
-      const review = await entry.client.reviewTrust(selection);
-      if (current() && entry.client.isTrustReviewCurrent(selection, review))
-        notify({ status: "review", review });
+      notify({ status: "binding" });
+      if (!current()) return;
+      await conversation.bind(
+        { project: true, presentation: entry.client, selection },
+        current,
+      );
+      if (current()) await read(true);
     });
   };
   return {
-    review: () => reviewContext(false),
+    review: () => reviewContext(true),
     inspectAncestors() {
       if (state.status !== "inspectionRequired") return Promise.resolve();
       return reviewContext(true);
-    },
-    confirm(review: NativeMemoryTrustReview) {
-      if (state.status !== "review" || state.review !== review || !selection)
-        return Promise.resolve();
-      const selected = selection;
-      return run(async () => {
-        if (!entry.client.isTrustReviewCurrent(selected, review)) return;
-        notify({ status: "binding", review });
-        if (!current()) return;
-        await conversation.bind(
-          {
-            presentation: entry.client,
-            selection: selected,
-            review,
-            mode: "enabled",
-          },
-          current,
-        );
-        if (current()) await read();
-      });
     },
     read() {
       if (conversation.status() !== "ready") return Promise.resolve();

@@ -45,7 +45,8 @@ function packet(reason = "KIT_MEMORY_READY") {
             projectKey: "a".repeat(64),
             instructionDigest: "b".repeat(64),
             digest: "c".repeat(64),
-            bytes: 28,
+            bytes: new TextEncoder().encode("<script>context</script> ñ")
+              .length,
             text: "<script>context</script> ñ",
             contentState: "initial",
           }
@@ -81,13 +82,15 @@ async function open() {
   });
 }
 async function review() {
-  await click("projectMemory.conversationReview");
-  expect(button("projectMemory.conversationPrepare").disabled).toBe(true);
-  const checkbox = document.querySelector<HTMLInputElement>(
-    'input[type="checkbox"]',
+  const supported = [...document.querySelectorAll("button")].some(
+    (item) => item.textContent === "projectMemory.deliveryEnable",
   );
-  if (!checkbox) throw new Error("Missing reviewed consent");
-  await act(async () => checkbox.click());
+  await click(
+    supported
+      ? "projectMemory.deliveryEnable"
+      : "projectMemory.conversationPrepare",
+  );
+  expect(document.querySelector('input[type="checkbox"]')).toBeNull();
 }
 async function mount(supportsDelivery = false) {
   const manager = createHarnessMemorySessions();
@@ -177,7 +180,7 @@ beforeEach(() => {
     if (command === "project_memory_context_open")
       return { id: ++id, token: "00000000-0000-4000-8000-000000000009" };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: trustReply().root, packet: packet().packet };
     if (command === "project_memory_context_read") {
       const value = packet();
       if (value.packet)
@@ -212,9 +215,12 @@ it("captures by gesture, reviews the execution cwd and prepares escaped context 
       .filter(([command]) => command === "project_memory_select")
       .map(([, args]) => args.path),
   ).toContain("/project/worktree");
-  expect(document.body.textContent).toContain("<script>untrusted()</script>");
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_review_trust",
+    ),
+  ).toBe(false);
   expect(document.querySelector("script")).toBeNull();
-  await click("projectMemory.conversationPrepare");
   expect(document.body.textContent).toContain(
     "projectMemory.conversationPrepared",
   );
@@ -263,27 +269,11 @@ function requireAncestorInspection() {
   });
 }
 
-it("requires the conversation's own ancestor inspection before reading instructions", async () => {
+it("inspects the conversation's own ancestors before binding project context", async () => {
   requireAncestorInspection();
   await mount();
   await open();
-  expect(invoke).toHaveBeenCalledWith(
-    "project_memory_select",
-    expect.objectContaining({
-      path: "/project/browsed",
-      inspectAncestors: true,
-    }),
-  );
-  await click("projectMemory.conversationReview");
-  const section = document.querySelector("section");
-  expect(section?.textContent).toContain("projectMemory.inspectDescription");
-  expect(
-    invoke.mock.calls.some(
-      ([command]) => command === "project_memory_review_trust",
-    ),
-  ).toBe(false);
-  await click("projectMemory.inspectAncestors");
-  expect(button("projectMemory.conversationPrepare").disabled).toBe(true);
+  await review();
   const selected = invoke.mock.calls.filter(
     ([command]) => command === "project_memory_select",
   );
@@ -291,10 +281,13 @@ it("requires the conversation's own ancestor inspection before reading instructi
     path: "/project/worktree",
     inspectAncestors: true,
   });
+  expect(invoke).toHaveBeenCalledWith(
+    "project_memory_context_bind",
+    expect.objectContaining({ request: { schema: 2 } }),
+  );
   expect(
     invoke.mock.calls.some(
-      ([command]) =>
-        command.includes("confirm_trust") || command.includes("context_bind"),
+      ([command]) => command === "project_memory_review_trust",
     ),
   ).toBe(false);
 });
@@ -314,7 +307,7 @@ it("does not read instructions after a consented inspection remains incomplete",
       : original?.(command, args),
   );
   await open();
-  await click("projectMemory.conversationReview");
+  await click("projectMemory.conversationPrepare");
   const inspect = document.querySelector<HTMLButtonElement>("section button");
   expect(inspect?.textContent).toBe("projectMemory.inspectAncestors");
   await act(async () => inspect?.click());
@@ -330,9 +323,20 @@ it("does not read instructions after a consented inspection remains incomplete",
 
 it("suppresses an inspection result after the captured conversation loses focus", async () => {
   requireAncestorInspection();
+  const initial = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_discover"
+      ? Promise.resolve({
+          schema: 1,
+          root: "/project",
+          blockedCount: 1,
+          scope: { state: "incomplete", ancestryComplete: false },
+        })
+      : initial?.(command, args),
+  );
   const f = await mount();
   await open();
-  await click("projectMemory.conversationReview");
+  await click("projectMemory.conversationPrepare");
   const pending = deferred<unknown>();
   const original = invoke.getMockImplementation();
   invoke.mockImplementation((command, args) =>
@@ -378,7 +382,9 @@ it("manages the selected worktree's files without trust settings and returns to 
   await click("projectMemory.manageConversationDirectory");
   expect(paths()[paths().length - 1]).toBe("/project/worktree");
   expect(document.body.textContent).not.toContain("projectMemory.reviewTrust");
-  expect(document.body.textContent).not.toContain("projectMemory.policyConfigure");
+  expect(document.body.textContent).not.toContain(
+    "projectMemory.policyConfigure",
+  );
   await click("projectMemory.manageBrowsedDirectory");
   expect(paths()[paths().length - 1]).toBe("/project/browsed");
   expect(
@@ -393,7 +399,6 @@ it.each(["KIT_MEMORY_POLICY_NEVER", "KIT_MEMORY_TRUST_REQUIRED"])(
   async (reason) => {
     await mount();
     await open();
-    await review();
     const original = invoke.getMockImplementation();
     invoke.mockImplementation((command, args) =>
       command === "project_memory_context_read"
@@ -405,9 +410,7 @@ it.each(["KIT_MEMORY_POLICY_NEVER", "KIT_MEMORY_TRUST_REQUIRED"])(
       "projectMemory.conversationPrepared",
     );
     expect(document.body.textContent).toContain(
-      reason === "KIT_MEMORY_POLICY_NEVER"
-        ? "projectMemory.conversationPolicyBlocked"
-        : "projectMemory.conversationTrustBlocked",
+      "projectMemory.conversationError",
     );
   },
 );
@@ -415,7 +418,6 @@ it.each(["KIT_MEMORY_POLICY_NEVER", "KIT_MEMORY_TRUST_REQUIRED"])(
 it("retires pending admission when the panel closes without binding its successor", async () => {
   const f = await mount();
   await open();
-  await review();
   const opening = deferred<unknown>();
   const original = invoke.getMockImplementation();
   invoke.mockImplementation((command, args) =>
@@ -443,7 +445,6 @@ it("withdraws captured conversation on focus loss without closing accepted engin
   const f = await mount();
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
   await act(async () =>
     f.view.update({
       ...f.input,
@@ -469,7 +470,6 @@ it("disables only the exact bound context after an explicit action", async () =>
   const f = await mount();
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
   await click("projectMemory.conversationDisable");
   expect(f.scope.status()).toBe("retired");
   expect(
@@ -564,6 +564,17 @@ it("retains disposed panel capacity through pending native selection settlement"
 
 it("retains failed presentation cleanup for exact retry before freeing panel capacity", async () => {
   const f = await mount();
+  const native = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_discover"
+      ? Promise.resolve({
+          schema: 1,
+          root: "/project",
+          blockedCount: 1,
+          scope: { state: "incomplete", ancestryComplete: false },
+        })
+      : native?.(command, args),
+  );
   const panels = Array.from({ length: 256 }, () =>
     createMemoryConversationPanel(f.scope, { kind: "local" }, () => undefined),
   );
@@ -601,7 +612,6 @@ it("rejects a closed panel's late packet while preserving memory for a fresh pan
   const f = await mount();
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
   const read = deferred<unknown>();
   const original = invoke.getMockImplementation();
   invoke.mockImplementation((command, args) =>
@@ -632,7 +642,6 @@ async function prepare(supportsDelivery = false) {
   const f = await mount(supportsDelivery);
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
   return f;
 }
 
@@ -783,11 +792,9 @@ it("coalesces copy gestures and suppresses late clipboard feedback after panel c
   expect(f.scope.status()).toBe("ready");
 });
 
-it("requires explicit delivery consent after preparation and preserves it after panel closure", async () => {
+it("enables future delivery with one explicit gesture and preserves it after panel closure", async () => {
   const f = await prepare(true);
-  expect(f.manager.turnSource(f.owner, () => {})).toBeUndefined();
-  expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
-  await click("projectMemory.deliveryEnable");
+  expect(f.manager.turnSource(f.owner, () => {})).toBeDefined();
   expect(f.scope.delivery?.getSnapshot().enabled).toBe(true);
   expect(document.body.textContent).toContain("projectMemory.deliveryEnabled");
   expect(f.scope.delivery?.getSnapshot().receipt).toBeNull();
@@ -802,7 +809,6 @@ it("requires explicit delivery consent after preparation and preserves it after 
 
 it("updates the open panel only after provider acceptance and keeps the delivered text separate", async () => {
   const f = await prepare(true);
-  await click("projectMemory.deliveryEnable");
   const source = f.manager.turnSource(f.owner, () => {});
   if (!source) throw new Error("Missing delivery source");
   const prepared = await source.prepare({}, "provider-thread", () => {});
@@ -838,6 +844,7 @@ it("retains the manual copy alternative for an adapter without automatic deliver
 
 it("does not enable a retired caller after a late native read", async () => {
   const f = await prepare(true);
+  await click("projectMemory.conversationDisable");
   const read = deferred<unknown>();
   const original = invoke.getMockImplementation();
   invoke.mockImplementation((command, args) =>
@@ -860,6 +867,7 @@ it("does not enable a retired caller after a late native read", async () => {
 
 it("requires a new gesture to enable a packet changed since its preview", async () => {
   const f = await prepare(true);
+  await click("projectMemory.conversationDisable");
   const original = invoke.getMockImplementation();
   const changed = packet();
   if (!changed.packet) throw new Error("Missing packet");
@@ -880,7 +888,6 @@ it("requires a new gesture to enable a packet changed since its preview", async 
 
 it("can disable and re-enable future delivery in the same panel while preserving the accepted receipt", async () => {
   const f = await prepare(true);
-  await click("projectMemory.deliveryEnable");
   const source = f.manager.turnSource(f.owner, () => {});
   if (!source) throw new Error("Missing delivery source");
   const prepared = await source.prepare({}, "provider-thread", () => {});
@@ -909,7 +916,6 @@ it("can disable and re-enable future delivery in the same panel while preserving
 
 it("does not acknowledge an old prepared turn after disabling and re-enabling delivery", async () => {
   const f = await prepare(true);
-  await click("projectMemory.deliveryEnable");
   const source = f.manager.turnSource(f.owner, () => {});
   if (!source) throw new Error("Missing delivery source");
   const prepared = await source.prepare({}, "old-thread", () => {});
@@ -929,7 +935,6 @@ it("does not acknowledge an old prepared turn after disabling and re-enabling de
 
 it("keeps delivery disabled when project policy changes before re-enabling", async () => {
   const f = await prepare(true);
-  await click("projectMemory.deliveryEnable");
   await click("projectMemory.conversationDisable");
   const original = invoke.getMockImplementation();
   invoke.mockImplementation((command, args) =>
@@ -941,7 +946,7 @@ it("keeps delivery disabled when project policy changes before re-enabling", asy
   expect(f.scope.delivery?.getSnapshot().enabled).toBe(false);
   expect(f.manager.turnSource(f.owner, () => {})).toBeUndefined();
   expect(document.body.textContent).toContain(
-    "projectMemory.conversationPolicyBlocked",
+    "projectMemory.conversationError",
   );
   expect(document.body.textContent).not.toContain("<script>context</script>");
 });

@@ -8,7 +8,6 @@ import {
   createMemoryConversationPanel,
   type MemoryConversationPanelState,
 } from "@/modules/workspace-kit/lib/memoryConversationPanel";
-import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 
 const noDelivery = () => inactiveMemoryDelivery;
 
@@ -34,9 +33,6 @@ export function MemoryConversation({
   const [state, setState] = useState<MemoryConversationPanelState>({
     status: "idle",
   });
-  const [accepted, setAccepted] = useState<NativeMemoryTrustReview | null>(
-    null,
-  );
   const controller = useRef<ReturnType<
     typeof createMemoryConversationPanel
   > | null>(null);
@@ -69,10 +65,6 @@ export function MemoryConversation({
     (state.status === "prepared" && state.copyStatus === "copying") ||
     (state.status === "prepared" && state.enabling === true) ||
     ["reviewing", "binding", "reading"].includes(state.status);
-  const review =
-    state.status === "review" || state.status === "binding"
-      ? state.review
-      : null;
   const result = state.status === "prepared" ? state.result : null;
   const retired = status === "retired" || state.status === "closed";
   return (
@@ -81,9 +73,6 @@ export function MemoryConversation({
       aria-busy={busy && !retired}
     >
       <h3 className="font-medium">{t("projectMemory.conversationTitle")}</h3>
-      <p className="text-xs text-muted-foreground">
-        {t("projectMemory.conversationDescription")}
-      </p>
       <p className="break-all font-mono text-xs" dir="auto">
         {conversation.cwd}
       </p>
@@ -144,61 +133,6 @@ export function MemoryConversation({
               </Button>
             </div>
           ) : null}
-          {review ? (
-            <>
-              <p className="break-all font-mono text-xs" dir="auto">
-                {review.snapshot.root}
-              </p>
-              <div className="max-h-[40vh] space-y-2 overflow-auto rounded-md border border-border p-2">
-                <details className="text-xs">
-                  <summary>{t("projectMemory.trustConfiguration")}</summary>
-                  <pre className="whitespace-pre-wrap break-words" dir="auto">
-                    {JSON.stringify(review.snapshot.config, null, 2)}
-                  </pre>
-                </details>
-                {review.snapshot.instructions.files.map((file) => (
-                  <details
-                    key={file.path}
-                    open={file.path === ".voktty/INIT.md"}
-                    className="text-xs"
-                  >
-                    <summary className="break-all font-mono" dir="auto">
-                      {file.path}
-                    </summary>
-                    <pre
-                      className="max-h-48 overflow-auto whitespace-pre-wrap break-words"
-                      dir="auto"
-                    >
-                      {file.fact.kind === "file"
-                        ? file.fact.text
-                        : t("projectMemory.missingFile")}
-                    </pre>
-                  </details>
-                ))}
-              </div>
-              <label className="flex items-start gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  disabled={busy}
-                  checked={accepted === review}
-                  onChange={(event) =>
-                    setAccepted(event.target.checked ? review : null)
-                  }
-                />
-                <span>{t("projectMemory.conversationAccept")}</span>
-              </label>
-              <Button
-                size="sm"
-                disabled={busy || accepted !== review}
-                onClick={() => {
-                  if (accepted === review)
-                    void controller.current?.confirm(review);
-                }}
-              >
-                {t("projectMemory.conversationPrepare")}
-              </Button>
-            </>
-          ) : null}
           {result ? (
             <div className="space-y-2">
               <p role="status">
@@ -207,11 +141,7 @@ export function MemoryConversation({
                     ? delivery.receipt
                       ? "projectMemory.deliveryPrepared"
                       : "projectMemory.conversationPrepared"
-                    : result.decision.reason === "KIT_MEMORY_POLICY_NEVER"
-                      ? remote
-                        ? "projectMemory.sshSettings.conversationPolicyBlocked"
-                        : "projectMemory.conversationPolicyBlocked"
-                      : "projectMemory.conversationTrustBlocked",
+                    : "projectMemory.conversationError",
                 )}
               </p>
               {result.packet ? (
@@ -285,16 +215,18 @@ export function MemoryConversation({
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            {status === "inactive" &&
-            !review &&
-            state.status !== "inspectionRequired" ? (
+            {status === "inactive" && state.status !== "inspectionRequired" ? (
               <Button
                 variant="outline"
                 size="sm"
                 disabled={busy}
                 onClick={() => void controller.current?.review()}
               >
-                {t("projectMemory.conversationReview")}
+                {t(
+                  delivery.supported
+                    ? "projectMemory.deliveryEnable"
+                    : "projectMemory.conversationPrepare",
+                )}
               </Button>
             ) : null}
             {status === "ready" ? (

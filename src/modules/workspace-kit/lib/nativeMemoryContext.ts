@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
+import type {
+  MemoryContextPacket,
+  MemoryContextResult,
+} from "@/modules/workspace-kit/lib/context";
 import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
 
 type Handle = Readonly<{ id: number; token: string }>;
@@ -14,10 +17,10 @@ type Binding = (
     root: string;
     projectKey: string;
     instructionDigest: string;
-  }>,
+  }> | null,
   issue: (handle: Handle, check: () => void) => Promise<unknown>,
   acquireTransport?: () => MemoryTransport,
-) => Promise<() => void>;
+) => Promise<Readonly<{ check: () => void; root: string }>>;
 const bindings = new WeakMap<NativeMemoryContext, Binding>();
 let resources = 0;
 let reads = 0;
@@ -48,6 +51,38 @@ const deniedReasons = new Set([
   "KIT_MEMORY_CONTEXT_UNSUPPORTED",
 ]);
 
+function packet(value: unknown): MemoryContextPacket {
+  const data = record(value);
+  if (
+    data.schema !== 1 ||
+    !digest(data.projectKey) ||
+    !digest(data.instructionDigest) ||
+    !digest(data.digest) ||
+    typeof data.contentState !== "string" ||
+    !["initial", "available", "unknown"].includes(data.contentState) ||
+    typeof data.text !== "string" ||
+    data.text.length > 24 * 1024 ||
+    data.text.includes("\0") ||
+    !Number.isSafeInteger(data.bytes) ||
+    (data.bytes as number) > 24 * 1024 ||
+    new TextEncoder().encode(data.text).length !== data.bytes
+  )
+    fail("unavailable");
+  for (const scalar of data.text) {
+    const point = scalar.codePointAt(0) ?? 0;
+    if (point >= 0xd800 && point <= 0xdfff) fail("unavailable");
+  }
+  return Object.freeze({
+    schema: 1,
+    projectKey: data.projectKey,
+    instructionDigest: data.instructionDigest,
+    digest: data.digest,
+    bytes: data.bytes,
+    contentState: data.contentState,
+    text: data.text,
+  }) as MemoryContextPacket;
+}
+
 function result(value: unknown): MemoryContextResult {
   const data = record(value);
   const decision = record(data.decision);
@@ -64,30 +99,11 @@ function result(value: unknown): MemoryContextResult {
   if (!decision.contextAllowed) {
     if (!deniedReasons.has(decision.reason) || data.packet !== null)
       fail("unavailable");
-  } else {
-    const packet = record(data.packet);
-    if (
-      decision.reason !== "KIT_MEMORY_READY" ||
-      decision.policy === "never" ||
-      packet.schema !== 1 ||
-      !digest(packet.projectKey) ||
-      !digest(packet.instructionDigest) ||
-      !digest(packet.digest) ||
-      typeof packet.contentState !== "string" ||
-      !["initial", "available", "unknown"].includes(packet.contentState) ||
-      typeof packet.text !== "string" ||
-      packet.text.length > 24 * 1024 ||
-      packet.text.includes("\0") ||
-      !Number.isSafeInteger(packet.bytes) ||
-      (packet.bytes as number) > 24 * 1024 ||
-      new TextEncoder().encode(packet.text).length !== packet.bytes
-    )
-      fail("unavailable");
-    for (const scalar of packet.text) {
-      const point = scalar.codePointAt(0) ?? 0;
-      if (point >= 0xd800 && point <= 0xdfff) fail("unavailable");
-    }
-  }
+  } else if (
+    decision.reason !== "KIT_MEMORY_READY" ||
+    decision.policy === "never"
+  )
+    fail("unavailable");
   return Object.freeze({
     schema: 1,
     decision: Object.freeze({
@@ -97,21 +113,7 @@ function result(value: unknown): MemoryContextResult {
       captureAllowed: false,
       reason: decision.reason,
     }),
-    packet:
-      data.packet === null
-        ? null
-        : (() => {
-            const packet = record(data.packet);
-            return Object.freeze({
-              schema: 1,
-              projectKey: packet.projectKey,
-              instructionDigest: packet.instructionDigest,
-              digest: packet.digest,
-              bytes: packet.bytes,
-              contentState: packet.contentState,
-              text: packet.text,
-            });
-          })(),
+    packet: decision.contextAllowed ? packet(data.packet) : null,
   }) as MemoryContextResult;
 }
 
@@ -127,7 +129,18 @@ export function bindNativeMemoryContext(
 ): Promise<() => void> {
   const bind = bindings.get(context);
   return bind
-    ? bind(identity, issue, acquireTransport)
+    ? bind(identity, issue, acquireTransport).then(({ check }) => check)
+    : Promise.reject({ code: "cancelled" });
+}
+
+export function bindNativeProjectMemoryContext(
+  context: NativeMemoryContext,
+  issue: (handle: Handle, check: () => void) => Promise<unknown>,
+  acquireTransport?: () => MemoryTransport,
+): Promise<Readonly<{ check: () => void; root: string }>> {
+  const bind = bindings.get(context);
+  return bind
+    ? bind(null, issue, acquireTransport)
     : Promise.reject({ code: "cancelled" });
 }
 
@@ -148,8 +161,9 @@ export function createNativeMemoryContext(
     transport ? transport.invoke<T>(command, args) : invoke<T>(command, args);
   let expectedPacket: Readonly<{
     projectKey: string;
-    instructionDigest: string;
+    instructionDigest?: string;
   }> | null = null;
+  let projectBinding = false;
   function check() {
     if (retired || isOwnerCurrent() !== true || retired) {
       retired = true;
@@ -218,8 +232,14 @@ export function createNativeMemoryContext(
             if (
               value.packet &&
               (value.packet.projectKey !== expectedPacket?.projectKey ||
-                value.packet.instructionDigest !==
-                  expectedPacket?.instructionDigest)
+                (expectedPacket?.instructionDigest !== undefined &&
+                  value.packet.instructionDigest !==
+                    expectedPacket.instructionDigest))
+            )
+              fail("unavailable");
+            if (
+              projectBinding &&
+              (!value.packet || value.decision.policy !== "manual")
             )
               fail("unavailable");
             return value;
@@ -270,14 +290,33 @@ export function createNativeMemoryContext(
       if (!handle) fail("unavailable");
       const reply = record(await issue(handle, check));
       check();
-      if (reply.schema !== 1 || reply.root !== identity.root)
-        fail("unavailable");
-      expectedPacket = Object.freeze({
-        projectKey: identity.projectKey,
-        instructionDigest: identity.instructionDigest,
-      });
+      if (identity) {
+        if (reply.schema !== 1 || reply.root !== identity.root)
+          fail("unavailable");
+        expectedPacket = Object.freeze({
+          projectKey: identity.projectKey,
+          instructionDigest: identity.instructionDigest,
+        });
+      } else {
+        if (
+          reply.schema !== 2 ||
+          typeof reply.root !== "string" ||
+          !reply.root ||
+          reply.root.length > 4096 ||
+          /[\x00-\x1f\x7f]/.test(reply.root) ||
+          new TextEncoder().encode(reply.root).length > 4096
+        )
+          fail("unavailable");
+        for (const scalar of reply.root) {
+          const point = scalar.codePointAt(0) ?? 0;
+          if (point >= 0xd800 && point <= 0xdfff) fail("unavailable");
+        }
+        const initial = packet(reply.packet);
+        expectedPacket = Object.freeze({ projectKey: initial.projectKey });
+        projectBinding = true;
+      }
       phase = "ready";
-      return check;
+      return Object.freeze({ check, root: reply.root as string });
     } catch (error) {
       await close();
       throw error;

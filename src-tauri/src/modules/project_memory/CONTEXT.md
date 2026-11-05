@@ -26,9 +26,9 @@ delivery. Ordinary later project edits are read through that same captured sourc
 Native workspace authorization, secret-path and root checks remain mandatory.
 
 This path never resolves, opens or initializes global memory storage. The frontend
-conversation panel and typed client still use the legacy review path below until
-their presentation adaptation is connected. The authenticated helper offers the
-matching `contextBindProject` operation without a local fallback.
+conversation panel and typed client use this project binding. The authenticated
+helper offers the matching `contextBindProject` operation without a local or
+legacy fallback. Legacy consumers retain the separate review path below.
 
 ## Legacy review-bound context
 
@@ -125,9 +125,11 @@ confirmed survives presentation close; resource or window retirement rejects
 late results. None of the commands starts an agent, writes project files or
 grants captures.
 
-The typed frontend context client opens only during explicit binding through an
-exact instruction-review receipt. It keeps resource handles private, validates
-the acknowledged root and packet identity, bounds packets to 24 KiB UTF-8, and
+The typed frontend context client opens only during explicit binding. Project
+binding requires schema 2, a bounded display root and a valid first packet; later
+reads retain its project key while allowing current instruction digests. Legacy
+binding requires the exact instruction-review receipt and its frozen identity.
+The client keeps resource handles private, bounds packets to 24 KiB UTF-8, and
 requires an original-owner validity predicate around asynchronous work. Reads
 coalesce per context. Window-local budgets cap resources and unsettled reads at
 256, retaining retired work through settlement and failed cleanup for retry.
@@ -156,18 +158,21 @@ and read publication, including after close cancellation. After accepted binding
 closing the panel or originating view does not retire the engine-owned context.
 Memory receipts and native handles are not added to serializable Session data.
 The internal `ready` status means bound, not trusted, allowed or delivered; every
-packet read still checks current native policy and instruction trust.
+project packet read still checks its original native source and current scope.
+Legacy consumers additionally check current policy and instruction trust.
 
 The shared project-memory panel can manually prepare context for the exact
 focused Harness conversation. The opening gesture captures its engine receipt,
 view registration and original persistence permit separately from the serialized
 project target. Focus, project, selection or registration transitions permanently
-retire the caller capture before view observers run. The reviewed selection uses
+retire the caller capture before view observers run. The captured selection uses
 the conversation's execution cwd, including a worktree, rather than the folder
-currently browsed by the project panel. Review and confirmation do not save trust
-or policy. The panel reads fresh native policy and trust results and labels an
-allowed packet as prepared but not sent, with an escaped preview and an initial
-content indicator. Manual-only contexts close on explicit disable. Supported
+currently browsed by the project panel. One explicit action inspects bounded
+ancestor markers, binds project files and prepares the packet without a global
+trust review or consent checkbox. For supported delivery channels that same
+action enables future turns without starting a model. The panel labels the
+packet as prepared but not sent, with an escaped preview and an initial content
+indicator. Manual-only contexts close on explicit disable. Supported
 delivery channels disable future delivery while retaining their prepared context.
 Closing the panel releases caller subscriptions and its presentation, preserving
 an accepted engine binding. Pending admission cannot outlive the original caller.
@@ -175,8 +180,7 @@ Panel resources retain their bounded slots through pending physical work and
 retryable cleanup. Project management remains available without a conversation.
 When execution and browsed directories differ, a separate explicit action switches
 project management to the conversation directory and can return to the original
-browsed directory. This lets worktree instruction trust be reviewed for its own
-root without silently redirecting project management or granting session use.
+browsed directory without silently redirecting project management.
 
 Harness, internal-agent and CLI delivery have independent consumer lifecycles.
 The Voktty AI launch preparer can consume an existing native review in `inherit`
@@ -189,7 +193,7 @@ provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet
 preparation does not demonstrate provider delivery, reading or comprehension.
-The shared frontend selects SSH context transport from the exact reviewed
+The shared frontend selects SSH context transport from the exact captured
 presentation. The context retains a separate owner on the original helper lease;
 panel close cannot release it. Namespace profile/project changes and Harness
 environment replacement retire conversation ownership, including round trips.

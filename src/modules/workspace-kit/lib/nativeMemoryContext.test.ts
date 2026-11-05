@@ -39,6 +39,139 @@ function packet() {
     },
   };
 }
+async function setupProject(isCurrent = () => true) {
+  const owner = createNativeMemoryPresentation();
+  const selection = await owner.select("/project", { kind: "local" });
+  const context = createNativeMemoryContext(isCurrent);
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_context_bind"
+      ? Promise.resolve({
+          schema: 2,
+          root: "/project",
+          packet: packet().packet,
+        })
+      : original?.(command, args),
+  );
+  return { owner, selection, context };
+}
+
+it("binds project files without consulting or changing global trust and reads updated instructions", async () => {
+  const { owner, selection, context } = await setupProject();
+  expect(await owner.bindProjectContext(selection, context)).toEqual({
+    root: "/project",
+  });
+  expect(invoke).toHaveBeenLastCalledWith("project_memory_context_bind", {
+    handle: { id: 1, token: "panel" },
+    selection: "selection",
+    context: handle,
+    request: { schema: 2 },
+  });
+  expect(invoke.mock.calls.map(([command]) => command)).toEqual([
+    "project_memory_open",
+    "project_memory_select",
+    "project_memory_context_open",
+    "project_memory_context_bind",
+  ]);
+  await owner.close();
+  const changed = packet();
+  changed.packet.instructionDigest = "d".repeat(64);
+  invoke.mockResolvedValueOnce(changed);
+  expect(await context.read()).toEqual(changed);
+  changed.packet.projectKey = "e".repeat(64);
+  invoke.mockResolvedValueOnce(changed);
+  await expect(context.read()).rejects.toMatchObject({ code: "unavailable" });
+  await context.close();
+});
+
+it.each(["legacy", "root", "packet", "bytes", "unicode", "budget"])(
+  "rejects invalid project bind replies (%s) and closes the exact resource without legacy retry",
+  async (kind) => {
+    const { owner, selection, context } = await setupProject();
+    const reply = { schema: 2, root: "/project", packet: packet().packet };
+    if (kind === "legacy") reply.schema = 1;
+    if (kind === "root") reply.root = "/project\0";
+    if (kind === "packet") reply.packet.projectKey = "bad";
+    if (kind === "bytes") reply.packet.bytes = 1;
+    if (kind === "unicode") {
+      reply.packet.text = "\ud800";
+      reply.packet.bytes = 3;
+    }
+    if (kind === "budget") reply.root = "x".repeat(4097);
+    const original = invoke.getMockImplementation();
+    invoke.mockImplementation((command, args) =>
+      command === "project_memory_context_bind"
+        ? Promise.resolve(reply)
+        : original?.(command, args),
+    );
+    await expect(
+      owner.bindProjectContext(selection, context),
+    ).rejects.toMatchObject({ code: "unavailable" });
+    expect(
+      invoke.mock.calls.filter(
+        ([command]) => command === "project_memory_context_bind",
+      ),
+    ).toHaveLength(1);
+    expect(invoke).toHaveBeenLastCalledWith("project_memory_context_close", {
+      handle,
+    });
+    await owner.close();
+  },
+);
+
+it.each(["open", "bind"])(
+  "retires the exact project context when its owner closes during %s",
+  async (phase) => {
+    const { owner, selection, context } = await setupProject();
+    const waiting = deferred<unknown>();
+    const started = deferred<void>();
+    const command =
+      phase === "open"
+        ? "project_memory_context_open"
+        : "project_memory_context_bind";
+    const original = invoke.getMockImplementation();
+    invoke.mockImplementation((name, args) => {
+      if (name === command) {
+        started.resolve();
+        return waiting.promise;
+      }
+      return original?.(name, args);
+    });
+    const binding = owner
+      .bindProjectContext(selection, context)
+      .catch((error: unknown) => error);
+    await started.promise;
+    await owner.close();
+    waiting.resolve(
+      phase === "open"
+        ? handle
+        : { schema: 2, root: "/project", packet: packet().packet },
+    );
+    expect(await binding).toMatchObject({ code: "cancelled" });
+    expect(
+      invoke.mock.calls.filter(
+        ([name]) => name === "project_memory_context_close",
+      ),
+    ).toEqual([["project_memory_context_close", { handle }]]);
+  },
+);
+
+it("rejects foreign project selections and copied contexts before native allocation", async () => {
+  const { owner, selection, context } = await setupProject();
+  const foreign = createNativeMemoryPresentation();
+  const selected = await foreign.select("/project", { kind: "local" });
+  await expect(
+    owner.bindProjectContext(selected, context),
+  ).rejects.toMatchObject({ code: "cancelled" });
+  await expect(
+    owner.bindProjectContext(selection, { ...context }),
+  ).rejects.toMatchObject({ code: "cancelled" });
+  expect(
+    invoke.mock.calls.some(([name]) => name === "project_memory_context_open"),
+  ).toBe(false);
+  await context.close();
+  await Promise.all([owner.close(), foreign.close()]);
+});
 beforeEach(() => {
   invoke.mockReset();
   invoke.mockImplementation(async (command, args) => {

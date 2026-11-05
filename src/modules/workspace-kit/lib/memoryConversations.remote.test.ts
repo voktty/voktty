@@ -328,6 +328,8 @@ beforeEach(() => {
     if (params.operation === "contextOpen") result = { ...handle, id: 2 };
     if (params.operation === "contextBind")
       result = { schema: 1, root: "/project" };
+    if (params.operation === "contextBindProject")
+      result = { schema: 2, root: "/project", packet: packet().packet };
     if (params.operation === "contextRead") result = packet();
     return {
       protocol: 2,
@@ -370,15 +372,16 @@ it.each([false, true])(
     panels.push(panel);
     expect(io.request).not.toHaveBeenCalled();
     await panel.review();
-    const review = states[states.length - 1];
-    if (review.status !== "review") throw new Error("Missing review");
-    expect(review.review.snapshot.root).toBe(root);
-    await panel.confirm(review.review);
     expect(conversation.status()).toBe("ready");
     const prepared = states[states.length - 1];
     if (prepared.status !== "prepared" || !prepared.result.packet)
       throw new Error("Missing prepared packet");
-    await panel.enable(prepared.result.packet);
+    expect(conversation.delivery?.getSnapshot().root).toBe(root);
+    expect(
+      io.request.mock.calls.some(
+        ([, request]) => request.params.operation === "reviewTrust",
+      ),
+    ).toBe(false);
     expect(conversation.delivery?.getSnapshot().enabled).toBe(true);
     expect(conversation.delivery?.getSnapshot().receipt).toBeNull();
     await panel.dispose();
@@ -424,6 +427,49 @@ it("rejects a different SSH host at the same POSIX directory before allocating c
   ).toBe(false);
   manager.dispose();
 });
+
+it.each(["legacy", "unsupported"])(
+  "rejects an incompatible remote project binding (%s) without local or legacy fallback",
+  async (kind) => {
+    const { conversation } = capture();
+    const original = io.request.getMockImplementation();
+    io.request.mockImplementation(async (id, request) => {
+      if (request.params.operation !== "contextBindProject")
+        return original?.(id, request);
+      return {
+        protocol: 2,
+        id: request.id,
+        ok: true,
+        result:
+          kind === "legacy"
+            ? { schema: 1, ok: true, result: { schema: 1, root: "/project" } }
+            : { schema: 1, ok: false, error: { code: "unsupported" } },
+      };
+    });
+    const states: MemoryConversationPanelState[] = [];
+    const panel = createMemoryConversationPanel(
+      conversation,
+      { kind: "local" },
+      (state) => states.push(state),
+    );
+    panels.push(panel);
+    await panel.review();
+    expect(conversation.status()).toBe("retired");
+    expect(states.some((state) => state.status === "prepared")).toBe(false);
+    expect(conversation.delivery?.getSnapshot().enabled).toBe(false);
+    const operations = io.request.mock.calls.map(
+      ([, request]) => request.params.operation,
+    );
+    expect(
+      operations.filter((operation) => operation === "contextBindProject"),
+    ).toHaveLength(1);
+    expect(operations).toContain("contextClose");
+    expect(operations).not.toContain("contextBind");
+    expect(operations).not.toContain("reviewTrust");
+    expect(io.request.mock.calls.every(([id]) => id === 7)).toBe(true);
+    expect(io.native).not.toHaveBeenCalled();
+  },
+);
 
 it("never accepts a local selection for an SSH conversation with an identical path", async () => {
   const manager = createMemoryConversations();
@@ -585,12 +631,10 @@ it.each(["policy", "runtime"] as const)(
       await act(async () => read?.click());
       const message =
         restriction === "policy"
-          ? "conversationPolicyBlocked"
-          : "deliveryUnsupported";
-      expect(node.textContent).toContain(
-        `projectMemory.sshSettings.${message}`,
-      );
-      expect(node.textContent).not.toContain(`projectMemory.${message}`);
+          ? "conversationError"
+          : "sshSettings.deliveryUnsupported";
+      expect(node.textContent).toContain(`projectMemory.${message}`);
+
       expect(conversation.delivery?.getSnapshot().enabled).toBe(false);
       expect(io.native).not.toHaveBeenCalled();
     } finally {
@@ -600,7 +644,7 @@ it.each(["policy", "runtime"] as const)(
   },
 );
 
-it("renders remote conversation review and requires consent before preparing and enabling", async () => {
+it("prepares and enables remote project context with one explicit gesture", async () => {
   environment();
   const { conversation } = capture();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -618,20 +662,19 @@ it("renders remote conversation review and requires consent before preparing and
     await act(async () =>
       view.render(createElement(ProjectMemoryPanel, { target, conversation })),
     );
-    await act(async () => button("projectMemory.conversationReview").click());
-    expect(button("projectMemory.conversationPrepare").disabled).toBe(true);
     expect(
       io.request.mock.calls.some(
         ([, request]) => request.params.operation === "contextOpen",
       ),
     ).toBe(false);
-    await act(async () =>
-      node.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click(),
-    );
-    await act(async () => button("projectMemory.conversationPrepare").click());
-    expect(node.textContent).toContain("projectMemory.conversationPrepared");
-    expect(conversation.delivery?.getSnapshot().enabled).toBe(false);
     await act(async () => button("projectMemory.deliveryEnable").click());
+    expect(node.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(node.textContent).toContain("projectMemory.conversationPrepared");
+    expect(
+      io.request.mock.calls.some(
+        ([, request]) => request.params.operation === "reviewTrust",
+      ),
+    ).toBe(false);
     expect(node.textContent).toContain("projectMemory.deliveryEnabled");
     expect(conversation.delivery?.getSnapshot().receipt).toBeNull();
   } finally {

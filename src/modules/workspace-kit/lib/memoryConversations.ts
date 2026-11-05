@@ -277,7 +277,7 @@ export function createMemoryConversations<Source = never>(
           let started = false;
           try {
             notify(entry);
-            const { presentation, selection, review, mode } = input;
+            const { presentation, selection } = input;
             if (!isActionCurrent()) fail("cancelled");
             check();
             if (
@@ -293,19 +293,30 @@ export function createMemoryConversations<Source = never>(
             check();
             admission = isActionCurrent;
             started = true;
-            await presentation.bindContext(
-              selection,
-              review,
-              entry.native,
-              mode,
-            );
+            let root: string;
+            if (input.project) {
+              root = (
+                await input.presentation.bindProjectContext(
+                  selection,
+                  entry.native,
+                )
+              ).root;
+            } else {
+              await input.presentation.bindContext(
+                selection,
+                input.review,
+                entry.native,
+                input.mode,
+              );
+              root = input.review.snapshot.root;
+            }
             check();
             if (!isActionCurrent()) fail("cancelled");
             check();
             bound = true;
             deliveryState = Object.freeze({
               ...deliveryState,
-              root: review.snapshot.root,
+              root,
             });
             binding = false;
             notify(entry);

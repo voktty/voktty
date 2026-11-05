@@ -114,6 +114,19 @@ export function remoteMemoryRequest(
       return { operation: "contextRead", context: handle };
     case "project_memory_context_bind": {
       const request = memoryRecord(args.request);
+      if (request.schema !== undefined) {
+        if (
+          request.schema !== 2 ||
+          Object.keys(request).some((key) => key !== "schema")
+        )
+          memoryFailure("invalidInput");
+        return {
+          operation: "contextBindProject",
+          schema: 2,
+          ...selected,
+          context: args.context,
+        };
+      }
       return {
         operation: "contextBind",
         ...selected,

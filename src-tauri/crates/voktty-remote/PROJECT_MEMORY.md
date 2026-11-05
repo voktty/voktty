@@ -52,7 +52,7 @@ Older helpers without this optional field retain their existing error behavior.
 | `contextOpen` | none | Reserve an empty context owner |
 | `contextBind` | `handle`, `selection`, `review`, `context`, `mode` | Consume a fresh trust review and move its source into the context owner |
 | `contextBindProject` | `schema: 2`, `handle`, `selection`, `context` | Bind the captured project source without global storage or instruction trust |
-| `contextRead` | `context` | Recheck current scope, policy and trust before preparing a packet |
+| `contextRead` | `context` | Recheck the captured source and scope; legacy contexts also recheck policy and trust |
 | `contextClose` | `context` | Retire only that context and release its resources |
 
 Handles contain a positive unsigned 32-bit `id` and a random UUID-v4 `token`.
@@ -161,9 +161,10 @@ Missing, inaccessible, corrupt or legacy private state remains untouched and
 cannot block this path. Current project instructions and facts can appear in a
 later packet without a stored trust update. Consumers still need original-source
 and packet-freshness checks before delivery. Legacy contexts retain their old
-private-origin, policy and trust checks. The frontend presentation remains on
-that legacy route until its client adaptation is connected. Older helpers reject
-the new operation instead of falling back to Desktop IO.
+private-origin, policy and trust checks. The frontend conversation panel uses
+`contextBindProject`; incompatible replies fail with exact context cleanup and
+no retry through legacy binding or Desktop IO. Older helpers can reject the new
+operation without affecting their other existing operations.
 
 The helper owns one lazy serial memory worker outside its interactive protocol
 loop. Filesystem RPCs and terminal input do not wait for memory processing.
@@ -221,8 +222,9 @@ and retains failed cleanup for exact retry. The final owner releases and closes
 its lease without closing sibling consumers. Client families and outstanding
 requests per family are each capped at 256, including retired unsettled work.
 
-The shared panel can manually bind and separately enable memory for a captured
-Harness conversation on a saved SSH project namespace. Selection matching uses
+The shared panel uses one explicit action to bind project files and enable future
+turns for a supported captured Harness conversation on a saved SSH project
+namespace. It starts no model and requires no global trust review. Selection matching uses
 the captured project, profile, connection and directory, rather than a POSIX
 path alone. Namespace metadata and Harness environment changes retire the
 conversation even when immediately reversed. The accepted context keeps its own

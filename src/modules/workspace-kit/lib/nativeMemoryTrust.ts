@@ -4,6 +4,7 @@ import type { InstructionFingerprint } from "@/modules/workspace-kit/lib/context
 import type { MemoryTransport } from "@/modules/workspace-kit/lib/memoryTransport";
 import {
   bindNativeMemoryContext,
+  bindNativeProjectMemoryContext,
   type NativeMemoryContext,
 } from "@/modules/workspace-kit/lib/nativeMemoryContext";
 
@@ -221,6 +222,7 @@ function snapshot(reply: Reply, revision: number): NativeMemoryTrustSnapshot {
 export function createNativeMemoryTrustClient(owner: Owner) {
   let revision = 0;
   let current: Review | null = null;
+  let projectBinding: object | null = null;
   function check(expected: Review) {
     owner.checkSelection(expected.selection);
     if (current !== expected || expected.phase === "consumed") cancelled();
@@ -228,8 +230,52 @@ export function createNativeMemoryTrustClient(owner: Owner) {
   return {
     retire() {
       current = null;
+      projectBinding = null;
     },
     api: {
+      async bindProjectContext(
+        selection: NativeMemorySelection,
+        context: NativeMemoryContext,
+      ): Promise<Readonly<{ root: string }>> {
+        owner.checkSelection(selection);
+        if (projectBinding || !owner.canRequest())
+          throw Object.assign(new Error("Memory requests are busy"), {
+            code: "busy",
+          });
+        const expected = {};
+        projectBinding = expected;
+        const check = () => {
+          owner.checkSelection(selection);
+          if (projectBinding !== expected) cancelled();
+        };
+        let bound = false;
+        try {
+          const result = await bindNativeProjectMemoryContext(
+            context,
+            (handle, checkContext) =>
+              owner.request<unknown>(
+                selection,
+                "project_memory_context_bind",
+                { context: handle, request: { schema: 2 } },
+                () => {
+                  check();
+                  checkContext();
+                },
+              ),
+            owner.contextTransport,
+          );
+          bound = true;
+          check();
+          result.check();
+          current = null;
+          return Object.freeze({ root: result.root });
+        } catch (error) {
+          if (bound) await context.close();
+          throw error;
+        } finally {
+          if (projectBinding === expected) projectBinding = null;
+        }
+      },
       async bindContext(
         selection: NativeMemorySelection,
         accepted: NativeMemoryTrustReview,

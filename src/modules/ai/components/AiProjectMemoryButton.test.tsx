@@ -115,13 +115,13 @@ function rawScope() {
   return scope;
 }
 async function review() {
-  await click("projectMemory.conversationReview");
-  expect(button("projectMemory.conversationPrepare").disabled).toBe(true);
-  const accepted = document.querySelector<HTMLInputElement>(
-    'input[type="checkbox"]',
-  );
-  if (!accepted) throw new Error("Missing explicit consent");
-  await act(async () => accepted.click());
+  await click("projectMemory.deliveryEnable");
+  expect(document.querySelector('input[type="checkbox"]')).toBeNull();
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_review_trust",
+    ),
+  ).toBe(false);
 }
 function publish(value: AiFileRootContext | null) {
   const state = useChatStore.getState();
@@ -167,7 +167,7 @@ beforeEach(() => {
         token: "00000000-0000-4000-8000-000000000009",
       };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: "/project", packet: packet().packet };
     if (command === "project_memory_context_read") return packet();
   });
 });
@@ -220,7 +220,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("opens manually, prepares the original Chat through reviewed consent, and never sends a model input", async () => {
+it("opens manually, prepares the original Chat with one explicit action, and never sends a model input", async () => {
   await mount();
   expect(chats.size).toBe(0);
   expect(invoke).not.toHaveBeenCalled();
@@ -234,17 +234,14 @@ it("opens manually, prepares the original Chat through reviewed consent, and nev
     ),
   ).toBe(false);
   await review();
-  await click("projectMemory.conversationPrepare");
   expect(scope.status()).toBe("ready");
   expect(document.body.textContent).toContain(text);
   expect(document.body.textContent).toContain(
     "projectMemory.conversationPrepared",
   );
-  expect(document.body.textContent).toContain(
-    "projectMemory.apiDeliveryConsent",
-  );
+  expect(document.body.textContent).toContain("projectMemory.deliveryEnabled");
   expect(document.querySelector("script")).toBeNull();
-  expect(scope.delivery?.getSnapshot().enabled).toBe(false);
+  expect(scope.delivery?.getSnapshot().enabled).toBe(true);
   expect(send).not.toHaveBeenCalled();
   await click("common.copy");
   await act(async () => {
@@ -263,16 +260,14 @@ it("opens manually, prepares the original Chat through reviewed consent, and nev
   expect(document.body.textContent).toContain(text);
 });
 
-it("enables future API input separately from preparation and shows a receipt only after a model response", async () => {
+it("enables future API input with preparation and shows a receipt only after a model response", async () => {
   await mount();
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
   const chat = getOrCreateChat("original");
   const scope = rawScope();
-  expect(getChatProjectKitMemory(chat)).toBeUndefined();
+  expect(getChatProjectKitMemory(chat)).toBeDefined();
   expect(scope.delivery?.getSnapshot().receipt).toBeNull();
-  await click("projectMemory.deliveryEnable");
   expect(scope.delivery?.getSnapshot().enabled).toBe(true);
   expect(scope.delivery?.getSnapshot().receipt).toBeNull();
   expect(send).not.toHaveBeenCalled();
@@ -308,7 +303,7 @@ it("does not confirm delivery enablement after the originating selection retires
   await mount();
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
+  await click("projectMemory.conversationDisable");
   const scope = rawScope();
   const chat = getOrCreateChat("original");
   let finish!: (value: unknown) => void;
@@ -343,7 +338,6 @@ it("retires a pending binding when the selected conversation changes", async () 
   await mount();
   await open();
   const scope = rawScope();
-  await review();
   let finish!: (value: unknown) => void;
   let start!: () => void;
   const opening = new Promise<unknown>((resolve) => {
@@ -360,7 +354,7 @@ it("retires a pending binding when the selected conversation changes", async () 
     }
     return original?.(command, args);
   });
-  await click("projectMemory.conversationPrepare");
+  await review();
   await admitted;
   getOrCreateChat("sibling");
   await act(async () => useChatStore.getState().switchSession("sibling"));
@@ -381,7 +375,6 @@ it("keeps accepted native memory after a presentation release or session switch"
   await mount();
   await open();
   await review();
-  await click("projectMemory.conversationPrepare");
   const scope = rawScope();
   getOrCreateChat("sibling");
   await act(async () => useChatStore.getState().switchSession("sibling"));
