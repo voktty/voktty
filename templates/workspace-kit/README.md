@@ -55,11 +55,10 @@ handoffs and decisions included.
 
 ## Status
 
-Template 1.2.0 defines the file-based workflow below. CLI `memory init` now
-publishes directly to the selected project without global memory storage.
-Desktop, SSH and the remaining CLI memory flows still need adapting, as do
-the initialization options and UI. The simpler workflow is not complete
-end to end yet.
+Template 1.3.0 defines the file-based workflow below. Desktop, CLI `memory init`
+and the authenticated SSH helper publish directly to the selected project
+without global memory storage. Recovery and remaining context flows still need
+adapting. The simpler workflow is not complete end to end yet.
 
 The documents do not implement an agent board, a scheduling service or the
 `voktty agent`, `voktty lock` or `voktty memory check` commands. File notes
@@ -134,6 +133,14 @@ and runtime approvals remain authoritative; the memory grants none of them.
 
 A new `.voktty/` is mostly empty. The agent follows `capture/initial.md` to
 read the project and `capture/refresh.md` to keep facts current as it works.
+The initial guide turns the real repository into project memory: purpose,
+entry points, component and data flows, contracts, current work, verification
+and a handoff for the next session. Copying files does not complete that work.
+The memory manager can preview and copy this task after preparation or for an
+existing kit. In the internal AI surface it can place the task in the current
+conversation's draft, preserving existing draft text; sending and tool approvals
+remain ordinary conversation actions. Other surfaces retain the copy alternative.
+No model response alone confirms that the project documents were written.
 It follows `capture/handoff.md` before leaving changed work and
 `capture/milestone.md` when verified work closes. This maintenance is part of
 the task, not another memory permission workflow. The guides do not start
@@ -166,6 +173,10 @@ them with its meaning and default. A deployment that leaves an unknown or
 required placeholder unfilled is an error, not a silent gap.
 
 ## Versioning
+
+Version 1.3.0 expands the first-capture guide into the project's save-and-resume
+procedure. It maps technical project observations into the existing content,
+domain, plan and handoff files rather than introducing another snapshot format.
 
 Version 1.2.0 makes ordinary file-based work and coordination the template's
 starting point. It removes the separate memory-enablement/capture prompts

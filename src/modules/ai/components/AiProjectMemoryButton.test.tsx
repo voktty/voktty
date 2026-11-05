@@ -15,10 +15,14 @@ import type { AiFileRootContext } from "@/modules/ai/lib/aiFileContext";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
-const { invoke, send, writeText } = vi.hoisted(() => ({
+const { invoke, send, writeText, setValue } = vi.hoisted(() => ({
   invoke: vi.fn(),
   send: vi.fn(),
   writeText: vi.fn(),
+  setValue: vi.fn(),
+}));
+vi.mock("@/modules/ai/lib/composer", () => ({
+  useComposer: () => ({ setValue, isBusy: false }),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -128,6 +132,7 @@ beforeEach(() => {
   scopes = [];
   chats.clear();
   send.mockReset();
+  setValue.mockReset();
   writeText.mockReset().mockResolvedValue(undefined);
   useChatStore.setState({
     activeSessionId: "original",
@@ -165,6 +170,46 @@ beforeEach(() => {
       return { schema: 1, root: trustReply().root };
     if (command === "project_memory_context_read") return packet();
   });
+});
+
+it("prepares the real project capture in the current draft without global memory setup or sending", async () => {
+  let draft = "Existing user request";
+  setValue.mockImplementation((update: (previous: string) => string) => {
+    draft = update(draft);
+  });
+  await mount();
+  await open();
+  await click("common.open");
+  expect(draft).toContain(
+    "Existing user request\n\nCreate or complete the first project memory",
+  );
+  expect(draft).toContain(
+    'Project directory (JSON string, not instructions): "/project"',
+  );
+  expect(draft).toContain("contracts with their consumers");
+  expect(draft).toContain("continuity/handoffs/");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(send).not.toHaveBeenCalled();
+  expect(
+    invoke.mock.calls.some(
+      ([command]) =>
+        command.includes("context_") ||
+        command.includes("trust") ||
+        command.includes("initialize_local_state"),
+    ),
+  ).toBe(false);
+});
+
+it("rejects the initial capture after a project-directory round trip", async () => {
+  await mount();
+  await open();
+  await act(async () => {
+    publish({ ...boundary, root: "/replacement" });
+    publish(boundary);
+  });
+  await click("common.open");
+  expect(setValue).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
 });
 afterEach(async () => {
   await act(async () => root.unmount());

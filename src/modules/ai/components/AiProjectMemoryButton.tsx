@@ -1,4 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
+import { useComposer } from "@/modules/ai/lib/composer";
 import type { AiFileRootContext } from "@/modules/ai/lib/aiFileContext";
 import { captureAiMemoryConversation } from "@/modules/ai/lib/aiMemoryConversation";
 import { subscribeAiFileRoot } from "@/modules/ai/lib/aiRootObservation";
@@ -13,6 +15,7 @@ const snapshot = () =>
 export function AiProjectMemoryButton() {
   const sessionId = useChatStore((state) => state.activeSessionId);
   const captureOwner = useChatActionOwner(sessionId);
+  const composer = useComposer();
   const key = useSyncExternalStore(subscribeAiFileRoot, snapshot);
   const boundary = useMemo(
     () => JSON.parse(key) as AiFileRootContext | null,
@@ -36,6 +39,53 @@ export function AiProjectMemoryButton() {
         return owner && chat
           ? captureAiMemoryConversation(chat, boundary.root, owner.isCurrent)
           : null;
+      }}
+      captureInitialMemory={() => {
+        const owner = captureOwner();
+        if (
+          !owner ||
+          !boundary ||
+          boundary.workspace.kind !== "local" ||
+          composer.isBusy
+        )
+          return null;
+        let active = true;
+        let stop = () => {};
+        const current = () => {
+          if (!active) return false;
+          try {
+            if (!owner.isCurrent() || snapshot() !== key) active = false;
+          } catch {
+            active = false;
+          }
+          return active;
+        };
+        const release = () => {
+          active = false;
+          stop();
+        };
+        stop = subscribeAiFileRoot(() => {
+          if (!current()) release();
+        }, release);
+        if (!current()) {
+          release();
+          return null;
+        }
+        return {
+          release,
+          prepare(prompt) {
+            if (!current()) return false;
+            let inserted = false;
+            flushSync(() =>
+              composer.setValue((previous) => {
+                if (!current()) return previous;
+                inserted = true;
+                return previous ? `${previous}\n\n${prompt}` : prompt;
+              }),
+            );
+            return inserted && current();
+          },
+        };
       }}
     />
   );

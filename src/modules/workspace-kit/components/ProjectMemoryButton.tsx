@@ -13,6 +13,7 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 import type { MemoryConversationCapture } from "@/modules/workspace-kit/lib/memoryConversation";
+import type { InitialMemoryDraftCapture } from "@/modules/workspace-kit/lib/initialMemoryPrompt";
 import { cn } from "@/lib/utils";
 import { refreshMemoryIndicators } from "@/modules/workspace-kit/lib/memoryIndicatorRefresh";
 
@@ -25,11 +26,13 @@ export function ProjectMemoryButton({
   target,
   rail = false,
   captureConversation,
+  captureInitialMemory,
   observe = false,
 }: {
   target: MemoryPanelTarget | null;
   rail?: boolean;
   captureConversation?: () => MemoryConversationCapture | null;
+  captureInitialMemory?: () => InitialMemoryDraftCapture | null;
   observe?: boolean;
 }) {
   const { t } = useTranslation();
@@ -40,15 +43,20 @@ export function ProjectMemoryButton({
     key: string;
     target: MemoryPanelTarget | null;
     capture: MemoryConversationCapture | null;
+    initialMemory: InitialMemoryDraftCapture | null;
     conversationError: boolean;
   } | null>(null);
   const open = opened !== null && opened.key === key;
   useLayoutEffect(() => {
     if (opened && opened.key !== key) {
       opened.capture?.release();
+      opened.initialMemory?.release();
       setOpened(null);
     }
-    return () => opened?.capture?.release();
+    return () => {
+      opened?.capture?.release();
+      opened?.initialMemory?.release();
+    };
   }, [opened, key]);
   return (
     <Dialog
@@ -56,6 +64,7 @@ export function ProjectMemoryButton({
       onOpenChange={(value) => {
         if (!value) {
           opened?.capture?.release();
+          opened?.initialMemory?.release();
           setOpened(null);
           if (open) refreshMemoryIndicators();
           return;
@@ -63,15 +72,22 @@ export function ProjectMemoryButton({
         if (open) return;
         let capture: MemoryConversationCapture | null = null;
         let conversationError = false;
+        let initialMemory: InitialMemoryDraftCapture | null = null;
         try {
           capture = captureConversation?.() ?? null;
         } catch {
           conversationError = true;
         }
+        try {
+          initialMemory = captureInitialMemory?.() ?? null;
+        } catch {
+          initialMemory = null;
+        }
         setOpened({
           key,
           target: target ? structuredClone(target) : null,
           capture,
+          initialMemory,
           conversationError,
         });
       }}
@@ -122,6 +138,20 @@ export function ProjectMemoryButton({
               target={opened.target}
               conversation={opened.capture?.conversation}
               conversationError={opened.conversationError}
+              prepareInitialMemory={
+                opened.initialMemory
+                  ? (prompt) => {
+                      if (!opened.initialMemory?.prepare(prompt)) return false;
+                      opened.initialMemory.release();
+                      opened.capture?.release();
+                      setOpened((current) =>
+                        current === opened ? null : current,
+                      );
+                      refreshMemoryIndicators();
+                      return true;
+                    }
+                  : undefined
+              }
             />
           </Suspense>
         </DialogContent>

@@ -4,6 +4,7 @@ import { useTranslation } from "@/modules/i18n";
 import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
 import { MemoryDocuments } from "@/modules/workspace-kit/components/MemoryDocuments";
 import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
+import { MemoryInitialCapture } from "@/modules/workspace-kit/components/MemoryInitialCapture";
 import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   canInitializeMemory,
@@ -33,10 +34,12 @@ export default function ProjectMemoryPanel({
   target,
   conversation = null,
   conversationError = false,
+  prepareInitialMemory,
 }: {
   target: MemoryPanelTarget | null;
   conversation?: Conversation | null;
   conversationError?: boolean;
+  prepareInitialMemory?: (prompt: string) => boolean;
 }) {
   const { t } = useTranslation();
   const [revision, setRevision] = useState(0);
@@ -120,6 +123,9 @@ export default function ProjectMemoryPanel({
             <MemoryObservation
               key={`${revision}:${managementTarget.path}`}
               target={managementTarget}
+              prepareInitialMemory={
+                managementTarget === target ? prepareInitialMemory : undefined
+              }
               onReload={() => setRevision((value) => value + 1)}
             />
           ) : (
@@ -140,9 +146,11 @@ export default function ProjectMemoryPanel({
 function MemoryObservation({
   target,
   onReload,
+  prepareInitialMemory,
 }: {
   target: MemoryPanelTarget;
   onReload: () => void;
+  prepareInitialMemory?: (prompt: string) => boolean;
 }) {
   const { t, language } = useTranslation();
   const [state, setState] = useState<MemoryPanelState>({ status: "loading" });
@@ -233,6 +241,13 @@ function MemoryObservation({
             void controller.current?.back();
           }}
         />
+        {state.status === "published" ? (
+          <MemoryInitialCapture
+            key={state.root}
+            root={state.root}
+            prepare={prepareInitialMemory}
+          />
+        ) : null}
         <DialogFooter>
           {supportsMemoryRecovery(target) &&
           ((state.status === "deploymentError" &&
@@ -374,6 +389,19 @@ function MemoryObservation({
               {t("projectMemory.recovery.reviewInitialization")}
             </Button>
           </>
+        ) : null}
+        {state.status === "ready" &&
+        state.observation.root &&
+        canBrowseMemoryDocuments(state.observation) ? (
+          <MemoryInitialCapture
+            key={state.observation.root}
+            root={state.observation.root}
+            prepare={
+              state.observation.root === target.path
+                ? prepareInitialMemory
+                : undefined
+            }
+          />
         ) : null}
         {state.status === "ready" &&
         canBrowseMemoryDocuments(state.observation) ? (

@@ -119,7 +119,12 @@ it("suppresses late document data after directory withdrawal and a round trip", 
   await act(async () => root.render(<ProjectMemoryPanel target={null} />));
   await act(async () => root.render(<ProjectMemoryPanel target={target} />));
   await act(async () => resolve(reply()));
-  expect(container.querySelector("pre")).toBeNull();
+  expect(container.textContent).not.toContain(text);
+  expect(
+    [...container.querySelectorAll("button")].some(
+      (element) => element.textContent === ".voktty/PROJECT.md",
+    ),
+  ).toBe(false);
   expect(container.textContent).toContain("projectMemory.found");
   expect(invoke).toHaveBeenCalledWith("project_memory_close", {
     handle: { id: 1, token: "owner" },

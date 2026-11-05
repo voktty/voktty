@@ -667,8 +667,10 @@ it.each(["KIT_MEMORY_POLICY_NEVER", "KIT_MEMORY_INSTRUCTIONS_CHANGED"])(
     expect(writeText).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain("<script>context</script>");
     expect(document.body.textContent).not.toContain("common.copied");
+    const conversation = document.querySelector("section");
+    expect(conversation).not.toBeNull();
     expect(
-      [...document.querySelectorAll("button")].some(
+      [...(conversation?.querySelectorAll("button") ?? [])].some(
         (item) => item.textContent === "common.copy",
       ),
     ).toBe(false);
