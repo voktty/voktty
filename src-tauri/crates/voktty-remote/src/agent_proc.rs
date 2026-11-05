@@ -1500,8 +1500,10 @@ mod unix_tests {
                 .code,
             "command_not_allowed"
         );
+        let mut missing = spec(&fx, "claude");
+        missing.search_path = Some(fx.bin.path().to_string_lossy().into_owned());
         assert_eq!(
-            spawn_process(&fx.base, home, &spec(&fx, "claude"), &launch)
+            spawn_process(&fx.base, home, &missing, &launch)
                 .unwrap_err()
                 .code,
             "command_not_found"
@@ -1539,7 +1541,7 @@ mod unix_tests {
     #[test]
     fn probe_reports_the_path_and_first_version_line_or_absence() {
         let fx = fixture("codex", "echo 'codex-cli 1.2.3'; echo second");
-        let search = format!("{}:/usr/bin:/bin", fx.bin.path().display());
+        let search = fx.bin.path().to_string_lossy().into_owned();
         let found = probe_agent("codex", &search).unwrap();
         assert!(found.found);
         assert_eq!(found.version.as_deref(), Some("codex-cli 1.2.3"));

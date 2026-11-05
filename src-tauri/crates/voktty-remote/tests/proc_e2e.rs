@@ -30,7 +30,7 @@ impl Helper {
         let mut child = Command::new(env!("CARGO_BIN_EXE_voktty-remote"))
             .arg("--stdio")
             .env("HOME", home)
-            .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+            .env("PATH", bin)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -141,7 +141,7 @@ fn the_agent_outlives_its_helper_and_a_new_helper_resumes_the_output() {
     let bin = tempfile::tempdir().unwrap();
     let work = tempfile::tempdir().unwrap();
     let script = bin.path().join("codex");
-    fs::write(&script, "#!/bin/sh\necho a\nsleep 1\necho b\nexit 5\n").unwrap();
+    fs::write(&script, "#!/bin/sh\necho a\n/bin/sleep 1\necho b\nexit 5\n").unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
 
     let (proc_id, applied) = {
