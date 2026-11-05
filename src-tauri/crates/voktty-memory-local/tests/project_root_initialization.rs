@@ -343,6 +343,40 @@ fn repair_preserves_project_content_and_rechecks_it_before_publication() {
 }
 
 #[test]
+fn repair_uses_persisted_values_after_the_folder_and_date_defaults_change() {
+    let _serial = SERIAL.lock().unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    let original = parent.path().join("original");
+    fs::create_dir(&original).unwrap();
+    let authority = access(&original, false);
+    publish(&authority);
+    let config = fs::read(original.join(".voktty/kit.json")).unwrap();
+    let readme = fs::read(original.join(".voktty/README.md")).unwrap();
+    let renamed = parent.path().join("renamed");
+    fs::rename(&original, &renamed).unwrap();
+    fs::remove_file(renamed.join(".voktty/README.md")).unwrap();
+    let authority = access(&renamed, false);
+    let mut next = request(&authority);
+    next.inputs.insert("project_name".into(), "renamed".into());
+    next.inputs.insert("created_at".into(), "2027-01-01".into());
+    let review = OwnedProjectInitializationPreview::prepare_at_project_root(
+        next,
+        &DiscoveryControl::default(),
+    )
+    .unwrap();
+    let digest = review.acceptance_digest();
+    let report = review
+        .publish(&digest, authority.as_ref(), &DiscoveryControl::default())
+        .unwrap();
+    assert!(report
+        .created
+        .iter()
+        .any(|path| path == ".voktty/README.md"));
+    assert_eq!(fs::read(renamed.join(".voktty/README.md")).unwrap(), readme);
+    assert_eq!(fs::read(renamed.join(".voktty/kit.json")).unwrap(), config);
+}
+
+#[test]
 fn explicit_and_resolved_reviews_have_distinct_acceptance_digests() {
     let _serial = SERIAL.lock().unwrap();
     let project = tempfile::tempdir().unwrap();

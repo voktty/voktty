@@ -91,7 +91,25 @@ impl OwnedProjectInitializationPreview {
         let target = destination.borrow();
         check_placement_recovery(&placement, &source, &target, control)?;
         let facts = target.observe_deployment(request.links, &control.read_control()?)?;
-        let mut files = render_template(&request.inputs).map_err(ReadError::Contract)?;
+        let mut inputs = request.inputs;
+        if matches!(placement, InitializationPlacement::ProjectRoot) {
+            // Initialization repairs the existing project; supplied defaults
+            // must not rename it or change its original creation date.
+            if let Some(PathFact::File { text }) = facts.get(".voktty/kit.json") {
+                if let Ok(config) = voktty_workspace_kit::parse_kit_config(text) {
+                    if let Some(values) = config["values"].as_object() {
+                        inputs.extend(
+                            values
+                                .iter()
+                                .filter(|(key, _)| key.as_str() != "kit_version")
+                                .map(|(key, value)| (key.clone(), value.clone())),
+                        );
+                    }
+                }
+            }
+        }
+        crate::template_inputs::validate_inputs(&inputs)?;
+        let mut files = render_template(&inputs).map_err(ReadError::Contract)?;
         if matches!(placement, InitializationPlacement::ProjectRoot) {
             for file in &mut files {
                 if file.kind == voktty_workspace_kit::FileKind::Content {
