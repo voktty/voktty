@@ -1,6 +1,5 @@
 import type { WorkspaceEnv } from "@/modules/workspace/env";
 import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
-import { memoryStorageDiagnostic } from "@/modules/workspace-kit/lib/memoryStorageDiagnostic";
 import type {
   createNativeMemoryPresentation,
   NativeMemoryDeploymentError,
@@ -45,8 +44,6 @@ export type MemoryPanelState =
   | { status: "ready"; observation: NativeMemoryScope }
   | { status: "error"; code: string; canPrepare: boolean }
   | { status: "configuring"; recovering?: boolean }
-  | { status: "initializationSetup"; code?: string; diagnostic?: string }
-  | { status: "preparingInitialization" }
   | { status: "previewing" }
   | { status: "review" | "publishing"; review: NativeMemoryReview }
   | { status: "published"; root: string; report: NativeMemoryPublication }
@@ -247,8 +244,7 @@ export function createMemoryPanelController(
       | "trust"
       | "policy"
       | "documents"
-      | "recovery"
-      | "setup" = "deployment",
+      | "recovery" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
@@ -268,34 +264,15 @@ export function createMemoryPanelController(
               ? (error as NativeMemoryDeploymentError)
               : { code: "unavailable" };
           notify(
-            operation === "setup"
-              ? {
-                  status: "initializationSetup",
-                  diagnostic: memoryStorageDiagnostic(error),
-                  code: [
-                    "denied",
-                    "missingState",
-                    "invalidState",
-                    "legacyStateRequiresReview",
-                    "unsupported",
-                    "unavailable",
-                    "timeout",
-                    "busy",
-                    "limit",
-                    "stale",
-                  ].includes(failure.code)
-                    ? failure.code
-                    : "unavailable",
-                }
-              : operation === "recovery"
-                ? { status: "recoveryError", error: failure }
-                : operation === "documents"
-                  ? { status: "documentsError", code: failure.code }
-                  : operation === "trust"
-                    ? { status: "trustError", code: failure.code }
-                    : operation === "policy"
-                      ? { status: "policyError", code: failure.code }
-                      : { status: "deploymentError", error: failure },
+            operation === "recovery"
+              ? { status: "recoveryError", error: failure }
+              : operation === "documents"
+                ? { status: "documentsError", code: failure.code }
+                : operation === "trust"
+                  ? { status: "trustError", code: failure.code }
+                  : operation === "policy"
+                    ? { status: "policyError", code: failure.code }
+                    : { status: "deploymentError", error: failure },
           );
         }
       })
@@ -303,6 +280,17 @@ export function createMemoryPanelController(
         pending = null;
       });
     return pending;
+  }
+  async function publishReview(
+    receipt: NativeMemorySelection,
+    review: NativeMemoryReview,
+  ) {
+    if (!current() || !entry.client.isReviewCurrent(receipt, review)) return;
+    notify({ status: "publishing", review });
+    if (!current() || !entry.client.isReviewCurrent(receipt, review)) return;
+    const report = await entry.client.confirmPreview(receipt, review);
+    if (current())
+      notify({ status: "published", root: review.snapshot.root, report });
   }
   return {
     load: () => run(false),
@@ -576,23 +564,48 @@ export function createMemoryPanelController(
         return Promise.resolve();
       return run(false, true);
     },
-    configure() {
+    configure(language = "en") {
       if (
-        !pending &&
-        current() &&
-        state.status === "ready" &&
-        canInitializeMemory(state.observation)
+        state.status !== "ready" ||
+        !(
+          canInitializeMemory(state.observation) ||
+          canRepairMemory(state.observation)
+        )
       )
-        notify({ status: "initializationSetup" });
-    },
-    prepareInitialization() {
-      if (state.status !== "initializationSetup") return Promise.resolve();
+        return Promise.resolve();
+      const inputs = {
+        project_name:
+          selectionPath
+            .replace(/[\\/]+$/, "")
+            .split(/[\\/]/)
+            .pop() || "Project",
+        created_at: new Date().toISOString().slice(0, 10),
+        language,
+      };
       return deploy(async (receipt) => {
-        notify({ status: "preparingInitialization" });
+        recoveringInitialization = false;
+        notify({ status: "previewing" });
         if (!current()) return;
-        await entry.client.initializeLocalState(receipt);
-        if (current()) notify({ status: "configuring" });
-      }, "setup");
+        const review = await entry.client.preview(receipt, {
+          destination: selectionPath,
+          environment: captured.environment,
+          inputs,
+          links: { agents: true, claude: true },
+        });
+        if (!current() || !entry.client.isReviewCurrent(receipt, review))
+          return;
+        if (
+          !review.snapshot.deployment.canPublish ||
+          review.snapshot.publicationBlocker ||
+          review.snapshot.deployment.entries.some(
+            (entry) => entry.action === "migrate",
+          )
+        ) {
+          notify({ status: "review", review });
+          return;
+        }
+        await publishReview(receipt, review);
+      });
     },
     preview(
       inputs: Readonly<Record<string, string>>,
@@ -625,26 +638,23 @@ export function createMemoryPanelController(
       )
         return Promise.resolve();
       return deploy(async (receipt) => {
-        notify({ status: "publishing", review: accepted });
-        if (!current()) return;
-        const report = await entry.client.confirmPreview(receipt, accepted);
-        if (current())
-          notify({ status: "published", root: accepted.snapshot.root, report });
+        await publishReview(receipt, accepted);
       });
     },
     back() {
       if (pending || !current() || !observation) return Promise.resolve();
       if (state.status === "deploymentError") {
+        if (!recoveringInitialization) {
+          notify({ status: "ready", observation });
+          return Promise.resolve();
+        }
         notify({
           status: "configuring",
           ...(recoveringInitialization ? { recovering: true } : {}),
         });
         return Promise.resolve();
       }
-      if (
-        state.status === "configuring" ||
-        state.status === "initializationSetup"
-      ) {
+      if (state.status === "configuring") {
         notify({ status: "ready", observation });
         return Promise.resolve();
       }
@@ -653,7 +663,12 @@ export function createMemoryPanelController(
         notify({ status: "previewing" });
         if (!current()) return;
         await entry.client.cancelPreview(receipt);
-        if (current()) notify({ status: "configuring" });
+        if (current() && observation)
+          notify(
+            recoveringInitialization
+              ? { status: "configuring", recovering: true }
+              : { status: "ready", observation },
+          );
       });
     },
     dispose: () => closeEntry(entry),
@@ -667,6 +682,15 @@ export function canInitializeMemory(observation: NativeMemoryScope) {
     !observation.root &&
     (observation.scope.state === "absent" ||
       observation.scope.state === "reserved")
+  );
+}
+
+export function canRepairMemory(observation: NativeMemoryScope) {
+  return (
+    observation.scope?.ancestryComplete === true &&
+    observation.blockedCount === 0 &&
+    (observation.scope.state === "ready" ||
+      observation.scope.state === "partial")
   );
 }
 

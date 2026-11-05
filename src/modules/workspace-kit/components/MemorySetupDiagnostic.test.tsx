@@ -11,9 +11,9 @@ vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key, language: "en" }),
 }));
 
-it("shows the bounded native setup failure in the panel and permits an explicit retry", async () => {
+it("reports a project preview failure without attempting private setup or exposing native details", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  let failed = true;
+  const failed = true;
   invoke.mockImplementation(async (command: string) => {
     if (command === "project_memory_open") return { id: 1, token: "handle" };
     if (command === "project_memory_select") return "selection";
@@ -24,7 +24,7 @@ it("shows the bounded native setup failure in the panel and permits an explicit 
         blockedCount: 0,
         scope: { state: "absent", ancestryComplete: true },
       };
-    if (command === "project_memory_initialize_local_state" && failed)
+    if (command === "project_memory_preview" && failed)
       throw {
         code: "denied",
         storage: { stage: "windows-directory-open", windowsError: 5 },
@@ -54,18 +54,16 @@ it("shows the bounded native setup failure in the panel and permits an explicit 
       ),
     );
     await click("projectMemory.initialize");
-    await click("projectMemory.prepare");
-    expect(node.querySelector('[role="alert"]')?.textContent).toBe(
-      "common.error: denied (windows-directory-open:5)",
-    );
+    expect(node.textContent).toContain("projectMemory.deploymentFailed");
     expect(node.textContent).not.toContain("private error text");
     expect(
-      invoke.mock.calls.some(([name]) => name === "project_memory_preview"),
+      invoke.mock.calls.some(
+        ([name]) => name === "project_memory_initialize_local_state",
+      ),
     ).toBe(false);
-    failed = false;
-    await click("projectMemory.prepare");
-    expect(node.querySelector('[role="alert"]')).toBeNull();
-    expect(node.querySelector("form")).not.toBeNull();
+    await click("common.back");
+    expect(node.querySelector("form")).toBeNull();
+    expect(node.textContent).toContain("projectMemory.initialize");
   } finally {
     await act(async () => root.unmount());
     vi.unstubAllGlobals();

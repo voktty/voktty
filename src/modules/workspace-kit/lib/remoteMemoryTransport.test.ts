@@ -387,7 +387,7 @@ it.each([target, namespace, connectedNamespace])(
 );
 
 it.each([target, namespace, connectedNamespace])(
-  "prepares private settings on SSH only after the labeled choice for $source",
+  "initializes SSH project files in one action without private setup for $source",
   async (input) => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const element = document.createElement("div");
@@ -405,21 +405,16 @@ it.each([target, namespace, connectedNamespace])(
         root.render(createElement(ProjectMemoryPanel, { target: input })),
       );
       await click("projectMemory.initialize");
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.prepareDescription",
-      );
-      expect(element.textContent).not.toContain(
-        "projectMemory.prepareDescription",
-      );
+      expect(element.textContent).toContain("projectMemory.installed");
+      expect(element.querySelector("form")).toBeNull();
       expect(
         io.request.mock.calls.some(
           ([, request]) => request.params.operation === "initialize",
         ),
       ).toBe(false);
-      await click("projectMemory.sshSettings.prepare");
       expect(
         io.request.mock.calls.some(
-          ([, request]) => request.params.operation === "initialize",
+          ([, request]) => request.params.operation === "confirm",
         ),
       ).toBe(true);
       expect(io.native).not.toHaveBeenCalled();
@@ -468,17 +463,7 @@ it.each([target, namespace, connectedNamespace])(
     expect(
       io.request.mock.calls.map(([, request]) => request.params.operation),
     ).toEqual(["open", "select", "inspect"]);
-    panel.configure();
-    await panel.prepareInitialization();
-    await panel.preview(
-      { project_name: "Original" },
-      { agents: false, claude: false },
-    );
-    const review = last(states);
-    expect(review?.status).toBe("review");
-    if (review?.status !== "review") throw new Error("Missing review");
-    expect(review.review.snapshot.root).toBe(input.path);
-    await panel.confirm(review.review);
+    await panel.configure();
     expect(last(states)).toEqual({
       status: "published",
       root: input.path,

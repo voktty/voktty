@@ -9,6 +9,7 @@ import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
 import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   canInitializeMemory,
+  canRepairMemory,
   canReviewMemoryPolicy,
   canReviewMemoryRecovery,
   canReviewMemoryTrust,
@@ -177,7 +178,7 @@ function MemoryObservation({
   target: MemoryPanelTarget;
   onReload: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [state, setState] = useState<MemoryPanelState>({ status: "loading" });
   const remote =
     target.environment.kind === "ssh" || target.path.startsWith("remote://");
@@ -343,12 +344,8 @@ function MemoryObservation({
     return (
       <>
         <MemoryInitialization
-          remote={remote}
           state={state}
           directory={target.path}
-          onPrepare={() => {
-            void controller.current?.prepareInitialization();
-          }}
           onPreview={(values, links) => {
             void controller.current?.preview(values, links);
           }}
@@ -392,9 +389,7 @@ function MemoryObservation({
             variant="outline"
             size="sm"
             disabled={
-              state.status === "previewing" ||
-              state.status === "publishing" ||
-              state.status === "preparingInitialization"
+              state.status === "previewing" || state.status === "publishing"
             }
             onClick={onReload}
           >
@@ -492,8 +487,13 @@ function MemoryObservation({
             </Button>
           </div>
         ) : null}
-        {state.status === "ready" && canInitializeMemory(state.observation) ? (
-          <Button size="sm" onClick={() => controller.current?.configure()}>
+        {state.status === "ready" &&
+        (canInitializeMemory(state.observation) ||
+          canRepairMemory(state.observation)) ? (
+          <Button
+            size="sm"
+            onClick={() => void controller.current?.configure(language)}
+          >
             {t("projectMemory.initialize")}
           </Button>
         ) : null}

@@ -59,12 +59,9 @@ async function click(label: string) {
 }
 async function configure() {
   await click("projectMemory.initialize");
-  await click("projectMemory.prepare");
-  await click("projectMemory.next");
 }
 async function reviewFiles() {
   await configure();
-  await click("projectMemory.preview");
 }
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -145,8 +142,8 @@ it("shows exact canonical preview and requires explicit acceptance before a toke
       ...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
     ].every((input) => !input.checked),
   ).toBe(true);
-  expect(container.textContent).toContain("projectMemory.publicWarning");
-  await click("projectMemory.preview");
+  expect(container.querySelector("form")).toBeNull();
+  expect(invoke.mock.calls.some(([command]) => command === "project_memory_initialize_local_state")).toBe(false);
   expect(container.textContent).toContain("/canonical/owned");
   expect(
     [...container.querySelectorAll("pre")].map(
@@ -179,8 +176,8 @@ it("shows exact canonical preview and requires explicit acceptance before a toke
     language: "es",
   });
   expect(previewCall?.[1].request.links).toEqual({
-    agents: false,
-    claude: false,
+    agents: true,
+    claude: true,
   });
 });
 it("never permits conflicting or unsupported publication, even after forced click", async () => {
@@ -263,7 +260,7 @@ it("never describes unreadable current bytes as a missing file", async () => {
   expect(button("projectMemory.initialize").disabled).toBe(true);
 });
 
-it("continues from first local setup through installation to managing the discovered kit", async () => {
+it("installs without local setup and returns to the discovered kit", async () => {
   let prepared = false;
   let installed = false;
   const original = invoke.getMockImplementation();
@@ -290,7 +287,7 @@ it("continues from first local setup through installation to managing the discov
   expect(prepared).toBe(false);
   await click("projectMemory.inspectAncestors");
   await reviewFiles();
-  expect(prepared).toBe(true);
+  expect(prepared).toBe(false);
   await act(async () =>
     container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click(),
   );
@@ -326,7 +323,7 @@ it("reconnects to existing memory on refresh without dropping ancestor inspectio
   await click("common.refresh");
   expect(container.textContent).toContain("/canonical/parent");
   expect(container.textContent).toContain("projectMemory.found");
-  expect(container.textContent).not.toContain("projectMemory.initialize");
+  expect(container.textContent).toContain("projectMemory.initialize");
   expect(button("projectMemory.reviewTrust")).toBeDefined();
   expect(button("projectMemory.policyConfigure")).toBeDefined();
   expect(invoke.mock.calls.filter(([command]) => command === "project_memory_select")).toHaveLength(selects);
@@ -409,7 +406,7 @@ it("leaves the authorization loop and offers initialization when private setting
   ).toBe(false);
 });
 
-it("keeps the authorized canonical selection from setup through installation and use settings", async () => {
+it("keeps the authorized canonical selection through installation without local setup", async () => {
   let prepared = false;
   let installed = false;
   const canonical = "C:/projects/example";
@@ -435,7 +432,7 @@ it("keeps the authorized canonical selection from setup through installation and
       };
     }
     if (command === "project_memory_preview") {
-      expect(prepared).toBe(true);
+      expect(prepared).toBe(false);
       return { ...structuredClone(preview), root: canonical };
     }
     if (command === "project_memory_confirm_preview") installed = true;

@@ -224,15 +224,16 @@ it.each(["failure", "blocker"] as const)(
       scope: { ...partial.scope, state: "absent" },
     });
     await f.panel.load();
-    f.panel.configure();
-    await f.panel.prepareInitialization();
     if (kind === "failure")
       f.api.preview.mockRejectedValueOnce({ code: "recoveryRequired" });
     else
       f.api.preview.mockResolvedValueOnce({
-        snapshot: { publicationBlocker: "recoveryRequired" },
+        snapshot: {
+          deployment: { canPublish: true, entries: [] },
+          publicationBlocker: "recoveryRequired",
+        },
       });
-    await f.panel.preview({}, { agents: false, claude: false });
+    await f.panel.configure();
     await f.panel.reviewRecovery();
     expect(f.api.reviewRecovery).toHaveBeenCalledOnce();
     expect(f.api.confirmRecovery).not.toHaveBeenCalled();

@@ -24,11 +24,14 @@ const observation = {
 } as NativeMemoryScope;
 const review = {
   snapshot: {
+    schema: 1,
     root: "/canonical",
-    deployment: { canPublish: true },
+    deployment: { canPublish: true, entries: [], lock: null },
+    isResuming: false,
+    recoveryFiles: [],
     publicationBlocker: null,
   },
-} as NativeMemoryReview;
+} as unknown as NativeMemoryReview;
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((yes) => {
@@ -75,7 +78,7 @@ function fixture() {
   const panel = createMemoryPanelController(target, publish, () => api);
   return { api, states, publish, panel };
 }
-it("requires complete absence, and never interprets a kit or incomplete scope as initialization permission", () => {
+it("requires complete inspection before initialization and permits existing memory repair", () => {
   expect(canInitializeMemory(observation)).toBe(true);
   for (const state of [
     "ready",
@@ -93,14 +96,66 @@ it("requires complete absence, and never interprets a kit or incomplete scope as
     ).toBe(false);
   expect(canInitializeMemory({ ...observation, blockedCount: 1 })).toBe(false);
   expect(canInitializeMemory({ ...observation, root: "/parent" })).toBe(false);
-  expect(
-    canInitializeMemory({
-      ...observation,
-      scope: { ...observation.scope, ancestryComplete: false },
-    }),
-  ).toBe(false);
 });
-it("inspects ancestors only by explicit action with a fresh selection and no state initialization", async () => {
+it("initializes in one action with project defaults and both root links without private setup", async () => {
+  const f = fixture();
+  await f.panel.load();
+  await f.panel.configure("es");
+  expect(f.api.preview).toHaveBeenCalledWith(selected, {
+    destination: "/owned",
+    environment: { kind: "local" },
+    inputs: {
+      project_name: "owned",
+      language: "es",
+      created_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    },
+    links: { agents: true, claude: true },
+  });
+  expect(f.api.initializeLocalState).not.toHaveBeenCalled();
+  expect(f.api.discover).not.toHaveBeenCalled();
+  expect(f.api.confirmPreview).toHaveBeenCalledExactlyOnceWith(
+    selected,
+    review,
+  );
+  expect(f.states[f.states.length - 1]?.status).toBe("published");
+  await f.panel.configure();
+  expect(f.api.confirmPreview).toHaveBeenCalledOnce();
+  await f.panel.dispose();
+});
+it("returns from a migration review without opening a configuration wizard or publishing", async () => {
+  const f = fixture();
+  const migration = {
+    ...review,
+    snapshot: {
+      ...review.snapshot,
+      deployment: {
+        ...review.snapshot.deployment,
+        entries: [
+          {
+            path: "AGENTS.md",
+            action: "migrate" as const,
+            reason: "root-link" as const,
+            expected: "Own rules",
+            proposed: "Own rules\nMemory link",
+          },
+        ],
+      },
+    },
+  };
+  f.api.preview.mockResolvedValue(migration);
+  await f.panel.load();
+  await f.panel.configure();
+  await f.panel.back();
+  expect(f.api.cancelPreview).toHaveBeenCalledExactlyOnceWith(selected);
+  expect(f.states[f.states.length - 1]).toEqual({
+    status: "ready",
+    observation,
+  });
+  expect(f.states.some((state) => state.status === "configuring")).toBe(false);
+  expect(f.api.confirmPreview).not.toHaveBeenCalled();
+  await f.panel.dispose();
+});
+it("inspects ancestors only by explicit action before initialization", async () => {
   const f = fixture();
   f.api.inspect.mockResolvedValueOnce({
     ...observation,
@@ -111,140 +166,83 @@ it("inspects ancestors only by explicit action with a fresh selection and no sta
     },
   });
   await f.panel.load();
-  f.panel.configure();
-  await f.panel.prepareInitialization();
-  expect(f.states[f.states.length - 1]?.status).toBe("ready");
+  await f.panel.configure();
+  expect(f.api.preview).not.toHaveBeenCalled();
   await f.panel.inspectAncestors();
   expect(f.api.select).toHaveBeenLastCalledWith(
     "/owned",
     { kind: "local" },
     { inspectAncestors: true },
   );
-  expect(f.api.initializeLocalState).not.toHaveBeenCalled();
-  f.panel.configure();
-  await f.panel.prepareInitialization();
-  expect(f.states[f.states.length - 1]?.status).toBe("configuring");
-  await f.panel.dispose();
-});
-it("captures preview inputs, requires the exact displayed review, and consumes confirmation once", async () => {
-  const f = fixture();
-  await f.panel.load();
-  f.panel.configure();
-  await f.panel.prepareInitialization();
-  const values = { project_name: "original" };
-  const links = { agents: false, claude: false };
-  const pending = f.panel.preview(values, links);
-  values.project_name = "changed";
-  links.agents = true;
-  await pending;
-  expect(f.api.preview).toHaveBeenCalledWith(selected, {
-    destination: "/owned",
-    environment: { kind: "local" },
-    inputs: { project_name: "original" },
-    links: { agents: false, claude: false },
-  });
-  await f.panel.confirm({ ...review });
-  expect(f.api.confirmPreview).not.toHaveBeenCalled();
-  const confirming = f.panel.confirm(review);
-  expect(f.panel.confirm(review)).toBe(confirming);
-  await confirming;
-  await f.panel.confirm(review);
+  await f.panel.configure();
   expect(f.api.confirmPreview).toHaveBeenCalledOnce();
-  expect(f.states[f.states.length - 1]?.status).toBe("published");
   await f.panel.dispose();
 });
-
-it("requires explicit local setup before preview and keeps a setup denial separate from project authorization", async () => {
-  const f = fixture();
-  await f.panel.load();
-  f.panel.configure();
-  expect(f.states[f.states.length - 1]).toEqual({
-    status: "initializationSetup",
-  });
-  await f.panel.preview({}, { agents: false, claude: false });
-  expect(f.api.preview).not.toHaveBeenCalled();
-  expect(f.api.initializeLocalState).not.toHaveBeenCalled();
-  f.api.initializeLocalState.mockRejectedValueOnce({ code: "denied" });
-  await f.panel.prepareInitialization();
-  expect(f.states[f.states.length - 1]).toEqual({
-    status: "initializationSetup",
-    code: "denied",
-  });
-  expect(f.api.preview).not.toHaveBeenCalled();
-  await f.panel.authorize();
-  expect(f.api.select).toHaveBeenCalledTimes(1);
-  await f.panel.prepareInitialization();
-  expect(f.states[f.states.length - 1]).toEqual({ status: "configuring" });
-  await f.panel.dispose();
-});
-
-it.each(["preparingInitialization", "settlement"])(
-  "retires local setup after %s without starting preview or publishing late state",
-  async (phase) => {
+it("repairs ready and partial memory through the same project service", async () => {
+  for (const state of ["ready", "partial"] as const) {
     const f = fixture();
-    const started = deferred<void>();
-    const setup = deferred<void>();
-    f.api.initializeLocalState.mockImplementation(() => {
-      started.resolve();
-      return setup.promise;
+    f.api.inspect.mockResolvedValue({
+      ...observation,
+      root: "/owned",
+      scope: { ...observation.scope, state },
     });
     await f.panel.load();
-    f.panel.configure();
-    if (phase === "preparingInitialization")
-      f.publish.mockImplementation((state) => {
-        if (state.status === "preparingInitialization") void f.panel.dispose();
-      });
-    const pending = f.panel.prepareInitialization();
-    if (phase === "settlement") {
-      await started.promise;
-      await f.panel.dispose();
-      setup.resolve();
-    }
-    await pending;
-    expect(f.api.preview).not.toHaveBeenCalled();
-    expect(
-      f.publish.mock.calls[f.publish.mock.calls.length - 1]?.[0].status,
-    ).toBe("preparingInitialization");
-    await f.panel.dispose();
-  },
-);
-it("withdraws confirmation admission when a publication observer closes the panel", async () => {
-  const f = fixture();
-  await f.panel.load();
-  f.panel.configure();
-  await f.panel.prepareInitialization();
-  await f.panel.preview({}, { agents: false, claude: false });
-  f.publish.mockImplementation((state) => {
-    if (state.status === "publishing") void f.panel.dispose();
-  });
-  await f.panel.confirm(review);
-  expect(f.api.confirmPreview).not.toHaveBeenCalled();
-  await f.panel.dispose();
-});
-it("blocks conflicts, native blockers and retired reviews before publication", async () => {
-  for (const snapshot of [
-    {
-      ...review.snapshot,
-      deployment: { ...review.snapshot.deployment, canPublish: false },
-    },
-    { ...review.snapshot, publicationBlocker: "migrationUnsupported" },
-    review.snapshot,
-  ]) {
-    const f = fixture();
-    const blocked = { ...review, snapshot };
-    f.api.preview.mockResolvedValueOnce(blocked);
-    await f.panel.load();
-    f.panel.configure();
-    await f.panel.prepareInitialization();
-    await f.panel.preview({}, { agents: false, claude: false });
-    if (snapshot === review.snapshot)
-      f.api.isReviewCurrent.mockReturnValue(false);
-    await f.panel.confirm(blocked);
-    expect(f.api.confirmPreview).not.toHaveBeenCalled();
+    await f.panel.configure();
+    expect(f.api.confirmPreview).toHaveBeenCalledOnce();
+    expect(f.api.initializeLocalState).not.toHaveBeenCalled();
     await f.panel.dispose();
   }
 });
-it("suppresses a late preview after disposal and never confirms it", async () => {
+it("requires the exact displayed migration review and consumes confirmation once", async () => {
+  const f = fixture();
+  const migration = {
+    ...review,
+    snapshot: {
+      ...review.snapshot,
+      deployment: {
+        canPublish: true,
+        lock: null,
+        entries: [
+          {
+            path: "AGENTS.md",
+            action: "migrate",
+            reason: "root-link",
+            expected: "Own rules",
+            proposed: "Own rules\nMemory link",
+          },
+        ],
+      },
+    },
+  } as NativeMemoryReview;
+  f.api.preview.mockResolvedValue(migration);
+  await f.panel.load();
+  await f.panel.configure();
+  expect(f.states[f.states.length - 1]?.status).toBe("review");
+  expect(f.api.confirmPreview).not.toHaveBeenCalled();
+  await f.panel.confirm({ ...migration });
+  expect(f.api.confirmPreview).not.toHaveBeenCalled();
+  const confirming = f.panel.confirm(migration);
+  expect(f.panel.confirm(migration)).toBe(confirming);
+  await confirming;
+  await f.panel.confirm(migration);
+  expect(f.api.confirmPreview).toHaveBeenCalledOnce();
+  await f.panel.dispose();
+});
+it.each(["previewing", "publishing"])(
+  "does not admit later IO when the %s observer closes the panel",
+  async (phase) => {
+    const f = fixture();
+    await f.panel.load();
+    f.publish.mockImplementation((state) => {
+      if (state.status === phase) void f.panel.dispose();
+    });
+    await f.panel.configure();
+    if (phase === "previewing") expect(f.api.preview).not.toHaveBeenCalled();
+    expect(f.api.confirmPreview).not.toHaveBeenCalled();
+    await f.panel.dispose();
+  },
+);
+it("suppresses a late preview after disposal without confirming it", async () => {
   const f = fixture();
   const read = deferred<NativeMemoryReview>();
   const started = deferred<void>();
@@ -253,29 +251,42 @@ it("suppresses a late preview after disposal and never confirms it", async () =>
     return read.promise;
   });
   await f.panel.load();
-  f.panel.configure();
-  await f.panel.prepareInitialization();
-  const pending = f.panel.preview({}, { agents: false, claude: false });
+  const pending = f.panel.configure();
   await started.promise;
   await f.panel.dispose();
   const count = f.publish.mock.calls.length;
   read.resolve(review);
   await pending;
   expect(f.publish).toHaveBeenCalledTimes(count);
-  await f.panel.confirm(review);
   expect(f.api.confirmPreview).not.toHaveBeenCalled();
 });
-it("retires a reviewed preview before returning to editable setup and never retries partial writes automatically", async () => {
+it("blocks conflicts, platform blockers and retired reviews before automatic publication", async () => {
+  for (const reason of ["conflict", "blocker", "retired"] as const) {
+    const f = fixture();
+    const blocked = {
+      ...review,
+      snapshot: {
+        ...review.snapshot,
+        deployment: {
+          canPublish: reason !== "conflict",
+          entries: [],
+          lock: null,
+        },
+        publicationBlocker:
+          reason === "blocker" ? "migrationUnsupported" : null,
+      },
+    } as NativeMemoryReview;
+    f.api.preview.mockResolvedValue(blocked);
+    if (reason === "retired") f.api.isReviewCurrent.mockReturnValue(false);
+    await f.panel.load();
+    await f.panel.configure();
+    await f.panel.confirm(blocked);
+    expect(f.api.confirmPreview).not.toHaveBeenCalled();
+    await f.panel.dispose();
+  }
+});
+it("reports partial publication without automatically retrying or claiming success", async () => {
   const f = fixture();
-  await f.panel.load();
-  f.panel.configure();
-  await f.panel.prepareInitialization();
-  await f.panel.preview({}, { agents: false, claude: false });
-  await f.panel.back();
-  expect(f.api.cancelPreview).toHaveBeenCalledWith(selected);
-  await f.panel.confirm(review);
-  expect(f.api.confirmPreview).not.toHaveBeenCalled();
-  await f.panel.preview({}, { agents: false, claude: false });
   const failure = {
     code: "recoveryRequired",
     changes: {
@@ -286,12 +297,13 @@ it("retires a reviewed preview before returning to editable setup and never retr
     },
   };
   f.api.confirmPreview.mockRejectedValueOnce(failure);
-  await f.panel.confirm(review);
+  await f.panel.load();
+  await f.panel.configure();
   expect(f.states[f.states.length - 1]).toEqual({
     status: "deploymentError",
     error: failure,
   });
-  await f.panel.confirm(review);
+  await f.panel.configure();
   expect(f.api.confirmPreview).toHaveBeenCalledOnce();
   await f.panel.dispose();
 });

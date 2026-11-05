@@ -23,20 +23,16 @@ type InitializationState = Exclude<
 export function MemoryInitialization({
   state,
   directory,
-  remote = false,
   onPreview,
-  onPrepare,
   onConfirm,
   onBack,
 }: {
   state: InitializationState;
   directory: string;
-  remote?: boolean;
   onPreview: (
     values: Record<string, string>,
     links: { agents: boolean; claude: boolean },
   ) => void;
-  onPrepare: () => void;
   onConfirm: (review: NativeMemoryReview) => void;
   onBack: () => void;
 }) {
@@ -60,52 +56,6 @@ export function MemoryInitialization({
   }));
   const [links, setLinks] = useState({ agents: false, claude: false });
   const [accepted, setAccepted] = useState<NativeMemoryReview | null>(null);
-  if (
-    state.status === "initializationSetup" ||
-    state.status === "preparingInitialization"
-  ) {
-    const busy = state.status === "preparingInitialization";
-    return (
-      <div className="space-y-3 text-sm" aria-busy={busy}>
-        <h3 className="font-medium">
-          {t(
-            remote
-              ? "projectMemory.sshSettings.prepare"
-              : "projectMemory.prepare",
-          )}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            remote
-              ? "projectMemory.sshSettings.prepareDescription"
-              : "projectMemory.prepareDescription",
-          )}
-        </p>
-        {state.status === "initializationSetup" && state.code ? (
-          <p role="alert">
-            {t("common.error")}:{" "}
-            <code>
-              {state.code}
-              {state.diagnostic ? ` (${state.diagnostic})` : ""}
-            </code>
-          </p>
-        ) : null}
-        {busy ? <p role="status">{t("projectMemory.checking")}</p> : null}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={busy} onClick={onBack}>
-            {t("common.back")}
-          </Button>
-          <Button size="sm" disabled={busy} onClick={onPrepare}>
-            {t(
-              remote
-                ? "projectMemory.sshSettings.prepare"
-                : "projectMemory.prepare",
-            )}
-          </Button>
-        </div>
-      </div>
-    );
-  }
   if (state.status === "configuring")
     return (
       <form
