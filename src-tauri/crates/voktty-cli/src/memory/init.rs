@@ -34,7 +34,11 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
     if args == [OsString::from("--help")] {
         return Ok(MemoryCommand::Help);
     }
-    let mut options = InitOptions::default();
+    let mut options = InitOptions {
+        agents: true,
+        claude: true,
+        ..InitOptions::default()
+    };
     let mut seen = BTreeSet::new();
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -109,9 +113,9 @@ pub(super) fn parse(args: Vec<OsString>) -> Result<MemoryCommand, CliError> {
             _ => return Err(usage_error("unknown memory init option; use memory --help")),
         }
     }
-    if (options.preview && options.yes) || (options.accept_plan.is_some() && !options.yes) {
+    if options.preview && (options.yes || options.accept_plan.is_some()) {
         return Err(usage_error(
-            "use --preview alone, or --yes with an optional --accept-plan",
+            "use --preview separately from --yes or --accept-plan",
         ));
     }
     Ok(MemoryCommand::Init(options))
@@ -298,14 +302,6 @@ fn confirm(input: &mut impl BufRead, output: &mut impl Write) -> Result<bool, Cl
 
 pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, CliError> {
     let interactive = !as_json && std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
-    if !interactive && (!options.preview && !options.yes || options.project.is_none()) {
-        return Err(usage_error("without an interactive terminal, init requires --project and either --preview or --yes; use --preview to review migrations before --accept-plan"));
-    }
-    if options.yes && options.project.is_none() {
-        return Err(usage_error(
-            "--yes requires an explicit --project directory",
-        ));
-    }
     let requested = options
         .project
         .clone()
@@ -370,10 +366,10 @@ pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, C
         .entries
         .iter()
         .any(|entry| entry.action == DeploymentAction::Migrate);
-    if options.yes && sensitive && options.accept_plan.is_none() {
-        return Err(CliError::new("memory_review_required","migrations require --preview and --yes --accept-plan <digest>; project files were not changed",EXIT_REQUEST));
-    }
-    if !options.yes {
+    if sensitive && options.accept_plan.is_none() {
+        if !interactive || options.yes {
+            return Err(CliError::new("memory_review_required","replacements require --preview followed by --accept-plan <digest>; project files were not changed",EXIT_REQUEST));
+        }
         show_review(&value, false);
         if !confirm(&mut std::io::stdin().lock(), &mut std::io::stderr())? {
             println!("Initialization cancelled; project files were not changed.");
@@ -390,7 +386,7 @@ pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, C
             if as_json {
                 println!("{}", json!({"ok":true,"result":result}));
             } else {
-                println!("Project memory initialized at {}. This command does not enable memory or captures.",root.display());
+                println!("Project memory ready at {}.", root.display());
             }
             Ok(ExitCode::SUCCESS)
         }

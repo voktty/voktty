@@ -141,7 +141,7 @@ fn runtime_sessions_are_reserved_and_invalid_markers_are_not_absence() {
 fn unknown_commands_and_bad_options_fail_before_control_or_project_io() {
     let root = tempfile::tempdir().unwrap();
     for args in [
-        vec!["memory", "init", "--json"],
+        vec!["memory", "unknown-command", "--json"],
         vec!["memory", "status", "--project", "--json"],
         vec![
             "memory",

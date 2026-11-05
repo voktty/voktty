@@ -75,13 +75,26 @@ fn error(output: &Output, code: &str) {
 }
 
 #[test]
-fn noninteractive_missing_consent_is_usage_before_any_state_or_project_write() {
+fn bare_initialization_uses_the_current_folder_and_links_agents_without_private_state() {
     let f = Fixture::new();
-    let output = f.init(&[]);
-    assert_eq!(output.status.code(), Some(2));
-    error(&output, "usage");
-    assert_eq!(fs::read_dir(&f.project).unwrap().count(), 0);
-    assert!(!f.data.exists());
+    fs::write(&f.data, b"unusable global state").unwrap();
+    let invoke = || {
+        Command::new(env!("CARGO_BIN_EXE_voktty-cli"))
+            .current_dir(&f.project)
+            .env("XDG_DATA_HOME", &f.data)
+            .args(["memory", "init", "--json"])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    };
+    result(&invoke());
+    assert!(f.project.join("AGENTS.md").exists());
+    assert!(f.project.join("CLAUDE.md").exists());
+    let config: Value =
+        serde_json::from_slice(&fs::read(f.project.join(".voktty/kit.json")).unwrap()).unwrap();
+    assert_eq!(config["project"], "project space");
+    assert_eq!(result(&invoke())["created"], json!([]));
+    assert_eq!(fs::read(&f.data).unwrap(), b"unusable global state");
 }
 
 #[test]
@@ -114,7 +127,10 @@ fn preview_is_read_only_for_the_project_and_explicit_creation_matches_the_shared
         manifest["version"].as_str().unwrap(),
         &files,
         &facts,
-        RootLinks::default(),
+        RootLinks {
+            agents: true,
+            claude: true,
+        },
     )
     .unwrap();
     for entry in &expected.plan.entries {
@@ -132,8 +148,8 @@ fn preview_is_read_only_for_the_project_and_explicit_creation_matches_the_shared
         json!([".voktty/.initialization.json"])
     );
     assert!(!f.project.join(".voktty/.initialization.json").exists());
-    assert!(!f.project.join("AGENTS.md").exists());
-    assert!(!f.project.join("CLAUDE.md").exists());
+    assert!(f.project.join("AGENTS.md").exists());
+    assert!(f.project.join("CLAUDE.md").exists());
     assert!(!f.data.exists());
     let again = result(&f.init(&["--yes"]));
     assert_eq!(again["created"], json!([]));
@@ -251,6 +267,7 @@ fn private_ignore_migration_requires_exact_review_and_preserves_reserved_binary_
     fs::create_dir_all(f.project.join(".voktty/sessions")).unwrap();
     fs::write(f.project.join(".voktty/.gitignore"), "*\r\n").unwrap();
     fs::write(f.project.join(".voktty/sessions/kept.bin"), [0, 255, 7]).unwrap();
+    error(&f.init(&[]), "memory_review_required");
     error(&f.init(&["--yes"]), "memory_review_required");
     assert!(!f.project.join(".voktty/INIT.md").exists());
     assert_eq!(
@@ -258,11 +275,7 @@ fn private_ignore_migration_requires_exact_review_and_preserves_reserved_binary_
         b"*\r\n"
     );
     let review = result(&f.init(&["--preview"]));
-    let report = result(&f.init(&[
-        "--yes",
-        "--accept-plan",
-        review["planDigest"].as_str().unwrap(),
-    ]));
+    let report = result(&f.init(&["--accept-plan", review["planDigest"].as_str().unwrap()]));
     assert_eq!(report["migrated"], json!([".voktty/.gitignore"]));
     assert_eq!(
         fs::read(f.project.join(".voktty/sessions/kept.bin")).unwrap(),
@@ -271,7 +284,7 @@ fn private_ignore_migration_requires_exact_review_and_preserves_reserved_binary_
 }
 
 #[test]
-fn opt_in_root_links_preserve_existing_rules_and_refuse_stale_acceptance() {
+fn default_root_links_preserve_existing_rules_and_refuse_stale_acceptance() {
     let f = Fixture::new();
     fs::write(
         f.project.join("AGENTS.md"),

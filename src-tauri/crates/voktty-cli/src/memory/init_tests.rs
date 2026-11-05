@@ -2,6 +2,24 @@ use super::*;
 use std::io::Cursor;
 
 #[test]
+fn defaults_link_both_agent_entry_points_and_acceptance_needs_no_yes_flag() {
+    let MemoryCommand::Init(options) = parse(Vec::new()).unwrap() else {
+        panic!("expected init")
+    };
+    assert!(options.agents && options.claude);
+    assert!(options.project.is_none());
+    assert!(!options.preview && !options.yes);
+    let digest = "a".repeat(64);
+    assert!(parse(vec!["--accept-plan".into(), digest.clone().into()]).is_ok());
+    assert!(parse(vec![
+        "--preview".into(),
+        "--accept-plan".into(),
+        digest.into()
+    ])
+    .is_err());
+}
+
+#[test]
 fn interactive_acceptance_requires_the_complete_yes_word() {
     for (answer, expected) in [
         ("", false),
