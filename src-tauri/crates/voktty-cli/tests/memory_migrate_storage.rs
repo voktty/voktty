@@ -120,8 +120,12 @@ fn reviewed_cli_migration_preserves_identity_never_trust_and_exact_journal_objec
     );
     assert!(source.is_file());
     let status = result(f.run(&["status", "--json"]));
-    assert_eq!(status["policy"]["mode"], "never");
-    assert_eq!(status["trust"], "stored_not_checked");
+    assert!(status["policy"]["mode"].is_null());
+    assert_eq!(status["trust"], "not_checked");
+    let policy = result(f.run(&["use", "--manual", "--preview", "--json"]));
+    assert_eq!(policy["previousMode"], "never");
+    assert_eq!(policy["trust"], "stored_not_checked");
+    assert_eq!(fs::read(target.join("memory-local.json")).unwrap(), state);
 }
 
 #[test]

@@ -29,20 +29,20 @@ fn no_private_state_and_no_private_origin_remain_distinct() {
     let project = tempfile::tempdir().unwrap();
     kit(project.path());
     let missing = project.path().join("absent-private-state");
-    let result = status(project.path(), Some(&missing)).unwrap();
+    let result = legacy_launch_status(project.path(), Some(&missing)).unwrap();
     assert_eq!(
         result["policy"],
         json!({"state":"uninitialized","mode":"manual"})
     );
     assert_eq!(result["trust"], "not_accepted");
     assert!(!missing.exists());
-    let result = status(project.path(), None).unwrap();
+    let result = legacy_launch_status(project.path(), None).unwrap();
     assert_eq!(result["policy"], json!({"state":"unavailable","mode":null}));
     assert_eq!(result["trust"], "not_checked");
 }
 
 #[test]
-fn status_uses_native_root_bound_preferences_without_claiming_current_trust() {
+fn legacy_launch_uses_native_root_bound_preferences_without_claiming_current_trust() {
     let project = tempfile::tempdir().unwrap();
     kit(project.path());
     let parent = private_parent();
@@ -63,7 +63,7 @@ fn status_uses_native_root_bound_preferences_without_claiming_current_trust() {
         "changed instructions, never read by status",
     )
     .unwrap();
-    let result = status(&root, Some(parent.path())).unwrap();
+    let result = legacy_launch_status(&root, Some(parent.path())).unwrap();
     assert_eq!(
         result["policy"],
         json!({"state":"observed","mode":"always"})
@@ -86,7 +86,7 @@ fn status_uses_native_root_bound_preferences_without_claiming_current_trust() {
         .set_policy(trusted.revision(), MemoryPolicy::Never, &control)
         .unwrap();
     assert_eq!(
-        status(&root, Some(parent.path())).unwrap()["policy"]["mode"],
+        legacy_launch_status(&root, Some(parent.path())).unwrap()["policy"]["mode"],
         "never"
     );
 }
@@ -101,7 +101,7 @@ fn corrupted_private_state_fails_without_repair_or_content_in_errors() {
     let path = parent.path().join("project-memory/memory-local.json");
     let bytes = b"PRIVATE MALFORMED STATE";
     fs::write(&path, bytes).unwrap();
-    let error = status(project.path(), Some(parent.path())).unwrap_err();
+    let error = legacy_launch_status(project.path(), Some(parent.path())).unwrap_err();
     assert_eq!(error.code, "memory_invalid_state");
     assert!(!error.message.contains("PRIVATE"));
     assert_eq!(fs::read(path).unwrap(), bytes);

@@ -67,6 +67,52 @@ fn status_works_without_desktop_tty_or_private_state_and_creates_nothing() {
     assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn status_ignores_unusable_and_legacy_global_origins_without_changing_their_data() {
+    for origin in [None, Some("dev.voktty"), Some("app.voktty.voktty")] {
+        let root = tempfile::tempdir().unwrap();
+        kit(root.path());
+        let global = root.path().join("global-data");
+        let saved = if let Some(origin) = origin {
+            let path = global.join(origin).join("project-memory/memory-local.json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            path
+        } else {
+            global.clone()
+        };
+        fs::write(&saved, b"OLD MEMORY MUST REMAIN UNCHANGED").unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_voktty-cli"))
+            .current_dir(root.path())
+            .env("XDG_DATA_HOME", &global)
+            .env("VOKTTY_CONTROL_ADDR", "invalid-fixture-endpoint")
+            .env_remove("VOKTTY_CONTROL_TOKEN")
+            .args(["memory", "status", "--json"])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let value = result(&output);
+        assert_eq!(value["scope"]["state"], "ready");
+        assert_eq!(value["policy"], json!({"state":"not_checked","mode":null}));
+        assert_eq!(value["trust"], "not_checked");
+        assert_eq!(
+            fs::read(&saved).unwrap(),
+            b"OLD MEMORY MUST REMAIN UNCHANGED"
+        );
+        if origin != Some("app.voktty.voktty") {
+            assert!(!global.join("app.voktty.voktty").exists());
+        }
+        assert!(!String::from_utf8(output.stdout)
+            .unwrap()
+            .contains("SENTINEL"));
+    }
+}
+
 #[test]
 fn status_from_a_child_resolves_the_parent_kit_without_printing_instructions() {
     let root = tempfile::tempdir().unwrap();

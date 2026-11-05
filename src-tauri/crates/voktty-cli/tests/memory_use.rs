@@ -120,8 +120,8 @@ fn explicit_modes_persist_without_model_trust_capture_or_project_writes() {
         assert_eq!(value["trust"], "not_accepted");
         assert_eq!(value["contextActivated"], false);
         assert_eq!(value["capturesActivated"], false);
-        let status = result(&f.run(&f.project, &["memory", "status"]));
-        assert_eq!(status["policy"]["mode"], mode);
+        let policy = result(&f.run(&f.project, &["memory", "use", "--manual", "--preview"]));
+        assert_eq!(policy["previousMode"], mode);
     }
     assert_eq!(contents(&f.project), before);
     let state: Value = serde_json::from_slice(&fs::read(f.store_path()).unwrap()).unwrap();
@@ -216,10 +216,10 @@ fn child_selection_resolves_parent_and_same_named_projects_do_not_share_policy()
     let other = f.project.parent().unwrap().join("other/project");
     populate(&other);
     assert_eq!(other.file_name(), f.project.file_name());
-    let status = result(&f.run(&other, &["memory", "status"]));
-    assert_eq!(status["policy"]["mode"], "manual");
-    let own = result(&f.run(&child, &["memory", "status"]));
-    assert_eq!(own["policy"]["mode"], "never");
+    let status = result(&f.run(&other, &["memory", "use", "--manual", "--preview"]));
+    assert_eq!(status["previousMode"], "manual");
+    let own = result(&f.run(&child, &["memory", "use", "--manual", "--preview"]));
+    assert_eq!(own["previousMode"], "never");
     result(&f.run(
         &f.project,
         &[
@@ -231,11 +231,11 @@ fn child_selection_resolves_parent_and_same_named_projects_do_not_share_policy()
         ],
     ));
     assert_eq!(
-        result(&f.run(&other, &["memory", "status"]))["policy"]["mode"],
+        result(&f.run(&other, &["memory", "use", "--manual", "--preview"]))["previousMode"],
         "always"
     );
     assert_eq!(
-        result(&f.run(&child, &["memory", "status"]))["policy"]["mode"],
+        result(&f.run(&child, &["memory", "use", "--manual", "--preview"]))["previousMode"],
         "never"
     );
 }
@@ -327,8 +327,8 @@ fn a_replaced_project_cannot_inherit_persisted_always() {
     let original = f.project.with_extension("original");
     fs::rename(&f.project, &original).unwrap();
     populate(&f.project);
-    let value = result(&f.run(&f.project, &["memory", "status"]));
-    assert_eq!(value["policy"]["mode"], "manual");
+    let value = result(&f.run(&f.project, &["memory", "use", "--manual", "--preview"]));
+    assert_eq!(value["previousMode"], "manual");
     let value = result(&f.use_mode("--manual"));
     assert_eq!(value["trust"], "not_accepted");
     assert!(original.join(".voktty/kit.json").exists());

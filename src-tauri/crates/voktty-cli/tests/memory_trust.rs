@@ -137,9 +137,13 @@ fn review_is_literal_and_acceptance_preserves_never_and_all_project_bytes() {
         assert_eq!(accepted[field], false);
     }
     assert_eq!(accepted["trustStored"], true);
-    let status = result(&f.run(&f.project, &["memory", "status"], true));
-    assert_eq!(status["policy"]["mode"], "never");
-    assert_eq!(status["trust"], "stored_not_checked");
+    let policy = result(&f.run(
+        &f.project,
+        &["memory", "use", "--manual", "--preview"],
+        true,
+    ));
+    assert_eq!(policy["previousMode"], "never");
+    assert_eq!(policy["trust"], "stored_not_checked");
     assert_eq!(contents(&f.project), before);
     error(
         &f.trust(&["--accept-review", review["reviewDigest"].as_str().unwrap()]),

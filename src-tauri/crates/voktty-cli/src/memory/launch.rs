@@ -1,5 +1,6 @@
 use super::{
-    map_error, status, usage_error, CliError, MemoryCommand, EXIT_REQUEST, EXIT_UNAVAILABLE,
+    legacy_launch_status, map_error, usage_error, CliError, MemoryCommand, EXIT_REQUEST,
+    EXIT_UNAVAILABLE,
 };
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -72,7 +73,7 @@ pub(super) fn run(options: RunOptions, as_json: bool) -> Result<ExitCode, CliErr
             .map_err(map_error)?;
     if !options.disabled {
         let parent = super::origin::parent()?;
-        let observation = status(&root, parent.as_deref())?;
+        let observation = legacy_launch_status(&root, parent.as_deref())?;
         let state = observation["scope"]["state"]
             .as_str()
             .unwrap_or("incomplete");

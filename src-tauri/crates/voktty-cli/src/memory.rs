@@ -188,7 +188,22 @@ fn existing_store(
     }
 }
 
-fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
+fn status(project: &Path) -> Result<Value, CliError> {
+    let control = DiscoveryControl::new(Duration::from_secs(5));
+    let root = resolve_local_memory_directory(project, &control.read_control().map_err(map_error)?)
+        .map_err(map_error)?;
+    let access = MarkerAccess { root: root.clone() };
+    let observation = inspect_local_memory_scope(&root, &access, &control).map_err(map_error)?;
+    control.read_control().map_err(map_error)?;
+    Ok(status_report(
+        &root,
+        &observation,
+        json!({"state":"not_checked", "mode":null}),
+        "not_checked",
+    ))
+}
+
+fn legacy_launch_status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
     let control = DiscoveryControl::new(Duration::from_secs(5));
     let root = resolve_local_memory_directory(project, &control.read_control().map_err(map_error)?)
         .map_err(map_error)?;
@@ -256,12 +271,21 @@ fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
         policy = json!({"state":"unavailable", "mode":null});
     }
     control.read_control().map_err(map_error)?;
+    Ok(status_report(&root, &observation, policy, trust))
+}
+
+fn status_report(
+    root: &Path,
+    observation: &NativeScopeObservation,
+    policy: Value,
+    trust: &str,
+) -> Value {
     let state = &observation.scope.state;
-    Ok(json!({
+    json!({
         "schema":1,
         "transport":"local",
         "directory":root,
-        "root":if state == "ready" { resolved_root(&observation) } else { None },
+        "root":if state == "ready" { resolved_root(observation) } else { None },
         "scope":{
             "state":state,
             "ancestryComplete":observation.scope.ancestry_complete,
@@ -274,7 +298,7 @@ fn status(project: &Path, parent: Option<&Path>) -> Result<Value, CliError> {
         "capabilities":{"discovery":true, "initialization":true, "persistentPolicy":true, "measurement":true, "contextDelivery":cfg!(target_os = "linux"), "capture":false,
             "recovery":{"preview":true,"restoreOriginals":cfg!(any(target_os = "linux", target_os = "android", windows))},
             "initialPromptLaunch":{"platform":"linux","codexVersions":["0.165.0"],"claudeVersions":["2.1.312"],"resume":false,"compaction":false}},
-    }))
+    })
 }
 
 pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, CliError> {
@@ -305,8 +329,7 @@ pub(super) fn run(command: MemoryCommand, as_json: bool) -> Result<ExitCode, Cli
                     .map_err(|_| map_error(ReadError::Unavailable))?
                     .join(project)
             };
-            let parent = origin::parent()?;
-            let result = status(&project, parent.as_deref())?;
+            let result = status(&project)?;
             let available = matches!(
                 result["scope"]["state"].as_str(),
                 Some("ready" | "absent" | "reserved")

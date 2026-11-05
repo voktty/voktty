@@ -83,8 +83,12 @@ fn cli_uses_the_desktop_store_and_preserves_its_installation_policy_and_trust() 
     let state_path = f.canonical().join("project-memory/memory-local.json");
     let before = fs::read(&state_path).unwrap();
     let status = result(&f.run(&["status", "--json"]));
-    assert_eq!(status["policy"]["mode"], "never");
-    assert_eq!(status["trust"], "stored_not_checked");
+    assert!(status["policy"]["mode"].is_null());
+    assert_eq!(status["trust"], "not_checked");
+    let launch = f.run(&["run", "--session", "codex"]);
+    assert_eq!(launch.status.code(), Some(5));
+    assert!(String::from_utf8_lossy(&launch.stderr).contains("Never"));
+    assert!(launch.stdout.is_empty());
     assert_eq!(fs::read(state_path).unwrap(), before);
     assert!(!f.legacy().exists());
 }
@@ -138,7 +142,6 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         let legacy_state = f.legacy().join("project-memory/memory-local.json");
         let legacy_before = fs::read(&legacy_state).ok();
         for args in [
-            vec!["status", "--json"],
             vec!["use", "--always", "--json"],
             vec!["trust", "--preview", "--json"],
             vec!["recover", "--preview", "--json"],
@@ -160,6 +163,9 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
             assert!(!text.contains("sentinel"));
         }
         result(&f.run(&["init", "--preview", "--project", ".", "--json"]));
+        let status = result(&f.run(&["status", "--json"]));
+        assert_eq!(status["scope"]["state"], "ready");
+        assert_eq!(status["policy"]["state"], "not_checked");
         if mode == "legacy-only" {
             assert!(!f.canonical().exists());
             assert_eq!(
@@ -188,7 +194,7 @@ fn unrelated_legacy_application_directory_does_not_block_memory() {
     fs::write(f.legacy().join("unrelated.json"), "unrelated fixture").unwrap();
     assert_eq!(
         result(&f.run(&["status", "--json"]))["policy"]["mode"],
-        "manual"
+        Value::Null
     );
     result(&f.run(&["use", "--never", "--json"]));
     assert_eq!(
