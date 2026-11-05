@@ -236,6 +236,17 @@ fn closing_with_a_pending_read_retires_delivery_and_preserves_siblings() {
 
 #[test]
 fn command_errors_and_handles_have_bounded_redacted_wire_shapes() {
+    for (error, code) in [
+        (MemoryTrustError::Changed, "stale"),
+        (MemoryTrustError::ScopeUnavailable, "scope"),
+        (ReadError::Store(StoreError::Conflict).into(), "stale"),
+        (ReadError::Contract(vec![]).into(), "unavailable"),
+    ] {
+        assert_eq!(
+            serde_json::to_value(MemoryCommandError::from(error)).unwrap(),
+            serde_json::json!({"code":code})
+        );
+    }
     let error: MemoryCommandError = MemoryWorkError::Read(ReadError::Contract(Vec::new())).into();
     assert_eq!(
         serde_json::to_value(error).unwrap(),

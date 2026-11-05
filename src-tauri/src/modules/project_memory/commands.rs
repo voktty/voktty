@@ -2,7 +2,9 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::sync::{atomic::AtomicBool, Mutex};
 use tauri::{Manager, Resource, ResourceId, ResourceTable, State, WebviewWindow};
+#[cfg(test)]
 use voktty_memory_local::MemoryStoreMode;
+use voktty_memory_local::{MemoryTrustError, StoreError};
 use voktty_workspace_kit::MemoryScope;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -45,11 +47,23 @@ fn cancelled() -> MemoryCommandError {
     MemoryWorkError::Read(ReadError::Cancelled).into()
 }
 
+impl From<MemoryTrustError> for MemoryCommandError {
+    fn from(error: MemoryTrustError) -> Self {
+        match error {
+            MemoryTrustError::Changed
+            | MemoryTrustError::Worker(MemoryWorkError::Read(ReadError::Store(
+                StoreError::Conflict,
+            ))) => Self { code: "stale" },
+            MemoryTrustError::ScopeUnavailable => Self { code: "scope" },
+            MemoryTrustError::Worker(error) => error.into(),
+        }
+    }
+}
+
 struct Selected {
     token: String,
     receipt: NativeMemorySelectionReceipt,
     reviews: deployment::CommandReviews,
-    trust: trust::CommandTrust,
 }
 
 #[derive(Default)]
@@ -151,7 +165,6 @@ impl PresentationResource {
             token: token.clone(),
             receipt,
             reviews: deployment::CommandReviews::default(),
-            trust: trust::CommandTrust::default(),
         });
         Ok(token)
     }
@@ -347,9 +360,6 @@ async fn inspect(
 
 #[path = "commands_deployment.rs"]
 pub mod deployment;
-
-#[path = "commands_trust.rs"]
-pub mod trust;
 
 #[path = "commands_context.rs"]
 pub mod context;
