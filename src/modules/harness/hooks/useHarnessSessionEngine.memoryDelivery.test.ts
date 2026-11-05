@@ -4,7 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useHarnessSessionEngine } from "@/modules/harness/hooks/useHarnessSessionEngine";
 import { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 import type { HarnessMemorySession } from "@/modules/harness/lib/harnessMemorySessions";
 import { qualifyHarnessMemorySession } from "@/modules/harness/lib/harnessMemorySessions";
 import type { Session } from "@/modules/harness/lib/session";
@@ -216,13 +215,11 @@ async function prepare(
   const panel = createNativeMemoryPresentation();
   panels.push(panel);
   const selection = await panel.select(scope.cwd, { kind: "local" });
-  const review = await panel.reviewTrust(selection);
   await act(async () => {
     await scope.bind({
       presentation: panel,
       selection,
-      review,
-      mode: "enabled",
+      project: true,
     });
   });
   const result = await scope.read();
@@ -287,15 +284,13 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   mocks.attachments.mockReset().mockImplementation(async (value) => value);
-  mocks.invoke.mockReset().mockImplementation(async (command, args) => {
+  mocks.invoke.mockReset().mockImplementation(async (command) => {
     if (command === "project_memory_open") return { id: 1, token: "panel" };
     if (command === "project_memory_select") return "selection";
-    if (command === "project_memory_review_trust")
-      return trustReply(args.request.revision);
     if (command === "project_memory_context_open")
       return { id: 2, token: "00000000-0000-4000-8000-000000000009" };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: "/project", packet: packet().packet };
     if (command === "project_memory_context_read") return packet();
   });
   registerHarness({
@@ -568,7 +563,7 @@ it("keeps engine-owned delivery after the enabling view's permission retires", a
   ).toBe("provider");
 });
 
-it("blocks an explicitly enabled turn after native policy revocation", async () => {
+it("blocks an explicitly enabled turn on a legacy policy response", async () => {
   const engine = mount();
   await act(async () => {
     await prepare(engine());
@@ -600,7 +595,9 @@ it("blocks an explicitly enabled turn after native policy revocation", async () 
   expect(
     engine()
       .readSession("source")
-      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+      ?.blocks.some((block) =>
+        block.text.includes("Memory context unavailable"),
+      ),
   ).toBe(true);
 });
 
@@ -922,7 +919,7 @@ it("activates AGY through the shared panel, displays only acknowledged input and
   await finishAgy(engine, 2);
 });
 
-it("blocks AGY delivery after native memory policy revocation", async () => {
+it("blocks AGY delivery on a legacy policy response", async () => {
   const engine = mount(agySession);
   let prepared!: Awaited<ReturnType<typeof prepare>>;
   await act(async () => {
@@ -954,7 +951,9 @@ it("blocks AGY delivery after native memory policy revocation", async () => {
   expect(
     engine()
       .readSession("source")
-      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+      ?.blocks.some((block) =>
+        block.text.includes("Memory context unavailable"),
+      ),
   ).toBe(true);
 });
 
@@ -1296,7 +1295,7 @@ it("activates Claude through the shared panel, shows its exact receipt and disab
   ).toHaveLength(reads);
   await finishClaude(engine);
 });
-it("blocks Claude input after native policy revocation", async () => {
+it("blocks Claude input on a legacy policy response", async () => {
   const engine = mountClaude();
   let prepared!: Awaited<ReturnType<typeof prepare>>;
   await act(async () => {
@@ -1330,10 +1329,12 @@ it("blocks Claude input after native policy revocation", async () => {
   expect(
     engine()
       .readSession("source")
-      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+      ?.blocks.some((block) =>
+        block.text.includes("Memory context unavailable"),
+      ),
   ).toBe(true);
 });
-it("keeps the original Claude turn active when policy rejects a memory follow-up before writing", async () => {
+it("keeps the original Claude turn active when a legacy policy response rejects a memory follow-up before writing", async () => {
   const engine = mountClaude();
   await act(async () => {
     await prepare(engine());
@@ -1369,7 +1370,9 @@ it("keeps the original Claude turn active when policy rejects a memory follow-up
   expect(
     engine()
       .readSession("source")
-      ?.blocks.some((block) => block.text.includes("KIT_MEMORY_POLICY_NEVER")),
+      ?.blocks.some((block) =>
+        block.text.includes("Memory context unavailable"),
+      ),
   ).toBe(true);
   await finishClaude(engine);
 });

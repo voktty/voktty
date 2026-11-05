@@ -161,6 +161,14 @@ The internal `ready` status means bound, not trusted, allowed or delivered; ever
 project packet read still checks its original native source and current scope.
 Legacy consumers additionally check current policy and instruction trust.
 
+The shared `MemoryConversation` binding now accepts only `project: true` and the
+project-context presentation. Bindings without `project: true` are rejected before
+binding admission or native allocation, leaving an inactive conversation usable
+for a subsequent project binding. Harness, internal Chat and SSH conversation
+tests exercise the project contract while retaining their independent ownership,
+delivery, request-budget and cleanup checks. The lower-level legacy context and
+trust APIs remain separate pending retirement; conversations cannot select them.
+
 The shared project-memory panel can manually prepare context for the exact
 focused Harness conversation. The opening gesture captures its engine receipt,
 view registration and original persistence permit separately from the serialized
@@ -183,12 +191,10 @@ project management to the conversation directory and can return to the original
 browsed directory without silently redirecting project management.
 
 Harness, internal-agent and CLI delivery have independent consumer lifecycles.
-The Voktty AI launch preparer can consume an existing native review in `inherit`
-mode after observing stored Always and matching saved instruction trust. This
-does not persist session consent or confirm the review as newly accepted trust.
-The native binding and packet readers retain the checks described above; their
-review receipt alone never authorizes delivery. See `docs/architecture/ai-subsystem.md`
-for the frontend inheritance and response-observation contract. A view, path or
+Ordinary internal-agent requests read the project guide through their existing
+authorized file reader without a global policy or trust review. Explicit shared
+conversation binding uses the project-only contract above. See
+`docs/architecture/ai-subsystem.md` for the response-observation contract. A view, path or
 provider session string cannot stand in for the exact
 engine conversation incarnation. The consumer must capture that identity before
 awaiting and retire its known native resource if adoption is refused. Packet

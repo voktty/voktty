@@ -12,7 +12,6 @@ import {
   type MemoryConversationPanelState,
 } from "@/modules/workspace-kit/lib/memoryConversationPanel";
 import { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import ProjectMemoryPanel from "@/modules/workspace-kit/components/ProjectMemoryPanel";
 import { RemoteSessionPool } from "@/modules/remote/sessionPool";
@@ -256,12 +255,10 @@ async function bind(
 ) {
   const presentation = client(path, env);
   const selected = await presentation.select(path, env);
-  const review = await presentation.reviewTrust(selected);
   await conversation.bind({
     presentation,
     selection: selected,
-    review,
-    mode: "enabled",
+    project: true,
   });
   return presentation;
 }
@@ -323,11 +320,12 @@ beforeEach(() => {
         blockedCount: 0,
         scope: { schema: 1, state: "ready", ancestryComplete: true },
       };
-    if (params.operation === "reviewTrust")
-      result = { ...trustReply(params.revision as number), root: "/project" };
+    if (
+      params.operation === "reviewTrust" ||
+      params.operation === "contextBind"
+    )
+      throw new Error("Legacy memory binding is forbidden");
     if (params.operation === "contextOpen") result = { ...handle, id: 2 };
-    if (params.operation === "contextBind")
-      result = { schema: 1, root: "/project" };
     if (params.operation === "contextBindProject")
       result = { schema: 2, root: "/project", packet: packet().packet };
     if (params.operation === "contextRead") result = packet();
@@ -338,11 +336,11 @@ beforeEach(() => {
       result: { schema: 1, ok: true, result },
     };
   });
-  io.native.mockImplementation(async (command, args) => {
+  io.native.mockImplementation(async (command) => {
     if (command === "project_memory_open") return handle;
     if (command === "project_memory_select") return selection;
     if (command === "project_memory_review_trust")
-      return { ...trustReply(args.request.revision), root: "/project" };
+      throw new Error("Legacy memory trust is forbidden");
   });
 });
 afterEach(async () => {
@@ -410,13 +408,11 @@ it("rejects a different SSH host at the same POSIX directory before allocating c
   };
   const presentation = client("/project", foreign);
   const selected = await presentation.select("/project", foreign);
-  const review = await presentation.reviewTrust(selected);
   await expect(
     conversation.bind({
       presentation,
       selection: selected,
-      review,
-      mode: "enabled",
+      project: true,
     }),
   ).rejects.toMatchObject({ code: "cancelled" });
   expect(conversation.status()).toBe("inactive");
@@ -485,13 +481,11 @@ it("never accepts a local selection for an SSH conversation with an identical pa
   const presentation = createNativeMemoryPresentation();
   clients.push(presentation);
   const selected = await presentation.select("/project", { kind: "local" });
-  const review = await presentation.reviewTrust(selected);
   await expect(
     conversation.bind({
       presentation,
       selection: selected,
-      review,
-      mode: "enabled",
+      project: true,
     }),
   ).rejects.toMatchObject({ code: "cancelled" });
   expect(

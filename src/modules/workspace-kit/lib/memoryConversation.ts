@@ -6,30 +6,20 @@ import type {
   createNativeMemoryPresentation,
   NativeMemorySelection,
 } from "@/modules/workspace-kit/lib/nativeMemory";
-import type { NativeMemoryTrustReview } from "@/modules/workspace-kit/lib/nativeMemoryTrust";
 import type { WorkspaceEnv } from "@/modules/workspace/env";
 
 type ConversationPresentation = ReturnType<
   typeof createNativeMemoryPresentation
 >;
-export type MemoryConversationBinding = Readonly<
-  {
-    presentation: Pick<ConversationPresentation, "isLocalSelection"> &
-      Partial<Pick<ConversationPresentation, "isSourceSelection">>;
-    selection: NativeMemorySelection;
-  } & (
-    | {
-        project: true;
-        presentation: Pick<ConversationPresentation, "bindProjectContext">;
-      }
-    | {
-        project?: false;
-        presentation: Pick<ConversationPresentation, "bindContext">;
-        review: NativeMemoryTrustReview;
-        mode: "inherit" | "enabled" | "disabled";
-      }
-  )
->;
+export type MemoryConversationBinding = Readonly<{
+  project: true;
+  presentation: Pick<
+    ConversationPresentation,
+    "isLocalSelection" | "bindProjectContext"
+  > &
+    Partial<Pick<ConversationPresentation, "isSourceSelection">>;
+  selection: NativeMemorySelection;
+}>;
 export type ManagedMemoryDeliveryReceipt = Readonly<{
   schema: 1;
   adapter: "codex" | "agy" | "claude";

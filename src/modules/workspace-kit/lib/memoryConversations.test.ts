@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { MemoryContextResult } from "@/modules/workspace-kit/lib/context";
-import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
+import type {
+  MemoryConversation,
+  MemoryConversationBinding,
+} from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   createMemoryConversations,
   qualifyMemoryConversation,
 } from "@/modules/workspace-kit/lib/memoryConversations";
 import { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -48,22 +50,19 @@ async function bind(scope: MemoryConversation) {
   const presentation = createNativeMemoryPresentation();
   panels.push(presentation);
   const selection = await presentation.select(scope.cwd, { kind: "local" });
-  const review = await presentation.reviewTrust(selection);
-  await scope.bind({ presentation, selection, review, mode: "enabled" });
+  await scope.bind({ presentation, selection, project: true });
 }
 beforeEach(() => {
   scopes = [];
   panels = [];
   let nextId = 1;
-  invoke.mockReset().mockImplementation(async (command, args) => {
+  invoke.mockReset().mockImplementation(async (command) => {
     if (command === "project_memory_open") return { id: 1, token: "panel" };
     if (command === "project_memory_select") return "selection";
-    if (command === "project_memory_review_trust")
-      return trustReply(args.request.revision);
     if (command === "project_memory_context_open")
       return { id: nextId++, token: "00000000-0000-4000-8000-000000000009" };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: "/project", packet: packet.packet };
     if (command === "project_memory_context_read") return packet;
   });
 });
@@ -71,6 +70,42 @@ afterEach(async () => {
   await Promise.all(scopes.map((scope) => scope.close()));
   await Promise.all(panels.map((panel) => panel.close()));
 });
+
+it.each([undefined, false])(
+  "rejects a retired review binding (project=%s) before native allocation without retiring the conversation",
+  async (project) => {
+    const scope = capture();
+    const presentation = createNativeMemoryPresentation();
+    panels.push(presentation);
+    const selection = await presentation.select(scope.cwd, { kind: "local" });
+    const legacy = vi.fn();
+    const permission = vi.fn(() => true);
+    const before = invoke.mock.calls.length;
+    await expect(
+      scope.bind(
+        {
+          project,
+          presentation: { ...presentation, bindContext: legacy },
+          selection,
+          review: { snapshot: { root: "/project" } },
+          mode: "enabled",
+        } as unknown as MemoryConversationBinding,
+        permission,
+      ),
+    ).rejects.toMatchObject({ code: "cancelled" });
+    expect(invoke.mock.calls).toHaveLength(before);
+    expect(legacy).not.toHaveBeenCalled();
+    expect(permission).not.toHaveBeenCalled();
+    expect(scope.status()).toBe("inactive");
+    await scope.bind({ project: true, presentation, selection });
+    expect(await scope.read()).toEqual(packet);
+    expect(
+      invoke.mock.calls
+        .filter(([name]) => name === "project_memory_context_bind")
+        .map(([, args]) => args.request),
+    ).toEqual([{ schema: 2 }]);
+  },
+);
 
 it("does not allocate native resources or enable delivery without an adapter", async () => {
   const manager = createMemoryConversations();

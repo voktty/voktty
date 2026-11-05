@@ -11,7 +11,6 @@ import { getOrCreateChat } from "@/modules/ai/store/chatRuntime";
 import { chats, touchChat, useChatStore } from "@/modules/ai/store/chatStore";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -41,6 +40,15 @@ const boundary: AiFileRootContext = {
   root: "/project",
   workspace: { kind: "local" },
 };
+const contextPacket = {
+  schema: 1,
+  projectKey: "a".repeat(64),
+  instructionDigest: "b".repeat(64),
+  digest: "c".repeat(64),
+  text: "context",
+  bytes: 7,
+  contentState: "available",
+};
 let scopes: MemoryConversation[];
 let panels: ReturnType<typeof createNativeMemoryPresentation>[];
 const extraOwners = new Set<object>();
@@ -58,8 +66,7 @@ async function bind(scope: MemoryConversation) {
   const presentation = createNativeMemoryPresentation();
   panels.push(presentation);
   const selection = await presentation.select(scope.cwd, { kind: "local" });
-  const review = await presentation.reviewTrust(selection);
-  await scope.bind({ presentation, selection, review, mode: "enabled" });
+  await scope.bind({ presentation, selection, project: true });
 }
 beforeEach(() => {
   scopes = [];
@@ -76,26 +83,24 @@ beforeEach(() => {
   });
   publish(boundary);
   let nextId = 10;
-  invoke.mockReset().mockImplementation(async (command, args) => {
+  invoke.mockReset().mockImplementation(async (command) => {
     if (command === "project_memory_open") return { id: 1, token: "panel" };
     if (command === "project_memory_select") return "selection";
-    if (command === "project_memory_review_trust")
-      return trustReply(args.request.revision);
     if (command === "project_memory_context_open")
       return { id: nextId++, token: "00000000-0000-4000-8000-000000000009" };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: "/project", packet: contextPacket };
     if (command === "project_memory_context_read")
       return {
         schema: 1,
         decision: {
           schema: 1,
-          policy: "never",
-          contextAllowed: false,
+          policy: "manual",
+          contextAllowed: true,
           captureAllowed: false,
-          reason: "KIT_MEMORY_POLICY_NEVER",
+          reason: "KIT_MEMORY_READY",
         },
-        packet: null,
+        packet: contextPacket,
       };
   });
 });
@@ -141,7 +146,7 @@ it("captures the exact Chat independently of active selection and Stop", async (
   useChatStore.getState().switchSession("sibling");
   await chat.stop();
   expect(capture(chat)).toBe(scope);
-  expect((await scope.read())?.decision.reason).toBe("KIT_MEMORY_POLICY_NEVER");
+  expect((await scope.read())?.decision.reason).toBe("KIT_MEMORY_READY");
 });
 
 it.each(["delete", "replace", "evict"])(

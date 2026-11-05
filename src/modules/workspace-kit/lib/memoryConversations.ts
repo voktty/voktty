@@ -270,6 +270,7 @@ export function createMemoryConversations<Source = never>(
         }),
         async bind(input: Binding, isActionCurrent = () => true) {
           check();
+          if (input.project !== true) fail("cancelled");
           if (binding) fail("busy");
           if (bound) fail("cancelled");
           binding = true;
@@ -293,23 +294,10 @@ export function createMemoryConversations<Source = never>(
             check();
             admission = isActionCurrent;
             started = true;
-            let root: string;
-            if (input.project) {
-              root = (
-                await input.presentation.bindProjectContext(
-                  selection,
-                  entry.native,
-                )
-              ).root;
-            } else {
-              await input.presentation.bindContext(
-                selection,
-                input.review,
-                entry.native,
-                input.mode,
-              );
-              root = input.review.snapshot.root;
-            }
+            const { root } = await presentation.bindProjectContext(
+              selection,
+              entry.native,
+            );
             check();
             if (!isActionCurrent()) fail("cancelled");
             check();

@@ -13,7 +13,6 @@ import {
 import { windowPersistenceAdmission } from "@/modules/harness/lib/persistenceAdmission";
 import type { Session } from "@/modules/harness/lib/session";
 import { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -126,8 +125,7 @@ async function input(
     path,
     local ? { kind: "local" } : { kind: "wsl", distro: "Test" },
   );
-  const review = await presentation.reviewTrust(selection);
-  return { presentation, selection, review, mode: "enabled" as const };
+  return { presentation, selection, project: true as const };
 }
 beforeEach(() => {
   roots = [];
@@ -135,15 +133,13 @@ beforeEach(() => {
   panels = [];
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let nextId = 10;
-  invoke.mockReset().mockImplementation(async (command, args) => {
+  invoke.mockReset().mockImplementation(async (command) => {
     if (command === "project_memory_open") return { id: 1, token: "panel" };
     if (command === "project_memory_select") return "selection";
-    if (command === "project_memory_review_trust")
-      return trustReply(args.request.revision);
     if (command === "project_memory_context_open")
       return { id: nextId++, token: "00000000-0000-4000-8000-000000000009" };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: "/project", packet: packet().packet };
     if (command === "project_memory_context_read") return packet();
   });
 });
@@ -486,7 +482,7 @@ it("rejects a second bind while retaining the first exact admission", async () =
   await started.promise;
   await expect(scope.bind(binding)).rejects.toMatchObject({ code: "busy" });
   await expect(scope.read()).rejects.toMatchObject({ code: "busy" });
-  bind.resolve({ schema: 1, root: binding.review.snapshot.root });
+  bind.resolve({ schema: 2, root: "/project", packet: packet().packet });
   await pending;
   expect(await scope.read()).toEqual(packet());
   expect(
@@ -655,7 +651,7 @@ it("bounds observers and releases their slots on unsubscription", async () => {
   expect(invoke).not.toHaveBeenCalled();
 });
 
-it("rechecks native policy after an earlier shared read settles before enabling delivery", async () => {
+it("rejects a legacy policy response after an earlier shared read settles before enabling delivery", async () => {
   const manager = createHarnessMemorySessions();
   const scope = manager.capture({}, "/project", "/project", () => true, true);
   scopes.push(scope);
@@ -690,7 +686,7 @@ it("rechecks native policy after an earlier shared read settles before enabling 
   expect(reads).toBe(1);
   old.resolve(packet());
   await previous;
-  expect((await enabling)?.decision.contextAllowed).toBe(false);
+  await expect(enabling).rejects.toMatchObject({ code: "unavailable" });
   expect(reads).toBe(2);
   expect(scope.delivery?.getSnapshot().enabled).toBe(false);
   manager.dispose();

@@ -10,7 +10,6 @@ import { chats, useChatStore } from "@/modules/ai/store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import { createNativeMemoryPresentation } from "@/modules/workspace-kit/lib/nativeMemory";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
 const io = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -102,8 +101,7 @@ async function bind(scope: MemoryConversation) {
   const presentation = createNativeMemoryPresentation();
   panels.push(presentation);
   const selection = await presentation.select(scope.cwd, { kind: "local" });
-  const review = await presentation.reviewTrust(selection);
-  await scope.bind({ presentation, selection, review, mode: "enabled" });
+  await scope.bind({ presentation, selection, project: true });
   const result = await scope.read();
   if (!result?.packet) throw new Error("Missing enabled fixture packet");
   return result.packet;
@@ -144,15 +142,13 @@ beforeEach(() => {
   });
   publish("/project");
   let nextId = 10;
-  io.invoke.mockReset().mockImplementation(async (command, args) => {
+  io.invoke.mockReset().mockImplementation(async (command) => {
     if (command === "project_memory_open") return { id: 1, token: "panel" };
     if (command === "project_memory_select") return "selection";
-    if (command === "project_memory_review_trust")
-      return trustReply(args.request.revision);
     if (command === "project_memory_context_open")
       return { id: nextId++, token: "00000000-0000-4000-8000-000000000009" };
     if (command === "project_memory_context_bind")
-      return { schema: 1, root: trustReply().root };
+      return { schema: 2, root: "/project", packet: packet().packet };
     if (command === "project_memory_context_read") return packet();
   });
   io.stream.mockReset().mockImplementation(async () => ({
@@ -282,7 +278,7 @@ it("permits ordinary requests after explicit disable in the same root", async ()
   ).toBe(false);
 });
 
-it("rechecks native policy and refuses a requested memory turn without silent fallback", async () => {
+it("rejects a legacy policy reply for a requested memory turn without silent fallback", async () => {
   const f = await enabled();
   io.denied = true;
   await f.chat.sendMessage({ text: "policy blocked" });
