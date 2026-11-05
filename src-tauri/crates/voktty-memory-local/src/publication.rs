@@ -26,7 +26,7 @@ const PREVIEW_LIFETIME: Duration = Duration::from_secs(120);
 
 #[path = "recovery.rs"]
 mod recovery;
-pub use recovery::{OwnedRecoveryReview, RecoveryRestore};
+pub use recovery::RecoveryRestore;
 
 #[path = "project_initialization.rs"]
 pub(crate) mod project_initialization;

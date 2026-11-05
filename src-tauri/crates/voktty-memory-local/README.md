@@ -753,41 +753,26 @@ opened object. Changed bytes, links, unsupported metadata and cancelled or denie
 cleanup preserve the recovery file. No atomic exchange or power-loss durability
 is claimed for Windows.
 
-## Explicit original restoration
+## Project-record recovery
 
-`OwnedRecoveryReview::prepare` reads an existing interrupted intent and retains
-the exact native workspaces, store and read authorities. It reviews only absent
-targets with readable, single-link original backups matching the recorded text.
-The review binds both project/root identities, installation, preference revision,
-intent and exact restoration inventory. Its digest changes when that inventory
-changes; revalidation and the 120-second lifetime apply before writes.
+`OwnedProjectRecoveryPreview::prepare` reviews the project's interrupted
+initialization record without opening global memory storage. It retains the
+native roots, read authorities, exact record and complete restoration, deployment
+and cleanup inventories. Acceptance requires the matching digest; root bindings,
+bytes, record lock and the review lifetime are revalidated before publication.
 
-`restore` consumes the review and requires its matching digest plus independent
-creation permission for each target and recovery-removal permission for its
-backup. Linux/Android use relative `renameat2(RENAME_NOREPLACE)`; Windows uses the
-owned-handle relative rename with replacement disabled. Original objects and
-their metadata are moved without cloning permissions. Existing or racing targets
-are preserved. Native root bindings, bytes and intent are checked again after
-each move. Unsupported platforms refuse restoration.
+`publish` consumes that review with independent native write authority. Original
+restoration still uses no-replace native moves that preserve object identity and
+metadata; existing or racing targets are preserved. `RecoveryRestore` is the
+shared inventory type used by the project review and native move primitives.
+The former global-store `OwnedRecoveryReview` API has been removed.
 
-The publication report's `created` names are restored targets and `cleaned` names
-are backup entries removed by moving those objects, not discarded originals.
-Failures retain acknowledged changes and candidate recovery names; an IO failure
-can leave additional unacknowledged moves. Reload before retrying. Restoration
-never removes the intent, publishes a kit marker, changes policy/trust or accepts
-the subsequent deployment. A fresh initialization review is required. Desktop,
-remote protocol and CLI integration of this restoration API remains pending.
-
-`MemoryWorkers::review_recovery` opens the captured native sources off-thread
-and returns that owned review without writing. `MemoryRecoveryRequest` contains
-only the original store, paths and independent read authorities, with the same
-4 KiB/128-component path limits as deployment. `restore_originals` consumes the
-review, validates the bounded acceptance digest before scheduling and uses a
-separate native write authority. Both operations share the existing four-slot
-deployment budget, discovery deadline and settlement rules above. Dropping a
-queued restoration prevents IO but retains capacity until the queued work settles.
-Failed admission consumes the restoration review; retry needs a fresh review.
-These workers provide no window receipt, IPC authorization or user acceptance.
+Desktop, CLI and the authenticated helper use the project-record review. Workers
+retain their bounded admission, deadlines, cancellation and physical settlement
+rules. Publication reports acknowledged changes; failure never implies rollback.
+Legacy global journals remain untouched and are not accepted as project recovery
+authority. See `PROJECT_READER.md` and the project recovery tests for the native
+scope and artifact checks. Platform runtime acceptance remains separate.
 
 Windows regression sources cover ordinary legacy-ignore/root-rule migration,
 reserved session bytes, unchanged preferences, named streams and a denied or

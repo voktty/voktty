@@ -345,37 +345,27 @@ requests per presentation remain counted through actual settlement, including
 superseded requests. These JavaScript guards neither grant native authority nor
 prove filesystem cancellation. Panel deployment follows the explicit review UI below.
 
-## Native restoration ownership
+## Native project recovery ownership
 
-Restoration and initialization share one native deployment-review slot per
-selection. Reserving either operation retires the previous review before opening
-private state, including when destination capture fails. Restoration uses distinct
-receipt, prepared-result and operation types. A publication receipt cannot confirm
-restoration. `reserve_recovery`, `open_recovery_store`, `start_recovery` and
-`accept_recovery` retain the original window, presentation, source and destination.
-Private state opening never creates identity or changes preferences. Starting a
-reservation twice is refused; ready snapshots contain only the native root,
-acceptance digest and exact original target/backup text for display.
+Recovery and initialization share one native deployment-review slot per selection.
+Reserving either retires the previous review, including when destination capture
+fails. Distinct receipts retain the original window, presentation, source and
+destination; a publication receipt cannot confirm recovery.
 
-`confirm_recovery` consumes the retained native review before digest validation,
-fresh write-authority capture and worker admission. Any of those failures requires
-a new review. The authority derives exclusively from that `OwnedRecoveryReview`,
-not display data. It permits creation only at its exact restoration targets and
-removal only at its recorded backups, with no replacement, staging or directory
-creation grants. Native workspace authorization, secret-path rules and source and
-review lifetimes remain mandatory. The core repeats identity, revision, original
-bytes and review-lifetime checks before moving files.
+Recovery uses `OwnedProjectRecoveryPreview` and the project-owned initialization
+record without opening private application storage. Confirmation consumes the
+native review before digest validation and worker admission. Write authority is
+captured from its complete restoration, deployment and cleanup requirements,
+never from display data. Ordinary workspace authorization, secret-path rules,
+root and byte checks, record locking and review lifetimes remain mandatory.
 
-Selection replacement, presentation close, window replacement or retirement and
-application shutdown retire contained restoration work. Results and errors check
-their original source and review after settlement. Exact cleanup cannot retire a
-successor or another presentation. No ownership lock spans an await; queued and
-running work retains the shared native worker budget until physical settlement.
-Cancellation or missing delivery never establishes rollback. Restoration preserves
-the interrupted intent and requires a fresh initialization review before subsequent
-publication. The IPC and native-local panel below expose these application APIs;
-CLI and authenticated remote protocol restoration remain pending. Windows runtime qualification
-and complete product acceptance remain pending.
+Selection replacement, presentation close, window retirement and shutdown retire
+contained work. Results and errors recheck their original owners after settlement;
+exact cleanup cannot retire a successor. No ownership mutex spans an await, and
+queued or running work retains its bounded worker capacity until physical
+settlement. Cancellation does not imply rollback. Desktop and the authenticated
+helper use schema-2 recovery reviews; CLI uses the same native project service.
+Windows runtime qualification and complete product acceptance remain pending.
 
 ## Restoration IPC
 
