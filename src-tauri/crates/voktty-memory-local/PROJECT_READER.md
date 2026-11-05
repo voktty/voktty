@@ -102,7 +102,8 @@ writers. An identical kit needs no write permissions and creates no record.
 A mutating publication creates `.voktty/.initialization.json` exclusively before
 changing kit files. This bounded operation record contains the transaction UUID,
 review digest, hashed native root bindings, relative paths and expected/proposed
-content hashes. It contains no absolute paths, original document text, private
+content hashes. New records also declare `activityLock: "record-v1"`. It contains
+no absolute paths, original document text, private
 preferences, instruction trust or installation identity. Another record cannot
 be overwritten or borrowed. Its presence makes an unfinished root visible to
 scope discovery. Resolved-scope publication rechecks ancestor and descendant
@@ -115,6 +116,18 @@ prevent independent processes using this publisher from starting on the same
 root. The existing persistent publisher retains its private journal and OS lock;
 the process guard is shared with it and does not acknowledge or recover a legacy
 private transaction.
+
+For `record-v1`, the publisher locks the exclusively created staging object
+before atomically exposing the record and retains that exact handle through all
+kit and backup mutations. Unix uses a nonblocking advisory file lock. Windows
+locks one byte at offset `0xfffffffffffffffe`, outside the bounded record text,
+so independent validation handles can still read it. The lock grants no writes
+or recovery permission, adds no private state and is released by the OS on process
+exit. It is released before final record cleanup, after all kit and backup work;
+that cleanup still compares the exact record and preserves replacements.
+An older record without this declaration does not establish the locking protocol.
+Recovery of retained project records is still pending; absence of a lock alone
+must not authorize restoration or removal of the record or its backups.
 
 The publisher reuses the existing native exclusive creator and original-preserving
 migration backends. It verifies expected bytes before mutation, publishes

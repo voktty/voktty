@@ -5,7 +5,54 @@ use crate::ProjectMemoryWorkspace;
 #[path = "project_publication.rs"]
 mod publication;
 
+#[cfg(all(test, any(unix, windows)))]
+#[path = "project_record_lock_tests.rs"]
+mod record_lock_tests;
+
 pub const PROJECT_INITIALIZATION_RECORD: &str = ".voktty/.initialization.json";
+
+#[cfg(unix)]
+pub(crate) fn lock_record(file: &std::fs::File) -> Result<(), ReadError> {
+    file.try_lock().map_err(|error| match error {
+        std::fs::TryLockError::WouldBlock => ReadError::Busy,
+        std::fs::TryLockError::Error(_) => ReadError::Io,
+    })
+}
+
+#[cfg(windows)]
+pub(crate) fn lock_record(file: &std::fs::File) -> Result<(), ReadError> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        LockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
+    };
+    use windows_sys::Win32::System::IO::OVERLAPPED;
+
+    // Windows byte locks deny reads through other handles. Reserve one byte
+    // beyond the bounded record so validation can still read its complete text.
+    let mut overlapped = OVERLAPPED::default();
+    overlapped.Anonymous.Anonymous.Offset = u32::MAX - 1;
+    overlapped.Anonymous.Anonymous.OffsetHigh = u32::MAX;
+    if unsafe {
+        LockFileEx(
+            file.as_raw_handle(),
+            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+            0,
+            1,
+            0,
+            &mut overlapped,
+        )
+    } == 0
+    {
+        return Err(
+            if std::io::Error::last_os_error().raw_os_error() == Some(33) {
+                ReadError::Busy
+            } else {
+                ReadError::Io
+            },
+        );
+    }
+    Ok(())
+}
 
 enum InitializationPlacement {
     Resolved(String),

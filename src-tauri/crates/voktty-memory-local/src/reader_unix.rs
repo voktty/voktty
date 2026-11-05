@@ -115,6 +115,38 @@ impl Directory {
         writes: &dyn crate::MemoryWriteAccess,
         control: &ReadControl,
     ) -> Result<(), ReadError> {
+        self.create_text_inner(root, (relative, false), text, reads, writes, control)
+            .map(drop)
+    }
+
+    pub(crate) fn create_initialization_record(
+        &self,
+        root: &Path,
+        text: &str,
+        reads: &dyn MemoryReadAccess,
+        writes: &dyn crate::MemoryWriteAccess,
+        control: &ReadControl,
+    ) -> Result<File, ReadError> {
+        self.create_text_inner(
+            root,
+            (crate::PROJECT_INITIALIZATION_RECORD, true),
+            text,
+            reads,
+            writes,
+            control,
+        )?
+        .ok_or(ReadError::Unavailable)
+    }
+
+    fn create_text_inner(
+        &self,
+        root: &Path,
+        (relative, hold_record): (&str, bool),
+        text: &str,
+        reads: &dyn MemoryReadAccess,
+        writes: &dyn crate::MemoryWriteAccess,
+        control: &ReadControl,
+    ) -> Result<Option<File>, ReadError> {
         let parts: Vec<_> = Path::new(relative).components().collect();
         if parts.is_empty()
             || parts.len() > 64
@@ -230,6 +262,13 @@ impl Directory {
             .write_all(text.as_bytes())
             .map_err(|_| ReadError::Io)?;
         staging.file.sync_all().map_err(|_| ReadError::Io)?;
+        let held_record = if hold_record {
+            let file = staging.file.try_clone().map_err(|_| ReadError::Io)?;
+            crate::publication::project_initialization::lock_record(&file)?;
+            Some(file)
+        } else {
+            None
+        };
         control.check()?;
         if !writes.allows_create(&target_path)
             || !reads.allows_read(&target_path)
@@ -270,7 +309,7 @@ impl Directory {
         drop(staging);
         parent.sync_all().map_err(|_| ReadError::Io)?;
         control.check()?;
-        Ok(())
+        Ok(held_record)
     }
 
     pub(crate) fn cleanup_initialization_record(

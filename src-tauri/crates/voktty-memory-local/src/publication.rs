@@ -29,7 +29,7 @@ mod recovery;
 pub use recovery::{OwnedRecoveryReview, RecoveryRestore};
 
 #[path = "project_initialization.rs"]
-mod project_initialization;
+pub(crate) mod project_initialization;
 pub use project_initialization::PROJECT_INITIALIZATION_RECORD;
 pub use project_initialization::{OwnedProjectInitializationPreview, ProjectInitializationRequest};
 

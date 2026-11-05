@@ -49,6 +49,7 @@ impl OwnedProjectInitializationPreview {
         let fingerprint = |text: &str| hex::encode(Sha256::digest(text.as_bytes()));
         let record = serde_json::json!({
             "schema":2,"operation":"initialize-project","scope":self.placement.name(),"transaction":self.transaction,
+            "activityLock":"record-v1",
             "reviewDigest":self.acceptance_digest(),
             "originBinding":fingerprint(&self.origin.review_binding()?.to_string()),
             "destinationBinding":fingerprint(&self.destination.review_binding()?.to_string()),
@@ -137,13 +138,25 @@ impl OwnedProjectInitializationPreview {
         }
         let record = self.record_text()?;
         let target = self.destination.borrow();
-        create_project(
-            &target,
-            PROJECT_INITIALIZATION_RECORD,
-            &record,
-            access,
-            control,
-        )?;
+        #[cfg(any(unix, windows))]
+        let record_lock = target
+            .checked_root(&control.read_control()?)?
+            .create_initialization_record(
+                target.root(),
+                &record,
+                target.access(),
+                access,
+                &control.read_control()?,
+            )
+            .map_err(|error| {
+                if error == ReadError::Unavailable {
+                    PublicationError::Conflict
+                } else {
+                    error.into()
+                }
+            })?;
+        #[cfg(not(any(unix, windows)))]
+        return Err(PublicationError::Unsupported);
         report.created.push(PROJECT_INITIALIZATION_RECORD.into());
         let mut completed = BTreeSet::new();
         self.check_progress(&record, &completed, false, control)?;
@@ -189,6 +202,10 @@ impl OwnedProjectInitializationPreview {
             }
         }
         self.check_progress(&record, &completed, true, control)?;
+        // No project or backup mutation follows this release. The remaining
+        // cleanup compares the exact record again and preserves replacements.
+        #[cfg(any(unix, windows))]
+        drop(record_lock);
         cleanup_project(
             &target,
             &RecoveryFile {
