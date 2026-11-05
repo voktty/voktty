@@ -62,7 +62,8 @@ within their original owners and stay within JavaScript's safe integer range.
 An invalid newer selection still retires the previous source. Confirmations
 consume reviews, including when native revalidation or publication fails.
 Cancellation cannot revive an older request. Native reviews retain their own
-120-second lifetime and filesystem/preference revision checks.
+120-second lifetime and filesystem checks; private-state operations additionally
+retain their preference revision checks.
 
 Initialization and restoration share one deployment review slot and monotonic
 revision per selection. A newer review invalidates the previous review even if
@@ -72,6 +73,17 @@ restoration token cannot publish initialization. A mismatched token or kind does
 not consume the current review. A matching restoration confirmation consumes its
 review even when its digest or native revalidation fails. Stale cancellation
 cannot retire a newer review; a future cancellation fences earlier arrivals.
+
+Initialization preview and confirmation use the project-owned native service
+without opening private host storage. Valid persisted `kit.json` values take
+precedence over caller defaults during repair; existing project content remains
+unchanged and is rechecked before publication. Bounded ancestor inspection
+rejects nested initialization beneath a known applicable memory root, without
+granting parent writes. Publication retains its temporary
+`.voktty/.initialization.json` record on interruption. Its recovery is pending;
+the legacy recovery operations below do not consume that record. Schema-1
+preview replies retain `isResuming: false` and `recoveryFiles: []` for current
+clients. These fields do not claim global-journal resumption.
 
 Recovery replies include `schema`, host-native `root`, `revision`, `review`,
 native SHA-256 `digest` and one to three literal `entries` with relative `target`,
@@ -110,8 +122,9 @@ and empty resource reservation create neither that directory nor an identity.
 Preparation is explicit. The shared store qualifies its local filesystem,
 ownership, permissions and complete ancestor chain and retains process locks and
 revision checks. Origins are rechecked when opening state and before consuming
-context or accepting a previously prepared review. A late legacy conflict
-consumes a matching confirmation without performing its write. Stateless
+context or accepting a previously prepared private-state review. A late legacy conflict
+consumes a matching private-state confirmation without performing its write.
+Project initialization preview and publication are independent of that state. Stateless
 inspection, document display, cancellation and exact resource cleanup remain
 available. Host and Desktop on different machines do not copy consent or trust.
 

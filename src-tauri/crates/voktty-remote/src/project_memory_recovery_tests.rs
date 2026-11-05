@@ -1,7 +1,7 @@
 use super::*;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use voktty_memory_local::MemoryWriteAccess;
+use voktty_memory_local::{InitializationPreview, MemoryWriteAccess};
 use voktty_remote_protocol::{METHOD_MEMORY_MANAGE, PROTOCOL_VERSION};
 
 struct InterruptedWriter(PathBuf);
@@ -213,9 +213,17 @@ fn failed_newer_preview_retires_recovery_and_failed_recovery_retires_preview() {
     assert_eq!(f.confirm(&fresh)["ok"], true);
 
     let mut f = Fixture::new(false);
+    let clean = f.project.path().join("clean");
+    fs::create_dir(&clean).unwrap();
+    let selected = f.call("select", json!({"path":clean,"revision":2}));
+    assert_eq!(selected["ok"], true, "{selected}");
+    f.selection = selected["result"].clone();
     let preview = f.call("preview", preview);
     assert_eq!(preview["ok"], true, "{preview}");
-    fails(f.call("reviewRecovery", json!({"revision":3})), "conflict");
+    fails(
+        f.call("reviewRecovery", json!({"revision":3})),
+        "pendingRecovery",
+    );
     fails(
         f.call("confirm", json!({"review":preview["result"]["review"]})),
         "cancelled",

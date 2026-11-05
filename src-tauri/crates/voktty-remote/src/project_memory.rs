@@ -11,9 +11,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use voktty_memory_local::{
     inspect_local_memory_scope, read_local_memory_documents, resolve_local_memory_directory,
-    DiscoveryControl, DiscoveryPurpose, InitializationPreview, LocalMemoryStore,
-    LocalMemoryWorkspace, MemoryContextSession, MemoryPolicyReview, MemorySessionUse,
-    MemoryTrustReview, OwnedInitializationPreview, OwnedRecoveryReview, ReadControl, ReadError,
+    DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace,
+    MemoryContextSession, MemoryPolicyReview, MemorySessionUse, MemoryTrustReview,
+    OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,
+    PublicationError, ReadControl, ReadError,
 };
 use voktty_remote_protocol::{RemoteRequest, RemoteResponse};
 use voktty_workspace_kit::RootLinks;
@@ -93,7 +94,7 @@ impl<T> Review<T> {
 }
 
 enum DeploymentReview {
-    Preview(Box<OwnedInitializationPreview>),
+    Preview(Box<OwnedProjectInitializationPreview>),
     Recovery(Box<OwnedRecoveryReview>),
 }
 
@@ -429,32 +430,38 @@ impl MemoryServer {
                         return Err(Error::new("limit"));
                     }
                 }
-                let store = self.store(false, &control.read_control()?)?;
-                let workspace = LocalMemoryWorkspace::open(
-                    &store,
-                    &source.requested,
-                    source.as_ref(),
-                    &control.read_control()?,
-                )?;
                 let values = inputs
                     .into_iter()
                     .map(|(key, value)| (key, Value::String(value)))
                     .collect();
-                let preview = InitializationPreview::prepare(
-                    &workspace,
-                    &workspace,
-                    &values,
-                    RootLinks {
-                        agents: links.agents,
-                        claude: links.claude,
+                let observed =
+                    inspect_local_memory_scope(&source.requested, source.as_ref(), control)?;
+                if observed.scope.state == "ready"
+                    && !observed.directories.iter().any(|directory| {
+                        Some(&directory.directory_key) == observed.scope.root_key.as_ref()
+                            && directory.path == source.requested
+                    })
+                {
+                    return Err(PublicationError::Scope.into());
+                }
+                let preview = OwnedProjectInitializationPreview::prepare_at_project_root(
+                    ProjectInitializationRequest {
+                        origin: source.requested.clone(),
+                        origin_access: source.clone(),
+                        destination: source.requested.clone(),
+                        destination_access: source.clone(),
+                        inputs: values,
+                        links: RootLinks {
+                            agents: links.agents,
+                            claude: links.claude,
+                        },
                     },
                     control,
-                )?
-                .into_owned(store.clone(), source.clone(), source.clone())?;
+                )?;
                 let mut result = json!({"schema":1,"root":source.requested,"revision":revision,
-                    "deployment":preview.deployment(),"isResuming":preview.is_resuming(),
+                    "deployment":preview.deployment(),"isResuming":false,
                     "publicationBlocker":preview.publication_blocker().map(|error| Error::from(error).code),
-                    "recoveryFiles":preview.recovery_files().iter().map(|file| json!({"path":file.path,"text":file.text})).collect::<Vec<_>>()});
+                    "recoveryFiles":[]});
                 let token = self
                     .selected(&handle, &selection)?
                     .deployment
@@ -476,12 +483,12 @@ impl MemoryServer {
                     return Err(Error::new("cancelled"));
                 };
                 let source = selected.source.clone();
-                self.state_parent(&control.read_control()?)?;
                 let access = AcceptedWrites {
                     source: &source,
                     requirements: preview.write_requirements(),
                 };
-                match preview.publish(&access, control) {
+                let digest = preview.acceptance_digest();
+                match preview.publish(&digest, &access, control) {
                     Ok(report) => Ok(
                         json!({"schema":1,"created":report.created,"skipped":report.skipped,
                         "migrated":report.migrated,"cleaned":report.cleaned}),

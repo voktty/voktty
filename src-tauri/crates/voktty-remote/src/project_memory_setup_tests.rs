@@ -142,7 +142,7 @@ fn legacy_host_state_never_opens_or_creates_a_second_store() {
 }
 
 #[test]
-fn a_late_legacy_store_consumes_confirmation_without_publishing() {
+fn a_late_legacy_store_does_not_block_project_publication() {
     use std::fs;
     let private = tempfile::tempdir().unwrap();
     fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
@@ -164,10 +164,11 @@ fn a_late_legacy_store_consumes_confirmation_without_publishing() {
     fs::create_dir(&legacy).unwrap();
     fs::create_dir(legacy.join("project-memory")).unwrap();
     let confirmation = json!({"operation":"confirm","handle":handle,"selection":selection,"review":review["review"]});
-    assert_eq!(
-        execute(confirmation.clone()).unwrap_err().code,
-        "legacyStateRequiresReview"
-    );
+    execute(confirmation.clone()).unwrap();
     assert_eq!(execute(confirmation).unwrap_err().code, "cancelled");
-    assert!(!root.join(".voktty").exists());
+    assert!(root.join(".voktty/kit.json").exists());
+    assert_eq!(
+        fs::read_dir(legacy.join("project-memory")).unwrap().count(),
+        0
+    );
 }

@@ -188,6 +188,70 @@ fn real_native_flow_preserves_reserved_data_and_binds_context_after_exact_review
 }
 
 #[test]
+fn initialization_reuse_and_link_only_repair_need_no_global_storage() {
+    let (project, private, mut server) = fixture();
+    let root = project.path();
+    let blocked = private.path().join("ordinary-file");
+    fs::write(&blocked, "preserved global sentinel").unwrap();
+    server.data_directory = Some(blocked.clone());
+    let handle = ok(&mut server, root, json!({"operation":"open"}));
+    let selection = select(&mut server, root, &handle, 1);
+    let params = |revision| {
+        json!({"operation":"preview","handle":handle,
+        "selection":selection,"revision":revision,
+        "inputs":{"project_name":"Remote project","created_at":"2026-11-03"},
+        "links":{"agents":true,"claude":true}})
+    };
+    for revision in 1..=3 {
+        if revision == 3 {
+            fs::remove_file(root.join("AGENTS.md")).unwrap();
+        }
+        let review = ok(&mut server, root, params(revision));
+        assert_eq!(review["isResuming"], false);
+        assert_eq!(review["recoveryFiles"], json!([]));
+        ok(
+            &mut server,
+            root,
+            json!({"operation":"confirm","handle":handle,
+            "selection":selection,"review":review["review"]}),
+        );
+        assert!(root.join("AGENTS.md").exists());
+        assert!(!root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+            .exists());
+        assert_eq!(
+            fs::read_to_string(&blocked).unwrap(),
+            "preserved global sentinel"
+        );
+        if revision == 1 {
+            fs::write(root.join(".voktty/CONTEXT.md"), "Agent-owned context\n").unwrap();
+        }
+        assert_eq!(
+            fs::read_to_string(root.join(".voktty/CONTEXT.md")).unwrap(),
+            "Agent-owned context\n"
+        );
+    }
+    assert_eq!(fs::read_dir(private.path()).unwrap().count(), 1);
+    let child = root.join("child");
+    fs::create_dir(&child).unwrap();
+    let nested = ok(
+        &mut server,
+        root,
+        json!({"operation":"select","handle":handle,"path":child,
+            "revision":2,"inspectAncestors":true}),
+    );
+    error(
+        &mut server,
+        root,
+        json!({"operation":"preview","handle":handle,"selection":nested,
+            "revision":1,"inputs":{"project_name":"Nested","created_at":"2026-11-03"},
+            "links":{"agents":true,"claude":true}}),
+        "scope",
+    );
+    assert!(!child.join(".voktty").exists());
+}
+
+#[test]
 fn invalid_reselection_and_reset_retire_old_reviews_and_never_publish_to_a_new_owner() {
     let (project, _private, mut server) = fixture();
     let root = project.path();
