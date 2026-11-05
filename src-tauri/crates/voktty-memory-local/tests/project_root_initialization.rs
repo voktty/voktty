@@ -60,6 +60,7 @@ impl MemoryWriteAccess for Access {
         self.allows_workspace_root(path)
             && !(self.interrupt.load(Ordering::Acquire)
                 && path.ends_with("RULES.md")
+                && self.root.join(PROJECT_INITIALIZATION_RECORD).exists()
                 && self.root.join(".voktty/INIT.md").exists())
     }
     fn allows_replace(&self, path: &Path) -> bool {
@@ -374,6 +375,66 @@ fn repair_uses_persisted_values_after_the_folder_and_date_defaults_change() {
         .any(|path| path == ".voktty/README.md"));
     assert_eq!(fs::read(renamed.join(".voktty/README.md")).unwrap(), readme);
     assert_eq!(fs::read(renamed.join(".voktty/kit.json")).unwrap(), config);
+}
+
+#[test]
+fn interrupted_repair_records_render_values_without_copying_preserved_content() {
+    let _serial = SERIAL.lock().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let authority = access(project.path(), false);
+    publish(&authority);
+    let config_path = project.path().join(".voktty/kit.json");
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["kitVersion"] = "0.1.0".into();
+    config["values"]["kit_version"] = "0.1.0".into();
+    fs::write(&config_path, config.to_string()).unwrap();
+    fs::write(
+        project.path().join(".voktty/CONTEXT.md"),
+        "private project context",
+    )
+    .unwrap();
+    fs::write(project.path().join("AGENTS.md"), "existing owner rules").unwrap();
+    fs::remove_file(project.path().join(".voktty/RULES.md")).unwrap();
+    let mut next = request(&authority);
+    next.inputs
+        .insert("project_name".into(), "New folder default".into());
+    next.inputs.insert("created_at".into(), "2027-01-01".into());
+    next.links = RootLinks {
+        agents: true,
+        claude: true,
+    };
+    let review = OwnedProjectInitializationPreview::prepare_at_project_root(
+        next,
+        &DiscoveryControl::default(),
+    )
+    .unwrap();
+    let digest = review.acceptance_digest();
+    authority.interrupt.store(true, Ordering::Release);
+    assert!(review
+        .publish(&digest, authority.as_ref(), &DiscoveryControl::default())
+        .is_err());
+    let text = fs::read_to_string(project.path().join(PROJECT_INITIALIZATION_RECORD)).unwrap();
+    let record: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let values = &record["template"]["values"];
+    assert_eq!(values["project_name"], "Explicit project root");
+    assert_eq!(values["created_at"], "2026-11-03");
+    let manifest: serde_json::Value =
+        serde_json::from_str(voktty_workspace_kit::resource("manifest.json").unwrap()).unwrap();
+    assert_eq!(values["kit_version"], manifest["version"]);
+    assert_eq!(record["template"]["version"], manifest["version"]);
+    assert_eq!(
+        record["template"]["links"],
+        json!({"agents":true,"claude":true})
+    );
+    assert!(!text.contains("private project context"));
+    assert!(!text.contains("existing owner rules"));
+    assert_eq!(fs::read_to_string(config_path).unwrap(), config.to_string());
+    assert!(record["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["path"] == ".voktty/CONTEXT.md" && entry["action"] == "skip"));
 }
 
 #[test]

@@ -85,6 +85,7 @@ pub struct OwnedProjectInitializationPreview {
     origin: OwnedProjectMemoryWorkspace,
     destination: OwnedProjectMemoryWorkspace,
     prepared: PreparedDeployment,
+    template_values: Map<String, Value>,
     links: RootLinks,
     placement: InitializationPlacement,
     created_at: Instant,
@@ -157,6 +158,16 @@ impl OwnedProjectInitializationPreview {
         }
         crate::template_inputs::validate_inputs(&inputs)?;
         let mut files = render_template(&inputs).map_err(ReadError::Contract)?;
+        let config = files
+            .iter()
+            .find(|file| file.path == ".voktty/kit.json")
+            .ok_or(ReadError::InvalidInput)?;
+        let config =
+            voktty_workspace_kit::parse_kit_config(&config.text).map_err(ReadError::Contract)?;
+        let template_values = config["values"]
+            .as_object()
+            .ok_or(ReadError::InvalidInput)?
+            .clone();
         if matches!(placement, InitializationPlacement::ProjectRoot) {
             for file in &mut files {
                 if file.kind == voktty_workspace_kit::FileKind::Content {
@@ -183,6 +194,7 @@ impl OwnedProjectInitializationPreview {
             origin,
             destination,
             prepared,
+            template_values,
             links: request.links,
             placement,
             created_at: Instant::now(),

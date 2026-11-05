@@ -50,11 +50,14 @@ impl OwnedProjectInitializationPreview {
         let record = serde_json::json!({
             "schema":2,"operation":"initialize-project","scope":self.placement.name(),"transaction":self.transaction,
             "activityLock":"record-v1",
+            "template": {"version":self.template_values["kit_version"],
+                "values":self.template_values,
+                "links":{"agents":self.links.agents,"claude":self.links.claude}},
             "reviewDigest":self.acceptance_digest(),
             "originBinding":fingerprint(&self.origin.review_binding()?.to_string()),
             "destinationBinding":fingerprint(&self.destination.review_binding()?.to_string()),
             "files":self.prepared.plan.entries.iter().enumerate().map(|(index, entry)| {
-                serde_json::json!({"path":entry.path,"expected":entry.expected.as_deref().map(fingerprint),
+                serde_json::json!({"path":entry.path,"action":entry.action,"expected":entry.expected.as_deref().map(fingerprint),
                     "proposed":fingerprint(&entry.proposed),"backup":self.backup(index)})
             }).collect::<Vec<_>>()
         }).to_string();

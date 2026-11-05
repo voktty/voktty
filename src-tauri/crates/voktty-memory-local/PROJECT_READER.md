@@ -101,9 +101,15 @@ writers. An identical kit needs no write permissions and creates no record.
 
 A mutating publication creates `.voktty/.initialization.json` exclusively before
 changing kit files. This bounded operation record contains the transaction UUID,
-review digest, hashed native root bindings, relative paths and expected/proposed
-content hashes. New records also declare `activityLock: "record-v1"`. It contains
-no absolute paths, original document text, private
+review digest, hashed native root bindings, relative paths, deployment actions
+and expected/proposed content hashes. New records also declare
+`activityLock: "record-v1"`. Their `template` field retains the exact normalized
+kit values, embedded template version and selected AGENTS/CLAUDE links. This
+allows template reproduction even if publication stopped before `kit.json`.
+Only configured template values are retained, not arbitrary caller inputs or
+existing content documents. Values can contain user-authored project metadata;
+the record is project data, not a redacted diagnostic. It contains
+no native root paths, original document text, private
 preferences, instruction trust or installation identity. Another record cannot
 be overwritten or borrowed. Its presence makes an unfinished root visible to
 scope discovery. Resolved-scope publication rechecks ancestor and descendant
@@ -126,6 +132,10 @@ or recovery permission, adds no private state and is released by the OS on proce
 exit. It is released before final record cleanup, after all kit and backup work;
 that cleanup still compares the exact record and preserves replacements.
 An older record without this declaration does not establish the locking protocol.
+Records without template data or deployment actions remain recognizable pending
+operations, not reproducible transactions. A future recovery must validate the
+embedded version, exact inventory and hashes rather than infer missing inputs
+from current defaults or treat this metadata as write authority.
 Recovery of retained project records is still pending; absence of a lock alone
 must not authorize restoration or removal of the record or its backups.
 

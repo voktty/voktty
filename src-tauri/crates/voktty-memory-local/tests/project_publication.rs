@@ -405,13 +405,52 @@ fn interrupted_copy_retains_a_metadata_only_record_and_never_publishes_the_marke
         &fs::read(project.path().join(PROJECT_INITIALIZATION_RECORD)).unwrap(),
     )
     .unwrap();
-    assert_eq!(record.as_object().unwrap().len(), 9);
+    assert_eq!(record.as_object().unwrap().len(), 10);
     assert_eq!(record["schema"], 2);
     assert_eq!(record["scope"], "resolved-memory-scope");
     assert_eq!(record["operation"], "initialize-project");
     assert_eq!(record["activityLock"], "record-v1");
     assert_eq!(record["destinationBinding"].as_str().unwrap().len(), 64);
     assert_eq!(record["reviewDigest"], digest);
+    let template = &record["template"];
+    assert_eq!(template["values"]["project_name"], "Native publication");
+    assert_eq!(template["values"]["created_at"], "2026-11-03");
+    assert_eq!(template["version"], template["values"]["kit_version"]);
+    let files =
+        voktty_workspace_kit::render_template(template["values"].as_object().unwrap()).unwrap();
+    let mut facts = files
+        .iter()
+        .map(|file| (file.path.clone(), voktty_workspace_kit::PathFact::Absent))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    facts.insert(
+        ".voktty/kit.lock.json".into(),
+        voktty_workspace_kit::PathFact::Absent,
+    );
+    let reproduced = voktty_workspace_kit::prepare_deployment(
+        template["version"].as_str().unwrap(),
+        &files,
+        &facts,
+        serde_json::from_value(template["links"].clone()).unwrap(),
+    )
+    .unwrap();
+    use sha2::{Digest, Sha256};
+    for (saved, entry) in record["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(&reproduced.plan.entries)
+    {
+        assert_eq!(saved["path"], entry.path);
+        assert_eq!(saved["action"], "create");
+        assert_eq!(
+            saved["proposed"],
+            hex::encode(Sha256::digest(entry.proposed.as_bytes()))
+        );
+    }
+    assert_eq!(
+        record["files"].as_array().unwrap().len(),
+        reproduced.plan.entries.len()
+    );
     assert!(record["files"]
         .as_array()
         .unwrap()
