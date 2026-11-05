@@ -140,8 +140,8 @@ impl MemoryReadAccess for InitReadAccess {
     }
 }
 
-struct AcceptedWriteAccess {
-    requirements: PublicationWriteRequirements,
+pub(super) struct AcceptedWriteAccess {
+    pub(super) requirements: PublicationWriteRequirements,
 }
 impl AcceptedWriteAccess {
     fn staging(&self, path: &Path) -> bool {

@@ -193,8 +193,9 @@ checks; explicit-root records do not acquire a delivery scope. Review expiration
 claiming rollback. A further interruption retains a recoverable record. Final
 record cleanup compares its exact bytes after all other work, as in publication.
 
-This synchronous native API does not replace Desktop, CLI or SSH recovery callers
-yet; those integrations still use the previous private journal contract. Linux
+The standalone CLI uses this synchronous native API without a global store.
+Desktop and SSH recovery callers still use the previous private journal contract
+pending adaptation. Linux
 tests exercise interruption, migration, metadata preservation and a separate live
 lock-holding process. Windows compilation is checked separately and is not native
 runtime qualification. Platforms without native migration/restoration/cleanup

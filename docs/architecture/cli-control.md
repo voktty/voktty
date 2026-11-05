@@ -51,7 +51,7 @@ Rust handles `ping`, `capabilities`, authentication, and file validation directl
 
 Status never resolves or opens global memory storage. The native stateless inspector uses invocation-local directory keys for the common pure resolver; these keys are omitted from CLI output and cannot identify a persistent project or grant trust. Missing, inaccessible, corrupt or legacy global state cannot block this observation and remains untouched. The command creates no application directories, installation identity, preference locks or project files. Policy reports `{"state":"not_checked","mode":null}` and trust reports `not_checked`, including for a ready kit.
 
-Remaining state-dependent CLI memory commands use the fixed `app.voktty.voktty/project-memory` directory beneath the native local application-data directory, matching Desktop. Earlier builds used `dev.voktty/project-memory`. An existing legacy entry, including empty, corrupt or linked state, refuses with `memory_legacy_state_requires_review` and exit 5 before opening either store or launching an agent. Inaccessible, linked or non-directory legacy application parents also refuse inspection. An ordinary legacy application directory without a `project-memory` entry does not block memory. Explicit `migrate-storage` is the only operation that moves legacy state; state-dependent commands never move, merge or discard installation identities, recovery journals, policies or trust. Project initialization does not inspect either global origin. After reviewed migration, a qualified permanent legacy marker permits the matching canonical store. Automatic migration is unavailable. Desktop retains its existing origin and behavior. `memory measure`, help and explicit `memory run --no-memory` remain independent of private state. The identifier equality is checked against the actual Desktop configuration by a regression test; platform bases remain native local data, including LocalAppData on Windows rather than roaming data.
+Remaining state-dependent CLI memory commands use the fixed `app.voktty.voktty/project-memory` directory beneath the native local application-data directory, matching Desktop. Earlier builds used `dev.voktty/project-memory`. An existing legacy entry, including empty, corrupt or linked state, refuses with `memory_legacy_state_requires_review` and exit 5 before opening either store or launching an agent. Inaccessible, linked or non-directory legacy application parents also refuse inspection. An ordinary legacy application directory without a `project-memory` entry does not block memory. Explicit `migrate-storage` is the only operation that moves legacy state; state-dependent commands never move, merge or discard installation identities, recovery journals, policies or trust. Project initialization and recovery do not inspect either global origin. After reviewed migration, a qualified permanent legacy marker permits the matching canonical store. Automatic migration is unavailable. Desktop retains its existing origin and behavior. `memory measure`, help and explicit `memory run --no-memory` remain independent of private state. The identifier equality is checked against the actual Desktop configuration by a regression test; platform bases remain native local data, including LocalAppData on Windows rather than roaming data.
 
 The command never prints instruction text, persistent project keys, installation IDs or other projects' preferences. Capabilities still describe the existing command surface, including persistent policy management and Linux initial-prompt delivery; those commands retain global dependencies pending retirement. `initialPromptLaunch` qualifies delivery by platform and adapter version; it does not probe the installed agent or grant permission. Capture, managed resume and compaction remain unavailable.
 
@@ -109,69 +109,67 @@ The digest covers the native origin and destination bindings, explicit-project-r
 
 Initialization targets the explicitly selected project root without recursively inspecting dependencies or selecting an ancestor kit. Separate parent and child projects remain independent; scope discovery for context use is a separate operation. The native publisher serializes its process-local admission and exclusively creates `.voktty/.initialization.json` to prevent concurrent cooperating publications. It retains no-replace creation, platform-specific migrations, marker ordering and changed-byte checks. The temporary project record and exact backups are cleaned after success. An interruption preserves them and blocks a fresh initialization for recovery; this command does not interpret or delete old global journals. Linux process tests cover the flow; other native platform runtime qualification remains outstanding.
 
-Successful `--json` output retains the schema-1 result envelope with root, plan digest and acknowledged `created`, `skipped`, `migrated` and `cleaned` paths, including the temporary record when used. `contextActivated`, `capturesActivated` and `policyChanged` remain false: initialization starts no model and never accesses policy or trust. A publication failure exits 5 with one redacted stderr error and acknowledged changes plus possible recovery paths. Partial project files remain; failure is not proof that no write occurred. Reload and obtain a fresh review before retrying. The other CLI memory commands and Desktop/helper integrations still retain their existing global-state dependencies until adapted.
+Successful `--json` output retains the schema-1 result envelope with root, plan digest and acknowledged `created`, `skipped`, `migrated` and `cleaned` paths, including the temporary record when used. `contextActivated`, `capturesActivated` and `policyChanged` remain false: initialization starts no model and never accesses policy or trust. A publication failure exits 5 with one redacted stderr error and acknowledged changes plus possible recovery paths. Partial project files remain; failure is not proof that no write occurred. Reload and obtain a fresh review before retrying. CLI use/trust/run and the remaining Desktop/helper integrations still retain global-state dependencies until adapted.
 
-## Standalone restoration of saved originals
+## Standalone project initialization recovery
 
 `memory recover` requires exactly one explicit `--preview` or
-`--accept-review <sha256>` choice, on both interactive and noninteractive
-terminals. There is no force, blind `--yes` or automatic acceptance. The command
-uses its process directory or `--project` as the exact native execution and
-restoration root; it cannot select a different journal destination or translate
-a remote namespace into local IO. It opens only existing private state in the
-Desktop storage origin. Missing state never creates directories, an installation
-identity or a journal. Existing cooperating locks may be acquired. The legacy
-origin guard applies to recovery and trust; project initialization is independent.
+`--accept-review <sha256>` choice, including on interactive terminals. It uses
+the process directory or `--project` as the exact native root. There is no force,
+blind acceptance, remote-to-local translation or global fallback.
 
-The shared `OwnedRecoveryReview` reads the installation-bound journal and reviews
-one to three saved originals whose targets are missing. The JSON preview contains
-schema 1, canonical `root`, a native `reviewDigest`, complete literal `entries`
-with relative `target`, `backup` and original `text`, and false
-`originalsRestored`, `initializationCompleted`, `policyChanged`, `trustChanged`,
-`contextActivated` and `capturesActivated`. Human output escapes terminal controls
-and bidi overrides without truncating the bounded original text. Preview changes
-no project files, policy or trust and exposes no private storage path or
-installation identity.
+The command uses `OwnedProjectRecoveryPreview` and the existing
+`.voktty/.initialization.json` record. It never resolves or opens either global
+memory storage origin. Missing, inaccessible, corrupt or legacy global data does
+not block recovery and remains untouched. Old global journals are not consumed.
 
-Acceptance constructs a fresh native review for the same root and compares its
-digest before restoration. The digest binds the complete intent, root instances,
-installation, preference revision and exact restoration entries. It is an
-acceptance check, not a durable write capability or a remembered session grant.
-Changes to root instances, reviewed bytes, target presence, preference revision
-or journal facts require another review. The native object retains its
-120-second lifetime and revalidates under
-the existing deployment lock before and between moves. CLI write authority
-permits only the reviewed missing targets and exact original backups; it grants
-no replacements, directory creation, arbitrary staging or secret-file access.
+Preview acquires the existing record's nonblocking activity lock and validates
+its schema, reproducible template version, exact inventory, hashes and native
+root-instance bindings. Live operations, unknown artifacts, older records without
+reproducible inputs/actions and modified bases or rules remain explicit errors.
+The native planner preserves current Content documents and reserved runtime data.
 
-Success reports schema 1, `root`, `reviewDigest`, `created`, `cleaned`, empty
-`skipped` and `migrated`, and `originalsRestored: true`. Other effect flags remain
-false and describe this operation. Original objects are moved back, preserving
-their native metadata under the qualified filesystem contract. Existing targets
-are preserved. Private preferences and the interrupted journal remain unchanged;
-the command never finishes initialization or starts an agent. A fresh
-`memory init --preview` can review initialization after restoration, independently
-of the preserved global journal. It does not consume or delete that journal.
-Restored, now-present targets are no longer recovery candidates.
+The JSON preview has schema 2, canonical `root`, native `reviewDigest`, complete
+`deployment`, `restorations` with relative target/backup and literal original
+text, `cleanup` entries with relative path and literal text, `recordCleanup`
+and `publicationBlocker` or null. All effect flags are false. Human output escapes
+terminal controls and bidi overrides. Preview writes no project or global data;
+it can temporarily hold the existing record's OS lock.
 
-Usage errors exit 2 before IO. Unavailable or refused native/state reads use the
-existing redacted errors and exit 3. Missing matching recovery, stale acceptance,
-conflicts and restoration failures exit 5. An admitted restoration failure uses
-one `ok: false` stderr envelope with `error` and top-level acknowledged `changes`
-(`created`, `migrated`, `cleaned`, `possibleRecoveryFiles`); stdout remains empty.
-Some moves may already have completed. Reload and review again; no automatic
-rollback or repair occurs. Corrupt state and foreign or linked artifacts are
-preserved without exposing their bodies in errors.
+Acceptance prepares a fresh review and compares its digest. The digest covers
+the exact record, native root bindings, current file/backup snapshot and resulting
+deployment. Project changes require another review; old global preferences do
+not participate. The consuming native review keeps its 120-second lifetime and
+retains the reacquired record lock through project and backup mutations, checking
+roots, bytes and original authority between phases. CLI recovery shares init's
+write authority for only the reviewed inventory, required parents, canonical UUID
+staging, exact rule/ignore migrations and exact cleanup. Secret-path protections
+remain in force.
 
-Status capabilities include `recovery: { preview, restoreOriginals }`. The latter
-reflects compiled native restoration support on Linux, Android and Windows, not
-runtime qualification. Linux process tests cover preview, exact acceptance,
-metadata, unchanged private state, changed facts, malformed input, terminal
-escaping and separately reviewed resumption. Other platform and filesystem
-runtime qualification remains outstanding. The SSH helper uses the same native
-origin resolver and storage on its execution host. Its legacy-state refusal is
-`legacyStateRequiresReview`; this local command does not migrate or combine
-settings. Desktop on another machine retains its separate installation.
+Success reports schema 2, root, reviewDigest, acknowledged created/skipped/migrated/
+cleaned paths and `initializationCompleted: true`. `originalsRestored` is true
+only if missing originals were restored before migration. Their native metadata
+is preserved under the qualified filesystem contract. Other effect flags remain
+false. The command completes missing files, verifies the kit and then cleans only
+recognized backups and the exact project record. It starts no agent. A completed
+kit with record cleanup pending needs no new project files.
+
+Usage errors exit 2. Unavailable or refused native reads, including unavailable
+project records and busy locks, use redacted errors and exit 3. Invalid records,
+conflicts, stale acceptance and admitted failures exit 5. Admitted failures use
+one stderr envelope with error and acknowledged changes, including possible
+recovery files; stdout remains empty. Earlier writes may have completed. Reload
+and review again; interruption does not promise rollback. Unknown data and linked
+artifacts remain preserved without their bodies appearing in errors.
+
+Status capabilities expose `recovery: { preview, completeInitialization }`.
+Compiled support on Linux, Android and Windows is not runtime qualification.
+Linux process tests cover native recovery, complete literal review, terminal
+escaping, exact acceptance, metadata, preserved context/sessions, unusable global
+origins, untouched old data, changed project facts and a live record lock.
+Other native platforms and filesystems require runtime qualification. Desktop and
+SSH helper recovery callers retain their previous private-journal contract until
+adapted.
 
 ## Persistent memory policy
 
@@ -283,10 +281,10 @@ Launcher directories for exited processes are removed at the next control-server
 
 The release profile uses one codegen unit, fat LTO, optimization level 3, abort-on-panic, and debug-info stripping. Reusing the native memory reader and embedded schema validation increased the Linux x86_64 CLI from 3,528,952 to 8,781,328 bytes for standalone status. Initialization and the shared native publisher measured 9,161,928 bytes; persistent policy management measured 9,208,400 bytes and explicit instruction trust measured 9,289,008 bytes and Unix agent launch measured 9,299,784 bytes and the qualified Codex initial-prompt channel measured 9,386,032 bytes. The shared Codex/Claude initial-prompt build measured 9,388,760 bytes; standalone memory measurement brings the measured Linux x86_64 build to 9,453,896 bytes. This trades additional artifact size for the same scope, path, publication and preference rules as the desktop. No external package versions change. Other target sizes require their own builds; always measure the actual artifacts after changing dependencies.
 
-Reviewed restoration measures 9,519,920 bytes in the Linux x86_64 GNU release
+The previous private-journal restoration measured 9,519,920 bytes in the Linux x86_64 GNU release
 sidecar built by `build-cli.mjs`. It reuses the existing native recovery core
 without adding a dependency. Other targets require their own builds and runtime
-qualification.
+qualification. The project-record recovery artifact has not been measured yet.
 
 ## Current limits
 

@@ -144,7 +144,6 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         for args in [
             vec!["use", "--always", "--json"],
             vec!["trust", "--preview", "--json"],
-            vec!["recover", "--preview", "--json"],
             vec!["run", "--session", "codex"],
             vec!["run", "codex"],
         ] {
@@ -166,6 +165,12 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         let status = result(&f.run(&["status", "--json"]));
         assert_eq!(status["scope"]["state"], "ready");
         assert_eq!(status["policy"]["state"], "not_checked");
+        let recovery = f.run(&["recover", "--preview", "--json"]);
+        assert_eq!(recovery.status.code(), Some(3));
+        assert_eq!(
+            serde_json::from_slice::<Value>(&recovery.stderr).unwrap()["error"]["code"],
+            "memory_unavailable"
+        );
         if mode == "legacy-only" {
             assert!(!f.canonical().exists());
             assert_eq!(
