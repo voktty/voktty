@@ -193,6 +193,14 @@ impl Drop for ReadPermit {
     }
 }
 
+pub struct ProjectContextObservation {
+    pub config: Value,
+    pub instructions: Value,
+    pub fingerprint: InstructionFingerprint,
+    pub project: PathFact,
+    pub context: PathFact,
+}
+
 pub struct NativeContextObservation {
     pub identity: Value,
     pub project_key: String,
@@ -500,54 +508,20 @@ impl<'a> LocalMemoryWorkspace<'a> {
         role: Option<&str>,
         control: &ReadControl,
     ) -> Result<NativeContextObservation, ReadError> {
-        let mut paths = inventory(true);
-        if let Some(role) = role {
-            let name = role
-                .strip_prefix(".voktty/team/roles/")
-                .and_then(|s| s.strip_suffix(".md"));
-            if role.len() > 256
-                || !name.is_some_and(|s| {
-                    !s.is_empty()
-                        && s.bytes()
-                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
-                })
-            {
-                return Err(ReadError::InvalidInput);
-            }
-            paths.insert(role.into());
-        }
-        paths.extend(["AGENTS.md".into(), "CLAUDE.md".into()]);
-        let instruction_paths = paths.clone();
-        paths.extend([
-            ".voktty/kit.json".into(),
-            ".voktty/PROJECT.md".into(),
-            ".voktty/CONTEXT.md".into(),
-        ]);
-        let (mut facts, local_preferences) = self.collect(&paths, 2 * 1024 * 1024, control)?;
-        let instructions = json!({"schema":1,"role":role,"files":instruction_paths.iter().map(|path| json!({"path":path,"fact":fact_value(&facts[path])})).collect::<Vec<_>>()});
-        let fingerprint =
-            instruction_fingerprint(&instructions.to_string()).map_err(ReadError::Contract)?;
-        let config = match &facts[".voktty/kit.json"] {
-            PathFact::File { text } => parse_kit_config(text).map_err(ReadError::Contract)?,
-            _ => return Err(ReadError::Unavailable),
-        };
-        let project = facts.remove(".voktty/PROJECT.md").expect("fixed inventory");
-        let context = facts.remove(".voktty/CONTEXT.md").expect("fixed inventory");
-        if !matches!(project, PathFact::File { .. }) || !matches!(context, PathFact::File { .. }) {
-            return Err(ReadError::Unavailable);
-        }
-        control.check()?;
+        let paths = context_inventory(role)?;
+        let (facts, local_preferences) = self.collect(&paths, 2 * 1024 * 1024, control)?;
+        let observed = project_context_observation(facts, role, control)?;
         Ok(NativeContextObservation {
             identity: self.identity.clone(),
             project_key: self.project_key.clone(),
             preference: local_preferences
                 .project_for_root(&self.project_key, self.root_instance.as_ref()),
             local_preferences,
-            config,
-            instructions,
-            fingerprint,
-            project,
-            context,
+            config: observed.config,
+            instructions: observed.instructions,
+            fingerprint: observed.fingerprint,
+            project: observed.project,
+            context: observed.context,
         })
     }
 
@@ -650,4 +624,62 @@ pub(crate) fn fact_value(fact: &PathFact) -> Value {
         PathFact::Absent => json!({"kind":"absent"}),
         PathFact::Blocked => json!({"kind":"blocked"}),
     }
+}
+
+fn context_inventory(role: Option<&str>) -> Result<BTreeSet<String>, ReadError> {
+    let mut paths = inventory(true);
+    if let Some(role) = role {
+        let name = role
+            .strip_prefix(".voktty/team/roles/")
+            .and_then(|s| s.strip_suffix(".md"));
+        if role.len() > 256
+            || !name.is_some_and(|s| {
+                !s.is_empty()
+                    && s.bytes()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+            })
+        {
+            return Err(ReadError::InvalidInput);
+        }
+        paths.insert(role.into());
+    }
+    paths.extend(["AGENTS.md".into(), "CLAUDE.md".into()]);
+    paths.extend([
+        ".voktty/kit.json".into(),
+        ".voktty/PROJECT.md".into(),
+        ".voktty/CONTEXT.md".into(),
+    ]);
+    Ok(paths)
+}
+
+fn project_context_observation(
+    mut facts: BTreeMap<String, PathFact>,
+    role: Option<&str>,
+    control: &ReadControl,
+) -> Result<ProjectContextObservation, ReadError> {
+    let mut instruction_paths = inventory(true);
+    instruction_paths.extend(["AGENTS.md".into(), "CLAUDE.md".into()]);
+    if let Some(role) = role {
+        instruction_paths.insert(role.into());
+    }
+    let instructions = json!({"schema":1,"role":role,"files":instruction_paths.iter().map(|path| json!({"path":path,"fact":fact_value(&facts[path])})).collect::<Vec<_>>()});
+    let fingerprint =
+        instruction_fingerprint(&instructions.to_string()).map_err(ReadError::Contract)?;
+    let config = match &facts[".voktty/kit.json"] {
+        PathFact::File { text } => parse_kit_config(text).map_err(ReadError::Contract)?,
+        _ => return Err(ReadError::Unavailable),
+    };
+    let project = facts.remove(".voktty/PROJECT.md").expect("fixed inventory");
+    let context = facts.remove(".voktty/CONTEXT.md").expect("fixed inventory");
+    if !matches!(project, PathFact::File { .. }) || !matches!(context, PathFact::File { .. }) {
+        return Err(ReadError::Unavailable);
+    }
+    control.check()?;
+    Ok(ProjectContextObservation {
+        config,
+        instructions,
+        fingerprint,
+        project,
+        context,
+    })
 }

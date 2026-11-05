@@ -115,6 +115,41 @@ fn project_observation_preserves_existing_kit_sessions_and_rule_files() {
         fs::read_to_string(project.path().join(".voktty/sessions/owner.json")).unwrap(),
         "session"
     );
+    let observed = workspace
+        .observe_context(None, &ReadControl::default())
+        .unwrap();
+    assert_eq!(observed.config["project"], "Project reader");
+    assert!(observed.instructions["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|file| file["path"] != ".voktty/sessions/owner.json"));
+    fs::write(
+        project.path().join(".voktty/CONTEXT.md"),
+        "New project facts\n",
+    )
+    .unwrap();
+    let updated = workspace
+        .observe_context(None, &ReadControl::default())
+        .unwrap();
+    assert_eq!(updated.fingerprint, observed.fingerprint);
+    assert!(matches!(updated.context, PathFact::File { text } if text == "New project facts\n"));
+    fs::write(
+        project.path().join(".voktty/INIT.md"),
+        "Updated project guide\n",
+    )
+    .unwrap();
+    let instructions = workspace
+        .observe_context(None, &ReadControl::default())
+        .unwrap();
+    assert_ne!(instructions.fingerprint, observed.fingerprint);
+    assert!(matches!(
+        workspace.observe_context(
+            Some(".voktty/team/roles/../../.env"),
+            &ReadControl::default()
+        ),
+        Err(ReadError::InvalidInput)
+    ));
 }
 
 #[test]
@@ -135,6 +170,9 @@ fn metadata_grants_cannot_read_documents_and_retirement_denies_later_reads() {
         .observe_deployment(RootLinks::default(), &ReadControl::default())
         .unwrap();
     assert!(matches!(facts[".voktty/PROJECT.md"], PathFact::Blocked));
+    assert!(workspace
+        .observe_context(None, &ReadControl::default())
+        .is_err());
     authority.active.store(false, Ordering::Release);
     assert!(matches!(
         workspace.observe_deployment(RootLinks::default(), &ReadControl::default()),
@@ -154,6 +192,14 @@ fn cancellation_and_deadline_stop_project_observation() {
     assert!(matches!(
         workspace.observe_deployment(RootLinks::default(), &cancelled),
         Err(ReadError::Cancelled)
+    ));
+    assert!(matches!(
+        workspace.observe_context(None, &cancelled),
+        Err(ReadError::Cancelled)
+    ));
+    assert!(matches!(
+        workspace.observe_context(None, &ReadControl::new(Duration::ZERO)),
+        Err(ReadError::Timeout)
     ));
     assert!(matches!(
         workspace.observe_deployment(RootLinks::default(), &ReadControl::new(Duration::ZERO)),
@@ -256,5 +302,37 @@ fn replacing_a_captured_project_or_linking_a_document_never_redirects_reads() {
     assert!(matches!(
         workspace.observe_deployment(RootLinks::default(), &ReadControl::default()),
         Err(ReadError::StaleRoot)
+    ));
+    assert!(matches!(
+        workspace.observe_context(None, &ReadControl::default()),
+        Err(ReadError::StaleRoot)
+    ));
+}
+
+#[test]
+fn context_reads_keep_the_aggregate_byte_limit_before_parsing() {
+    let _serial = SERIAL.lock().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for name in [
+        "INIT.md",
+        "RULES.md",
+        "INDEX.md",
+        "README.md",
+        "kit.schema.json",
+        "PROJECT.md",
+        "CONTEXT.md",
+        "plans/README.md",
+        "continuity/README.md",
+    ] {
+        let path = project.path().join(".voktty").join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "x".repeat(256 * 1024)).unwrap();
+    }
+    let authority = access(project.path());
+    let workspace =
+        ProjectMemoryWorkspace::open(project.path(), &authority, &ReadControl::default()).unwrap();
+    assert!(matches!(
+        workspace.observe_context(None, &ReadControl::default()),
+        Err(ReadError::Limit)
     ));
 }

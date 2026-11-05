@@ -164,6 +164,28 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         Ok(facts)
     }
 
+    /// Reads the bounded project instruction and context inventory without
+    /// installation identity, preferences or permission to deliver it to a model.
+    pub fn observe_context(
+        &self,
+        role: Option<&str>,
+        control: &ReadControl,
+    ) -> Result<ProjectContextObservation, ReadError> {
+        let paths = context_inventory(role)?;
+        let _permit = ReadPermit::acquire(control)?;
+        let directory = self.checked_root(control)?;
+        let facts = collect_project_facts(
+            &directory,
+            &self.root,
+            self.access,
+            &paths,
+            2 * 1024 * 1024,
+            control,
+        )?;
+        self.checked_root(control)?;
+        project_context_observation(facts, role, control)
+    }
+
     pub(crate) fn recovery_artifacts(
         &self,
         control: &ReadControl,

@@ -1,5 +1,15 @@
 # Native session context preparation
 
+`ProjectMemoryWorkspace::observe_context` reads configuration, instruction facts
+and fingerprints, PROJECT and CONTEXT using only captured project authority.
+It returns `ProjectContextObservation` without an installation identity or private
+preferences and performs no writes. It shares the inventory, role validation,
+schema checks and bounded fact assembly used by the legacy reader below, with
+the same four-reader admission, 2 MiB batch limit, cancellation, secret-path and
+root-identity checks. It does not resolve a delivery scope, bind a conversation
+or authorize provider delivery. Migrating the session consumers below to this
+project-only observation remains in progress.
+
 `MemoryContextSession::bind` and `MemoryWorkers::bind_context_session` consume an existing native
 `MemoryTrustReview` with an explicit `MemorySessionUse` choice. The review is
 an immutable observation for display, separate from accepting instruction trust.
