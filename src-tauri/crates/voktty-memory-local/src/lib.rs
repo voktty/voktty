@@ -32,9 +32,10 @@ pub use origin::{resolve_memory_application_parent, MemoryOriginError, MEMORY_AP
 pub use origin::{OriginMigrationFailure, OriginMigrationReview, OriginMigrationSummary};
 pub use publication::{
     InitializationPreview, MemoryWriteAccess, OwnedInitializationPreview,
-    OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,
-    PublicationError, PublicationFailure, PublicationReport, PublicationWriteRequirements,
-    RecoveryFile, RecoveryRestore, PROJECT_INITIALIZATION_RECORD,
+    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, OwnedRecoveryReview,
+    ProjectInitializationRequest, ProjectRecoveryRequest, PublicationError, PublicationFailure,
+    PublicationReport, PublicationWriteRequirements, RecoveryFile, RecoveryRestore,
+    PROJECT_INITIALIZATION_RECORD,
 };
 pub use storage_diagnostics::{StorageFailure, StorageStage};
 pub use workers::{

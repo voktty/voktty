@@ -243,6 +243,19 @@ impl<'a> ProjectMemoryWorkspace<'a> {
         self.access
     }
 
+    #[cfg(any(unix, windows))]
+    pub(crate) fn hold_initialization_record(
+        &self,
+        control: &ReadControl,
+    ) -> Result<(std::fs::File, String), ReadError> {
+        let _permit = ReadPermit::acquire(control)?;
+        let directory = self.checked_root(control)?;
+        let record = directory.hold_initialization_record(&self.root, self.access, control)?;
+        self.checked_root(control)?;
+        control.check()?;
+        Ok(record)
+    }
+
     pub(crate) fn read_artifact(
         &self,
         path: &str,

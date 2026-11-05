@@ -133,11 +133,10 @@ exit. It is released before final record cleanup, after all kit and backup work;
 that cleanup still compares the exact record and preserves replacements.
 An older record without this declaration does not establish the locking protocol.
 Records without template data or deployment actions remain recognizable pending
-operations, not reproducible transactions. A future recovery must validate the
-embedded version, exact inventory and hashes rather than infer missing inputs
-from current defaults or treat this metadata as write authority.
-Recovery of retained project records is still pending; absence of a lock alone
-must not authorize restoration or removal of the record or its backups.
+operations, not reproducible transactions. Native project recovery validates the
+embedded version, exact inventory and hashes rather than inferring missing inputs
+from current defaults or treating this metadata as write authority. Older records
+remain explicit errors with their files preserved.
 
 The publisher reuses the existing native exclusive creator and original-preserving
 migration backends. It verifies expected bytes before mutation, publishes
@@ -154,3 +153,49 @@ existing persistent publication route is unchanged. Windows sources are checked
 by cross-compilation, which does not qualify native NTFS runtime behavior.
 `MemoryWorkers::publish_project` uses the same four-slot worker lifetime and
 original cancellation deadline as preparation.
+
+## Project recovery
+
+`OwnedProjectRecoveryPreview::prepare` captures native origin/destination read
+authorities through `ProjectRecoveryRequest`. It opens the existing project
+record component by component, rejects links, multiple hard links, oversized
+records and filesystem changes, and acquires the nonblocking `record-v1` lock
+before reading it. The read shares the four-reader budget and bounded phase.
+A live publisher or recovery cannot be borrowed; process exit releases its lock.
+Preparation releases that lock after validation and performs no writes.
+
+The strict record parser verifies schema, operation, scope, canonical transaction
+UUID, hashes, template version and the exact ordered embedded inventory. Backup
+names are derived from the transaction and original entry index, never accepted
+as arbitrary paths. Unknown artifacts, unsupported versions and records without
+template inputs or actions remain preserved and block recovery. The original
+native root-instance bindings must still match. No private store is opened and
+no installation identity, policy, trust or session permission is created.
+
+The pure recovery planner reproduces missing files, preserves currently present
+Content documents, and rejects modified bases or rules. Only the three existing
+rule/ignore migration paths are eligible for restoration. A missing rule is
+restored by moving its verified original object back before migration, preserving
+its native metadata. A recognized pre-exchange proposal can be cleaned only
+while its original remains at the target. Recognized originals are retained until
+the whole kit verifies. An already completed kit can require only record cleanup.
+Unknown or changed backups are never discarded. The kit lock is reproduced from
+the actual planned base proposals, including the private-ignore migration.
+
+The acceptance digest covers the exact record, current file/backup snapshot and
+resulting deployment. `publish` consumes that original review with independently
+granted create, replace and cleanup access. It reacquires the exact record lock,
+revalidates the snapshot and original authorities, and retains the lock through
+all project and backup mutations. It uses the same native create, migration,
+original-restoration and cleanup primitives as initialization. Root and byte
+checks separate every phase. Resolved-scope records retain ancestor/descendant
+checks; explicit-root records do not acquire a delivery scope. Review expiration,+cancellation, unknown data or changed authority stops subsequent phases without
+claiming rollback. A further interruption retains a recoverable record. Final
+record cleanup compares its exact bytes after all other work, as in publication.
+
+This synchronous native API does not replace Desktop, CLI or SSH recovery callers
+yet; those integrations still use the previous private journal contract. Linux
+tests exercise interruption, migration, metadata preservation and a separate live
+lock-holding process. Windows compilation is checked separately and is not native
+runtime qualification. Platforms without native migration/restoration/cleanup
+report their existing unavailable states before project writes.

@@ -29,6 +29,9 @@ use windows_sys::Win32::Storage::FileSystem::{
 #[path = "publication_windows.rs"]
 mod publication;
 
+#[path = "project_record_windows.rs"]
+mod project_record;
+
 #[path = "state_windows.rs"]
 mod state_security;
 

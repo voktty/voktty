@@ -21,6 +21,9 @@ pub(crate) mod origin;
 #[path = "state_unix.rs"]
 mod state;
 
+#[path = "project_record_unix.rs"]
+mod project_record;
+
 #[cfg(target_os = "linux")]
 #[path = "root_birth_linux.rs"]
 mod root_birth;

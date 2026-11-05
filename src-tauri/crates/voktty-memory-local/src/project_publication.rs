@@ -306,7 +306,7 @@ impl OwnedProjectInitializationPreview {
     }
 }
 
-fn create_project(
+pub(super) fn create_project(
     target: &ProjectMemoryWorkspace<'_>,
     path: &str,
     text: &str,
@@ -340,7 +340,7 @@ fn create_project(
     }
 }
 
-fn migrate_project(
+pub(super) fn migrate_project(
     target: &ProjectMemoryWorkspace<'_>,
     entry: &voktty_workspace_kit::DeploymentEntry,
     backup: &str,
@@ -372,7 +372,7 @@ fn migrate_project(
     }
 }
 
-fn cleanup_project(
+pub(super) fn cleanup_project(
     target: &ProjectMemoryWorkspace<'_>,
     file: &RecoveryFile,
     access: &dyn MemoryWriteAccess,

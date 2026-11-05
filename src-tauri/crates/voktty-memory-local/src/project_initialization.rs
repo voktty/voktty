@@ -5,6 +5,10 @@ use crate::ProjectMemoryWorkspace;
 #[path = "project_publication.rs"]
 mod publication;
 
+#[path = "project_recovery.rs"]
+mod recovery;
+pub use recovery::{OwnedProjectRecoveryPreview, ProjectRecoveryRequest};
+
 #[cfg(all(test, any(unix, windows)))]
 #[path = "project_record_lock_tests.rs"]
 mod record_lock_tests;
@@ -269,26 +273,36 @@ impl OwnedProjectInitializationPreview {
         allow_partial: bool,
         control: &DiscoveryControl,
     ) -> Result<(), PublicationError> {
-        source.validate_root(&control.read_control()?)?;
-        target.validate_root(&control.read_control()?)?;
-        let InitializationPlacement::Resolved(identity) = &self.placement else {
-            return validate_project_root(target.root());
-        };
-        let source_scope =
-            source.observe_scope_with_identity(DiscoveryPurpose::Discover, identity, control)?;
-        let target_scope =
-            target.observe_scope_with_identity(DiscoveryPurpose::Initialize, identity, control)?;
-        let key = target_scope
-            .directories
-            .iter()
-            .find(|directory| directory.path == target.root())
-            .map(|directory| directory.directory_key.as_str())
-            .ok_or(PublicationError::Scope)?;
-        if !scopes_allow_target(&source_scope, &target_scope, key, allow_partial, true) {
-            return Err(PublicationError::Scope);
-        }
-        Ok(())
+        validate_placement_for(&self.placement, source, target, allow_partial, control)
     }
+}
+
+fn validate_placement_for(
+    placement: &InitializationPlacement,
+    source: &ProjectMemoryWorkspace<'_>,
+    target: &ProjectMemoryWorkspace<'_>,
+    allow_partial: bool,
+    control: &DiscoveryControl,
+) -> Result<(), PublicationError> {
+    source.validate_root(&control.read_control()?)?;
+    target.validate_root(&control.read_control()?)?;
+    let InitializationPlacement::Resolved(identity) = placement else {
+        return validate_project_root(target.root());
+    };
+    let source_scope =
+        source.observe_scope_with_identity(DiscoveryPurpose::Discover, identity, control)?;
+    let target_scope =
+        target.observe_scope_with_identity(DiscoveryPurpose::Initialize, identity, control)?;
+    let key = target_scope
+        .directories
+        .iter()
+        .find(|directory| directory.path == target.root())
+        .map(|directory| directory.directory_key.as_str())
+        .ok_or(PublicationError::Scope)?;
+    if !scopes_allow_target(&source_scope, &target_scope, key, allow_partial, true) {
+        return Err(PublicationError::Scope);
+    }
+    Ok(())
 }
 
 fn validate_project_root(root: &Path) -> Result<(), PublicationError> {

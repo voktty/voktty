@@ -31,7 +31,10 @@ pub use recovery::{OwnedRecoveryReview, RecoveryRestore};
 #[path = "project_initialization.rs"]
 pub(crate) mod project_initialization;
 pub use project_initialization::PROJECT_INITIALIZATION_RECORD;
-pub use project_initialization::{OwnedProjectInitializationPreview, ProjectInitializationRequest};
+pub use project_initialization::{
+    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, ProjectInitializationRequest,
+    ProjectRecoveryRequest,
+};
 
 static PUBLICATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
