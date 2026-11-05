@@ -1,9 +1,7 @@
 use super::*;
 use std::sync::{mpsc, Condvar, Mutex};
 use std::time::Duration;
-use voktty_memory_local::{
-    MemoryDeploymentWorkError, MemoryWriteAccess, PublicationError, StoreError,
-};
+use voktty_memory_local::{MemoryDeploymentWorkError, MemoryWriteAccess, PublicationError};
 use voktty_workspace_kit::RootLinks;
 
 struct Fixture {
@@ -33,7 +31,6 @@ fn request(f: &Fixture) -> NativeMemoryPreviewRequest {
     NativeMemoryPreviewRequest {
         destination: f.root.clone(),
         environment: WorkspaceEnv::Local,
-        store: f.store.clone(),
         inputs: json!({"project_name":"Owned native review", "created_at":"2026-10-29"})
             .as_object()
             .unwrap()
@@ -138,6 +135,11 @@ impl MemoryWriteAccess for WriteAccess {
         }
         true
     }
+    fn allows_remove_staging(&self, path: &Path) -> bool {
+        path == self
+            .root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+    }
 }
 
 #[test]
@@ -166,7 +168,7 @@ fn accepted_review_publishes_exact_bytes_once_without_changing_preferences() {
         )));
         assert!(is_cancelled(&owner.preview(&selected, &receipt)));
         let report = job.finish().await.unwrap();
-        assert_eq!(report.created.len(), expected.len());
+        assert_eq!(report.created.len(), expected.len() + 1);
         assert_eq!(report.created.last().unwrap(), ".voktty/kit.json");
         for entry in expected {
             assert_eq!(
@@ -346,7 +348,7 @@ fn dropping_the_owner_retires_opening_delivery_even_when_worker_and_receipt_surv
 }
 
 #[test]
-fn selection_retirement_cancels_publication_without_releasing_its_physical_lock_early() {
+fn selection_retirement_preserves_the_unfinished_project_record() {
     let f = fixture();
     let runtime = runtime();
     let gate = Arc::new(Gate::new());
@@ -365,29 +367,25 @@ fn selection_retirement_cancels_publication_without_releasing_its_physical_lock_
             .select(&f.registry, f.root.clone(), &WorkspaceEnv::Local)
             .unwrap();
         assert!(is_cancelled(&job.finish().await));
-        assert!(matches!(
-            f.store.try_lock_deployment(),
-            Err(StoreError::Busy)
-        ));
+        assert!(f.store.try_lock_deployment().is_ok());
+        assert!(f
+            .root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+            .exists());
         drop(release);
-        tokio::time::timeout(Duration::from_secs(3), async {
-            loop {
-                match f.store.try_lock_deployment() {
-                    Ok(lock) => {
-                        drop(lock);
-                        break;
-                    }
-                    Err(StoreError::Busy) => tokio::time::sleep(Duration::from_millis(1)).await,
-                    Err(error) => panic!("unexpected lock error: {error:?}"),
-                }
-            }
-        })
-        .await
-        .unwrap();
         assert!(!f.root.join(".voktty/kit.json").exists());
         assert!(f.root.join(".voktty/INIT.md").exists());
-        let retry = prepare(&mut owner, &current, &f).await;
-        assert!(owner.preview(&current, &retry).unwrap().is_resuming());
+        let retry = owner
+            .prepare_preview(&current, &f.registry, request(&f))
+            .unwrap()
+            .finish()
+            .await;
+        assert!(matches!(
+            retry,
+            Err(MemoryDeploymentWorkError::Preview(
+                PublicationError::RecoveryRequired(_)
+            ))
+        ));
     });
 }
 
@@ -423,15 +421,21 @@ fn publication_failure_preserves_partial_report_and_does_not_restore_acceptance(
         )));
         assert!(!f.root.join(".voktty/kit.json").exists());
         write.deny.store(false, Ordering::Release);
-        let retry = prepare(&mut owner, &selected, &f).await;
-        assert!(owner.preview(&selected, &retry).unwrap().is_resuming());
-        owner
-            .publish_preview(&selected, &retry, write, DiscoveryControl::default())
+        let retry = owner
+            .prepare_preview(&selected, &f.registry, request(&f))
             .unwrap()
             .finish()
-            .await
-            .unwrap();
-        assert!(f.root.join(".voktty/kit.json").exists());
+            .await;
+        assert!(matches!(
+            retry,
+            Err(MemoryDeploymentWorkError::Preview(
+                PublicationError::RecoveryRequired(_)
+            ))
+        ));
+        assert!(f
+            .root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+            .exists());
     });
 }
 

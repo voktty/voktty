@@ -1,7 +1,8 @@
 use super::*;
 use std::sync::Weak;
 use voktty_memory_local::{
-    MemoryDeploymentWorkError, MemoryTrustError, MemoryWriteAccess, OwnedInitializationPreview,
+    MemoryDeploymentWorkError, MemoryTrustError, MemoryWriteAccess,
+    OwnedProjectInitializationPreview,
 };
 
 /// One native presentation's selected source. Changing selection retires the
@@ -321,7 +322,6 @@ impl NativeMemorySelection {
             receipt,
             &reserved,
             NativeMemoryPreviewValues {
-                store: request.store,
                 inputs: request.inputs,
                 links: request.links,
             },
@@ -360,15 +360,6 @@ impl NativeMemorySelection {
         )
     }
 
-    pub(super) fn preview_store_control(
-        &self,
-        selection: &NativeMemorySelectionReceipt,
-        reserved: &NativeMemoryPreviewReceipt,
-    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
-        self.current(selection)?;
-        self.deployment.store_control(reserved)
-    }
-
     pub fn accept_preview(
         &mut self,
         receipt: &NativeMemorySelectionReceipt,
@@ -382,7 +373,7 @@ impl NativeMemorySelection {
         &self,
         selection: &NativeMemorySelectionReceipt,
         receipt: &NativeMemoryPreviewReceipt,
-    ) -> Result<&OwnedInitializationPreview, MemoryDeploymentWorkError> {
+    ) -> Result<&OwnedProjectInitializationPreview, MemoryDeploymentWorkError> {
         self.current(selection)?;
         self.deployment.preview(receipt)
     }

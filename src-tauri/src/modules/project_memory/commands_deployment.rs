@@ -36,9 +36,8 @@ impl PreviewRequest {
         Ok(())
     }
 
-    fn values(self, store: Arc<LocalMemoryStore>) -> NativeMemoryPreviewValues {
+    fn values(self) -> NativeMemoryPreviewValues {
         NativeMemoryPreviewValues {
-            store,
             inputs: self
                 .inputs
                 .into_iter()
@@ -442,6 +441,19 @@ impl PresentationResource {
 #[path = "commands_recovery.rs"]
 pub mod recovery;
 
+fn matches_memory_destination(observed: &NativeScopeObservation, root: &Path) -> bool {
+    let Some(origin) = observed.directories.first() else {
+        return false;
+    };
+    if observed.scope.state == "ready" {
+        return observed.directories.iter().any(|directory| {
+            Some(&directory.directory_key) == observed.scope.root_key.as_ref()
+                && root == directory.path
+        });
+    }
+    root.starts_with(&origin.path)
+}
+
 async fn preview(
     app: &NativeMemoryApplication,
     registry: &WorkspaceRegistry,
@@ -452,23 +464,29 @@ async fn preview(
     let capture = resource.reserve_review(app, registry, selection, &request)?;
     let result = async {
         request.validate_inputs()?;
-        let store = app
-            .open_preview_store(
+        let observed = app
+            .inspect_scope(
                 &resource.window,
                 &resource.receipt,
                 &capture.selection,
-                &capture.receipt,
+                DiscoveryControl::default(),
             )
-            .await?;
+            .map_err(MemoryDeploymentWorkError::from)?
+            .finish()
+            .await
+            .map_err(MemoryDeploymentWorkError::from)?;
         resource.check_review(app, selection, &capture, Phase::Opening)?;
         let read = app.start_preview(
             &resource.window,
             &resource.receipt,
             &capture.selection,
             &capture.receipt,
-            request.values(store),
+            request.values(),
         )?;
         let prepared = read.finish().await?;
+        if !matches_memory_destination(&observed, prepared.root()) {
+            return Err(MemoryDeploymentWorkError::Preview(PublicationError::Scope).into());
+        }
         resource.adopt_review(app, selection, &capture, prepared)
     }
     .await;

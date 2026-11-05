@@ -52,10 +52,8 @@ fn authorize_initialize_reserved_directory_and_use_reviewed_memory_without_touch
         let reservation = app.reserve_preview(&window, &presentation, &selected, &registry,
             NativeMemoryPreviewTarget { destination: authorized.clone(), environment: WorkspaceEnv::Local, control: DiscoveryControl::default() }
         ).unwrap();
-        let preview_store = app.open_preview_store(&window, &presentation, &selected, &reservation).await.unwrap();
         let prepared = app.start_preview(&window, &presentation, &selected, &reservation,
             NativeMemoryPreviewValues {
-                store: preview_store,
                 inputs: json!({ "project_name": "Fresh integration", "created_at": "2026-11-02", "language": "es" }).as_object().unwrap().clone(),
                 links: RootLinks::default(),
             }

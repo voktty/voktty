@@ -1,6 +1,7 @@
 use super::*;
 use crate::modules::project_memory::tests::{project, runtime, store};
 use std::fs;
+use voktty_memory_local::MemoryPreviewRequest;
 
 struct MigrationWriter(PathBuf);
 impl MemoryWriteAccess for MigrationWriter {

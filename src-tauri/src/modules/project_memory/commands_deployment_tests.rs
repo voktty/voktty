@@ -242,24 +242,21 @@ fn failed_new_destination_retires_acceptance_and_cannot_restore_it() {
 }
 
 #[test]
-fn preview_errors_never_initialize_state_or_keep_an_acceptance() {
+fn preview_needs_no_global_state_and_invalid_inputs_retire_acceptance() {
     let (state, app, resource) = fixture();
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
     runtime().block_on(async {
-        assert_eq!(
-            preview(
-                &app,
-                &registry,
-                &resource,
-                &selection,
-                request(project.path(), 1)
-            )
-            .await
-            .unwrap_err()
-            .code,
-            "unavailable"
-        );
+        let first = preview(
+            &app,
+            &registry,
+            &resource,
+            &selection,
+            request(project.path(), 1),
+        )
+        .await
+        .unwrap();
+        assert!(!first.review.is_empty());
         assert_eq!(fs::read_dir(state.path()).unwrap().count(), 0);
         let mut oversized = request(project.path(), 2);
         oversized
@@ -278,26 +275,23 @@ fn preview_errors_never_initialize_state_or_keep_an_acceptance() {
         initialize(&app, &resource).await;
         let preferences = state.path().join("project-memory/memory-local.json");
         fs::remove_file(&preferences).unwrap();
-        assert_eq!(
-            preview(
-                &app,
-                &registry,
-                &resource,
-                &selection,
-                request(project.path(), 3)
-            )
-            .await
-            .unwrap_err()
-            .code,
-            "missingState"
-        );
+        let last = preview(
+            &app,
+            &registry,
+            &resource,
+            &selection,
+            request(project.path(), 3),
+        )
+        .await
+        .unwrap();
+        assert!(!last.review.is_empty());
         assert!(!preferences.exists());
         assert_eq!(fs::read_dir(project.path()).unwrap().count(), 0);
     });
 }
 
 #[test]
-fn cancellation_while_private_store_is_queued_prevents_its_io_and_late_adoption() {
+fn cancellation_while_preview_is_queued_suppresses_late_adoption_and_writes() {
     let (state, app, resource) = fixture();
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
@@ -317,7 +311,7 @@ fn cancellation_while_private_store_is_queued_prevents_its_io_and_late_adoption(
     runtime.block_on(async {
         let pending = preview(&app, &registry, &resource, &selection, request(project.path(), 1));
         tokio::pin!(pending);
-        tokio::select! { biased; _ = &mut pending => panic!("store must be queued"), _ = tokio::task::yield_now() => {} }
+        tokio::select! { biased; _ = &mut pending => panic!("preview must be queued"), _ = tokio::task::yield_now() => {} }
         assert!(resource.cancel_review(&app, &selection, 1, None).unwrap());
         release_tx.send(()).unwrap();
         blocked.await.unwrap();
@@ -338,22 +332,13 @@ fn completed_old_worker_cannot_adopt_after_a_replacement_or_selection_round_trip
         let old = resource
             .reserve_review(&app, &registry, &selection, &input)
             .unwrap();
-        let store = app
-            .open_preview_store(
-                &resource.window,
-                &resource.receipt,
-                &old.selection,
-                &old.receipt,
-            )
-            .await
-            .unwrap();
         let prepared = app
             .start_preview(
                 &resource.window,
                 &resource.receipt,
                 &old.selection,
                 &old.receipt,
-                input.values(store),
+                input.values(),
             )
             .unwrap()
             .finish()

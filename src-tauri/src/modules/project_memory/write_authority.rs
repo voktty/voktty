@@ -2,7 +2,7 @@ use super::*;
 use std::collections::BTreeSet;
 use std::sync::Weak;
 use voktty_memory_local::{
-    MemoryWriteAccess, OwnedInitializationPreview, OwnedRecoveryReview,
+    MemoryWriteAccess, OwnedProjectInitializationPreview, OwnedRecoveryReview,
     PublicationWriteRequirements,
 };
 
@@ -82,7 +82,13 @@ impl WriteScope {
     fn build(requirements: PublicationWriteRequirements) -> Result<Self, ReadError> {
         if requirements.create.len() > 128
             || requirements.replace.len() > 3
-            || requirements.recovery.len() > 3
+            || requirements.recovery.len() > 4
+            || requirements
+                .recovery
+                .iter()
+                .filter(|path| path.as_str() != voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+                .count()
+                > 3
         {
             return Err(ReadError::Limit);
         }
@@ -112,7 +118,9 @@ impl WriteScope {
             bytes: scope.root.to_str().ok_or(ReadError::InvalidInput)?.len(),
         };
         for relative in requirements.recovery {
-            if !backup_name(&relative) {
+            if !backup_name(&relative)
+                && relative != voktty_memory_local::PROJECT_INITIALIZATION_RECORD
+            {
                 return Err(ReadError::InvalidInput);
             }
             let path = relative_path(&scope.root, &relative)?;
@@ -134,7 +142,9 @@ impl WriteScope {
         }
         for relative in requirements.create {
             let path = relative_path(&scope.root, &relative)?;
-            if !scope.recovery.contains(&path) {
+            if !scope.recovery.contains(&path)
+                || relative == voktty_memory_local::PROJECT_INITIALIZATION_RECORD
+            {
                 budget.insert(
                     &mut scope.stage_parents,
                     path.parent().ok_or(ReadError::InvalidInput)?.to_owned(),
@@ -175,7 +185,7 @@ pub(super) struct NativeMemoryWriteAuthority {
 impl NativeMemoryWriteAuthority {
     pub(super) fn capture(
         registry: &WorkspaceRegistry,
-        preview: &OwnedInitializationPreview,
+        preview: &OwnedProjectInitializationPreview,
         origin: Arc<Access>,
         destination: Arc<Access>,
         review: &Arc<AtomicBool>,

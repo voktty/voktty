@@ -199,50 +199,34 @@ async fn interrupted(
         )
         .await
         .unwrap();
-    let native_selection = resource.capture(selected).unwrap();
-    let read = app
-        .prepare_preview(
-            &resource.window,
-            &resource.receipt,
-            &native_selection,
-            registry,
-            NativeMemoryPreviewRequest {
-                destination: root.into(),
-                environment: WorkspaceEnv::Local,
+    resource.check(app, selected).unwrap();
+    let source = NativeMemorySource::capture(registry, root.into(), &WorkspaceEnv::Local).unwrap();
+    let preview = MemoryWorkers::default()
+        .preview(
+            voktty_memory_local::MemoryPreviewRequest {
                 store,
+                origin: root.into(),
+                origin_access: source.access.clone(),
+                destination: root.into(),
+                destination_access: source.access.clone(),
                 inputs: json!({"project_name":"Recovery IPC","created_at":"2026-11-03"})
                     .as_object()
                     .unwrap()
                     .clone(),
                 links: RootLinks::default(),
-                control: DiscoveryControl::default(),
             },
-        )
-        .unwrap();
-    let receipt = app
-        .accept_preview(
-            &resource.window,
-            &resource.receipt,
-            &native_selection,
-            read.finish().await.unwrap(),
-        )
-        .unwrap();
-    let failure = app
-        .publish_preview(
-            &resource.window,
-            &resource.receipt,
-            &native_selection,
-            &receipt,
-            Arc::new(InterruptedMigration(root.into())),
             DiscoveryControl::default(),
         )
         .unwrap()
         .finish()
         .await
+        .unwrap();
+    let failure = preview
+        .publish(
+            &InterruptedMigration(root.into()),
+            &DiscoveryControl::default(),
+        )
         .unwrap_err();
-    let MemoryDeploymentWorkError::Publication(failure) = failure else {
-        panic!("interrupted migration required")
-    };
     let backup = failure.possible_recovery_files[0].clone();
     assert_eq!(fs::read(root.join(&backup)).unwrap(), b"*\r\n");
     fs::remove_file(root.join(".voktty/.gitignore")).unwrap();

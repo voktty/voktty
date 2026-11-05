@@ -59,11 +59,11 @@ budget and returns a noncloneable prepared artifact with its original identity.
 
 `reserve_preview` separates ownership admission from filesystem work. It captures
 the destination, native read authority and original request control and retires
-the previous review before opening private state. `start_preview` accepts only
-that exact reservation once, together with the captured values and native store;
+the previous review before project filesystem work. `start_preview` accepts only
+that exact reservation once, together with the captured values;
 it cannot replace the destination, authorization snapshot or deadline after an
 await. The existing `prepare_preview` convenience method performs both phases
-when the caller already owns its store. Reservations grant neither a ready plan
+without requiring an application store. Reservations grant neither a ready plan
 nor publication permission, and expired requests cannot renew their deadline.
 
 `NativeMemoryPreviewRead::receipt` exposes only a weak native identity, so an
@@ -86,8 +86,9 @@ permanently retires the old review and requests cooperative cancellation of its
 current phase. Its destination source retires with it. Preparation and publication
 results recheck the original review, origin and destination after awaiting.
 Cancelled delivery does not roll back files or acknowledge a blocked filesystem
-call. Partial reports and the private recovery intent retain their existing
-semantics. Native worker slots and publication locks remain held through physical
+call. Partial reports retain acknowledged changes. Interrupted project publication
+leaves its temporary record and backups for recovery; it does not use a private
+installation journal. Native worker slots and publication locks remain held through physical
 IO settlement even when the owner has already retired.
 
 Callers must recheck `is_preview_current` immediately before delivering an
@@ -171,14 +172,16 @@ resource close, window destruction and application shutdown retire contained
 reviews through the same ownership tree, including requests already in flight.
 The existing 64-window, 256-presentation and four-worker limits still apply.
 
-`open_preview_store` is a noncreating read of this application's existing private
-state. The caller reserves the review before awaiting it. Its five-second read
-phase comes from `DiscoveryControl::read_control`, sharing the reservation's
-original remaining lifetime and cancellation. Both entry and delivery require
-the original selection and a still-reserved review; later preparation cannot
-adopt an old store response. Cancellation propagates to queued native IO, while
-admitted workers retain capacity until settlement. Missing or invalid state is
-an error, never implicit initialization or a project-directory fallback.
+Preview and publication use `preview_project_at_root` and `publish_project` from
+the same native service as CLI initialization. They require only the captured
+project roots and read/write authorities. Existing content documents are preserved;
+missing bases and links can be repaired without reinitializing preferences.
+`open_preview_store` and its forwarding control methods have been removed.
+The record `.voktty/.initialization.json` and up to three exact migration backups
+remain inside the project, with exclusive creation and cleanup of owned bytes.
+Legacy recovery, trust, policy and the current panel setup still use their prior
+state-dependent flows until adapted. This backend change does not remove the
+wizard or private setup from the user interface.
 
 `preview_snapshot` returns detached, bounded display data cloned from the ready
 native artifact. It holds no mutation lock after returning and cannot replace
@@ -191,7 +194,7 @@ receipts behind ordered, opaque command tokens.
 ## Purpose-bound publication authority
 
 Explicit native `confirm_preview` captures fresh, bounded registry grants and
-derives its write scope from the original immutable `OwnedInitializationPreview`.
+derives its write scope from the original immutable `OwnedProjectInitializationPreview`.
 It never accepts a display snapshot, serialized plan or caller-provided inventory.
 The canonical destination, reviewed creations, necessary parent directories and
 exact recorded migration backups define the scope. Creation staging is limited
@@ -285,16 +288,22 @@ selection token and a strict request containing `revision`, `destination`,
 from 1 through JavaScript's maximum safe integer within each selection. Stale
 or repeated revisions cannot replace a review. A fresh revision retires the
 previous review even if destination validation fails. Inputs are checked before
-private storage IO against the worker's 32-value, 64-byte-key, 16-KiB-value and
+project IO against the worker's 32-value, 64-byte-key, 16-KiB-value and
 256-KiB-total limits. Nested input values, client plans, authorities, storage
 origins and unknown request or link fields are rejected.
 
-The command reserves native ownership before awaiting noncreating private-state
-open, then prepares and adopts only that exact review. It never initializes
-missing state, grants roots, starts an agent or changes use policy. Its schema-1
+The command reserves native ownership, inspects bounded ancestor metadata and
+prepares a project-owned review. It never opens or initializes application memory
+storage, grants roots, starts an agent or changes use policy. Canonical native
+paths constrain the destination to the selected project or its already observed
+applicable memory root, including aliases. A
+known applicable parent memory blocks nested initialization without granting
+write access to that parent. Incomplete metadata does not grant new paths.
+Preparation does not scan project descendants or dependencies. Its schema-1
 reply contains an opaque review UUID, revision, the owned canonical destination
 `root`, detached deployment display data,
-recovery display files, resume status and a redacted platform blocker. Expected
+a redacted platform blocker and retained wire fields `isResuming: false` and
+`recoveryFiles: []`. Those fields do not claim global-journal resumption. Expected
 and proposed project bytes are deliberately included for explicit review; private
 preferences, installation identity and authorization objects are not. Editing
 the returned data cannot change the retained native publication plan.
@@ -455,8 +464,8 @@ Continuing re-inspects the current source and opens editable initialization deta
 requiring a new native preview and its independent publication acceptance. No
 previous plan or checkbox can publish implicitly. Partial scopes also offer manual
 review of a pending initialization without creating private state or asserting
-that an intent exists. The native preview must still match the exact recorded
-intent, root identities and bytes.
+that an intent exists. New initialization uses project files and does not consume the
+preserved legacy journal. Native root identities and expected bytes still apply.
 
 The recovery initialization form exposes the original creation date as well as
 the existing project details and persistent-link choices, so a previous day's
@@ -727,7 +736,7 @@ Refresh opens a new presentation and does not inherit ancestor inspection consen
 
 Setup collects project details, explains Git-ready shared files and public-repository
 effects, and leaves both persistent root-rule links unchecked. Native preview
-performs descendant checks and displays the exact current and proposed bytes for
+reads the selected project inventory and displays exact current and proposed bytes for
 every entry, recovery artifacts and the canonical destination from the retained
 native artifact. Conflicts and platform blockers disable publication. A separate
 checkbox accepts the displayed review before its token-only, single-use confirmation.

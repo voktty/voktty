@@ -172,3 +172,46 @@ fn a_registered_unrelated_destination_cannot_borrow_the_origins_ancestor_consent
     });
     assert!(!registry.is_authorized(second.path()));
 }
+
+#[test]
+fn a_registered_applicable_parent_can_be_repaired_from_its_child() {
+    let (state, app, resource) = fixture();
+    let project = project();
+    let root = fs::canonicalize(project.path()).unwrap();
+    let child = root.join("child");
+    fs::create_dir(&child).unwrap();
+    let registry = WorkspaceRegistry::default();
+    registry.authorize(&root).unwrap();
+    let selected = resource
+        .select_with_inspection(&app, &registry, root.clone(), &WorkspaceEnv::Local, 1, true)
+        .unwrap();
+    runtime().block_on(async {
+        let review = preview(&app, &registry, &resource, &selected, request(&root))
+            .await
+            .unwrap();
+        confirm(&app, &registry, &resource, &selected, &review.review)
+            .await
+            .unwrap();
+        fs::remove_file(root.join(".voktty/RULES.md")).unwrap();
+        let selected = resource
+            .select_with_inspection(
+                &app,
+                &registry,
+                child.clone(),
+                &WorkspaceEnv::Local,
+                2,
+                true,
+            )
+            .unwrap();
+        let review = preview(&app, &registry, &resource, &selected, request(&root))
+            .await
+            .unwrap();
+        assert_eq!(review.root, root);
+        confirm(&app, &registry, &resource, &selected, &review.review)
+            .await
+            .unwrap();
+        assert!(root.join(".voktty/RULES.md").is_file());
+        assert!(!child.join(".voktty").exists());
+        assert_eq!(fs::read_dir(state.path()).unwrap().count(), 0);
+    });
+}

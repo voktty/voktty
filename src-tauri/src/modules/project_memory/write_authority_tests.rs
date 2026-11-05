@@ -37,7 +37,6 @@ fn request(f: &Fixture, links: RootLinks) -> NativeMemoryPreviewRequest {
     NativeMemoryPreviewRequest {
         destination: f.root.clone(),
         environment: WorkspaceEnv::Local,
-        store: f.store.clone(),
         inputs: json!({"project_name":"Purpose-bound writes", "created_at":"2026-10-29"})
             .as_object()
             .unwrap()
@@ -69,7 +68,7 @@ fn access(root: &Path) -> Arc<Access> {
 }
 fn capture(
     f: &Fixture,
-    preview: &OwnedInitializationPreview,
+    preview: &OwnedProjectInitializationPreview,
     live: &Arc<AtomicBool>,
 ) -> NativeMemoryWriteAuthority {
     NativeMemoryWriteAuthority::capture(
@@ -136,7 +135,7 @@ fn migration_authority_names_only_exact_transaction_backups_and_selected_rules()
         let preview = owner.preview(&selected, &receipt).unwrap();
         let requirements = preview.write_requirements();
         assert_eq!(requirements.root, f.root);
-        assert_eq!(requirements.recovery.len(), 2);
+        assert_eq!(requirements.recovery.len(), 3);
         let live = Arc::new(AtomicBool::new(true));
         let authority = capture(&f, preview, &live);
         assert!(authority.allows_replace(&f.root.join("AGENTS.md")));
@@ -295,7 +294,7 @@ fn production_confirmation_migrates_opted_in_rules_and_preserves_reserved_conten
             .await
             .unwrap();
         assert_eq!(report.migrated.len(), 3);
-        assert_eq!(report.cleaned.len(), 3);
+        assert_eq!(report.cleaned.len(), 4);
         assert!(f.root.join(".voktty/kit.json").exists());
         assert!(fs::read_to_string(f.root.join("AGENTS.md"))
             .unwrap()
@@ -357,7 +356,7 @@ impl MemoryWriteAccess for Interrupt {
 }
 
 #[test]
-fn recovery_confirmation_cleans_only_recorded_original_backups_without_replacing_skipped_targets() {
+fn interrupted_publication_requires_project_recovery_and_preserves_backups() {
     let f = fixture();
     fs::create_dir(f.root.join(".voktty")).unwrap();
     fs::write(f.root.join(".voktty/.gitignore"), "*\n").unwrap();
@@ -381,29 +380,23 @@ fn recovery_confirmation_cleans_only_recorded_original_backups_without_replacing
             panic!("partial migration expected")
         };
         assert_eq!(failure.migrated, vec![".voktty/.gitignore"]);
-        let receipt = prepare(&f, &mut owner, &selected, RootLinks::default()).await;
-        let preview = owner.preview(&selected, &receipt).unwrap();
-        assert!(preview.is_resuming());
-        let backup = preview.recovery_files()[0].path.clone();
-        let live = Arc::new(AtomicBool::new(true));
-        let authority = capture(&f, preview, &live);
-        assert!(authority.allows_remove_staging(&f.root.join(&backup)));
-        assert!(!authority.allows_create(&f.root.join(&backup)));
-        assert!(!authority.allows_replace(&f.root.join(".voktty/.gitignore")));
-        let report = owner
-            .confirm_preview(
-                &selected,
-                &receipt,
-                &f.registry,
-                DiscoveryControl::default(),
-            )
+        let retry = owner
+            .prepare_preview(&selected, &f.registry, request(&f, RootLinks::default()))
             .unwrap()
             .finish()
-            .await
-            .unwrap();
-        assert_eq!(report.cleaned, vec![backup.clone()]);
-        assert!(!f.root.join(backup).exists());
-        assert!(f.root.join(".voktty/kit.json").exists());
+            .await;
+        assert!(matches!(
+            retry,
+            Err(MemoryDeploymentWorkError::Preview(
+                voktty_memory_local::PublicationError::RecoveryRequired(_)
+            ))
+        ));
+        let backup = failure.possible_recovery_files[0].clone();
+        assert_eq!(fs::read(f.root.join(&backup)).unwrap(), b"*\n");
+        assert!(f
+            .root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+            .exists());
     });
 }
 

@@ -39,25 +39,6 @@ impl NativeMemoryApplication {
         })
     }
 
-    pub async fn open_preview_store(
-        &self,
-        window: &NativeMemoryWindow,
-        presentation: &NativeMemoryPresentationReceipt,
-        selected: &NativeMemorySelectionReceipt,
-        reserved: &NativeMemoryPreviewReceipt,
-    ) -> Result<Arc<LocalMemoryStore>, MemoryDeploymentWorkError> {
-        let control = self.with_deployment(window, |owners, receipt| {
-            owners.preview_store_control(receipt, presentation, selected, reserved)
-        })?;
-        let result = self
-            .store(window, MemoryStoreMode::OpenExisting, control)
-            .await;
-        self.with_deployment(window, |owners, receipt| {
-            owners.preview_store_control(receipt, presentation, selected, reserved)?;
-            result.map_err(Into::into)
-        })
-    }
-
     pub fn start_preview(
         &self,
         window: &NativeMemoryWindow,

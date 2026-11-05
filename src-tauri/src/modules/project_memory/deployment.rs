@@ -2,8 +2,9 @@ use super::*;
 use serde_json::{Map, Value};
 use std::sync::Weak;
 use voktty_memory_local::{
-    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPreviewRequest, MemoryWriteAccess,
-    OwnedInitializationPreview, PublicationError, PublicationReport, RecoveryFile,
+    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryWriteAccess,
+    OwnedProjectInitializationPreview, ProjectInitializationRequest, PublicationError,
+    PublicationReport, RecoveryFile,
 };
 use voktty_workspace_kit::{PreparedDeployment, RootLinks};
 
@@ -14,7 +15,6 @@ pub struct NativeMemoryPreviewTarget {
 }
 
 pub struct NativeMemoryPreviewValues {
-    pub store: Arc<LocalMemoryStore>,
     pub inputs: Map<String, Value>,
     pub links: RootLinks,
 }
@@ -30,12 +30,12 @@ pub struct NativeMemoryPreviewSnapshot {
 }
 
 impl NativeMemoryPreviewSnapshot {
-    pub(super) fn capture(preview: &OwnedInitializationPreview) -> Self {
+    pub(super) fn capture(preview: &OwnedProjectInitializationPreview) -> Self {
         Self {
             root: preview.write_requirements().root,
             deployment: preview.deployment().clone(),
-            is_resuming: preview.is_resuming(),
-            recovery_files: preview.recovery_files().to_vec(),
+            is_resuming: false,
+            recovery_files: Vec::new(),
             publication_blocker: preview.publication_blocker(),
         }
     }
@@ -45,7 +45,6 @@ impl NativeMemoryPreviewSnapshot {
 pub struct NativeMemoryPreviewRequest {
     pub destination: PathBuf,
     pub environment: WorkspaceEnv,
-    pub store: Arc<LocalMemoryStore>,
     pub inputs: Map<String, Value>,
     pub links: RootLinks,
     pub control: DiscoveryControl,
@@ -66,7 +65,7 @@ struct Review {
 enum ReviewState {
     Reserved,
     Opening,
-    Ready(Box<OwnedInitializationPreview>),
+    Ready(Box<OwnedProjectInitializationPreview>),
     Publishing,
     RecoveryReserved,
     RecoveryOpening,
@@ -97,7 +96,13 @@ pub struct NativeMemoryPreviewReceipt {
 
 pub struct NativeMemoryPreparedPreview {
     receipt: NativeMemoryPreviewReceipt,
-    preview: OwnedInitializationPreview,
+    preview: OwnedProjectInitializationPreview,
+}
+
+impl NativeMemoryPreparedPreview {
+    pub(super) fn root(&self) -> &Path {
+        self.preview.root()
+    }
 }
 
 struct ReviewOperation<T> {
@@ -126,7 +131,7 @@ impl<T> ReviewOperation<T> {
 
 #[must_use = "finish or drop this preview request to retire its consumer"]
 pub struct NativeMemoryPreviewRead {
-    operation: ReviewOperation<OwnedInitializationPreview>,
+    operation: ReviewOperation<OwnedProjectInitializationPreview>,
     receipt: NativeMemoryPreviewReceipt,
 }
 impl NativeMemoryPreviewRead {
@@ -199,9 +204,8 @@ impl NativeMemoryDeployment {
             return Err(cancelled());
         }
         review.state = ReviewState::Opening;
-        let job = MemoryWorkers::default().preview(
-            MemoryPreviewRequest {
-                store: values.store,
+        let job = MemoryWorkers::default().preview_project_at_root(
+            ProjectInitializationRequest {
                 origin: source.requested.clone(),
                 origin_access: source.access.clone(),
                 destination: review.destination.requested.clone(),
@@ -235,20 +239,6 @@ impl NativeMemoryDeployment {
         })
     }
 
-    pub(super) fn store_control(
-        &self,
-        receipt: &NativeMemoryPreviewReceipt,
-    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
-        if !self.is_current(receipt) {
-            return Err(cancelled());
-        }
-        let review = self.review.as_ref().ok_or_else(cancelled)?;
-        if !matches!(review.state, ReviewState::Reserved) {
-            return Err(cancelled());
-        }
-        Ok(review.control.read_control()?)
-    }
-
     pub(super) fn accept(
         &mut self,
         prepared: NativeMemoryPreparedPreview,
@@ -267,7 +257,7 @@ impl NativeMemoryDeployment {
     pub(super) fn preview(
         &self,
         receipt: &NativeMemoryPreviewReceipt,
-    ) -> Result<&OwnedInitializationPreview, MemoryDeploymentWorkError> {
+    ) -> Result<&OwnedProjectInitializationPreview, MemoryDeploymentWorkError> {
         if !self.is_current(receipt) {
             return Err(cancelled());
         }
@@ -300,7 +290,8 @@ impl NativeMemoryDeployment {
             return Err(cancelled());
         };
         review.control = control.clone();
-        let job = MemoryWorkers::default().publish(*preview, access, control);
+        let digest = preview.acceptance_digest();
+        let job = MemoryWorkers::default().publish_project(*preview, digest, access, control);
         match job {
             Ok(job) => Ok(NativeMemoryPublication {
                 operation: ReviewOperation {

@@ -185,6 +185,16 @@ fn unusable_application_data_does_not_block_creation_reuse_or_repair() {
     fs::create_dir_all(f.project.join(".voktty/sessions")).unwrap();
     fs::write(f.project.join(".voktty/sessions/kept.bin"), [0, 255]).unwrap();
     assert_eq!(result(&f.init(&flags))["created"], json!([]));
+    fs::remove_file(f.project.join("AGENTS.md")).unwrap();
+    let link_only = result(&f.init(&flags));
+    assert!(link_only["created"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("AGENTS.md")));
+    assert!(!link_only["created"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/RULES.md")));
     fs::remove_file(f.project.join(".voktty/RULES.md")).unwrap();
     fs::remove_file(f.project.join("AGENTS.md")).unwrap();
     let repaired = result(&f.init(&flags));

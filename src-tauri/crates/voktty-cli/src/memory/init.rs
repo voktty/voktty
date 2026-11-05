@@ -157,7 +157,10 @@ impl AcceptedWriteAccess {
                 .requirements
                 .create
                 .iter()
-                .filter(|entry| !self.requirements.recovery.contains(entry))
+                .filter(|entry| {
+                    !self.requirements.recovery.contains(entry)
+                        || entry.as_str() == voktty_memory_local::PROJECT_INITIALIZATION_RECORD
+                })
                 .chain(self.requirements.replace.iter())
                 .any(|entry| self.requirements.root.join(entry).parent() == path.parent())
     }

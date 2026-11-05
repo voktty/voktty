@@ -38,17 +38,6 @@ impl NativeMemoryOwners {
             .start_preview(selected, reserved, values)
     }
 
-    pub(in crate::modules::project_memory) fn preview_store_control(
-        &self,
-        window: &NativeMemoryWindowReceipt,
-        presentation: &NativeMemoryPresentationReceipt,
-        selected: &NativeMemorySelectionReceipt,
-        reserved: &NativeMemoryPreviewReceipt,
-    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
-        self.selection(window, presentation)?
-            .preview_store_control(selected, reserved)
-    }
-
     pub fn accept_preview(
         &mut self,
         window: &NativeMemoryWindowReceipt,

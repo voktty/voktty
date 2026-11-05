@@ -4,7 +4,7 @@ use serde_json::json;
 use std::fs;
 use std::sync::{mpsc, Condvar};
 use std::time::Duration;
-use voktty_memory_local::{PublicationError, StoreError};
+use voktty_memory_local::PublicationError;
 use voktty_workspace_kit::RootLinks;
 
 #[path = "application_recovery_tests.rs"]
@@ -68,9 +68,8 @@ fn target(f: &Fixture) -> NativeMemoryPreviewTarget {
         control: DiscoveryControl::default(),
     }
 }
-fn values(store: Arc<LocalMemoryStore>) -> NativeMemoryPreviewValues {
+fn values() -> NativeMemoryPreviewValues {
     NativeMemoryPreviewValues {
-        store,
         inputs: json!({"project_name":"Window review", "created_at":"2026-10-29"})
             .as_object()
             .unwrap()
@@ -91,20 +90,9 @@ fn reserve(f: &Fixture) -> NativeMemoryPreviewReceipt {
 }
 async fn prepare(f: &Fixture) -> NativeMemoryPreviewReceipt {
     let reserved = reserve(f);
-    let store = f
-        .app
-        .open_preview_store(&f.window, &f.presentation, &f.selected, &reserved)
-        .await
-        .unwrap();
     let prepared = f
         .app
-        .start_preview(
-            &f.window,
-            &f.presentation,
-            &f.selected,
-            &reserved,
-            values(store),
-        )
+        .start_preview(&f.window, &f.presentation, &f.selected, &reserved, values())
         .unwrap()
         .finish()
         .await
@@ -174,6 +162,11 @@ impl MemoryWriteAccess for Writer {
         }
         true
     }
+    fn allows_remove_staging(&self, path: &Path) -> bool {
+        path == self
+            .root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+    }
 }
 fn writer(f: &Fixture) -> Arc<Writer> {
     Arc::new(Writer {
@@ -183,7 +176,7 @@ fn writer(f: &Fixture) -> Arc<Writer> {
 }
 
 #[test]
-fn window_review_store_and_snapshot_preserve_the_original_accepted_plan() {
+fn window_review_preserves_the_original_plan_and_existing_preferences() {
     let f = fixture();
     let before = f.store.load().unwrap();
     runtime().block_on(async {
@@ -218,7 +211,7 @@ fn window_review_store_and_snapshot_preserve_the_original_accepted_plan() {
             DiscoveryControl::default()
         )));
         let report = publication.finish().await.unwrap();
-        assert_eq!(report.created.len(), expected.len());
+        assert_eq!(report.created.len(), expected.len() + 1);
         assert_eq!(report.created.last().unwrap(), ".voktty/kit.json");
         for entry in expected {
             assert_eq!(
@@ -314,7 +307,7 @@ fn a_same_label_window_replacement_rejects_old_prepared_results_and_cleanup() {
                 &f.presentation,
                 &f.selected,
                 &reservation,
-                values(f.store.clone()),
+                values(),
             )
             .unwrap()
             .finish()
@@ -360,13 +353,7 @@ fn a_same_label_window_replacement_rejects_old_prepared_results_and_cleanup() {
             .is_preview_current(&replacement, &presentation, &selected, &review));
         let prepared = f
             .app
-            .start_preview(
-                &replacement,
-                &presentation,
-                &selected,
-                &review,
-                values(f.store.clone()),
-            )
+            .start_preview(&replacement, &presentation, &selected, &review, values())
             .unwrap()
             .finish()
             .await
@@ -382,42 +369,33 @@ fn a_same_label_window_replacement_rejects_old_prepared_results_and_cleanup() {
 }
 
 #[test]
-fn reserving_a_new_review_retires_acceptance_before_private_store_is_opened() {
+fn reservation_start_is_once_and_replacement_retires_the_old_result() {
     let f = fixture();
     runtime().block_on(async {
-        let old = prepare(&f).await;
         let reserved = reserve(&f);
-        assert!(cancelled(&f.app.publish_preview(
-            &f.window,
-            &f.presentation,
-            &f.selected,
-            &old,
-            writer(&f),
-            DiscoveryControl::default()
-        )));
-        assert!(cancelled(&f.app.preview_snapshot(
-            &f.window,
-            &f.presentation,
-            &f.selected,
-            &reserved
-        )));
-        assert!(!f
+        let read = f
             .app
-            .cancel_preview(&f.window, &f.presentation, &f.selected, &old)
-            .unwrap());
-        let opened = f
-            .app
-            .open_preview_store(&f.window, &f.presentation, &f.selected, &reserved)
-            .await
+            .start_preview(&f.window, &f.presentation, &f.selected, &reserved, values())
             .unwrap();
-        let successor = reserve(&f);
         assert!(cancelled(&f.app.start_preview(
             &f.window,
             &f.presentation,
             &f.selected,
             &reserved,
-            values(opened)
+            values()
         )));
+        let prepared = read.finish().await.unwrap();
+        let successor = reserve(&f);
+        assert!(cancelled(&f.app.accept_preview(
+            &f.window,
+            &f.presentation,
+            &f.selected,
+            prepared
+        )));
+        assert!(!f
+            .app
+            .cancel_preview(&f.window, &f.presentation, &f.selected, &reserved)
+            .unwrap());
         assert!(f
             .app
             .is_preview_current(&f.window, &f.presentation, &f.selected, &successor));
@@ -426,45 +404,7 @@ fn reserving_a_new_review_retires_acceptance_before_private_store_is_opened() {
 }
 
 #[test]
-fn reservation_start_is_once_and_new_state_cannot_reopen_the_private_store() {
-    let f = fixture();
-    runtime().block_on(async {
-        let reserved = reserve(&f);
-        let read = f
-            .app
-            .start_preview(
-                &f.window,
-                &f.presentation,
-                &f.selected,
-                &reserved,
-                values(f.store.clone()),
-            )
-            .unwrap();
-        assert!(cancelled(&f.app.start_preview(
-            &f.window,
-            &f.presentation,
-            &f.selected,
-            &reserved,
-            values(f.store.clone())
-        )));
-        assert!(cancelled(
-            &f.app
-                .open_preview_store(&f.window, &f.presentation, &f.selected, &reserved)
-                .await
-        ));
-        let prepared = read.finish().await.unwrap();
-        f.app
-            .accept_preview(&f.window, &f.presentation, &f.selected, prepared)
-            .unwrap();
-        assert!(f
-            .app
-            .preview_snapshot(&f.window, &f.presentation, &f.selected, &reserved)
-            .is_ok());
-    });
-}
-
-#[test]
-fn expired_reservation_does_not_open_state_or_renew_the_preview_deadline() {
+fn expired_reservation_rejects_start_without_project_io() {
     let f = fixture();
     runtime().block_on(async {
         let mut expired = target(&f);
@@ -481,20 +421,7 @@ fn expired_reservation_does_not_open_state_or_renew_the_preview_deadline() {
             .unwrap();
         assert!(matches!(
             f.app
-                .open_preview_store(&f.window, &f.presentation, &f.selected, &reserved)
-                .await,
-            Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
-                ReadError::Timeout
-            )))
-        ));
-        assert!(matches!(
-            f.app.start_preview(
-                &f.window,
-                &f.presentation,
-                &f.selected,
-                &reserved,
-                values(f.store.clone())
-            ),
+                .start_preview(&f.window, &f.presentation, &f.selected, &reserved, values()),
             Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
                 ReadError::Timeout
             )))
@@ -507,12 +434,13 @@ fn expired_reservation_does_not_open_state_or_renew_the_preview_deadline() {
 }
 
 #[test]
-fn opening_missing_private_state_never_initializes_a_directory_or_identity() {
+fn unusable_application_storage_does_not_block_publication_reuse_or_link_only_repair() {
     let f = fixture();
-    let empty = parent();
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        empty.path().to_owned(),
-    ));
+    let origin = parent();
+    let blocked = origin.path().join("not-a-directory");
+    fs::write(&blocked, "global storage sentinel").unwrap();
+    let (app, window) =
+        NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(blocked.clone()));
     let presentation = app.open_presentation(&window).unwrap();
     let selected = app
         .select(
@@ -523,21 +451,70 @@ fn opening_missing_private_state_never_initializes_a_directory_or_identity() {
             &WorkspaceEnv::Local,
         )
         .unwrap();
-    let reserved = app
-        .reserve_preview(&window, &presentation, &selected, &f.registry, target(&f))
-        .unwrap();
     runtime().block_on(async {
-        assert!(app
-            .open_preview_store(&window, &presentation, &selected, &reserved)
-            .await
-            .is_err());
+        for cycle in 0..3 {
+            if cycle == 1 {
+                fs::write(f.root.join(".voktty/CONTEXT.md"), "Current project facts\n").unwrap();
+                fs::remove_file(f.root.join("AGENTS.md")).unwrap();
+            }
+            let reserved = app
+                .reserve_preview(&window, &presentation, &selected, &f.registry, target(&f))
+                .unwrap();
+            let mut input = values();
+            input.links = RootLinks {
+                agents: true,
+                claude: true,
+            };
+            let prepared = app
+                .start_preview(&window, &presentation, &selected, &reserved, input)
+                .unwrap()
+                .finish()
+                .await
+                .unwrap();
+            let ready = app
+                .accept_preview(&window, &presentation, &selected, prepared)
+                .unwrap();
+            let report = app
+                .confirm_preview(
+                    &window,
+                    &presentation,
+                    &selected,
+                    &ready,
+                    &f.registry,
+                    DiscoveryControl::default(),
+                )
+                .unwrap()
+                .finish()
+                .await
+                .unwrap();
+            if cycle == 1 {
+                assert!(report.created.contains(&"AGENTS.md".to_owned()));
+                assert!(!report.created.contains(&".voktty/RULES.md".to_owned()));
+            }
+            if cycle == 2 {
+                assert!(report.created.is_empty());
+            }
+            assert!(f.root.join("AGENTS.md").is_file());
+            assert!(!f
+                .root
+                .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+                .exists());
+            assert_eq!(
+                fs::read_to_string(&blocked).unwrap(),
+                "global storage sentinel"
+            );
+            if cycle > 0 {
+                assert_eq!(
+                    fs::read_to_string(f.root.join(".voktty/CONTEXT.md")).unwrap(),
+                    "Current project facts\n"
+                );
+            }
+        }
     });
-    assert_eq!(fs::read_dir(empty.path()).unwrap().count(), 0);
-    assert!(!f.root.join(".voktty").exists());
 }
 
 #[test]
-fn presentation_close_retires_queued_private_state_reads_before_they_start() {
+fn presentation_close_retires_queued_project_preview_before_io() {
     let f = fixture();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -554,64 +531,22 @@ fn presentation_close_retires_queued_private_state_reads_before_they_start() {
             gate.wait();
         });
         observed.recv_timeout(Duration::from_secs(3)).unwrap();
-        let mut read =
-            Box::pin(
-                f.app
-                    .open_preview_store(&f.window, &f.presentation, &f.selected, &reserved),
-            );
-        tokio::select! {
-            biased;
-            _ = &mut read => panic!("blocked state read completed before gate release"),
-            _ = tokio::task::yield_now() => {}
-        }
-        assert!(f
+        let read = f
             .app
+            .start_preview(&f.window, &f.presentation, &f.selected, &reserved, values())
+            .unwrap();
+        f.app
             .close_presentation(&f.window, &f.presentation)
-            .unwrap());
+            .unwrap();
         drop(release);
         occupied.await.unwrap();
-        assert!(cancelled(&read.await));
+        assert!(cancelled(&read.finish().await));
         assert!(!f.root.join(".voktty").exists());
     });
 }
 
 #[test]
-fn reservation_retirement_cancels_its_already_captured_state_phase() {
-    let f = fixture();
-    let old = reserve(&f);
-    let phase = f
-        .app
-        .with_deployment(&f.window, |owners, window| {
-            owners.preview_store_control(window, &f.presentation, &f.selected, &old)
-        })
-        .unwrap();
-    let current = reserve(&f);
-    assert!(matches!(
-        MemoryWorkers::default().context(
-            f.store.clone(),
-            f.root.clone(),
-            Arc::new(NoRead),
-            None,
-            phase
-        ),
-        Err(MemoryWorkError::Read(ReadError::Cancelled))
-    ));
-    assert!(f
-        .app
-        .is_preview_current(&f.window, &f.presentation, &f.selected, &current));
-}
-struct NoRead;
-impl MemoryReadAccess for NoRead {
-    fn allows_metadata(&self, _: &Path) -> bool {
-        panic!("cancelled private-state phase reached IO")
-    }
-    fn allows_read(&self, _: &Path) -> bool {
-        panic!("cancelled private-state phase reached IO")
-    }
-}
-
-#[test]
-fn native_resource_close_retires_publication_without_releasing_its_lock_early() {
+fn native_resource_close_preserves_the_unfinished_project_record() {
     let f = fixture();
     let runtime = runtime();
     let gate = Arc::new(Gate::new());
@@ -637,25 +572,12 @@ fn native_resource_close_retires_publication_without_releasing_its_lock_early() 
         let id = resources.add_arc(f.window.clone());
         resources.close(id).unwrap();
         assert!(cancelled(&job.finish().await));
-        assert!(matches!(
-            f.store.try_lock_deployment(),
-            Err(StoreError::Busy)
-        ));
+        assert!(f.store.try_lock_deployment().is_ok());
+        assert!(f
+            .root
+            .join(voktty_memory_local::PROJECT_INITIALIZATION_RECORD)
+            .exists());
         drop(release);
-        tokio::time::timeout(Duration::from_secs(3), async {
-            loop {
-                match f.store.try_lock_deployment() {
-                    Ok(lock) => {
-                        drop(lock);
-                        break;
-                    }
-                    Err(StoreError::Busy) => tokio::time::sleep(Duration::from_millis(1)).await,
-                    Err(error) => panic!("unexpected lock error: {error:?}"),
-                }
-            }
-        })
-        .await
-        .unwrap();
         assert!(!f.root.join(".voktty/kit.json").exists());
         assert!(f.root.join(".voktty/INIT.md").exists());
     });
@@ -668,13 +590,7 @@ fn shutdown_retires_an_admitted_preview_without_delivering_its_result() {
         let reserved = reserve(&f);
         let job = f
             .app
-            .start_preview(
-                &f.window,
-                &f.presentation,
-                &f.selected,
-                &reserved,
-                values(f.store.clone()),
-            )
+            .start_preview(&f.window, &f.presentation, &f.selected, &reserved, values())
             .unwrap();
         f.app.shutdown();
         assert!(cancelled(&job.finish().await));

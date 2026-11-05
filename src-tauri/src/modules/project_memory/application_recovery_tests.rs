@@ -17,24 +17,32 @@ impl MemoryWriteAccess for InterruptedMigration {
 async fn interrupted(f: &Fixture) -> String {
     fs::create_dir(f.root.join(".voktty")).unwrap();
     fs::write(f.root.join(".voktty/.gitignore"), "*\r\n").unwrap();
-    let review = prepare(f).await;
-    let error = f
-        .app
-        .publish_preview(
-            &f.window,
-            &f.presentation,
-            &f.selected,
-            &review,
-            Arc::new(InterruptedMigration(f.root.clone())),
+    let source =
+        NativeMemorySource::capture(&f.registry, f.root.clone(), &WorkspaceEnv::Local).unwrap();
+    let input = values();
+    let preview = MemoryWorkers::default()
+        .preview(
+            voktty_memory_local::MemoryPreviewRequest {
+                store: f.store.clone(),
+                origin: f.root.clone(),
+                origin_access: source.access.clone(),
+                destination: f.root.clone(),
+                destination_access: source.access.clone(),
+                inputs: input.inputs,
+                links: input.links,
+            },
             DiscoveryControl::default(),
         )
         .unwrap()
         .finish()
         .await
+        .unwrap();
+    let failure = preview
+        .publish(
+            &InterruptedMigration(f.root.clone()),
+            &DiscoveryControl::default(),
+        )
         .unwrap_err();
-    let MemoryDeploymentWorkError::Publication(failure) = error else {
-        panic!("interrupted migration required")
-    };
     let backup = failure.possible_recovery_files[0].clone();
     assert_eq!(fs::read(f.root.join(&backup)).unwrap(), b"*\r\n");
     fs::remove_file(f.root.join(".voktty/.gitignore")).unwrap();
