@@ -129,6 +129,11 @@ it("starts no work on creation, coalesces reads and never prepares private setti
   const load = panel.load();
   expect(panel.load()).toBe(load);
   await load;
+  expect(api.select).toHaveBeenCalledExactlyOnceWith(
+    "/project",
+    { kind: "local" },
+    { inspectAncestors: true },
+  );
   expect(api.initializeLocalState).not.toHaveBeenCalled();
   expect(api.inspect).toHaveBeenCalledWith(selected);
   expect(api.discover).not.toHaveBeenCalled();
@@ -268,9 +273,11 @@ it("recovers denied selection only after explicit directory authorization and re
   });
   await Promise.all([panel.authorize(), panel.authorize()]);
   expect(authorize).toHaveBeenCalledExactlyOnceWith("/project");
-  expect(api.select).toHaveBeenLastCalledWith("/canonical/project", {
-    kind: "local",
-  });
+  expect(api.select).toHaveBeenLastCalledWith(
+    "/canonical/project",
+    { kind: "local" },
+    { inspectAncestors: true },
+  );
   expect(publish).toHaveBeenLastCalledWith({ status: "ready", observation });
   expect(api.initializeLocalState).not.toHaveBeenCalled();
   expect(api.confirmTrust).not.toHaveBeenCalled();

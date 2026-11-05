@@ -105,20 +105,19 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("explains narrow inspection and never initializes memory or private settings on opening", async () => {
-  expect(container.textContent).toContain("projectMemory.inspectDescription");
-  expect(container.textContent).not.toContain("projectMemory.initialize");
+it("inspects bounded ancestor markers on opening without initializing memory or private settings", async () => {
+  expect(container.textContent).not.toContain("projectMemory.inspectDescription");
+  expect(container.textContent).toContain("projectMemory.initialize");
   expect(invoke.mock.calls.map(([command]) => command)).toEqual([
     "project_memory_open",
     "project_memory_select",
     "project_memory_discover",
   ]);
-  await click("projectMemory.inspectAncestors");
   expect(invoke).toHaveBeenCalledWith("project_memory_select", {
     handle: { id: 1, token: "owner" },
     path: "/owned",
     environment: { kind: "local" },
-    revision: 2,
+    revision: 1,
     inspectAncestors: true,
   });
   expect(container.textContent).toContain("projectMemory.initialize");
@@ -130,11 +129,10 @@ it("explains narrow inspection and never initializes memory or private settings 
   const selects = invoke.mock.calls.filter(
     ([command]) => command === "project_memory_select",
   );
-  expect(selects).toHaveLength(2);
+  expect(selects).toHaveLength(1);
   expect(selects[selects.length - 1][1]).toHaveProperty("inspectAncestors", true);
 });
 it("shows exact canonical preview and requires explicit acceptance before a token-only confirmation", async () => {
-  await click("projectMemory.inspectAncestors");
   await configure();
   expect(
     [
@@ -186,7 +184,6 @@ it("never permits conflicting or unsupported publication, even after forced clic
       ? { ...preview, publicationBlocker: "migrationUnsupported" }
       : original?.(command, args),
   );
-  await click("projectMemory.inspectAncestors");
   await reviewFiles();
   expect(container.textContent).toContain("projectMemory.conflicts");
   expect(button("projectMemory.initialize").disabled).toBe(true);
@@ -212,7 +209,6 @@ it("shows acknowledged partial writes without automatic retry or success", async
       };
     return original?.(command, args);
   });
-  await click("projectMemory.inspectAncestors");
   await reviewFiles();
   await act(async () =>
     container
@@ -252,7 +248,6 @@ it("never describes unreadable current bytes as a missing file", async () => {
         }
       : original?.(command, args),
   );
-  await click("projectMemory.inspectAncestors");
   await reviewFiles();
   expect(container.textContent).toContain("projectMemory.currentUnavailable");
   expect(container.textContent).not.toContain("projectMemory.missingFile");
@@ -284,7 +279,6 @@ it("installs without local setup and returns to the discovered kit", async () =>
   });
   await click("common.refresh");
   expect(prepared).toBe(false);
-  await click("projectMemory.inspectAncestors");
   await reviewFiles();
   expect(prepared).toBe(false);
   await act(async () =>
@@ -307,7 +301,6 @@ it("installs without local setup and returns to the discovered kit", async () =>
 });
 
 it("reconnects to existing memory on refresh without dropping ancestor inspection or installing files", async () => {
-  await click("projectMemory.inspectAncestors");
   const selects = invoke.mock.calls.filter(([command]) => command === "project_memory_select").length;
   const original = invoke.getMockImplementation();
   invoke.mockImplementation(async (command, args) =>
@@ -352,7 +345,8 @@ it("offers explicit authorization when native selection rejects an unregistered 
   expect(invoke).toHaveBeenCalledWith("project_memory_select", expect.objectContaining({
     path: "/canonical/owned", environment: { kind: "local" },
   }));
-  expect(container.textContent).toContain("projectMemory.inspectDescription");
+  expect(container.textContent).toContain("projectMemory.initialize");
+  expect(container.textContent).not.toContain("projectMemory.inspectDescription");
   expect(invoke.mock.calls.some(([command]) => command === "project_memory_initialize_local_state" || command === "project_memory_confirm_trust")).toBe(false);
 });
 

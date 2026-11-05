@@ -267,7 +267,13 @@ it("requires the conversation's own ancestor inspection before reading instructi
   requireAncestorInspection();
   await mount();
   await open();
-  await click("projectMemory.inspectAncestors");
+  expect(invoke).toHaveBeenCalledWith(
+    "project_memory_select",
+    expect.objectContaining({
+      path: "/project/browsed",
+      inspectAncestors: true,
+    }),
+  );
   await click("projectMemory.conversationReview");
   const section = document.querySelector("section");
   expect(section?.textContent).toContain("projectMemory.inspectDescription");

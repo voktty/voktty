@@ -64,6 +64,13 @@ it("opens only by action, shows the owned root, and never enables or initializes
   await open();
   expect(document.body.textContent).toContain("/memory-root");
   expect(document.body.textContent).toContain("/owned");
+  expect(invoke).toHaveBeenCalledWith("project_memory_select", {
+    handle: { id: 1, token: "handle" },
+    path: "/owned",
+    environment: { kind: "local" },
+    revision: 1,
+    inspectAncestors: true,
+  });
   expect(invoke.mock.calls.map(([command]) => command)).toEqual([
     "project_memory_open",
     "project_memory_select",

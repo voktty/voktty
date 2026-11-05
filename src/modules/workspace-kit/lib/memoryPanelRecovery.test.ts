@@ -149,7 +149,7 @@ it("allows explicit review of pending initialization without creating private st
 });
 
 it.each(["restored", "pending"] as const)(
-  "requires explicit ancestor inspection before reviewing %s initialization",
+  "keeps %s initialization blocked when requested ancestor inspection is incomplete",
   async (phase) => {
     const f = fixture();
     f.api.inspect.mockResolvedValue({
@@ -168,6 +168,7 @@ it.each(["restored", "pending"] as const)(
     expect(f.api.select).toHaveBeenCalledExactlyOnceWith(
       target.path,
       target.environment,
+      { inspectAncestors: true },
     );
     await f.panel.preview({}, { agents: false, claude: false });
     expect(f.api.preview).not.toHaveBeenCalled();

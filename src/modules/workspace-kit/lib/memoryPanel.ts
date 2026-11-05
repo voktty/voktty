@@ -143,9 +143,7 @@ export function createMemoryPanelController(
             selected = await entry.client.select(
               selectionPath,
               captured.environment,
-              ...(inspectAncestors
-                ? ([{ inspectAncestors: true }] as const)
-                : []),
+              { inspectAncestors: true },
             );
           const receipt = selected;
           if (!receipt || !current()) return;

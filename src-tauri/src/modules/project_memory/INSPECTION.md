@@ -43,16 +43,18 @@ reply is the existing `scope`, `root` and `blockedCount` envelope; instruction
 bodies, raw facts, blocked paths, preferences and installation identity stay
 native. Directory keys are observation-local, not persistent project identities.
 
-The management panel uses that same state-free inspection for opening, refresh,
-directory authorization recovery and accepted ancestor inspection. A private
-settings error must not be presented as a reason to authorize the project again.
-Initialization first presents an explicit local-settings preparation step before
-the project-values and file-preview steps. That action creates or opens the
-private installation state under its existing native checks; it grants neither
-instruction trust nor conversation delivery. A failure remains in that step with
-a bounded error code and an explicit retry. Project publication still requires
-its separate exact file review. Continuing after publication retains the original
-authorized selection rather than reopening the caller's unqualified path.
+The management panel uses that same state-free inspection for opening, refresh
+and directory authorization recovery. Opening the panel requests the existing
+bounded ancestor-marker inspection as part of selecting its captured directory,
+without a separate permission screen. This does not read ancestor instructions,
+authorize ancestor workspaces or grant writes. Refresh and continuation after
+publication retain that exact selection. Unavailable or incomplete ancestry
+remains explicit and blocks initialization; the panel offers an inspection retry
+rather than treating unknown parents as absent. Background indicators do not
+inherit this panel selection or request its ancestor inspection grant.
+Initialization uses project defaults without private-settings preparation;
+replacements still require their exact file review. A private settings error
+must not be presented as a reason to authorize the project again.
 Native storage failures log the operation, first failing storage/security stage,
 bounded error description and optional numeric Windows status. Diagnostics are
 per operation and contain no paths, account identifiers, ACLs or document data.

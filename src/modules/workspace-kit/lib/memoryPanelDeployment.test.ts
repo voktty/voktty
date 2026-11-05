@@ -155,7 +155,7 @@ it("returns from a migration review without opening a configuration wizard or pu
   expect(f.api.confirmPreview).not.toHaveBeenCalled();
   await f.panel.dispose();
 });
-it("inspects ancestors only by explicit action before initialization", async () => {
+it("keeps unavailable ancestry blocked and permits an explicit inspection retry", async () => {
   const f = fixture();
   f.api.inspect.mockResolvedValueOnce({
     ...observation,
@@ -166,6 +166,11 @@ it("inspects ancestors only by explicit action before initialization", async () 
     },
   });
   await f.panel.load();
+  expect(f.api.select).toHaveBeenCalledExactlyOnceWith(
+    "/owned",
+    { kind: "local" },
+    { inspectAncestors: true },
+  );
   await f.panel.configure();
   expect(f.api.preview).not.toHaveBeenCalled();
   await f.panel.inspectAncestors();
@@ -192,6 +197,29 @@ it("repairs ready and partial memory through the same project service", async ()
     expect(f.api.initializeLocalState).not.toHaveBeenCalled();
     await f.panel.dispose();
   }
+});
+it("keeps the inspected selection through create, refresh and repair without another ancestor step", async () => {
+  const f = fixture();
+  await f.panel.load();
+  await f.panel.configure();
+  f.api.inspect.mockResolvedValue({
+    ...observation,
+    root: "/owned",
+    scope: { ...observation.scope, state: "ready" },
+  });
+  await f.panel.load();
+  await f.panel.configure();
+  expect(f.api.select).toHaveBeenCalledExactlyOnceWith(
+    "/owned",
+    { kind: "local" },
+    { inspectAncestors: true },
+  );
+  expect(f.api.confirmPreview).toHaveBeenCalledTimes(2);
+  expect(f.api.initializeLocalState).not.toHaveBeenCalled();
+  expect(f.states.some((state) => state.status === "recoveryInspection")).toBe(
+    false,
+  );
+  await f.panel.dispose();
 });
 it("requires the exact displayed migration review and consumes confirmation once", async () => {
   const f = fixture();
