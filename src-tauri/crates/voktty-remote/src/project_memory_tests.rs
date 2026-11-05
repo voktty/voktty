@@ -99,11 +99,16 @@ fn real_native_flow_preserves_reserved_data_and_binds_context_after_exact_review
         json!({"operation":"inspect","handle":handle,"selection":selection}),
     );
     assert_eq!(inspected["scope"]["state"], "reserved");
-    error(
-        &mut server,
-        root,
-        json!({"operation":"discover","handle":handle,"selection":selection}),
-        "unavailable",
+    assert_eq!(
+        server
+            .handle(
+                Some(root),
+                request(json!({"operation":"discover","handle":handle,"selection":selection}))
+            )
+            .error
+            .unwrap()
+            .code,
+        "invalid_params"
     );
     assert_eq!(fs::read_dir(private.path()).unwrap().count(), 0);
     initialize(&mut server, root, &handle, &selection);
@@ -117,7 +122,7 @@ fn real_native_flow_preserves_reserved_data_and_binds_context_after_exact_review
         ok(
             &mut server,
             root,
-            json!({"operation":"discover","handle":handle,"selection":selection})
+            json!({"operation":"inspect","handle":handle,"selection":selection})
         )["scope"]["state"],
         "ready"
     );
@@ -536,6 +541,7 @@ fn retired_setup_and_policy_operations_reject_before_storage_or_resource_allocat
     let handle = json!({"id":1,"token":uuid::Uuid::new_v4().to_string()});
     let selection = uuid::Uuid::new_v4().to_string();
     for params in [
+        json!({"operation":"discover","handle":handle,"selection":selection}),
         json!({"operation":"initialize","handle":handle,"selection":selection}),
         json!({"operation":"reviewPolicy","handle":handle,"selection":selection,"revision":1,"policy":"always"}),
         json!({"operation":"confirmPolicy","handle":handle,"selection":selection,"review":uuid::Uuid::new_v4().to_string()}),

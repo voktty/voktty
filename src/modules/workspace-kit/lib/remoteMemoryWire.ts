@@ -31,8 +31,9 @@ export function remoteMemoryRequest(
         ...(args.inspectAncestors === true ? { inspectAncestors: true } : {}),
       };
     case "project_memory_discover":
+      if (args.inspectionOnly !== true) memoryFailure("unsupported");
       return {
-        operation: args.inspectionOnly === true ? "inspect" : "discover",
+        operation: "inspect",
         ...selected,
       };
     case "project_memory_documents":

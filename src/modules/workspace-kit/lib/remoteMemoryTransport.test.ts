@@ -470,6 +470,7 @@ it.each([target, namespace, connectedNamespace])(
   async (input) => {
     const owner = client(input);
     for (const method of [
+      "discover",
       "initializeLocalState",
       "reviewPolicy",
       "confirmPolicy",
@@ -479,6 +480,14 @@ it.each([target, namespace, connectedNamespace])(
       expect(method in owner).toBe(false);
     const transport = createRemoteMemoryTransport(input);
     transports.push(transport);
+    for (const inspectionOnly of [undefined, false])
+      await expect(
+        transport.invoke("project_memory_discover", {
+          handle,
+          selection: "selection",
+          inspectionOnly,
+        }),
+      ).rejects.toMatchObject({ code: "unsupported" });
     await expect(
       transport.invoke("project_memory_initialize_local_state", {
         handle,

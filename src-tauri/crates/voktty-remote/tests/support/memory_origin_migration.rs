@@ -24,23 +24,26 @@ fn live_helper_recognizes_only_the_reviewed_marker_without_resetting_identity() 
     let handle = helper.ok(json!({"operation":"open"}));
     let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
     assert_eq!(
-        helper.memory(json!({"operation":"discover","handle":handle,"selection":selection}))
-            ["error"]["code"],
+        helper.memory(
+            json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1})
+        )["error"]["code"],
         "legacyStateRequiresReview"
     );
     assert!(!data.join("app.voktty.voktty").exists());
     let review = OriginMigrationReview::prepare(data, &control).unwrap();
     let digest = review.digest().to_owned();
     review.accept(&digest, &control).unwrap();
-    let discovered =
-        helper.ok(json!({"operation":"discover","handle":handle,"selection":selection}));
-    assert_eq!(discovered["scope"]["state"], "absent");
+    let reviewed = helper.memory(
+        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":2}),
+    );
+    assert_eq!(reviewed["error"]["code"], "scope");
     let path = data.join("app.voktty.voktty/project-memory/memory-local.json");
     assert_eq!(fs::read(&path).unwrap(), state);
     fs::write(legacy.join("project-memory"), b"foreign marker bytes").unwrap();
     assert_eq!(
-        helper.memory(json!({"operation":"discover","handle":handle,"selection":selection}))
-            ["error"]["code"],
+        helper.memory(
+            json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":3})
+        )["error"]["code"],
         "legacyStateRequiresReview"
     );
     helper.ok(json!({"operation":"close","handle":handle}));

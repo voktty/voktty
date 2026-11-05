@@ -46,10 +46,6 @@ pub(super) enum Request {
         handle: Handle,
         selection: String,
     },
-    Discover {
-        handle: Handle,
-        selection: String,
-    },
     Preview {
         handle: Handle,
         selection: String,

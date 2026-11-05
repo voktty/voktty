@@ -34,7 +34,6 @@ Older helpers without this optional field retain their existing error behavior.
 | `clear` | `handle`, `revision` | Retire selection and all its reviews |
 | `close` | `handle` | Release exactly that presentation |
 | `inspect` | `handle`, `selection` | Read bounded markers without private state or instruction bodies |
-| `discover` | `handle`, `selection` | Discover using existing private settings without initializing them |
 | `preview` | `handle`, `selection`, `revision`, `inputs`, `links` | Retain an exact native initialization review at the selected directory |
 | `confirm` | `handle`, `selection`, `review` | Consume and publish that review after native revalidation |
 | `cancel` | `handle`, `selection`, `revision` | Retire the matching initialization review or fence an earlier arrival |
@@ -52,7 +51,7 @@ Older helpers without this optional field retain their existing error behavior.
 | `contextClose` | `context` | Retire only that context and release its resources |
 
 Handles contain a positive unsigned 32-bit `id` and a random UUID-v4 `token`.
-The former `initialize`, `reviewPolicy`, `confirmPolicy` and `cancelPolicy`
+The former `discover`, `initialize`, `reviewPolicy`, `confirmPolicy` and `cancelPolicy`
 operations are removed. They fail as `invalid_params` before operation admission,
 resource allocation or private storage access. Project initialization uses
 `preview` and `confirm` without a private setup step. The legacy storage reader

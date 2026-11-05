@@ -2,6 +2,14 @@ use super::*;
 use crate::modules::project_memory::tests::{populate, project, runtime};
 
 #[test]
+fn discovery_requires_explicit_stateless_inspection() {
+    assert!(require_inspection(Some(true)).is_ok());
+    for value in [None, Some(false)] {
+        assert_eq!(require_inspection(value).unwrap_err().code, "unsupported");
+    }
+}
+
+#[test]
 fn marker_inspection_needs_no_private_state_and_returns_only_scope_metadata() {
     let (state, app, resource) = tests::fixture();
     let dir = project();

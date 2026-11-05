@@ -11,10 +11,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use voktty_memory_local::{
     inspect_local_memory_scope, read_local_memory_documents, resolve_local_memory_directory,
-    DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace,
-    MemoryContextSession, MemorySessionUse, MemoryTrustReview, OwnedProjectInitializationPreview,
-    OwnedProjectRecoveryPreview, ProjectInitializationRequest, ProjectRecoveryRequest,
-    PublicationError, ReadControl, ReadError,
+    DiscoveryControl, LocalMemoryStore, MemoryContextSession, MemorySessionUse, MemoryTrustReview,
+    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, ProjectInitializationRequest,
+    ProjectRecoveryRequest, PublicationError, ReadControl, ReadError,
 };
 use voktty_remote_protocol::{RemoteRequest, RemoteResponse};
 use voktty_workspace_kit::RootLinks;
@@ -347,31 +346,6 @@ impl MemoryServer {
                 let source = &self.selected(&handle, &selection)?.source;
                 let observed =
                     inspect_local_memory_scope(&source.requested, source.as_ref(), control)?;
-                let memory = observed
-                    .scope
-                    .root_key
-                    .as_ref()
-                    .and_then(|key| {
-                        observed
-                            .directories
-                            .iter()
-                            .find(|entry| &entry.directory_key == key)
-                    })
-                    .map(|entry| entry.path.clone());
-                Ok(
-                    json!({"schema":1,"scope":observed.scope,"root":memory,"blockedCount":observed.blocked_paths.len()}),
-                )
-            }
-            Request::Discover { handle, selection } => {
-                let source = self.selected(&handle, &selection)?.source.clone();
-                let store = self.store(&control.read_control()?)?;
-                let workspace = LocalMemoryWorkspace::open(
-                    &store,
-                    &source.requested,
-                    source.as_ref(),
-                    &control.read_control()?,
-                )?;
-                let observed = workspace.observe_scope(DiscoveryPurpose::Discover, control)?;
                 let memory = observed
                     .scope
                     .root_key

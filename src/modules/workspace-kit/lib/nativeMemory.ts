@@ -277,9 +277,6 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
         throw error;
       }
     },
-    discover(receipt: NativeMemorySelection) {
-      return request<NativeMemoryScope>("project_memory_discover", receipt);
-    },
     inspect(receipt: NativeMemorySelection) {
       return request<NativeMemoryScope>("project_memory_discover", receipt, {
         inspectionOnly: true,

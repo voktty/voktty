@@ -126,7 +126,10 @@ fn readonly_discovery_never_initializes_private_state_or_project_files() {
         .select(&app, &registry, root, &WorkspaceEnv::Local, 1)
         .unwrap();
     runtime().block_on(async {
-        assert!(discover(&app, &resource, &token).await.is_err());
+        assert_eq!(
+            inspect(&app, &resource, &token).await.unwrap().scope.state,
+            "incomplete"
+        );
         assert_eq!(std::fs::read_dir(state.path()).unwrap().count(), 0);
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
         app.store(
@@ -137,7 +140,7 @@ fn readonly_discovery_never_initializes_private_state_or_project_files() {
         .await
         .unwrap();
         let before = std::fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
-        let reply = discover(&app, &resource, &token).await.unwrap();
+        let reply = inspect(&app, &resource, &token).await.unwrap();
         assert_eq!(reply.scope.state, "incomplete");
         assert_eq!(reply.scope.initialization, "not_requested");
         assert!(reply.root.is_none());
@@ -167,7 +170,7 @@ fn discovery_reply_keeps_native_preferences_instructions_and_blocked_paths_priva
         )
         .await
         .unwrap();
-        let reply = discover(&app, &resource, &token).await.unwrap();
+        let reply = inspect(&app, &resource, &token).await.unwrap();
         let json = serde_json::to_value(reply).unwrap();
         assert_eq!(json.as_object().unwrap().len(), 4);
         assert_eq!(json["schema"], 1);
@@ -183,7 +186,7 @@ fn discovery_reply_keeps_native_preferences_instructions_and_blocked_paths_priva
         }
         resource.retire();
         assert_eq!(
-            discover(&app, &resource, &token).await.unwrap_err().code,
+            inspect(&app, &resource, &token).await.unwrap_err().code,
             "cancelled"
         );
     });

@@ -33,7 +33,7 @@ fn explicit_selection_inspection_allows_real_deployment_without_authorizing_pare
         .unwrap();
         let preferences = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         assert!(
-            !super::super::discover(&app, &resource, &ordinary)
+            !super::super::inspect(&app, &resource, &ordinary)
                 .await
                 .unwrap()
                 .scope
@@ -44,7 +44,7 @@ fn explicit_selection_inspection_allows_real_deployment_without_authorizing_pare
             .unwrap();
         assert!(resource.check(&app, &ordinary).is_err());
         assert!(
-            super::super::discover(&app, &resource, &inspected)
+            super::super::inspect(&app, &resource, &inspected)
                 .await
                 .unwrap()
                 .scope
@@ -71,7 +71,7 @@ fn explicit_selection_inspection_allows_real_deployment_without_authorizing_pare
             .unwrap();
         assert!(resource.check(&app, &inspected).is_err());
         assert!(
-            !super::super::discover(&app, &resource, &disabled)
+            !super::super::inspect(&app, &resource, &disabled)
                 .await
                 .unwrap()
                 .scope
@@ -100,7 +100,7 @@ fn inspecting_parent_memory_cannot_promote_it_to_a_workspace_or_publish_nested_m
         )
         .await
         .unwrap();
-        let observed = super::super::discover(&app, &resource, &selected)
+        let observed = super::super::inspect(&app, &resource, &selected)
             .await
             .unwrap();
         assert_eq!(observed.scope.state, "ready");

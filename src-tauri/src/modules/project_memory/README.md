@@ -240,12 +240,13 @@ supported; other environments never fall back to local IO. The returned UUID is
 an ephemeral selection receipt. Selection does not authorize paths, initialize
 state or trust instructions.
 
-`project_memory_discover` requires the current selection receipt, opens existing
-private state without creating it, rechecks selection, and runs read-only scope
-discovery with the existing five-second ascending budget. Its schema-1 reply
+`project_memory_discover` requires `inspectionOnly: true` and the current
+selection receipt. Missing or false inspection flags reject with `unsupported`
+before resource lookup or private-state access. The command runs stateless
+marker inspection with the existing five-second ascending budget. Its schema-1 reply
 contains `scope`, the resolved `root` if available and `blockedCount`; raw facts,
 blocked paths, local preferences, installation identity and instructions remain
-native. Missing or invalid state is an error, never evidence of an absent kit.
+native. Global memory preferences are not inspected or opened on this path.
 Errors contain a redacted `code`, not observed content or paths.
 
 `project_memory_initialize_local_state` has been removed from Desktop and the

@@ -29,13 +29,14 @@ it("starts no IPC until selected and never initializes state during discovery", 
   const owner = createNativeMemoryPresentation();
   expect(invoke).not.toHaveBeenCalled();
   const selected = await owner.select("/project", { kind: "local" });
-  expect(await owner.discover(selected)).toEqual(scope);
+  expect(await owner.inspect(selected)).toEqual(scope);
   expect(invoke.mock.calls.map(([command]) => command)).toEqual([
     "project_memory_open",
     "project_memory_select",
     "project_memory_discover",
   ]);
   expect("initializeLocalState" in owner).toBe(false);
+  expect("discover" in owner).toBe(false);
   await owner.close();
 });
 
@@ -77,7 +78,7 @@ it("retires a selection round trip and rejects foreign or copied receipts", asyn
   const current = await owner.select("/project", { kind: "local" });
   const foreign = await other.select("/project", { kind: "local" });
   for (const stale of [first, foreign, { ...current }]) {
-    await expect(owner.discover(stale)).rejects.toMatchObject({
+    await expect(owner.inspect(stale)).rejects.toMatchObject({
       code: "cancelled",
     });
   }
@@ -100,14 +101,14 @@ it("suppresses retired results and errors without issuing later initialization",
     });
     const owner = createNativeMemoryPresentation();
     const selected = await owner.select("/project", { kind: "local" });
-    const pending = owner.discover(selected);
+    const pending = owner.inspect(selected);
     const result = expect(pending).rejects.toMatchObject({ code: "cancelled" });
     await started.promise;
     await owner.select("/replacement", { kind: "local" });
     if (reject) read.reject({ code: "unavailable" });
     else read.resolve(scope);
     await result;
-    await expect(owner.discover(selected)).rejects.toMatchObject({
+    await expect(owner.inspect(selected)).rejects.toMatchObject({
       code: "cancelled",
     });
     expect(
@@ -200,10 +201,11 @@ it("cannot publish a late native selection over its newer receipt", async () => 
   first.resolve("old-token");
   await result;
   expect(owner.isCurrent(current)).toBe(true);
-  await owner.discover(current);
+  await owner.inspect(current);
   expect(invoke).toHaveBeenLastCalledWith("project_memory_discover", {
     handle,
     selection: "new-token",
+    inspectionOnly: true,
   });
   await owner.close();
 });

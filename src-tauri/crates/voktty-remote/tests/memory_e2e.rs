@@ -159,6 +159,17 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
             .code,
         "invalid_params"
     );
+    assert_eq!(
+        helper
+            .request(
+                METHOD_MEMORY_MANAGE,
+                json!({"operation":"discover","handle":handle,"selection":selection})
+            )
+            .error
+            .unwrap()
+            .code,
+        "invalid_params"
+    );
     assert!(!data.exists());
     let preview = helper.ok(json!({"operation":"preview","handle":handle,"selection":selection,"revision":1,
         "inputs":{"project_name":"Helper integration","project_summary":"Memory over framed transport","owner_title":"Owner","primary_branch":"main",
@@ -380,7 +391,9 @@ fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
         "invalid_params"
     );
     assert_eq!(
-        helper.memory(json!({"operation":"discover","handle":handle,"selection":selection})),
+        helper.memory(
+            json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1})
+        ),
         json!({"schema":1,"ok":false,"error":{"code":"legacyStateRequiresReview"}})
     );
     assert_eq!(helper.memory(json!({"operation":"reviewRecovery","schema":2,"handle":handle,"selection":selection,"revision":1}))["error"]["code"], "unavailable");

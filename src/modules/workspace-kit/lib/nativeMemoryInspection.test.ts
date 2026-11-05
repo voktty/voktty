@@ -66,7 +66,7 @@ it("captures explicit inspection before opening and cannot deliver an old select
     inspectAncestors: true,
   });
   await owner.select("/elsewhere", { kind: "local" });
-  await expect(owner.discover(receipt)).rejects.toMatchObject({
+  await expect(owner.inspect(receipt)).rejects.toMatchObject({
     code: "cancelled",
   });
   await owner.close();

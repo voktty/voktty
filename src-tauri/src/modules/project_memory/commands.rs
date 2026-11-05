@@ -277,35 +277,6 @@ pub struct ScopeReply {
     blocked_count: usize,
 }
 
-async fn discover(
-    app: &NativeMemoryApplication,
-    resource: &PresentationResource,
-    token: &str,
-) -> Result<ScopeReply, MemoryCommandError> {
-    resource.check(app, token)?;
-    let store = app
-        .store(
-            &resource.window,
-            MemoryStoreMode::OpenExisting,
-            ReadControl::default(),
-        )
-        .await;
-    let selected = resource.check(app, token)?;
-    let store = store?;
-    let result = app
-        .discover(
-            &resource.window,
-            &resource.receipt,
-            &selected,
-            store,
-            DiscoveryControl::new(std::time::Duration::from_secs(5)),
-        )?
-        .finish()
-        .await;
-    resource.check(app, token)?;
-    scope_reply(result?)
-}
-
 fn scope_reply(observation: NativeScopeObservation) -> Result<ScopeReply, MemoryCommandError> {
     let root = observation
         .scope
@@ -341,12 +312,18 @@ pub async fn project_memory_discover(
     selection: String,
     inspection_only: Option<bool>,
 ) -> Result<ScopeReply, MemoryCommandError> {
+    require_inspection(inspection_only)?;
     let resource = presentation(&window, &handle)?;
-    if inspection_only == Some(true) {
-        inspect(&app, &resource, &selection).await
-    } else {
-        discover(&app, &resource, &selection).await
+    inspect(&app, &resource, &selection).await
+}
+
+fn require_inspection(inspection_only: Option<bool>) -> Result<(), MemoryCommandError> {
+    if inspection_only != Some(true) {
+        return Err(MemoryCommandError {
+            code: "unsupported",
+        });
     }
+    Ok(())
 }
 
 async fn inspect(
