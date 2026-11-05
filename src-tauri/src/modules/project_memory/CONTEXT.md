@@ -28,9 +28,10 @@ Native workspace authorization, secret-path and root checks remain mandatory.
 This path never resolves, opens or initializes global memory storage. The frontend
 conversation panel and typed client use this project binding. The authenticated
 helper offers the matching `contextBindProject` operation without a local or
-legacy fallback. Legacy consumers retain the separate review path below.
+legacy fallback. Desktop context IPC rejects the former review-bound request.
+The native core and helper still retain legacy APIs pending separate retirement.
 
-## Legacy review-bound context
+## Native core legacy context pending retirement
 
 The native application reserves context owners independently of presentations.
 `open_context` creates one empty, window-bound receipt without filesystem access,
@@ -101,25 +102,23 @@ the captured window's weak owners, without requiring application State to remain
 available.
 
 `project_memory_context_bind` takes a presentation handle, selection token,
-already-open context handle and strict `{ review, mode }` request. The review
-token must name the current ready artifact from `project_memory_review_trust`.
-It is consumed once without accepting or persisting instruction trust. Modes are
-`inherit`, `enabled` and `disabled`; unknown fields or modes are rejected. No
-root, project key, trust digest, instruction text, store path, logical session ID
-or capture consent can be supplied in that request.
+already-open context handle and strict `{ "schema": 2 }` request. Former
+`{ review, mode }` requests and unknown fields are rejected during deserialization.
+No root, project key, trust digest, instruction text, store path, logical session
+ID or capture consent can be supplied in that request.
 
 The resource admits one transition from opening to binding. Concurrent attempts
 return `busy`; replay against a ready context returns `cancelled`, preserving the
 incumbent in both cases. Native preparation retains the original selection and
-review reservation through settlement. Promotion clears that presentation's
+project reservation through settlement. Promotion clears that presentation's
 selected command state after moving its source, then checks presentation and
-context retirement before acknowledging `{ schema: 1, root }`. The root is
+context retirement before acknowledging `{ schema: 2, root, packet }`. The root is
 display metadata, not proof of allowed delivery. An admitted failure retires its
 known context; table cleanup removes only that exact resource allocation.
 
 `project_memory_context_read` requires a ready resource, checks its original
 lifetime before and after the native read, and returns `MemoryContextResult`.
-Denied policy or trust returns no packet. The packet remains bounded to 24 KiB
+An unavailable project returns no packet. The packet remains bounded to 24 KiB
 UTF-8. Native errors expose only the existing redacted code. A context that was
 confirmed survives presentation close; resource or window retirement rejects
 late results. None of the commands starts an agent, writes project files or

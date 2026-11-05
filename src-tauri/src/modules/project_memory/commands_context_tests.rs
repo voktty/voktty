@@ -25,46 +25,6 @@ fn select(
         .unwrap();
     (registry, selected)
 }
-async fn review(
-    app: &NativeMemoryApplication,
-    presentation: &PresentationResource,
-    selected: &str,
-    revision: u64,
-) -> String {
-    let reply = trust::review(
-        app,
-        presentation,
-        selected,
-        serde_json::from_value(json!({"revision":revision,"role":null})).unwrap(),
-    )
-    .await
-    .unwrap();
-    serde_json::to_value(reply).unwrap()["review"]
-        .as_str()
-        .unwrap()
-        .into()
-}
-async fn trusted(
-    app: &NativeMemoryApplication,
-    presentation: &PresentationResource,
-    selected: &str,
-) -> String {
-    app.store(
-        &presentation.window,
-        MemoryStoreMode::Initialize,
-        ReadControl::default(),
-    )
-    .await
-    .unwrap();
-    let token = review(app, presentation, selected, 1).await;
-    trust::confirm(app, presentation, selected, &token)
-        .await
-        .unwrap();
-    review(app, presentation, selected, 2).await
-}
-fn request(review: &str, mode: &str) -> ContextBindRequest {
-    serde_json::from_value(json!({"review":review,"mode":mode})).unwrap()
-}
 fn handle(table: &mut ResourceTable, resource: &Arc<ContextResource>) -> ContextHandle {
     ContextHandle {
         id: table.add_arc(resource.clone()),
@@ -92,27 +52,26 @@ fn empty_context_handles_are_window_owned_readless_and_never_initialize_state() 
 }
 
 #[test]
-fn token_only_context_confirmation_preserves_preferences_and_survives_panel_close() {
+fn project_context_preserves_preferences_and_survives_panel_close() {
     let (state, app, presentation) = fixture();
     let dir = project();
     let (_registry, selected) = select(&app, &presentation, dir.path());
     runtime().block_on(async {
-        let review = trusted(&app, &presentation, &selected).await;
-        let before = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
-        let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
-        let reply = bind(
-            &app,
-            &presentation,
-            &selected,
-            &context,
-            request(&review, "enabled"),
+        app.store(
+            &presentation.window,
+            MemoryStoreMode::Initialize,
+            ReadControl::default(),
         )
         .await
         .unwrap();
-        assert_eq!(
-            serde_json::to_value(reply).unwrap(),
-            json!({"schema":1,"root":dir.path()})
-        );
+        let before = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
+        let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
+        let reply = bind(&app, &presentation, &selected, &context, project_request())
+            .await
+            .unwrap();
+        assert_eq!(reply.schema, 2);
+        assert_eq!(reply.root, dir.path().to_str().unwrap());
+        assert!(reply.packet.bytes <= 24 * 1024);
         assert!(presentation.check(&app, &selected).is_err());
         presentation.retire();
         let result = read(&app, &context).await.unwrap();
@@ -136,45 +95,25 @@ fn duplicate_context_confirmation_does_not_close_the_pending_or_ready_incumbent(
     let dir = project();
     let (_registry, selected) = select(&app, &presentation, dir.path());
     runtime().block_on(async {
-        let token = trusted(&app, &presentation, &selected).await;
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
         context.begin(&app, &presentation.window).unwrap();
         assert_eq!(
-            bind(
-                &app,
-                &presentation,
-                &selected,
-                &context,
-                request(&token, "enabled")
-            )
-            .await
-            .unwrap_err()
-            .code,
+            bind(&app, &presentation, &selected, &context, project_request())
+                .await
+                .unwrap_err()
+                .code,
             "busy"
         );
         assert_eq!(context.phase.load(Ordering::Acquire), BINDING);
-        trust::bind_context(
-            &app,
-            &presentation,
-            &selected,
-            &token,
-            &context,
-            MemorySessionUse::Enabled,
-        )
-        .await
-        .unwrap();
+        bind_project(&app, &presentation, &selected, &context)
+            .await
+            .unwrap();
         context.phase.store(READY, Ordering::Release);
         assert_eq!(
-            bind(
-                &app,
-                &presentation,
-                &selected,
-                &context,
-                request(&token, "enabled")
-            )
-            .await
-            .unwrap_err()
-            .code,
+            bind(&app, &presentation, &selected, &context, project_request())
+                .await
+                .unwrap_err()
+                .code,
             "cancelled"
         );
         assert!(read(&app, &context).await.unwrap().packet.is_some());
@@ -187,23 +126,16 @@ fn failed_binding_retires_its_known_resource_without_removing_a_replacement() {
     let dir = project();
     let (_registry, selected) = select(&app, &presentation, dir.path());
     runtime().block_on(async {
-        let token = trusted(&app, &presentation, &selected).await;
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
         let mut table = ResourceTable::default();
         let handle = handle(&mut table, &context);
-        fs::write(dir.path().join(".voktty/INIT.md"), "Foreign instructions").unwrap();
+        fs::remove_file(dir.path().join(".voktty/kit.json")).unwrap();
         assert_eq!(
-            bind(
-                &app,
-                &presentation,
-                &selected,
-                &context,
-                request(&token, "enabled")
-            )
-            .await
-            .unwrap_err()
-            .code,
-            "stale"
+            bind(&app, &presentation, &selected, &context, project_request())
+                .await
+                .unwrap_err()
+                .code,
+            "scope"
         );
         assert_eq!(context.phase.load(Ordering::Acquire), CLOSED);
         assert!(!app.is_context_current(&presentation.window, &context.receipt));
@@ -263,82 +195,6 @@ fn handles_reject_foreign_tables_types_nonces_and_old_ids_even_when_retired() {
 }
 
 #[test]
-fn a_context_from_another_native_window_cannot_consume_the_original_review() {
-    let (_state, app, presentation) = fixture();
-    let (_other_state, other, other_presentation) = fixture();
-    let dir = project();
-    let (_registry, selected) = select(&app, &presentation, dir.path());
-    runtime().block_on(async {
-        let token = trusted(&app, &presentation, &selected).await;
-        let foreign = ContextResource::open(&other, other_presentation.window.clone()).unwrap();
-        assert_eq!(
-            bind(
-                &app,
-                &presentation,
-                &selected,
-                &foreign,
-                request(&token, "enabled")
-            )
-            .await
-            .unwrap_err()
-            .code,
-            "cancelled"
-        );
-        assert_eq!(foreign.phase.load(Ordering::Acquire), OPEN);
-        let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
-        bind(
-            &app,
-            &presentation,
-            &selected,
-            &context,
-            request(&token, "enabled"),
-        )
-        .await
-        .unwrap();
-        assert!(read(&app, &context).await.unwrap().packet.is_some());
-    });
-}
-
-#[test]
-fn queued_confirmation_is_cancelled_by_context_panel_selection_window_or_app_retirement() {
-    for retire in 0..5 {
-        let (_state, app, presentation) = fixture();
-        let dir = project();
-        let (registry, selected) = select(&app, &presentation, dir.path());
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .max_blocking_threads(1)
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let token = trusted(&app, &presentation, &selected).await;
-            let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
-            let (started, observed) = std::sync::mpsc::channel();
-            let (release, blocked) = std::sync::mpsc::channel();
-            let blocker = tokio::task::spawn_blocking(move || {
-                started.send(()).unwrap();
-                blocked.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
-            });
-            observed.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
-            let pending = bind(&app, &presentation, &selected, &context, request(&token,"enabled"));
-            tokio::pin!(pending);
-            tokio::select! { biased; _ = &mut pending => panic!("binding must be queued"), _ = tokio::task::yield_now() => {} }
-            match retire {
-                0 => context.retire(),
-                1 => presentation.retire(),
-                2 => { presentation.select_with_inspection(&app,&registry,dir.path().join("src"),&WorkspaceEnv::Local,2,true).unwrap(); },
-                3 => presentation.window.retire(),
-                _ => app.shutdown(),
-            }
-            release.send(()).unwrap();
-            blocker.await.unwrap();
-            assert_eq!(pending.await.unwrap_err().code, "cancelled");
-            assert_eq!(context.phase.load(Ordering::Acquire), CLOSED);
-        });
-    }
-}
-
-#[test]
 fn queued_context_read_cannot_publish_after_its_resource_is_closed() {
     let (_state, app, presentation) = fixture();
     let dir = project();
@@ -349,9 +205,8 @@ fn queued_context_read_cannot_publish_after_its_resource_is_closed() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let token = trusted(&app, &presentation, &selected).await;
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
-        bind(&app, &presentation, &selected, &context, request(&token,"enabled")).await.unwrap();
+        bind(&app, &presentation, &selected, &context, project_request()).await.unwrap();
         let (started, observed) = std::sync::mpsc::channel();
         let (release, blocked) = std::sync::mpsc::channel();
         let blocker = tokio::task::spawn_blocking(move || {
@@ -381,7 +236,7 @@ fn strict_context_wire_accepts_no_root_trust_policy_or_capture_facts() {
         "captures",
         "sessionId",
     ] {
-        let mut input = json!({"review":"token","mode":"enabled"});
+        let mut input = json!({"schema":2});
         input[field] = json!(true);
         assert!(serde_json::from_value::<ContextBindRequest>(input).is_err());
     }
@@ -411,22 +266,15 @@ fn confirming_context_never_accepts_instruction_trust_or_changes_local_policy() 
         .await
         .unwrap();
         let before = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
-        let review = review(&app, &presentation, &selected, 1).await;
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
-        bind(
-            &app,
-            &presentation,
-            &selected,
-            &context,
-            request(&review, "enabled"),
-        )
-        .await
-        .unwrap();
+        bind(&app, &presentation, &selected, &context, project_request())
+            .await
+            .unwrap();
         let result = read(&app, &context).await.unwrap();
-        assert_eq!(result.decision.reason, "KIT_MEMORY_TRUST_REQUIRED");
-        assert!(!result.decision.context_allowed);
+        assert_eq!(result.decision.reason, "KIT_MEMORY_READY");
+        assert!(result.decision.context_allowed);
         assert!(!result.decision.capture_allowed);
-        assert!(result.packet.is_none());
+        assert!(result.packet.is_some());
         assert_eq!(
             fs::read(state.path().join("project-memory/memory-local.json")).unwrap(),
             before
@@ -468,8 +316,11 @@ fn project_context_transfers_the_original_source_without_opening_global_state() 
                 .unwrap();
             assert_eq!(reply.schema, 2);
             assert_eq!(reply.root, dir.path().to_str().unwrap());
-            assert!(reply.packet.as_ref().unwrap().bytes <= 24 * 1024);
-            assert_eq!(reply.packet, read(&app, &context).await.unwrap().packet);
+            assert!(reply.packet.bytes <= 24 * 1024);
+            assert_eq!(
+                Some(reply.packet),
+                read(&app, &context).await.unwrap().packet
+            );
             assert!(presentation.check(&app, &selected).is_err());
             presentation.retire();
             fs::write(
@@ -508,12 +359,20 @@ fn project_context_transfers_the_original_source_without_opening_global_state() 
 
 #[test]
 fn project_context_schema_and_foreign_window_checks_precede_binding_admission() {
-    let (_state, app, presentation) = fixture();
+    let (state, app, presentation) = fixture();
     let (_other_state, other, other_presentation) = fixture();
     let dir = project();
     let (_registry, selected) = select(&app, &presentation, dir.path());
     runtime().block_on(async {
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
+        for mode in ["enabled", "disabled", "inherit"] {
+            assert!(serde_json::from_value::<ContextBindRequest>(
+                json!({"review":uuid::Uuid::new_v4().to_string(),"mode":mode})
+            )
+            .is_err());
+            assert_eq!(context.phase.load(Ordering::Acquire), OPEN);
+            assert_eq!(fs::read_dir(state.path()).unwrap().count(), 0);
+        }
         for schema in [0, 1, 3] {
             assert_eq!(
                 bind(

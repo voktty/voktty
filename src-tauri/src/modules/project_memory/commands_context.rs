@@ -1,6 +1,5 @@
 use super::*;
 use std::sync::atomic::AtomicU8;
-use voktty_memory_local::MemorySessionUse;
 use voktty_workspace_kit::{MemoryContextPacket, MemoryContextResult};
 
 const OPEN: u8 = 0;
@@ -15,36 +14,17 @@ pub struct ContextHandle {
     token: String,
 }
 
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ContextMode {
-    Inherit,
-    Enabled,
-    Disabled,
-}
-impl From<ContextMode> for MemorySessionUse {
-    fn from(mode: ContextMode) -> Self {
-        match mode {
-            ContextMode::Inherit => Self::Inherit,
-            ContextMode::Enabled => Self::Enabled,
-            ContextMode::Disabled => Self::Disabled,
-        }
-    }
-}
-
 #[derive(Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
-pub enum ContextBindRequest {
-    Project { schema: u8 },
-    Legacy { review: String, mode: ContextMode },
+#[serde(deny_unknown_fields)]
+pub struct ContextBindRequest {
+    schema: u8,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ContextBoundReply {
     schema: u8,
     root: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packet: Option<MemoryContextPacket>,
+    packet: MemoryContextPacket,
 }
 
 pub(super) struct ContextResource {
@@ -217,23 +197,14 @@ async fn bind(
     context: &ContextResource,
     request: ContextBindRequest,
 ) -> Result<ContextBoundReply, MemoryCommandError> {
-    if matches!(request, ContextBindRequest::Project { schema } if schema != 2) {
+    if request.schema != 2 {
         return Err(MemoryCommandError {
             code: "unsupported",
         });
     }
-    let project = matches!(request, ContextBindRequest::Project { .. });
     context.begin(app, &presentation.window)?;
     let result = async {
-        match request {
-            ContextBindRequest::Project { .. } => {
-                bind_project(app, presentation, selection, context).await?
-            }
-            ContextBindRequest::Legacy { review, mode } => {
-                trust::bind_context(app, presentation, selection, &review, context, mode.into())
-                    .await?
-            }
-        }
+        bind_project(app, presentation, selection, context).await?;
         context.check(app, &presentation.window)?;
         let root = app
             .context_root(&context.window, &context.receipt)?
@@ -247,19 +218,15 @@ async fn bind(
             .compare_exchange(BINDING, READY, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| cancelled())?;
         context.check_bound(app)?;
-        let packet = if project {
-            Some(read(app, context).await?.packet.ok_or(MemoryCommandError {
-                code: "unavailable",
-            })?)
-        } else {
-            None
-        };
-        if project && !presentation.live.load(Ordering::Acquire) {
+        let packet = read(app, context).await?.packet.ok_or(MemoryCommandError {
+            code: "unavailable",
+        })?;
+        if !presentation.live.load(Ordering::Acquire) {
             return Err(cancelled());
         }
         context.check_bound(app)?;
         Ok(ContextBoundReply {
-            schema: if project { 2 } else { 1 },
+            schema: 2,
             root,
             packet,
         })
