@@ -7,8 +7,42 @@ preferences and performs no writes. It shares the inventory, role validation,
 schema checks and bounded fact assembly used by the legacy reader below, with
 the same four-reader admission, 2 MiB batch limit, cancellation, secret-path and
 root-identity checks. It does not resolve a delivery scope, bind a conversation
-or authorize provider delivery. Migrating the session consumers below to this
-project-only observation remains in progress.
+or authorize provider delivery.
+
+## Project-owned session context
+
+`MemoryContextSession::bind_project` and `MemoryWorkers::bind_project_context`
+capture the execution directory, one ready ancestor memory root and the original
+native read authority without an installation identity, global store or trust
+review. The caller supplies the conversation lifetime. Metadata inspection alone
+does not grant document reads. Missing or ambiguous scopes, blocked documents,
+invalid roles and replaced directories refuse binding.
+
+Project sessions use the shared native packet reader and 24 KiB renderer.
+Each read rechecks both captured roots and the complete applicable scope before
+and after gathering current instructions and factual content. Ordinary project
+edits can appear in the next packet without a persistent trust update. A consumer
+must compare its captured packet again before delivery; preparation is not proof
+of provider acceptance. Changing the execution root or creating another applicable
+kit cannot redirect a bound session. Scope and bytes are point-in-time checks.
+
+The existing schema-1 result uses `manual` as its default policy label and reports
+context preparation available and captures false. This label is not a stored
+policy, fabricated instruction-trust receipt or tool permission. Project sessions
+never open, modify, repair or inherit legacy global state.
+
+Both project and legacy bindings below share the same process-wide 256-session
+budget, four-worker admission, cancellation and physical-settlement ownership.
+Dropping a session retires subsequent reads; pending jobs keep their slot until
+settlement. Ready binding and read results recheck their original authority at
+consumption. Independent sessions cannot retire or adopt one another.
+
+The CLI consumes this shared project session for explicit initial-prompt launch.
+Desktop and SSH conversation owners still use the legacy binding below pending
+their IPC/RPC and presentation adaptation. No additional timer, watcher or provider
+starts when a binding is idle.
+
+## Legacy policy-bound session context
 
 `MemoryContextSession::bind` and `MemoryWorkers::bind_context_session` consume an existing native
 `MemoryTrustReview` with an explicit `MemorySessionUse` choice. The review is
@@ -81,7 +115,7 @@ source into its confirmed context. See the
 [native owner contract](../../src/modules/project_memory/CONTEXT.md). A panel
 retires sources it still owns; a promoted context requires its own release.
 The desktop exposes explicit opaque context resources through the native owner
-contract. Standalone Linux CLI launches can consume this native binding for a
+contract. Standalone Linux CLI launches consume the project binding above for a
 qualified initial user prompt; this does not establish provider acceptance or
 managed resume. See [CLI control](../../../docs/architecture/cli-control.md).
 SSH, WSL and Docker

@@ -749,3 +749,252 @@ fn retired_native_authority_rejects_ready_binding_and_context_delivery() {
         });
     }
 }
+
+fn project_session(f: &Fixture) -> MemoryContextSession {
+    MemoryContextSession::bind_project(
+        f.project.path().join("src"),
+        f.access.clone(),
+        None,
+        &DiscoveryControl::default(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn project_sessions_read_current_files_without_opening_or_repairing_global_state() {
+    let f = fixture();
+    policy(&f, MemoryPolicy::Never);
+    fs::write(
+        f.state.path().join("memory-local.json"),
+        "corrupt legacy bytes",
+    )
+    .unwrap();
+    let first = project_session(&f);
+    let second = project_session(&f);
+    assert_eq!(first.root(), f.project.path());
+    let initial = first.read(&DiscoveryControl::default()).unwrap();
+    assert!(initial.packet.is_some());
+    assert!(!initial.decision.capture_allowed);
+    fs::write(
+        f.project.path().join(".voktty/CONTEXT.md"),
+        "Current project facts",
+    )
+    .unwrap();
+    fs::write(
+        f.project.path().join(".voktty/INIT.md"),
+        "Current project instructions",
+    )
+    .unwrap();
+    let packet = first
+        .read(&DiscoveryControl::default())
+        .unwrap()
+        .packet
+        .unwrap();
+    assert!(packet.text.contains("Current project facts"));
+    assert!(packet.text.contains("Current project instructions"));
+    assert!(packet.bytes <= 24 * 1024);
+    assert_eq!(bytes(&f), b"corrupt legacy bytes");
+    let cancelled = DiscoveryControl::default();
+    cancelled.cancel();
+    assert!(first.read(&cancelled).is_err());
+    assert!(first.read(&DiscoveryControl::new(Duration::ZERO)).is_err());
+    first.retire();
+    assert!(first.read(&DiscoveryControl::default()).is_err());
+    assert!(second
+        .read(&DiscoveryControl::default())
+        .unwrap()
+        .packet
+        .is_some());
+}
+
+#[test]
+fn project_sessions_never_rebind_after_root_replacement_or_nested_kit_creation() {
+    for replace in [false, true] {
+        let f = fixture();
+        let session = project_session(&f);
+        if replace {
+            fs::rename(
+                f.project.path().join("src"),
+                f.project.path().join("old-src"),
+            )
+            .unwrap();
+            fs::create_dir(f.project.path().join("src")).unwrap();
+        } else {
+            populate(&f.project.path().join("src"));
+        }
+        assert!(session.read(&DiscoveryControl::default()).is_err());
+    }
+}
+
+#[test]
+fn project_binding_failures_release_their_capacity_without_changing_global_bytes() {
+    let f = fixture();
+    let before = bytes(&f);
+    let budget = Arc::new(AtomicUsize::new(0));
+    for role in [
+        Some(".voktty/team/roles/../../.env".into()),
+        Some("x".repeat(257)),
+    ] {
+        assert!(MemoryContextSession::bind_project_with_slot(
+            f.project.path().join("src"),
+            f.access.clone(),
+            role,
+            &DiscoveryControl::default(),
+            SessionSlot::acquire(budget.clone()).unwrap(),
+        )
+        .is_err());
+        assert_eq!(budget.load(Ordering::Acquire), 0);
+    }
+    f.access.retired.store(true, Ordering::Release);
+    assert!(MemoryContextSession::bind_project_with_slot(
+        f.project.path().join("src"),
+        f.access.clone(),
+        None,
+        &DiscoveryControl::default(),
+        SessionSlot::acquire(budget.clone()).unwrap(),
+    )
+    .is_err());
+    assert_eq!(budget.load(Ordering::Acquire), 0);
+    assert_eq!(bytes(&f), before);
+}
+
+#[test]
+fn project_bindings_and_reads_reject_authority_retired_after_worker_completion() {
+    for binding in [false, true] {
+        let f = fixture();
+        runtime().block_on(async {
+            let workers = workers();
+            if binding {
+                let job = workers
+                    .bind_project_context(
+                        f.project.path().join("src"),
+                        f.access.clone(),
+                        None,
+                        DiscoveryControl::default(),
+                    )
+                    .unwrap();
+                tokio::time::timeout(Duration::from_secs(3), async {
+                    while job.job.receiver.is_empty() {
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+                f.access.retired.store(true, Ordering::Release);
+                assert!(matches!(
+                    job.finish().await,
+                    Err(MemoryTrustError::Worker(MemoryWorkError::Read(
+                        ReadError::Denied
+                    )))
+                ));
+            } else {
+                let session = project_session(&f);
+                let job = workers
+                    .session_context(&session, DiscoveryControl::default())
+                    .unwrap();
+                tokio::time::timeout(Duration::from_secs(3), async {
+                    while job.job.receiver.is_empty() {
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+                f.access.retired.store(true, Ordering::Release);
+                assert!(matches!(
+                    job.finish().await,
+                    Err(MemoryTrustError::Worker(MemoryWorkError::Read(
+                        ReadError::Denied
+                    )))
+                ));
+            }
+        });
+    }
+}
+
+#[test]
+fn project_read_retirement_retains_shared_capacity_until_physical_settlement() {
+    let f = fixture();
+    let runtime = Builder::new_current_thread()
+        .enable_time()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let workers = workers();
+        let budget = Arc::new(AtomicUsize::new(0));
+        let session = workers
+            .bind_project_with_budget(
+                f.project.path().join("src"),
+                f.access.clone(),
+                None,
+                DiscoveryControl::default(),
+                budget.clone(),
+            )
+            .unwrap()
+            .finish()
+            .await
+            .unwrap();
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let held = gate.clone();
+        let (started, observed) = mpsc::channel();
+        let blocker = tokio::task::spawn_blocking(move || {
+            started.send(()).unwrap();
+            let (locked, timeout) = held
+                .1
+                .wait_timeout_while(held.0.lock().unwrap(), Duration::from_secs(3), |released| {
+                    !*released
+                })
+                .unwrap();
+            assert!(*locked && !timeout.timed_out());
+        });
+        observed.recv_timeout(Duration::from_secs(3)).unwrap();
+        let job = workers
+            .session_context(&session, DiscoveryControl::default())
+            .unwrap();
+        drop(session);
+        assert_eq!(budget.load(Ordering::Acquire), 1);
+        assert_eq!(workers.active.load(Ordering::Acquire), 1);
+        *gate.0.lock().unwrap() = true;
+        gate.1.notify_all();
+        blocker.await.unwrap();
+        assert!(job.finish().await.is_err());
+        assert_eq!(budget.load(Ordering::Acquire), 0);
+        assert_eq!(workers.active.load(Ordering::Acquire), 0);
+    });
+}
+
+#[test]
+fn project_binding_and_legacy_binding_share_one_capacity_budget() {
+    let f = fixture();
+    runtime().block_on(async {
+        let workers = workers();
+        let budget = Arc::new(AtomicUsize::new(MAX_SESSIONS - 1));
+        let session = workers
+            .bind_project_with_budget(
+                f.project.path().join("src"),
+                f.access.clone(),
+                None,
+                DiscoveryControl::default(),
+                budget.clone(),
+            )
+            .unwrap()
+            .finish()
+            .await
+            .unwrap();
+        assert_eq!(budget.load(Ordering::Acquire), MAX_SESSIONS);
+        let review = review(&f, &workers).await;
+        assert!(matches!(
+            workers.bind_context_with_budget(
+                review,
+                MemorySessionUse::Enabled,
+                DiscoveryControl::default(),
+                budget.clone()
+            ),
+            Err(MemoryTrustError::Worker(MemoryWorkError::Read(
+                ReadError::Limit
+            )))
+        ));
+        drop(session);
+        assert_eq!(budget.load(Ordering::Acquire), MAX_SESSIONS - 1);
+    });
+}

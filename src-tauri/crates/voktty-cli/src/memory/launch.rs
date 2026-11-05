@@ -83,7 +83,10 @@ fn with_memory(root: &std::path::Path, options: &RunOptions) -> Result<ExitCode,
         fs::{MetadataExt, OpenOptionsExt},
         process::CommandExt,
     };
-    use voktty_memory_local::{ProjectMemoryWorkspace, ReadError};
+    use std::sync::Arc;
+    use voktty_memory_local::{
+        MemoryContextSession, MemoryTrustError, ProjectMemoryWorkspace, ReadError,
+    };
     let adapter = adapters::Adapter::parse(&options.adapter).ok_or_else(adapters::unavailable)?;
     adapters::arguments(adapter, &options.args, "")?;
     let directory = std::fs::OpenOptions::new()
@@ -115,24 +118,28 @@ fn with_memory(root: &std::path::Path, options: &RunOptions) -> Result<ExitCode,
     };
     let memory = resolve_scope(&scope)?;
     let access = TrustReadAccess::new(root.to_owned(), memory.clone());
-    let workspace = ProjectMemoryWorkspace::open(
-        &memory,
-        &access,
-        &control.read_control().map_err(map_error)?,
-    )
-    .map_err(map_error)?;
-    let packet = workspace
-        .read_context_packet(None, &control.read_control().map_err(map_error)?)
-        .map_err(map_error)?;
+    let project_error = |error: MemoryTrustError| match error {
+        MemoryTrustError::Worker(voktty_memory_local::MemoryWorkError::Read(error)) => {
+            map_error(error)
+        }
+        _ => CliError::new(
+            "memory_scope_unavailable",
+            "project memory changed or its scope is unavailable; no agent was started",
+            EXIT_REQUEST,
+        ),
+    };
+    let session =
+        MemoryContextSession::bind_project(root.to_owned(), Arc::new(access), None, &control)
+            .map_err(project_error)?;
+    let packet = session
+        .read(&control)
+        .map_err(project_error)?
+        .packet
+        .ok_or_else(adapters::unavailable)?;
     let admitted = adapters::Admission::prepare(root, adapter)?;
     let args = adapters::arguments(adapter, &options.args, &packet.text)?;
-    let current_scope = origin
-        .observe_scope(voktty_memory_local::DiscoveryPurpose::Discover, &control)
-        .map_err(map_error)?;
-    let current = workspace
-        .read_context_packet(None, &control.read_control().map_err(map_error)?)
-        .map_err(map_error)?;
-    if current != packet || resolve_scope(&current_scope)? != memory {
+    let current = session.read(&control).map_err(project_error)?;
+    if current.packet.as_ref() != Some(&packet) {
         return Err(adapters::unavailable());
     }
     let current = std::fs::metadata(root).map_err(|_| adapters::unavailable())?;

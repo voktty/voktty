@@ -43,7 +43,7 @@ impl Drop for SessionSlot {
     }
 }
 
-struct BoundContext {
+struct LegacyBoundContext {
     origin: OwnedMemoryWorkspace,
     memory: OwnedMemoryWorkspace,
     config: Value,
@@ -52,6 +52,41 @@ struct BoundContext {
     choice: MemorySessionUse,
     live: AtomicBool,
     _slot: SessionSlot,
+}
+
+#[path = "project_context_session.rs"]
+mod project;
+
+enum BoundContext {
+    Legacy(Box<LegacyBoundContext>),
+    Project(Box<project::ProjectBoundContext>),
+}
+
+impl BoundContext {
+    fn check(&self) -> Result<(), ReadError> {
+        match self {
+            Self::Legacy(bound) => bound.check(),
+            Self::Project(bound) => bound.check(),
+        }
+    }
+    fn read(&self, control: &DiscoveryControl) -> Result<MemoryContextResult, MemoryTrustError> {
+        match self {
+            Self::Legacy(bound) => bound.read(control),
+            Self::Project(bound) => bound.read(control),
+        }
+    }
+    fn root(&self) -> &Path {
+        match self {
+            Self::Legacy(bound) => bound.memory.root(),
+            Self::Project(bound) => bound.root(),
+        }
+    }
+    fn retire(&self) {
+        match self {
+            Self::Legacy(bound) => bound.live.store(false, Ordering::Release),
+            Self::Project(bound) => bound.retire(),
+        }
+    }
 }
 
 /// An exact native context owner, never a logical Harness or provider session ID.
@@ -75,6 +110,36 @@ impl MemoryContextSession {
         Self::bind_with_slot(review, choice, control, slot)
     }
 
+    /// Captures one ready project scope using only ordinary native read authority.
+    /// The caller owns the conversation lifetime; this writes no permission state.
+    pub fn bind_project(
+        origin: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        role: Option<String>,
+        control: &DiscoveryControl,
+    ) -> Result<Self, MemoryTrustError> {
+        let slot = SessionSlot::acquire(
+            SESSIONS
+                .get_or_init(|| Arc::new(AtomicUsize::new(0)))
+                .clone(),
+        )?;
+        Self::bind_project_with_slot(origin, access, role, control, slot)
+    }
+
+    fn bind_project_with_slot(
+        origin: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        role: Option<String>,
+        control: &DiscoveryControl,
+        slot: SessionSlot,
+    ) -> Result<Self, MemoryTrustError> {
+        Ok(Self {
+            bound: Arc::new(BoundContext::Project(Box::new(
+                project::ProjectBoundContext::prepare(origin, access, role, control, slot)?,
+            ))),
+        })
+    }
+
     fn bind_with_slot(
         review: MemoryTrustReview,
         choice: MemorySessionUse,
@@ -83,7 +148,7 @@ impl MemoryContextSession {
     ) -> Result<Self, MemoryTrustError> {
         review.revalidate(control)?;
         Ok(Self {
-            bound: Arc::new(BoundContext {
+            bound: Arc::new(BoundContext::Legacy(Box::new(LegacyBoundContext {
                 origin: review.origin,
                 memory: review.memory,
                 config: review.observed.config,
@@ -92,11 +157,12 @@ impl MemoryContextSession {
                 choice,
                 live: AtomicBool::new(true),
                 _slot: slot,
-            }),
+            }))),
         })
     }
 
-    /// Rechecks current scope, policy and trust before returning a bounded packet.
+    /// Rechecks the bound source and scope before returning a bounded packet.
+    /// Legacy bindings additionally retain their policy and trust contract.
     /// Preparing a packet is not a receipt of delivery to a provider.
     pub fn read(
         &self,
@@ -106,11 +172,11 @@ impl MemoryContextSession {
     }
 
     pub fn root(&self) -> &Path {
-        self.bound.memory.root()
+        self.bound.root()
     }
 
     pub fn retire(&self) {
-        self.bound.live.store(false, Ordering::Release);
+        self.bound.retire();
     }
 }
 impl Drop for MemoryContextSession {
@@ -144,7 +210,7 @@ impl MemoryContextRead {
     }
 }
 
-impl BoundContext {
+impl LegacyBoundContext {
     fn check(&self) -> Result<(), ReadError> {
         if !self.live.load(Ordering::Acquire) {
             return Err(ReadError::Cancelled);
@@ -225,6 +291,39 @@ impl BoundContext {
 }
 
 impl MemoryWorkers {
+    pub fn bind_project_context(
+        &self,
+        origin: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        role: Option<String>,
+        control: DiscoveryControl,
+    ) -> Result<MemoryContextSessionJob, MemoryTrustError> {
+        self.bind_project_with_budget(
+            origin,
+            access,
+            role,
+            control,
+            SESSIONS
+                .get_or_init(|| Arc::new(AtomicUsize::new(0)))
+                .clone(),
+        )
+    }
+
+    fn bind_project_with_budget(
+        &self,
+        origin: PathBuf,
+        access: Arc<dyn MemoryReadAccess>,
+        role: Option<String>,
+        control: DiscoveryControl,
+        active: Arc<AtomicUsize>,
+    ) -> Result<MemoryContextSessionJob, MemoryTrustError> {
+        let slot = SessionSlot::acquire(active)?;
+        let job = self.submit(Control::Scope(control.clone()), move || {
+            MemoryContextSession::bind_project_with_slot(origin, access, role, &control, slot)
+        })?;
+        Ok(MemoryContextSessionJob { job })
+    }
+
     /// Consumes the exact displayed review without writing trust or preferences.
     /// A policy or trust review by itself never enables this session.
     pub fn bind_context_session(
