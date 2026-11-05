@@ -358,6 +358,25 @@ fn cleanup_project(
     access: &dyn MemoryWriteAccess,
     control: &DiscoveryControl,
 ) -> Result<(), PublicationError> {
+    #[cfg(unix)]
+    if file.path == PROJECT_INITIALIZATION_RECORD {
+        return target
+            .checked_root(&control.read_control()?)?
+            .cleanup_initialization_record(
+                target.root(),
+                &file.text,
+                target.access(),
+                access,
+                &control.read_control()?,
+            )
+            .map_err(|error| {
+                if error == ReadError::Unavailable {
+                    PublicationError::RecoveryRequired(vec![file.path.clone()])
+                } else {
+                    error.into()
+                }
+            });
+    }
     #[cfg(any(target_os = "linux", target_os = "android", windows))]
     {
         target

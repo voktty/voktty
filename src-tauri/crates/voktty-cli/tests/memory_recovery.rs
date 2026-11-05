@@ -290,7 +290,7 @@ fn native_review_and_exact_acceptance_restore_original_objects_without_finishing
         ],
         true,
     ));
-    assert_eq!(preview["isResuming"], true);
+    assert_eq!(preview["schema"], 2);
     assert!(preview["publicationBlocker"].is_null());
     assert!(!f.root.join(".voktty/kit.json").exists());
     result(&f.run(
@@ -311,7 +311,7 @@ fn native_review_and_exact_acceptance_restore_original_objects_without_finishing
         true,
     ));
     assert!(f.root.join(".voktty/kit.json").is_file());
-    assert!(!f.intent_path().exists());
+    assert_eq!(fs::read(f.intent_path()).unwrap(), intent);
     assert_eq!(fs::read(f.state_path()).unwrap(), preferences);
     assert_eq!(
         fs::read(f.root.join(".voktty/sessions/kept.json")).unwrap(),

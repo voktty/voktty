@@ -291,6 +291,58 @@ fn matching_existing_template_files_and_sessions_are_preserved_without_inheritin
 }
 
 #[test]
+fn repair_preserves_project_content_and_rechecks_it_before_publication() {
+    let _serial = SERIAL.lock().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let authority = access(project.path(), false);
+    publish(&authority);
+    let content = render_template(&request(&authority).inputs)
+        .unwrap()
+        .into_iter()
+        .filter(|file| file.kind == voktty_workspace_kit::FileKind::Content)
+        .map(|file| {
+            let text = format!("Project-owned content for {}\n", file.path);
+            fs::write(project.path().join(&file.path), &text).unwrap();
+            (file.path, text)
+        })
+        .collect::<Vec<_>>();
+    fs::remove_file(project.path().join(".voktty/RULES.md")).unwrap();
+    let review = OwnedProjectInitializationPreview::prepare_at_project_root(
+        request(&authority),
+        &DiscoveryControl::default(),
+    )
+    .unwrap();
+    let digest = review.acceptance_digest();
+    fs::write(
+        project.path().join(".voktty/CONTEXT.md"),
+        "Concurrent update\n",
+    )
+    .unwrap();
+    assert_eq!(
+        review
+            .publish(&digest, authority.as_ref(), &DiscoveryControl::default())
+            .unwrap_err()
+            .error,
+        PublicationError::StalePreview
+    );
+    assert!(!project.path().join(".voktty/RULES.md").exists());
+    assert!(!project.path().join(PROJECT_INITIALIZATION_RECORD).exists());
+    publish(&authority);
+    assert!(project.path().join(".voktty/RULES.md").exists());
+    for (path, text) in content {
+        let expected = if path == ".voktty/CONTEXT.md" {
+            "Concurrent update\n"
+        } else {
+            &text
+        };
+        assert_eq!(
+            fs::read_to_string(project.path().join(path)).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
 fn explicit_and_resolved_reviews_have_distinct_acceptance_digests() {
     let _serial = SERIAL.lock().unwrap();
     let project = tempfile::tempdir().unwrap();

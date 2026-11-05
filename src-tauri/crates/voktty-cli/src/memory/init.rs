@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 use voktty_memory_local::{
-    path_policy, resolve_local_memory_directory, DiscoveryControl, InitializationPreview,
-    LocalMemoryStore, LocalMemoryWorkspace, MemoryReadAccess, MemoryWriteAccess,
-    OwnedInitializationPreview, PublicationError, PublicationWriteRequirements, ReadError,
+    path_policy, resolve_local_memory_directory, DiscoveryControl, MemoryReadAccess,
+    MemoryWriteAccess, OwnedProjectInitializationPreview, ProjectInitializationRequest,
+    PublicationError, PublicationWriteRequirements, ReadError,
 };
 use voktty_workspace_kit::{DeploymentAction, RootLinks};
 
@@ -215,42 +215,35 @@ fn publication_error(error: PublicationError) -> CliError {
 
 fn prepare(
     root: &Path,
-    parent: &Path,
     options: &InitOptions,
-) -> Result<OwnedInitializationPreview, CliError> {
+) -> Result<OwnedProjectInitializationPreview, CliError> {
     let control = DiscoveryControl::default();
-    let phase = control.read_control().map_err(map_error)?;
-    LocalMemoryStore::prepare_application_parent(parent, &phase).map_err(map_error)?;
-    let store = Arc::new(LocalMemoryStore::create_private(parent, &phase).map_err(map_error)?);
-    store
-        .initialize()
-        .map_err(|error| map_error(ReadError::Store(error)))?;
     let access: Arc<dyn MemoryReadAccess> = Arc::new(InitReadAccess {
         marker: MarkerAccess {
             root: root.to_owned(),
         },
     });
-    let workspace =
-        LocalMemoryWorkspace::open(&store, root, access.as_ref(), &phase).map_err(map_error)?;
-    InitializationPreview::prepare(
-        &workspace,
-        &workspace,
-        &options.values,
-        RootLinks {
-            agents: options.agents,
-            claude: options.claude,
+    OwnedProjectInitializationPreview::prepare_at_project_root(
+        ProjectInitializationRequest {
+            origin: root.to_owned(),
+            origin_access: access.clone(),
+            destination: root.to_owned(),
+            destination_access: access,
+            inputs: options.values.clone(),
+            links: RootLinks {
+                agents: options.agents,
+                claude: options.claude,
+            },
         },
         &control,
     )
-    .and_then(|preview| preview.into_owned(store.clone(), access.clone(), access.clone()))
     .map_err(publication_error)
 }
 
-fn review(root: &Path, preview: &OwnedInitializationPreview) -> Value {
-    json!({"schema":1,"root":root,"planDigest":preview.acceptance_digest(),
-        "deployment":preview.deployment(),"isResuming":preview.is_resuming(),
-        "publicationBlocker":preview.publication_blocker().map(|error| error.to_string()),
-        "recoveryFiles":preview.recovery_files().iter().map(|file| json!({"path":file.path,"text":file.text})).collect::<Vec<_>>()})
+fn review(root: &Path, preview: &OwnedProjectInitializationPreview) -> Value {
+    json!({"schema":2,"root":root,"planDigest":preview.acceptance_digest(),
+        "deployment":preview.deployment(),
+        "publicationBlocker":preview.publication_blocker().map(|error| error.to_string())})
 }
 
 fn show_review(value: &Value, as_json: bool) {
@@ -278,15 +271,6 @@ fn show_review(value: &Value, as_json: bool) {
                     terminal_text(entry["proposed"].as_str().unwrap_or_default())
                 );
             }
-        }
-    }
-    if let Some(files) = value["recoveryFiles"].as_array() {
-        for file in files {
-            println!(
-                "\nOwned recovery cleanup: {}\n{}",
-                file["path"].as_str().unwrap_or_default(),
-                terminal_text(file["text"].as_str().unwrap_or_default())
-            );
         }
     }
 }
@@ -357,8 +341,7 @@ pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, C
                 .join(", ")
         ))
     })?;
-    let parent = super::origin::required_parent()?;
-    let preview = prepare(&root, &parent, &options)?;
+    let preview = prepare(&root, &options)?;
     let value = review(&root, &preview);
     if options.preview {
         show_review(&value, as_json);
@@ -378,15 +361,14 @@ pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, C
             EXIT_REQUEST,
         ));
     }
-    let sensitive = !preview.recovery_files().is_empty()
-        || preview
-            .deployment()
-            .plan
-            .entries
-            .iter()
-            .any(|entry| entry.action == DeploymentAction::Migrate);
+    let sensitive = preview
+        .deployment()
+        .plan
+        .entries
+        .iter()
+        .any(|entry| entry.action == DeploymentAction::Migrate);
     if options.yes && sensitive && options.accept_plan.is_none() {
-        return Err(CliError::new("memory_review_required","migrations and recovery cleanup require --preview and --yes --accept-plan <digest>; project files were not changed",EXIT_REQUEST));
+        return Err(CliError::new("memory_review_required","migrations require --preview and --yes --accept-plan <digest>; project files were not changed",EXIT_REQUEST));
     }
     if !options.yes {
         show_review(&value, false);
@@ -398,7 +380,8 @@ pub(super) fn run(mut options: InitOptions, as_json: bool) -> Result<ExitCode, C
     let access = AcceptedWriteAccess {
         requirements: preview.write_requirements(),
     };
-    match preview.publish(&access, &DiscoveryControl::default()) {
+    let digest = preview.acceptance_digest();
+    match preview.publish(&digest, &access, &DiscoveryControl::default()) {
         Ok(report) => {
             let result = json!({"schema":1,"root":root,"planDigest":value["planDigest"],"created":report.created,"skipped":report.skipped,"migrated":report.migrated,"cleaned":report.cleaned,"contextActivated":false,"capturesActivated":false,"policyChanged":false});
             if as_json {

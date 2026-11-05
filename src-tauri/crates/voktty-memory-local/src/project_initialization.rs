@@ -91,7 +91,16 @@ impl OwnedProjectInitializationPreview {
         let target = destination.borrow();
         check_placement_recovery(&placement, &source, &target, control)?;
         let facts = target.observe_deployment(request.links, &control.read_control()?)?;
-        let files = render_template(&request.inputs).map_err(ReadError::Contract)?;
+        let mut files = render_template(&request.inputs).map_err(ReadError::Contract)?;
+        if matches!(placement, InitializationPlacement::ProjectRoot) {
+            for file in &mut files {
+                if file.kind == voktty_workspace_kit::FileKind::Content {
+                    if let Some(PathFact::File { text }) = facts.get(&file.path) {
+                        file.text.clone_from(text);
+                    }
+                }
+            }
+        }
         let manifest: Value =
             serde_json::from_str(resource("manifest.json").expect("embedded manifest"))
                 .expect("validated manifest");
@@ -145,7 +154,7 @@ impl OwnedProjectInitializationPreview {
             .entries
             .iter()
             .any(|entry| entry.action != DeploymentAction::Skip)
-            && !cfg!(any(target_os = "linux", target_os = "android", windows))
+            && !cfg!(any(unix, windows))
         {
             return Some(PublicationError::Unsupported);
         }

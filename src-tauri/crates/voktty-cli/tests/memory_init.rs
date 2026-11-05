@@ -125,19 +125,16 @@ fn preview_is_read_only_for_the_project_and_explicit_creation_matches_the_shared
     }
     assert_eq!(
         published["created"].as_array().unwrap().len(),
-        expected.plan.entries.len()
+        expected.plan.entries.len() + 1
     );
+    assert_eq!(
+        published["cleaned"],
+        json!([".voktty/.initialization.json"])
+    );
+    assert!(!f.project.join(".voktty/.initialization.json").exists());
     assert!(!f.project.join("AGENTS.md").exists());
     assert!(!f.project.join("CLAUDE.md").exists());
-    let private: Value = serde_json::from_slice(
-        &fs::read(
-            f.data
-                .join("app.voktty.voktty/project-memory/memory-local.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(private["projects"], json!([]));
+    assert!(!f.data.exists());
     let again = result(&f.init(&["--yes"]));
     assert_eq!(again["created"], json!([]));
     assert_eq!(
@@ -147,7 +144,7 @@ fn preview_is_read_only_for_the_project_and_explicit_creation_matches_the_shared
 }
 
 #[test]
-fn descendant_and_ancestor_kits_block_initialization_without_project_changes() {
+fn explicit_project_creation_preserves_separate_ancestor_and_descendant_kits() {
     for parent_first in [true, false] {
         let f = Fixture::new();
         let child = f.project.join("nested");
@@ -163,9 +160,78 @@ fn descendant_and_ancestor_kits_block_initialization_without_project_changes() {
             (&other, &f)
         };
         result(&first.init(&["--yes"]));
-        error(&second.init(&["--yes"]), "memory_scope_conflict");
-        assert!(!second.project.join(".voktty").exists());
+        let first_config = fs::read(first.project.join(".voktty/kit.json")).unwrap();
+        result(&second.init(&["--yes"]));
+        assert!(second.project.join(".voktty/kit.json").exists());
         assert!(first.project.join(".voktty/kit.json").exists());
+        assert_eq!(
+            fs::read(first.project.join(".voktty/kit.json")).unwrap(),
+            first_config
+        );
+    }
+}
+
+#[test]
+fn unusable_application_data_does_not_block_creation_reuse_or_repair() {
+    let f = Fixture::new();
+    fs::write(&f.data, b"unusable application data sentinel").unwrap();
+    let flags = ["--yes", "--link-agents", "--link-claude"];
+    result(&f.init(&flags));
+    fs::write(
+        f.project.join(".voktty/CONTEXT.md"),
+        "Current project facts\n",
+    )
+    .unwrap();
+    fs::create_dir_all(f.project.join(".voktty/sessions")).unwrap();
+    fs::write(f.project.join(".voktty/sessions/kept.bin"), [0, 255]).unwrap();
+    assert_eq!(result(&f.init(&flags))["created"], json!([]));
+    fs::remove_file(f.project.join(".voktty/RULES.md")).unwrap();
+    fs::remove_file(f.project.join("AGENTS.md")).unwrap();
+    let repaired = result(&f.init(&flags));
+    assert!(repaired["created"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/RULES.md")));
+    assert!(repaired["created"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("AGENTS.md")));
+    assert_eq!(
+        fs::read(f.project.join(".voktty/CONTEXT.md")).unwrap(),
+        b"Current project facts\n"
+    );
+    assert_eq!(
+        fs::read(f.project.join(".voktty/sessions/kept.bin")).unwrap(),
+        [0, 255]
+    );
+    assert_eq!(
+        fs::read(&f.data).unwrap(),
+        b"unusable application data sentinel"
+    );
+}
+
+#[test]
+fn initialization_never_opens_or_changes_existing_global_state() {
+    let f = Fixture::new();
+    for name in ["app.voktty.voktty", "dev.voktty"] {
+        let parent = f.data.join(name).join("project-memory");
+        fs::create_dir_all(&parent).unwrap();
+        fs::write(parent.join("memory-local.json"), b"opaque preferences").unwrap();
+        fs::write(parent.join("memory-deployment.json"), b"opaque recovery").unwrap();
+    }
+    result(&f.init(&["--preview"]));
+    result(&f.init(&["--yes"]));
+    for name in ["app.voktty.voktty", "dev.voktty"] {
+        let parent = f.data.join(name).join("project-memory");
+        assert_eq!(
+            fs::read(parent.join("memory-local.json")).unwrap(),
+            b"opaque preferences"
+        );
+        assert_eq!(
+            fs::read(parent.join("memory-deployment.json")).unwrap(),
+            b"opaque recovery"
+        );
+        assert_eq!(fs::read_dir(parent).unwrap().count(), 2);
     }
 }
 

@@ -273,6 +273,74 @@ impl Directory {
         Ok(())
     }
 
+    pub(crate) fn cleanup_initialization_record(
+        &self,
+        root: &Path,
+        expected: &str,
+        reads: &dyn MemoryReadAccess,
+        writes: &dyn crate::MemoryWriteAccess,
+        control: &ReadControl,
+    ) -> Result<(), ReadError> {
+        let relative = crate::PROJECT_INITIALIZATION_RECORD;
+        let path = root.join(relative);
+        let parent_path = root.join(".voktty");
+        if expected.len() > 256 * 1024
+            || !reads.allows_workspace_root(root)
+            || !reads.allows_metadata(&parent_path)
+            || !reads.allows_metadata(&path)
+            || !reads.allows_read(&path)
+            || !writes.allows_remove_staging(&path)
+        {
+            return Err(ReadError::Denied);
+        }
+        control.check()?;
+        let parent = self.open_child(OsStr::new(".voktty"), &parent_path, control)?;
+        let name = OsStr::new(".initialization.json");
+        let file = open_at(&parent.file, name, false).map_err(|_| ReadError::Unavailable)?;
+        let before = file.metadata().map_err(|_| ReadError::Io)?;
+        if !before.is_file() || before.nlink() != 1 || before.len() > 256 * 1024 {
+            return Err(ReadError::Unavailable);
+        }
+        let mut bytes = Vec::new();
+        let mut bounded = file.take(256 * 1024 + 1);
+        bounded.read_to_end(&mut bytes).map_err(|_| ReadError::Io)?;
+        if bytes != expected.as_bytes() {
+            return Err(ReadError::Unavailable);
+        }
+        control.check()?;
+        if !reads.allows_workspace_root(root)
+            || !reads.allows_metadata(&parent_path)
+            || !reads.allows_metadata(&path)
+            || !reads.allows_read(&path)
+            || !writes.allows_remove_staging(&path)
+        {
+            return Err(ReadError::Denied);
+        }
+        if Self::open_root(root, control)?.identity() != self.identity()
+            || Self::open_root(&parent_path, control)?.identity() != parent.identity()
+            || !same_file(
+                &before,
+                &bounded.get_ref().metadata().map_err(|_| ReadError::Io)?,
+            )
+            || !same_file(
+                &before,
+                &open_at(&parent.file, name, false)
+                    .map_err(|_| ReadError::Unavailable)?
+                    .metadata()
+                    .map_err(|_| ReadError::Io)?,
+            )
+        {
+            return Err(ReadError::Unavailable);
+        }
+        control.check()?;
+        let name = CString::new(name.as_bytes()).map_err(|_| ReadError::InvalidInput)?;
+        if unsafe { libc::unlinkat(parent.file.as_raw_fd(), name.as_ptr(), 0) } != 0 {
+            return Err(ReadError::Io);
+        }
+        parent.file.sync_all().map_err(|_| ReadError::Io)?;
+        control.check()
+    }
+
     pub(crate) fn probe(&self, name: &OsStr) -> io::Result<Option<EntryKind>> {
         let name = CString::new(name.as_bytes())
             .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
@@ -489,6 +557,10 @@ impl Directory {
         Err(ReadError::InvalidInput)
     }
 }
+
+#[cfg(test)]
+#[path = "initialization_cleanup_tests.rs"]
+mod initialization_cleanup_tests;
 
 fn errno_pointer() -> Option<*mut libc::c_int> {
     #[cfg(target_os = "linux")]

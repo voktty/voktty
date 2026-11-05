@@ -32,6 +32,7 @@ impl Fixture {
             _owned: owned,
         };
         result(&fixture.run(&["init", "--yes", "--project", ".", "--json"]));
+        result(&fixture.run(&["use", "--manual", "--json"]));
         fixture
     }
 
@@ -138,7 +139,6 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         let legacy_before = fs::read(&legacy_state).ok();
         for args in [
             vec!["status", "--json"],
-            vec!["init", "--preview", "--project", ".", "--json"],
             vec!["use", "--always", "--json"],
             vec!["trust", "--preview", "--json"],
             vec!["recover", "--preview", "--json"],
@@ -159,6 +159,7 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
             );
             assert!(!text.contains("sentinel"));
         }
+        result(&f.run(&["init", "--preview", "--project", ".", "--json"]));
         if mode == "legacy-only" {
             assert!(!f.canonical().exists());
             assert_eq!(

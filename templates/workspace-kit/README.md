@@ -55,10 +55,11 @@ handoffs and decisions included.
 
 ## Status
 
-Template 1.2.0 defines the file-based workflow below. The existing Desktop,
-CLI and SSH memory integrations do not yet implement that simpler workflow
-end to end: their settings-backed initialization and UI are being adapted.
-This template update does not itself remove that dependency from the app.
+Template 1.2.0 defines the file-based workflow below. CLI `memory init` now
+publishes directly to the selected project without global memory storage.
+Desktop, SSH and the remaining CLI memory flows still need adapting, as do
+the initialization options and UI. The simpler workflow is not complete
+end to end yet.
 
 The documents do not implement an agent board, a scheduling service or the
 `voktty agent`, `voktty lock` or `voktty memory check` commands. File notes

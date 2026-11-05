@@ -59,6 +59,7 @@ impl Fixture {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
+        assert!(self.run(&["memory", "use", "--manual"]).status.success());
     }
     fn verified_codex(&self) {
         self.verified_agent("codex", "codex-cli 0.165.0");

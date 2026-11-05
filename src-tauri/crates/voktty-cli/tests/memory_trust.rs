@@ -52,6 +52,7 @@ impl Fixture {
             ],
             true,
         ));
+        result(&self.run(&self.project, &["memory", "use", "--manual"], true));
     }
     fn trust(&self, args: &[&str]) -> Output {
         self.run(
