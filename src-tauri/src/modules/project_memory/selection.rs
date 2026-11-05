@@ -42,27 +42,14 @@ impl NativeMemorySelection {
             .reserve_recovery(destination, target.control))
     }
 
-    pub(super) fn recovery_store_control(
-        &self,
-        selection: &NativeMemorySelectionReceipt,
-        reserved: &NativeMemoryRecoveryReceipt,
-    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
-        self.current(selection)?;
-        self.deployment.recovery_store_control(reserved)
-    }
-
     pub fn start_recovery(
         &mut self,
         selection: &NativeMemorySelectionReceipt,
         reserved: &NativeMemoryRecoveryReceipt,
-        store: Arc<LocalMemoryStore>,
     ) -> Result<NativeMemoryRecoveryRead, MemoryDeploymentWorkError> {
         self.current(selection)?;
-        self.deployment.prepare_recovery(
-            self.source.as_ref().ok_or(ReadError::Cancelled)?,
-            reserved,
-            store,
-        )
+        self.deployment
+            .prepare_recovery(self.source.as_ref().ok_or(ReadError::Cancelled)?, reserved)
     }
 
     pub fn accept_recovery(

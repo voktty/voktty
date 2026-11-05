@@ -14,27 +14,15 @@ impl NativeMemoryOwners {
             .reserve_recovery(selected, registry, target)
     }
 
-    pub(in crate::modules::project_memory) fn recovery_store_control(
-        &self,
-        window: &NativeMemoryWindowReceipt,
-        presentation: &NativeMemoryPresentationReceipt,
-        selected: &NativeMemorySelectionReceipt,
-        reserved: &NativeMemoryRecoveryReceipt,
-    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
-        self.selection(window, presentation)?
-            .recovery_store_control(selected, reserved)
-    }
-
     pub fn start_recovery(
         &mut self,
         window: &NativeMemoryWindowReceipt,
         presentation: &NativeMemoryPresentationReceipt,
         selected: &NativeMemorySelectionReceipt,
         reserved: &NativeMemoryRecoveryReceipt,
-        store: Arc<LocalMemoryStore>,
     ) -> Result<NativeMemoryRecoveryRead, MemoryDeploymentWorkError> {
         self.selection_mut(window, presentation)?
-            .start_recovery(selected, reserved, store)
+            .start_recovery(selected, reserved)
     }
 
     pub fn accept_recovery(

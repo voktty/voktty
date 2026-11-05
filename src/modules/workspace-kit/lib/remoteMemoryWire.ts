@@ -63,6 +63,7 @@ export function remoteMemoryRequest(
       source.checkSelection(request.destination, request.environment);
       return {
         operation: "reviewRecovery",
+        schema: 2,
         ...selected,
         revision: request.revision,
       };
@@ -71,6 +72,7 @@ export function remoteMemoryRequest(
       const confirmation = memoryRecord(args.confirmation);
       return {
         operation: "confirmRecovery",
+        schema: 2,
         ...selected,
         review: confirmation.review,
         digest: confirmation.digest,

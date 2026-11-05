@@ -25,11 +25,14 @@ const partial = {
 } as NativeMemoryScope;
 const review = {
   snapshot: {
-    schema: 1,
+    schema: 2,
     root: "/canonical",
     entries: [
       { target: ".voktty/.gitignore", backup: ".voktty/backup", text: "*\r\n" },
     ],
+    deployment: { entries: [], canPublish: true, lock: null },
+    cleanup: [],
+    publicationBlocker: null,
   },
 } as unknown as NativeMemoryRecoveryReview;
 const report = {
@@ -112,7 +115,7 @@ it("reviews partial memory only by action and requires the exact review before r
   await f.panel.dispose();
 });
 
-it("re-inspects after restoration and starts editable initialization without publishing or reusing an old preview", async () => {
+it("re-inspects after completed recovery without repeating initialization", async () => {
   const f = fixture();
   await f.panel.load();
   await f.panel.reviewRecovery();
@@ -125,8 +128,8 @@ it("re-inspects after restoration and starts editable initialization without pub
   await f.panel.resumeInitialization();
   expect(f.api.inspect).toHaveBeenCalledTimes(2);
   expect(f.publish).toHaveBeenLastCalledWith({
-    status: "configuring",
-    recovering: true,
+    status: "ready",
+    observation: expect.objectContaining({ blockedCount: 0 }),
   });
   expect(f.api.preview).not.toHaveBeenCalled();
   expect(f.api.confirmPreview).not.toHaveBeenCalled();
@@ -148,20 +151,16 @@ it("allows explicit review of pending initialization without creating private st
   await f.panel.dispose();
 });
 
-it.each(["restored", "pending"] as const)(
+it.each(["pending"] as const)(
   "keeps %s initialization blocked when requested ancestor inspection is incomplete",
-  async (phase) => {
+  async () => {
     const f = fixture();
     f.api.inspect.mockResolvedValue({
       ...partial,
       scope: { ...partial.scope, ancestryComplete: false },
     });
     await f.panel.load();
-    if (phase === "restored") {
-      await f.panel.reviewRecovery();
-      await f.panel.confirmRecovery(review);
-      await f.panel.resumeInitialization();
-    } else f.panel.configureInterruptedInitialization();
+    f.panel.configureInterruptedInitialization();
     expect(f.publish).toHaveBeenLastCalledWith({
       status: "recoveryInspection",
     });
@@ -251,8 +250,8 @@ it("does not enter initialization when fresh post-restoration inspection fails",
   f.api.inspect.mockRejectedValueOnce({ code: "denied" });
   await f.panel.resumeInitialization();
   expect(f.publish).toHaveBeenLastCalledWith({
-    status: "recoveryError",
-    error: { code: "denied" },
+    status: "error",
+    code: "denied",
   });
   expect(f.api.preview).not.toHaveBeenCalled();
   expect(f.api.confirmPreview).not.toHaveBeenCalled();

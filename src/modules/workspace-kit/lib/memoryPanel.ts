@@ -279,6 +279,8 @@ export function createMemoryPanelController(
       if (
         state.status !== "recoveryReview" ||
         state.review !== accepted ||
+        !accepted.snapshot.deployment.canPublish ||
+        accepted.snapshot.publicationBlocker !== null ||
         !selected ||
         !entry.client.isRecoveryReviewCurrent(selected, accepted)
       )
@@ -303,19 +305,8 @@ export function createMemoryPanelController(
     },
     resumeInitialization() {
       if (state.status !== "recoveryRestored") return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "recoveryLoading" });
-        if (!current()) return;
-        const observed = await entry.client.inspect(receipt);
-        if (!current()) return;
-        observation = observed;
-        recoveringInitialization = true;
-        notify(
-          observed.scope.ancestryComplete
-            ? { status: "configuring", recovering: true }
-            : { status: "recoveryInspection" },
-        );
-      }, "recovery");
+      recoveringInitialization = false;
+      return run();
     },
     backRecovery() {
       if (

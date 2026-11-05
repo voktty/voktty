@@ -69,7 +69,7 @@ enum ReviewState {
     Publishing,
     RecoveryReserved,
     RecoveryOpening,
-    RecoveryReady(Box<voktty_memory_local::OwnedRecoveryReview>),
+    RecoveryReady(Box<voktty_memory_local::OwnedProjectRecoveryPreview>),
     Restoring,
 }
 

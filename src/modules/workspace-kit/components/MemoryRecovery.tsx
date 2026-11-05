@@ -69,7 +69,47 @@ export default function MemoryRecovery({
                 </pre>
               </section>
             ))}
+            {review.snapshot.deployment.entries.map((entry) => (
+              <section key={entry.path} className="space-y-2 text-xs">
+                <p className="break-all font-mono" dir="auto">
+                  {entry.path}
+                </p>
+                <p>{t(`projectMemory.actions.${entry.action}`)}</p>
+                <p>{t("projectMemory.before")}</p>
+                <pre
+                  className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2"
+                  dir="auto"
+                >
+                  {entry.expected ?? t("projectMemory.missingFile")}
+                </pre>
+                <p>{t("projectMemory.after")}</p>
+                <pre
+                  className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2"
+                  dir="auto"
+                >
+                  {entry.proposed}
+                </pre>
+              </section>
+            ))}
+            <section className="space-y-2 text-xs">
+              <p>{t("projectMemory.recovery.backup")}</p>
+              <ul className="break-all font-mono" dir="auto">
+                {[
+                  ...new Set([
+                    ...review.snapshot.cleanup.map((entry) => entry.path),
+                    ...review.snapshot.entries.map((entry) => entry.backup),
+                    ".voktty/.initialization.json",
+                  ]),
+                ].map((path) => (
+                  <li key={path}>{path}</li>
+                ))}
+              </ul>
+            </section>
           </div>
+          {review.snapshot.publicationBlocker ||
+          !review.snapshot.deployment.canPublish ? (
+            <p role="alert">{t("projectMemory.conflicts")}</p>
+          ) : null}
           <label className="flex items-start gap-2 text-xs">
             <input
               type="checkbox"
@@ -141,9 +181,20 @@ export default function MemoryRecovery({
         {review ? (
           <Button
             size="sm"
-            disabled={busy || accepted !== review}
+            disabled={
+              busy ||
+              accepted !== review ||
+              !review.snapshot.deployment.canPublish ||
+              review.snapshot.publicationBlocker !== null
+            }
             onClick={() => {
-              if (!busy && accepted === review) onConfirm(review);
+              if (
+                !busy &&
+                accepted === review &&
+                review.snapshot.deployment.canPublish &&
+                review.snapshot.publicationBlocker === null
+              )
+                onConfirm(review);
             }}
           >
             {t(

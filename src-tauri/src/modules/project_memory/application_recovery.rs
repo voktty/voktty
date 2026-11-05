@@ -15,35 +15,15 @@ impl NativeMemoryApplication {
         })
     }
 
-    pub async fn open_recovery_store(
-        &self,
-        window: &NativeMemoryWindow,
-        presentation: &NativeMemoryPresentationReceipt,
-        selected: &NativeMemorySelectionReceipt,
-        reserved: &NativeMemoryRecoveryReceipt,
-    ) -> Result<Arc<LocalMemoryStore>, MemoryDeploymentWorkError> {
-        let control = self.with_deployment(window, |owners, receipt| {
-            owners.recovery_store_control(receipt, presentation, selected, reserved)
-        })?;
-        let result = self
-            .store(window, MemoryStoreMode::OpenExisting, control)
-            .await;
-        self.with_deployment(window, |owners, receipt| {
-            owners.recovery_store_control(receipt, presentation, selected, reserved)?;
-            result.map_err(Into::into)
-        })
-    }
-
     pub fn start_recovery(
         &self,
         window: &NativeMemoryWindow,
         presentation: &NativeMemoryPresentationReceipt,
         selected: &NativeMemorySelectionReceipt,
         reserved: &NativeMemoryRecoveryReceipt,
-        store: Arc<LocalMemoryStore>,
     ) -> Result<NativeMemoryRecoveryRead, MemoryDeploymentWorkError> {
         self.with_deployment(window, |owners, receipt| {
-            owners.start_recovery(receipt, presentation, selected, reserved, store)
+            owners.start_recovery(receipt, presentation, selected, reserved)
         })
     }
 

@@ -3,8 +3,8 @@ use crate::template_inputs::validate_inputs;
 use crate::{
     DiscoveryControl, InitializationPreview, LocalMemoryStore, LocalMemoryWorkspace,
     MemoryReadAccess, MemoryWriteAccess, OwnedInitializationPreview,
-    OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,
-    PublicationError, PublicationFailure, PublicationReport, ReadError,
+    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, ProjectInitializationRequest,
+    ProjectRecoveryRequest, PublicationError, PublicationFailure, PublicationReport, ReadError,
 };
 use serde_json::{Map, Value};
 use std::path::PathBuf;
@@ -22,15 +22,6 @@ pub struct MemoryPreviewRequest {
     pub destination_access: Arc<dyn MemoryReadAccess>,
     pub inputs: Map<String, Value>,
     pub links: RootLinks,
-}
-
-/// Captured native sources only; restoration never accepts a renderer inventory.
-pub struct MemoryRecoveryRequest {
-    pub store: Arc<LocalMemoryStore>,
-    pub origin: PathBuf,
-    pub origin_access: Arc<dyn MemoryReadAccess>,
-    pub destination: PathBuf,
-    pub destination_access: Arc<dyn MemoryReadAccess>,
 }
 
 #[derive(Debug)]
@@ -77,42 +68,21 @@ impl<T> MemoryDeploymentJob<T> {
 impl MemoryWorkers {
     pub fn review_recovery(
         &self,
-        request: MemoryRecoveryRequest,
+        request: ProjectRecoveryRequest,
         control: DiscoveryControl,
-    ) -> Result<MemoryDeploymentJob<OwnedRecoveryReview>, MemoryDeploymentWorkError> {
+    ) -> Result<MemoryDeploymentJob<OwnedProjectRecoveryPreview>, MemoryDeploymentWorkError> {
         validate_path(&request.origin)?;
         validate_path(&request.destination)?;
         let job = self.submit(Control::Scope(control.clone()), move || {
-            let prepare = || -> Result<OwnedRecoveryReview, PublicationError> {
-                let origin = LocalMemoryWorkspace::open(
-                    &request.store,
-                    &request.origin,
-                    request.origin_access.as_ref(),
-                    &control.phase(Duration::from_secs(5)),
-                )?;
-                let destination = LocalMemoryWorkspace::open(
-                    &request.store,
-                    &request.destination,
-                    request.destination_access.as_ref(),
-                    &control.phase(Duration::from_secs(5)),
-                )?;
-                OwnedRecoveryReview::prepare(
-                    &origin,
-                    &destination,
-                    request.store.clone(),
-                    request.origin_access.clone(),
-                    request.destination_access.clone(),
-                    &control,
-                )
-            };
-            prepare().map_err(MemoryDeploymentWorkError::Preview)
+            OwnedProjectRecoveryPreview::prepare(request, &control)
+                .map_err(MemoryDeploymentWorkError::Preview)
         })?;
         Ok(MemoryDeploymentJob { job })
     }
 
-    pub fn restore_originals(
+    pub fn recover_project(
         &self,
-        review: OwnedRecoveryReview,
+        review: OwnedProjectRecoveryPreview,
         digest: String,
         access: Arc<dyn MemoryWriteAccess>,
         control: DiscoveryControl,
@@ -122,7 +92,7 @@ impl MemoryWorkers {
         }
         let job = self.submit(Control::Scope(control.clone()), move || {
             review
-                .restore(&digest, access.as_ref(), &control)
+                .publish(&digest, access.as_ref(), &control)
                 .map_err(MemoryDeploymentWorkError::Publication)
         })?;
         Ok(MemoryDeploymentJob { job })

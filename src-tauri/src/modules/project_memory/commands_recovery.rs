@@ -48,6 +48,10 @@ pub struct RecoveryReviewReply {
     revision: u64,
     digest: String,
     entries: Vec<RestorationEntry>,
+    deployment: voktty_workspace_kit::PreparedDeployment,
+    cleanup: Vec<RecoveryReply>,
+    #[serde(rename = "publicationBlocker")]
+    publication_blocker: Option<&'static str>,
 }
 
 type RecoveryCapture = ReviewCapture<NativeMemoryRecoveryReceipt>;
@@ -153,11 +157,21 @@ impl PresentationResource {
             app.recovery_snapshot(&self.window, &self.receipt, &capture.selection, &receipt)?;
         review.phase = Phase::Ready;
         Ok(RecoveryReviewReply {
-            schema: 1,
+            schema: 2,
             root: snapshot.root,
             review: capture.token.clone(),
             revision: capture.revision,
             digest: snapshot.digest,
+            deployment: snapshot.deployment,
+            cleanup: snapshot
+                .cleanup
+                .into_iter()
+                .map(|file| RecoveryReply {
+                    path: file.path,
+                    text: file.text,
+                })
+                .collect(),
+            publication_blocker: snapshot.publication_blocker.map(publication_code),
             entries: snapshot
                 .entries
                 .into_iter()
@@ -226,14 +240,6 @@ async fn review_recovery(
     let capture = resource.reserve_recovery_review(app, registry, selection, &request)?;
     let result = async {
         request.validate()?;
-        let store = app
-            .open_recovery_store(
-                &resource.window,
-                &resource.receipt,
-                &capture.selection,
-                &capture.receipt,
-            )
-            .await?;
         resource.check_recovery_review(app, selection, &capture, Phase::Opening)?;
         let prepared = app
             .start_recovery(
@@ -241,7 +247,6 @@ async fn review_recovery(
                 &resource.receipt,
                 &capture.selection,
                 &capture.receipt,
-                store,
             )?
             .finish()
             .await?;

@@ -7,7 +7,7 @@ use std::time::Duration;
 use voktty_memory_local::MemoryWriteAccess;
 
 #[test]
-fn cancelling_queued_recovery_store_prevents_io_and_cannot_adopt_after_retirement() {
+fn cancelling_queued_recovery_prevents_io_and_cannot_adopt_after_retirement() {
     let (state, app, resource) = fixture();
     let project = project();
     let (registry, selected) = select(&app, &resource, project.path());
@@ -47,22 +47,12 @@ fn late_recovery_artifact_cannot_replace_a_publication_or_same_path_successor() 
             let capture = resource
                 .reserve_recovery_review(&app, &registry, &selected, &request(project.path(), 1))
                 .unwrap();
-            let store = app
-                .open_recovery_store(
-                    &resource.window,
-                    &resource.receipt,
-                    &capture.selection,
-                    &capture.receipt,
-                )
-                .await
-                .unwrap();
             let prepared = app
                 .start_recovery(
                     &resource.window,
                     &resource.receipt,
                     &capture.selection,
                     &capture.receipt,
-                    store,
                 )
                 .unwrap()
                 .finish()
@@ -191,7 +181,7 @@ async fn interrupted(
 ) -> String {
     fs::create_dir(root.join(".voktty")).unwrap();
     fs::write(root.join(".voktty/.gitignore"), "*\r\n").unwrap();
-    let store = app
+    let _store = app
         .store(
             &resource.window,
             MemoryStoreMode::Initialize,
@@ -202,9 +192,8 @@ async fn interrupted(
     resource.check(app, selected).unwrap();
     let source = NativeMemorySource::capture(registry, root.into(), &WorkspaceEnv::Local).unwrap();
     let preview = MemoryWorkers::default()
-        .preview(
-            voktty_memory_local::MemoryPreviewRequest {
-                store,
+        .preview_project_at_root(
+            voktty_memory_local::ProjectInitializationRequest {
                 origin: root.into(),
                 origin_access: source.access.clone(),
                 destination: root.into(),
@@ -221,26 +210,32 @@ async fn interrupted(
         .finish()
         .await
         .unwrap();
+    let digest = preview.acceptance_digest();
     let failure = preview
         .publish(
+            &digest,
             &InterruptedMigration(root.into()),
             &DiscoveryControl::default(),
         )
         .unwrap_err();
-    let backup = failure.possible_recovery_files[0].clone();
+    let backup = failure
+        .possible_recovery_files
+        .iter()
+        .find(|path| path.contains(".voktty-migration-"))
+        .unwrap()
+        .clone();
     assert_eq!(fs::read(root.join(&backup)).unwrap(), b"*\r\n");
     fs::remove_file(root.join(".voktty/.gitignore")).unwrap();
     backup
 }
 
 #[test]
-fn recovery_ipc_restores_exact_reviewed_bytes_once_and_preserves_intent_and_preferences() {
+fn recovery_ipc_completes_exact_review_once_and_preserves_global_preferences() {
     let (state, app, resource) = fixture();
     let project = project();
     let (registry, selected) = select(&app, &resource, project.path());
     runtime().block_on(async {
         let backup = interrupted(&app, &resource, &registry, &selected, project.path()).await;
-        let intent = fs::read(state.path().join("project-memory/memory-deployment.json")).unwrap();
         let prefs = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         let reply = review_recovery(
             &app,
@@ -254,8 +249,8 @@ fn recovery_ipc_restores_exact_reviewed_bytes_once_and_preserves_intent_and_pref
         let accepted = confirmation(&reply);
         let duplicate = confirmation(&reply);
         let mut wire = serde_json::to_value(&reply).unwrap();
-        assert_eq!(wire.as_object().unwrap().len(), 6);
-        assert_eq!(wire["schema"], 1);
+        assert_eq!(wire.as_object().unwrap().len(), 9);
+        assert_eq!(wire["schema"], 2);
         assert_eq!(
             wire["entries"][0],
             json!({"target":".voktty/.gitignore","backup":backup,"text":"*\r\n"})
@@ -273,21 +268,30 @@ fn recovery_ipc_restores_exact_reviewed_bytes_once_and_preserves_intent_and_pref
         let result = confirm_recovery(&app, &registry, &resource, &selected, accepted)
             .await
             .unwrap();
-        assert_eq!(result.created, vec![".voktty/.gitignore"]);
-        assert_eq!(result.cleaned, vec![backup]);
-        assert_eq!(
-            fs::read(project.path().join(".voktty/.gitignore")).unwrap(),
-            b"*\r\n"
+        assert!(result
+            .created
+            .iter()
+            .any(|path| path == ".voktty/.gitignore"));
+        assert!(result.cleaned.contains(&backup));
+        assert!(result
+            .migrated
+            .iter()
+            .any(|path| path == ".voktty/.gitignore"));
+        assert!(
+            !fs::read_to_string(project.path().join(".voktty/.gitignore"))
+                .unwrap()
+                .contains("forged display")
         );
-        assert_eq!(
-            fs::read(state.path().join("project-memory/memory-deployment.json")).unwrap(),
-            intent
-        );
+        assert!(!state
+            .path()
+            .join("project-memory/memory-deployment.json")
+            .exists());
         assert_eq!(
             fs::read(state.path().join("project-memory/memory-local.json")).unwrap(),
             prefs
         );
-        assert!(!project.path().join(".voktty/kit.json").exists());
+        assert!(project.path().join(".voktty/kit.json").exists());
+        assert!(!project.path().join(".voktty/.initialization.json").exists());
         assert_eq!(
             confirm_recovery(&app, &registry, &resource, &selected, duplicate)
                 .await
@@ -295,19 +299,6 @@ fn recovery_ipc_restores_exact_reviewed_bytes_once_and_preserves_intent_and_pref
                 .code,
             "cancelled"
         );
-        let preview = super::super::preview(
-            &app,
-            &registry,
-            &resource,
-            &selected,
-            publication_request(project.path(), 2),
-        )
-        .await
-        .unwrap();
-        super::super::confirm(&app, &registry, &resource, &selected, &preview.review)
-            .await
-            .unwrap();
-        assert!(project.path().join(".voktty/kit.json").exists());
     });
 }
 

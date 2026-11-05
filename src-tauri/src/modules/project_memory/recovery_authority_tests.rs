@@ -1,7 +1,7 @@
 use super::*;
-use crate::modules::project_memory::tests::{project, runtime, store};
+use crate::modules::project_memory::tests::{project, runtime};
 use std::fs;
-use voktty_memory_local::MemoryPreviewRequest;
+use voktty_memory_local::ProjectInitializationRequest;
 
 struct MigrationWriter(PathBuf);
 impl MemoryWriteAccess for MigrationWriter {
@@ -18,9 +18,8 @@ impl MemoryWriteAccess for MigrationWriter {
 }
 
 #[test]
-fn restoration_factory_grants_only_exact_targets_and_backups_under_its_original_lifetime() {
+fn recovery_factory_grants_only_reviewed_project_changes_under_its_original_lifetime() {
     let project = project();
-    let (_state, store) = store();
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(project.path()).unwrap();
     registry.authorize("/dev").unwrap();
@@ -29,19 +28,20 @@ fn restoration_factory_grants_only_exact_targets_and_backups_under_its_original_
     let source =
         NativeMemorySource::capture(&registry, root.clone(), &WorkspaceEnv::Local).unwrap();
     runtime().block_on(async {
-        let preview = MemoryWorkers::default().preview(MemoryPreviewRequest {
-            store: store.clone(), origin: root.clone(), origin_access: source.access.clone(),
+        let preview = MemoryWorkers::default().preview_project_at_root(ProjectInitializationRequest {
+            origin: root.clone(), origin_access: source.access.clone(),
             destination: root.clone(), destination_access: source.access.clone(),
             inputs: serde_json::json!({"project_name":"Recovery authority", "created_at":"2026-11-03"}).as_object().unwrap().clone(),
             links: RootLinks::default(),
         }, DiscoveryControl::default()).unwrap().finish().await.unwrap();
-        let failure = preview.publish(&MigrationWriter(root.clone()), &DiscoveryControl::default()).unwrap_err();
-        let backup = failure.possible_recovery_files[0].clone();
+        let digest = preview.acceptance_digest();
+        let failure = preview.publish(&digest, &MigrationWriter(root.clone()), &DiscoveryControl::default()).unwrap_err();
+        let backup = failure.possible_recovery_files.iter().find(|path| path.contains(".voktty-migration-")).unwrap().clone();
         fs::remove_file(root.join(".voktty/.gitignore")).unwrap();
         let mut owner = NativeMemoryDeployment::default();
         let destination = NativeMemorySource::capture(&registry, root.clone(), &WorkspaceEnv::Local).unwrap();
         let receipt = owner.reserve_recovery(destination, DiscoveryControl::default());
-        let prepared = owner.prepare_recovery(&source, &receipt, store).unwrap().finish().await.unwrap();
+        let prepared = owner.prepare_recovery(&source, &receipt).unwrap().finish().await.unwrap();
         owner.accept_recovery(prepared).unwrap();
         let review = owner.review.as_ref().unwrap();
         let access = super::super::super::write_authority::NativeMemoryWriteAuthority::capture_recovery(
@@ -51,14 +51,17 @@ fn restoration_factory_grants_only_exact_targets_and_backups_under_its_original_
         let target = root.join(".voktty/.gitignore");
         assert!(access.allows_create(&target));
         assert!(access.allows_remove_staging(&root.join(backup)));
-        for path in [root.clone(), root.join(".voktty"), root.join("AGENTS.md"),
-            root.join(".voktty/kit.json"), root.join(".voktty/.voktty-stage-12345678-1234-4234-8234-123456789abc"),
+        assert!(access.allows_create(&root.join(".voktty/kit.json")));
+        assert!(access.allows_create(&root.join(".voktty/.voktty-stage-12345678-1234-4234-8234-123456789abc")));
+        assert!(access.allows_remove_staging(&root.join(".voktty/.initialization.json")));
+        for path in [root.clone(), root.join("AGENTS.md"),
+            root.join(".voktty/.voktty-stage-invalid"),
             root.join(".env"), root.join(".voktty/.voktty-migration-12345678-1234-4234-8234-123456789abc-127")] {
             assert!(!access.allows_create(&path));
             assert!(!access.allows_replace(&path));
             assert!(!access.allows_remove_staging(&path));
         }
-        assert!(!access.allows_replace(&target));
+        assert!(access.allows_replace(&target));
         owner.clear();
         assert!(!access.allows_create(&target));
     });

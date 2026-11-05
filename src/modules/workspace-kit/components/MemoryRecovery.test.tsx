@@ -20,18 +20,33 @@ const backup = `.voktty/.voktty-migration-${token}-2`;
 const originalText = "<script>privateOriginal()</script>\r\n*\r\n";
 function reply(revision = 1) {
   return {
-    schema: 1,
+    schema: 2,
     revision,
     review: token,
     digest: "a".repeat(64),
     root: "/canonical/owned",
     entries: [{ target: ".voktty/.gitignore", backup, text: originalText }],
+    deployment: {
+      entries: [
+        {
+          path: ".voktty/kit.json",
+          action: "create",
+          reason: "missing",
+          expected: null,
+          proposed: '{"project":"reviewed"}',
+        },
+      ],
+      canPublish: true,
+      lock: null,
+    },
+    cleanup: [],
+    publicationBlocker: null,
   };
 }
 const report = {
   schema: 1,
-  created: [".voktty/.gitignore"],
-  cleaned: [backup],
+  created: [".voktty/.gitignore", ".voktty/kit.json"],
+  cleaned: [backup, ".voktty/.initialization.json"],
   migrated: [],
   skipped: [],
 };
@@ -110,6 +125,9 @@ it("starts with metadata only and presents original bytes and paths before expli
   expect(container.textContent).toContain("projectMemory.recovery.effects");
   expect(container.querySelector("pre")?.textContent).toBe(originalText);
   expect(container.querySelector("script")).toBeNull();
+  expect(container.textContent).toContain(".voktty/kit.json");
+  expect(container.textContent).toContain('{"project":"reviewed"}');
+  expect(container.textContent).toContain(".voktty/.initialization.json");
   expect(button("projectMemory.recovery.confirm").disabled).toBe(true);
   await click("projectMemory.recovery.confirm");
   expect(
@@ -157,7 +175,26 @@ it("cancels on back, re-inspects the directory and never carries acceptance to a
   ).toBe(false);
 });
 
-it("requires fresh discovery and a new publication preview after restoration", async () => {
+it("keeps a blocked recovery unconfirmable after acceptance", async () => {
+  const previous = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_review_recovery"
+      ? Promise.resolve({ ...reply(), publicationBlocker: "unsupported" })
+      : previous?.(command, args),
+  );
+  await click("projectMemory.recovery.review");
+  await accept();
+  expect(button("projectMemory.recovery.confirm").disabled).toBe(true);
+  expect(container.textContent).toContain("projectMemory.conflicts");
+  await click("projectMemory.recovery.confirm");
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_confirm_recovery",
+    ),
+  ).toBe(false);
+});
+
+it("refreshes discovery after completed recovery without repeating initialization", async () => {
   await click("projectMemory.recovery.review");
   await accept();
   await click("projectMemory.recovery.confirm");
@@ -167,25 +204,11 @@ it("requires fresh discovery and a new publication preview after restoration", a
       ([command]) => command === "project_memory_discover",
     ),
   ).toHaveLength(2);
-  expect(container.textContent).toContain("projectMemory.valuesTitle");
-  expect(container.textContent).toContain(
-    "projectMemory.recovery.matchInitialization",
-  );
-  expect(
-    container.querySelector<HTMLInputElement>('input[type="date"]'),
-  ).not.toBeNull();
+  expect(container.textContent).not.toContain("projectMemory.valuesTitle");
+  expect(container.querySelector('input[type="date"]')).toBeNull();
   expect(
     invoke.mock.calls.some(([command]) => command === "project_memory_preview"),
   ).toBe(false);
-  await click("projectMemory.next");
-  await click("projectMemory.preview");
-  expect(invoke).toHaveBeenLastCalledWith(
-    "project_memory_preview",
-    expect.objectContaining({
-      request: expect.objectContaining({ revision: 2 }),
-    }),
-  );
-  expect(button("projectMemory.initialize").disabled).toBe(true);
   expect(
     invoke.mock.calls.some(
       ([command]) => command === "project_memory_confirm_preview",
@@ -223,9 +246,9 @@ it("permits a pending initialization review with its original date without initi
   ).toBe(false);
 });
 
-it.each(["restored", "pending"] as const)(
+it.each(["pending"] as const)(
   "offers explicit parent inspection before configuring %s initialization",
-  async (phase) => {
+  async () => {
     const previous = invoke.getMockImplementation();
     let complete = false;
     invoke.mockImplementation((command, args) => {
@@ -240,15 +263,8 @@ it.each(["restored", "pending"] as const)(
         });
       return previous?.(command, args);
     });
-    if (phase === "restored") {
-      await click("projectMemory.recovery.review");
-      await accept();
-      await click("projectMemory.recovery.confirm");
-      await click("projectMemory.recovery.continue");
-    } else {
-      await click("common.refresh");
-      await click("projectMemory.recovery.reviewInitialization");
-    }
+    await click("common.refresh");
+    await click("projectMemory.recovery.reviewInitialization");
     expect(container.textContent).toContain("projectMemory.inspectDescription");
     expect(container.querySelector("form")).toBeNull();
     expect(complete).toBe(false);

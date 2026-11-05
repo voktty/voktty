@@ -73,11 +73,13 @@ pub(super) enum Request {
         revision: u64,
     },
     ReviewRecovery {
+        schema: u8,
         handle: Handle,
         selection: String,
         revision: u64,
     },
     ConfirmRecovery {
+        schema: u8,
         handle: Handle,
         selection: String,
         review: String,

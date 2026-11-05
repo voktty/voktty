@@ -3,7 +3,7 @@ mod access;
 #[path = "project_memory_wire.rs"]
 mod wire;
 
-use access::{AcceptedRestoration, AcceptedWrites, Access};
+use access::{AcceptedWrites, Access};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -13,8 +13,8 @@ use voktty_memory_local::{
     inspect_local_memory_scope, read_local_memory_documents, resolve_local_memory_directory,
     DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace,
     MemoryContextSession, MemoryPolicyReview, MemorySessionUse, MemoryTrustReview,
-    OwnedProjectInitializationPreview, OwnedRecoveryReview, ProjectInitializationRequest,
-    PublicationError, ReadControl, ReadError,
+    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, ProjectInitializationRequest,
+    ProjectRecoveryRequest, PublicationError, ReadControl, ReadError,
 };
 use voktty_remote_protocol::{RemoteRequest, RemoteResponse};
 use voktty_workspace_kit::RootLinks;
@@ -95,7 +95,7 @@ impl<T> Review<T> {
 
 enum DeploymentReview {
     Preview(Box<OwnedProjectInitializationPreview>),
-    Recovery(Box<OwnedRecoveryReview>),
+    Recovery(Box<OwnedProjectRecoveryPreview>),
 }
 
 struct Selection {
@@ -512,33 +512,33 @@ impl MemoryServer {
                 .deployment
                 .cancel(revision)?)),
             Request::ReviewRecovery {
+                schema,
                 handle,
                 selection,
                 revision,
             } => {
+                if schema != 2 {
+                    return Err(Error::new("unsupported"));
+                }
                 let source = {
                     let selected = self.selected(&handle, &selection)?;
                     selected.deployment.reserve(revision)?;
                     selected.source.clone()
                 };
-                let store = self.store(false, &control.read_control()?)?;
-                let workspace = LocalMemoryWorkspace::open(
-                    &store,
-                    &source.requested,
-                    source.as_ref(),
-                    &control.read_control()?,
-                )?;
-                let review = OwnedRecoveryReview::prepare(
-                    &workspace,
-                    &workspace,
-                    store.clone(),
-                    source.clone(),
-                    source.clone(),
+                let review = OwnedProjectRecoveryPreview::prepare(
+                    ProjectRecoveryRequest {
+                        origin: source.requested.clone(),
+                        origin_access: source.clone(),
+                        destination: source.requested.clone(),
+                        destination_access: source.clone(),
+                    },
                     control,
                 )?;
-                let mut result = json!({"schema":1,"root":source.requested,"revision":revision,
-                    "digest":review.acceptance_digest(),
-                    "entries":review.entries().iter().map(|entry| json!({
+                let mut result = json!({"schema":2,"root":source.requested,"revision":revision,
+                    "digest":review.acceptance_digest(), "deployment":review.deployment(),
+                    "cleanup":review.cleanup_files().iter().map(|file| json!({"path":file.path,"text":file.text})).collect::<Vec<_>>(),
+                    "publicationBlocker":review.publication_blocker().map(|error| Error::from(error).code),
+                    "entries":review.restorations().iter().map(|entry| json!({
                         "target":entry.target,"backup":entry.backup,"text":entry.text
                     })).collect::<Vec<_>>()});
                 let token = self
@@ -549,11 +549,15 @@ impl MemoryServer {
                 Ok(result)
             }
             Request::ConfirmRecovery {
+                schema,
                 handle,
                 selection,
                 review,
                 digest,
             } => {
+                if schema != 2 {
+                    return Err(Error::new("unsupported"));
+                }
                 let selected = self.selected(&handle, &selection)?;
                 let DeploymentReview::Recovery(review) =
                     selected.deployment.take_if(&review, |value| {
@@ -563,12 +567,11 @@ impl MemoryServer {
                     return Err(Error::new("cancelled"));
                 };
                 let source = selected.source.clone();
-                self.state_parent(&control.read_control()?)?;
-                let access = AcceptedRestoration(AcceptedWrites {
+                let access = AcceptedWrites {
                     source: &source,
                     requirements: review.write_requirements(),
-                });
-                match review.restore(&digest, &access, control) {
+                };
+                match review.publish(&digest, &access, control) {
                     Ok(report) => Ok(json!({"schema":1,"created":report.created,
                         "skipped":report.skipped,"migrated":report.migrated,"cleaned":report.cleaned})),
                     Err(failure) => {

@@ -21,9 +21,8 @@ async fn interrupted(f: &Fixture) -> String {
         NativeMemorySource::capture(&f.registry, f.root.clone(), &WorkspaceEnv::Local).unwrap();
     let input = values();
     let preview = MemoryWorkers::default()
-        .preview(
-            voktty_memory_local::MemoryPreviewRequest {
-                store: f.store.clone(),
+        .preview_project_at_root(
+            voktty_memory_local::ProjectInitializationRequest {
                 origin: f.root.clone(),
                 origin_access: source.access.clone(),
                 destination: f.root.clone(),
@@ -37,13 +36,20 @@ async fn interrupted(f: &Fixture) -> String {
         .finish()
         .await
         .unwrap();
+    let digest = preview.acceptance_digest();
     let failure = preview
         .publish(
+            &digest,
             &InterruptedMigration(f.root.clone()),
             &DiscoveryControl::default(),
         )
         .unwrap_err();
-    let backup = failure.possible_recovery_files[0].clone();
+    let backup = failure
+        .possible_recovery_files
+        .iter()
+        .find(|path| path.contains(".voktty-migration-"))
+        .unwrap()
+        .clone();
     assert_eq!(fs::read(f.root.join(&backup)).unwrap(), b"*\r\n");
     fs::remove_file(f.root.join(".voktty/.gitignore")).unwrap();
     backup
@@ -69,13 +75,8 @@ fn reserve_recovery(f: &Fixture) -> NativeMemoryRecoveryReceipt {
 }
 async fn recovery_read(f: &Fixture) -> NativeMemoryRecoveryRead {
     let reserved = reserve_recovery(f);
-    let store = f
-        .app
-        .open_recovery_store(&f.window, &f.presentation, &f.selected, &reserved)
-        .await
-        .unwrap();
     f.app
-        .start_recovery(&f.window, &f.presentation, &f.selected, &reserved, store)
+        .start_recovery(&f.window, &f.presentation, &f.selected, &reserved)
         .unwrap()
 }
 async fn ready_recovery(f: &Fixture) -> NativeMemoryRecoveryReceipt {
@@ -108,16 +109,10 @@ fn confirm(
 }
 
 #[test]
-fn recovery_confirmation_moves_only_reviewed_original_and_requires_new_initialization_review() {
+fn recovery_confirmation_completes_project_without_changing_global_settings() {
     let f = fixture();
     runtime().block_on(async {
         let backup = interrupted(&f).await;
-        let intent = fs::read(
-            f.parent
-                .path()
-                .join("project-memory/memory-deployment.json"),
-        )
-        .unwrap();
         let before = f.store.load().unwrap();
         let receipt = ready_recovery(&f).await;
         let mut display = snapshot(&f, &receipt);
@@ -127,47 +122,32 @@ fn recovery_confirmation_moves_only_reviewed_original_and_requires_new_initializ
         let job = confirm(&f, &receipt, display.digest).unwrap();
         assert!(cancelled(&confirm(&f, &receipt, invalid_digest())));
         let report = job.finish().await.unwrap();
-        assert_eq!(report.created, vec![".voktty/.gitignore"]);
-        assert_eq!(report.cleaned, vec![backup]);
-        assert_eq!(
-            fs::read(f.root.join(".voktty/.gitignore")).unwrap(),
-            b"*\r\n"
-        );
+        assert!(report
+            .created
+            .iter()
+            .any(|path| path == ".voktty/.gitignore"));
+        assert!(report.cleaned.contains(&backup));
+        assert!(report
+            .migrated
+            .iter()
+            .any(|path| path == ".voktty/.gitignore"));
+        assert!(!fs::read_to_string(f.root.join(".voktty/.gitignore"))
+            .unwrap()
+            .contains("forged display"));
         assert_eq!(f.store.load().unwrap(), before);
-        assert_eq!(
-            fs::read(
-                f.parent
-                    .path()
-                    .join("project-memory/memory-deployment.json")
-            )
-            .unwrap(),
-            intent
-        );
-        assert!(!f.root.join(".voktty/kit.json").exists());
+        assert!(!f
+            .parent
+            .path()
+            .join("project-memory/memory-deployment.json")
+            .exists());
+        assert!(f.root.join(".voktty/kit.json").exists());
+        assert!(!f.root.join(".voktty/.initialization.json").exists());
         assert!(cancelled(&f.app.recovery_snapshot(
             &f.window,
             &f.presentation,
             &f.selected,
             &receipt
         )));
-        let next = prepare(&f).await;
-        assert!(!f
-            .app
-            .is_recovery_current(&f.window, &f.presentation, &f.selected, &receipt));
-        f.app
-            .confirm_preview(
-                &f.window,
-                &f.presentation,
-                &f.selected,
-                &next,
-                &f.registry,
-                DiscoveryControl::default(),
-            )
-            .unwrap()
-            .finish()
-            .await
-            .unwrap();
-        assert!(f.root.join(".voktty/kit.json").exists());
     });
 }
 fn invalid_digest() -> String {
@@ -199,20 +179,7 @@ fn failed_destination_capture_and_expired_start_retire_the_previous_recovery() {
             .unwrap();
         assert!(matches!(
             f.app
-                .open_recovery_store(&f.window, &f.presentation, &f.selected, &receipt)
-                .await,
-            Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
-                ReadError::Timeout
-            )))
-        ));
-        assert!(matches!(
-            f.app.start_recovery(
-                &f.window,
-                &f.presentation,
-                &f.selected,
-                &receipt,
-                f.store.clone()
-            ),
+                .start_recovery(&f.window, &f.presentation, &f.selected, &receipt),
             Err(MemoryDeploymentWorkError::Worker(MemoryWorkError::Read(
                 ReadError::Timeout
             )))
@@ -261,14 +228,8 @@ fn recovery_reservation_starts_once_and_late_prepared_results_cannot_replace_suc
             &f.window,
             &f.presentation,
             &f.selected,
-            &old,
-            f.store.clone()
+            &old
         )));
-        assert!(cancelled(
-            &f.app
-                .open_recovery_store(&f.window, &f.presentation, &f.selected, &old)
-                .await
-        ));
         assert!(cancelled(&confirm(&f, &old, invalid_digest())));
         let prepared = read.finish().await.unwrap();
         let current = ready_recovery(&f).await;

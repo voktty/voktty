@@ -15,8 +15,8 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use voktty_memory_local::{
-    DiscoveryControl, InitializationPreview, LocalMemoryStore, LocalMemoryWorkspace,
-    MemoryReadAccess, MemoryWriteAccess, ReadControl,
+    DiscoveryControl, LocalMemoryStore, MemoryReadAccess, MemoryWriteAccess,
+    OwnedProjectInitializationPreview, ProjectInitializationRequest, ReadControl,
 };
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_HANDSHAKE,
@@ -252,35 +252,41 @@ fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake
     let store = Arc::new(LocalMemoryStore::create_private(&parent, &control).unwrap());
     store.initialize().unwrap();
     let access = Arc::new(RecoveryFixtureAccess(root.to_owned()));
-    let workspace = LocalMemoryWorkspace::open(&store, root, access.as_ref(), &control).unwrap();
-    let preview = InitializationPreview::prepare(
-        &workspace,
-        &workspace,
-        json!({"project_name":"Framed recovery","created_at":"2026-11-03"})
-            .as_object()
-            .unwrap(),
-        voktty_workspace_kit::RootLinks::default(),
+    let preview = OwnedProjectInitializationPreview::prepare_at_project_root(
+        ProjectInitializationRequest {
+            origin: root.to_owned(),
+            origin_access: access.clone(),
+            destination: root.to_owned(),
+            destination_access: access.clone(),
+            inputs: json!({"project_name":"Framed recovery","created_at":"2026-11-03"})
+                .as_object()
+                .unwrap()
+                .clone(),
+            links: voktty_workspace_kit::RootLinks::default(),
+        },
         &DiscoveryControl::default(),
     )
-    .unwrap()
-    .into_owned(store.clone(), access.clone(), access.clone())
     .unwrap();
+    let digest = preview.acceptance_digest();
     let failure = preview
-        .publish(access.as_ref(), &DiscoveryControl::default())
+        .publish(&digest, access.as_ref(), &DiscoveryControl::default())
         .unwrap_err();
-    assert_eq!(failure.possible_recovery_files.len(), 1);
-    let backup = &failure.possible_recovery_files[0];
+    assert_eq!(failure.possible_recovery_files.len(), 2);
+    let backup = failure
+        .possible_recovery_files
+        .iter()
+        .find(|path| path.contains(".voktty-migration-"))
+        .unwrap();
     fs::remove_file(root.join(".voktty/.gitignore")).unwrap();
     let intent_path = parent.join("project-memory/memory-deployment.json");
     let state_path = parent.join("project-memory/memory-local.json");
-    let intent = fs::read(&intent_path).unwrap();
     let state = fs::read(&state_path).unwrap();
     let mut helper = Helper::start(&data);
     helper.handshake(root);
     let handle = helper.ok(json!({"operation":"open"}));
     let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
     let review = helper.ok(
-        json!({"operation":"reviewRecovery","handle":handle,"selection":selection,"revision":1}),
+        json!({"operation":"reviewRecovery","schema":2,"handle":handle,"selection":selection,"revision":1}),
     );
     assert_eq!(
         review["entries"],
@@ -289,7 +295,7 @@ fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake
     assert!(!root.join(".voktty/.gitignore").exists());
     helper.handshake(root);
     let rejected = helper.memory(
-        json!({"operation":"confirmRecovery","handle":handle,"selection":selection,
+        json!({"operation":"confirmRecovery","schema":2,"handle":handle,"selection":selection,
         "review":review["review"],"digest":review["digest"]}),
     );
     assert_eq!(rejected["error"]["code"], "cancelled");
@@ -297,18 +303,28 @@ fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake
     let handle = helper.ok(json!({"operation":"open"}));
     let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
     let review = helper.ok(
-        json!({"operation":"reviewRecovery","handle":handle,"selection":selection,"revision":1}),
+        json!({"operation":"reviewRecovery","schema":2,"handle":handle,"selection":selection,"revision":1}),
     );
     let report = helper.ok(
-        json!({"operation":"confirmRecovery","handle":handle,"selection":selection,
+        json!({"operation":"confirmRecovery","schema":2,"handle":handle,"selection":selection,
         "review":review["review"],"digest":review["digest"]}),
     );
-    assert_eq!(report["created"], json!([".voktty/.gitignore"]));
-    assert_eq!(report["cleaned"], json!([backup]));
-    assert_eq!(fs::read(root.join(".voktty/.gitignore")).unwrap(), b"*\r\n");
+    assert!(report["created"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/.gitignore")));
+    assert!(report["migrated"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/.gitignore")));
+    assert!(report["cleaned"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/.initialization.json")));
     assert!(!root.join(backup).exists());
-    assert!(!root.join(".voktty/kit.json").exists());
-    assert_eq!(fs::read(intent_path).unwrap(), intent);
+    assert!(root.join(".voktty/kit.json").exists());
+    assert!(!root.join(".voktty/.initialization.json").exists());
+    assert!(!intent_path.exists());
     assert_eq!(fs::read(state_path).unwrap(), state);
 }
 
@@ -333,12 +349,8 @@ fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
     let inspection =
         helper.ok(json!({"operation":"inspect","handle":handle,"selection":selection}));
     assert_eq!(inspection["scope"]["state"], "absent");
-    for operation in ["initialize", "discover", "reviewRecovery"] {
-        let extra = if operation == "reviewRecovery" {
-            json!({"revision":1})
-        } else {
-            json!({})
-        };
+    for operation in ["initialize", "discover"] {
+        let extra = json!({});
         let mut params = json!({"operation":operation,"handle":handle,"selection":selection});
         params
             .as_object_mut()
@@ -349,6 +361,7 @@ fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
             json!({"schema":1,"ok":false,"error":{"code":"legacyStateRequiresReview"}})
         );
     }
+    assert_eq!(helper.memory(json!({"operation":"reviewRecovery","schema":2,"handle":handle,"selection":selection,"revision":1}))["error"]["code"], "unavailable");
     helper.ok(json!({"operation":"close","handle":handle}));
     assert_eq!(
         fs::read(legacy.join("memory-local.json")).unwrap(),

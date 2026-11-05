@@ -87,10 +87,10 @@ const recoveryBackup =
   ".voktty/.voktty-migration-00000000-0000-4000-8000-000000000004-0";
 const restoration = {
   schema: 1,
-  created: [".voktty/.gitignore"],
+  created: [".voktty/.gitignore", ".voktty/kit.json"],
   skipped: [],
   migrated: [],
-  cleaned: [recoveryBackup],
+  cleaned: [recoveryBackup, ".voktty/.initialization.json"],
 };
 let pool: RemoteSessionPool;
 let open: Mock<RemoteSessionPoolDeps["open"]>;
@@ -168,7 +168,7 @@ function operation(params: Record<string, unknown>): unknown {
       return publication;
     case "reviewRecovery":
       return {
-        schema: 1,
+        schema: 2,
         root: "/project",
         revision: params.revision,
         review: trustReply().review,
@@ -180,8 +180,24 @@ function operation(params: Record<string, unknown>): unknown {
             text: "*\r\n",
           },
         ],
+        deployment: {
+          entries: [
+            {
+              path: ".voktty/kit.json",
+              action: "create",
+              reason: "missing",
+              expected: null,
+              proposed: "{}",
+            },
+          ],
+          canPublish: true,
+          lock: null,
+        },
+        cleanup: [],
+        publicationBlocker: null,
       };
     case "confirmRecovery":
+      initialized = true;
       return restoration;
     case "reviewTrust":
       return { ...trustReply(params.revision as number), root: "/project" };
@@ -502,6 +518,7 @@ it.each([target, namespace, connectedNamespace])(
     ]);
     expect(last(io.request.mock.calls)?.[1].params).toEqual({
       operation: "reviewRecovery",
+      schema: 2,
       handle,
       selection: "00000000-0000-4000-8000-000000000003",
       revision: 1,
@@ -509,6 +526,7 @@ it.each([target, namespace, connectedNamespace])(
     expect(await owner.confirmRecovery(selected, review)).toEqual(restoration);
     expect(last(io.request.mock.calls)?.[1].params).toEqual({
       operation: "confirmRecovery",
+      schema: 2,
       handle,
       selection: "00000000-0000-4000-8000-000000000003",
       review: trustReply().review,
@@ -589,7 +607,10 @@ it.each([target, namespace, connectedNamespace])(
         report: restoration,
       });
       await panel.resumeInitialization();
-      expect(last(states)).toEqual({ status: "configuring", recovering: true });
+      expect(last(states)).toMatchObject({
+        status: "ready",
+        observation: { scope: { state: "ready" } },
+      });
       expect(
         io.request.mock.calls.map(([, request]) => request.params.operation),
       ).toEqual([

@@ -2,7 +2,11 @@ import {
   createNativeMemoryPresentation,
   type NativeMemoryReview,
 } from "@/modules/workspace-kit/lib/nativeMemory";
-import type { NativeMemoryRecoveryReview } from "@/modules/workspace-kit/lib/nativeMemoryRecovery";
+import {
+  memoryRecoveryReview,
+  memoryRestorationReport,
+  type NativeMemoryRecoveryReview,
+} from "@/modules/workspace-kit/lib/nativeMemoryRecovery";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -21,12 +25,27 @@ const previewInput = {
 };
 function reply(revision = 1) {
   return {
-    schema: 1,
+    schema: 2,
     revision,
     review: token,
     digest: "a".repeat(64),
     root: "/project",
     entries: [{ target: ".voktty/.gitignore", backup, text: "*\r\n" }],
+    deployment: {
+      entries: [
+        {
+          path: ".voktty/kit.json",
+          action: "create",
+          reason: "missing",
+          expected: null,
+          proposed: "{}",
+        },
+      ],
+      canPublish: true,
+      lock: null,
+    },
+    cleanup: [],
+    publicationBlocker: null,
   };
 }
 function previewReply(revision: number) {
@@ -43,8 +62,8 @@ function previewReply(revision: number) {
 }
 const report = {
   schema: 1,
-  created: [".voktty/.gitignore"],
-  cleaned: [backup],
+  created: [".voktty/.gitignore", ".voktty/kit.json"],
+  cleaned: [backup, ".voktty/.initialization.json"],
   skipped: [],
   migrated: [],
 };
@@ -110,8 +129,14 @@ it("accepts the bounded three-target inventory and copies only known native fiel
   expect(accepted.snapshot.entries[0]).not.toHaveProperty("extra");
   invoke.mockResolvedValue({
     schema: 1,
-    created: accepted.snapshot.entries.map((entry) => entry.target),
-    cleaned: accepted.snapshot.entries.map((entry) => entry.backup),
+    created: [
+      ...accepted.snapshot.entries.map((entry) => entry.target),
+      ".voktty/kit.json",
+    ],
+    cleaned: [
+      ...accepted.snapshot.entries.map((entry) => entry.backup),
+      ".voktty/.initialization.json",
+    ],
     migrated: [],
     skipped: [],
   });
@@ -136,9 +161,12 @@ it("captures recovery input and freezes reviewed bytes while retaining token and
     request: { ...input, revision: 1 },
   });
   expect(accepted.snapshot).toEqual({
-    schema: 1,
+    schema: 2,
     root: "/project",
     entries: reply().entries,
+    deployment: { entries: reply().deployment.entries, canPublish: true },
+    cleanup: [],
+    publicationBlocker: null,
   });
   expect(accepted.snapshot).not.toHaveProperty("digest");
   expect(accepted.snapshot).not.toHaveProperty("review");
@@ -329,7 +357,50 @@ it.each(["select", "close"] as const)(
 
 const malformed = [
   (r: Record<string, unknown>) => {
-    r.schema = 2;
+    r.deployment = {
+      ...reply().deployment,
+      entries: [
+        {
+          ...reply().deployment.entries[0],
+          path: ".voktty/state/settings.json",
+        },
+      ],
+    };
+  },
+  (r: Record<string, unknown>) => {
+    r.deployment = {
+      ...reply().deployment,
+      entries: [{ ...reply().deployment.entries[0], path: ".voktty/../.env" }],
+    };
+  },
+  (r: Record<string, unknown>) => {
+    r.deployment = {
+      ...reply().deployment,
+      entries: [{ ...reply().deployment.entries[0], action: "migrate" }],
+    };
+  },
+  (r: Record<string, unknown>) => {
+    r.deployment = {
+      ...reply().deployment,
+      entries: [
+        reply().deployment.entries[0],
+        { ...reply().deployment.entries[0], path: ".voktty/KIT.json" },
+      ],
+    };
+  },
+  (r: Record<string, unknown>) => {
+    r.cleanup = [{ path: ".env", text: "private" }];
+  },
+  (r: Record<string, unknown>) => {
+    r.cleanup = [
+      {
+        path: ".voktty/.voktty-migration-abcdefab-1234-4234-8234-123456789abc-3",
+        text: "foreign transaction",
+      },
+    ];
+  },
+  (r: Record<string, unknown>) => {
+    r.schema = 1;
   },
   (r: Record<string, unknown>) => {
     r.revision = 2;
@@ -350,7 +421,7 @@ const malformed = [
     r.root = "é".repeat(2049);
   },
   (r: Record<string, unknown>) => {
-    r.entries = [];
+    r.deployment = { ...reply().deployment, entries: [] };
   },
   (r: Record<string, unknown>) => {
     r.entries = [reply().entries[0], reply().entries[0]];
@@ -396,6 +467,34 @@ const malformed = [
     ];
   },
 ];
+it("accepts project completion without missing originals and verifies cleanup multiplicity", () => {
+  const data = {
+    ...reply(),
+    entries: [],
+    cleanup: [
+      { path: backup, text: "proposal" },
+      { path: backup, text: "original" },
+    ],
+  };
+  const { receipt } = memoryRecoveryReview(data, 1);
+  const completed = {
+    schema: 1,
+    created: [".voktty/kit.json"],
+    cleaned: [backup, ".voktty/.initialization.json", backup],
+    migrated: [],
+    skipped: [],
+  };
+  expect(memoryRestorationReport(completed, receipt)).toEqual(completed);
+  expect(() =>
+    memoryRestorationReport(
+      { ...completed, cleaned: [backup, ".voktty/.initialization.json"] },
+      receipt,
+    ),
+  ).toThrow();
+  data.cleanup[0].text = "changed after review";
+  expect(receipt.snapshot.cleanup[0].text).toBe("proposal");
+  expect(Object.isFrozen(receipt.snapshot.deployment.entries[0])).toBe(true);
+});
 it.each(malformed.map((change, index) => ({ change, index })))(
   "rejects invalid review wire data before acceptance ($index)",
   async ({ change }) => {

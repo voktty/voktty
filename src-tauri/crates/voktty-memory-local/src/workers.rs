@@ -334,9 +334,7 @@ impl MemoryWorkers {
 
 #[path = "deployment_workers.rs"]
 mod deployment;
-pub use deployment::{
-    MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPreviewRequest, MemoryRecoveryRequest,
-};
+pub use deployment::{MemoryDeploymentJob, MemoryDeploymentWorkError, MemoryPreviewRequest};
 
 #[path = "trust_workers.rs"]
 mod trust;

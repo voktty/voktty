@@ -1,7 +1,9 @@
 use super::*;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use voktty_memory_local::{InitializationPreview, MemoryWriteAccess};
+use voktty_memory_local::{
+    MemoryWriteAccess, OwnedProjectInitializationPreview, ProjectInitializationRequest,
+};
 use voktty_remote_protocol::{METHOD_MEMORY_MANAGE, PROTOCOL_VERSION};
 
 struct InterruptedWriter(PathBuf);
@@ -40,31 +42,38 @@ impl Fixture {
         fs::create_dir_all(root.join(".voktty/sessions")).unwrap();
         fs::write(root.join(".voktty/sessions/kept.json"), "reserved fixture").unwrap();
         fs::write(root.join(".voktty/.gitignore"), b"*\r\n").unwrap();
-        let store = server.store(true, &ReadControl::default()).unwrap();
+        let _store = server.store(true, &ReadControl::default()).unwrap();
         let source = Arc::new(Access::new(root.to_owned(), root.to_owned(), true));
-        let workspace =
-            LocalMemoryWorkspace::open(&store, root, source.as_ref(), &ReadControl::default())
-                .unwrap();
-        let preview = InitializationPreview::prepare(
-            &workspace,
-            &workspace,
-            json!({"project_name":"Recovery helper","created_at":"2026-11-03"})
-                .as_object()
-                .unwrap(),
-            RootLinks::default(),
+        let preview = OwnedProjectInitializationPreview::prepare_at_project_root(
+            ProjectInitializationRequest {
+                origin: root.to_owned(),
+                origin_access: source.clone(),
+                destination: root.to_owned(),
+                destination_access: source.clone(),
+                inputs: json!({"project_name":"Recovery helper","created_at":"2026-11-03"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                links: RootLinks::default(),
+            },
             &DiscoveryControl::default(),
         )
-        .unwrap()
-        .into_owned(store.clone(), source.clone(), source.clone())
         .unwrap();
+        let digest = preview.acceptance_digest();
         let failure = preview
             .publish(
+                &digest,
                 &InterruptedWriter(root.to_owned()),
                 &DiscoveryControl::default(),
             )
             .unwrap_err();
-        assert_eq!(failure.possible_recovery_files.len(), 1);
-        let backup = failure.possible_recovery_files[0].clone();
+        assert_eq!(failure.possible_recovery_files.len(), 2);
+        let backup = failure
+            .possible_recovery_files
+            .iter()
+            .find(|path| path.contains(".voktty-migration-"))
+            .unwrap()
+            .clone();
         assert_eq!(fs::read(root.join(&backup)).unwrap(), b"*\r\n");
         if missing {
             fs::remove_file(root.join(".voktty/.gitignore")).unwrap();
@@ -89,6 +98,9 @@ impl Fixture {
     fn call(&mut self, operation: &str, extra: Value) -> Value {
         let mut params =
             json!({"operation":operation,"handle":self.handle,"selection":self.selection});
+        if matches!(operation, "reviewRecovery" | "confirmRecovery") {
+            params["schema"] = json!(2);
+        }
         if matches!(operation, "select" | "close") {
             params.as_object_mut().unwrap().remove("selection");
         }
@@ -149,9 +161,51 @@ fn fails(reply: Value, code: &str) {
 }
 
 #[test]
-fn exact_restore_preserves_original_object_state_and_journal_without_publishing() {
+fn recovery_requires_project_schema_before_consuming_review_or_touching_global_state() {
     let mut f = Fixture::new(true);
-    let intent = f.state("memory-deployment.json");
+    let review = f.review(1);
+    for operation in ["reviewRecovery", "confirmRecovery"] {
+        let extra = if operation == "reviewRecovery" {
+            json!({"revision":2,"schema":1})
+        } else {
+            json!({"review":review["review"],"digest":review["digest"],"schema":1})
+        };
+        fails(f.call(operation, extra), "unsupported");
+    }
+    assert_eq!(f.confirm(&review)["ok"], true);
+    assert!(!f
+        .private
+        .path()
+        .join("app.voktty.voktty/project-memory/memory-deployment.json")
+        .exists());
+    let request = json!({"operation":"reviewRecovery","handle":f.handle,"selection":f.selection,"revision":2});
+    assert!(serde_json::from_value::<Request>(request).is_err());
+}
+
+#[test]
+fn project_recovery_ignores_corrupt_and_legacy_global_memory_data() {
+    let mut f = Fixture::new(true);
+    let current = f
+        .private
+        .path()
+        .join("app.voktty.voktty/project-memory/memory-local.json");
+    fs::write(&current, b"corrupt global sentinel").unwrap();
+    let legacy = f.private.path().join("dev.voktty/project-memory");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(legacy.join("memory-local.json"), b"legacy sentinel").unwrap();
+    let review = f.review(1);
+    assert_eq!(f.confirm(&review)["ok"], true);
+    assert_eq!(fs::read(current).unwrap(), b"corrupt global sentinel");
+    assert_eq!(
+        fs::read(legacy.join("memory-local.json")).unwrap(),
+        b"legacy sentinel"
+    );
+    assert!(f.project.path().join(".voktty/kit.json").exists());
+}
+
+#[test]
+fn exact_recovery_completes_project_preserving_metadata_and_global_preferences() {
+    let mut f = Fixture::new(true);
     let preferences = f.state("memory-local.json");
     let metadata = fs::metadata(f.project.path().join(&f.backup)).unwrap();
     let review = f.review(1);
@@ -167,31 +221,40 @@ fn exact_restore_preserves_original_object_state_and_journal_without_publishing(
     );
     let report = f.confirm(&review);
     assert_eq!(report["ok"], true, "{report}");
-    assert_eq!(
-        report["result"],
-        json!({"schema":1,"created":[".voktty/.gitignore"],
-        "skipped":[],"migrated":[],"cleaned":[f.backup]})
-    );
+    assert_eq!(report["result"]["schema"], 1);
+    assert!(report["result"]["created"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/.gitignore")));
+    assert!(report["result"]["migrated"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/.gitignore")));
+    assert!(report["result"]["cleaned"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(".voktty/.initialization.json")));
     let target = f.project.path().join(".voktty/.gitignore");
     let restored = fs::metadata(&target).unwrap();
-    assert_eq!(fs::read(target).unwrap(), b"*\r\n");
+    assert!(fs::read_to_string(target)
+        .unwrap()
+        .starts_with("# Preserve privacy"));
     assert_eq!(
-        (
-            restored.ino(),
-            restored.mode(),
-            restored.uid(),
-            restored.gid()
-        ),
-        (
-            metadata.ino(),
-            metadata.mode(),
-            metadata.uid(),
-            metadata.gid()
-        )
+        (restored.mode(), restored.uid(), restored.gid()),
+        (metadata.mode(), metadata.uid(), metadata.gid())
     );
     assert!(!f.project.path().join(&f.backup).exists());
-    assert!(!f.project.path().join(".voktty/kit.json").exists());
-    assert_eq!(f.state("memory-deployment.json"), intent);
+    assert!(f.project.path().join(".voktty/kit.json").exists());
+    assert!(!f
+        .project
+        .path()
+        .join(".voktty/.initialization.json")
+        .exists());
+    assert!(!f
+        .private
+        .path()
+        .join("app.voktty.voktty/project-memory/memory-deployment.json")
+        .exists());
     assert_eq!(f.state("memory-local.json"), preferences);
     assert_eq!(
         fs::read(f.project.path().join(".voktty/sessions/kept.json")).unwrap(),
@@ -222,7 +285,7 @@ fn failed_newer_preview_retires_recovery_and_failed_recovery_retires_preview() {
     assert_eq!(preview["ok"], true, "{preview}");
     fails(
         f.call("reviewRecovery", json!({"revision":3})),
-        "pendingRecovery",
+        "unavailable",
     );
     fails(
         f.call("confirm", json!({"review":preview["result"]["review"]})),
@@ -260,20 +323,14 @@ fn cancellation_fences_earlier_arrivals_without_retiring_a_newer_review() {
 }
 
 #[test]
-fn wrong_digest_and_changed_preferences_consume_only_the_original_review() {
-    for change_preferences in [false, true] {
+fn wrong_digest_and_changed_project_consume_only_the_original_review() {
+    for change_project in [false, true] {
         let mut f = Fixture::new(true);
         let review = f.review(1);
         let before = fs::read(f.project.path().join(&f.backup)).unwrap();
-        let confirmation = if change_preferences {
-            let store = f.server.store(false, &ReadControl::default()).unwrap();
-            store
-                .set_policy(
-                    store.load().unwrap().revision(),
-                    &"a".repeat(64),
-                    voktty_memory_local::MemoryPolicy::Never,
-                )
-                .unwrap();
+        let initial = fs::read(f.project.path().join(".voktty/INIT.md")).unwrap();
+        let confirmation = if change_project {
+            fs::write(f.project.path().join(".voktty/INIT.md"), "changed content").unwrap();
             review.clone()
         } else {
             let mut wrong = review.clone();
@@ -284,7 +341,15 @@ fn wrong_digest_and_changed_preferences_consume_only_the_original_review() {
         fails(f.confirm(&review), "cancelled");
         assert_eq!(fs::read(f.project.path().join(&f.backup)).unwrap(), before);
         assert!(!f.project.path().join(".voktty/.gitignore").exists());
-        let fresh = f.review(2);
+        if change_project {
+            fails(f.call("reviewRecovery", json!({"revision":2})), "conflict");
+            assert_eq!(
+                fs::read(f.project.path().join(".voktty/INIT.md")).unwrap(),
+                b"changed content"
+            );
+            fs::write(f.project.path().join(".voktty/INIT.md"), initial).unwrap();
+        }
+        let fresh = f.review(3);
         assert_eq!(f.confirm(&fresh)["ok"], true);
     }
 }
@@ -320,7 +385,7 @@ fn retired_selections_presentations_and_helper_generations_cannot_restore() {
 }
 
 #[test]
-fn restoration_writes_authorize_only_exact_missing_targets_and_original_backups() {
+fn recovery_writes_authorize_only_reviewed_plan_and_cleanup_under_original_source() {
     let mut f = Fixture::new(true);
     f.review(1);
     let selected = f
@@ -336,22 +401,22 @@ fn restoration_writes_authorize_only_exact_missing_targets_and_original_backups(
         panic!("missing recovery review");
     };
     let source = selected.source.clone();
-    let access = AcceptedRestoration(AcceptedWrites {
+    let access = AcceptedWrites {
         source: source.as_ref(),
         requirements: review.write_requirements(),
-    });
+    };
     let root = f.project.path();
     let target = root.join(".voktty/.gitignore");
     assert!(access.allows_create(&target));
     assert!(access.allows_remove_staging(&root.join(&f.backup)));
-    assert!(!access.allows_replace(&target));
+    assert!(access.allows_replace(&target));
+    assert!(access.allows_create(&root.join(".voktty/kit.json")));
+    assert!(access
+        .allows_create(&root.join(".voktty/.voktty-stage-00000000-0000-4000-8000-000000000004")));
     for path in [
-        root.to_owned(),
-        root.join(".voktty"),
         root.join("AGENTS.md"),
         root.join(".env"),
-        root.join(".voktty/kit.json"),
-        root.join(".voktty/.voktty-stage-00000000-0000-4000-8000-000000000004"),
+        root.join(".voktty/.voktty-stage-invalid"),
         root.join(".voktty/.voktty-migration-00000000-0000-4000-8000-000000000004-127"),
     ] {
         assert!(!access.allows_create(&path));

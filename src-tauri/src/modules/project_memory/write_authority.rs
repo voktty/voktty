@@ -2,7 +2,7 @@ use super::*;
 use std::collections::BTreeSet;
 use std::sync::Weak;
 use voktty_memory_local::{
-    MemoryWriteAccess, OwnedProjectInitializationPreview, OwnedRecoveryReview,
+    MemoryWriteAccess, OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview,
     PublicationWriteRequirements,
 };
 
@@ -201,21 +201,18 @@ impl NativeMemoryWriteAuthority {
 
     pub(super) fn capture_recovery(
         registry: &WorkspaceRegistry,
-        original: &OwnedRecoveryReview,
+        original: &OwnedProjectRecoveryPreview,
         origin: Arc<Access>,
         destination: Arc<Access>,
         review: &Arc<AtomicBool>,
     ) -> Result<Self, MemoryWorkError> {
-        let requirements = original.write_requirements();
-        let targets = requirements.create.clone();
-        let mut scope = WriteScope::build(requirements)?;
-        scope.stage_parents.clear();
-        scope.create.retain(|path| {
-            targets
-                .iter()
-                .any(|target| *path == scope.root.join(target))
-        });
-        Self::capture_scope(registry, scope, origin, destination, review)
+        Self::capture_scope(
+            registry,
+            WriteScope::build(original.write_requirements())?,
+            origin,
+            destination,
+            review,
+        )
     }
 
     fn capture_scope(

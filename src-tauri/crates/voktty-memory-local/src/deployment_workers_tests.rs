@@ -183,9 +183,8 @@ impl MemoryWriteAccess for MigrationAccess {
     }
 }
 
-fn recovery_request(f: &Fixture) -> MemoryRecoveryRequest {
-    MemoryRecoveryRequest {
-        store: f.store.clone(),
+fn recovery_request(f: &Fixture) -> ProjectRecoveryRequest {
+    ProjectRecoveryRequest {
         origin: f.access.root.clone(),
         origin_access: f.access.clone(),
         destination: f.access.root.clone(),
@@ -196,11 +195,29 @@ fn recovery_request(f: &Fixture) -> MemoryRecoveryRequest {
 async fn interrupted_original(f: &Fixture, workers: &MemoryWorkers) -> String {
     fs::create_dir(f.access.root.join(".voktty")).unwrap();
     fs::write(f.access.root.join(".voktty/.gitignore"), "*\r\n").unwrap();
-    let review = preview(f, workers).await;
+    let input = request(f);
+    let review = workers
+        .preview_project_at_root(
+            ProjectInitializationRequest {
+                origin: input.origin,
+                origin_access: input.origin_access,
+                destination: input.destination,
+                destination_access: input.destination_access,
+                inputs: input.inputs,
+                links: input.links,
+            },
+            DiscoveryControl::default(),
+        )
+        .unwrap()
+        .finish()
+        .await
+        .unwrap();
+    let digest = review.acceptance_digest();
     f.access.deny_rules.store(true, Ordering::Release);
     let error = workers
-        .publish(
+        .publish_project(
             review,
+            digest,
             Arc::new(MigrationAccess(f.access.clone())),
             DiscoveryControl::default(),
         )
@@ -211,20 +228,25 @@ async fn interrupted_original(f: &Fixture, workers: &MemoryWorkers) -> String {
     let MemoryDeploymentWorkError::Publication(failure) = error else {
         panic!("interrupted migration required")
     };
-    let backup = failure.possible_recovery_files[0].clone();
+    let backup = failure
+        .possible_recovery_files
+        .iter()
+        .find(|path| path.contains(".voktty-migration-"))
+        .unwrap()
+        .clone();
     assert_eq!(fs::read(f.access.root.join(&backup)).unwrap(), b"*\r\n");
     fs::remove_file(f.access.root.join(".voktty/.gitignore")).unwrap();
+    f.access.deny_rules.store(false, Ordering::Release);
     backup
 }
 
 #[test]
-fn recovery_workers_preserve_intent_and_report_exact_restoration_off_thread() {
+fn recovery_workers_complete_project_without_global_state_off_thread() {
     let f = fixture();
     let caller = std::thread::current().id();
     runtime().block_on(async {
         let workers = workers();
         let backup = interrupted_original(&f, &workers).await;
-        let intent = fs::read(f.state.path().join("memory-deployment.json")).unwrap();
         let preferences = fs::read(f.state.path().join("memory-local.json")).unwrap();
         let job = workers
             .review_recovery(recovery_request(&f), DiscoveryControl::default())
@@ -233,10 +255,10 @@ fn recovery_workers_preserve_intent_and_report_exact_restoration_off_thread() {
         assert_eq!(workers.active.load(Ordering::Acquire), 1);
         assert!(!f.access.root.join(".voktty/.gitignore").exists());
         let review = job.finish().await.unwrap();
-        assert_eq!(review.entries()[0].backup, backup);
+        assert_eq!(review.restorations()[0].backup, backup);
         let digest = review.acceptance_digest();
         let report = workers
-            .restore_originals(
+            .recover_project(
                 review,
                 digest,
                 Arc::new(MigrationAccess(f.access.clone())),
@@ -246,21 +268,26 @@ fn recovery_workers_preserve_intent_and_report_exact_restoration_off_thread() {
             .finish()
             .await
             .unwrap();
-        assert_eq!(report.created, vec![".voktty/.gitignore"]);
-        assert_eq!(report.cleaned, vec![backup]);
-        assert_eq!(
-            fs::read(f.access.root.join(".voktty/.gitignore")).unwrap(),
-            b"*\r\n"
-        );
-        assert_eq!(
-            fs::read(f.state.path().join("memory-deployment.json")).unwrap(),
-            intent
-        );
+        assert!(report
+            .created
+            .iter()
+            .any(|path| path == ".voktty/.gitignore"));
+        assert!(report.cleaned.contains(&backup));
+        assert!(report
+            .cleaned
+            .iter()
+            .any(|path| path == ".voktty/.initialization.json"));
+        assert!(report
+            .migrated
+            .iter()
+            .any(|path| path == ".voktty/.gitignore"));
+        assert!(!f.state.path().join("memory-deployment.json").exists());
         assert_eq!(
             fs::read(f.state.path().join("memory-local.json")).unwrap(),
             preferences
         );
-        assert!(!f.access.root.join(".voktty/kit.json").exists());
+        assert!(f.access.root.join(".voktty/kit.json").exists());
+        assert!(!f.access.root.join(".voktty/.initialization.json").exists());
         assert_eq!(workers.active.load(Ordering::Acquire), 0);
     });
     assert_ne!(f.access.reads.lock().unwrap().unwrap(), caller);
@@ -287,7 +314,7 @@ fn recovery_worker_rejects_changed_digest_or_retired_authority_without_losing_ba
             };
             f.access.retired.store(retired, Ordering::Release);
             let error = workers
-                .restore_originals(
+                .recover_project(
                     review,
                     digest,
                     Arc::new(MigrationAccess(f.access.clone())),
@@ -300,7 +327,8 @@ fn recovery_worker_rejects_changed_digest_or_retired_authority_without_losing_ba
             assert!(matches!(error, MemoryDeploymentWorkError::Publication(_)));
             assert_eq!(fs::read(f.access.root.join(backup)).unwrap(), b"*\r\n");
             assert!(!f.access.root.join(".voktty/.gitignore").exists());
-            assert!(f.state.path().join("memory-deployment.json").exists());
+            assert!(f.access.root.join(".voktty/.initialization.json").exists());
+            assert!(!f.state.path().join("memory-deployment.json").exists());
         });
     }
 }
@@ -388,7 +416,7 @@ fn queued_retired_restoration_retains_capacity_until_settlement_and_never_moves_
         observed.recv_timeout(Duration::from_secs(3)).unwrap();
         let control = DiscoveryControl::default();
         let job = workers
-            .restore_originals(
+            .recover_project(
                 review,
                 digest,
                 Arc::new(MigrationAccess(f.access.clone())),

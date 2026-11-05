@@ -1,5 +1,5 @@
 use super::*;
-use voktty_memory_local::{MemoryRecoveryRequest, OwnedRecoveryReview, RecoveryRestore};
+use voktty_memory_local::{OwnedProjectRecoveryPreview, ProjectRecoveryRequest, RecoveryRestore};
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "recovery_authority_tests.rs"]
@@ -23,7 +23,7 @@ pub struct NativeMemoryRecoveryReceipt {
 
 pub struct NativeMemoryPreparedRecovery {
     receipt: NativeMemoryRecoveryReceipt,
-    review: OwnedRecoveryReview,
+    review: OwnedProjectRecoveryPreview,
 }
 
 /// Display bytes and digest are not restoration authority.
@@ -32,11 +32,14 @@ pub struct NativeMemoryRecoverySnapshot {
     pub root: PathBuf,
     pub digest: String,
     pub entries: Vec<RecoveryRestore>,
+    pub deployment: voktty_workspace_kit::PreparedDeployment,
+    pub cleanup: Vec<RecoveryFile>,
+    pub publication_blocker: Option<PublicationError>,
 }
 
 #[must_use = "finish or drop this recovery request to retire its consumer"]
 pub struct NativeMemoryRecoveryRead {
-    operation: ReviewOperation<OwnedRecoveryReview>,
+    operation: ReviewOperation<OwnedProjectRecoveryPreview>,
     receipt: NativeMemoryRecoveryReceipt,
 }
 impl NativeMemoryRecoveryRead {
@@ -72,25 +75,10 @@ impl NativeMemoryDeployment {
         NativeMemoryRecoveryReceipt { receipt }
     }
 
-    pub(in crate::modules::project_memory) fn recovery_store_control(
-        &self,
-        receipt: &NativeMemoryRecoveryReceipt,
-    ) -> Result<ReadControl, MemoryDeploymentWorkError> {
-        if !self.is_recovery_current(receipt) {
-            return Err(cancelled());
-        }
-        let review = self.review.as_ref().ok_or_else(cancelled)?;
-        if !matches!(review.state, ReviewState::RecoveryReserved) {
-            return Err(cancelled());
-        }
-        Ok(review.control.read_control()?)
-    }
-
     pub(in crate::modules::project_memory) fn prepare_recovery(
         &mut self,
         source: &NativeMemorySource,
         receipt: &NativeMemoryRecoveryReceipt,
-        store: Arc<LocalMemoryStore>,
     ) -> Result<NativeMemoryRecoveryRead, MemoryDeploymentWorkError> {
         if !self.is_recovery_current(receipt) {
             return Err(cancelled());
@@ -101,8 +89,7 @@ impl NativeMemoryDeployment {
         }
         review.state = ReviewState::RecoveryOpening;
         let job = MemoryWorkers::default().review_recovery(
-            MemoryRecoveryRequest {
-                store,
+            ProjectRecoveryRequest {
                 origin: source.requested.clone(),
                 origin_access: source.access.clone(),
                 destination: review.destination.requested.clone(),
@@ -152,7 +139,7 @@ impl NativeMemoryDeployment {
     fn recovery(
         &self,
         receipt: &NativeMemoryRecoveryReceipt,
-    ) -> Result<&OwnedRecoveryReview, MemoryDeploymentWorkError> {
+    ) -> Result<&OwnedProjectRecoveryPreview, MemoryDeploymentWorkError> {
         if !self.is_recovery_current(receipt) {
             return Err(cancelled());
         }
@@ -170,7 +157,10 @@ impl NativeMemoryDeployment {
         Ok(NativeMemoryRecoverySnapshot {
             root: review.write_requirements().root,
             digest: review.acceptance_digest(),
-            entries: review.entries().to_vec(),
+            entries: review.restorations().to_vec(),
+            deployment: review.deployment().clone(),
+            cleanup: review.cleanup_files().into_iter().cloned().collect(),
+            publication_blocker: review.publication_blocker(),
         })
     }
 
@@ -211,7 +201,7 @@ impl NativeMemoryDeployment {
                     review.destination.access.clone(),
                     &review.live,
                 )?;
-            MemoryWorkers::default().restore_originals(*original, digest, Arc::new(access), control)
+            MemoryWorkers::default().recover_project(*original, digest, Arc::new(access), control)
         };
         match start() {
             Ok(job) => Ok(NativeMemoryRestoration {
