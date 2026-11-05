@@ -44,7 +44,11 @@ export function createProjectMemoryReader(
   let namespaces: WeakMap<object, number> | undefined;
   let nextNamespace = 0;
 
-  const load = async (target: AiFileRootContext, assertCurrent: () => void) => {
+  const load = async (
+    target: AiFileRootContext,
+    assertCurrent: () => void,
+    guide: boolean,
+  ) => {
     const { root, workspace } = target;
     assertCurrent();
     let canonicalRoot: string;
@@ -61,9 +65,11 @@ export function createProjectMemoryReader(
     )
       return null;
     const separator = root.includes("\\") && !root.includes("/") ? "\\" : "/";
-    for (const filename of [PROJECT_MEMORY_FILE, LEGACY_PROJECT_MEMORY_FILE]) {
+    for (const filename of guide
+      ? [".voktty/INIT.md"]
+      : [PROJECT_MEMORY_FILE, LEGACY_PROJECT_MEMORY_FILE]) {
       assertCurrent();
-      const path = `${root.endsWith(separator) ? root : root + separator}${filename}`;
+      const path = `${root.endsWith(separator) ? root : root + separator}${filename.split("/").join(separator)}`;
       if (!checkReadable(path).ok) continue;
       try {
         const canonical = await canonicalize(path, workspace);
@@ -83,69 +89,76 @@ export function createProjectMemoryReader(
     return null;
   };
 
+  async function read(
+    source: AiFileRootContext | null,
+    assertCurrent: () => void,
+    namespace?: object,
+    guide = false,
+  ): Promise<string | null> {
+    assertCurrent();
+    if (
+      !source ||
+      source.root.length > 32768 ||
+      source.root.startsWith("remote://") ||
+      !checkReadable(source.root).ok ||
+      !checkWorkspacePath(source.root, source.root).ok ||
+      (source.workspace.kind !== "local" &&
+        source.workspace.kind !== "wsl" &&
+        source.workspace.kind !== "ssh") ||
+      (source.workspace.kind !== "local" &&
+        (!source.root.startsWith("/") || source.root.startsWith("//")))
+    )
+      return null;
+    const target = structuredClone(source);
+    let key = `${guide ? "guide" : "root"}:${fileReadCacheKey(target.root, target.workspace)}`;
+    if (namespace) {
+      namespaces ??= new WeakMap();
+      let id = namespaces.get(namespace);
+      if (id === undefined) {
+        if (nextNamespace === Number.MAX_SAFE_INTEGER)
+          throw new Error("Project memory context capacity exceeded.");
+        id = ++nextNamespace;
+        namespaces.set(namespace, id);
+      }
+      key = `context:${id}:${key}`;
+    }
+    if (key.length > 65536) return null;
+    const existing = cache.get(key);
+    if (existing && now() - existing.savedAt < TTL_MS) {
+      cache.delete(key);
+      cache.set(key, existing);
+      return existing.content;
+    }
+    cache.delete(key);
+    if (pending >= limit)
+      throw new Error("Too many pending project memory reads.");
+    const publication = {};
+    publications.set(key, publication);
+    pending++;
+    try {
+      const content = await load(target, assertCurrent, guide);
+      assertCurrent();
+      if (publications.get(key) === publication) {
+        cache.delete(key);
+        cache.set(key, { content, savedAt: now() });
+        while (cache.size > cacheSize) {
+          const oldest = cache.keys().next();
+          if (oldest.done) break;
+          cache.delete(oldest.value);
+        }
+      }
+      return content;
+    } finally {
+      pending--;
+      if (publications.get(key) === publication) publications.delete(key);
+    }
+  }
   return {
-    async read(
+    read,
+    readGuide: (
       source: AiFileRootContext | null,
       assertCurrent: () => void,
       namespace?: object,
-    ): Promise<string | null> {
-      assertCurrent();
-      if (
-        !source ||
-        source.root.length > 32768 ||
-        source.root.startsWith("remote://") ||
-        !checkReadable(source.root).ok ||
-        !checkWorkspacePath(source.root, source.root).ok ||
-        (source.workspace.kind !== "local" &&
-          source.workspace.kind !== "wsl" &&
-          source.workspace.kind !== "ssh") ||
-        (source.workspace.kind !== "local" &&
-          (!source.root.startsWith("/") || source.root.startsWith("//")))
-      )
-        return null;
-      const target = structuredClone(source);
-      let key = fileReadCacheKey(target.root, target.workspace);
-      if (namespace) {
-        namespaces ??= new WeakMap();
-        let id = namespaces.get(namespace);
-        if (id === undefined) {
-          if (nextNamespace === Number.MAX_SAFE_INTEGER)
-            throw new Error("Project memory context capacity exceeded.");
-          id = ++nextNamespace;
-          namespaces.set(namespace, id);
-        }
-        key = `context:${id}:${key}`;
-      }
-      if (key.length > 65536) return null;
-      const existing = cache.get(key);
-      if (existing && now() - existing.savedAt < TTL_MS) {
-        cache.delete(key);
-        cache.set(key, existing);
-        return existing.content;
-      }
-      cache.delete(key);
-      if (pending >= limit)
-        throw new Error("Too many pending project memory reads.");
-      const publication = {};
-      publications.set(key, publication);
-      pending++;
-      try {
-        const content = await load(target, assertCurrent);
-        assertCurrent();
-        if (publications.get(key) === publication) {
-          cache.delete(key);
-          cache.set(key, { content, savedAt: now() });
-          while (cache.size > cacheSize) {
-            const oldest = cache.keys().next();
-            if (oldest.done) break;
-            cache.delete(oldest.value);
-          }
-        }
-        return content;
-      } finally {
-        pending--;
-        if (publications.get(key) === publication) publications.delete(key);
-      }
-    },
+    ) => read(source, assertCurrent, namespace, true),
   };
 }

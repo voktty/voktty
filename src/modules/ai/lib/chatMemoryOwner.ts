@@ -6,7 +6,6 @@ import type { MemoryConversation } from "@/modules/workspace-kit/lib/memoryConve
 import { createMemoryConversations } from "@/modules/workspace-kit/lib/memoryConversations";
 import { createAiMemoryDelivery } from "@/modules/ai/lib/aiMemoryDelivery";
 import type { AiProjectKitMemorySource } from "@/modules/ai/lib/projectKitMemory";
-import { createMemoryInheritance } from "@/modules/workspace-kit/lib/memoryInheritance";
 
 type Owner = {
   capture: () => MemoryConversation | null;
@@ -42,7 +41,6 @@ export function registerChatMemoryOwner(
     typeof createMemoryConversations<AiProjectKitMemorySource>
   > | null = null;
   let conversation: MemoryConversation | null = null;
-  let inheritance: ReturnType<typeof createMemoryInheritance> | null = null;
   let capturing = false;
   let unsubscribe: (() => void) | null = null;
   let releaseDelivery: (() => void) | null = null;
@@ -94,7 +92,6 @@ export function registerChatMemoryOwner(
           "model-response",
         );
         conversation = manager.capture(chat, root, root, current, true);
-        inheritance = createMemoryInheritance(conversation);
         releaseDelivery?.();
         const captured = conversation;
         releaseDelivery = captured.subscribe(() => {
@@ -128,13 +125,10 @@ export function registerChatMemoryOwner(
       const source = owner.source();
       if (source) return source;
       if (conversation && !conversation.isCurrent()) {
-        if (inheritance?.needsPreparation())
-          throw new Error("Project memory: cancelled");
         return undefined;
       }
       const captured = owner.capture();
       if (!captured) return undefined;
-      await inheritance?.prepare(assertCurrent);
       assertCurrent();
       return owner.source();
     },

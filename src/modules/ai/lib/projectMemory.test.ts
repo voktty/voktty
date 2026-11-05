@@ -30,6 +30,32 @@ function fixture(
   };
 }
 
+it("keeps the project guide and root cache separate", async () => {
+  const f = fixture();
+  f.readFile.mockImplementation(async (path) => text(path));
+  expect(await f.reader.read(source, current)).toBe("/fixture/VOKTTY.md");
+  expect(await f.reader.readGuide(source, current)).toBe(
+    "/fixture/.voktty/INIT.md",
+  );
+  expect(await f.reader.read(source, current)).toBe("/fixture/VOKTTY.md");
+  expect(await f.reader.readGuide(source, current)).toBe(
+    "/fixture/.voktty/INIT.md",
+  );
+  expect(f.readFile).toHaveBeenCalledTimes(2);
+});
+
+it.each(["/other/INIT.md", "/fixture/.env"])(
+  "refuses a guide resolving to %s",
+  async (destination) => {
+    const f = fixture();
+    f.canonicalize.mockImplementation(async (path) =>
+      path === source.root ? path : destination,
+    );
+    expect(await f.reader.readGuide(source, current)).toBeNull();
+    expect(f.readFile).not.toHaveBeenCalled();
+  },
+);
+
 it("bounds LRU snapshots and expires a cached memory after thirty seconds", async () => {
   let now = 0;
   const f = fixture({ cacheSize: 2, now: () => now });

@@ -21,7 +21,10 @@ vi.mock("@/modules/ai/lib/agent", () => ({ runAgentStream: io.run }));
 let sequence = 0;
 beforeEach(() => {
   vi.resetAllMocks();
-  io.canonicalize.mockImplementation(async (path: string) => path);
+  io.canonicalize.mockImplementation(async (path: string) => {
+    if (path.endsWith("/.voktty/INIT.md")) throw new Error("missing guide");
+    return path;
+  });
   io.readFile.mockResolvedValue({
     kind: "text",
     content: "legacy root rules",

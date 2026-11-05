@@ -358,7 +358,7 @@ export function buildStableSystem(
     : "";
   const memoryBlock =
     projectMemory && projectMemory.trim().length > 0
-      ? `\n\n## PROJECT — VOKTTY.md\n${projectMemory.trim()}`
+      ? `\n\n## PROJECT FILES\n${projectMemory.trim()}`
       : "";
   return `${base}${langBlock}${memoryBlock}${personaBlock}${customBlock}`;
 }

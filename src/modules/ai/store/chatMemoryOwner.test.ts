@@ -5,6 +5,7 @@ import {
   captureChatMemoryConversation,
   forgetChatMemoryOwner,
   registerChatMemoryOwner,
+  prepareChatProjectKitMemory,
 } from "@/modules/ai/lib/chatMemoryOwner";
 import { getOrCreateChat } from "@/modules/ai/store/chatRuntime";
 import { chats, touchChat, useChatStore } from "@/modules/ai/store/chatStore";
@@ -117,6 +118,13 @@ it("allocates no memory resource or root read by constructing and selecting chat
   useChatStore.getState().switchSession("sibling");
   state.setLive({ ...state.live, getFileRootContext: root });
   expect(root).not.toHaveBeenCalled();
+  expect(invoke).not.toHaveBeenCalled();
+});
+
+it("prepares an ordinary request without global memory IPC", async () => {
+  const chat = getOrCreateChat("original");
+  invoke.mockRejectedValue(new Error("application storage unavailable"));
+  expect(await prepareChatProjectKitMemory(chat, () => {})).toBeUndefined();
   expect(invoke).not.toHaveBeenCalled();
 });
 

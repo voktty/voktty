@@ -15,7 +15,10 @@ vi.mock("@/modules/ai/lib/agent", () => ({ runAgentStream: io.run }));
 let sequence = 0;
 beforeEach(() => {
   vi.resetAllMocks();
-  io.canonicalize.mockImplementation(async (path: string) => path);
+  io.canonicalize.mockImplementation(async (path: string) => {
+    if (path.endsWith("/.voktty/INIT.md")) throw new Error("missing guide");
+    return path;
+  });
   io.readFile.mockResolvedValue({ kind: "text", content: "original", size: 8 });
   io.run.mockResolvedValue({
     toUIMessageStream: () =>
@@ -67,6 +70,54 @@ function fixture() {
     },
   };
 }
+
+it.each([true, false])(
+  "loads the project guide with root instructions available=%s",
+  async (hasRoot) => {
+    const f = fixture();
+    io.canonicalize.mockImplementation(async (path: string) => path);
+    io.readFile.mockImplementation(async (path: string) => {
+      if (path.endsWith("/.voktty/INIT.md"))
+        return {
+          kind: "text",
+          content: "Read CONTEXT.md and leave a handoff.",
+          size: 34,
+        };
+      if (hasRoot) return { kind: "text", content: "Project rules", size: 13 };
+      throw new Error("missing root instructions");
+    });
+    await f.send();
+    const run = io.run.mock.calls[0][0];
+    expect(run.projectMemory).toContain("## .voktty/INIT.md");
+    expect(run.projectMemory).toContain("Read CONTEXT.md and leave a handoff.");
+    expect(run.projectMemory).toContain("respecting read-only requests");
+    expect(run.projectMemory.includes("Project rules")).toBe(hasRoot);
+    expect(io.readFile).toHaveBeenCalledWith(`${f.root}/.voktty/INIT.md`, {
+      kind: "local",
+    });
+  },
+);
+
+it("cancels a request while the project guide is pending", async () => {
+  const f = fixture();
+  const abort = new AbortController();
+  let finish!: (value: unknown) => void;
+  io.canonicalize.mockImplementation(async (path: string) => path);
+  io.readFile.mockImplementation(async (path: string) => {
+    if (path.endsWith("/.voktty/INIT.md"))
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    return { kind: "text", content: "root rules", size: 10 };
+  });
+  const pending = f.send(abort.signal);
+  const outcome = expect(pending).rejects.toThrow("retired");
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  abort.abort();
+  finish({ kind: "text", content: "late guide", size: 10 });
+  await outcome;
+  expect(io.run).not.toHaveBeenCalled();
+});
 
 it("isolates equal project paths on different filesystems", async () => {
   const f = fixture();

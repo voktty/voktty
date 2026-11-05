@@ -230,12 +230,21 @@ export function createContextAwareTransport(deps: Deps) {
           legacyMemoryNamespace = kitMemory.context;
         }
       }
-      const projectMemory = await projectMemoryReader.read(
+      const rootInstructions = await projectMemoryReader.read(
         boundary,
         assertCurrent,
         legacyMemoryNamespace,
       );
       assertCurrent();
+      const guide = await projectMemoryReader.readGuide(
+        boundary,
+        assertCurrent,
+        legacyMemoryNamespace,
+      );
+      assertCurrent();
+      const projectMemory = guide?.trim()
+        ? `${rootInstructions ?? ""}\n\n## .voktty/INIT.md\nRead the referenced project context and relevant handoffs before working. Maintain memory through normal file tools, respecting read-only requests and existing tool approvals.\n${guide}`
+        : rootInstructions;
       const envBlock = formatEnvBlock(live);
       let messagesForRun = envBlock
         ? injectEnvIntoLastUser(submittedMessages, envBlock)
