@@ -39,9 +39,8 @@ pub use publication::{
 pub use storage_diagnostics::{StorageFailure, StorageStage};
 pub use workers::{
     MemoryContextRead, MemoryContextSession, MemoryContextSessionJob, MemoryDeploymentJob,
-    MemoryDeploymentWorkError, MemoryJob, MemoryPolicyError, MemoryPolicyJob, MemoryPolicyReview,
-    MemoryPreviewRequest, MemorySessionUse, MemoryStoreMode, MemoryTrustError, MemoryTrustJob,
-    MemoryTrustReview, MemoryWorkError, MemoryWorkers,
+    MemoryDeploymentWorkError, MemoryJob, MemoryPreviewRequest, MemorySessionUse, MemoryStoreMode,
+    MemoryTrustError, MemoryTrustJob, MemoryTrustReview, MemoryWorkError, MemoryWorkers,
 };
 #[cfg(not(any(unix, windows)))]
 mod reader_unavailable;

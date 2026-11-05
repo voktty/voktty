@@ -13,7 +13,6 @@ pub struct NativeMemorySelection {
     deployment: deployment::NativeMemoryDeployment,
     trust_control: Option<trust::TrustControl>,
     context_control: Option<context::ContextControl>,
-    pub(super) policy_control: Option<policy::PolicyControl>,
 }
 
 /// Native-only identity, never a filesystem, instruction or session grant.
@@ -179,7 +178,6 @@ impl NativeMemorySelection {
         self.deployment.clear();
         self.trust_control = None;
         self.context_control = None;
-        self.policy_control = None;
         Ok(context::NativeMemoryContext {
             source,
             native: prepared.native,
@@ -205,7 +203,6 @@ impl NativeMemorySelection {
         self.deployment.clear();
         self.trust_control = None;
         self.context_control = None;
-        self.policy_control = None;
         self.source = None;
         let inspection = inspect_ancestors
             .then(|| native_spelling(&requested))
@@ -237,7 +234,6 @@ impl NativeMemorySelection {
         self.deployment.clear();
         self.trust_control = None;
         self.context_control = None;
-        self.policy_control = None;
         self.source = None;
         true
     }

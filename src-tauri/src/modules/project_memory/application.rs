@@ -357,8 +357,5 @@ mod recovery;
 #[path = "application_trust.rs"]
 mod trust;
 
-#[path = "application_policy.rs"]
-mod policy;
-
 #[path = "application_context.rs"]
 mod context;

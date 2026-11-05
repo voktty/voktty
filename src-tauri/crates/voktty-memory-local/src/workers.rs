@@ -343,10 +343,6 @@ pub use trust::{
     MemoryTrustError, MemoryTrustJob, MemoryTrustReview,
 };
 
-#[path = "policy_workers.rs"]
-mod policy;
-pub use policy::{MemoryPolicyError, MemoryPolicyJob, MemoryPolicyReview};
-
 #[cfg(test)]
 #[path = "workers_tests.rs"]
 mod tests;

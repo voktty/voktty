@@ -251,12 +251,6 @@ pub use trust::{
     NativeMemoryTrustSnapshot, NativeMemoryTrustWrite,
 };
 
-mod policy;
-pub use policy::{
-    NativeMemoryPolicyRead, NativeMemoryPolicyReservation, NativeMemoryPolicyReview,
-    NativeMemoryPolicySnapshot, NativeMemoryPolicyWrite,
-};
-
 mod context;
 pub use context::{
     NativeMemoryContextBinding, NativeMemoryContextReceipt, NativeMemoryContextTarget,

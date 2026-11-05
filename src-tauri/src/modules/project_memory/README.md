@@ -179,9 +179,9 @@ missing bases and links can be repaired without reinitializing preferences.
 `open_preview_store` and its forwarding control methods have been removed.
 The record `.voktty/.initialization.json` and up to three exact migration backups
 remain inside the project, with exclusive creation and cleanup of owned bytes.
-Legacy recovery, trust, policy and the current panel setup still use their prior
-state-dependent flows until adapted. This backend change does not remove the
-wizard or private setup from the user interface.
+Project recovery and the normal panel use project-owned services without private
+setup. Legacy trust and context APIs retain their state-dependent flows pending
+retirement; policy commands and their exclusive native layers have been removed.
 
 `preview_snapshot` returns detached, bounded display data cloned from the ready
 native artifact. It holds no mutation lock after returning and cannot replace
@@ -466,98 +466,19 @@ move, preserved existing targets, independent trust and policy, partial failures
 and the required subsequent review. Other locales use the English fallback.
 Native WebView, Windows and full remote runtime acceptance remain separate gates.
 
-## Native policy ownership
+## Retired policy controls
 
-`NativeMemorySelection` reserves one policy operation before private-state IO.
-Its weak native identity differs from the source and path. A replacement retires
-the original reservation and cancels its current phase. Review starts only once;
-failed admission does not permit reusing that reservation. Exact cancellation
-cannot retire a successor or another selection. Selection replacement, including
-failed capture, presentation close, window retirement and application shutdown
-retire contained policy work.
+Desktop no longer registers `project_memory_review_policy`,
+`project_memory_confirm_policy` or `project_memory_cancel_policy`. Their native
+selection reservations, application forwarding, typed client and exclusive
+workers have been removed. The authenticated helper also rejects the retired
+policy operations before allocating resources or opening private storage.
 
-`NativeMemoryOwners` and `NativeMemoryApplication` forward reservation, review,
-acceptance and cancellation under their original native receipts. No ownership
-mutex spans an await. `open_policy_store` uses only existing application state,
-checks the still-unstarted reservation before and after reading, and preserves
-its original remaining deadline and cancellation. It never initializes identity
-or uses a project as private storage.
-
-The native review retains its exact source authority allocation. Its detached
-snapshot contains the resolved root, project key, immutable requested policy and
-only that project's effective preference. Edited display values cannot replace
-the artifact. Foreign, replaced and retired artifacts cannot accept. Acceptance
-consumes the artifact and transfers the reservation to its new bounded phase
-without renewing the review lifetime. Results and errors check the original
-source and reservation after worker settlement. Already admitted preference
-writes are not rolled back by retirement.
-
-The existing window, presentation and physical worker budgets remain unchanged.
-Linux tests exercise replacement, exact cleanup, foreign ownership, selection
-round trips, native retirement and queued cancellation. The policy IPC below
-exposes these operations through the typed client and manual panel below.
-Exact session permissions and context delivery remain pending.
-Remote policy operations and other native runtimes are not yet qualified.
-
-## Local policy IPC
-
-`project_memory_review_policy` requires the calling presentation, current selection
-and a strict request with an increasing safe-integer `revision` and a `policy`
-string of `manual`, `always` or `never`. The legacy store alias `ask` and client
-roots, digests, grants and session fields are rejected. The choice is captured
-before awaiting. Native reservation precedes noncreating private-state opening;
-the original deadline, source and reservation guard each asynchronous phase.
-Only a complete, unambiguous ready memory scope can produce a policy review.
-
-The schema-1 reply contains an opaque UUID, revision, canonical memory `root`,
-`projectKey`, requested `policy` and that project's effective nullable `preference`.
-It exposes neither installation identity, private root bindings, unrelated
-preferences nor instruction or factual documents. Review performs no preference
-write and does not validate current instruction bytes as trusted.
-
-`project_memory_confirm_policy` accepts only the current selection and ready UUID.
-It consumes the original artifact before admission and changes only its retained
-policy after native scope, identity and revision checks. Admission or acceptance
-failure never restores the token. The schema-1 reply contains only that project's
-persisted `preference`. Concurrent preference changes report `stale` rather than
-rebasing acceptance. Instruction trust, session enables and capture consent
-remain independent; no repository file, tool approval or model is changed.
-
-`project_memory_cancel_policy` uses the request revision, including before a
-review UUID exists. Newer cancellation records a tombstone; stale cancellation
-and asynchronous error cleanup cannot cancel a successor. Command disposal
-retires its exact native weak reservation and cancels its captured IO phase.
-Source, presentation, window and application retirement reject late results and
-errors. The original review lifetime is never renewed, no mutex spans an await,
-and admitted work retains its physical budget until settlement. Retired delivery
-does not roll back an admitted policy write. Errors contain only redacted codes.
-The typed client exposes these commands for existing context consumers. Project
-file management no longer offers a private policy screen.
-
-## Typed policy client
-
-`nativeMemoryPolicy.ts` binds each policy review to its original presentation,
-selection and private receipt object. It captures the requested choice before
-awaiting and retains the native token separately from display data. Known reply
-fields are copied into frozen snapshots; unrelated fields are discarded. Root
-text must be valid Unicode within 4 KiB UTF-8, with no ASCII control characters. UUIDs,
-project keys, digests, revisions, choices and effective preferences are checked.
-These display checks grant no native authority or instruction trust.
-
-Confirmation sends only the retained UUID, coalesces duplicate calls through
-settlement and consumes acceptance on success or failure. A reply must match
-the reviewed project, exact requested policy and unchanged effective trust digest
-before the client reports success. Cancellation retires delivery synchronously,
-sends the original revision and permits cleanup retry after failure. Its boolean
-reply is validated under the original owner. Superseded responses and errors
-cannot affect a successor; selection replacement and close retire policy work.
-
-Policy, trust and deployment share the existing 256 unsettled-request budget,
-including retired operations until their actual IPC settlement. A full budget
-refuses new admission without replacing an admitted review. These JavaScript
-receipts do not acknowledge physical cancellation or roll back native writes.
-Construction starts no IPC, preference mutation, agent or session. Context
-consumers retain their own session and delivery ownership.
+Project initialization, repair, recovery and project-owned context use their
+existing project services without a private policy setup step. Workspace
+access, secret-path protection, nonce checks, bounded work and cleanup ownership
+remain on those services. Existing global preferences are preserved; legacy
+trust and context APIs remain separate pending retirement.
 
 ## Instruction trust IPC
 

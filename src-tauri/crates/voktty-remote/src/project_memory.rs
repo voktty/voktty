@@ -12,9 +12,9 @@ use std::time::Duration;
 use voktty_memory_local::{
     inspect_local_memory_scope, read_local_memory_documents, resolve_local_memory_directory,
     DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, LocalMemoryWorkspace,
-    MemoryContextSession, MemoryPolicyReview, MemorySessionUse, MemoryTrustReview,
-    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, ProjectInitializationRequest,
-    ProjectRecoveryRequest, PublicationError, ReadControl, ReadError,
+    MemoryContextSession, MemorySessionUse, MemoryTrustReview, OwnedProjectInitializationPreview,
+    OwnedProjectRecoveryPreview, ProjectInitializationRequest, ProjectRecoveryRequest,
+    PublicationError, ReadControl, ReadError,
 };
 use voktty_remote_protocol::{RemoteRequest, RemoteResponse};
 use voktty_workspace_kit::RootLinks;
@@ -103,7 +103,6 @@ struct Selection {
     source: Arc<Access>,
     deployment: Review<DeploymentReview>,
     trust: Review<MemoryTrustReview>,
-    policy: Review<MemoryPolicyReview>,
 }
 
 impl Selection {
@@ -356,7 +355,6 @@ impl MemoryServer {
                     source: Arc::new(Access::new(root.to_owned(), requested, inspect_ancestors)),
                     deployment: Review::default(),
                     trust: Review::default(),
-                    policy: Review::default(),
                 });
                 Ok(json!(token))
             }
@@ -655,49 +653,6 @@ impl MemoryServer {
             } => Ok(json!(self
                 .selected(&handle, &selection)?
                 .trust
-                .cancel(revision)?)),
-            Request::ReviewPolicy {
-                handle,
-                selection,
-                revision,
-                policy,
-            } => {
-                let source = {
-                    let selected = self.selected(&handle, &selection)?;
-                    selected.policy.reserve(revision)?;
-                    selected.source.clone()
-                };
-                let policy = wire::policy(&policy)?;
-                let store = self.store(false, &control.read_control()?)?;
-                let review = MemoryPolicyReview::prepare(
-                    store,
-                    source.requested.clone(),
-                    source,
-                    policy,
-                    control,
-                )?;
-                let mut result = json!({"schema":1,"revision":revision,"root":review.root(),
-                    "projectKey":review.project_key(),"policy":review.policy(),"preference":review.preference()});
-                let token = self.selected(&handle, &selection)?.policy.put(review);
-                result["review"] = json!(token);
-                Ok(result)
-            }
-            Request::ConfirmPolicy {
-                handle,
-                selection,
-                review,
-            } => {
-                let review = self.selected(&handle, &selection)?.policy.take(&review)?;
-                self.state_parent(&control.read_control()?)?;
-                Ok(json!({"schema":1,"preference":review.accept(control)?}))
-            }
-            Request::CancelPolicy {
-                handle,
-                selection,
-                revision,
-            } => Ok(json!(self
-                .selected(&handle, &selection)?
-                .policy
                 .cancel(revision)?)),
             Request::ContextOpen {} => {
                 let (id, token) = self.allocate()?;

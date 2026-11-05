@@ -539,6 +539,35 @@ fn strict_parameters_and_limits_reject_before_private_state_or_project_writes() 
 }
 
 #[test]
+fn retired_policy_operations_reject_before_storage_or_resource_allocation() {
+    let (project, private, mut server) = fixture();
+    let old_state = private.path().join("memory-local.json");
+    fs::write(&old_state, "existing private state").unwrap();
+    fs::write(project.path().join("AGENTS.md"), "existing rules").unwrap();
+    let next_id = server.next_id;
+    let handle = json!({"id":1,"token":uuid::Uuid::new_v4().to_string()});
+    let selection = uuid::Uuid::new_v4().to_string();
+    for params in [
+        json!({"operation":"reviewPolicy","handle":handle,"selection":selection,"revision":1,"policy":"always"}),
+        json!({"operation":"confirmPolicy","handle":handle,"selection":selection,"review":uuid::Uuid::new_v4().to_string()}),
+        json!({"operation":"cancelPolicy","handle":handle,"selection":selection,"revision":1}),
+    ] {
+        let reply = server.handle(Some(project.path()), request(params));
+        assert_eq!(reply.error.unwrap().code, "invalid_params");
+        assert_eq!(server.next_id, next_id);
+        assert!(server.presentations.is_empty());
+        assert!(server.contexts.is_empty());
+        assert_eq!(fs::read(&old_state).unwrap(), b"existing private state");
+        assert_eq!(fs::read_dir(private.path()).unwrap().count(), 1);
+        assert_eq!(
+            fs::read(project.path().join("AGENTS.md")).unwrap(),
+            b"existing rules"
+        );
+        assert_eq!(fs::read_dir(project.path()).unwrap().count(), 1);
+    }
+}
+
+#[test]
 fn trust_policy_and_session_consent_remain_independent_and_policy_changes_apply_to_live_context() {
     let (project, _private, mut server) = fixture();
     let root = project.path();
@@ -601,22 +630,19 @@ fn trust_policy_and_session_consent_remain_independent_and_policy_changes_apply_
         true
     );
 
-    let editor = ok(&mut server, root, json!({"operation":"open"}));
-    let selected = select(&mut server, root, &editor, 1);
-    let policy = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewPolicy","handle":editor,"selection":selected,"revision":1,"policy":"never"}),
-    );
-    assert_eq!(policy["preference"]["policy"], "manual");
+    let store = server.store(false, &ReadControl::default()).unwrap();
+    let snapshot = store.load().unwrap();
+    let key = accepted["preference"]["projectKey"].as_str().unwrap();
+    let changed = store
+        .set_policy(
+            snapshot.revision(),
+            key,
+            voktty_memory_local::MemoryPolicy::Never,
+        )
+        .unwrap();
     assert_eq!(
-        policy["preference"]["instructionDigest"],
-        accepted["preference"]["instructionDigest"]
-    );
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"confirmPolicy","handle":editor,"selection":selected,"review":policy["review"]}),
+        changed.project(key).unwrap().instruction_digest.as_deref(),
+        accepted["preference"]["instructionDigest"].as_str()
     );
     let denied = ok(
         &mut server,

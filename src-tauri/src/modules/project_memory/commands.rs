@@ -50,7 +50,6 @@ struct Selected {
     receipt: NativeMemorySelectionReceipt,
     reviews: deployment::CommandReviews,
     trust: trust::CommandTrust,
-    policy: policy::CommandPolicy,
 }
 
 #[derive(Default)]
@@ -153,7 +152,6 @@ impl PresentationResource {
             receipt,
             reviews: deployment::CommandReviews::default(),
             trust: trust::CommandTrust::default(),
-            policy: policy::CommandPolicy::default(),
         });
         Ok(token)
     }
@@ -389,9 +387,6 @@ pub mod deployment;
 
 #[path = "commands_trust.rs"]
 pub mod trust;
-
-#[path = "commands_policy.rs"]
-pub mod policy;
 
 #[path = "commands_context.rs"]
 pub mod context;

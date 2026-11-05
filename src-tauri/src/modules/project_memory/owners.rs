@@ -215,8 +215,5 @@ mod recovery;
 #[path = "owner_trust.rs"]
 mod trust;
 
-#[path = "owner_policy.rs"]
-mod policy;
-
 #[path = "owner_context.rs"]
 mod context;

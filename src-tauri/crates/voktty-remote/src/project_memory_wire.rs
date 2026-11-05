@@ -2,8 +2,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use voktty_memory_local::{
-    MemoryPolicy, MemoryPolicyError, MemoryTrustError, MemoryWorkError, PublicationError,
-    ReadError, StoreError,
+    MemoryTrustError, MemoryWorkError, PublicationError, ReadError, StoreError,
 };
 
 #[derive(Clone, Deserialize)]
@@ -111,22 +110,6 @@ pub(super) enum Request {
         selection: String,
         revision: u64,
     },
-    ReviewPolicy {
-        handle: Handle,
-        selection: String,
-        revision: u64,
-        policy: String,
-    },
-    ConfirmPolicy {
-        handle: Handle,
-        selection: String,
-        review: String,
-    },
-    CancelPolicy {
-        handle: Handle,
-        selection: String,
-        revision: u64,
-    },
     ContextOpen {},
     ContextBind {
         handle: Handle,
@@ -215,16 +198,6 @@ impl From<MemoryTrustError> for Error {
     }
 }
 
-impl From<MemoryPolicyError> for Error {
-    fn from(error: MemoryPolicyError) -> Self {
-        match error {
-            MemoryPolicyError::Worker(error) => error.into(),
-            MemoryPolicyError::ScopeUnavailable => Self::new("scope"),
-            MemoryPolicyError::Changed => Self::new("stale"),
-        }
-    }
-}
-
 impl From<PublicationError> for Error {
     fn from(error: PublicationError) -> Self {
         match error {
@@ -240,15 +213,6 @@ impl From<PublicationError> for Error {
             PublicationError::RecoveryRequired(_) => Self::new("recoveryRequired"),
             PublicationError::Io => Self::new("unavailable"),
         }
-    }
-}
-
-pub(super) fn policy(value: &str) -> Result<MemoryPolicy, Error> {
-    match value {
-        "manual" => Ok(MemoryPolicy::Manual),
-        "always" => Ok(MemoryPolicy::Always),
-        "never" => Ok(MemoryPolicy::Never),
-        _ => Err(Error::new("invalidInput")),
     }
 }
 
