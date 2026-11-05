@@ -32,7 +32,20 @@ impl Fixture {
             _owned: owned,
         };
         result(&fixture.run(&["init", "--yes", "--project", ".", "--json"]));
-        result(&fixture.run(&["use", "--manual", "--json"]));
+        let control = ReadControl::default();
+        LocalMemoryStore::prepare_application_parent(&fixture.canonical(), &control).unwrap();
+        let store = LocalMemoryStore::create_private(&fixture.canonical(), &control).unwrap();
+        let snapshot = store.initialize().unwrap();
+        let snapshot = store
+            .set_policy(
+                snapshot.revision(),
+                &"a".repeat(64),
+                voktty_memory_local::MemoryPolicy::Never,
+            )
+            .unwrap();
+        store
+            .trust_instructions(snapshot.revision(), &"a".repeat(64), &"b".repeat(64))
+            .unwrap();
         fixture
     }
 
@@ -65,21 +78,10 @@ fn result(output: &Output) -> Value {
 }
 
 #[test]
-fn cli_uses_the_desktop_store_and_preserves_its_installation_policy_and_trust() {
+fn project_commands_preserve_existing_installation_policy_and_trust() {
     let f = Fixture::new();
     let store = LocalMemoryStore::open_private(&f.canonical(), &ReadControl::default()).unwrap();
     let initial = store.load().unwrap();
-    result(&f.run(&["use", "--never", "--json"]));
-    let review = result(&f.run(&["trust", "--preview", "--json"]));
-    result(&f.run(&[
-        "trust",
-        "--accept-review",
-        review["reviewDigest"].as_str().unwrap(),
-        "--json",
-    ]));
-    let snapshot = store.load().unwrap();
-    assert_eq!(snapshot.installation_id(), initial.installation_id());
-    assert_eq!(snapshot.revision(), initial.revision() + 2);
     let state_path = f.canonical().join("project-memory/memory-local.json");
     let before = fs::read(&state_path).unwrap();
     let status = result(&f.run(&["status", "--json"]));
@@ -89,11 +91,14 @@ fn cli_uses_the_desktop_store_and_preserves_its_installation_policy_and_trust() 
     assert!(launch.status.success(), "{launch:?}");
     assert_eq!(launch.stdout, b"fixture-agent-started");
     assert_eq!(fs::read(state_path).unwrap(), before);
+    let snapshot = store.load().unwrap();
+    assert_eq!(snapshot.installation_id(), initial.installation_id());
+    assert_eq!(snapshot.revision(), initial.revision());
     assert!(!f.legacy().exists());
 }
 
 #[test]
-fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_an_agent() {
+fn project_commands_ignore_legacy_state_without_reading_or_merging_it() {
     for mode in [
         "legacy-only",
         "both",
@@ -105,7 +110,6 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         "file-store",
     ] {
         let f = Fixture::new();
-        result(&f.run(&["use", "--never", "--json"]));
         let state_path = f.canonical().join("project-memory/memory-local.json");
         let original = fs::read(&state_path).unwrap();
         match mode {
@@ -140,20 +144,6 @@ fn legacy_state_blocks_all_private_commands_without_reading_merging_or_starting_
         }
         let legacy_state = f.legacy().join("project-memory/memory-local.json");
         let legacy_before = fs::read(&legacy_state).ok();
-        for args in [
-            vec!["use", "--always", "--json"],
-            vec!["trust", "--preview", "--json"],
-        ] {
-            let output = f.run(&args);
-            assert_eq!(output.status.code(), Some(5), "{mode}: {output:?}");
-            assert!(output.stdout.is_empty());
-            let text = String::from_utf8(output.stderr).unwrap();
-            assert!(
-                text.contains("memory_legacy_state_requires_review"),
-                "{mode}: {args:?}: {text}"
-            );
-            assert!(!text.contains("sentinel"));
-        }
         result(&f.run(&["init", "--preview", "--project", ".", "--json"]));
         let status = result(&f.run(&["status", "--json"]));
         assert_eq!(status["scope"]["state"], "ready");
@@ -200,7 +190,7 @@ fn unrelated_legacy_application_directory_does_not_block_memory() {
         result(&f.run(&["status", "--json"]))["policy"]["mode"],
         Value::Null
     );
-    result(&f.run(&["use", "--never", "--json"]));
+    result(&f.run(&["init", "--preview", "--json"]));
     assert_eq!(
         fs::read(f.legacy().join("unrelated.json")).unwrap(),
         b"unrelated fixture"

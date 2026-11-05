@@ -52,6 +52,7 @@ fn status_works_without_desktop_tty_or_private_state_and_creates_nothing() {
     assert_eq!(value["scope"]["state"], "absent");
     assert_eq!(value["scope"]["ancestryComplete"], true);
     assert_eq!(value["scope"]["descendantsChecked"], false);
+    assert_eq!(value["capabilities"]["persistentPolicy"], false);
     assert_eq!(
         value["capabilities"]["contextDelivery"],
         cfg!(target_os = "linux")
@@ -64,6 +65,38 @@ fn status_works_without_desktop_tty_or_private_state_and_creates_nothing() {
         value["capabilities"]["initialPromptLaunch"]["claudeVersions"],
         json!(["2.1.312"])
     );
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn retired_global_memory_commands_reject_before_project_or_storage_io() {
+    let root = tempfile::tempdir().unwrap();
+    for args in [
+        vec!["memory", "use", "--always", "--json"],
+        vec!["memory", "use", "--never", "--json"],
+        vec!["memory", "trust", "--preview", "--json"],
+        vec![
+            "memory",
+            "trust",
+            "--accept-review",
+            &"a".repeat(64),
+            "--json",
+        ],
+        vec!["memory", "migrate-storage", "--preview", "--json"],
+    ] {
+        let output = cli(root.path(), &args);
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        let error: Value = serde_json::from_slice(&output.stderr).unwrap();
+        assert_eq!(error["error"]["code"], "usage");
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    }
+    let help = cli(root.path(), &["memory", "--help"]);
+    assert!(help.status.success());
+    let text = String::from_utf8(help.stdout).unwrap();
+    for retired in ["memory use", "memory trust", "memory migrate-storage"] {
+        assert!(!text.contains(retired));
+    }
     assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }
 

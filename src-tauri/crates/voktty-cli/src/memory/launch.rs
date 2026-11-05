@@ -6,6 +6,8 @@ use voktty_memory_local::{resolve_local_memory_directory, DiscoveryControl};
 
 #[cfg(target_os = "linux")]
 mod adapters;
+#[cfg(target_os = "linux")]
+mod context_access;
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct RunOptions {
@@ -77,7 +79,8 @@ pub(super) fn run(options: RunOptions, as_json: bool) -> Result<ExitCode, CliErr
 
 #[cfg(target_os = "linux")]
 fn with_memory(root: &std::path::Path, options: &RunOptions) -> Result<ExitCode, CliError> {
-    use super::{resolved_root, trust::TrustReadAccess, MarkerAccess, EXIT_REQUEST};
+    use self::context_access::ProjectReadAccess;
+    use super::{resolved_root, MarkerAccess, EXIT_REQUEST};
     use std::os::fd::AsRawFd;
     use std::os::unix::{
         fs::{MetadataExt, OpenOptionsExt},
@@ -117,7 +120,7 @@ fn with_memory(root: &std::path::Path, options: &RunOptions) -> Result<ExitCode,
             .ok_or_else(|| map_error(ReadError::Unavailable))
     };
     let memory = resolve_scope(&scope)?;
-    let access = TrustReadAccess::new(root.to_owned(), memory.clone());
+    let access = ProjectReadAccess::new(root.to_owned(), memory.clone());
     let project_error = |error: MemoryTrustError| match error {
         MemoryTrustError::Worker(voktty_memory_local::MemoryWorkError::Read(error)) => {
             map_error(error)

@@ -347,7 +347,7 @@ fn explicit_project_context_uses_current_instructions_and_ignores_legacy_policy(
     let f = Fixture::new();
     f.init();
     f.verified_codex();
-    assert!(f.run(&["memory", "use", "--always"]).status.success());
+    seed_policy(&f, voktty_memory_local::MemoryPolicy::Always);
     let before = fs::read(f.state()).unwrap();
     let native = value(&f.run(&["memory", "run", "codex"]));
     assert_eq!(native["args"], serde_json::json!([]));
@@ -357,7 +357,7 @@ fn explicit_project_context_uses_current_instructions_and_ignores_legacy_policy(
     assert!(packet.contains(".voktty/INIT.md"));
     assert_eq!(fs::read(f.state()).unwrap(), before);
     fs::write(f.project.join(".voktty/INIT.md"), "Updated project guide").unwrap();
-    assert!(f.run(&["memory", "use", "--never"]).status.success());
+    seed_policy(&f, voktty_memory_local::MemoryPolicy::Never);
     let before = fs::read(f.state()).unwrap();
     let result = value(&f.run(&["memory", "run", "--session", "codex"]));
     let packet =
@@ -691,4 +691,29 @@ fn project_context_resolves_ancestors_and_rejects_linked_documents_and_ambiguity
     assert_eq!(refused.status.code(), Some(5));
     assert!(refused.stdout.is_empty());
     assert!(!f.data.exists());
+}
+
+fn seed_policy(f: &Fixture, policy: voktty_memory_local::MemoryPolicy) {
+    use voktty_memory_local::{
+        LocalMemoryStore, LocalMemoryWorkspace, MemoryReadAccess, ReadControl,
+    };
+    struct Access(PathBuf);
+    impl MemoryReadAccess for Access {
+        fn allows_metadata(&self, path: &std::path::Path) -> bool {
+            path.starts_with(&self.0)
+        }
+        fn allows_read(&self, path: &std::path::Path) -> bool {
+            self.allows_metadata(path)
+        }
+    }
+    let parent = f.data.join("app.voktty.voktty");
+    let control = ReadControl::default();
+    LocalMemoryStore::prepare_application_parent(&parent, &control).unwrap();
+    let store = LocalMemoryStore::create_private(&parent, &control).unwrap();
+    let snapshot = store.initialize().unwrap();
+    let access = Access(fs::canonicalize(&f.project).unwrap());
+    let workspace = LocalMemoryWorkspace::open(&store, &access.0, &access, &control).unwrap();
+    store
+        .set_policy(snapshot.revision(), workspace.project_key(), policy)
+        .unwrap();
 }

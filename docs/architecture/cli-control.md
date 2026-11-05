@@ -22,11 +22,6 @@ voktty memory init [--project <directory>] [--set <name=value>]...
                    [--preview | --accept-plan <sha256>] [--json]
 voktty memory recover [--project <directory>]
                       --preview | --accept-review <sha256> [--json]
-voktty memory migrate-storage --preview | --accept-review <sha256> [--json]
-voktty memory use --always|--never|--manual [--project <directory>]
-                  [--preview] [--json]
-voktty memory trust [--project <directory>] [--role .voktty/team/roles/<name>.md]
-                    --preview | --accept-review <sha256> [--json]
 voktty memory run [--project <directory>] [--session|--no-memory]
                   codex|claude|agy [-- <agent-args...>]
 ```
@@ -51,51 +46,13 @@ Rust handles `ping`, `capabilities`, authentication, and file validation directl
 
 Status never resolves or opens global memory storage. The native stateless inspector uses invocation-local directory keys for the common pure resolver; these keys are omitted from CLI output and cannot identify a persistent project or grant trust. Missing, inaccessible, corrupt or legacy global state cannot block this observation and remains untouched. The command creates no application directories, installation identity, preference locks or project files. Policy reports `{"state":"not_checked","mode":null}` and trust reports `not_checked`, including for a ready kit.
 
-Remaining state-dependent CLI memory commands use the fixed `app.voktty.voktty/project-memory` directory beneath the native local application-data directory, matching Desktop. Earlier builds used `dev.voktty/project-memory`. An existing legacy entry, including empty, corrupt or linked state, refuses with `memory_legacy_state_requires_review` and exit 5 before opening either store. Inaccessible, linked or non-directory legacy application parents also refuse inspection. An ordinary legacy application directory without a `project-memory` entry does not block memory. Explicit `migrate-storage` is the only operation that moves legacy state; state-dependent commands never move, merge or discard installation identities, recovery journals, policies or trust. Project initialization, recovery and agent launch do not inspect either global origin. After reviewed migration, a qualified permanent legacy marker permits the matching canonical store. Automatic migration is unavailable. Desktop retains its existing origin and behavior. `memory measure`, help and all `memory run` modes remain independent of private state. The identifier equality is checked against the actual Desktop configuration by a regression test; platform bases remain native local data, including LocalAppData on Windows rather than roaming data.
+All current CLI memory commands use project files without resolving or opening global memory storage. The former `use`, `trust` and `migrate-storage` commands are removed and reject as usage errors before IO. Existing global installations, identities, preferences, trust digests and journals remain untouched; no migration or deletion is performed. Status retains the schema-1 policy/trust fields as not checked for compatibility and advertises `persistentPolicy: false`.
 
-The command never prints instruction text, persistent project keys, installation IDs or other projects' preferences. Capabilities still describe the existing command surface, including persistent policy management and Linux initial-prompt delivery; policy/trust commands retain global dependencies pending retirement. `initialPromptLaunch` qualifies delivery by platform and adapter version; it does not probe the installed agent or grant permission. Capture, managed resume and compaction remain unavailable.
+The command never prints instruction text, persistent project keys, installation IDs or other projects' preferences. `initialPromptLaunch` qualifies delivery by platform and adapter version; it does not probe the installed agent or grant permission. Capture, managed resume and compaction remain unavailable.
 
 With `--json`, stdout contains `{ "ok": true, "result": { "schema": 1, ... } }` for a completed observation. The result includes `transport`, canonical `directory`, a uniquely resolved `root` or null, `scope`, `policy`, `trust` and `capabilities`. `scope` includes state, ancestry completeness, ancestor-kit paths, blocked count and `descendantsChecked: false`. An ambiguous scope lists every observed ancestor kit and returns no selected root. Exit 0 means a complete `ready`, `absent` or `reserved` observation; exit 5 means an invalid, partial, ambiguous or incomplete scope, with the observation still on stdout. Usage errors exit 2; unavailable or refused native/state IO exits 3. Errors use the existing `{ "ok": false, "error": { "code", "message" } }` stderr envelope with redacted messages. `memory --help` describes the currently available command; unsupported subcommands fail before filesystem or control-plane IO.
 
 The local binary does not translate `remote://`, UNC, WSL or Docker destinations into local paths. Running a compatible CLI inside another environment uses that process's own native filesystem and installation state; it does not borrow the desktop's authorization or state. Native Windows and macOS runtime qualification remains required.
-
-## Explicit private storage migration
-
-`memory migrate-storage` acts on this execution machine's complete legacy memory
-installation, including every project's stored preference. It requires exactly
-one `--preview` or `--accept-review <sha256>`, including on a TTY. There is no
-project selection, application-path override, force or blind acceptance option.
-Linux and Android have the native atomic exchange implementation; other platforms
-refuse before storage IO. Linux runtime tests qualify the implemented flow;
-Android, other platforms and additional filesystems remain unqualified.
-
-Preview opens only existing legacy state. It can acquire/create the ordinary
-preference and deployment lock files, but creates no destination, identity or
-project files. Its schema-1 result includes `reviewDigest`, policy counts, stored
-instruction-digest count, journal presence and pending-reservation status.
-Installation IDs, project keys, account paths and file bodies are not printed.
-Journal presence does not certify its validity for later project recovery.
-
-Acceptance requires the matching fresh native review. It preserves the directory
-and file objects, installation identity, exact preferences and journal bytes,
-including Never and accepted instruction digests. It grants no new trust, session
-permission, tools, context delivery or captures. An existing destination memory
-directory, even an empty one, blocks migration; two installations are never
-merged. Unknown artifacts, corrupt preferences, links, hardlinks, unsafe
-permissions, changed facts and unavailable filesystem identity block without
-discarding data. The destination application directory's unrelated files remain
-untouched. See the [native origin contract](../../src-tauri/crates/voktty-memory-local/ORIGIN.md).
-
-The single directory exchange leaves a permanent marker at the legacy memory
-path, blocking old writers. Keep this marker. A qualified interrupted reservation
-can be reviewed again and completed. There is no automatic rollback or cleanup
-of foreign or invalid artifacts. Errors after admission report
-`applicationParentMayExist`, `reservationCreated` and `stateMoved`; a failure
-does not prove that nothing changed. Reload before retrying. Usage errors exit 2,
-native preparation errors use the existing redacted errors and exit 3, and a
-changed acceptance or admitted failure exits 5 with one stderr error envelope.
-Successful preview or migration exits 0. JSON success flags separately report
-`stateMoved` and false policy, trust, project-file, context and capture changes.
 
 ## Standalone memory initialization
 
@@ -109,7 +66,7 @@ The digest covers the native origin and destination bindings, explicit-project-r
 
 Initialization targets the explicitly selected project root without recursively inspecting dependencies or selecting an ancestor kit. Separate parent and child projects remain independent; scope discovery for context use is a separate operation. The native publisher serializes its process-local admission and exclusively creates `.voktty/.initialization.json` to prevent concurrent cooperating publications. It retains no-replace creation, platform-specific migrations, marker ordering and changed-byte checks. The temporary project record and exact backups are cleaned after success. An interruption preserves them and blocks a fresh initialization for recovery; this command does not interpret or delete old global journals. Linux process tests cover the flow; other native platform runtime qualification remains outstanding.
 
-Successful `--json` output retains the schema-1 result envelope with root, plan digest and acknowledged `created`, `skipped`, `migrated` and `cleaned` paths, including the temporary record when used. `contextActivated`, `capturesActivated` and `policyChanged` remain false: initialization starts no model and never accesses policy or trust. A publication failure exits 5 with one redacted stderr error and acknowledged changes plus possible recovery paths. Partial project files remain; failure is not proof that no write occurred. Reload and obtain a fresh review before retrying. CLI use/trust and the remaining Desktop/helper context integrations still retain global-state dependencies until adapted.
+Successful `--json` output retains the schema-1 result envelope with root, plan digest and acknowledged `created`, `skipped`, `migrated` and `cleaned` paths, including the temporary record when used. `contextActivated`, `capturesActivated` and `policyChanged` remain false: initialization starts no model and never accesses policy or trust. A publication failure exits 5 with one redacted stderr error and acknowledged changes plus possible recovery paths. Partial project files remain; failure is not proof that no write occurred. Reload and obtain a fresh review before retrying. Desktop and helper retain separate legacy state APIs pending retirement; project-only context bindings do not use them.
 
 ## Standalone project initialization recovery
 
@@ -168,30 +125,7 @@ Linux process tests cover native recovery, complete literal review, terminal
 escaping, exact acceptance, metadata, preserved context/sessions, unusable global
 origins, untouched old data, changed project facts and a live record lock.
 Other native platforms and filesystems require runtime qualification. Desktop and
-SSH helper recovery callers retain their previous private-journal contract until
-adapted.
-
-## Persistent memory policy
-
-`memory use` requires exactly one explicit `--always`, `--never` or `--manual` choice. The selected directory defaults to the process cwd; `--project` selects another native local directory. The command resolves a single valid ancestor kit before opening private state. Missing, reserved, invalid, ambiguous or incomplete scopes fail without initializing state or changing preferences. Unresolved environments never fall back to the desktop filesystem. Once a valid scope is established, the command may explicitly initialize the same native private installation state used by the panel.
-
-The CLI calls `MemoryPolicyReview::prepare` and its consuming `accept` method synchronously, without creating an async runtime. The desktop worker delegates to those same native operations while retaining its existing admission, cancellation and settlement wrapper. Reviews retain the original root instances, installation, preference snapshot and two-minute lifetime. Scope and root checks run again before storing by revision compare-and-swap; changed roots or concurrent preferences require another review. An IO error after admission may occur after a policy write has completed, so reload status before retrying.
-
-`--preview` reports the resolved root, prior and requested modes, and stored-trust status without accepting the choice. It may initialize previously absent private installation state, but creates no project preference. Explicit mode flags apply without a second terminal prompt and work without a TTY or running Desktop. The policy is local to this machine and native project root, outside Git. Choosing a policy preserves valid existing instruction trust, never reads or accepts new instruction bytes, grants no session/capture permission and starts no model. `stored_not_checked` does not confirm that current instructions match the accepted digest. Existing linked rules and context already delivered to a runtime remain outside this policy change's removal authority.
-
-Successful JSON output uses the existing `ok/result` envelope with schema 1, canonical memory `root`, `scope: "project-on-this-machine"`, `previousMode`, `mode`, `policyStored` and `trust`. `contextActivated`, `capturesActivated` and `projectFilesChanged` are false. Preview has `policyStored: false`; successful acceptance has `policyStored: true`. Usage errors exit 2, unavailable native/state IO exits 3, and unavailable or changed review scopes exit 5. No private project keys, installation IDs or unrelated preferences enter the output. The command cannot erase an admitted write or reset corrupt state automatically.
-
-`--session` in `memory use` requires an addressable existing conversation and is rejected before filesystem or private-state IO, with an action to use Project Memory in that conversation. For a new qualified launch, `memory run --session` reads the project under ordinary native authorization instead. Neither path stores a global choice disguised as temporary permission.
-
-## Standalone instruction trust
-
-`memory trust` requires exactly one of `--preview` or `--accept-review <sha256>`. It uses the process directory or `--project` and accepts an optional exact `.voktty/team/roles/<name>.md` path; names contain only lowercase ASCII letters, digits and hyphens. Invalid options fail before IO. The CLI first resolves one ready kit with complete ancestor discovery. Only that resolved root receives instruction-read authority, alongside the original execution directory and metadata-only ancestor markers. Shared native path, link, filesystem, size and lifetime checks remain in force.
-
-Preview displays the complete native instruction inventory and configuration, including selected role and existing root rules. It excludes factual `PROJECT.md`/`CONTEXT.md`, installation identity, persistent project keys and unrelated preferences. Human previews escape terminal controls and bidi overrides; JSON retains literal content through normal JSON escaping. Explicit preview may initialize private installation state, but creates no project preference or project files.
-
-`reviewDigest` hashes a versioned native review binding: original execution root and memory root identities and birth instances, installation, preference revision, configuration and instruction fingerprint including role. Use the same execution directory and role when accepting. A replaced root, changed configuration or instructions, changed role or any preference revision requires another preview. Factual context changes alone do not require instruction trust again. The hash is an explicit acceptance check, not delivery authority or a token with its own expiration. Each invocation constructs a fresh native review with the existing two-minute lifetime; consuming acceptance rechecks scope, root instances, installation, preferences and current instructions before the native compare-and-swap write. Desktop workers delegate to the same synchronous preparation and acceptance while retaining their admission and retirement wrapper.
-
-Acceptance stores only this machine's root-bound instruction digest, preserves use policy including `never`, grants no tools or session permission, and delivers no context or captures. Successful schema-1 JSON uses the normal `ok/result` envelope with `root`, `reviewDigest`, `trustStored`, and false `policyChanged`, `contextActivated`, `capturesActivated` and `projectFilesChanged`. Preview additionally includes `config` and `instructions`, with `trustStored: false`. Usage errors exit 2; native/state IO errors exit 3; unavailable or changed review scopes exit 5. Errors redact file contents and private state. Linux process tests cover this flow; native Windows and macOS runtime qualification remains outstanding.
+SSH helper recovery use the same project-record contract.
 
 ## Standalone memory measurement
 

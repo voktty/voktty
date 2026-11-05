@@ -1,8 +1,8 @@
 # Native memory origin and reviewed migration
 
 `resolve_memory_application_parent` receives the native local application-data
-base, never repository configuration, a webview path or a remote request. CLI
-and SSH helper use the fixed `app.voktty.voktty` application identifier. Desktop
+base, never repository configuration, a webview path or a remote request. The
+legacy SSH helper state path uses the fixed `app.voktty.voktty` application identifier. Desktop
 uses its existing matching native origin. The resolver creates no directories
 or identity and does not grant filesystem, instruction or session authority.
 Callers still qualify the complete application chain before state IO.
@@ -19,7 +19,8 @@ Linux/Android expose `OriginMigrationReview`. Other platforms retain refusal;
 there is no ordinary-rename or copy fallback. Native Windows/macOS and Android
 runtime qualification remain required. The API's base has the same native-origin
 precondition as the resolver. It does not accept a selected project or an
-arbitrary source/destination pair. CLI supplies the native data resolver.
+arbitrary source/destination pair. The CLI no longer exposes storage migration;
+this native API remains for legacy callers pending retirement.
 
 Preparation opens existing qualified legacy state and acquires the existing
 deployment and preference locks without waiting. It may create those ordinary

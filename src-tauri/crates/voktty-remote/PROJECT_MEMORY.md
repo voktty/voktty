@@ -112,11 +112,10 @@ operations with `legacyStateRequiresReview`; neither store is opened or created.
 A linked, inaccessible or non-directory legacy application parent also blocks.
 An ordinary legacy application directory without project-memory does not block.
 Ordinary helper requests never move, merge or discard identity, policy, trust or
-an interrupted journal. On Linux/Android, a separately invoked native CLI can
-review and accept `memory migrate-storage` on that host. Its permanent private
-marker is accepted only for the matching canonical directory and parent
-instances. It blocks old writers; it is not permission to merge installations or
-copy consent from another machine. Other platforms have no migration fallback.
+an interrupted journal. The CLI no longer exposes private storage migration.
+Project-only initialization, recovery and context do not inspect either origin.
+Existing qualified migration markers remain relevant only to legacy state
+operations; they are not project authorization or consent from another machine.
 Do not delete legacy state or a migration marker to bypass a refusal. See
 [the native origin contract](../voktty-memory-local/ORIGIN.md). Marker inspection
 and empty resource reservation create neither that directory nor an identity.
