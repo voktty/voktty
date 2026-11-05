@@ -35,14 +35,7 @@ it("starts no IPC until selected and never initializes state during discovery", 
     "project_memory_select",
     "project_memory_discover",
   ]);
-  await owner.initializeLocalState(selected);
-  expect(invoke).toHaveBeenLastCalledWith(
-    "project_memory_initialize_local_state",
-    {
-      handle,
-      selection: "selected-token",
-    },
-  );
+  expect("initializeLocalState" in owner).toBe(false);
   await owner.close();
 });
 
@@ -114,7 +107,7 @@ it("suppresses retired results and errors without issuing later initialization",
     if (reject) read.reject({ code: "unavailable" });
     else read.resolve(scope);
     await result;
-    await expect(owner.initializeLocalState(selected)).rejects.toMatchObject({
+    await expect(owner.discover(selected)).rejects.toMatchObject({
       code: "cancelled",
     });
     expect(

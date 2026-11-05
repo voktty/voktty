@@ -248,11 +248,11 @@ blocked paths, local preferences, installation identity and instructions remain
 native. Missing or invalid state is an error, never evidence of an absent kit.
 Errors contain a redacted `code`, not observed content or paths.
 
-`project_memory_initialize_local_state` is a separate explicit action under the
-same current selection. It prepares only the application's private state, never
-project files or a kit. Selection retirement before later stages prevents their
-admission; retirement after an admitted write suppresses delivery without
-promising rollback. Both operations revalidate before returning.
+`project_memory_initialize_local_state` has been removed from Desktop and the
+typed client. The helper rejects the former `initialize` operation before
+resource allocation or storage access. Its legacy storage reader only opens
+existing data; initialization is confined to test fixtures. Project file
+initialization uses the project publisher and never needs private setup.
 
 The typed client in `workspace-kit/lib/nativeMemory.ts` starts no IPC until an
 explicit selection, captures its environment and maintains those revisions.

@@ -466,10 +466,11 @@ it("uses SSH for the shared indicator and never initializes private state during
 });
 
 it.each([target, namespace, connectedNamespace])(
-  "rejects retired policy commands before allocating SSH resources for $source",
+  "rejects retired setup and policy commands before allocating SSH resources for $source",
   async (input) => {
     const owner = client(input);
     for (const method of [
+      "initializeLocalState",
       "reviewPolicy",
       "confirmPolicy",
       "cancelPolicy",
@@ -478,6 +479,12 @@ it.each([target, namespace, connectedNamespace])(
       expect(method in owner).toBe(false);
     const transport = createRemoteMemoryTransport(input);
     transports.push(transport);
+    await expect(
+      transport.invoke("project_memory_initialize_local_state", {
+        handle,
+        selection: "selection",
+      }),
+    ).rejects.toMatchObject({ code: "unsupported" });
     for (const action of ["review", "confirm", "cancel"])
       await expect(
         transport.invoke(`project_memory_${action}_policy`, {

@@ -69,11 +69,7 @@ fn preview(
 }
 
 fn initialize(server: &mut MemoryServer, root: &Path, handle: &Value, selection: &Value) {
-    ok(
-        server,
-        root,
-        json!({"operation":"initialize","handle":handle,"selection":selection}),
-    );
+    super::setup_tests::seed_store(server, &ReadControl::default());
     let review = preview(server, root, handle, selection, 1);
     assert_eq!(review["deployment"]["canPublish"], true);
     ok(
@@ -257,11 +253,7 @@ fn invalid_reselection_and_reset_retire_old_reviews_and_never_publish_to_a_new_o
     let root = project.path();
     let handle = ok(&mut server, root, json!({"operation":"open"}));
     let selection = select(&mut server, root, &handle, 1);
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"initialize","handle":handle,"selection":selection}),
-    );
+
     let review = preview(&mut server, root, &handle, &selection, 1);
     error(
         &mut server,
@@ -332,11 +324,7 @@ fn review_rechecks_changed_bytes_and_consumes_failed_publication() {
     let root = project.path();
     let handle = ok(&mut server, root, json!({"operation":"open"}));
     let selection = select(&mut server, root, &handle, 1);
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"initialize","handle":handle,"selection":selection}),
-    );
+
     let review = preview(&mut server, root, &handle, &selection, 1);
     fs::create_dir(root.join(".voktty")).unwrap();
     fs::write(root.join(".voktty/PROJECT.md"), "External replacement").unwrap();
@@ -539,7 +527,7 @@ fn strict_parameters_and_limits_reject_before_private_state_or_project_writes() 
 }
 
 #[test]
-fn retired_policy_operations_reject_before_storage_or_resource_allocation() {
+fn retired_setup_and_policy_operations_reject_before_storage_or_resource_allocation() {
     let (project, private, mut server) = fixture();
     let old_state = private.path().join("memory-local.json");
     fs::write(&old_state, "existing private state").unwrap();
@@ -548,6 +536,7 @@ fn retired_policy_operations_reject_before_storage_or_resource_allocation() {
     let handle = json!({"id":1,"token":uuid::Uuid::new_v4().to_string()});
     let selection = uuid::Uuid::new_v4().to_string();
     for params in [
+        json!({"operation":"initialize","handle":handle,"selection":selection}),
         json!({"operation":"reviewPolicy","handle":handle,"selection":selection,"revision":1,"policy":"always"}),
         json!({"operation":"confirmPolicy","handle":handle,"selection":selection,"review":uuid::Uuid::new_v4().to_string()}),
         json!({"operation":"cancelPolicy","handle":handle,"selection":selection,"revision":1}),
@@ -630,7 +619,7 @@ fn trust_policy_and_session_consent_remain_independent_and_policy_changes_apply_
         true
     );
 
-    let store = server.store(false, &ReadControl::default()).unwrap();
+    let store = server.store(&ReadControl::default()).unwrap();
     let snapshot = store.load().unwrap();
     let key = accepted["preference"]["projectKey"].as_str().unwrap();
     let changed = store
@@ -664,11 +653,7 @@ fn cancellation_fences_out_of_order_reviews_and_changed_instructions_cannot_be_t
     let root = project.path();
     let handle = ok(&mut server, root, json!({"operation":"open"}));
     let selection = select(&mut server, root, &handle, 1);
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"initialize","handle":handle,"selection":selection}),
-    );
+    super::setup_tests::seed_store(&server, &ReadControl::default());
     ok(
         &mut server,
         root,
@@ -706,7 +691,7 @@ fn cancellation_fences_out_of_order_reviews_and_changed_instructions_cannot_be_t
         "cancelled",
     );
     let snapshot = server
-        .store(false, &ReadControl::default())
+        .store(&ReadControl::default())
         .unwrap()
         .load()
         .unwrap();

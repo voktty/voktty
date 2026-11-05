@@ -293,9 +293,6 @@ export function createNativeMemoryPresentation(transport?: MemoryTransport) {
       capture(receipt);
       return result;
     },
-    initializeLocalState(receipt: NativeMemorySelection) {
-      return request<void>("project_memory_initialize_local_state", receipt);
-    },
     async preview(
       receipt: NativeMemorySelection,
       input: NativeMemoryPreviewInput,

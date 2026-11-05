@@ -24,7 +24,7 @@ fn live_helper_recognizes_only_the_reviewed_marker_without_resetting_identity() 
     let handle = helper.ok(json!({"operation":"open"}));
     let selection = helper.ok(json!({"operation":"select","handle":handle,"path":root,"revision":1,"inspectAncestors":true}));
     assert_eq!(
-        helper.memory(json!({"operation":"initialize","handle":handle,"selection":selection}))
+        helper.memory(json!({"operation":"discover","handle":handle,"selection":selection}))
             ["error"]["code"],
         "legacyStateRequiresReview"
     );
@@ -32,7 +32,6 @@ fn live_helper_recognizes_only_the_reviewed_marker_without_resetting_identity() 
     let review = OriginMigrationReview::prepare(data, &control).unwrap();
     let digest = review.digest().to_owned();
     review.accept(&digest, &control).unwrap();
-    helper.ok(json!({"operation":"initialize","handle":handle,"selection":selection}));
     let discovered =
         helper.ok(json!({"operation":"discover","handle":handle,"selection":selection}));
     assert_eq!(discovered["scope"]["state"], "absent");

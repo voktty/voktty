@@ -356,7 +356,6 @@ pub fn run() {
             project_memory::commands::project_memory_select,
             project_memory::commands::project_memory_discover,
             project_memory::commands::documents::project_memory_documents,
-            project_memory::commands::project_memory_initialize_local_state,
             project_memory::commands::deployment::project_memory_preview,
             project_memory::commands::deployment::project_memory_confirm_preview,
             project_memory::commands::deployment::project_memory_cancel_preview,

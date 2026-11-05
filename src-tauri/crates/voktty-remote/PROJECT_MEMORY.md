@@ -35,7 +35,6 @@ Older helpers without this optional field retain their existing error behavior.
 | `close` | `handle` | Release exactly that presentation |
 | `inspect` | `handle`, `selection` | Read bounded markers without private state or instruction bodies |
 | `discover` | `handle`, `selection` | Discover using existing private settings without initializing them |
-| `initialize` | `handle`, `selection` | Explicitly prepare private host settings; no project writes or trust |
 | `preview` | `handle`, `selection`, `revision`, `inputs`, `links` | Retain an exact native initialization review at the selected directory |
 | `confirm` | `handle`, `selection`, `review` | Consume and publish that review after native revalidation |
 | `cancel` | `handle`, `selection`, `revision` | Retire the matching initialization review or fence an earlier arrival |
@@ -46,9 +45,6 @@ Older helpers without this optional field retain their existing error behavior.
 | `reviewTrust` | `handle`, `selection`, `revision`; optional `role` | Display native instructions and retain their exact review |
 | `confirmTrust` | `handle`, `selection`, `review` | Accept only that native instruction review |
 | `cancelTrust` | `handle`, `selection`, `revision` | Retire or fence a trust review |
-| `reviewPolicy` | `handle`, `selection`, `revision`, `policy` | Retain a native `manual`, `always` or `never` policy review |
-| `confirmPolicy` | `handle`, `selection`, `review` | Consume the exact policy review without granting trust or session consent |
-| `cancelPolicy` | `handle`, `selection`, `revision` | Retire or fence a policy review |
 | `contextOpen` | none | Reserve an empty context owner |
 | `contextBind` | `handle`, `selection`, `review`, `context`, `mode` | Consume a fresh trust review and move its source into the context owner |
 | `contextBindProject` | `schema: 2`, `handle`, `selection`, `context` | Bind the captured project source without global storage or instruction trust |
@@ -56,6 +52,12 @@ Older helpers without this optional field retain their existing error behavior.
 | `contextClose` | `context` | Retire only that context and release its resources |
 
 Handles contain a positive unsigned 32-bit `id` and a random UUID-v4 `token`.
+The former `initialize`, `reviewPolicy`, `confirmPolicy` and `cancelPolicy`
+operations are removed. They fail as `invalid_params` before operation admission,
+resource allocation or private storage access. Project initialization uses
+`preview` and `confirm` without a private setup step. The legacy storage reader
+only opens existing state; it never creates an installation or preferences.
+
 IDs increase without reuse; exhaustion rejects new resources with `limit`.
 Selection and review tokens are independently generated UUIDs. A helper admits at most 64
 combined presentations and contexts. Selection and review revisions increase

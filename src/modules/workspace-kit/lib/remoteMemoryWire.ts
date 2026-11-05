@@ -35,8 +35,6 @@ export function remoteMemoryRequest(
         operation: args.inspectionOnly === true ? "inspect" : "discover",
         ...selected,
       };
-    case "project_memory_initialize_local_state":
-      return { operation: "initialize", ...selected };
     case "project_memory_documents":
       return {
         operation: "documents",

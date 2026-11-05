@@ -50,10 +50,6 @@ pub(super) enum Request {
         handle: Handle,
         selection: String,
     },
-    Initialize {
-        handle: Handle,
-        selection: String,
-    },
     Preview {
         handle: Handle,
         selection: String,

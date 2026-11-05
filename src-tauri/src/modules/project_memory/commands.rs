@@ -368,20 +368,6 @@ async fn inspect(
     scope_reply(result?)
 }
 
-#[tauri::command]
-pub async fn project_memory_initialize_local_state(
-    window: WebviewWindow,
-    app: State<'_, NativeMemoryApplication>,
-    handle: PresentationHandle,
-    selection: String,
-) -> Result<(), setup::MemorySetupError> {
-    let resource = presentation(&window, &handle)?;
-    setup::initialize(&app, &resource, &selection).await
-}
-
-#[path = "commands_setup.rs"]
-mod setup;
-
 #[path = "commands_deployment.rs"]
 pub mod deployment;
 

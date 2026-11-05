@@ -42,7 +42,7 @@ impl Fixture {
         fs::create_dir_all(root.join(".voktty/sessions")).unwrap();
         fs::write(root.join(".voktty/sessions/kept.json"), "reserved fixture").unwrap();
         fs::write(root.join(".voktty/.gitignore"), b"*\r\n").unwrap();
-        let _store = server.store(true, &ReadControl::default()).unwrap();
+        let _store = super::setup_tests::seed_store(&server, &ReadControl::default());
         let source = Arc::new(Access::new(root.to_owned(), root.to_owned(), true));
         let preview = OwnedProjectInitializationPreview::prepare_at_project_root(
             ProjectInitializationRequest {

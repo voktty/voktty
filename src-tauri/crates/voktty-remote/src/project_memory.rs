@@ -215,11 +215,7 @@ impl MemoryServer {
             .ok_or(Error::new("cancelled"))
     }
 
-    fn store(
-        &self,
-        initialize: bool,
-        control: &ReadControl,
-    ) -> Result<Arc<LocalMemoryStore>, Error> {
+    fn store(&self, control: &ReadControl) -> Result<Arc<LocalMemoryStore>, Error> {
         let parent = self.state_parent(control)?;
         let parent = parent.as_path();
         let control = control.clone().with_storage_diagnostics();
@@ -232,24 +228,13 @@ impl MemoryServer {
             }));
             error
         };
-        if initialize {
-            LocalMemoryStore::prepare_application_parent(parent, &control)
-        } else {
-            LocalMemoryStore::check_application_parent(parent, &control)
-        }
-        .map_err(|error| diagnostic(error, voktty_memory_local::StorageStage::ApplicationParent))?;
-        let store = if initialize {
-            LocalMemoryStore::create_private(parent, &control)
-        } else {
-            LocalMemoryStore::open_private(parent, &control)
-        }
-        .map_err(|error| diagnostic(error, voktty_memory_local::StorageStage::PrivateDirectory))?;
-        if initialize {
-            store.initialize()
-        } else {
-            store.load()
-        }
-        .map_err(|error| {
+        LocalMemoryStore::check_application_parent(parent, &control).map_err(|error| {
+            diagnostic(error, voktty_memory_local::StorageStage::ApplicationParent)
+        })?;
+        let store = LocalMemoryStore::open_private(parent, &control).map_err(|error| {
+            diagnostic(error, voktty_memory_local::StorageStage::PrivateDirectory)
+        })?;
+        store.load().map_err(|error| {
             diagnostic(
                 ReadError::Store(error),
                 voktty_memory_local::StorageStage::Preferences,
@@ -377,14 +362,9 @@ impl MemoryServer {
                     json!({"schema":1,"scope":observed.scope,"root":memory,"blockedCount":observed.blocked_paths.len()}),
                 )
             }
-            Request::Initialize { handle, selection } => {
-                self.selected(&handle, &selection)?;
-                self.store(true, &control.read_control()?)?;
-                Ok(Value::Null)
-            }
             Request::Discover { handle, selection } => {
                 let source = self.selected(&handle, &selection)?.source.clone();
-                let store = self.store(false, &control.read_control()?)?;
+                let store = self.store(&control.read_control()?)?;
                 let workspace = LocalMemoryWorkspace::open(
                     &store,
                     &source.requested,
@@ -619,7 +599,7 @@ impl MemoryServer {
                     selected.trust.reserve(revision)?;
                     selected.source.clone()
                 };
-                let store = self.store(false, &control.read_control()?)?;
+                let store = self.store(&control.read_control()?)?;
                 let review = MemoryTrustReview::prepare(
                     store,
                     source.requested.clone(),

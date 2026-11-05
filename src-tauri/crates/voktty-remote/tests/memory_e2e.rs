@@ -148,7 +148,18 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
     let scope = helper.ok(json!({"operation":"inspect","handle":handle,"selection":selection}));
     assert_eq!(scope["scope"]["state"], "reserved");
     assert!(!data.exists());
-    helper.ok(json!({"operation":"initialize","handle":handle,"selection":selection}));
+    assert_eq!(
+        helper
+            .request(
+                METHOD_MEMORY_MANAGE,
+                json!({"operation":"initialize","handle":handle,"selection":selection})
+            )
+            .error
+            .unwrap()
+            .code,
+        "invalid_params"
+    );
+    assert!(!data.exists());
     let preview = helper.ok(json!({"operation":"preview","handle":handle,"selection":selection,"revision":1,
         "inputs":{"project_name":"Helper integration","project_summary":"Memory over framed transport","owner_title":"Owner","primary_branch":"main",
         "verify_commands":"cargo test","language":"English","created_at":"2026-11-02","default_runtime":"codex","default_model":"default"},
@@ -163,6 +174,14 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
         .unwrap()
         .iter()
         .any(|file| file["path"] == ".voktty/PROJECT.md"));
+    assert!(!data.exists());
+    let control = ReadControl::default();
+    let parent = data.join("app.voktty.voktty");
+    LocalMemoryStore::prepare_application_parent(&parent, &control).unwrap();
+    LocalMemoryStore::create_private(&parent, &control)
+        .unwrap()
+        .initialize()
+        .unwrap();
     let trust = helper
         .ok(json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}));
     helper.ok(json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":trust["review"]}));
@@ -349,18 +368,21 @@ fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
     let inspection =
         helper.ok(json!({"operation":"inspect","handle":handle,"selection":selection}));
     assert_eq!(inspection["scope"]["state"], "absent");
-    for operation in ["initialize", "discover"] {
-        let extra = json!({});
-        let mut params = json!({"operation":operation,"handle":handle,"selection":selection});
-        params
-            .as_object_mut()
+    assert_eq!(
+        helper
+            .request(
+                METHOD_MEMORY_MANAGE,
+                json!({"operation":"initialize","handle":handle,"selection":selection})
+            )
+            .error
             .unwrap()
-            .extend(extra.as_object().unwrap().clone());
-        assert_eq!(
-            helper.memory(params),
-            json!({"schema":1,"ok":false,"error":{"code":"legacyStateRequiresReview"}})
-        );
-    }
+            .code,
+        "invalid_params"
+    );
+    assert_eq!(
+        helper.memory(json!({"operation":"discover","handle":handle,"selection":selection})),
+        json!({"schema":1,"ok":false,"error":{"code":"legacyStateRequiresReview"}})
+    );
     assert_eq!(helper.memory(json!({"operation":"reviewRecovery","schema":2,"handle":handle,"selection":selection,"revision":1}))["error"]["code"], "unavailable");
     helper.ok(json!({"operation":"close","handle":handle}));
     assert_eq!(
