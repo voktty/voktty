@@ -311,7 +311,7 @@ it("captures the saved source before any delayed load and never adopts a new pro
 });
 
 it.each([target, namespace, connectedNamespace])(
-  "renders SSH trust and policy effects for $source",
+  "shows SSH project files without private settings controls for $source",
   async (input) => {
     initialized = true;
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -323,59 +323,29 @@ it.each([target, namespace, connectedNamespace])(
         root.render(createElement(ProjectMemoryPanel, { target: input })),
       );
       expect(element.textContent).toContain("projectMemory.found");
-      expect(element.textContent).not.toContain("projectMemory.unsupported");
-      const review = [...element.querySelectorAll("button")].find(
-        (button) => button.textContent === "projectMemory.reviewTrust",
-      );
-      expect(review).toBeDefined();
-      await act(async () => review?.click());
-      expect(
-        [...element.querySelectorAll("pre")].map((pre) => pre.textContent),
-      ).toContain(trustReply().instructions.files[0].fact.text);
       expect(element.textContent).toContain(input.path);
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.trustDescription",
-      );
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.trustAccept",
-      );
+      expect(element.textContent).not.toContain("projectMemory.reviewTrust");
       expect(element.textContent).not.toContain(
-        "projectMemory.trustDescription",
+        "projectMemory.policyConfigure",
       );
-      const click = async (label: string) => {
-        const button = [...element.querySelectorAll("button")].find(
-          (item) => item.textContent === label,
-        );
-        expect(button).toBeDefined();
-        await act(async () => button?.click());
-      };
-      await click("common.back");
-      await click("projectMemory.policyConfigure");
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.policyTitle",
+      expect(element.textContent).not.toContain("projectMemory.prepare");
+      const browse = [...element.querySelectorAll("button")].find(
+        (button) => button.textContent === "common.browse",
       );
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.policyDescription",
-      );
-      const never = element.querySelector<HTMLInputElement>(
-        'input[value="never"]',
-      );
-      expect(never).not.toBeNull();
-      await act(async () => never?.click());
-      await click("projectMemory.policyReview");
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.policyCurrent",
-      );
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.policyRequested",
-      );
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.policySaveEffects",
-      );
-      await click("projectMemory.sshSettings.policyConfirm");
-      expect(element.textContent).toContain(
-        "projectMemory.sshSettings.policySaved",
-      );
+      expect(browse).toBeDefined();
+      await act(async () => browse?.click());
+      expect(
+        io.request.mock.calls.some(
+          ([, request]) => request.params.operation === "documents",
+        ),
+      ).toBe(true);
+      expect(
+        io.request.mock.calls.some(([, request]) =>
+          ["initialize", "reviewTrust", "reviewPolicy"].includes(
+            request.params.operation as string,
+          ),
+        ),
+      ).toBe(false);
       expect(io.native).not.toHaveBeenCalled();
     } finally {
       await act(async () => root.unmount());

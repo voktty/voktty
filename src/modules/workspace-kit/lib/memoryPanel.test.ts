@@ -117,7 +117,7 @@ it("withdraws document admission if a loading observer retires its panel", async
   await panel.dispose();
 });
 
-it("starts no work on creation, coalesces reads, and prepares only on explicit action", async () => {
+it("starts no work on creation, coalesces reads and never prepares private settings", async () => {
   const api = client();
   const states: MemoryPanelState[] = [];
   const panel = createMemoryPanelController(
@@ -133,8 +133,9 @@ it("starts no work on creation, coalesces reads, and prepares only on explicit a
   expect(api.inspect).toHaveBeenCalledWith(selected);
   expect(api.discover).not.toHaveBeenCalled();
   expect(states[states.length - 1]).toEqual({ status: "ready", observation });
-  await panel.prepare();
-  expect(api.initializeLocalState).toHaveBeenCalledOnce();
+  await panel.load();
+  expect(api.initializeLocalState).not.toHaveBeenCalled();
+  expect(api.inspect).toHaveBeenCalledTimes(2);
   expect(api.select).toHaveBeenCalledOnce();
   await panel.dispose();
 });
@@ -149,7 +150,7 @@ it("withdraws authority before a loading callback can request a write", async ()
     },
     () => api,
   );
-  await panel.prepare();
+  await panel.load();
   expect(api.select).not.toHaveBeenCalled();
   expect(api.initializeLocalState).not.toHaveBeenCalled();
   await panel.dispose();
@@ -170,14 +171,14 @@ it("cannot publish a read after closing and does not prepare from a stale select
   await panel.dispose();
   read.resolve(observation);
   await load;
-  await panel.prepare();
+  await panel.load();
   expect(publish.mock.calls.map(([state]) => state.status)).toEqual([
     "loading",
   ]);
   expect(api.initializeLocalState).not.toHaveBeenCalled();
 });
 
-it("requires a retained selected source before offering private-state preparation", async () => {
+it("reports inspection failures without preparing private state", async () => {
   const api = client();
   const publish = vi.fn();
   api.inspect.mockRejectedValueOnce({ code: "missingState" });
@@ -186,10 +187,9 @@ it("requires a retained selected source before offering private-state preparatio
   expect(publish).toHaveBeenLastCalledWith({
     status: "error",
     code: "missingState",
-    canPrepare: true,
   });
   api.isCurrent.mockReturnValue(false);
-  await panel.prepare();
+  await panel.load();
   expect(api.initializeLocalState).not.toHaveBeenCalled();
   await panel.dispose();
 });
@@ -265,7 +265,6 @@ it("recovers denied selection only after explicit directory authorization and re
   expect(publish).toHaveBeenLastCalledWith({
     status: "error",
     code: "denied",
-    canPrepare: false,
   });
   await Promise.all([panel.authorize(), panel.authorize()]);
   expect(authorize).toHaveBeenCalledExactlyOnceWith("/project");
@@ -321,7 +320,6 @@ it("redacts unknown error codes and never offers authorization for an unsupporte
   expect(publish).toHaveBeenLastCalledWith({
     status: "error",
     code: "unavailable",
-    canPrepare: false,
   });
   await panel.authorize();
   expect(authorize).not.toHaveBeenCalled();

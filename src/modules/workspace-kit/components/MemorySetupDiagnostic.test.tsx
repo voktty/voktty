@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import ProjectMemoryPanel from "@/modules/workspace-kit/components/ProjectMemoryPanel";
-import { memoryStorageDiagnostic } from "@/modules/workspace-kit/lib/memoryStorageDiagnostic";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -68,28 +67,4 @@ it("reports a project preview failure without attempting private setup or exposi
     await act(async () => root.unmount());
     vi.unstubAllGlobals();
   }
-});
-
-it("rejects arbitrary diagnostic text and invalid operating-system status values", () => {
-  expect(
-    memoryStorageDiagnostic({
-      storage: { stage: "windows-owner", windowsError: null },
-    }),
-  ).toBe("windows-owner");
-  for (const storage of [
-    null,
-    "private content",
-    {},
-    { stage: "private path" },
-    ...[-1, 1.5, Infinity, 0x100000000, "5"].map((windowsError) => ({
-      stage: "windows-directory-open",
-      windowsError,
-    })),
-  ])
-    expect(memoryStorageDiagnostic({ storage })).toBeUndefined();
-  expect(
-    memoryStorageDiagnostic({
-      storage: { stage: "preferences", windowsError: 0xffffffff },
-    }),
-  ).toBe("preferences:4294967295");
 });

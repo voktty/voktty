@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ProjectMemoryPanel from "@/modules/workspace-kit/components/ProjectMemoryPanel";
-import { trustReply } from "@/modules/workspace-kit/lib/nativeMemoryTrust.test-utils";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -296,8 +295,9 @@ it("installs without local setup and returns to the discovered kit", async () =>
   await click("projectMemory.next");
   expect(container.textContent).toContain("projectMemory.found");
   expect(container.textContent).toContain("/canonical/owned");
-  expect(button("projectMemory.reviewTrust")).toBeDefined();
-  expect(button("projectMemory.policyConfigure")).toBeDefined();
+  expect(button("common.browse")).toBeDefined();
+  expect(container.textContent).not.toContain("projectMemory.reviewTrust");
+  expect(container.textContent).not.toContain("projectMemory.policyConfigure");
   expect(invoke.mock.calls.filter(([command]) => command === "project_memory_confirm_preview")).toHaveLength(1);
   expect(invoke.mock.calls.some(([command]) =>
     command === "project_memory_confirm_trust" ||
@@ -324,8 +324,9 @@ it("reconnects to existing memory on refresh without dropping ancestor inspectio
   expect(container.textContent).toContain("/canonical/parent");
   expect(container.textContent).toContain("projectMemory.found");
   expect(container.textContent).toContain("projectMemory.initialize");
-  expect(button("projectMemory.reviewTrust")).toBeDefined();
-  expect(button("projectMemory.policyConfigure")).toBeDefined();
+  expect(button("common.browse")).toBeDefined();
+  expect(container.textContent).not.toContain("projectMemory.reviewTrust");
+  expect(container.textContent).not.toContain("projectMemory.policyConfigure");
   expect(invoke.mock.calls.filter(([command]) => command === "project_memory_select")).toHaveLength(selects);
   expect(invoke.mock.calls.some(([command]) => command === "project_memory_preview" || command === "project_memory_confirm_preview")).toBe(false);
 });
@@ -457,76 +458,10 @@ it("keeps the authorized canonical selection through installation without local 
   await click("projectMemory.next");
   expect(container.textContent).toContain("projectMemory.found");
   expect(container.textContent).not.toContain("denied");
-  expect(button("projectMemory.reviewTrust")).toBeDefined();
-  expect(button("projectMemory.policyConfigure")).toBeDefined();
+  expect(button("common.browse")).toBeDefined();
+  expect(container.textContent).not.toContain("projectMemory.reviewTrust");
+  expect(container.textContent).not.toContain("projectMemory.policyConfigure");
   expect(
     invoke.mock.calls.filter(([command]) => command === "workspace_authorize"),
   ).toHaveLength(1);
 });
-
-it("can prepare this computer's missing settings before trusting an existing project memory", async () => {
-  let prepared = false;
-  const original = invoke.getMockImplementation();
-  invoke.mockImplementation(async (command, args) => {
-    if (command === "project_memory_discover")
-      return {
-        schema: 1,
-        root: "/canonical/owned",
-        blockedCount: 0,
-        scope: { state: "ready", ancestryComplete: true },
-      };
-    if (command === "project_memory_review_trust") {
-      if (!prepared) throw { code: "missingState" };
-      return { ...trustReply(args.request.revision), root: "/canonical/owned" };
-    }
-    if (command === "project_memory_initialize_local_state") {
-      prepared = true;
-      return;
-    }
-    return original?.(command, args);
-  });
-  await click("common.refresh");
-  await click("projectMemory.reviewTrust");
-  expect(prepared).toBe(false);
-  expect(container.textContent).toContain("projectMemory.prepareDescription");
-  await click("projectMemory.prepare");
-  expect(prepared).toBe(true);
-  await click("projectMemory.reviewTrust");
-  expect(container.textContent).toContain("projectMemory.trustAccept");
-  expect(
-    invoke.mock.calls.some(([command]) =>
-      /project_memory_(preview|confirm_preview|confirm_trust|confirm_policy)/.test(
-        command,
-      ),
-    ),
-  ).toBe(false);
-});
-
-it.each(["denied", "invalidState", "unsupported"])(
-  "does not offer missing-settings recovery for an existing memory's %s error",
-  async (code) => {
-    const original = invoke.getMockImplementation();
-    invoke.mockImplementation(async (command, args) => {
-      if (command === "project_memory_discover")
-        return {
-          schema: 1,
-          root: "/canonical/owned",
-          blockedCount: 0,
-          scope: { state: "ready", ancestryComplete: true },
-        };
-      if (command === "project_memory_review_trust") throw { code };
-      return original?.(command, args);
-    });
-    await click("common.refresh");
-    await click("projectMemory.reviewTrust");
-    expect(container.textContent).toContain("projectMemory.trustFailed");
-    expect(container.textContent).not.toContain(
-      "projectMemory.prepareDescription",
-    );
-    expect(
-      invoke.mock.calls.some(
-        ([command]) => command === "project_memory_initialize_local_state",
-      ),
-    ).toBe(false);
-  },
-);

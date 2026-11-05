@@ -35,11 +35,3 @@ export function parseMemoryStorageDiagnostic(
     return;
   return { stage: storage.stage, windowsError: code };
 }
-
-export function memoryStorageDiagnostic(error: unknown): string | undefined {
-  const diagnostic = parseMemoryStorageDiagnostic(error);
-  if (!diagnostic) return;
-  return diagnostic.windowsError === null
-    ? diagnostic.stage
-    : `${diagnostic.stage}:${diagnostic.windowsError}`;
-}

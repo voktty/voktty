@@ -5,9 +5,7 @@ import { useTranslation } from "@/modules/i18n";
 import type {
   MemoryDocumentsState,
   MemoryPanelState,
-  MemoryPolicyState,
   MemoryRecoveryState,
-  MemoryTrustState,
 } from "@/modules/workspace-kit/lib/memoryPanel";
 import type { NativeMemoryReview } from "@/modules/workspace-kit/lib/nativeMemory";
 import { useId, useState } from "react";
@@ -15,8 +13,6 @@ import { useId, useState } from "react";
 type InitializationState = Exclude<
   MemoryPanelState,
   | { status: "loading" | "ready" | "error" }
-  | MemoryTrustState
-  | MemoryPolicyState
   | MemoryDocumentsState
   | MemoryRecoveryState
 >;

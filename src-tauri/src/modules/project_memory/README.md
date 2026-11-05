@@ -541,8 +541,8 @@ Source, presentation, window and application retirement reject late results and
 errors. The original review lifetime is never renewed, no mutex spans an await,
 and admitted work retains its physical budget until settlement. Retired delivery
 does not roll back an admitted policy write. Errors contain only redacted codes.
-The typed client and manual panel below expose these commands; session grants
-and context consumers remain pending.
+The typed client exposes these commands for existing context consumers. Project
+file management no longer offers a private policy screen.
 
 ## Typed policy client
 
@@ -566,38 +566,8 @@ Policy, trust and deployment share the existing 256 unsettled-request budget,
 including retired operations until their actual IPC settlement. A full budget
 refuses new admission without replacing an admitted review. These JavaScript
 receipts do not acknowledge physical cancellation or roll back native writes.
-Construction starts no IPC, preference mutation, agent or session. The manual
-panel below provides manual policy choices; exact session grants and context
-delivery remain separate integrations.
-
-## Manual local policy panel
-
-The shared terminal and Harness memory panel offers policy management only for
-a complete, unambiguous ready scope with a resolved root and no blocked paths.
-Opening the panel still performs metadata discovery only. Opening policy choices
-does no additional IO and selects no value implicitly. The three choices are
-manual per session, always in this project and never in this project. Copy
-explains their local duration, independent instruction trust and capture consent,
-and the fact that context delivery is not connected yet.
-
-Review requires an explicit choice and reads the native policy artifact. It
-shows the resolved root, current effective policy and exact requested policy.
-Saving requires a separate action on that same review object. Back cancels the
-original review before returning to choices and resets the radio selection.
-The success view reports only the persisted local policy, never a session enable
-or model delivery. Never does not remove rule files that an external agent may
-still read. Closing during an admitted save does not imply rollback.
-
-Controller guards retain the original selection across awaits and synchronous
-state observers, including immediately before confirmation. Duplicate actions
-coalesce; errors cannot automatically retry a consumed review. Policy errors stay
-separate from trust and deployment. Refresh, target retirement and close retire
-the original presentation and suppress late results and errors. Busy review and
-save states disable duplicate save, back and refresh controls. The existing
-presentation and request limits remain unchanged. English and Spanish copy is
-provided; other locales use the established English fallback for these controls.
-Exact session permissions, persistent policy indicators outside management,
-context delivery and native runtime smoke qualification remain pending.
+Construction starts no IPC, preference mutation, agent or session. Context
+consumers retain their own session and delivery ownership.
 
 ## Instruction trust IPC
 
@@ -653,19 +623,10 @@ admitted filesystem work keeps the existing four-slot native worker budget until
 settlement. Cancelled delivery does not roll back an admitted preferences write.
 All result and error paths recheck their original command, native reservation,
 source and owning window. No ownership or command-state mutex spans an await.
-The typed client and manual panel below expose these commands without injecting
-context into Harness, CLI or internal AI. Authenticated remote trust and
-additional native platform runtime qualification remain pending.
+The typed client exposes these commands to existing conversation-context
+consumers. Additional native platform runtime qualification remains pending.
 
-## Manual instruction trust panel
-
-The shared terminal and Harness memory panel offers instruction review only for
-a ready scope with complete ancestry, a resolved root and no blocked paths.
-Opening the panel still performs metadata discovery only. Reading instructions
-requires the separate review action; it never initializes private state or a kit.
-The panel presents the native canonical root, configuration and all instruction
-files as literal text. Repository markup is not executed. A changed digest is
-described as a changed version, without inventing an unavailable historical diff.
+## Typed instruction trust client
 
 `nativeMemoryTrust.ts` retains each review's UUID and revision privately, bound
 to its exact selection and receipt object. Display snapshots contain only known
@@ -683,15 +644,6 @@ Confirmation sends only the retained native UUID and consumes acceptance on eith
 success or failure. A malformed acceptance reply is not reported as success and
 does not permit automatic retry. Native admitted writes retain their existing
 settlement and no-rollback semantics.
-
-An unchecked checkbox accepts only the displayed review object. Returning retires
-that review before showing the observation again; a later review requires another
-acceptance. Controller guards recheck selection after awaits and state observers,
-including before reading instructions or confirming trust. Closing never confirms
-trust. Success records instruction trust only, preserving use policy, session and
-capture choices. It starts no agent. Policy has its separate manual controls;
-session controls and actual delivery remain pending. English and Spanish trust copy is provided; other supported
-locales currently use the established English fallback for these new controls.
 
 ## Narrow ancestor inspection
 
@@ -726,28 +678,29 @@ than acquiring inferred permissions. Linux tests cover real discovery and
 publication without granting parents. Other native runtime qualification remains
 pending.
 
-## Manual initialization panel
+## Project file management panel
 
-The shared terminal and Harness panel offers initialization only for an absent
-or reserved scope with complete ancestry, no blocked paths and no existing memory
-root. Setup captures its own presentation's directory and environment. A detected
-parent kit can be displayed but is never promoted to an authorized workspace.
-Refresh opens a new presentation and does not inherit ancestor inspection consent.
+The terminal and Harness panel inspects project markers without private state.
+Its controller exposes only inspection, ordinary workspace authorization,
+initialization/publication, document browsing and legacy recovery. Private setup,
+policy and instruction-trust screens and their controller states are removed.
+Conversation context retains its independent existing native clients and checks;
+removing those screens does not change their authorization or stored data.
 
-Setup collects project details, explains Git-ready shared files and public-repository
-effects, and leaves both persistent root-rule links unchecked. Native preview
-reads the selected project inventory and displays exact current and proposed bytes for
-every entry, recovery artifacts and the canonical destination from the retained
-native artifact. Conflicts and platform blockers disable publication. A separate
-checkbox accepts the displayed review before its token-only, single-use confirmation.
-Returning to setup cancels that review; closing retires the whole presentation.
-Duplicate submissions coalesce through actual settlement. Callbacks recheck the
-original selection after awaits and after state observers, including before writes.
+Initialization uses folder, date and interface-language defaults with both
+`AGENTS.md` and `CLAUDE.md` links enabled. Ready or partial memory with complete
+ancestry and no blocked paths can use the same action for repair. The native
+project service preserves existing project content and valid persisted template
+values. A known parent is never promoted to an authorized destination.
+Create/skip-only plans publish under the original action; migrations retain an
+exact current/proposed file review, checkbox and single-use confirmation. A
+conflict or platform blocker prevents publication. Returning cancels the exact
+review before showing the observation again. Duplicate work coalesces, and
+original-owner checks surround awaits, state observers and write admission.
 
-Installation reports acknowledged paths, preserves native partial-failure reports
-and never implies rollback after cancellation or failure. Retry requires another
-manual preview. It starts no agent, delivers no instructions and grants no trust,
-use policy or paid captures. The Git-ready mode is currently implemented; machine-only
-Git exclusion, manifest-based setup suggestions, provider-context defaults, initial
-AI capture, broader recovery controls and remote deployment remain pending. Input
-and review components are lazy-loaded with the existing management dialog.
+Publication reports acknowledged paths and preserves partial-failure reports.
+It never retries automatically or implies rollback. Initialization does not
+start an agent or change conversation delivery. Legacy interrupted-initialization
+editing remains separate and still offers its form; recovery of the newer
+project record is pending. Marker ancestry inspection remains explicit. Native
+Windows, real SSH and agent workflow acceptance are still required.

@@ -109,7 +109,7 @@ it("keeps unsupported and missing targets explicit without opening native work",
   }
 });
 
-it("prepares private settings only after the explicit action", async () => {
+it("does not offer private setup when marker inspection fails", async () => {
   let prepared = false;
   invoke.mockImplementation(async (command: string) => {
     if (command === "project_memory_open") return { id: 1, token: "handle" };
@@ -133,12 +133,17 @@ it("prepares private settings only after the explicit action", async () => {
   );
   await open();
   expect(prepared).toBe(false);
-  expect(document.body.textContent).toContain(
+  expect(document.body.textContent).toContain("missingState");
+  expect(document.body.textContent).not.toContain(
     "projectMemory.prepareDescription",
   );
-  await act(async () => button("projectMemory.prepare").click());
-  expect(prepared).toBe(true);
-  expect(document.body.textContent).toContain("projectMemory.incomplete");
+  await act(async () => button("common.refresh").click());
+  expect(prepared).toBe(false);
+  expect(
+    invoke.mock.calls.some(
+      ([command]) => command === "project_memory_initialize_local_state",
+    ),
+  ).toBe(false);
 });
 
 it("closes with Escape and returns keyboard focus to its original trigger", async () => {

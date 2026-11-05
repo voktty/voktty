@@ -361,7 +361,7 @@ it("suppresses an inspection result after the captured conversation loses focus"
   );
 });
 
-it("manages a worktree's trust only after selecting its directory and can return to the browsed directory", async () => {
+it("manages the selected worktree's files without trust settings and returns to the browsed directory", async () => {
   await mount();
   await open();
   const paths = () =>
@@ -371,8 +371,8 @@ it("manages a worktree's trust only after selecting its directory and can return
   expect(paths()).not.toContain("/project/worktree");
   await click("projectMemory.manageConversationDirectory");
   expect(paths()[paths().length - 1]).toBe("/project/worktree");
-  await click("projectMemory.reviewTrust");
-  expect(document.body.textContent).toContain("projectMemory.trustTitle");
+  expect(document.body.textContent).not.toContain("projectMemory.reviewTrust");
+  expect(document.body.textContent).not.toContain("projectMemory.policyConfigure");
   await click("projectMemory.manageBrowsedDirectory");
   expect(paths()[paths().length - 1]).toBe("/project/browsed");
   expect(

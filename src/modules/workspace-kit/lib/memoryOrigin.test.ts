@@ -50,7 +50,6 @@ it("preserves the host legacy-origin refusal without offering new settings", asy
     expect(states[states.length - 1]).toEqual({
       status: "error",
       code: "legacyStateRequiresReview",
-      canPrepare: false,
     });
     expect(initializeLocalState).not.toHaveBeenCalled();
   } finally {

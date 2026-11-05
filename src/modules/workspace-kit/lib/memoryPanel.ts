@@ -10,39 +10,18 @@ import type {
 } from "@/modules/workspace-kit/lib/nativeMemory";
 import { authorizeNativeMemoryDirectory } from "@/modules/workspace-kit/lib/nativeMemoryAuthorization";
 import type { MemoryDocuments } from "@/modules/workspace-kit/lib/nativeMemoryDocuments";
-import type {
-  NativeMemoryPolicy,
-  NativeMemoryPolicyAccepted,
-  NativeMemoryPolicyReview,
-} from "@/modules/workspace-kit/lib/nativeMemoryPolicy";
 import type { NativeMemoryRecoveryReview } from "@/modules/workspace-kit/lib/nativeMemoryRecovery";
-import type {
-  NativeMemoryTrustAccepted,
-  NativeMemoryTrustReview,
-} from "@/modules/workspace-kit/lib/nativeMemoryTrust";
-
 export type MemoryPanelTarget = Readonly<{
   path: string;
   environment: WorkspaceEnv;
   source: string;
 }>;
-export type MemoryTrustState =
-  | { status: "trustLoading" }
-  | {
-      status: "trustReview";
-      review: NativeMemoryTrustReview;
-    }
-  | { status: "trustAccepting"; review: NativeMemoryTrustReview }
-  | { status: "trustAccepted"; root: string; report: NativeMemoryTrustAccepted }
-  | { status: "trustError"; code: string };
 export type MemoryPanelState =
   | MemoryRecoveryState
   | MemoryDocumentsState
-  | MemoryPolicyState
-  | MemoryTrustState
   | { status: "loading" }
   | { status: "ready"; observation: NativeMemoryScope }
-  | { status: "error"; code: string; canPrepare: boolean }
+  | { status: "error"; code: string }
   | { status: "configuring"; recovering?: boolean }
   | { status: "previewing" }
   | { status: "review" | "publishing"; review: NativeMemoryReview }
@@ -66,25 +45,12 @@ export type MemoryDocumentsState =
   | { status: "documentsLoading" }
   | { status: "documentsReady"; snapshot: MemoryDocuments }
   | { status: "documentsError"; code: string };
-export type MemoryPolicyState =
-  | { status: "policyConfiguring" }
-  | { status: "policyLoading" }
-  | { status: "policyReview"; review: NativeMemoryPolicyReview }
-  | { status: "policyAccepting"; review: NativeMemoryPolicyReview }
-  | {
-      status: "policyAccepted";
-      root: string;
-      report: NativeMemoryPolicyAccepted;
-    }
-  | { status: "policyError"; code: string };
 type Client = Pick<
   ReturnType<typeof createNativeMemoryPresentation>,
   | "select"
   | "isCurrent"
-  | "discover"
   | "inspect"
   | "documents"
-  | "initializeLocalState"
   | "close"
   | "preview"
   | "confirmPreview"
@@ -94,14 +60,6 @@ type Client = Pick<
   | "confirmRecovery"
   | "cancelRecovery"
   | "isRecoveryReviewCurrent"
-  | "reviewTrust"
-  | "confirmTrust"
-  | "cancelTrust"
-  | "isTrustReviewCurrent"
-  | "reviewPolicy"
-  | "confirmPolicy"
-  | "cancelPolicy"
-  | "isPolicyReviewCurrent"
 >;
 type Entry = {
   client: Client;
@@ -165,7 +123,7 @@ export function createMemoryPanelController(
       publish(next);
     }
   };
-  function run(prepare: boolean, inspectAncestors = false, authorize = false) {
+  function run(inspectAncestors = false, authorize = false) {
     if (entry.retired) return Promise.resolve();
     if (pending) return pending;
     pending = Promise.resolve()
@@ -191,13 +149,7 @@ export function createMemoryPanelController(
             );
           const receipt = selected;
           if (!receipt || !current()) return;
-          if (prepare) {
-            await entry.client.initializeLocalState(receipt);
-            if (!current()) return;
-          }
-          const observed = prepare
-            ? await entry.client.discover(receipt)
-            : await entry.client.inspect(receipt);
+          const observed = await entry.client.inspect(receipt);
           if (!current()) return;
           observation = observed;
           notify({ status: "ready", observation: observed });
@@ -227,8 +179,6 @@ export function createMemoryPanelController(
           notify({
             status: "error",
             code,
-            canPrepare:
-              current() && (code === "unavailable" || code === "missingState"),
           });
         }
       })
@@ -239,12 +189,7 @@ export function createMemoryPanelController(
   }
   function deploy(
     work: (receipt: NativeMemorySelection) => Promise<void>,
-    operation:
-      | "deployment"
-      | "trust"
-      | "policy"
-      | "documents"
-      | "recovery" = "deployment",
+    operation: "deployment" | "documents" | "recovery" = "deployment",
   ) {
     if (entry.retired || !selected || !current()) return Promise.resolve();
     if (pending) return pending;
@@ -268,11 +213,7 @@ export function createMemoryPanelController(
               ? { status: "recoveryError", error: failure }
               : operation === "documents"
                 ? { status: "documentsError", code: failure.code }
-                : operation === "trust"
-                  ? { status: "trustError", code: failure.code }
-                  : operation === "policy"
-                    ? { status: "policyError", code: failure.code }
-                    : { status: "deploymentError", error: failure },
+                : { status: "deploymentError", error: failure },
           );
         }
       })
@@ -293,7 +234,7 @@ export function createMemoryPanelController(
       notify({ status: "published", root: review.snapshot.root, report });
   }
   return {
-    load: () => run(false),
+    load: () => run(),
     configureInterruptedInitialization() {
       if (
         pending ||
@@ -402,7 +343,7 @@ export function createMemoryPanelController(
     browseDocuments() {
       if (
         !observation ||
-        !canReviewMemoryTrust(observation) ||
+        !canBrowseMemoryDocuments(observation) ||
         !["ready", "documentsReady", "documentsError"].includes(state.status)
       )
         return Promise.resolve();
@@ -434,120 +375,12 @@ export function createMemoryPanelController(
         !supportedMemoryPanelTarget(captured)
       )
         return Promise.resolve();
-      return run(false, false, true);
+      return run(false, true);
     },
-    configurePolicy() {
-      if (
-        !pending &&
-        current() &&
-        state.status === "ready" &&
-        canReviewMemoryPolicy(state.observation)
-      )
-        notify({ status: "policyConfiguring" });
-    },
-    reviewPolicy(choice: NativeMemoryPolicy) {
-      if (state.status !== "policyConfiguring") return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "policyLoading" });
-        if (!current()) return;
-        const review = await entry.client.reviewPolicy(receipt, choice);
-        if (current() && entry.client.isPolicyReviewCurrent(receipt, review))
-          notify({ status: "policyReview", review });
-      }, "policy");
-    },
-    confirmPolicy(accepted: NativeMemoryPolicyReview) {
-      if (
-        state.status !== "policyReview" ||
-        state.review !== accepted ||
-        !selected ||
-        !entry.client.isPolicyReviewCurrent(selected, accepted)
-      )
-        return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "policyAccepting", review: accepted });
-        if (
-          !current() ||
-          !entry.client.isPolicyReviewCurrent(receipt, accepted)
-        )
-          return;
-        const report = await entry.client.confirmPolicy(receipt, accepted);
-        if (current())
-          notify({
-            status: "policyAccepted",
-            root: accepted.snapshot.root,
-            report,
-          });
-      }, "policy");
-    },
-    backPolicy() {
-      if (pending || !current() || !observation) return Promise.resolve();
-      if (
-        state.status === "policyConfiguring" ||
-        state.status === "policyAccepted"
-      ) {
-        notify({ status: "ready", observation });
-        return Promise.resolve();
-      }
-      if (state.status !== "policyReview" && state.status !== "policyError")
-        return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "policyLoading" });
-        if (!current()) return;
-        await entry.client.cancelPolicy(receipt);
-        if (current()) notify({ status: "policyConfiguring" });
-      }, "policy");
-    },
-    reviewTrust() {
-      if (state.status !== "ready" || !canReviewMemoryTrust(state.observation))
-        return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "trustLoading" });
-        if (!current()) return;
-        const review = await entry.client.reviewTrust(receipt);
-        if (current() && entry.client.isTrustReviewCurrent(receipt, review))
-          notify({ status: "trustReview", review });
-      }, "trust");
-    },
-    confirmTrust(accepted: NativeMemoryTrustReview) {
-      if (
-        state.status !== "trustReview" ||
-        state.review !== accepted ||
-        !selected ||
-        !entry.client.isTrustReviewCurrent(selected, accepted)
-      )
-        return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "trustAccepting", review: accepted });
-        if (!current()) return;
-        const report = await entry.client.confirmTrust(receipt, accepted);
-        if (current())
-          notify({
-            status: "trustAccepted",
-            root: accepted.snapshot.root,
-            report,
-          });
-      }, "trust");
-    },
-    backTrust() {
-      if (pending || !current() || !observation) return Promise.resolve();
-      if (state.status === "trustAccepted") {
-        notify({ status: "ready", observation });
-        return Promise.resolve();
-      }
-      if (state.status !== "trustReview" && state.status !== "trustError")
-        return Promise.resolve();
-      return deploy(async (receipt) => {
-        notify({ status: "trustLoading" });
-        if (!current()) return;
-        await entry.client.cancelTrust(receipt);
-        if (current() && observation) notify({ status: "ready", observation });
-      }, "trust");
-    },
-    prepare: () => run(true),
     inspectAncestors() {
       if (state.status === "recoveryInspection") {
         if (pending) return pending;
-        return run(false, true).then(() => {
+        return run(true).then(() => {
           if (!current() || state.status !== "ready") return;
           notify(
             state.observation.scope.ancestryComplete
@@ -562,7 +395,7 @@ export function createMemoryPanelController(
         state.observation.scope.ancestryComplete
       )
         return Promise.resolve();
-      return run(false, true);
+      return run(true);
     },
     configure(language = "en") {
       if (
@@ -710,7 +543,7 @@ export function canReviewMemoryRecovery(
   );
 }
 
-export function canReviewMemoryTrust(observation: NativeMemoryScope) {
+export function canBrowseMemoryDocuments(observation: NativeMemoryScope) {
   return (
     observation.scope?.state === "ready" &&
     observation.scope.ancestryComplete === true &&
@@ -718,10 +551,6 @@ export function canReviewMemoryTrust(observation: NativeMemoryScope) {
     typeof observation.root === "string" &&
     observation.root.length > 0
   );
-}
-
-export function canReviewMemoryPolicy(observation: NativeMemoryScope) {
-  return canReviewMemoryTrust(observation);
 }
 
 export function supportedMemoryPanelTarget(target: MemoryPanelTarget) {

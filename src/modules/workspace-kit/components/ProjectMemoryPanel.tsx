@@ -4,15 +4,12 @@ import { useTranslation } from "@/modules/i18n";
 import { MemoryConversation } from "@/modules/workspace-kit/components/MemoryConversation";
 import { MemoryDocuments } from "@/modules/workspace-kit/components/MemoryDocuments";
 import { MemoryInitialization } from "@/modules/workspace-kit/components/MemoryInitialization";
-import { MemoryPolicy } from "@/modules/workspace-kit/components/MemoryPolicy";
-import { MemoryTrust } from "@/modules/workspace-kit/components/MemoryTrust";
 import type { MemoryConversation as Conversation } from "@/modules/workspace-kit/lib/memoryConversation";
 import {
   canInitializeMemory,
   canRepairMemory,
-  canReviewMemoryPolicy,
   canReviewMemoryRecovery,
-  canReviewMemoryTrust,
+  canBrowseMemoryDocuments,
   createMemoryPanelController,
   type MemoryPanelState,
   type MemoryPanelTarget,
@@ -140,37 +137,6 @@ export default function ProjectMemoryPanel({
   );
 }
 
-function MemorySettingsRecovery({
-  code,
-  remote,
-  onPrepare,
-}: {
-  code?: string;
-  remote: boolean;
-  onPrepare: () => void;
-}) {
-  const { t } = useTranslation();
-  if (code !== "missingState" && code !== "unavailable") return null;
-  return (
-    <div className="space-y-3 rounded-lg border border-border p-3">
-      <p className="text-xs text-muted-foreground">
-        {t(
-          remote
-            ? "projectMemory.sshSettings.prepareDescription"
-            : "projectMemory.prepareDescription",
-        )}
-      </p>
-      <Button variant="outline" size="sm" onClick={onPrepare}>
-        {t(
-          remote
-            ? "projectMemory.sshSettings.prepare"
-            : "projectMemory.prepare",
-        )}
-      </Button>
-    </div>
-  );
-}
-
 function MemoryObservation({
   target,
   onReload,
@@ -180,8 +146,6 @@ function MemoryObservation({
 }) {
   const { t, language } = useTranslation();
   const [state, setState] = useState<MemoryPanelState>({ status: "loading" });
-  const remote =
-    target.environment.kind === "ssh" || target.path.startsWith("remote://");
   const controller = useRef<ReturnType<
     typeof createMemoryPanelController
   > | null>(null);
@@ -199,7 +163,7 @@ function MemoryObservation({
         void owner.dispose();
       };
     } catch {
-      setState({ status: "error", code: "busy", canPrepare: false });
+      setState({ status: "error", code: "busy" });
       return () => {
         active = false;
       };
@@ -248,93 +212,6 @@ function MemoryObservation({
           void controller.current?.browseDocuments();
         }}
       />
-    );
-  if (
-    state.status === "policyConfiguring" ||
-    state.status === "policyLoading" ||
-    state.status === "policyReview" ||
-    state.status === "policyAccepting" ||
-    state.status === "policyAccepted" ||
-    state.status === "policyError"
-  )
-    return (
-      <>
-        <MemoryPolicy
-          remote={remote}
-          key={state.status === "policyConfiguring" ? "configure" : "operation"}
-          state={state}
-          onReview={(choice) => {
-            void controller.current?.reviewPolicy(choice);
-          }}
-          onConfirm={(review) => {
-            void controller.current?.confirmPolicy(review);
-          }}
-          onBack={() => {
-            void controller.current?.backPolicy();
-          }}
-        />
-        <MemorySettingsRecovery
-          remote={remote}
-          code={state.status === "policyError" ? state.code : undefined}
-          onPrepare={() => {
-            void controller.current?.prepare();
-          }}
-        />
-        <DialogFooter>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={
-              state.status === "policyLoading" ||
-              state.status === "policyAccepting"
-            }
-            onClick={onReload}
-          >
-            {t("common.refresh")}
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  if (
-    state.status === "trustLoading" ||
-    state.status === "trustReview" ||
-    state.status === "trustAccepting" ||
-    state.status === "trustAccepted" ||
-    state.status === "trustError"
-  )
-    return (
-      <>
-        <MemoryTrust
-          remote={remote}
-          state={state}
-          onConfirm={(review) => {
-            void controller.current?.confirmTrust(review);
-          }}
-          onBack={() => {
-            void controller.current?.backTrust();
-          }}
-        />
-        <MemorySettingsRecovery
-          remote={remote}
-          code={state.status === "trustError" ? state.code : undefined}
-          onPrepare={() => {
-            void controller.current?.prepare();
-          }}
-        />
-        <DialogFooter>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={
-              state.status === "trustLoading" ||
-              state.status === "trustAccepting"
-            }
-            onClick={onReload}
-          >
-            {t("common.refresh")}
-          </Button>
-        </DialogFooter>
-      </>
     );
   if (
     state.status !== "loading" &&
@@ -447,28 +324,6 @@ function MemoryObservation({
             </p>
           </div>
         ) : null}
-        {state.status === "error" && state.canPrepare ? (
-          <div className="space-y-3 rounded-lg border border-border p-3">
-            <p className="text-xs text-muted-foreground">
-              {t(
-                remote
-                  ? "projectMemory.sshSettings.prepareDescription"
-                  : "projectMemory.prepareDescription",
-              )}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void controller.current?.prepare()}
-            >
-              {t(
-                remote
-                  ? "projectMemory.sshSettings.prepare"
-                  : "projectMemory.prepare",
-              )}
-            </Button>
-          </div>
-        ) : null}
         {state.status === "ready" &&
         state.observation.scope.state === "incomplete" &&
         !state.observation.scope.ancestryComplete ? (
@@ -520,7 +375,8 @@ function MemoryObservation({
             </Button>
           </>
         ) : null}
-        {state.status === "ready" && canReviewMemoryTrust(state.observation) ? (
+        {state.status === "ready" &&
+        canBrowseMemoryDocuments(state.observation) ? (
           <Button
             size="sm"
             variant="outline"
@@ -529,27 +385,6 @@ function MemoryObservation({
             }}
           >
             {t("common.browse")}
-          </Button>
-        ) : null}
-        {state.status === "ready" && canReviewMemoryTrust(state.observation) ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              void controller.current?.reviewTrust();
-            }}
-          >
-            {t("projectMemory.reviewTrust")}
-          </Button>
-        ) : null}
-        {state.status === "ready" &&
-        canReviewMemoryPolicy(state.observation) ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => controller.current?.configurePolicy()}
-          >
-            {t("projectMemory.policyConfigure")}
           </Button>
         ) : null}
       </div>
