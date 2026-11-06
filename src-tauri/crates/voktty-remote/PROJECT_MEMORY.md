@@ -155,13 +155,15 @@ private directories. Those tests are not a real SSH or Desktop UI smoke test.
 
 ## Desktop client ownership
 
-The shared memory manager and indicator route explicit SSH workspaces and saved
-SSH project namespaces through this service. Namespace resolution captures its
-saved project and profile before asynchronous work; an attached SSH descriptor
-must agree with that profile and contain the project root, using the owned
-helper's canonical root when the saved path is an alias. Neither ambient
-workspace selection nor a borrowed numeric session ID chooses the host. POSIX
-host directories stay inside the captured root; this client does not support
+The shared memory manager and indicator route explicit SSH workspaces and SSH
+project namespaces through this service. Namespace resolution captures its saved
+project and profile before asynchronous work. An attached SSH descriptor can also
+resolve its own namespace without a saved project, but must agree with the profile
+and contain the helper's canonical root when the selected path is an alias.
+Direct SSH navigation outside the initial directory acquires a separate helper
+scope rooted at the selected directory. Neither ambient workspace selection nor
+a borrowed numeric session ID chooses the host. Subsequent requests stay inside
+the captured helper root; this client does not support
 WSL, Docker, serial or Windows SSH host paths. Local Desktop paths retain their
 native commands. Unknown namespaces and older helpers fail without local IO.
 

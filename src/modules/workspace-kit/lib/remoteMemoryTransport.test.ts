@@ -754,7 +754,7 @@ it.each([
   { ...namespace, path: "remote://unknown/project" },
   { ...namespace, path: "remote://voktty-ssh-memory-host/project/../outside" },
   { ...namespace, path: "remote://voktty-ssh-memory-host/project\\secret" },
-  { ...target, path: "/outside" },
+  { ...target, path: "/project/../outside" },
 ])(
   "rejects unowned or escaping sources before acquiring a helper: $path",
   async (input) => {

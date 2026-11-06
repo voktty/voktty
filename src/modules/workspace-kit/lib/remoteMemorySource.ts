@@ -43,24 +43,40 @@ function resolve(target: MemoryPanelTarget) {
     const project = remoteProjectForPath(target.path);
     if (
       !parsed ||
-      !project ||
-      project.environmentId !== parsed.environmentId ||
       !directory(parsed.hostPath) ||
-      !directory(project.cwd)
+      (project &&
+        (project.environmentId !== parsed.environmentId ||
+          !directory(project.cwd))) ||
+      (!project && target.environment.kind !== "ssh")
     )
       memoryFailure("unsupported");
-    const root = project.cwd.replace(/\/+$/, "") || "/";
+    const env = target.environment;
+    if (env.kind === "ssh" && !directory(env.root))
+      memoryFailure("unsupported");
+    const selectedRoot =
+      project?.cwd ??
+      (env.kind === "ssh" &&
+      within(env.root.replace(/\/+$/, "") || "/", parsed.hostPath)
+        ? env.root
+        : parsed.hostPath);
+    const root = selectedRoot.replace(/\/+$/, "") || "/";
     if (!within(root, parsed.hostPath)) memoryFailure("denied");
-    const profile = findSshProfile(
+    const savedProfile = findSshProfile(
       parsed.environmentId,
       usePreferencesStore.getState().sshConnections ?? [],
       { kind: "local" },
     );
+    const profile =
+      savedProfile ??
+      (env.kind === "ssh"
+        ? findSshProfile(parsed.environmentId, [env.connection], {
+            kind: "local",
+          })
+        : undefined);
     if (!profile) memoryFailure("unsupported");
     const connection = normalizedRemoteSessionConnection(
       remoteSshConnectionForProfile(profile),
     );
-    const env = target.environment;
     if (
       env.kind === "ssh" &&
       (env.connection.id !== profile.id ||
@@ -79,14 +95,22 @@ function resolve(target: MemoryPanelTarget) {
         env.kind === "ssh" && !within(env.root.replace(/\/+$/, "") || "/", root)
           ? env.root.replace(/\/+$/, "") || "/"
           : null,
-      identity: JSON.stringify([project, profile.id, connection]),
+      identity: JSON.stringify([
+        project ?? null,
+        profile.id,
+        connection,
+        root,
+        savedProfile ? "saved" : "attached",
+      ]),
     };
   }
   const env = target.environment;
   if (env.kind !== "ssh" || !directory(env.root) || !directory(target.path))
     memoryFailure("unsupported");
-  const root = env.root.replace(/\/+$/, "") || "/";
-  if (!within(root, target.path)) memoryFailure("denied");
+  const workspaceRoot = env.root.replace(/\/+$/, "") || "/";
+  const root = within(workspaceRoot, target.path)
+    ? workspaceRoot
+    : target.path.replace(/\/+$/, "") || "/";
   const connection = normalizedRemoteSessionConnection(env.connection);
   if (!env.connection.id || !connection.host) memoryFailure("invalidInput");
   return {
@@ -96,7 +120,12 @@ function resolve(target: MemoryPanelTarget) {
     path: target.path,
     environmentId: null,
     attachedRoot: null,
-    identity: JSON.stringify([env.connection.id, root, connection]),
+    identity: JSON.stringify([
+      env.connection.id,
+      workspaceRoot,
+      root,
+      connection,
+    ]),
   };
 }
 
