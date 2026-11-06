@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from "vitest";
 import { createMemoryClient } from "@/modules/workspace-kit/lib/memoryClient";
-import { remotePath } from "@/modules/connections/model/remoteProjects";
+import {
+  rememberRemoteProject,
+  remotePath,
+} from "@/modules/connections/model/remoteProjects";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { RemoteRequest } from "@/modules/remote/client";
 
@@ -148,6 +151,37 @@ it("does not resolve an unknown project namespace from a local environment", asy
     await client.close();
   }
   expect(io.acquire).not.toHaveBeenCalled();
+  expect(io.native).not.toHaveBeenCalled();
+});
+
+it("keeps an attached Harness inside its root when a saved project owns a parent folder", async () => {
+  rememberRemoteProject(environmentId, {
+    id: "parent",
+    name: "Parent",
+    cwd: "/work",
+  });
+  const env = { ...environment, root: "/work/app" };
+  const path = remotePath(environmentId, "/work/app/src");
+  const client = createMemoryClient({
+    path,
+    environment: env,
+    source: "harness:owned",
+  });
+  try {
+    const selected = await client.select(path, env);
+    expect((await client.inspect(selected)).root).toBe(
+      remotePath(environmentId, env.root),
+    );
+    expect(io.acquire).toHaveBeenCalledWith(
+      { profileId: profile.id, root: env.root },
+      expect.objectContaining({ host: profile.host }),
+    );
+    await expect(
+      client.documents(selected, remotePath(environmentId, "/work/other")),
+    ).rejects.toMatchObject({ code: "denied" });
+  } finally {
+    await client.close();
+  }
   expect(io.native).not.toHaveBeenCalled();
 });
 

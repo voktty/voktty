@@ -59,7 +59,12 @@ function resolve(target: MemoryPanelTarget) {
       within(env.root.replace(/\/+$/, "") || "/", parsed.hostPath)
         ? env.root
         : parsed.hostPath);
-    const root = selectedRoot.replace(/\/+$/, "") || "/";
+    let root = selectedRoot.replace(/\/+$/, "") || "/";
+    if (env.kind === "ssh") {
+      const attachedRoot = env.root.replace(/\/+$/, "") || "/";
+      if (within(root, attachedRoot) && within(attachedRoot, parsed.hostPath))
+        root = attachedRoot;
+    }
     if (!within(root, parsed.hostPath)) memoryFailure("denied");
     const savedProfile = findSshProfile(
       parsed.environmentId,

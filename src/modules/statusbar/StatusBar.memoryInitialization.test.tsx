@@ -6,6 +6,13 @@ import { StatusBar } from "@/modules/statusbar/StatusBar";
 import { publishActiveSurface } from "@/modules/surfaces/lib/activeSurfaceStore";
 import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 import { asTabKey, asWorkspaceScopeId } from "@/modules/tabs/lib/tabIdentity";
+import { HarnessProjectMemoryButton } from "@/modules/harness/chrome/HarnessProjectMemoryButton";
+import { HarnessProjectOwner } from "@/modules/harness/hooks/useHarnessProjectSelection";
+import {
+  rememberRemoteProject,
+  remotePath,
+} from "@/modules/connections/model/remoteProjects";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 
 const io = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -79,6 +86,8 @@ const handle = { id: 1, token: "00000000-0000-4000-8000-000000000001" };
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.resetAllMocks();
+  localStorage.clear();
+  usePreferencesStore.setState({ sshConnections: [profile] });
   useHarnessProjectEnvStore.setState({ projects: {} });
   const reply = (operation: string) => {
     if (operation === "open") return handle;
@@ -139,7 +148,7 @@ beforeEach(() => {
     return {
       info: {
         session_id: 62,
-        workspace_root: "/owned",
+        workspace_root: key.root,
         capabilities: ["memory.manage"],
       },
       release: () => {},
@@ -159,24 +168,37 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each([false, true])(
-  "initializes from the foreground Harness without a conversation or background terminal (SSH=%s)",
-  async (remote) => {
+it.each(["local", "ssh", "namespace-footer", "namespace-rail"])(
+  "initializes from the foreground Harness without a conversation or background terminal (%s)",
+  async (mode) => {
+    const remote = mode !== "local";
+    const namespace = mode.startsWith("namespace-");
+    const environmentId = `voktty-ssh-${profile.id}`;
+    const selectedProject = namespace
+      ? remotePath(environmentId, project)
+      : project;
+    const connectedRoot = namespace ? project : "/owned";
+    if (namespace)
+      rememberRemoteProject(environmentId, {
+        id: "parent",
+        name: "Parent",
+        cwd: "/owned",
+      });
     if (remote)
       useHarnessProjectEnvStore.setState({
         projects: {
-          [project]: {
+          [selectedProject]: {
             identity: {
-              projectId: project,
+              projectId: selectedProject,
               profileId: profile.id,
-              requestedRoot: "/owned",
-              resolvedRoot: "/owned",
+              requestedRoot: connectedRoot,
+              resolvedRoot: connectedRoot,
               automatic: false,
             },
             env: {
               kind: "ssh",
               connection: profile,
-              root: "/owned",
+              root: connectedRoot,
               sessionId: 61,
             },
             connecting: false,
@@ -187,8 +209,8 @@ it.each([false, true])(
     publishActiveSurface({
       kind: "harness",
       ownerId: 20,
-      projectCwd: project,
-      focusFolder: project,
+      projectCwd: selectedProject,
+      focusFolder: selectedProject,
     });
     const node = document.createElement("div");
     document.body.append(node);
@@ -204,7 +226,7 @@ it.each([false, true])(
           id: 20,
           kind: "harness",
           title: "Harness",
-          cwd: project,
+          cwd: selectedProject,
           tabKey: asTabKey("harness-memory"),
           workspaceScopeId: asWorkspaceScopeId("scope"),
           spaceId: "default",
@@ -231,7 +253,17 @@ it.each([false, true])(
       return found;
     }
     try {
-      await act(async () => root.render(<StatusBar {...props} />));
+      await act(async () => root.render(
+        mode === "namespace-rail" ? (
+          <HarnessProjectOwner
+            value={{ ownerId: 20, tabKey: asTabKey("harness-memory") }}
+          >
+            <HarnessProjectMemoryButton cwd={selectedProject} />
+          </HarnessProjectOwner>
+        ) : (
+          <StatusBar {...props} />
+        ),
+      ));
       await act(async () => {
         button("projectMemory.title").click();
         await import("@/modules/workspace-kit/components/ProjectMemoryPanel");
@@ -244,6 +276,10 @@ it.each([false, true])(
           ),
         ).toBe(false);
         expect(io.request.mock.calls.every(([id]) => id === 62)).toBe(true);
+        expect(io.acquire).toHaveBeenCalledWith(
+          { profileId: profile.id, root: connectedRoot },
+          expect.objectContaining({ host: profile.host }),
+        );
         expect(
           io.request.mock.calls.some(
             ([, request]) =>

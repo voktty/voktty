@@ -97,6 +97,9 @@ and project environment; an unrelated terminal cannot supply that destination.
 Connecting or failed project environments remain unavailable. Conversation
 receipts still supply their optional context controls and retain their separate
 ownership checks; they are not a prerequisite for preparing project files.
+For an attached SSH Harness, a saved ancestor project cannot widen the helper
+root beyond the connected workspace. A directory inside that workspace uses
+the narrower root; unrelated directories retain the existing denial checks.
 
 Explicit document browsing uses the separate display-only contract described in
 [DOCUMENTS.md](DOCUMENTS.md). Marker observation never starts that content read.

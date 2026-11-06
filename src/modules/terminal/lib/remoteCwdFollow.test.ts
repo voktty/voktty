@@ -29,6 +29,11 @@ describe("shouldFollowRemoteCwd", () => {
     expect(follow({ agentActive: true })).toBe(true);
   });
 
+  it("recovers when integration stops reporting after an earlier prompt", () => {
+    expect(follow({ lastReportAgoMs: REMOTE_CWD_SILENCE_MS })).toBe(true);
+    expect(follow({ lastReportAgoMs: REMOTE_CWD_SILENCE_MS - 1 })).toBe(false);
+  });
+
   it("asks the helper when integration never reported a folder", () => {
     expect(
       follow({ shellReportedCwd: false, openedForMs: REMOTE_CWD_SILENCE_MS }),

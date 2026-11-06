@@ -106,6 +106,7 @@ type Session = {
   initialCwd: string | undefined;
   lastCwd: string | null;
   shellReportedCwd: boolean;
+  lastShellCwdAt: number | null;
   openedAt: number;
   cwdLookupInFlight: boolean;
   pendingExit: number | null;
@@ -983,6 +984,7 @@ function ensureSession(
     initialCwd,
     lastCwd: null,
     shellReportedCwd: false,
+    lastShellCwdAt: null,
     openedAt: Date.now(),
     cwdLookupInFlight: false,
     pendingExit: null,
@@ -1323,6 +1325,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
           onCwd: (next) => {
             markSessionReady(leafId);
             s.shellReportedCwd = true;
+            s.lastShellCwdAt = Date.now();
             if (s.lastCwd === next) return;
             s.lastCwd = next;
             s.callbacks.onCwd?.(next);
@@ -1365,6 +1368,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         (next) => {
           markSessionReady(leafId);
           s.shellReportedCwd = true;
+          s.lastShellCwdAt = Date.now();
           if (s.lastCwd === next) return;
           s.lastCwd = next;
           s.callbacks.onCwd?.(next);
@@ -2057,6 +2061,8 @@ function followRemoteCwds(): void {
         agentActive: s.pty !== null && isAgentActivePty(s.pty.id),
         shellReportedCwd: s.shellReportedCwd,
         openedForMs: now - s.openedAt,
+        lastReportAgoMs:
+          s.lastShellCwdAt === null ? undefined : now - s.lastShellCwdAt,
         lookupInFlight: s.cwdLookupInFlight,
       })
     ) {
