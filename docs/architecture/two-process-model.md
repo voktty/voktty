@@ -79,6 +79,19 @@ Frontend readers require a validated filesystem identity and ignore unqualified 
 #### Watch
 
 - `fs_watch_add` / `fs_watch_remove` - filesystem change notifications
+- `fs_watch_add_tree` / `fs_watch_remove_tree` - refcounted repository tree coverage
+
+The native invoke dispatcher admits these four commands to one lazily started
+worker, in arrival order. Directory traversal, path canonicalization, watcher
+locks and operating-system acknowledgements run off the window thread. Other
+commands keep their existing dispatch. The queue allows 256 waiting commands
+and one active command; saturation or worker startup failure rejects before
+admission without running the operation. A reply still reports the original
+command's completion and error, not just queue acceptance. Admitted cleanup
+drains even after its dispatcher is dropped. A blocked OS watcher can stall
+this worker but does not run on the window thread or consume additional workers.
+The original workspace authorization, network-path exclusion and refcounts
+remain inside the native command. SSH watchers keep their separate transport.
 
 #### Search
 

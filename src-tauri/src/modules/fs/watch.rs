@@ -11,6 +11,9 @@ use super::is_network_path;
 use crate::modules::fs::to_canon;
 use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
 
+#[path = "watch_dispatch.rs"]
+pub(crate) mod dispatch;
+
 // Quiet-gap before a batch flushes; MAX_WINDOW caps latency under a long stream.
 const DEBOUNCE: Duration = Duration::from_millis(150);
 const MAX_WINDOW: Duration = Duration::from_millis(1000);

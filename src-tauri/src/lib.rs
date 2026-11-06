@@ -349,7 +349,7 @@ pub fn run() {
         .manage(quick_composer::QuickComposerState::default())
         .manage(harness::window_transfer::WindowTransferState::new())
         .manage(harness::remote_connections::RemoteConnections::default())
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(fs::watch::dispatch::handler(tauri::generate_handler![
             bootstrap_status,
             project_memory::commands::project_memory_open,
             project_memory::commands::project_memory_close,
@@ -865,7 +865,7 @@ pub fn run() {
             modules::window::quit_poll_reply,
             modules::window::quit_decision,
             modules::window::quit_ready,
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
