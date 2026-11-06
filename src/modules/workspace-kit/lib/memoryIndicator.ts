@@ -122,6 +122,7 @@ export function createMemoryIndicator(
             selected ??= await entry.client.select(
               captured.path,
               captured.environment,
+              { inspectAncestors: true },
             );
             if (entry.closed || !entry.client.isCurrent(selected)) return;
             const observation = await entry.client.inspect(selected);

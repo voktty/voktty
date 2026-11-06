@@ -316,7 +316,7 @@ it("reconnects to existing memory on refresh without dropping ancestor inspectio
   await click("common.refresh");
   expect(container.textContent).toContain("/canonical/parent");
   expect(container.textContent).toContain("projectMemory.found");
-  expect(container.textContent).toContain("projectMemory.initialize");
+  expect(container.textContent).not.toContain("projectMemory.initialize");
   expect(button("common.browse")).toBeDefined();
   expect(container.textContent).not.toContain("projectMemory.reviewTrust");
   expect(container.textContent).not.toContain("projectMemory.policyConfigure");

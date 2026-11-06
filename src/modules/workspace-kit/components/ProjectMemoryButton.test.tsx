@@ -100,6 +100,38 @@ it("withdraws the old panel on source replacement and never reopens it on a roun
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
+it("shows found memory without offering initialization and keeps maintenance behind More", async () => {
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command) =>
+    command === "project_memory_discover"
+      ? Promise.resolve({
+          schema: 1,
+          root: "/owned",
+          blockedCount: 0,
+          scope: { schema: 1, state: "ready", ancestryComplete: true },
+        })
+      : original?.(command),
+  );
+  await act(async () => root.render(<ProjectMemoryButton target={target} />));
+  await open();
+  expect(document.body.textContent).toContain("projectMemory.found");
+  expect(
+    [...document.querySelectorAll("button")].some(
+      (item) => item.textContent === "projectMemory.initialize",
+    ),
+  ).toBe(false);
+  const more = [...document.querySelectorAll("details")].find(
+    (item) => item.querySelector("summary")?.textContent === "common.more",
+  );
+  expect(more).toBeDefined();
+  expect(more?.open).toBe(false);
+  expect(more?.textContent).toContain("projectMemory.conversationPrepare");
+  expect(more?.textContent).toContain("common.refresh");
+  expect(
+    invoke.mock.calls.some(([command]) => command === "project_memory_preview"),
+  ).toBe(false);
+});
+
 it("keeps unsupported and missing targets explicit without opening native work", async () => {
   for (const value of [
     null,

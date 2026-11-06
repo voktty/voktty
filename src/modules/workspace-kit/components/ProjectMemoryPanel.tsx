@@ -19,6 +19,7 @@ import {
 } from "@/modules/workspace-kit/lib/memoryPanel";
 import {
   lazy,
+  type ReactNode,
   Suspense,
   useLayoutEffect,
   useMemo,
@@ -63,7 +64,7 @@ export default function ProjectMemoryPanel({
       manageConversation && conversationTarget ? conversationTarget : target,
     [manageConversation, target, conversationTarget],
   );
-  return (
+  const extra = (
     <>
       {conversation && conversationTarget && canManageConversation ? (
         <MemoryConversation
@@ -96,59 +97,62 @@ export default function ProjectMemoryPanel({
         </Button>
       ) : null}
       {managementTarget ? (
-        <>
-          <dl className="grid min-w-0 gap-3 rounded-lg border border-border p-3 text-xs">
-            <div>
-              <dt className="text-muted-foreground">
-                {t("projectMemory.directory")}
-              </dt>
-              <dd className="mt-1 break-all font-mono" dir="auto">
-                {managementTarget.path}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">
-                {t("projectMemory.environment")}
-              </dt>
-              <dd className="mt-1">
-                {managementTarget.path.startsWith("remote://")
-                  ? t("projectMemory.remote")
-                  : managementTarget.environment.kind === "local"
-                    ? t("projectMemory.local")
-                    : managementTarget.environment.kind.toUpperCase()}
-              </dd>
-            </div>
-          </dl>
-          {supportedMemoryPanelTarget(managementTarget) ? (
-            <MemoryObservation
-              key={`${revision}:${managementTarget.path}`}
-              target={managementTarget}
-              prepareInitialMemory={
-                managementTarget === target ? prepareInitialMemory : undefined
-              }
-              onReload={() => setRevision((value) => value + 1)}
-            />
-          ) : (
-            <p role="status" className="text-sm text-muted-foreground">
-              {t("projectMemory.unsupported")}
-            </p>
-          )}
-        </>
-      ) : (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("projectMemory.noTarget")}
-        </p>
-      )}
+        <dl className="grid min-w-0 gap-3 rounded-lg border border-border p-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">
+              {t("projectMemory.directory")}
+            </dt>
+            <dd className="mt-1 break-all font-mono" dir="auto">
+              {managementTarget.path}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">
+              {t("projectMemory.environment")}
+            </dt>
+            <dd className="mt-1">
+              {managementTarget.path.startsWith("remote://")
+                ? t("projectMemory.remote")
+                : managementTarget.environment.kind === "local"
+                  ? t("projectMemory.local")
+                  : managementTarget.environment.kind.toUpperCase()}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
     </>
+  );
+  return managementTarget ? (
+    supportedMemoryPanelTarget(managementTarget) ? (
+      <MemoryObservation
+        key={`${revision}:${managementTarget.path}`}
+        target={managementTarget}
+        extra={extra}
+        prepareInitialMemory={
+          managementTarget === target ? prepareInitialMemory : undefined
+        }
+        onReload={() => setRevision((value) => value + 1)}
+      />
+    ) : (
+      <p role="status" className="text-sm text-muted-foreground">
+        {t("projectMemory.unsupported")}
+      </p>
+    )
+  ) : (
+    <p role="status" className="text-sm text-muted-foreground">
+      {t("projectMemory.noTarget")}
+    </p>
   );
 }
 
 function MemoryObservation({
   target,
+  extra,
   onReload,
   prepareInitialMemory,
 }: {
   target: MemoryPanelTarget;
+  extra: ReactNode;
   onReload: () => void;
   prepareInitialMemory?: (prompt: string) => boolean;
 }) {
@@ -313,11 +317,6 @@ function MemoryObservation({
         className="space-y-3 text-sm"
       >
         <p role={state.status === "error" ? "alert" : "status"}>{t(message)}</p>
-        {state.status === "error" ? (
-          <p className="text-xs text-muted-foreground">
-            {t("common.error")}: <code>{state.code}</code>
-          </p>
-        ) : null}
         {state.status === "error" &&
         state.code === "denied" &&
         target.environment.kind === "local" &&
@@ -343,9 +342,6 @@ function MemoryObservation({
         state.observation.scope.state === "incomplete" &&
         !state.observation.scope.ancestryComplete ? (
           <div className="space-y-3 rounded-lg border border-border p-3">
-            <p className="text-xs text-muted-foreground">
-              {t("projectMemory.inspectDescription")}
-            </p>
             <Button
               variant="outline"
               size="sm"
@@ -353,18 +349,23 @@ function MemoryObservation({
                 void controller.current?.inspectAncestors();
               }}
             >
-              {t("projectMemory.inspectAncestors")}
+              {t("common.retry")}
             </Button>
           </div>
         ) : null}
         {state.status === "ready" &&
         (canInitializeMemory(state.observation) ||
-          canRepairMemory(state.observation)) ? (
+          (state.observation.scope.state === "partial" &&
+            canRepairMemory(state.observation))) ? (
           <Button
             size="sm"
             onClick={() => void controller.current?.configure(language)}
           >
-            {t("projectMemory.initialize")}
+            {t(
+              canInitializeMemory(state.observation)
+                ? "projectMemory.initialize"
+                : "common.refresh",
+            )}
           </Button>
         ) : null}
         {state.status === "ready" &&
@@ -391,19 +392,6 @@ function MemoryObservation({
           </>
         ) : null}
         {state.status === "ready" &&
-        state.observation.root &&
-        canBrowseMemoryDocuments(state.observation) ? (
-          <MemoryInitialCapture
-            key={state.observation.root}
-            root={state.observation.root}
-            prepare={
-              state.observation.root === target.path
-                ? prepareInitialMemory
-                : undefined
-            }
-          />
-        ) : null}
-        {state.status === "ready" &&
         canBrowseMemoryDocuments(state.observation) ? (
           <Button
             size="sm"
@@ -415,6 +403,43 @@ function MemoryObservation({
             {t("common.browse")}
           </Button>
         ) : null}
+        <details className="space-y-3">
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            {t("common.more")}
+          </summary>
+          <div className="space-y-3 pt-2">
+            {extra}
+            {state.status === "error" ? (
+              <p className="text-xs text-muted-foreground">
+                {t("common.error")}: <code>{state.code}</code>
+              </p>
+            ) : null}
+            {state.status === "ready" &&
+            state.observation.scope.state === "ready" &&
+            canRepairMemory(state.observation) ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void controller.current?.configure(language)}
+              >
+                {t("common.refresh")}
+              </Button>
+            ) : null}
+            {state.status === "ready" &&
+            state.observation.root &&
+            canBrowseMemoryDocuments(state.observation) ? (
+              <MemoryInitialCapture
+                key={state.observation.root}
+                root={state.observation.root}
+                prepare={
+                  state.observation.root === target.path
+                    ? prepareInitialMemory
+                    : undefined
+                }
+              />
+            ) : null}
+          </div>
+        </details>
       </div>
       <DialogFooter>
         <Button

@@ -76,9 +76,13 @@ it("only inspects on load, captures the original target and coalesces refreshes"
   const pending = indicator.load();
   expect(indicator.load()).toBe(pending);
   await pending;
-  expect(api.select).toHaveBeenCalledExactlyOnceWith("/project", {
-    kind: "local",
-  });
+  expect(api.select).toHaveBeenCalledExactlyOnceWith(
+    "/project",
+    {
+      kind: "local",
+    },
+    { inspectAncestors: true },
+  );
   expect(api.inspect).toHaveBeenCalledExactlyOnceWith(selected);
   expect(notify.mock.calls.map(([state]) => state)).toEqual([
     "checking",

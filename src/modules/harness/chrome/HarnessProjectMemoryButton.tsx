@@ -162,6 +162,7 @@ export function HarnessProjectMemoryButton({ cwd }: { cwd: string }) {
   return (
     <ProjectMemoryButton
       rail
+      observe
       target={source.target}
       captureConversation={source.captureConversation}
     />

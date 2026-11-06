@@ -85,11 +85,13 @@ export default function MemoryIndicator({
       title={message}
       className={cn(
         "inline-flex",
+        ["absent", "checking", "unsupported", "noTarget"].includes(current) &&
+          "text-muted-foreground",
         current === "found" && "text-emerald-500",
         (current === "review" ||
           current === "foundReview" ||
           current === "error") &&
-          "text-amber-500",
+          "text-orange-500",
         current === "checking" && "animate-pulse",
       )}
     >

@@ -70,6 +70,10 @@ it("debounces the active target and displays verified memory without private sta
     selection: "selection",
     inspectionOnly: true,
   });
+  expect(invoke).toHaveBeenCalledWith(
+    "project_memory_select",
+    expect.objectContaining({ inspectAncestors: true }),
+  );
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(
     invoke.mock.calls.filter(
@@ -109,7 +113,33 @@ it("withdraws old green state immediately and rejects a late old-folder observat
   expect(state()).toBe("noTarget");
 });
 
-it("explains an observed kit with unverified parents in amber without granting inspection", async () => {
+it("shows confirmed absence in gray without claiming that unavailable memory is absent", async () => {
+  const original = invoke.getMockImplementation();
+  invoke.mockImplementation((command, args) =>
+    command === "project_memory_discover"
+      ? Promise.resolve({
+          schema: 1,
+          root: null,
+          blockedCount: 0,
+          scope: { schema: 1, state: "absent", ancestryComplete: true },
+        })
+      : original?.(command, args),
+  );
+  await act(async () => render());
+  await act(async () => vi.advanceTimersByTimeAsync(200));
+  expect(state()).toBe("absent");
+  expect(node.querySelector("[data-memory-state]")?.className).toContain(
+    "text-muted-foreground",
+  );
+  invoke.mockRejectedValueOnce({ code: "denied" });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(state()).toBe("error");
+  expect(node.querySelector("[data-memory-state]")?.className).toContain(
+    "text-orange-500",
+  );
+});
+
+it("keeps an observed kit orange if bounded ancestor inspection remains incomplete", async () => {
   invoke.mockImplementation(async (command) => {
     if (command === "project_memory_open") return { id: 1, token: "handle" };
     if (command === "project_memory_select") return "selection";
@@ -130,7 +160,7 @@ it("explains an observed kit with unverified parents in amber without granting i
   await act(async () => vi.advanceTimersByTimeAsync(200));
   expect(state()).toBe("foundReview");
   const indicator = node.querySelector("[data-memory-state]");
-  expect(indicator?.className).toContain("text-amber-500");
+  expect(indicator?.className).toContain("text-orange-500");
   expect(indicator?.className).not.toContain("text-emerald-500");
   expect(indicator?.getAttribute("title")).toBe(
     "projectMemory.found projectMemory.review",

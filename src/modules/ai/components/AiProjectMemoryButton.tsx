@@ -23,6 +23,7 @@ export function AiProjectMemoryButton() {
   );
   return (
     <ProjectMemoryButton
+      observe
       target={
         boundary
           ? {

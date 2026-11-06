@@ -50,8 +50,13 @@ without a separate permission screen. This does not read ancestor instructions,
 authorize ancestor workspaces or grant writes. Refresh and continuation after
 publication retain that exact selection. Unavailable or incomplete ancestry
 remains explicit and blocks initialization; the panel offers an inspection retry
-rather than treating unknown parents as absent. Background indicators do not
-inherit this panel selection or request its ancestor inspection grant.
+rather than treating unknown parents as absent. Background indicators retain
+their own selections and request the same bounded ancestor-marker inspection.
+This avoids reporting unknown ancestry solely because the indicator omitted
+that inspection. It never grants ancestor instruction reads or writes. A valid
+complete scope is green, absence is gray, and incomplete, invalid or unavailable
+observations are orange. Harness rail and internal AI buttons use the same
+observer; selected-source retirement and debounce remain unchanged.
 Initialization uses project defaults without private-settings preparation;
 replacements still require their exact file review. A private settings error
 must not be presented as a reason to authorize the project again.
@@ -72,12 +77,15 @@ the original authorization requirements.
 Green means a valid marker was found with complete ancestry and no blocked
 observations. It does not mean that an agent received memory, instruction trust
 was accepted or context delivery is enabled. Confirmed absence is neutral;
-an incomplete scope with exactly one observed kit has an amber indicator that
+an incomplete scope with exactly one observed kit has an orange indicator that
 reports both the found memory and the need for review. It neither treats the
 scope as usable nor retains the management panel's ancestor inspection grant.
 Other incomplete, conflicting or inaccessible observations require review. Errors
-never become absence. The panel retains separate trust, policy, conversation
-preparation and delivery controls. Explicit SSH workspaces and saved SSH project
+never become absence. The normal panel shows the observation and its root.
+Initialization is offered only for absence; existing ready memory keeps
+maintenance and initial-capture instructions under More, alongside conversation
+controls and directory metadata. Actual replacement and recovery conflicts still
+require their native review. Explicit SSH workspaces and saved SSH project
 namespaces use the shared client's independently leased `memory.manage` helper
 transport; see its [contract](../../../crates/voktty-remote/PROJECT_MEMORY.md).
 Unknown namespaces and unsupported WSL, Docker and serial targets remain explicit
