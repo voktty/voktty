@@ -11,9 +11,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use voktty_memory_local::{
     inspect_local_memory_scope, read_local_memory_documents, resolve_local_memory_directory,
-    DiscoveryControl, LocalMemoryStore, MemoryContextSession, MemorySessionUse, MemoryTrustReview,
-    OwnedProjectInitializationPreview, OwnedProjectRecoveryPreview, ProjectInitializationRequest,
-    ProjectRecoveryRequest, PublicationError, ReadControl, ReadError,
+    DiscoveryControl, MemoryContextSession, OwnedProjectInitializationPreview,
+    OwnedProjectRecoveryPreview, ProjectInitializationRequest, ProjectRecoveryRequest,
+    PublicationError, ReadControl,
 };
 use voktty_remote_protocol::{RemoteRequest, RemoteResponse};
 use voktty_workspace_kit::RootLinks;
@@ -58,10 +58,6 @@ impl<T> Review<T> {
         token
     }
 
-    fn take(&mut self, token: &str) -> Result<T, Error> {
-        self.take_if(token, |_| true)
-    }
-
     fn take_if(&mut self, token: &str, accepts: impl FnOnce(&T) -> bool) -> Result<T, Error> {
         if token.len() != 36
             || !self
@@ -101,7 +97,6 @@ struct Selection {
     token: String,
     source: Arc<Access>,
     deployment: Review<DeploymentReview>,
-    trust: Review<MemoryTrustReview>,
 }
 
 impl Selection {
@@ -140,40 +135,14 @@ impl Drop for Context {
 }
 
 /// Owned by one authenticated helper incarnation. Rehandshake drops its receipts.
+#[derive(Default)]
 pub(super) struct MemoryServer {
-    data_directory: Option<PathBuf>,
     next_id: u64,
     presentations: HashMap<u64, Presentation>,
     contexts: HashMap<u64, Context>,
 }
 
-impl Default for MemoryServer {
-    fn default() -> Self {
-        Self {
-            data_directory: dirs::data_local_dir(),
-            next_id: 0,
-            presentations: HashMap::new(),
-            contexts: HashMap::new(),
-        }
-    }
-}
-
 impl MemoryServer {
-    fn state_parent(&self, control: &ReadControl) -> Result<PathBuf, Error> {
-        let base = self
-            .data_directory
-            .as_deref()
-            .ok_or(Error::new("unavailable"))?;
-        voktty_memory_local::resolve_memory_application_parent(base, control).map_err(|error| {
-            match error {
-                voktty_memory_local::MemoryOriginError::Read(error) => Error::from(error),
-                voktty_memory_local::MemoryOriginError::LegacyStateRequiresReview => {
-                    Error::new("legacyStateRequiresReview")
-                }
-            }
-        })
-    }
-
     pub fn reset(&mut self) {
         self.presentations.clear();
         self.contexts.clear();
@@ -212,34 +181,6 @@ impl MemoryServer {
             .get_mut(&handle.id)
             .filter(|value| handle.token.len() == 36 && value.token == handle.token)
             .ok_or(Error::new("cancelled"))
-    }
-
-    fn store(&self, control: &ReadControl) -> Result<Arc<LocalMemoryStore>, Error> {
-        let parent = self.state_parent(control)?;
-        let parent = parent.as_path();
-        let control = control.clone().with_storage_diagnostics();
-        let diagnostic = |error: ReadError, fallback: voktty_memory_local::StorageStage| {
-            let failure = control.storage_failure();
-            let mut error = Error::from(error);
-            error.storage = Some(json!({
-                "stage": failure.map_or(fallback, |failure| failure.stage).as_str(),
-                "windowsError": failure.and_then(|failure| failure.windows_error),
-            }));
-            error
-        };
-        LocalMemoryStore::check_application_parent(parent, &control).map_err(|error| {
-            diagnostic(error, voktty_memory_local::StorageStage::ApplicationParent)
-        })?;
-        let store = LocalMemoryStore::open_private(parent, &control).map_err(|error| {
-            diagnostic(error, voktty_memory_local::StorageStage::PrivateDirectory)
-        })?;
-        store.load().map_err(|error| {
-            diagnostic(
-                ReadError::Store(error),
-                voktty_memory_local::StorageStage::Preferences,
-            )
-        })?;
-        Ok(Arc::new(store))
     }
 
     #[cfg(test)]
@@ -338,7 +279,6 @@ impl MemoryServer {
                     token: token.clone(),
                     source: Arc::new(Access::new(root.to_owned(), requested, inspect_ancestors)),
                     deployment: Review::default(),
-                    trust: Review::default(),
                 });
                 Ok(json!(token))
             }
@@ -562,52 +502,6 @@ impl MemoryServer {
                 )?;
                 serde_json::to_value(documents).map_err(|_| Error::new("unavailable"))
             }
-            Request::ReviewTrust {
-                handle,
-                selection,
-                revision,
-                role,
-            } => {
-                let source = {
-                    let selected = self.selected(&handle, &selection)?;
-                    selected.trust.reserve(revision)?;
-                    selected.source.clone()
-                };
-                let store = self.store(&control.read_control()?)?;
-                let review = MemoryTrustReview::prepare(
-                    store,
-                    source.requested.clone(),
-                    source,
-                    role,
-                    control,
-                )?;
-                let observed = review.observation();
-                let mut result = json!({"schema":1,"revision":revision,"root":review.root(),
-                    "projectKey":observed.project_key,"config":observed.config,"instructions":observed.instructions,
-                    "fingerprint":observed.fingerprint,"preference":observed.preference});
-                let token = self.selected(&handle, &selection)?.trust.put(review);
-                result["review"] = json!(token);
-                Ok(result)
-            }
-            Request::ConfirmTrust {
-                handle,
-                selection,
-                review,
-            } => {
-                let review = self.selected(&handle, &selection)?.trust.take(&review)?;
-                self.state_parent(&control.read_control()?)?;
-                let key = review.observation().project_key.clone();
-                let snapshot = review.accept(control)?;
-                Ok(json!({"schema":1,"preference":snapshot.project(&key)}))
-            }
-            Request::CancelTrust {
-                handle,
-                selection,
-                revision,
-            } => Ok(json!(self
-                .selected(&handle, &selection)?
-                .trust
-                .cancel(revision)?)),
             Request::ContextOpen {} => {
                 let (id, token) = self.allocate()?;
                 self.contexts.insert(
@@ -619,32 +513,6 @@ impl MemoryServer {
                     },
                 );
                 Ok(json!({"id":id,"token":token}))
-            }
-            Request::ContextBind {
-                handle,
-                selection,
-                review,
-                context,
-                mode,
-            } => {
-                let resource = self.context(&context)?;
-                if resource.bound.is_some() || resource.project_attempted {
-                    return Err(Error::new("cancelled"));
-                }
-                let mode = match mode.as_str() {
-                    "enabled" => MemorySessionUse::Enabled,
-                    "disabled" => MemorySessionUse::Disabled,
-                    "inherit" => MemorySessionUse::Inherit,
-                    _ => return Err(Error::new("invalidInput")),
-                };
-                let review = self.selected(&handle, &selection)?.trust.take(&review)?;
-                self.state_parent(&control.read_control()?)?;
-                let bound = MemoryContextSession::bind(review, mode, control)?;
-                let result = json!({"schema":1,"root":bound.root()});
-                let source = self.selected(&handle, &selection)?.source.clone();
-                self.context(&context)?.bound = Some((bound, source));
-                self.presentation(&handle)?.selected = None;
-                Ok(result)
             }
             Request::ContextBindProject {
                 schema,
@@ -677,9 +545,6 @@ impl MemoryServer {
                 Ok(result)
             }
             Request::ContextRead { context } => {
-                if !self.context(&context)?.project_attempted {
-                    self.state_parent(&control.read_control()?)?;
-                }
                 let (bound, _) = self
                     .context(&context)?
                     .bound
@@ -722,10 +587,6 @@ fn validate_directory(root: &Path, path: &str, control: &ReadControl) -> Result<
 #[cfg(all(test, target_os = "linux"))]
 #[path = "project_memory_tests.rs"]
 mod tests;
-
-#[cfg(all(test, target_os = "linux"))]
-#[path = "project_memory_setup_tests.rs"]
-mod setup_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "project_memory_recovery_tests.rs"]

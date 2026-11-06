@@ -86,30 +86,7 @@ pub(super) enum Request {
         selection: String,
         root: String,
     },
-    ReviewTrust {
-        handle: Handle,
-        selection: String,
-        revision: u64,
-        role: Option<String>,
-    },
-    ConfirmTrust {
-        handle: Handle,
-        selection: String,
-        review: String,
-    },
-    CancelTrust {
-        handle: Handle,
-        selection: String,
-        revision: u64,
-    },
     ContextOpen {},
-    ContextBind {
-        handle: Handle,
-        selection: String,
-        review: String,
-        context: Handle,
-        mode: String,
-    },
     ContextBindProject {
         schema: u8,
         handle: Handle,
@@ -128,7 +105,6 @@ pub(super) enum Request {
 pub(super) struct Error {
     pub code: &'static str,
     pub changes: Option<Value>,
-    pub storage: Option<Value>,
 }
 
 impl Error {
@@ -136,16 +112,12 @@ impl Error {
         Self {
             code,
             changes: None,
-            storage: None,
         }
     }
     pub fn value(self) -> Value {
         let mut value = json!({"code":self.code});
         if let Some(changes) = self.changes {
             value["changes"] = changes;
-        }
-        if let Some(storage) = self.storage {
-            value["storage"] = storage;
         }
         value
     }

@@ -21,11 +21,6 @@ acknowledged relative paths and possible recovery files. Already published files
 are preserved. Transport/protocol and malformed-request failures retain the
 ordinary remote error envelope. Arbitrary OS messages, private storage paths,
 installation identity and raw discovery facts are never included in errors.
-Storage failures may additionally contain `storage: { stage, windowsError }`.
-The stage is a fixed native storage/security stage and the nullable Windows
-status is an unsigned 32-bit integer. Clients validate and copy only those two
-fields, preserve the original error code and ignore unknown diagnostic values.
-Older helpers without this optional field retain their existing error behavior.
 
 | Operation | Required fields besides `operation` | Effect |
 | --- | --- | --- |
@@ -37,25 +32,22 @@ Older helpers without this optional field retain their existing error behavior.
 | `preview` | `handle`, `selection`, `revision`, `inputs`, `links` | Retain an exact native initialization review at the selected directory |
 | `confirm` | `handle`, `selection`, `review` | Consume and publish that review after native revalidation |
 | `cancel` | `handle`, `selection`, `revision` | Retire the matching initialization review or fence an earlier arrival |
-| `reviewRecovery` | `handle`, `selection`, `revision` | Review complete saved originals for missing targets at the selected directory |
-| `confirmRecovery` | `handle`, `selection`, `review`, `digest` | Consume that exact review and restore only its missing targets |
+| `reviewRecovery` | `schema: 2`, `handle`, `selection`, `revision` | Review the complete project recovery plan at the selected directory |
+| `confirmRecovery` | `schema: 2`, `handle`, `selection`, `review`, `digest` | Consume and publish that exact project recovery plan |
 | `cancelRecovery` | `handle`, `selection`, `revision` | Retire or fence the shared deployment review |
 | `documents` | `handle`, `selection`, `root` | Display the shared native document inventory for the expected root |
-| `reviewTrust` | `handle`, `selection`, `revision`; optional `role` | Display native instructions and retain their exact review |
-| `confirmTrust` | `handle`, `selection`, `review` | Accept only that native instruction review |
-| `cancelTrust` | `handle`, `selection`, `revision` | Retire or fence a trust review |
 | `contextOpen` | none | Reserve an empty context owner |
-| `contextBind` | `handle`, `selection`, `review`, `context`, `mode` | Consume a fresh trust review and move its source into the context owner |
 | `contextBindProject` | `schema: 2`, `handle`, `selection`, `context` | Bind the captured project source without global storage or instruction trust |
-| `contextRead` | `context` | Recheck the captured source and scope; legacy contexts also recheck policy and trust |
+| `contextRead` | `context` | Recheck the captured project source and scope |
 | `contextClose` | `context` | Retire only that context and release its resources |
 
 Handles contain a positive unsigned 32-bit `id` and a random UUID-v4 `token`.
-The former `discover`, `initialize`, `reviewPolicy`, `confirmPolicy` and `cancelPolicy`
+The former `discover`, `initialize`, `reviewPolicy`, `confirmPolicy`,
+`cancelPolicy`, `reviewTrust`, `confirmTrust`, `cancelTrust` and `contextBind`
 operations are removed. They fail as `invalid_params` before operation admission,
 resource allocation or private storage access. Project initialization uses
-`preview` and `confirm` without a private setup step. The legacy storage reader
-only opens existing state; it never creates an installation or preferences.
+`preview` and `confirm` without a private setup step. The helper no longer
+resolves an application-data origin or opens global memory storage.
 
 IDs increase without reuse; exhaustion rejects new resources with `limit`.
 Selection and review tokens are independently generated UUIDs. A helper admits at most 64
@@ -64,8 +56,7 @@ within their original owners and stay within JavaScript's safe integer range.
 An invalid newer selection still retires the previous source. Confirmations
 consume reviews, including when native revalidation or publication fails.
 Cancellation cannot revive an older request. Native reviews retain their own
-120-second lifetime and filesystem checks; private-state operations additionally
-retain their preference revision checks.
+120-second lifetime and filesystem checks.
 
 Initialization and restoration share one deployment review slot and monotonic
 revision per selection. A newer review invalidates the previous review even if
@@ -82,52 +73,27 @@ precedence over caller defaults during repair; existing project content remains
 unchanged and is rechecked before publication. Bounded ancestor inspection
 rejects nested initialization beneath a known applicable memory root, without
 granting parent writes. Publication retains its temporary
-`.voktty/.initialization.json` record on interruption. Its recovery is pending;
-the legacy recovery operations below do not consume that record. Schema-1
-preview replies retain `isResuming: false` and `recoveryFiles: []` for current
-clients. These fields do not claim global-journal resumption.
+`.voktty/.initialization.json` record on interruption. Schema-1 preview replies
+retain `isResuming: false` and `recoveryFiles: []`; those fields do not claim
+global-journal resumption. Recovery uses the project record instead.
 
-Recovery replies include `schema`, host-native `root`, `revision`, `review`,
-native SHA-256 `digest` and one to three literal `entries` with relative `target`,
-`backup` and full original `text`. The native journal binds the root instances,
-installation and preferences; display data is not write authority. Restoration
-uses the shared native recovery core with authority limited to creating exact
-missing targets and consuming exact original backups beneath the original
-authenticated workspace. It permits no replacements, directory creation,
-arbitrary staging or secret paths. Success returns the normal publication
-report; partial failure preserves acknowledged `changes`. Restoration leaves
-the journal and preferences unchanged and never publishes the kit. Resuming
-initialization requires fresh inspection, editable inputs, preview and separate
-acceptance. The worker retains its existing lifetime, generation, queue and
-output-settlement rules for all three operations. Older `memory.manage` helpers
-may reject these additive operations; clients report the rejection without
-falling back to Desktop IO.
+Schema-2 recovery replies contain the host-native `root`, `revision`, `review`,
+acceptance `digest`, exact original `entries`, deployment plan, cleanup inventory
+and any publication blocker. Display data cannot replace the retained native
+artifact. Confirmation consumes that review once and derives write authority
+from its complete restoration, deployment and cleanup requirements beneath the
+original authenticated workspace. Secret-path protections, root identities,
+expected bytes, publication locking and review lifetime remain mandatory.
+Success returns acknowledged created, skipped, migrated and cleaned paths;
+partial failure preserves acknowledged `changes`. Global preferences and old
+private journals remain untouched. Older helpers may reject schema-2 recovery;
+clients report that rejection without falling back to Desktop IO.
 
-The host and standalone CLI use the shared native origin resolver:
-`dirs::data_local_dir()/app.voktty.voktty/project-memory`, matching Desktop on
-that execution machine. They share its installation identity, preference
-revisions and process locks. Clients cannot choose that path. Older helpers
-and CLI builds used `dev.voktty/project-memory`. Any existing legacy entry,
-including empty, corrupt, linked or inaccessible state, blocks private-state
-operations with `legacyStateRequiresReview`; neither store is opened or created.
-A linked, inaccessible or non-directory legacy application parent also blocks.
-An ordinary legacy application directory without project-memory does not block.
-Ordinary helper requests never move, merge or discard identity, policy, trust or
-an interrupted journal. The CLI no longer exposes private storage migration.
-Project-only initialization, recovery and context do not inspect either origin.
-Existing qualified migration markers remain relevant only to legacy state
-operations; they are not project authorization or consent from another machine.
-Do not delete legacy state or a migration marker to bypass a refusal. See
-[the native origin contract](../voktty-memory-local/ORIGIN.md). Marker inspection
-and empty resource reservation create neither that directory nor an identity.
-Preparation is explicit. The shared store qualifies its local filesystem,
-ownership, permissions and complete ancestor chain and retains process locks and
-revision checks. Origins are rechecked when opening state and before consuming
-context or accepting a previously prepared private-state review. A late legacy conflict
-consumes a matching private-state confirmation without performing its write.
-Project initialization preview and publication are independent of that state. Stateless
-inspection, document display, cancellation and exact resource cleanup remain
-available. Host and Desktop on different machines do not copy consent or trust.
+All current helper memory operations use project files. Missing, corrupt,
+inaccessible or legacy global data cannot block initialization, repair, recovery
+or context. The helper never moves, merges or discards old installation data,
+preferences or migration markers. Stateless inspection, document display,
+cancellation and exact resource cleanup retain their original checks.
 
 Ancestor inspection is a narrow, explicit choice for a selection. It permits
 only ancestor metadata, immediate `.voktty` entry metadata/enumeration and
@@ -137,19 +103,14 @@ uses the shared native preview and publisher. Write authority is derived only
 from the accepted plan's create, replace, staging and recovery requirements,
 under the captured workspace and secret-path rules. Reserved data is preserved.
 
-Context modes are `enabled`, `disabled` or `inherit`. Binding does not write trust
-or policy. A successful binding returns `{"schema":1,"root":"/host/project"}`,
-where `root` is the native bound memory root, which may be an authorized ancestor
-of the selected directory. An enabled session cannot override missing trust or
-`never` policy.
 Context packets retain the shared 24 KiB limit and grant no capture permission.
 Preparing or copying a packet is not provider acceptance or evidence of reading.
 Binding transfers the original source out of the presentation, so closing the
 panel does not close accepted context. Context close and successful rehandshake
 retire the old resources; a new helper cannot adopt an earlier helper's receipts.
 
-`contextBindProject` is the project-only alternative to the legacy review-bound
-operation above. It requires schema 2 before admission, rejects unknown fields,
+`contextBindProject` is the only context binding operation. It requires schema 2
+before admission, rejects unknown fields,
 and consumes one binding attempt on an empty context. A failed admitted attempt
 cannot reuse that context; close it and obtain a fresh opening. Success returns
 `{ schema: 2, root, packet }` using the shared native project session. Selection
@@ -160,8 +121,7 @@ Reads on project-bound contexts do not resolve or open global memory storage.
 Missing, inaccessible, corrupt or legacy private state remains untouched and
 cannot block this path. Current project instructions and facts can appear in a
 later packet without a stored trust update. Consumers still need original-source
-and packet-freshness checks before delivery. Legacy contexts retain their old
-private-origin, policy and trust checks. The frontend conversation panel uses
+and packet-freshness checks before delivery. The frontend conversation panel uses
 `contextBindProject`; incompatible replies fail with exact context cleanup and
 no retry through legacy binding or Desktop IO. Older helpers can reject the new
 operation without affecting their other existing operations.

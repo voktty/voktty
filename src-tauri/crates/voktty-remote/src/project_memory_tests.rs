@@ -36,10 +36,7 @@ fn fixture() -> (tempfile::TempDir, tempfile::TempDir, MemoryServer) {
     let project = tempfile::tempdir_in("/dev/shm").unwrap();
     let private = tempfile::tempdir().unwrap();
     fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    let server = MemoryServer {
-        data_directory: Some(private.path().to_owned()),
-        ..Default::default()
-    };
+    let server = MemoryServer::default();
     (project, private, server)
 }
 
@@ -69,7 +66,6 @@ fn preview(
 }
 
 fn initialize(server: &mut MemoryServer, root: &Path, handle: &Value, selection: &Value) {
-    super::setup_tests::seed_store(server, &ReadControl::default());
     let review = preview(server, root, handle, selection, 1);
     assert_eq!(review["deployment"]["canPublish"], true);
     ok(
@@ -80,7 +76,7 @@ fn initialize(server: &mut MemoryServer, root: &Path, handle: &Value, selection:
 }
 
 #[test]
-fn real_native_flow_preserves_reserved_data_and_binds_context_after_exact_reviews() {
+fn real_native_flow_preserves_reserved_data_and_binds_project_context() {
     let (project, private, mut server) = fixture();
     let root = project.path();
     fs::create_dir_all(root.join(".voktty/sessions")).unwrap();
@@ -126,30 +122,15 @@ fn real_native_flow_preserves_reserved_data_and_binds_context_after_exact_review
         )["scope"]["state"],
         "ready"
     );
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1,"role":null}),
-    );
-    assert!(review["instructions"]["files"].as_array().unwrap().len() > 1);
-    let accepted = ok(
-        &mut server,
-        root,
-        json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":review["review"]}),
-    );
-    assert_eq!(accepted["preference"]["policy"], "manual");
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":2,"role":null}),
-    );
     let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
     let bound = ok(
         &mut server,
         root,
-        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
+        json!({"operation":"contextBindProject","schema":2,"handle":handle,"selection":selection,"context":context}),
     );
-    assert_eq!(bound, json!({"schema":1,"root":root}));
+    assert_eq!(bound["schema"], 2);
+    assert_eq!(bound["root"], json!(root));
+    assert!(bound["packet"]["bytes"].as_u64().unwrap() <= 24 * 1024);
     ok(
         &mut server,
         root,
@@ -194,7 +175,6 @@ fn initialization_reuse_and_link_only_repair_need_no_global_storage() {
     let root = project.path();
     let blocked = private.path().join("ordinary-file");
     fs::write(&blocked, "preserved global sentinel").unwrap();
-    server.data_directory = Some(blocked.clone());
     let handle = ok(&mut server, root, json!({"operation":"open"}));
     let selection = select(&mut server, root, &handle, 1);
     let params = |revision| {
@@ -301,24 +281,20 @@ fn context_binding_reports_the_native_memory_root_for_a_nested_selection() {
         root,
         json!({"operation":"select","handle":handle,"path":nested,"revision":2,"inspectAncestors":true}),
     );
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}),
-    );
-    assert_eq!(review["root"], json!(root));
     let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
     let bound = ok(
         &mut server,
         root,
-        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
+        json!({"operation":"contextBindProject","schema":2,"handle":handle,"selection":selection,"context":context}),
     );
-    assert_eq!(bound, json!({"schema":1,"root":root}));
+    assert_eq!(bound["schema"], 2);
+    assert_eq!(bound["root"], json!(root));
+    assert!(bound["packet"]["bytes"].as_u64().unwrap() <= 24 * 1024);
     assert_ne!(bound["root"], json!(nested));
     error(
         &mut server,
         root,
-        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
+        json!({"operation":"contextBindProject","schema":2,"handle":handle,"selection":selection,"context":context}),
         "cancelled",
     );
 }
@@ -532,7 +508,7 @@ fn strict_parameters_and_limits_reject_before_private_state_or_project_writes() 
 }
 
 #[test]
-fn retired_setup_and_policy_operations_reject_before_storage_or_resource_allocation() {
+fn retired_global_operations_reject_before_storage_or_resource_allocation() {
     let (project, private, mut server) = fixture();
     let old_state = private.path().join("memory-local.json");
     fs::write(&old_state, "existing private state").unwrap();
@@ -546,6 +522,10 @@ fn retired_setup_and_policy_operations_reject_before_storage_or_resource_allocat
         json!({"operation":"reviewPolicy","handle":handle,"selection":selection,"revision":1,"policy":"always"}),
         json!({"operation":"confirmPolicy","handle":handle,"selection":selection,"review":uuid::Uuid::new_v4().to_string()}),
         json!({"operation":"cancelPolicy","handle":handle,"selection":selection,"revision":1}),
+        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}),
+        json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":uuid::Uuid::new_v4().to_string()}),
+        json!({"operation":"cancelTrust","handle":handle,"selection":selection,"revision":1}),
+        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":uuid::Uuid::new_v4().to_string(),"context":handle,"mode":"enabled"}),
     ] {
         let reply = server.handle(Some(project.path()), request(params));
         assert_eq!(reply.error.unwrap().code, "invalid_params");
@@ -563,103 +543,11 @@ fn retired_setup_and_policy_operations_reject_before_storage_or_resource_allocat
 }
 
 #[test]
-fn trust_policy_and_session_consent_remain_independent_and_policy_changes_apply_to_live_context() {
+fn cancellation_fences_out_of_order_publication_reviews() {
     let (project, _private, mut server) = fixture();
     let root = project.path();
     let handle = ok(&mut server, root, json!({"operation":"open"}));
     let selection = select(&mut server, root, &handle, 1);
-    initialize(&mut server, root, &handle, &selection);
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}),
-    );
-    assert!(review["preference"].is_null());
-    let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
-    );
-    let denied = ok(
-        &mut server,
-        root,
-        json!({"operation":"contextRead","context":context}),
-    );
-    assert_eq!(denied["decision"]["contextAllowed"], false);
-    assert!(denied["packet"].is_null());
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"contextClose","context":context}),
-    );
-
-    let selection = select(&mut server, root, &handle, 2);
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}),
-    );
-    let accepted = ok(
-        &mut server,
-        root,
-        json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":review["review"]}),
-    );
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":2}),
-    );
-    let context = ok(&mut server, root, json!({"operation":"contextOpen"}));
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"contextBind","handle":handle,"selection":selection,"review":review["review"],"context":context,"mode":"enabled"}),
-    );
-    assert_eq!(
-        ok(
-            &mut server,
-            root,
-            json!({"operation":"contextRead","context":context})
-        )["decision"]["contextAllowed"],
-        true
-    );
-
-    let store = server.store(&ReadControl::default()).unwrap();
-    let snapshot = store.load().unwrap();
-    let key = accepted["preference"]["projectKey"].as_str().unwrap();
-    let changed = store
-        .set_policy(
-            snapshot.revision(),
-            key,
-            voktty_memory_local::MemoryPolicy::Never,
-        )
-        .unwrap();
-    assert_eq!(
-        changed.project(key).unwrap().instruction_digest.as_deref(),
-        accepted["preference"]["instructionDigest"].as_str()
-    );
-    let denied = ok(
-        &mut server,
-        root,
-        json!({"operation":"contextRead","context":context}),
-    );
-    assert_eq!(denied["decision"]["contextAllowed"], false);
-    assert!(denied["packet"].is_null());
-    ok(
-        &mut server,
-        root,
-        json!({"operation":"contextClose","context":context}),
-    );
-}
-
-#[test]
-fn cancellation_fences_out_of_order_reviews_and_changed_instructions_cannot_be_trusted() {
-    let (project, _private, mut server) = fixture();
-    let root = project.path();
-    let handle = ok(&mut server, root, json!({"operation":"open"}));
-    let selection = select(&mut server, root, &handle, 1);
-    super::setup_tests::seed_store(&server, &ReadControl::default());
     ok(
         &mut server,
         root,
@@ -678,32 +566,6 @@ fn cancellation_fences_out_of_order_reviews_and_changed_instructions_cannot_be_t
         root,
         json!({"operation":"confirm","handle":handle,"selection":selection,"review":review["review"]}),
     );
-    let review = ok(
-        &mut server,
-        root,
-        json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}),
-    );
-    fs::write(root.join(".voktty/INIT.md"), "Changed instructions\n").unwrap();
-    error(
-        &mut server,
-        root,
-        json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":review["review"]}),
-        "stale",
-    );
-    error(
-        &mut server,
-        root,
-        json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":review["review"]}),
-        "cancelled",
-    );
-    let snapshot = server
-        .store(&ReadControl::default())
-        .unwrap()
-        .load()
-        .unwrap();
-    assert!(snapshot
-        .project(review["projectKey"].as_str().unwrap())
-        .is_none());
 }
 
 #[test]
@@ -712,7 +574,6 @@ fn project_context_protocol_binds_and_reads_without_global_storage_or_trust() {
     let root = project.path();
     let blocked = private.path().join("global-file");
     fs::write(&blocked, "preserved global bytes").unwrap();
-    server.data_directory = Some(blocked.clone());
     let handle = ok(&mut server, root, json!({"operation":"open"}));
     let selection = select(&mut server, root, &handle, 1);
     let review = preview(&mut server, root, &handle, &selection, 1);
@@ -733,7 +594,6 @@ fn project_context_protocol_binds_and_reads_without_global_storage_or_trust() {
         root,
         json!({"operation":"close","handle":handle}),
     );
-    server.data_directory = None;
     let current = ok(
         &mut server,
         root,

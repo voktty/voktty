@@ -490,7 +490,8 @@ The typed frontend also exposes no trust-review API. Desktop context binding
 accepts only the project-owned schema-2 contract described in `CONTEXT.md`.
 
 The shared redacted error conversion remains available to project binding.
-Native core and authenticated-helper legacy trust APIs still await retirement;
+The helper also rejects trust operations and legacy context binding and no longer
+opens global storage. Native core legacy trust APIs still await retirement;
 existing global data is preserved. Project publication, recovery and context
 continue to enforce their original source, authorization and lifetime checks.
 

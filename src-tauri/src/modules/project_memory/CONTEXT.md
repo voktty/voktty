@@ -29,7 +29,8 @@ This path never resolves, opens or initializes global memory storage. The fronte
 conversation panel and typed client use this project binding. The authenticated
 helper offers the matching `contextBindProject` operation without a local or
 legacy fallback. Desktop context IPC rejects the former review-bound request.
-The native core and helper still retain legacy APIs pending separate retirement.
+The helper also rejects legacy trust and context binding. The native core still
+retains legacy APIs pending separate retirement.
 
 ## Native core legacy context pending retirement
 

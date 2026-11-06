@@ -34,15 +34,18 @@ impl Fixture {
         let project = tempfile::tempdir_in("/dev/shm").unwrap();
         let private = tempfile::tempdir().unwrap();
         fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
-        let mut server = MemoryServer {
-            data_directory: Some(private.path().to_owned()),
-            ..Default::default()
-        };
+        let mut server = MemoryServer::default();
         let root = project.path();
         fs::create_dir_all(root.join(".voktty/sessions")).unwrap();
         fs::write(root.join(".voktty/sessions/kept.json"), "reserved fixture").unwrap();
         fs::write(root.join(".voktty/.gitignore"), b"*\r\n").unwrap();
-        let _store = super::setup_tests::seed_store(&server, &ReadControl::default());
+        let old_state = private.path().join("app.voktty.voktty/project-memory");
+        fs::create_dir_all(&old_state).unwrap();
+        fs::write(
+            old_state.join("memory-local.json"),
+            b"preserved global sentinel",
+        )
+        .unwrap();
         let source = Arc::new(Access::new(root.to_owned(), root.to_owned(), true));
         let preview = OwnedProjectInitializationPreview::prepare_at_project_root(
             ProjectInitializationRequest {

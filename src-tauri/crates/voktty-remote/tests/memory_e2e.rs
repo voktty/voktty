@@ -1,8 +1,5 @@
 #![cfg(target_os = "linux")]
 
-#[path = "support/memory_origin_migration.rs"]
-mod origin_migration;
-
 use serde_json::{json, Value};
 use std::fs;
 use std::io::Write;
@@ -186,21 +183,14 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
         .iter()
         .any(|file| file["path"] == ".voktty/PROJECT.md"));
     assert!(!data.exists());
-    let control = ReadControl::default();
-    let parent = data.join("app.voktty.voktty");
-    LocalMemoryStore::prepare_application_parent(&parent, &control).unwrap();
-    LocalMemoryStore::create_private(&parent, &control)
-        .unwrap()
-        .initialize()
-        .unwrap();
-    let trust = helper
-        .ok(json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1}));
-    helper.ok(json!({"operation":"confirmTrust","handle":handle,"selection":selection,"review":trust["review"]}));
-    let trust = helper
-        .ok(json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":2}));
+    let state_path = data.join("app.voktty.voktty/project-memory/memory-local.json");
+    fs::create_dir_all(state_path.parent().unwrap()).unwrap();
+    fs::write(&state_path, b"preserved corrupt global sentinel").unwrap();
     let context = helper.ok(json!({"operation":"contextOpen"}));
-    let bound = helper.ok(json!({"operation":"contextBind","handle":handle,"selection":selection,"review":trust["review"],"context":context,"mode":"enabled"}));
-    assert_eq!(bound, json!({"schema":1,"root":root}));
+    let bound = helper.ok(json!({"operation":"contextBindProject","schema":2,"handle":handle,"selection":selection,"context":context}));
+    assert_eq!(bound["schema"], 2);
+    assert_eq!(bound["root"], json!(root));
+    assert!(bound["packet"]["bytes"].as_u64().unwrap() <= 24 * 1024);
     helper.ok(json!({"operation":"close","handle":handle}));
     let context_reply = helper.ok(json!({"operation":"contextRead","context":context}));
     assert_eq!(context_reply["decision"]["contextAllowed"], true);
@@ -212,14 +202,19 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
     let legacy = data.join("dev.voktty");
     fs::create_dir(&legacy).unwrap();
     fs::create_dir(legacy.join("project-memory")).unwrap();
-    assert_eq!(
-        helper.memory(json!({"operation":"contextRead","context":context}))["error"]["code"],
-        "legacyStateRequiresReview"
-    );
+    let legacy_state = legacy.join("project-memory/memory-local.json");
+    fs::write(&legacy_state, b"preserved legacy sentinel").unwrap();
+    let current = helper.ok(json!({"operation":"contextRead","context":context}));
+    assert_eq!(current["packet"], context_reply["packet"]);
+    fs::write(root.join(".voktty/INIT.md"), "Updated project guide").unwrap();
+    let current = helper.ok(json!({"operation":"contextRead","context":context}));
+    assert!(current["packet"]["text"]
+        .as_str()
+        .unwrap()
+        .contains("Updated project guide"));
     helper.ok(json!({"operation":"contextClose","context":context}));
-    fs::remove_dir(legacy.join("project-memory")).unwrap();
-    fs::remove_dir(legacy).unwrap();
     let stored = fs::read(data.join("app.voktty.voktty/project-memory/memory-local.json")).unwrap();
+    assert_eq!(stored, b"preserved corrupt global sentinel");
     drop(helper);
 
     let mut replacement = Helper::start(&data);
@@ -235,6 +230,10 @@ fn real_helper_initializes_reserved_kit_and_uses_context_without_transferring_re
     assert_eq!(
         fs::read_to_string(root.join(".voktty/sessions/kept.json")).unwrap(),
         "reserved conversation"
+    );
+    assert_eq!(
+        fs::read(legacy_state).unwrap(),
+        b"preserved legacy sentinel"
     );
 }
 
@@ -359,7 +358,7 @@ fn real_framed_helper_restores_only_after_review_and_rejects_a_retired_handshake
 }
 
 #[test]
-fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
+fn retired_global_requests_leave_legacy_state_and_project_operations_untouched() {
     let project = tempfile::tempdir_in("/dev/shm").unwrap();
     let private = tempfile::tempdir().unwrap();
     fs::set_permissions(private.path(), fs::Permissions::from_mode(0o700)).unwrap();
@@ -391,10 +390,11 @@ fn legacy_state_refusal_keeps_stateless_inspection_and_cleanup_available() {
         "invalid_params"
     );
     assert_eq!(
-        helper.memory(
+        helper.request(
+            METHOD_MEMORY_MANAGE,
             json!({"operation":"reviewTrust","handle":handle,"selection":selection,"revision":1})
-        ),
-        json!({"schema":1,"ok":false,"error":{"code":"legacyStateRequiresReview"}})
+        ).error.unwrap().code,
+        "invalid_params"
     );
     assert_eq!(helper.memory(json!({"operation":"reviewRecovery","schema":2,"handle":handle,"selection":selection,"revision":1}))["error"]["code"], "unavailable");
     helper.ok(json!({"operation":"close","handle":handle}));
