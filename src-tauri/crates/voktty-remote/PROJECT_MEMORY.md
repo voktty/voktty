@@ -207,3 +207,10 @@ Preparation and enabling do not start a model or prove delivery. Codex requires
 its turn RPC acknowledgement; Claude requires the exact replay echo and completed
 write. Native Windows, real SSH and actual model reading remain runtime
 acceptance requirements, independent of transport and provider-adapter tests.
+
+The Linux x86-64 release test in `scripts/release/remote-memory.node-test.mjs`
+executes the shipped static helper, not an in-process server fixture. It checks
+initial publication, agent entry links, project-only context binding and reading
+after presentation close, without creating global storage. Rebuilding Desktop
+must embed an up-to-date helper: a successful marker inspection alone does not
+prove compatibility with project publication or schema-2 context commands.

@@ -287,6 +287,7 @@ function handleFrame(kind, payload) {
           rows: 24,
           cwd: helperWorkspaceRoot,
           blocks: false,
+          multiplexerMode: "none",
         }),
       );
     } else if (response.id === "pty-open") {
