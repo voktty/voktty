@@ -6,6 +6,8 @@ import { StatusBar } from "@/modules/statusbar/StatusBar";
 import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 import { asTabKey, asWorkspaceScopeId } from "@/modules/tabs/lib/tabIdentity";
 import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
+import { publishActiveSurface } from "@/modules/surfaces/lib/activeSurfaceStore";
+import { useHarnessProjectEnvStore } from "@/modules/harness/lib/harnessEnvStore";
 
 const { captured } = vi.hoisted(() => ({
   captured: { target: null as MemoryPanelTarget | null },
@@ -118,6 +120,33 @@ it("uses the active leaf directory and environment instead of the toolkit or an 
   const memoryTarget: MemoryPanelTarget = {
     path: "/project/active-folder", environment: { kind: "local" }, source: "harness:20:harness-key",
   };
+  await act(async () => {
+    publishActiveSurface({ kind: "harness", ownerId: 20, projectCwd: "/project", focusFolder: "/project/active-folder" });
+    root.render(<StatusBar {...props} tabs={[harness]} toolkitSourceKey="harness-key" activeLeafId={undefined} toolkitTarget={null} />);
+  });
+  expect(captured.target).toEqual(memoryTarget);
+  const ssh = {
+    kind: "ssh" as const, root: "/project", sessionId: 61,
+    connection: { id: "memory-host", name: "Host", host: "fixture.invalid", port: 22 },
+  };
+  await act(async () => {
+    useHarnessProjectEnvStore.setState({ projects: {
+      "/project": {
+        identity: { projectId: "/project", profileId: ssh.connection.id, requestedRoot: "/project", resolvedRoot: "/project", automatic: false },
+        env: ssh, connecting: false, error: null,
+      },
+    } });
+  });
+  expect(captured.target).toEqual({ ...memoryTarget, environment: ssh });
+  await act(async () => useHarnessProjectEnvStore.setState((state) => ({ projects: {
+    "/project": { ...state.projects["/project"], connecting: true },
+  } })));
+  expect(captured.target).toBeNull();
+  await act(async () => useHarnessProjectEnvStore.setState((state) => ({ projects: {
+    "/project": { ...state.projects["/project"], connecting: false, error: "offline" },
+  } })));
+  expect(captured.target).toBeNull();
+  await act(async () => useHarnessProjectEnvStore.setState({ projects: {} }));
   let current = true;
   const release = memorySurfaceRegistry.publish({
     source: memoryTarget.source, target: memoryTarget, isCurrent: () => current, captureConversation: () => null,
@@ -126,9 +155,12 @@ it("uses the active leaf directory and environment instead of the toolkit or an 
   expect(captured.target).toEqual(memoryTarget);
   current = false;
   await act(async () => root.render(<StatusBar {...props} tabs={[harness]} toolkitSourceKey="harness-key" />));
+  expect(captured.target).toEqual(memoryTarget);
+  await act(async () => publishActiveSurface({ kind: "terminal", ownerId: 1, cwd: "/background" }));
   expect(captured.target).toBeNull();
   await act(async () => release());
   await act(async () => root.unmount());
+  publishActiveSurface(null);
   node.remove();
   vi.unstubAllGlobals();
 });

@@ -41,6 +41,11 @@ import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore"
 import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
 import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
 import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
+import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
+import {
+  harnessProjectEnvironmentFor,
+  useHarnessProjectEnvStore,
+} from "@/modules/harness/lib/harnessEnvStore";
 
 const LazyFloatingArcadeWidget = lazy(() =>
   import("./components/FloatingArcadeWidget").then((m) => ({
@@ -137,6 +142,33 @@ export function StatusBar({
   const toggleNotesBoard = useNotesBoardStore((s) => s.toggle);
   const closeNotesBoard = useNotesBoardStore((s) => s.close);
   const memoryTab = tabs?.find(tab => tab.tabKey === toolkitSourceKey);
+  const activeSurface = useActiveSurfaceStore((state) => state.surface);
+  const harnessTab = memoryTab?.kind === "harness" ? memoryTab : null;
+  const harnessSelected =
+    harnessTab !== null &&
+    activeSurface.kind === "harness" &&
+    activeSurface.ownerId === harnessTab.id;
+  const harnessProject = harnessSelected
+    ? activeSurface.project ?? harnessTab.cwd
+    : null;
+  const harnessEnvironment = useHarnessProjectEnvStore((state) =>
+    harnessProjectEnvironmentFor(harnessProject ?? null, state.projects),
+  );
+  const harnessDirectory = harnessSelected
+    ? activeSurface.folder ?? harnessProject
+    : null;
+  const harnessTarget =
+    harnessTab &&
+    harnessDirectory &&
+    harnessDirectory !== "~" &&
+    !harnessEnvironment.connecting &&
+    !harnessEnvironment.error
+      ? {
+          path: harnessDirectory,
+          environment: harnessEnvironment.env,
+          source: `harness:${harnessTab.id}:${harnessTab.tabKey}`,
+        }
+      : null;
   const memorySurface = useSyncExternalStore(
     memorySurfaceRegistry.subscribe,
     memorySurfaceRegistry.getSnapshot,
@@ -147,9 +179,7 @@ export function StatusBar({
     memorySurface.isCurrent()
       ? memorySurface
       : null;
-  const memoryTarget = harnessMemory
-    ? harnessMemory.target
-    : memoryTab?.kind === "terminal" &&
+  const terminalMemoryTarget = memoryTab?.kind === "terminal" &&
         !memoryTab.collaboration &&
         memoryTab.activeLeafId === activeLeafId &&
         toolkitTarget && activeLeafId !== undefined && cwd && activeWorkspaceEnv
@@ -159,6 +189,9 @@ export function StatusBar({
           source: `terminal:${toolkitSourceKey ?? ""}:${activeLeafId}`,
         }
       : null;
+  const memoryTarget = harnessMemory
+    ? harnessMemory.target
+    : harnessTarget ?? terminalMemoryTarget;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

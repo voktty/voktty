@@ -91,6 +91,13 @@ transport; see its [contract](../../../crates/voktty-remote/PROJECT_MEMORY.md).
 Unknown namespaces and unsupported WSL, Docker and serial targets remain explicit
 and do not invoke local inspection as a fallback.
 
+The footer can initialize the selected Harness directory before a conversation
+has published a memory receipt. This uses the selected surface's owner, folder
+and project environment; an unrelated terminal cannot supply that destination.
+Connecting or failed project environments remain unavailable. Conversation
+receipts still supply their optional context controls and retain their separate
+ownership checks; they are not a prerequisite for preparing project files.
+
 Explicit document browsing uses the separate display-only contract described in
 [DOCUMENTS.md](DOCUMENTS.md). Marker observation never starts that content read.
 
