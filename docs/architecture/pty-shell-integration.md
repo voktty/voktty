@@ -103,6 +103,25 @@ The reader thread runs an `AgentDetector` (`agent_detect.rs`) over the byte stre
 
 Terminal input sends `\r` (CR), not `\n` (LF). PowerShell on Windows requires CR.
 
+## Opt-in input and resize diagnostics
+
+Set `VOKTTY_MEMORY_DIAGNOSTICS=1` before starting Desktop to also trace native PTY
+input and resize operations under `voktty::pty_io`. The first operation caches
+the exact-value check until process exit. Disabled tracing emits no events and
+creates no per-operation clock. Enabled tracing adds logging on the input path
+and can affect timing, so use it only during diagnosis.
+
+Each operation has an independent numeric trace ID. Events contain only the
+fixed operation and stage, elapsed milliseconds and `scope_closed`; no input,
+output, paths, credentials, environment values or session identifiers are logged.
+`Writer` precedes the input mutex and `Write` precedes the native pipe write.
+`OutputGate`, `Master`, `Resize` and `Collaboration` precede their corresponding
+resize locks or calls. `Session` precedes registry lookup. An exit event records
+the last stage even after an error; it does not prove success or IPC delivery.
+Missing exit events require correlation with process lifetime and thread stacks.
+These diagnostics do not move commands to another thread, change lock ordering,
+cancel native calls or qualify a fix for a Windows freeze.
+
 ## Invariants
 
 - Do not remove `CONPTY_LIFECYCLE_LOCK` without verifying first-tab stability under fast tab spam.

@@ -1,5 +1,6 @@
 mod agent_detect;
 mod da_filter;
+mod diagnostics;
 mod session;
 pub(crate) mod shell_init;
 
@@ -14,6 +15,7 @@ use tauri::ipc::{Channel, Response};
 
 use crate::modules::control::ControlState;
 use crate::modules::workspace::{user_spawn_cwd_or_home, WorkspaceEnv, WorkspaceRegistry};
+use diagnostics::{Operation, Stage, Trace};
 use session::Session;
 
 pub struct PtyState {
@@ -65,6 +67,8 @@ impl PtyState {
     }
 
     pub(crate) fn write_bytes(&self, id: u32, bytes: &[u8]) -> Result<(), String> {
+        let mut trace = Trace::new(Operation::Write);
+        trace.step(Stage::Session);
         let session = self
             .sessions
             .read()
@@ -75,12 +79,16 @@ impl PtyState {
                 log::warn!("pty_write: unknown id={id}");
                 "no session".to_string()
             })?;
+        trace.step(Stage::Writer);
         let mut writer = session.writer.lock().unwrap();
-        writer.write_all(bytes).map_err(|e| {
+        trace.step(Stage::Write);
+        let result = writer.write_all(bytes).map_err(|e| {
             // EPIPE is expected if the child already exited.
             log::debug!("pty_write id={id} failed: {e}");
             e.to_string()
-        })
+        });
+        trace.step(Stage::Reply);
+        result
     }
 
     pub(crate) fn send_collab_snapshot_barrier(
@@ -215,6 +223,8 @@ pub fn pty_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
+    let mut trace = Trace::new(Operation::Resize);
+    trace.step(Stage::Session);
     let session = state
         .sessions
         .read()
@@ -225,11 +235,12 @@ pub fn pty_resize(
             log::warn!("pty_resize: unknown id={id}");
             "no session".to_string()
         })?;
+    trace.step(Stage::OutputGate);
     let _output_guard = session.output_gate.lock().unwrap();
-    session
-        .master
-        .lock()
-        .unwrap()
+    trace.step(Stage::Master);
+    let master = session.master.lock().unwrap();
+    trace.step(Stage::Resize);
+    master
         .resize(PtySize {
             rows,
             cols,
@@ -240,7 +251,10 @@ pub fn pty_resize(
             log::warn!("pty_resize id={id} failed: {e}");
             e.to_string()
         })?;
+    drop(master);
+    trace.step(Stage::Collaboration);
     collab.resize_terminal(id, cols, rows);
+    trace.step(Stage::Reply);
     Ok(())
 }
 
