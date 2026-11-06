@@ -15,9 +15,7 @@ fn authorize_initialize_reserved_directory_and_use_reviewed_memory_without_touch
     fs::write(root.join(".voktty/.gitignore"), "*\n").unwrap();
     fs::write(root.join("AGENTS.md"), "Existing root rules\n").unwrap();
     let registry = WorkspaceRegistry::default();
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        state.path().to_owned(),
-    ));
+    let (app, window) = NativeMemoryApplication::test_origin();
     let presentation = app.open_presentation(&window).unwrap();
     assert!(matches!(
         app.select(

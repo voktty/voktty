@@ -4,7 +4,6 @@ use tauri::ResourceTable;
 
 fn application() -> NativeMemoryApplication {
     NativeMemoryApplication {
-        _storage: Err(ReadError::Unavailable.into()),
         owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
         bindings: Mutex::new(HashMap::new()),
     }

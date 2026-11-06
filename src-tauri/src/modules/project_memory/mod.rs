@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use voktty_memory_local::{
     path_policy, DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, MemoryJob, MemoryReadAccess,
-    MemoryWorkError, MemoryWorkers, NativeScopeObservation, ReadControl, ReadError,
+    MemoryWorkError, MemoryWorkers, NativeScopeObservation, ReadError,
 };
 
 struct Access {
@@ -241,9 +241,6 @@ pub use deployment::{
     NativeMemoryRecoveryConfirmation, NativeMemoryRecoveryRead, NativeMemoryRecoveryReceipt,
     NativeMemoryRecoverySnapshot, NativeMemoryRecoveryTarget, NativeMemoryRestoration,
 };
-
-mod storage;
-pub use storage::NativeMemoryStorage;
 
 mod owners;
 pub use owners::{NativeMemoryOwners, NativeMemoryPresentationReceipt, NativeMemoryWindowReceipt};

@@ -430,12 +430,8 @@ fn write_registry_snapshot_limits_fail_closed_without_reusing_read_grants() {
 #[test]
 fn window_confirmation_rejects_foreign_owners_and_never_reaccepts_a_consumed_review() {
     let f = fixture();
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        f._state.path().to_owned(),
-    ));
-    let (foreign, foreign_window) = NativeMemoryApplication::test_origin(
-        NativeMemoryStorage::test_origin(f._state.path().to_owned()),
-    );
+    let (app, window) = NativeMemoryApplication::test_origin();
+    let (foreign, foreign_window) = NativeMemoryApplication::test_origin();
     let presentation = app.open_presentation(&window).unwrap();
     let selected = app
         .select(

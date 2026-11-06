@@ -263,9 +263,7 @@ fn recovery_cannot_borrow_foreign_windows_presentations_or_same_path_selections(
     runtime().block_on(async {
         interrupted(&f).await;
         let receipt = ready_recovery(&f).await;
-        let (foreign, foreign_window) = NativeMemoryApplication::test_origin(
-            NativeMemoryStorage::test_origin(f.parent.path().to_owned()),
-        );
+        let (foreign, foreign_window) = NativeMemoryApplication::test_origin();
         assert!(cancelled(&foreign.recovery_snapshot(
             &f.window,
             &f.presentation,

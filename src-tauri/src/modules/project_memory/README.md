@@ -101,14 +101,9 @@ Ancestor inspection requires the explicit selection consent described below.
 Linux tests exercise the real native workers and filesystem. Other native runtime
 qualification remains pending.
 
-`NativeMemoryStorage::capture` obtains only Tauri's native `app_local_data_dir`
-path, without IO or a project/cwd fallback. Its `open` and explicit `initialize`
-operations run through `MemoryWorkers::store`, sharing the four-slot budget and
-the original deadline through actual settlement. Opening existing state creates
-neither directory nor identity. Initialization creates the fixed private child
-and UUID, never a kit or workspace, instruction or session grant. Corrupt state
-is preserved. Retirement can suppress delivery without rolling back an already
-admitted initialization. A queued cancelled operation cannot start its IO.
+`NativeMemoryStorage` and global application memory store methods have been retired
+from `NativeMemoryApplication`. Project operations run directly against the selected
+project and its `.voktty/` directory without global application memory storage.
 
 The private directory helpers inspect actual filesystem metadata and permissions.
 Unix requires native ownership, no shared writes, a private child and a recognized

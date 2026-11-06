@@ -19,10 +19,7 @@ fn fixture() -> Fixture {
     let root = registry.authorize(project.path()).unwrap();
     registry.authorize("/dev").unwrap();
     populate(&root);
-    let state = tempfile::tempdir().unwrap();
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        state.path().to_owned(),
-    ));
+    let (app, window) = NativeMemoryApplication::test_origin();
     let presentation = app.open_presentation(&window).unwrap();
     let selected = app
         .select(
@@ -193,9 +190,7 @@ fn project_context_ready_artifacts_never_adopt_a_replaced_selection() {
     let root = registry.authorize(project.path()).unwrap();
     registry.authorize("/dev").unwrap();
     populate(&root);
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        state.path().to_owned(),
-    ));
+    let (app, window) = NativeMemoryApplication::test_origin();
     let presentation = app.open_presentation(&window).unwrap();
     let selected = app
         .select(

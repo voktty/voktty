@@ -4,7 +4,6 @@ use std::sync::{Mutex, Weak};
 use tauri::{Manager, Resource, ResourceId, Runtime, WebviewWindow, WindowEvent};
 
 pub struct NativeMemoryApplication {
-    _storage: Result<NativeMemoryStorage, MemoryWorkError>,
     owners: Arc<Mutex<Option<NativeMemoryOwners>>>,
     bindings: Mutex<HashMap<String, (ResourceId, Weak<NativeMemoryWindow>)>>,
 }
@@ -84,9 +83,8 @@ impl NativeMemoryApplication {
     }
 
     #[cfg(test)]
-    pub(super) fn test_origin(storage: NativeMemoryStorage) -> (Self, Arc<NativeMemoryWindow>) {
+    pub(super) fn test_origin() -> (Self, Arc<NativeMemoryWindow>) {
         let app = Self {
-            _storage: Ok(storage),
             owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
             bindings: Mutex::new(HashMap::new()),
         };
@@ -94,9 +92,8 @@ impl NativeMemoryApplication {
         (app, window)
     }
 
-    pub fn capture<R: Runtime>(app: &tauri::AppHandle<R>) -> Self {
+    pub fn capture<R: Runtime>(_app: &tauri::AppHandle<R>) -> Self {
         Self {
-            _storage: NativeMemoryStorage::capture(app),
             owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
             bindings: Mutex::new(HashMap::new()),
         }

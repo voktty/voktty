@@ -7,9 +7,7 @@ pub(super) fn fixture() -> (
     Arc<PresentationResource>,
 ) {
     let state = crate::modules::project_memory::tests::storage_parent();
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        state.path().to_path_buf(),
-    ));
+    let (app, window) = NativeMemoryApplication::test_origin();
     let receipt = app.open_presentation(&window).unwrap();
     let resource = Arc::new(PresentationResource {
         token: uuid::Uuid::new_v4().to_string(),

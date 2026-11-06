@@ -4,7 +4,7 @@ use serde_json::json;
 use std::fs;
 use std::sync::{mpsc, Condvar};
 use std::time::Duration;
-use voktty_memory_local::PublicationError;
+use voktty_memory_local::{PublicationError, ReadControl};
 use voktty_workspace_kit::RootLinks;
 
 #[path = "application_recovery_tests.rs"]
@@ -36,9 +36,7 @@ fn fixture() -> Fixture {
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(project.path()).unwrap();
     registry.authorize("/dev").unwrap();
-    let (app, window) = NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(
-        parent.path().to_owned(),
-    ));
+    let (app, window) = NativeMemoryApplication::test_origin();
     let presentation = app.open_presentation(&window).unwrap();
     let selected = app
         .select(
@@ -238,9 +236,7 @@ fn foreign_application_window_and_presentation_cannot_borrow_a_review() {
     let f = fixture();
     runtime().block_on(async {
         let review = prepare(&f).await;
-        let (foreign, foreign_window) = NativeMemoryApplication::test_origin(
-            NativeMemoryStorage::test_origin(f.parent.path().to_owned()),
-        );
+        let (foreign, foreign_window) = NativeMemoryApplication::test_origin();
         assert!(cancelled(&foreign.preview_snapshot(
             &f.window,
             &f.presentation,
@@ -439,8 +435,7 @@ fn unusable_application_storage_does_not_block_publication_reuse_or_link_only_re
     let origin = parent();
     let blocked = origin.path().join("not-a-directory");
     fs::write(&blocked, "global storage sentinel").unwrap();
-    let (app, window) =
-        NativeMemoryApplication::test_origin(NativeMemoryStorage::test_origin(blocked.clone()));
+    let (app, window) = NativeMemoryApplication::test_origin();
     let presentation = app.open_presentation(&window).unwrap();
     let selected = app
         .select(
