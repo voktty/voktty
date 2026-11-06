@@ -14,6 +14,7 @@ use uuid::Uuid;
 mod apple_acl;
 mod application;
 mod bootstrap;
+pub mod coordination;
 mod discovery;
 #[cfg(test)]
 #[path = "../../../test_support/memory_parent.rs"]
@@ -26,6 +27,12 @@ mod reader;
 mod storage_diagnostics;
 mod template_inputs;
 mod workers;
+pub use coordination::{
+    acquire_claims_guard, acquire_reservation, complete_mailbox_note, list_mailbox_inbox,
+    list_reservations, release_claims_guard, release_reservation, send_mailbox_note,
+    with_claims_guard, AutoClaimsGuard, ClaimsGuard, CoordinationError, MailboxEntry, MailboxNote,
+    NoteKind, ReservationConflict, ReservationEntry, WorkReservation,
+};
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use origin::{resolve_memory_application_parent, MemoryOriginError, MEMORY_APPLICATION_ID};
 #[cfg(any(target_os = "linux", target_os = "android"))]

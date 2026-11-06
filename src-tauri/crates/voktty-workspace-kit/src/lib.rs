@@ -1,4 +1,5 @@
 mod context;
+mod coordination;
 mod deployment;
 mod document;
 mod git_exclude;
@@ -42,6 +43,11 @@ pub fn resource(source: &str) -> Option<&'static str> {
 pub use context::{
     build_memory_context, build_project_memory_packet, instruction_fingerprint,
     InstructionFingerprint, InstructionRecord, MemoryContextPacket, MemoryContextResult,
+};
+pub use coordination::{
+    check_reservation_conflict, normalize_reservation_path, parse_mailbox_note,
+    parse_work_reservation, paths_overlap, validate_note, validate_reservation, ClaimsGuard,
+    MailboxNote, NoteKind, ReservationConflict, WorkReservation,
 };
 pub use deployment::{
     plan_deployment, DeploymentAction, DeploymentEntry, DeploymentPlan, DeploymentReason, PathFact,
