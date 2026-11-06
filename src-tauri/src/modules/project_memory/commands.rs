@@ -7,6 +7,10 @@ use voktty_memory_local::MemoryStoreMode;
 use voktty_memory_local::{MemoryTrustError, StoreError};
 use voktty_workspace_kit::MemoryScope;
 
+#[path = "commands_diagnostics.rs"]
+mod diagnostics;
+use diagnostics::{Operation, Stage, Trace};
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PresentationHandle {
@@ -215,7 +219,10 @@ pub fn project_memory_open(
     window: WebviewWindow,
     app: State<'_, NativeMemoryApplication>,
 ) -> Result<PresentationHandle, MemoryCommandError> {
+    let mut trace = Trace::new(Operation::Open);
+    trace.step(Stage::WindowOwner);
     let owner = app.bound_window(&window)?;
+    trace.step(Stage::Presentation);
     let receipt = app.open_presentation(&owner)?;
     let resource = Arc::new(PresentationResource {
         token: uuid::Uuid::new_v4().to_string(),
@@ -224,7 +231,9 @@ pub fn project_memory_open(
         selected: Mutex::new(SelectionState::default()),
         live: AtomicBool::new(true),
     });
+    trace.step(Stage::ResourceTable);
     let id = window.resources_table().add_arc(resource.clone());
+    trace.step(Stage::Revalidate);
     if !app.window_is_current(&resource.window) {
         let removed = {
             let mut table = window.resources_table();
@@ -242,6 +251,7 @@ pub fn project_memory_open(
         }
         return Err(cancelled());
     }
+    trace.step(Stage::Reply);
     Ok(PresentationHandle {
         id,
         token: resource.token.clone(),
@@ -253,11 +263,15 @@ pub fn project_memory_close(
     window: WebviewWindow,
     handle: PresentationHandle,
 ) -> Result<(), MemoryCommandError> {
+    let mut trace = Trace::new(Operation::Close);
+    trace.step(Stage::ResourceTable);
     let resource = {
         let mut table = window.resources_table();
         take(&mut table, &handle)?
     };
+    trace.step(Stage::Presentation);
     resource.retire();
+    trace.step(Stage::Reply);
     Ok(())
 }
 
@@ -273,12 +287,17 @@ pub fn project_memory_select(
     revision: u64,
     inspect_ancestors: Option<bool>,
 ) -> Result<String, MemoryCommandError> {
+    let mut trace = Trace::new(Operation::Select);
+    trace.step(Stage::ResourceTable);
     let resource = presentation(&window, &handle)?;
-    if inspect_ancestors == Some(true) {
+    trace.step(Stage::Selection);
+    let result = if inspect_ancestors == Some(true) {
         resource.select_with_inspection(&app, &registry, path, &environment, revision, true)
     } else {
         resource.select(&app, &registry, path, &environment, revision)
-    }
+    };
+    trace.step(Stage::Reply);
+    result
 }
 
 #[derive(Debug, Serialize)]
@@ -325,9 +344,11 @@ pub async fn project_memory_discover(
     selection: String,
     inspection_only: Option<bool>,
 ) -> Result<ScopeReply, MemoryCommandError> {
+    let mut trace = Trace::new(Operation::Inspect);
     require_inspection(inspection_only)?;
+    trace.step(Stage::ResourceTable);
     let resource = presentation(&window, &handle)?;
-    inspect(&app, &resource, &selection).await
+    inspect_traced(&app, &resource, &selection, &mut trace).await
 }
 
 fn require_inspection(inspection_only: Option<bool>) -> Result<(), MemoryCommandError> {
@@ -339,22 +360,36 @@ fn require_inspection(inspection_only: Option<bool>) -> Result<(), MemoryCommand
     Ok(())
 }
 
+#[cfg(test)]
 async fn inspect(
     app: &NativeMemoryApplication,
     resource: &PresentationResource,
     token: &str,
 ) -> Result<ScopeReply, MemoryCommandError> {
+    let mut trace = Trace::new(Operation::Inspect);
+    inspect_traced(app, resource, token, &mut trace).await
+}
+
+async fn inspect_traced(
+    app: &NativeMemoryApplication,
+    resource: &PresentationResource,
+    token: &str,
+    trace: &mut Trace,
+) -> Result<ScopeReply, MemoryCommandError> {
+    trace.step(Stage::Selection);
     let selected = resource.check(app, token)?;
-    let result = app
-        .inspect_scope(
-            &resource.window,
-            &resource.receipt,
-            &selected,
-            DiscoveryControl::new(std::time::Duration::from_secs(5)),
-        )?
-        .finish()
-        .await;
+    trace.step(Stage::WorkerAdmission);
+    let pending = app.inspect_scope(
+        &resource.window,
+        &resource.receipt,
+        &selected,
+        DiscoveryControl::new(std::time::Duration::from_secs(5)),
+    )?;
+    trace.step(Stage::WorkerWait);
+    let result = pending.finish().await;
+    trace.step(Stage::Revalidate);
     resource.check(app, token)?;
+    trace.step(Stage::Reply);
     scope_reply(result?)
 }
 

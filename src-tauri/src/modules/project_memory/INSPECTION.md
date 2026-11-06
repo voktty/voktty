@@ -21,9 +21,9 @@ they settle and their exact resource-close operation is acknowledged. Failed
 cleanup remains charged and is retried when another observer is created.
 
 For local targets, the typed client's `inspect` method uses the existing
-`project_memory_discover` command with `inspectionOnly: true`. The optional flag
-defaults to false, retaining the original existing-private-state discovery
-contract. Inspection requires the same current native window, presentation and
+`project_memory_discover` command with `inspectionOnly: true`. Missing or false
+flags are rejected before inspection; no private-state fallback exists.
+Inspection requires the same current native window, presentation and
 selection tokens as other memory operations. It never authorizes a directory,
 opens private state, creates an installation identity or changes preferences.
 
@@ -85,3 +85,27 @@ and do not invoke local inspection as a fallback.
 
 Explicit document browsing uses the separate display-only contract described in
 [DOCUMENTS.md](DOCUMENTS.md). Marker observation never starts that content read.
+
+## Opt-in command tracing
+
+Set `VOKTTY_MEMORY_DIAGNOSTICS=1` before starting Desktop to trace local indicator
+commands in the existing application log under `voktty::memory_inspection`.
+The exact value `1` enables tracing; the first command caches that choice until
+process exit. With tracing disabled, commands emit no diagnostic events.
+
+Each opening, selection, inspection or close receives an independent numeric
+trace ID. Events contain only the operation, fixed stage, elapsed milliseconds
+and a `scope_closed` flag. They never include paths, resource tokens, selection IDs,
+environment values, instruction bodies or kit configuration. A stage event is
+emitted before entering that step. A final event records the last stage when
+the command scope is released, including errors or future cancellation;
+`scope_closed=true` proves neither success nor delivery of an IPC response. A missing
+final event alone is not proof of a hang: process termination can omit it too.
+
+`WorkerWait` means inspection was admitted and the command is waiting for native
+work; it does not identify a particular filesystem call. `WindowOwner`,
+`ResourceTable`, `Presentation` and `Selection` distinguish earlier ownership
+steps. Capture thread stacks on the affected Windows build to determine why a
+stage stops progressing. Tracing does not alter timeouts, authorization, work
+budgets, cleanup or the automatic observation behavior, and is not a fix or
+runtime qualification of the reported Windows freeze.
