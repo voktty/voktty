@@ -2,10 +2,9 @@ use super::*;
 use std::collections::HashMap;
 use std::sync::{Mutex, Weak};
 use tauri::{Manager, Resource, ResourceId, Runtime, WebviewWindow, WindowEvent};
-use voktty_memory_local::MemoryStoreMode;
 
 pub struct NativeMemoryApplication {
-    storage: Result<NativeMemoryStorage, MemoryWorkError>,
+    _storage: Result<NativeMemoryStorage, MemoryWorkError>,
     owners: Arc<Mutex<Option<NativeMemoryOwners>>>,
     bindings: Mutex<HashMap<String, (ResourceId, Weak<NativeMemoryWindow>)>>,
 }
@@ -87,7 +86,7 @@ impl NativeMemoryApplication {
     #[cfg(test)]
     pub(super) fn test_origin(storage: NativeMemoryStorage) -> (Self, Arc<NativeMemoryWindow>) {
         let app = Self {
-            storage: Ok(storage),
+            _storage: Ok(storage),
             owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
             bindings: Mutex::new(HashMap::new()),
         };
@@ -97,13 +96,16 @@ impl NativeMemoryApplication {
 
     pub fn capture<R: Runtime>(app: &tauri::AppHandle<R>) -> Self {
         Self {
-            storage: NativeMemoryStorage::capture(app),
+            _storage: NativeMemoryStorage::capture(app),
             owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
             bindings: Mutex::new(HashMap::new()),
         }
     }
 
-    fn register_window(&self, label: &str) -> Result<Arc<NativeMemoryWindow>, MemoryWorkError> {
+    pub(super) fn register_window(
+        &self,
+        label: &str,
+    ) -> Result<Arc<NativeMemoryWindow>, MemoryWorkError> {
         let mut owners = self.owners.lock().map_err(|_| ReadError::Unavailable)?;
         let receipt = owners
             .as_mut()
@@ -281,61 +283,6 @@ impl NativeMemoryApplication {
         })
     }
 
-    pub fn discover(
-        &self,
-        window: &NativeMemoryWindow,
-        presentation: &NativeMemoryPresentationReceipt,
-        selected: &NativeMemorySelectionReceipt,
-        store: Arc<LocalMemoryStore>,
-        control: DiscoveryControl,
-    ) -> Result<NativeMemoryRead<NativeScopeObservation>, MemoryWorkError> {
-        self.with_owners(window, |owners, receipt| {
-            owners.selection(receipt, presentation)?.scope(
-                selected,
-                store,
-                DiscoveryPurpose::Discover,
-                control,
-            )
-        })
-    }
-
-    pub async fn store(
-        &self,
-        window: &NativeMemoryWindow,
-        mode: MemoryStoreMode,
-        control: ReadControl,
-    ) -> Result<Arc<LocalMemoryStore>, MemoryWorkError> {
-        let control = control.with_storage_diagnostics();
-        let diagnostics = control.clone();
-        let job = self.with_owners(window, |owners, receipt| {
-            if !owners.is_window_current(receipt) {
-                return Err(ReadError::Cancelled.into());
-            }
-            let storage = self.storage.as_ref().map_err(Clone::clone)?;
-            match mode {
-                MemoryStoreMode::OpenExisting => storage.open(control),
-                MemoryStoreMode::Initialize => storage.initialize(control),
-            }
-        })?;
-        let result = job.finish().await;
-        if let (Err(error), Some(failure)) = (&result, diagnostics.storage_failure()) {
-            let mode = match mode {
-                MemoryStoreMode::OpenExisting => "open",
-                MemoryStoreMode::Initialize => "initialize",
-            };
-            log::warn!(
-                "project memory storage failed: mode={mode} stage={} windows_error={:?} error={error}",
-                failure.stage.as_str(), failure.windows_error
-            );
-        }
-        self.with_owners(window, |owners, receipt| {
-            if !owners.is_window_current(receipt) {
-                return Err(ReadError::Cancelled.into());
-            }
-            result
-        })
-    }
-
     pub fn shutdown(&self) {
         *self
             .owners
@@ -353,9 +300,6 @@ mod reviews;
 
 #[path = "application_recovery.rs"]
 mod recovery;
-
-#[path = "application_trust.rs"]
-mod trust;
 
 #[path = "application_context.rs"]
 mod context;

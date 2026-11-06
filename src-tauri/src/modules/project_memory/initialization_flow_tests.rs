@@ -1,5 +1,4 @@
 use super::*;
-use voktty_memory_local::{MemorySessionUse, MemoryStoreMode};
 use voktty_workspace_kit::RootLinks;
 
 #[test]
@@ -48,7 +47,6 @@ fn authorize_initialize_reserved_directory_and_use_reviewed_memory_without_touch
         assert_eq!(fs::read_dir(state.path()).unwrap().count(), 0);
         assert!(!root.join(".voktty/kit.json").exists());
 
-        let store = app.store(&window, MemoryStoreMode::Initialize, ReadControl::default()).await.unwrap();
         let reservation = app.reserve_preview(&window, &presentation, &selected, &registry,
             NativeMemoryPreviewTarget { destination: authorized.clone(), environment: WorkspaceEnv::Local, control: DiscoveryControl::default() }
         ).unwrap();
@@ -72,22 +70,9 @@ fn authorize_initialize_reserved_directory_and_use_reviewed_memory_without_touch
         let observed = app.inspect_scope(&window, &presentation, &selected, DiscoveryControl::default())
             .unwrap().finish().await.unwrap();
         assert_eq!(observed.scope.state, "ready");
-        let reserved = app.reserve_trust(&window, &presentation, &selected, DiscoveryControl::default()).unwrap();
-        let instructions = app.review_trust(&window, &presentation, &selected, &reserved, store.clone(), None)
-            .unwrap().finish().await.unwrap();
-        let snapshot = instructions.snapshot(&reserved).unwrap();
-        let digest = snapshot.fingerprint.digest;
-        let preference = app.accept_trust(&window, &presentation, &selected, instructions, DiscoveryControl::default())
-            .unwrap().finish().await.unwrap();
-        assert_eq!(preference.instruction_digest.as_deref(), Some(digest.as_str()));
-        assert_eq!(preference.policy, voktty_memory_local::MemoryPolicy::Manual);
 
-        let reserved = app.reserve_trust(&window, &presentation, &selected, DiscoveryControl::default()).unwrap();
-        let instructions = app.review_trust(&window, &presentation, &selected, &reserved, store, None)
-            .unwrap().finish().await.unwrap();
         let context = app.open_context(&window).unwrap();
-        let target = NativeMemoryContextTarget { context: &context, presentation: &presentation, selected: &selected };
-        let bound = app.bind_context_session(&window, target, instructions, MemorySessionUse::Enabled, DiscoveryControl::default())
+        let bound = app.bind_project_context(&window, NativeMemoryContextTarget { context: &context, presentation: &presentation, selected: &selected }, DiscoveryControl::default())
             .unwrap().finish().await.unwrap();
         app.promote_context(&window, NativeMemoryContextTarget { context: &context, presentation: &presentation, selected: &selected }, bound).unwrap();
         app.close_presentation(&window, &presentation).unwrap();

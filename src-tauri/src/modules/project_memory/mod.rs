@@ -4,8 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use voktty_memory_local::{
     path_policy, DiscoveryControl, DiscoveryPurpose, LocalMemoryStore, MemoryJob, MemoryReadAccess,
-    MemoryWorkError, MemoryWorkers, NativeContextObservation, NativeScopeObservation, ReadControl,
-    ReadError,
+    MemoryWorkError, MemoryWorkers, NativeScopeObservation, ReadControl, ReadError,
 };
 
 struct Access {
@@ -211,24 +210,6 @@ impl NativeMemorySource {
             access: self.access.clone(),
         })
     }
-
-    pub fn context(
-        &self,
-        store: Arc<LocalMemoryStore>,
-        role: Option<String>,
-        control: ReadControl,
-    ) -> Result<NativeMemoryRead<NativeContextObservation>, MemoryWorkError> {
-        Ok(NativeMemoryRead {
-            job: MemoryWorkers::default().context(
-                store,
-                self.requested.clone(),
-                self.access.clone(),
-                role,
-                control,
-            )?,
-            access: self.access.clone(),
-        })
-    }
 }
 impl Drop for NativeMemorySource {
     fn drop(&mut self) {
@@ -244,12 +225,6 @@ mod ancestor_inspection_tests;
 
 mod selection;
 pub use selection::{NativeMemorySelection, NativeMemorySelectionReceipt};
-
-mod trust;
-pub use trust::{
-    NativeMemoryTrustRead, NativeMemoryTrustReservation, NativeMemoryTrustReview,
-    NativeMemoryTrustSnapshot, NativeMemoryTrustWrite,
-};
 
 mod context;
 pub use context::{

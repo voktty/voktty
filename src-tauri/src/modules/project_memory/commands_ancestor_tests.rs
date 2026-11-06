@@ -24,12 +24,11 @@ fn explicit_selection_inspection_allows_real_deployment_without_authorizing_pare
         .select(&app, &registry, root.clone(), &WorkspaceEnv::Local, 1)
         .unwrap();
     runtime().block_on(async {
-        app.store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
+        fs::create_dir_all(state.path().join("project-memory")).unwrap();
+        fs::write(
+            state.path().join("project-memory/memory-local.json"),
+            "preserved",
         )
-        .await
         .unwrap();
         let preferences = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         assert!(
@@ -93,13 +92,6 @@ fn inspecting_parent_memory_cannot_promote_it_to_a_workspace_or_publish_nested_m
         .select_with_inspection(&app, &registry, root.clone(), &WorkspaceEnv::Local, 1, true)
         .unwrap();
     runtime().block_on(async {
-        app.store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
-        )
-        .await
-        .unwrap();
         let observed = super::super::inspect(&app, &resource, &selected)
             .await
             .unwrap();
@@ -136,13 +128,6 @@ fn a_registered_unrelated_destination_cannot_borrow_the_origins_ancestor_consent
         .select_with_inspection(&app, &registry, origin, &WorkspaceEnv::Local, 1, true)
         .unwrap();
     runtime().block_on(async {
-        app.store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
-        )
-        .await
-        .unwrap();
         let error = preview(&app, &registry, &resource, &selected, request(&destination))
             .await
             .unwrap_err();

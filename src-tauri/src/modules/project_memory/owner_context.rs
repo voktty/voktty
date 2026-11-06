@@ -1,5 +1,5 @@
 use super::*;
-use voktty_memory_local::{MemoryContextRead, MemorySessionUse, MemoryTrustError};
+use voktty_memory_local::{MemoryContextRead, MemoryTrustError};
 
 const MAX_CONTEXTS: usize = 256;
 
@@ -49,34 +49,6 @@ impl NativeMemoryOwners {
         let binding = self
             .selection_mut(window, target.presentation)?
             .bind_project_context(target.context, target.selected, control.clone())?;
-        self.context_owner_mut(window, target.context)?.binding = Some(control);
-        Ok(binding)
-    }
-
-    pub fn bind_context_session(
-        &mut self,
-        window: &NativeMemoryWindowReceipt,
-        target: NativeMemoryContextTarget<'_>,
-        review: NativeMemoryTrustReview,
-        choice: MemorySessionUse,
-        control: DiscoveryControl,
-    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
-        let owner = self.context_owner(window, target.context)?;
-        if owner.context.is_some() {
-            return Err(ReadError::Cancelled.into());
-        }
-        if owner.binding.is_some() {
-            return Err(ReadError::Busy.into());
-        }
-        let binding = self
-            .selection_mut(window, target.presentation)?
-            .bind_context_session(
-                target.context,
-                target.selected,
-                review,
-                choice,
-                control.clone(),
-            )?;
         self.context_owner_mut(window, target.context)?.binding = Some(control);
         Ok(binding)
     }

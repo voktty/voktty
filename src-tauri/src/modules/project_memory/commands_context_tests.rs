@@ -57,12 +57,11 @@ fn project_context_preserves_preferences_and_survives_panel_close() {
     let dir = project();
     let (_registry, selected) = select(&app, &presentation, dir.path());
     runtime().block_on(async {
-        app.store(
-            &presentation.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
+        fs::create_dir_all(state.path().join("project-memory")).unwrap();
+        fs::write(
+            state.path().join("project-memory/memory-local.json"),
+            "preserved",
         )
-        .await
         .unwrap();
         let before = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();
@@ -258,12 +257,11 @@ fn confirming_context_never_accepts_instruction_trust_or_changes_local_policy() 
     let dir = project();
     let (_registry, selected) = select(&app, &presentation, dir.path());
     runtime().block_on(async {
-        app.store(
-            &presentation.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
+        fs::create_dir_all(state.path().join("project-memory")).unwrap();
+        fs::write(
+            state.path().join("project-memory/memory-local.json"),
+            "preserved",
         )
-        .await
         .unwrap();
         let before = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         let context = ContextResource::open(&app, presentation.window.clone()).unwrap();

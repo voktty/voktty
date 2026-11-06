@@ -1,5 +1,5 @@
 use super::*;
-use voktty_memory_local::{MemoryContextRead, MemorySessionUse, MemoryTrustError};
+use voktty_memory_local::{MemoryContextRead, MemoryTrustError};
 
 impl NativeMemoryApplication {
     pub fn open_context(
@@ -17,19 +17,6 @@ impl NativeMemoryApplication {
     ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
         self.with_owners(window, |owners, receipt| {
             Ok(owners.bind_project_context(receipt, target, control))
-        })?
-    }
-
-    pub fn bind_context_session(
-        &self,
-        window: &NativeMemoryWindow,
-        target: NativeMemoryContextTarget<'_>,
-        review: NativeMemoryTrustReview,
-        choice: MemorySessionUse,
-        control: DiscoveryControl,
-    ) -> Result<NativeMemoryContextBinding, MemoryTrustError> {
-        self.with_owners(window, |owners, receipt| {
-            Ok(owners.bind_context_session(receipt, target, review, choice, control))
         })?
     }
 
@@ -86,7 +73,3 @@ impl NativeMemoryApplication {
         })
     }
 }
-
-#[cfg(all(test, target_os = "linux"))]
-#[path = "application_context_tests.rs"]
-mod tests;

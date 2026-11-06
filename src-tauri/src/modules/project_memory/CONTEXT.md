@@ -29,10 +29,9 @@ This path never resolves, opens or initializes global memory storage. The fronte
 conversation panel and typed client use this project binding. The authenticated
 helper offers the matching `contextBindProject` operation without a local or
 legacy fallback. Desktop context IPC rejects the former review-bound request.
-The helper also rejects legacy trust and context binding. The native core still
-retains legacy APIs pending separate retirement.
-
-## Native core legacy context pending retirement
+The helper also rejects legacy trust and context binding. Native core legacy
+trust and global store contracts have been retired, leaving context binding
+operating strictly through schema-2 project context.
 
 The native application reserves context owners independently of presentations.
 `open_context` creates one empty, window-bound receipt without filesystem access,

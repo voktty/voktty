@@ -181,14 +181,6 @@ async fn interrupted(
 ) -> String {
     fs::create_dir(root.join(".voktty")).unwrap();
     fs::write(root.join(".voktty/.gitignore"), "*\r\n").unwrap();
-    let _store = app
-        .store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
-        )
-        .await
-        .unwrap();
     resource.check(app, selected).unwrap();
     let source = NativeMemorySource::capture(registry, root.into(), &WorkspaceEnv::Local).unwrap();
     let preview = MemoryWorkers::default()
@@ -235,6 +227,12 @@ fn recovery_ipc_completes_exact_review_once_and_preserves_global_preferences() {
     let project = project();
     let (registry, selected) = select(&app, &resource, project.path());
     runtime().block_on(async {
+        fs::create_dir_all(state.path().join("project-memory")).unwrap();
+        fs::write(
+            state.path().join("project-memory/memory-local.json"),
+            "preserved",
+        )
+        .unwrap();
         let backup = interrupted(&app, &resource, &registry, &selected, project.path()).await;
         let prefs = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         let reply = review_recovery(

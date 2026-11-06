@@ -25,13 +25,12 @@ fn request(root: &Path, revision: u64) -> PreviewRequest {
     }))
     .unwrap()
 }
-async fn initialize(app: &NativeMemoryApplication, resource: &PresentationResource) {
-    app.store(
-        &resource.window,
-        MemoryStoreMode::Initialize,
-        ReadControl::default(),
+fn initialize(state: &tempfile::TempDir) {
+    fs::create_dir_all(state.path().join("project-memory")).unwrap();
+    fs::write(
+        state.path().join("project-memory/memory-local.json"),
+        "preserved",
     )
-    .await
     .unwrap();
 }
 
@@ -41,7 +40,7 @@ fn preview_reply_is_display_only_and_confirmation_publishes_the_original_once() 
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
     runtime().block_on(async {
-        initialize(&app, &resource).await;
+        initialize(&state);
         let preferences = fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         let reply = preview(
             &app,
@@ -272,7 +271,7 @@ fn preview_needs_no_global_state_and_invalid_inputs_retire_acceptance() {
         assert_eq!(fs::read_dir(state.path()).unwrap().count(), 0);
         assert!(!resource.cancel_review(&app, &selection, 2, None).unwrap());
         assert_eq!(fs::read_dir(project.path()).unwrap().count(), 0);
-        initialize(&app, &resource).await;
+        initialize(&state);
         let preferences = state.path().join("project-memory/memory-local.json");
         fs::remove_file(&preferences).unwrap();
         let last = preview(
@@ -323,11 +322,11 @@ fn cancellation_while_preview_is_queued_suppresses_late_adoption_and_writes() {
 
 #[test]
 fn completed_old_worker_cannot_adopt_after_a_replacement_or_selection_round_trip() {
-    let (_state, app, resource) = fixture();
+    let (state, app, resource) = fixture();
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
     runtime().block_on(async {
-        initialize(&app, &resource).await;
+        initialize(&state);
         let input = request(project.path(), 1);
         let old = resource
             .reserve_review(&app, &registry, &selection, &input)
@@ -393,11 +392,11 @@ fn completed_old_worker_cannot_adopt_after_a_replacement_or_selection_round_trip
 
 #[test]
 fn denied_write_admission_consumes_acceptance_without_falling_back_to_read_grants() {
-    let (_state, app, resource) = fixture();
+    let (state, app, resource) = fixture();
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
     runtime().block_on(async {
-        initialize(&app, &resource).await;
+        initialize(&state);
         let ready = preview(
             &app,
             &registry,
@@ -433,12 +432,12 @@ fn denied_write_admission_consumes_acceptance_without_falling_back_to_read_grant
 
 #[test]
 fn duplicate_or_foreign_confirmation_cannot_borrow_or_retire_a_current_publication() {
-    let (_state, app, resource) = fixture();
+    let (state, app, resource) = fixture();
     let (_other_state, foreign, _other_resource) = fixture();
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
     runtime().block_on(async {
-        initialize(&app, &resource).await;
+        initialize(&state);
         let ready = preview(
             &app,
             &registry,
@@ -478,11 +477,11 @@ fn duplicate_or_foreign_confirmation_cannot_borrow_or_retire_a_current_publicati
 
 #[test]
 fn publication_conflict_preserves_foreign_bytes_and_returns_an_acknowledged_changes_report() {
-    let (_state, app, resource) = fixture();
+    let (state, app, resource) = fixture();
     let project = project();
     let (registry, selection) = select(&app, &resource, project.path());
     runtime().block_on(async {
-        initialize(&app, &resource).await;
+        initialize(&state);
         let ready = preview(
             &app,
             &registry,
@@ -552,7 +551,7 @@ fn wire_contracts_reject_client_plans_and_never_serialize_native_error_details()
 
 #[test]
 fn preview_reports_the_owned_canonical_root_for_an_explicit_destination_alias() {
-    let (_state, app, resource) = fixture();
+    let (state, app, resource) = fixture();
     let project = project();
     let actual = project.path().join("actual");
     let alias = project.path().join("picked");
@@ -565,7 +564,7 @@ fn preview_reports_the_owned_canonical_root_for_an_explicit_destination_alias() 
         .select(&app, &registry, actual.clone(), &WorkspaceEnv::Local, 1)
         .unwrap();
     runtime().block_on(async {
-        initialize(&app, &resource).await;
+        initialize(&state);
         let prepared = preview(&app, &registry, &resource, &selected, request(&alias, 1))
             .await
             .unwrap();

@@ -1,10 +1,10 @@
 use super::*;
-use crate::modules::project_memory::tests::{populate, project, runtime, store};
+use crate::modules::project_memory::tests::{populate, project, runtime};
 use tauri::ResourceTable;
 
 fn application() -> NativeMemoryApplication {
     NativeMemoryApplication {
-        storage: Err(ReadError::Unavailable.into()),
+        _storage: Err(ReadError::Unavailable.into()),
         owners: Arc::new(Mutex::new(Some(NativeMemoryOwners::default()))),
         bindings: Mutex::new(HashMap::new()),
     }
@@ -114,13 +114,7 @@ fn application_boundaries_shutdown_and_last_resource_drop_fail_closed() {
     app.shutdown();
     assert!(app.register_window("main").is_err());
     assert!(app.open_presentation(&owner).is_err());
-    runtime().block_on(async {
-        assert!(matches!(
-            app.store(&owner, MemoryStoreMode::Initialize, ReadControl::default())
-                .await,
-            Err(MemoryWorkError::Read(ReadError::Cancelled))
-        ));
-    });
+    assert!(app.open_context(&owner).is_err());
     owner.retire();
 }
 
@@ -130,7 +124,6 @@ fn native_destroy_and_application_exit_retire_admitted_discovery() {
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
     populate(&root);
-    let (_state, store) = store();
     runtime().block_on(async {
         for shutdown in [false, true] {
             let app = application();
@@ -146,11 +139,10 @@ fn native_destroy_and_application_exit_retire_admitted_discovery() {
                 )
                 .unwrap();
             let read = app
-                .discover(
+                .inspect_scope(
                     &owner,
                     &presentation,
                     &selected,
-                    store.clone(),
                     DiscoveryControl::default(),
                 )
                 .unwrap();
@@ -178,79 +170,20 @@ fn native_destroy_and_application_exit_retire_admitted_discovery() {
             )
             .unwrap();
         let observation = app
-            .discover(
+            .inspect_scope(
                 &owner,
                 &presentation,
                 &selected,
-                store,
                 DiscoveryControl::default(),
             )
             .unwrap()
             .finish()
             .await
             .unwrap();
-        assert!(observation.scope.root_key.is_some());
+        assert_eq!(observation.scope.state, "incomplete");
         assert!(app.is_current(&owner, &presentation, &selected));
         drop(app);
         assert!(owner.owners.upgrade().is_none());
-    });
-}
-
-#[test]
-fn explicit_storage_actions_require_the_current_application_and_window() {
-    let dir = super::super::tests::storage_parent();
-    let mut app = application();
-    app.storage = Ok(NativeMemoryStorage::test_origin(dir.path().to_path_buf()));
-    let foreign = application();
-    let foreign_owner = foreign.register_window("main").unwrap();
-    let owner = app.register_window("main").unwrap();
-    runtime().block_on(async {
-        assert!(matches!(
-            app.store(
-                &foreign_owner,
-                MemoryStoreMode::Initialize,
-                ReadControl::default()
-            )
-            .await,
-            Err(MemoryWorkError::Read(ReadError::Cancelled))
-        ));
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
-        assert!(app
-            .store(
-                &owner,
-                MemoryStoreMode::OpenExisting,
-                ReadControl::default()
-            )
-            .await
-            .is_err());
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
-        let control = ReadControl::default().with_storage_diagnostics();
-        let initialized = app
-            .store(&owner, MemoryStoreMode::Initialize, control.clone())
-            .await
-            .unwrap_or_else(|error| {
-                panic!(
-                    "storage initialization failed: {error}; {:?}",
-                    control.storage_failure()
-                )
-            });
-        let snapshot = initialized.load().unwrap();
-        let reopened = app
-            .store(
-                &owner,
-                MemoryStoreMode::OpenExisting,
-                ReadControl::default(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(reopened.load().unwrap(), snapshot);
-        owner.retire();
-        assert!(matches!(
-            app.store(&owner, MemoryStoreMode::Initialize, ReadControl::default())
-                .await,
-            Err(MemoryWorkError::Read(ReadError::Cancelled))
-        ));
-        assert_eq!(initialized.load().unwrap(), snapshot);
     });
 }
 
@@ -259,7 +192,7 @@ fn poisoned_owner_lock_still_retires_captured_read_authority() {
     let dir = project();
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
-    let (_state, store) = store();
+    populate(&root);
     runtime().block_on(async {
         let app = application();
         let owner = app.register_window("main").unwrap();
@@ -268,11 +201,10 @@ fn poisoned_owner_lock_still_retires_captured_read_authority() {
             .select(&owner, &presentation, &registry, root, &WorkspaceEnv::Local)
             .unwrap();
         let read = app
-            .discover(
+            .inspect_scope(
                 &owner,
                 &presentation,
                 &selected,
-                store,
                 DiscoveryControl::default(),
             )
             .unwrap();

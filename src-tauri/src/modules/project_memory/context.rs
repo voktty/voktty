@@ -10,7 +10,6 @@ pub struct NativeMemoryContextBinding {
     pub(super) job: MemoryContextSessionJob,
     pub(super) access: Arc<Access>,
     pub(super) live: Arc<AtomicBool>,
-    pub(super) project: bool,
 }
 impl NativeMemoryContextBinding {
     pub async fn finish(self) -> Result<NativeMemoryPreparedContext, MemoryTrustError> {
@@ -26,7 +25,6 @@ impl NativeMemoryContextBinding {
             native,
             access: self.access,
             live: self.live,
-            project: self.project,
         })
     }
 }
@@ -36,7 +34,6 @@ pub struct NativeMemoryPreparedContext {
     pub(super) native: MemoryContextSession,
     pub(super) access: Arc<Access>,
     pub(super) live: Arc<AtomicBool>,
-    pub(super) project: bool,
 }
 
 #[derive(Clone)]
@@ -94,7 +91,6 @@ impl NativeMemorySource {
             )?,
             access: self.access.clone(),
             live: live.clone(),
-            project: true,
         };
         Ok((
             binding,

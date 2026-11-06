@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use std::fs;
 use tokio::runtime::{Builder, Runtime};
-use voktty_workspace_kit::{render_template, PathFact};
+use voktty_workspace_kit::render_template;
 
 #[path = "../../../test_support/memory_parent.rs"]
 mod memory_parent;
@@ -182,14 +182,10 @@ fn dropping_a_source_permanently_retires_reads_without_retiring_its_replacement(
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
     populate(&root);
-    let (state, store) = store();
-    let preferences = fs::read(state.path().join("memory-local.json")).unwrap();
     runtime().block_on(async {
         let original =
             NativeMemorySource::capture(&registry, root.clone(), &WorkspaceEnv::Local).unwrap();
-        let old = original
-            .context(store.clone(), None, ReadControl::default())
-            .unwrap();
+        let old = original.inspect_scope(DiscoveryControl::default()).unwrap();
         drop(original);
         let replacement =
             NativeMemorySource::capture(&registry, root.clone(), &WorkspaceEnv::Local).unwrap();
@@ -198,17 +194,13 @@ fn dropping_a_source_permanently_retires_reads_without_retiring_its_replacement(
             Err(MemoryWorkError::Read(ReadError::Cancelled))
         ));
         let current = replacement
-            .context(store.clone(), None, ReadControl::default())
+            .inspect_scope(DiscoveryControl::default())
             .unwrap()
             .finish()
             .await
             .unwrap();
-        assert!(matches!(current.project, PathFact::File { text } if text == "native project"));
+        assert_eq!(current.scope.state, "incomplete");
     });
-    assert_eq!(
-        fs::read(state.path().join("memory-local.json")).unwrap(),
-        preferences
-    );
 }
 
 #[cfg(unix)]

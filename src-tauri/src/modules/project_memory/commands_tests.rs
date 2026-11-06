@@ -132,12 +132,11 @@ fn readonly_discovery_never_initializes_private_state_or_project_files() {
         );
         assert_eq!(std::fs::read_dir(state.path()).unwrap().count(), 0);
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
-        app.store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
+        std::fs::create_dir_all(state.path().join("project-memory")).unwrap();
+        std::fs::write(
+            state.path().join("project-memory/memory-local.json"),
+            "preserved",
         )
-        .await
         .unwrap();
         let before = std::fs::read(state.path().join("project-memory/memory-local.json")).unwrap();
         let reply = inspect(&app, &resource, &token).await.unwrap();
@@ -163,13 +162,6 @@ fn discovery_reply_keeps_native_preferences_instructions_and_blocked_paths_priva
         .select(&app, &registry, root, &WorkspaceEnv::Local, 1)
         .unwrap();
     runtime().block_on(async {
-        app.store(
-            &resource.window,
-            MemoryStoreMode::Initialize,
-            ReadControl::default(),
-        )
-        .await
-        .unwrap();
         let reply = inspect(&app, &resource, &token).await.unwrap();
         let json = serde_json::to_value(reply).unwrap();
         assert_eq!(json.as_object().unwrap().len(), 4);
@@ -202,21 +194,12 @@ fn closing_with_a_pending_read_retires_delivery_and_preserves_siblings() {
         .select(&app, &registry, root, &WorkspaceEnv::Local, 1)
         .unwrap();
     runtime().block_on(async {
-        let store = app
-            .store(
-                &resource.window,
-                MemoryStoreMode::Initialize,
-                ReadControl::default(),
-            )
-            .await
-            .unwrap();
         let selected = resource.check(&app, &token).unwrap();
         let read = app
-            .discover(
+            .inspect_scope(
                 &resource.window,
                 &resource.receipt,
                 &selected,
-                store,
                 DiscoveryControl::default(),
             )
             .unwrap();

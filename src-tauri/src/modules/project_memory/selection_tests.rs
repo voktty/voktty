@@ -83,7 +83,7 @@ fn failed_selection_retires_the_old_destination_without_authorizing_the_new_one(
 }
 
 #[test]
-fn stale_receipts_cannot_admit_scope_or_context_work() {
+fn stale_receipts_cannot_admit_scope_or_documents_work() {
     let dir = project();
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
@@ -91,18 +91,18 @@ fn stale_receipts_cannot_admit_scope_or_context_work() {
     let stale = owner
         .select(&registry, root.clone(), &WorkspaceEnv::Local)
         .unwrap();
-    let current = owner.select(&registry, root, &WorkspaceEnv::Local).unwrap();
-    let (_state, store) = store();
-    // No runtime exists: rejection must precede worker admission.
+    let current = owner
+        .select(&registry, root.clone(), &WorkspaceEnv::Local)
+        .unwrap();
+    // Rejection must precede worker admission.
     assert!(matches!(
-        owner.context(&stale, store.clone(), None, ReadControl::default()),
+        owner.inspect_scope(&stale, DiscoveryControl::default()),
         Err(MemoryWorkError::Read(ReadError::Cancelled))
     ));
     assert!(matches!(
-        owner.scope(
+        owner.documents(
             &stale,
-            store,
-            DiscoveryPurpose::Discover,
+            root.to_str().unwrap().into(),
             DiscoveryControl::default()
         ),
         Err(MemoryWorkError::Read(ReadError::Cancelled))
@@ -111,20 +111,18 @@ fn stale_receipts_cannot_admit_scope_or_context_work() {
 }
 
 #[test]
-fn selection_change_retires_admitted_context_and_preserves_the_new_reader() {
+fn selection_change_retires_admitted_inspection_and_preserves_the_new_reader() {
     let dir = project();
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
     populate(&root);
-    let (state, store) = store();
-    let before = fs::read(state.path().join("memory-local.json")).unwrap();
     runtime().block_on(async {
         let mut owner = NativeMemorySelection::default();
         let old = owner
             .select(&registry, root.clone(), &WorkspaceEnv::Local)
             .unwrap();
         let read = owner
-            .context(&old, store.clone(), None, ReadControl::default())
+            .inspect_scope(&old, DiscoveryControl::default())
             .unwrap();
         let current = owner.select(&registry, root, &WorkspaceEnv::Local).unwrap();
         assert!(matches!(
@@ -132,19 +130,15 @@ fn selection_change_retires_admitted_context_and_preserves_the_new_reader() {
             Err(MemoryWorkError::Read(ReadError::Cancelled))
         ));
         let observation = owner
-            .context(&current, store.clone(), None, ReadControl::default())
+            .inspect_scope(&current, DiscoveryControl::default())
             .unwrap()
             .finish()
             .await
             .unwrap();
-        assert!(matches!(observation.project, PathFact::File { text } if text == "native project"));
+        assert_eq!(observation.scope.state, "incomplete");
         assert!(owner.is_current(&current));
         drop(owner);
     });
-    assert_eq!(
-        fs::read(state.path().join("memory-local.json")).unwrap(),
-        before
-    );
 }
 
 #[test]
@@ -152,17 +146,12 @@ fn dropping_selection_retires_its_admitted_scope_even_if_receipts_survive() {
     let dir = project();
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
-    let (_state, store) = store();
+    populate(&root);
     runtime().block_on(async {
         let mut owner = NativeMemorySelection::default();
         let receipt = owner.select(&registry, root, &WorkspaceEnv::Local).unwrap();
         let read = owner
-            .scope(
-                &receipt,
-                store,
-                DiscoveryPurpose::Discover,
-                DiscoveryControl::default(),
-            )
+            .inspect_scope(&receipt, DiscoveryControl::default())
             .unwrap();
         drop(owner);
         assert!(matches!(

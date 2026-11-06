@@ -2,8 +2,6 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::sync::{atomic::AtomicBool, Mutex};
 use tauri::{Manager, Resource, ResourceId, ResourceTable, State, WebviewWindow};
-#[cfg(test)]
-use voktty_memory_local::MemoryStoreMode;
 use voktty_memory_local::{MemoryTrustError, StoreError};
 use voktty_workspace_kit::MemoryScope;
 

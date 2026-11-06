@@ -491,7 +491,7 @@ accepts only the project-owned schema-2 contract described in `CONTEXT.md`.
 
 The shared redacted error conversion remains available to project binding.
 The helper also rejects trust operations and legacy context binding and no longer
-opens global storage. Native core legacy trust APIs still await retirement;
+opens global storage. Native core legacy trust and store methods have been retired;
 existing global data is preserved. Project publication, recovery and context
 continue to enforce their original source, authorization and lifetime checks.
 

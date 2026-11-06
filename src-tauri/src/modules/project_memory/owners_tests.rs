@@ -82,7 +82,6 @@ fn owner_retirement_suppresses_admitted_results_without_affecting_other_windows(
     let registry = WorkspaceRegistry::default();
     let root = registry.authorize(dir.path()).unwrap();
     populate(&root);
-    let (_state, store) = store();
     runtime().block_on(async {
         for retirement in 0..4 {
             let mut owners = NativeMemoryOwners::default();
@@ -111,7 +110,7 @@ fn owner_retirement_suppresses_admitted_results_without_affecting_other_windows(
             let read = owners
                 .selection(&window, &presentation)
                 .unwrap()
-                .context(&selected, store.clone(), None, ReadControl::default())
+                .inspect_scope(&selected, DiscoveryControl::default())
                 .unwrap();
             match retirement {
                 0 => {
@@ -144,21 +143,14 @@ fn owner_retirement_suppresses_admitted_results_without_affecting_other_windows(
             let current = owners.selection(&other, &other_presentation).unwrap();
             assert!(current.is_current(&other_selected));
             let observation = current
-                .context(&other_selected, store.clone(), None, ReadControl::default())
+                .inspect_scope(&other_selected, DiscoveryControl::default())
                 .unwrap()
                 .finish()
                 .await
                 .unwrap();
-            assert!(
-                matches!(observation.project, PathFact::File { text } if text == "native project")
-            );
+            assert_eq!(observation.scope.state, "incomplete");
             let read = current
-                .scope(
-                    &other_selected,
-                    store.clone(),
-                    DiscoveryPurpose::Discover,
-                    DiscoveryControl::default(),
-                )
+                .inspect_scope(&other_selected, DiscoveryControl::default())
                 .unwrap();
             drop(owners);
             assert!(matches!(
