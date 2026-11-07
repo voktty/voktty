@@ -443,11 +443,11 @@ export function TabBar({
     <div
       data-tabs-header
       data-tauri-drag-region
-      className="group flex min-w-0 flex-1 items-center gap-0.5"
+      className="group flex h-full min-w-0 flex-1 items-center gap-0.5"
     >
       <div
         ref={scrollRef}
-        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
+        className="flex h-full min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
       >
         <Tabs
           value={activeValue}

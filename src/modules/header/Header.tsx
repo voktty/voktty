@@ -111,6 +111,22 @@ type Props = {
 
 const COMPACT_WIDTH = 720;
 
+export function isInteractiveHeaderTarget(target: EventTarget | null): boolean {
+  if (!target) return false;
+  const element =
+    target instanceof Element
+      ? target
+      : (target as Node).parentElement instanceof Element
+        ? (target as Node).parentElement
+        : null;
+  if (!element) return false;
+  return Boolean(
+    element.closest(
+      "button, a, input, select, textarea, [role='button'], [role='tab'], [role='menuitem'], [data-radix-collection-item], [data-interactive], [data-no-drag], [data-tauri-drag-region='false']",
+    ),
+  );
+}
+
 export function Header({
   tabs,
   activeId,
@@ -234,9 +250,69 @@ export function Header({
     if (e.button === 0) dragStartRef.current = null;
   };
 
+  const headerDragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const headerDraggedRef = useRef(false);
+
+  const handleHeaderPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    if (isInteractiveHeaderTarget(e.target)) return;
+    headerDraggedRef.current = false;
+    headerDragStartRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleHeaderPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!headerDragStartRef.current) return;
+    if (e.buttons !== 1) {
+      headerDragStartRef.current = null;
+      return;
+    }
+    const dist = Math.hypot(
+      e.clientX - headerDragStartRef.current.x,
+      e.clientY - headerDragStartRef.current.y,
+    );
+    if (dist > 4) {
+      headerDraggedRef.current = true;
+      headerDragStartRef.current = null;
+      try {
+        void getCurrentWindow().startDragging();
+      } catch {}
+    }
+  };
+
+  const handleHeaderPointerUp = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button === 0) {
+      headerDragStartRef.current = null;
+      if (headerDraggedRef.current) {
+        setTimeout(() => {
+          headerDraggedRef.current = false;
+        }, 150);
+      }
+    }
+  };
+
+  const handleHeaderPointerCancel = () => {
+    headerDragStartRef.current = null;
+    headerDraggedRef.current = false;
+  };
+
+  const handleHeaderDoubleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (isInteractiveHeaderTarget(e.target)) return;
+    if (headerDraggedRef.current) {
+      headerDraggedRef.current = false;
+      return;
+    }
+    e.preventDefault();
+    onNew();
+  };
+
   return (
     <header
       ref={rootRef}
+      onPointerDown={handleHeaderPointerDown}
+      onPointerMove={handleHeaderPointerMove}
+      onPointerUp={handleHeaderPointerUp}
+      onPointerCancel={handleHeaderPointerCancel}
+      onDoubleClick={handleHeaderDoubleClick}
       className={cn(
         "flex h-9 shrink-0 items-center justify-between border-b border-border/60 bg-frame px-2 select-none",
         IS_MAC && "pl-[76px]",
@@ -317,7 +393,7 @@ export function Header({
       </div>
 
       <div
-        className="flex min-w-0 flex-1 items-center gap-1.5"
+        className="flex h-full min-w-0 flex-1 items-center gap-1.5"
         data-tauri-drag-region
       >
         {tabStyle === "horizontal" && (
