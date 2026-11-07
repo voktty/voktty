@@ -633,11 +633,13 @@ export function ProjectRail({
   };
 
   const onConfirmRemoveUnavailable = ({ purgeData }: { purgeData: boolean }) => {
-    for (const path of removableUnavailable) {
-      const targetPath = normalizeProjectPath(path);
-      onRemoveProject?.(targetPath, { purgeData });
-    }
+    const targets = [...removableUnavailable];
     setRemovingUnavailable(false);
+    void (async () => {
+      for (const path of targets) {
+        await onRemoveProject?.(normalizeProjectPath(path), { purgeData });
+      }
+    })();
   };
 
   const pinnedIds = sections.pinned.map((item) => item.path);

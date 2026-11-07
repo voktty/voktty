@@ -183,6 +183,7 @@ import { DEFAULT_PROVIDER_ACCOUNT_ID, type ProviderAccountProvider } from "../li
 import {
   archiveProject,
   forgetProject,
+  isProjectSuppressedFromImport,
   isRemoteProjectPath,
   lastProjectPath,
   loadRecents,
@@ -755,6 +756,7 @@ export function HarnessApp({
           for (const p of paths) {
             if (
               looksLikeProject(p) &&
+              !isProjectSuppressedFromImport(p) &&
               !updated.some((r) => sameProjectPath(r.path, p))
             ) {
               updated = rememberProject(p);

@@ -5,6 +5,7 @@ const KEY = "monocode.recentProjects";
 const RAIL_ORDER_KEY = "monocode.projectRailOrder";
 const RAIL_PINNED_KEY = "monocode.projectRailPinned";
 const ARCHIVED_KEY = "monocode.archivedProjects";
+const DISMISSED_KEY = "monocode.dismissedProjects";
 const ARCHIVED_CHANGED = "monocode:archived-projects-changed";
 const RECENTS_CHANGED = "monocode:recent-projects-changed";
 const REMOTE_PROJECTS_CHANGED = "terax:remote-projects-changed";
@@ -99,6 +100,7 @@ export function rememberProject(path: string): RecentProject[] {
   const normalized = normalize(path);
   if (normalized === "~" || !looksLikeProject(normalized)) return loadRecents();
   dropArchived(normalized);
+  dropDismissed(normalized);
   const prev = loadRecents().filter((p) => !sameProjectPath(p.path, normalized));
   const next = [{ path: normalized, openedAt: Date.now() }, ...prev].slice(
     0,
@@ -126,6 +128,7 @@ function dropFromRail(path: string): RecentProject[] {
 export function forgetProject(path: string): RecentProject[] {
   const normalized = normalize(path);
   dropArchived(normalized);
+  addDismissed(normalized);
   remoteProjectCleaner?.(normalized);
   return dropFromRail(normalized);
 }
@@ -190,6 +193,41 @@ function dropArchived(path: string) {
   const next = prev.filter((item) => !sameProjectPath(item.path, normalized));
   if (next.length === prev.length) return;
   saveArchived(next);
+}
+
+function loadDismissed(): string[] {
+  return readPathList(DISMISSED_KEY);
+}
+
+function saveDismissed(next: string[]) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(next.slice(0, MAX)));
+  } catch {
+    // private mode / quota
+  }
+}
+
+function addDismissed(path: string) {
+  const rest = loadDismissed().filter((item) => !sameProjectPath(item, path));
+  saveDismissed([path, ...rest]);
+}
+
+function dropDismissed(path: string) {
+  const prev = loadDismissed();
+  const next = prev.filter((item) => !sameProjectPath(item, path));
+  if (next.length !== prev.length) saveDismissed(next);
+}
+
+/**
+ * Projects the user removed or archived on purpose. Automatic imports (external
+ * agent history) must skip them; only an explicit open brings one back.
+ */
+export function isProjectSuppressedFromImport(path: string): boolean {
+  const normalized = normalize(path);
+  return (
+    loadDismissed().some((item) => sameProjectPath(item, normalized)) ||
+    loadArchivedProjects().some((item) => sameProjectPath(item.path, normalized))
+  );
 }
 
 /** Most recently opened project, if any. Used to restore the folder on launch. */
