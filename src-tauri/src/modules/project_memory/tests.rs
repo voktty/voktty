@@ -31,44 +31,21 @@ pub(super) fn project() -> tempfile::TempDir {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        tempfile::tempdir().unwrap()
+        tempfile::tempdir_in(std::fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap()
     }
 }
 pub(super) fn storage_parent() -> tempfile::TempDir {
     memory_parent::memory_parent()
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 pub(super) type StoreFixture = tempfile::TempDir;
 
-#[cfg(windows)]
-pub(super) struct StoreFixture {
-    _directory: tempfile::TempDir,
-    root: PathBuf,
-}
-
-#[cfg(windows)]
-impl StoreFixture {
-    pub(super) fn path(&self) -> &Path {
-        &self.root
-    }
-}
-
+#[cfg(unix)]
 pub(super) fn store() -> (StoreFixture, Arc<LocalMemoryStore>) {
     let dir = storage_parent();
-    #[cfg(windows)]
-    let store =
-        Arc::new(LocalMemoryStore::create_private(dir.path(), &ReadControl::default()).unwrap());
-    #[cfg(not(windows))]
     let store = Arc::new(LocalMemoryStore::open(dir.path()).unwrap());
-    #[cfg(windows)]
-    let root = dir.path().join("project-memory");
     store.initialize().unwrap();
-    #[cfg(windows)]
-    let dir = StoreFixture {
-        _directory: dir,
-        root,
-    };
     (dir, store)
 }
 pub(super) fn populate(root: &Path) {

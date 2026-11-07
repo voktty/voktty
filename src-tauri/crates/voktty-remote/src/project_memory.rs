@@ -183,7 +183,7 @@ impl MemoryServer {
             .ok_or(Error::new("cancelled"))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub fn handle(&mut self, root: Option<&Path>, request: RemoteRequest) -> RemoteResponse {
         let control = request_control(&request);
         self.handle_with_control(root, request, &control)
