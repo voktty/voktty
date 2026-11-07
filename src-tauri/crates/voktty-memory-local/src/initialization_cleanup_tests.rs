@@ -57,7 +57,10 @@ impl MemoryWriteAccess for Access {
 }
 
 fn fixture(action: u8) -> (tempfile::TempDir, Access) {
+    #[cfg(target_os = "linux")]
     let temp = tempfile::tempdir().unwrap();
+    #[cfg(not(target_os = "linux"))]
+    let temp = tempfile::tempdir_in(std::fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
     let root = temp.path().join("project");
     fs::create_dir_all(root.join(".voktty")).unwrap();
     fs::write(

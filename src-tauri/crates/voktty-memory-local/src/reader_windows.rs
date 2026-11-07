@@ -22,8 +22,8 @@ use windows_sys::Win32::Storage::FileSystem::{
     GetFinalPathNameByHandleW, DELETE, FILE_ATTRIBUTE_DEVICE, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_CASE_SENSITIVE_INFO, FILE_ID_BOTH_DIR_INFO,
     FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES,
-    FILE_READ_DATA, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_STANDARD_INFO, FILE_TRAVERSE,
-    FILE_TYPE_DISK, FILE_WRITE_DATA, SYNCHRONIZE,
+    FILE_READ_DATA, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_STANDARD_INFO,
+    FILE_TRAVERSE, FILE_TYPE_DISK, FILE_WRITE_DATA, SYNCHRONIZE,
 };
 
 #[path = "publication_windows.rs"]
@@ -279,10 +279,11 @@ fn open_kind(parent: Option<&File>, name: &OsStr, kind: OpenKind) -> io::Result<
             // Rename opens the destination directory for FILE_ADD_FILE. Keep
             // directory writes compatible while still refusing directory deletion.
             FILE_SHARE_READ
+                | FILE_SHARE_WRITE
                 | if kind.directory() {
-                    FILE_SHARE_WRITE
-                } else {
                     0
+                } else {
+                    FILE_SHARE_DELETE
                 },
             if kind.create() {
                 FILE_CREATE

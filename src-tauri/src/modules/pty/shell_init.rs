@@ -1680,7 +1680,12 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args[0].ends_with("docker") || args[0].ends_with("podman"));
+        assert!(
+            args[0].ends_with("docker")
+                || args[0].ends_with("docker.exe")
+                || args[0].ends_with("podman")
+                || args[0].ends_with("podman.exe")
+        );
         assert_eq!(args[1], "exec");
         assert_eq!(args[2], "-it");
         assert_eq!(args[3], "c-123456789abc");
@@ -1704,7 +1709,12 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args[0].ends_with("docker") || args[0].ends_with("podman"));
+        assert!(
+            args[0].ends_with("docker")
+                || args[0].ends_with("docker.exe")
+                || args[0].ends_with("podman")
+                || args[0].ends_with("podman.exe")
+        );
         assert_eq!(args[1], "exec");
         assert_eq!(args[2], "-it");
         assert_eq!(args[3], "-u");
