@@ -117,6 +117,16 @@ import { useNativeFolderOpening } from "@/modules/explorer/lib/useNativeFolderOp
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import { useAutomationsRequest } from "@/modules/harness/lib/automationsRequest";
+import {
+  ensurePreviewTunnel,
+  wasLaunchedByPreview,
+} from "@/modules/preview/lib/previewTunnels";
+import {
+  isRemoteCapture,
+  resolveCaptureTarget,
+  type CaptureTarget,
+} from "@/modules/preview/lib/resolveCaptureTarget";
+import { getLeafWorkspaceEnv } from "@/modules/terminal/lib/useTerminalSession";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   Header,
@@ -2495,21 +2505,28 @@ function DesktopApp() {
     onError: () => toast.error(t("feedback.somethingWentWrong")),
   });
 
-  const openDevServerPreview = useCallback(
-    (capture: DevServerCapture) => {
+  const openCapturedPreview = useCallback(
+    (capture: DevServerCapture, target: CaptureTarget) => {
       const linked = tabsRef.current.find(
         (tab): tab is PreviewTab =>
           tab.kind === "preview" && tab.devServerScope === capture.scope,
       );
       if (linked) {
-        if (linked.url !== capture.url) {
-          updateTab(linked.id, { url: capture.url });
+        if (
+          linked.url !== target.url ||
+          Boolean(linked.inspectViaProxy) !== target.inspectViaProxy
+        ) {
+          updateTab(linked.id, {
+            url: target.url,
+            inspectViaProxy: target.inspectViaProxy,
+          });
         }
         setActiveId(linked.id);
         return linked.id;
       }
-      const id = newPreviewTab(capture.url, {
+      const id = newPreviewTab(target.url, {
         devServerScope: capture.scope,
+        inspectViaProxy: target.inspectViaProxy,
       });
       const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
       if (activeTab) {
@@ -2521,6 +2538,33 @@ function DesktopApp() {
       return id;
     },
     [effectiveActiveId, newPreviewTab, setActiveId, spaceViewLimit, updateTab],
+  );
+
+  const captureDeps = useMemo(
+    () => ({
+      leafEnv: getLeafWorkspaceEnv,
+      tunnel: ensurePreviewTunnel,
+      launched: wasLaunchedByPreview,
+    }),
+    [],
+  );
+
+  // A capture from a remote terminal needs an SSH tunnel first; a local one
+  // opens immediately, as before.
+  const openDevServerPreview = useCallback(
+    (capture: DevServerCapture) => {
+      if (!isRemoteCapture(capture.leafId, getLeafWorkspaceEnv)) {
+        return openCapturedPreview(capture, {
+          url: capture.url,
+          inspectViaProxy: false,
+        });
+      }
+      void resolveCaptureTarget(capture, captureDeps)
+        .then((target) => openCapturedPreview(capture, target))
+        .catch(() => toast.error(t("preview.tunnelFailed")));
+      return undefined;
+    },
+    [captureDeps, openCapturedPreview, t],
   );
 
   useEffect(() => {
@@ -2535,13 +2579,21 @@ function DesktopApp() {
             (tab): tab is PreviewTab =>
               tab.kind === "preview" && tab.devServerScope === capture.scope,
           );
-          if (linked && linked.url !== capture.url) {
-            updateTab(linked.id, { url: capture.url });
-          }
+          if (!linked) continue;
+          void resolveCaptureTarget(capture, captureDeps)
+            .then((target) => {
+              if (linked.url !== target.url) {
+                updateTab(linked.id, {
+                  url: target.url,
+                  inspectViaProxy: target.inspectViaProxy,
+                });
+              }
+            })
+            .catch(() => undefined);
         }
       }
     });
-  }, [updateTab]);
+  }, [captureDeps, updateTab]);
 
   useEffect(() => {
     const handleJumpToComponent = (e: Event) => {

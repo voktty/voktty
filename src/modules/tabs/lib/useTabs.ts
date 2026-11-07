@@ -118,6 +118,12 @@ export type PreviewTab = TabBase & {
   url: string;
   /** Stable workspace/server link used by terminal dev-server capture. */
   devServerScope?: string;
+  /**
+   * Load a loopback page through the inspector proxy so the inspector can be
+   * injected. Used for tunneled remote pages; not persisted, as its tunnel
+   * does not survive a restart.
+   */
+  inspectViaProxy?: boolean;
 };
 
 export type MarkdownTab = TabBase & {
@@ -240,6 +246,7 @@ export type TabPatch = Partial<{
   dirty: boolean;
   url: string;
   devServerScope: string;
+  inspectViaProxy: boolean;
   /** Empty string resets a terminal tab to its cwd-derived name. */
   customTitle: string;
   overrideLanguage: string | null;
@@ -1441,7 +1448,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   const newPreviewTab = useCallback(
     (
       url: string,
-      options?: { devServerScope?: string; spaceId?: string; activate?: boolean },
+      options?: {
+        devServerScope?: string;
+        inspectViaProxy?: boolean;
+        spaceId?: string;
+        activate?: boolean;
+      },
     ) => {
       const id = nextIdRef.current++;
       const spaceId = options?.spaceId ?? activeSpaceIdRef.current;
@@ -1455,6 +1467,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ...(options?.devServerScope
           ? { devServerScope: options.devServerScope }
           : {}),
+        ...(options?.inspectViaProxy ? { inspectViaProxy: true } : {}),
       };
       tabsRef.current = [...tabsRef.current, newTab];
       setTabs(tabsRef.current);
@@ -1933,6 +1946,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             }),
             ...(patch.devServerScope !== undefined && {
               devServerScope: patch.devServerScope || undefined,
+            }),
+            ...(patch.inspectViaProxy !== undefined && {
+              inspectViaProxy: patch.inspectViaProxy || undefined,
             }),
           };
         } else if (x.kind === "markdown") {

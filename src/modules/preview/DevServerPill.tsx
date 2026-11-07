@@ -19,6 +19,10 @@ import {
   type DevServerCapture,
   useDevServerCaptureStore,
 } from "./devServerStore";
+import { LOCAL_WORKSPACE, type WorkspaceEnv } from "@/modules/workspace";
+import { toast } from "sonner";
+import { markPreviewLaunch } from "./lib/previewTunnels";
+import { previewPortFor, remoteServerCommand } from "./lib/remoteServer";
 import { useWebProjectKind } from "./lib/useWebProjectKind";
 import { isLocalProjectRoot, webProjectLabel } from "./lib/webProject";
 import { useWebServerStore } from "./store/webServerStore";
@@ -29,8 +33,11 @@ type Props = {
   leafId?: number;
   filePath?: string | null;
   cwd?: string | null;
-  /** Folder of the active project when it lives on this computer. */
+  /** Folder of the active project: on this computer or inside an SSH session. */
   projectRoot?: string | null;
+  projectEnv?: WorkspaceEnv;
+  /** Types a command into the active terminal; false when there is none. */
+  onRunCommand?: (command: string) => boolean;
   onOpen: (capture: DevServerCapture) => void;
   onOpenUrl?: (url: string) => void;
 };
@@ -43,11 +50,16 @@ function captureLabel(capture: DevServerCapture): string {
   }
 }
 
+/** Protocol name, identical in every language. */
+const SSH_TAG = "SSH";
+
 export function DevServerPill({
   leafId,
   filePath,
   cwd,
   projectRoot,
+  projectEnv = LOCAL_WORKSPACE,
+  onRunCommand,
   onOpen,
   onOpenUrl,
 }: Props) {
@@ -67,7 +79,7 @@ export function DevServerPill({
   );
 
   const isWebFile = Boolean(filePath && isWebPreviewablePath(filePath));
-  const projectKind = useWebProjectKind(projectRoot);
+  const project = useWebProjectKind(projectRoot, projectEnv);
 
   // 1. If active dev servers were detected from terminal
   if (captures.length > 0) {
@@ -247,8 +259,50 @@ export function DevServerPill({
     );
   }
 
-  // 4. A web project is active (Harness or terminal) with nothing running yet
-  if (projectKind && isLocalProjectRoot(projectRoot)) {
+  // 4a. A web project on a remote host: serve it from the terminal, tunnel it
+  if (
+    project &&
+    projectRoot &&
+    projectEnv.kind === "ssh" &&
+    projectEnv.sessionId !== undefined &&
+    onRunCommand
+  ) {
+    const sessionId = projectEnv.sessionId;
+    const root = projectRoot;
+    const handleServeRemote = () => {
+      const port = previewPortFor(root);
+      markPreviewLaunch(sessionId, port);
+      const sent = onRunCommand(remoteServerCommand(project.kind, port, project.docroot));
+      if (!sent) toast.error(t("preview.remoteNoTerminal"));
+    };
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 max-w-48 gap-1.5 rounded-full px-2 text-[10.5px] text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-emerald-400"
+            onClick={handleServeRemote}
+          >
+            <HugeiconsIcon icon={PlayIcon} size={12} strokeWidth={1.8} />
+            <span className="truncate">
+              {`${t("preview.openPreview")} (${webProjectLabel(project.kind)} ${SSH_TAG})`}
+            </span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-64 text-[11px]">
+          {t("preview.serveRemoteProject", {
+            port: String(previewPortFor(root)),
+          })}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  // 4b. A web project is active (Harness or terminal) with nothing running yet
+  if (project && projectEnv.kind === "local" && isLocalProjectRoot(projectRoot)) {
+    const projectKind = project.kind;
     const root = projectRoot;
     const handleStartProject = async () => {
       setStartingIntegrated(true);

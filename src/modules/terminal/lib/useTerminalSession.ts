@@ -306,6 +306,12 @@ const leafStatusListeners = new Map<
   Set<(status: ResourceConnectionState) => void>
 >();
 
+/** Filesystem a live terminal leaf runs in, for callers outside React. */
+export function getLeafWorkspaceEnv(leafId: number): WorkspaceEnv | undefined {
+  const session = sessions.get(leafId);
+  return session && !session.disposed ? session.workspaceEnv : undefined;
+}
+
 export function useLeafWorkspaceEnv(
   leafId: number | null,
 ): WorkspaceEnv | undefined {

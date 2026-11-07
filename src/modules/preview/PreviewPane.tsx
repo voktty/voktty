@@ -50,6 +50,8 @@ export type PreviewPaneHandle = {
 
 type Props = {
   url: string;
+  /** Route loopback pages through the proxy too, to inject the inspector. */
+  viaProxy?: boolean;
   visible: boolean;
   onUrlChange: (url: string) => void;
 };
@@ -59,7 +61,7 @@ type Props = {
 const SUSPEND_AFTER_MS = 30_000;
 
 export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
-  function PreviewPane({ url, visible, onUrlChange }, ref) {
+  function PreviewPane({ url, viaProxy, visible, onUrlChange }, ref) {
     const { t } = useTranslation();
     // `nonce` is part of the iframe `key`. Bumping it remounts the iframe,
     // which is the only reliable cross-origin reload (calling
@@ -104,7 +106,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         setEffectiveSrc("");
         return;
       }
-      if (isLocalUrl(normalized)) {
+      if (isLocalUrl(normalized) && !viaProxy) {
         setEffectiveSrc(normalized);
         return;
       }
@@ -120,7 +122,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       return () => {
         cancelled = true;
       };
-    }, [url]);
+    }, [url, viaProxy]);
 
     usePreviewFileReload(url, loaded, (current) =>
       setNonce((n) => current() ? n + 1 : n),

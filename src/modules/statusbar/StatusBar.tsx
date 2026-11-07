@@ -251,7 +251,9 @@ export function StatusBar({
           leafId={activeLeafId}
           filePath={filePath}
           cwd={cwd}
-          projectRoot={activeWorkspaceEnv?.kind === "local" ? cwd : null}
+          projectRoot={cwd}
+          projectEnv={activeWorkspaceEnv}
+          onRunCommand={onRunCommand}
           onOpen={onOpenDevServer}
           onOpenUrl={onOpenPreview}
         />

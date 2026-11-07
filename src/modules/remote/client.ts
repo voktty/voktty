@@ -94,10 +94,12 @@ export function requestRemote(
 export function openRemoteTunnel(
   sessionId: number,
   remotePort: number,
+  preferredLocalPort?: number,
 ): Promise<RemoteTunnelInfo> {
   return invoke<RemoteTunnelInfo>("remote_tunnel_open", {
     sessionId,
     remotePort,
+    ...(preferredLocalPort === undefined ? {} : { preferredLocalPort }),
   }).catch((reason: unknown) => {
     if (
       typeof reason === "object" &&
