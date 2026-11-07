@@ -3280,6 +3280,7 @@ export const es: TranslationSchema = {
     reload: "Recargar",
     devServerDetected: "Servidor dev detectado en {url}",
     openPreview: "Abrir vista previa",
+    openProjectPreview: "Servir {{root}} y verlo junto a esta vista",
     xfoHint:
       "Muchos sitios públicos no permiten embeberse (X-Frame-Options). Si la página está en blanco, ábrela externamente.",
     title: "Vista previa",

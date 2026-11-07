@@ -3195,6 +3195,7 @@ export const en = {
     reload: "Reload",
     devServerDetected: "Dev server detected at {url}",
     openPreview: "Open Preview",
+    openProjectPreview: "Serve {{root}} and preview it beside this view",
     xfoHint:
       "Many public sites refuse to embed (X-Frame-Options). If the page is blank, open it externally.",
     title: "Preview",

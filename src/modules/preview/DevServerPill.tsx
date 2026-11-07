@@ -19,6 +19,8 @@ import {
   type DevServerCapture,
   useDevServerCaptureStore,
 } from "./devServerStore";
+import { useWebProjectKind } from "./lib/useWebProjectKind";
+import { isLocalProjectRoot, webProjectLabel } from "./lib/webProject";
 import { useWebServerStore } from "./store/webServerStore";
 
 const NO_CAPTURES: DevServerCapture[] = [];
@@ -27,6 +29,8 @@ type Props = {
   leafId?: number;
   filePath?: string | null;
   cwd?: string | null;
+  /** Folder of the active project when it lives on this computer. */
+  projectRoot?: string | null;
   onOpen: (capture: DevServerCapture) => void;
   onOpenUrl?: (url: string) => void;
 };
@@ -43,6 +47,7 @@ export function DevServerPill({
   leafId,
   filePath,
   cwd,
+  projectRoot,
   onOpen,
   onOpenUrl,
 }: Props) {
@@ -62,6 +67,7 @@ export function DevServerPill({
   );
 
   const isWebFile = Boolean(filePath && isWebPreviewablePath(filePath));
+  const projectKind = useWebProjectKind(projectRoot);
 
   // 1. If active dev servers were detected from terminal
   if (captures.length > 0) {
@@ -241,6 +247,55 @@ export function DevServerPill({
     );
   }
 
-  // 4. No web service or previewable file -> completely hidden
+  // 4. A web project is active (Harness or terminal) with nothing running yet
+  if (projectKind && isLocalProjectRoot(projectRoot)) {
+    const root = projectRoot;
+    const handleStartProject = async () => {
+      setStartingIntegrated(true);
+      try {
+        const info = await useWebServerStore.getState().startServer(root);
+        onOpen({
+          id: `integrated-${info.port}`,
+          leafId: leafId ?? 0,
+          ptyId: null,
+          commandGeneration: 0,
+          workspaceKey: "local",
+          cwd: root,
+          scope: `integrated-${info.port}`,
+          url: info.url,
+          detectedAt: Date.now(),
+        });
+      } catch (err) {
+        console.error("Failed to start integrated server for project:", err);
+      } finally {
+        setStartingIntegrated(false);
+      }
+    };
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={startingIntegrated}
+            className="h-6 max-w-48 gap-1.5 rounded-full px-2 text-[10.5px] text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-emerald-400"
+            onClick={handleStartProject}
+          >
+            <HugeiconsIcon icon={PlayIcon} size={12} strokeWidth={1.8} />
+            <span className="truncate">
+              {t("preview.openPreview")} ({webProjectLabel(projectKind)})
+            </span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-[11px]">
+          {t("preview.openProjectPreview", { root })}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  // 5. No web service, previewable file or web project -> completely hidden
   return null;
 }
