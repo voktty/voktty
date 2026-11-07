@@ -5098,6 +5098,12 @@ export const es: TranslationSchema = {
     unavailableDir: "Directorio no disponible en disco",
     unavailableDirShort: "Directorio no disponible",
     unavailableDirTag: "[Directorio no disponible en disco]",
+    unavailableHost: "Host remoto inaccesible",
+    unavailableHostShort: "Host remoto inaccesible",
+    unavailableHostTag: "[Host remoto inaccesible]",
+    unavailableProfile: "La conexión SSH de este proyecto ya no está guardada",
+    unavailableProfileShort: "Conexión SSH no guardada",
+    unavailableProfileTag: "[Conexión SSH no guardada]",
     working: "Trabajando",
     menu: {
       file: "Archivo",

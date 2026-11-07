@@ -95,6 +95,12 @@ import { RailAction, RailSearch } from "./RailAction";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
 import { RemoveUnavailableProjectsDialog } from "./RemoveUnavailableProjectsDialog";
 import { removableUnavailableProjects } from "../lib/projectCleanup";
+import type { ProjectUnavailableReason } from "../lib/projectAvailability";
+import {
+  UnavailableReasonsContext,
+  unavailableKeys,
+  useUnavailableReason,
+} from "./unavailableReasons";
 import { ProjectBackgroundDialog } from "./ProjectBackgroundDialog";
 import { TabVisitNav } from "./TitleBar";
 import { Shimmer } from "../surfaces/Shimmer";
@@ -344,7 +350,7 @@ export function ProjectRail({
     () => Array.from(allProjects.keys()),
     [allProjects],
   );
-  const { unavailablePaths, recheckPath } =
+  const { unavailablePaths, unavailableReasons, recheckPath } =
     useProjectAvailability(allProjectPaths);
   const removableUnavailable = useMemo(
     () =>
@@ -639,6 +645,7 @@ export function ProjectRail({
     onActivate: onSelectProject,
   });
   return (
+    <UnavailableReasonsContext.Provider value={unavailableReasons}>
     <nav
       ref={resize.setPaneRef}
       aria-label={t("harness.chrome.projects")}
@@ -982,6 +989,7 @@ export function ProjectRail({
         onDoubleClick={resize.onDoubleClick}
       />
     </nav>
+    </UnavailableReasonsContext.Provider>
   );
 }
 
@@ -1651,8 +1659,9 @@ function ProjectCard({
   const additions = stats?.additions ?? 0;
   const deletions = stats?.deletions ?? 0;
   const hasChanges = files > 0 || additions > 0 || deletions > 0;
-  const cardTitle = projectCardTitle(item.path, name, stats, busy, unavailable);
-  const cardAriaLabel = projectCardAriaLabel(name, stats, busy, unavailable);
+  const reason = useUnavailableReason(item.path);
+  const cardTitle = projectCardTitle(item.path, name, stats, busy, unavailable ? (reason ?? "missing-directory") : null);
+  const cardAriaLabel = projectCardAriaLabel(name, stats, busy, unavailable ? (reason ?? "missing-directory") : null);
 
   return (
     <div
@@ -1723,8 +1732,8 @@ function ProjectCard({
         )}
         {unavailable ? (
           <span
-            title={t("harness.unavailableDir")}
-            aria-label={t("harness.unavailableDirShort")}
+            title={t(unavailableKeys(reason ?? "missing-directory").title)}
+            aria-label={t(unavailableKeys(reason ?? "missing-directory").short)}
             className="flex shrink-0 items-center justify-center text-amber-500 dark:text-amber-400 group-hover:hidden"
           >
             <CircleAlert className="size-3.5 shrink-0 text-amber-400" strokeWidth={2} />
@@ -1823,10 +1832,10 @@ function projectCardTitle(
   name: string,
   stats: GitDiffStats | null,
   busy: boolean,
-  unavailable = false,
+  unavailable: ProjectUnavailableReason | null = null,
 ): string {
   const parts = [name, path];
-  if (unavailable) parts.push(t("harness.unavailableDirTag"));
+  if (unavailable) parts.push(t(unavailableKeys(unavailable).tag));
   if (busy) parts.push(t("harness.working"));
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
@@ -1849,10 +1858,10 @@ function projectCardAriaLabel(
   name: string,
   stats: GitDiffStats | null,
   busy: boolean,
-  unavailable = false,
+  unavailable: ProjectUnavailableReason | null = null,
 ): string {
   const parts = [name];
-  if (unavailable) parts.push(t("harness.unavailableDirShort"));
+  if (unavailable) parts.push(t(unavailableKeys(unavailable).short));
   if (busy) parts.push(t("harness.working"));
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;

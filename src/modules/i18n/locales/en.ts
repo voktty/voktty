@@ -4979,6 +4979,12 @@ export const en = {
     unavailableDir: "Directory unavailable on disk",
     unavailableDirShort: "Directory unavailable",
     unavailableDirTag: "[Directory unavailable on disk]",
+    unavailableHost: "Remote host unreachable",
+    unavailableHostShort: "Remote host unreachable",
+    unavailableHostTag: "[Remote host unreachable]",
+    unavailableProfile: "The SSH connection for this project is no longer saved",
+    unavailableProfileShort: "SSH connection not saved",
+    unavailableProfileTag: "[SSH connection not saved]",
     working: "Working",
     menu: {
       file: "File",
