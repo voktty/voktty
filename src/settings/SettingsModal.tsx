@@ -9,6 +9,7 @@ import {
   type SettingsSearchEntry,
 } from "./settingsSearch";
 import {
+  AiChat02Icon,
   AiScanIcon,
   Cancel01Icon,
   CommandLineIcon,
@@ -16,8 +17,10 @@ import {
   InformationCircleIcon,
   KeyboardIcon,
   Key01Icon,
+  FolderLibraryIcon,
   PackageIcon,
   PaintBoardIcon,
+  Plug01Icon,
   ServerStack01Icon,
   ServerStack03Icon,
   Settings01Icon,
@@ -89,6 +92,21 @@ const AliasesSection = React.lazy(() =>
     default: m.AliasesSection,
   })),
 );
+const AgenticSection = React.lazy(() =>
+  import("./sections/AgenticSection").then((m) => ({
+    default: m.AgenticSection,
+  })),
+);
+const IntegrationsSection = React.lazy(() =>
+  import("./sections/IntegrationsSection").then((m) => ({
+    default: m.IntegrationsSection,
+  })),
+);
+const ProjectsSection = React.lazy(() =>
+  import("./sections/ProjectsSection").then((m) => ({
+    default: m.ProjectsSection,
+  })),
+);
 const AboutSection = React.lazy(() =>
   import("./sections/AboutSection").then((m) => ({
     default: m.AboutSection,
@@ -123,6 +141,9 @@ const TABS: {
   { id: "vault", icon: Key01Icon, component: VaultSection },
   { id: "aliases", icon: CommandLineIcon, component: AliasesSection },
   { id: "harness", icon: AiScanIcon, component: HarnessSection },
+  { id: "agentic", icon: AiChat02Icon, component: AgenticSection },
+  { id: "integrations", icon: Plug01Icon, component: IntegrationsSection },
+  { id: "projects", icon: FolderLibraryIcon, component: ProjectsSection },
   { id: "companion", icon: AiScanIcon, component: CompanionSection },
   { id: "about", icon: InformationCircleIcon, component: AboutSection },
 ];

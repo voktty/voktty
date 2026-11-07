@@ -632,7 +632,7 @@ function GeneralPage({
   );
 }
 
-function ChatPage() {
+export function ChatPage() {
   const { t } = useTranslation();
   const [transcriptLayout, setTranscriptLayout] =
     useState<TranscriptLayout>(loadTranscriptLayout);
@@ -773,7 +773,7 @@ function ChatPage() {
   );
 }
 
-function InboxPage({
+export function InboxPage({
   cwd,
   recents = [],
   notificationProjectPath = null,
@@ -1574,7 +1574,7 @@ function archivedProjectLabel(path: string): string {
   );
 }
 
-function ArchivePage({
+export function ArchivePage({
   cwd,
   sessions,
   onOpenSession,

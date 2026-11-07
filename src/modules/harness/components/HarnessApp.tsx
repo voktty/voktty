@@ -250,7 +250,11 @@ import {
 } from "../lib/settings";
 import { warmPiSkills } from "../lib/skills";
 
-import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import {
+  closeSettingsWindow,
+  openSettingsWindow,
+} from "@/modules/settings/openSettingsWindow";
+import { publishHarnessSettingsContext } from "../lib/settingsBridge";
 import {
   addTabsToNewGroup,
   addTabToGroup,
@@ -619,6 +623,7 @@ export function HarnessApp({
     () => true,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsBridgeOwner] = useState(() => Symbol("harness-settings"));
   const settingsReturnViewRef = useRef({
     search: false,
     inbox: false,
@@ -4721,6 +4726,40 @@ export function HarnessApp({
     },
     [onSelectHistorySession],
   );
+
+  useEffect(() => {
+    if (!visible || !focused) return;
+    return publishHarnessSettingsContext(
+      {
+        cwd: sidebarCwd,
+        recents,
+        sessions: sidebarHistory,
+        onOpenSession: (sessionId) => {
+          closeSettingsWindow();
+          void onSelectHistorySession(sessionId);
+        },
+        onArchiveSession: onArchiveHistorySession,
+        onDeleteSession: onDeleteHistorySession,
+        onRestoreProject,
+        onDeleteProject: (path) => {
+          void onRemoveProject(path, { purgeData: true });
+        },
+      },
+      settingsBridgeOwner,
+    );
+  }, [
+    visible,
+    focused,
+    sidebarCwd,
+    recents,
+    sidebarHistory,
+    onSelectHistorySession,
+    onArchiveHistorySession,
+    onDeleteHistorySession,
+    onRestoreProject,
+    onRemoveProject,
+    settingsBridgeOwner,
+  ]);
 
   const onRailBack = useCallback(() => {
     if (settingsOpen) {
