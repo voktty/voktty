@@ -39,10 +39,13 @@ const internalCrates = new Set([
   "voktty-collab-protocol",
   "voktty-companion-protocol",
   "voktty-control-protocol",
+  "voktty-memory-local",
+  "voktty-paths",
   "voktty-remote",
   "voktty-remote-protocol",
   "voktty-tool-policy",
   "voktty-workspace-edit",
+  "voktty-workspace-kit",
 ]);
 
 function versionParts(version) {
