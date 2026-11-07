@@ -26,9 +26,7 @@ impl Drop for Acl {
 /// principals and effective permissions have a verified native policy.
 pub(crate) fn restrictive_only(file: &File) -> Result<(), ReadError> {
     unsafe {
-        if let Some(ptr) = crate::reader_unix::errno_pointer() {
-            *ptr = 0;
-        }
+        *libc::__error() = 0;
     }
     let pointer = unsafe { acl_get_fd_np(file.as_raw_fd(), ACL_TYPE_EXTENDED) };
     if pointer.is_null() {

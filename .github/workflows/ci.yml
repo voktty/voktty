@@ -182,7 +182,25 @@ jobs:
 
       - name: cargo nextest
         working-directory: src-tauri
-        run: cargo nextest run --locked --retries 2 --no-fail-fast
+        shell: bash
+        run: cargo nextest run --locked --retries 2 --no-fail-fast 2>&1 | tee nextest.log
+
+      - name: Report nextest failures
+        if: always()
+        shell: bash
+        run: |
+          if [ -f src-tauri/nextest.log ]; then
+            echo "### Nextest Results for ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+            grep -B 2 -A 8 -E "FAIL|FAILED|panicked at" src-tauri/nextest.log >> $GITHUB_STEP_SUMMARY || true
+          fi
+
+      - name: Upload nextest log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nextest-${{ matrix.os }}
+          path: src-tauri/nextest.log
+          if-no-files-found: ignore
 
   coverage:
     runs-on: ubuntu-22.04
