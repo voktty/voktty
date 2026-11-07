@@ -1305,6 +1305,7 @@ export const en = {
     resourceOpenFailed: "The dropped path could not be opened.",
     dragReady: "Drag active. Move to a highlighted space or slot.",
     dropReady: "Release to place the tab here.",
+    splitDropReady: "Release to split the view and create a new space.",
     resourceDragReady: "Drag active. Move over a view to cite it in AI.",
     resourceDropReady: "Release here to cite this file in AI.",
     rendererCapacity:

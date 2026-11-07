@@ -301,4 +301,79 @@ describe("planWorkspaceDrop", () => {
       reason: "same-space",
     });
   });
+
+  describe("splitting over a standalone tab", () => {
+    const host = (tabKey: string): WorkspaceDropTarget => ({
+      kind: "tab-split",
+      tabKey: asTabKey(tabKey),
+    });
+
+    it("creates a new space from two standalone tabs", () => {
+      expect(
+        planWorkspaceDrop({
+          source: standalone("tab-new"),
+          target: host("tab-host"),
+          viewSpaces: [],
+          tabs: [terminalTab("tab-host", 1), terminalTab("tab-new", 1)],
+        }),
+      ).toMatchObject({
+        accepted: true,
+        operation: "split-new-space",
+        hostTabKey: "tab-host",
+      });
+    });
+
+    it("rejects dropping a tab over itself", () => {
+      expect(
+        planWorkspaceDrop({
+          source: standalone("tab-host"),
+          target: host("tab-host"),
+          viewSpaces: [],
+        }),
+      ).toEqual({ accepted: false, reason: "same-target" });
+    });
+
+    it("rejects a host that already belongs to a space", () => {
+      expect(
+        planWorkspaceDrop({
+          source: standalone("tab-new"),
+          target: host("tab-first"),
+          viewSpaces: [space("a", "tab-first", "tab-second")],
+        }),
+      ).toEqual({ accepted: false, reason: "host-not-standalone" });
+    });
+
+    it("respects the configured view limit", () => {
+      expect(
+        planWorkspaceDrop({
+          source: standalone("tab-new"),
+          target: host("tab-host"),
+          viewSpaces: [],
+          maxSlots: 1,
+        }),
+      ).toEqual({ accepted: false, reason: "max-slots" });
+    });
+
+    it("respects the terminal renderer budget", () => {
+      expect(
+        planWorkspaceDrop({
+          source: standalone("tab-new"),
+          target: host("tab-host"),
+          viewSpaces: [],
+          tabs: [terminalTab("tab-host", 4), terminalTab("tab-new", 4)],
+          maxVisiblePanes: 7,
+        }),
+      ).toEqual({ accepted: false, reason: "renderer-capacity" });
+    });
+
+    it("never accepts a file or directory resource", () => {
+      expect(
+        planWorkspaceDrop({
+          source: resource("file"),
+          target: host("tab-host"),
+          viewSpaces: [],
+        }),
+      ).toEqual({ accepted: false, reason: "resource-requires-view" });
+    });
+  });
 });

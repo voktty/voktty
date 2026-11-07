@@ -18,6 +18,7 @@ export type WorkspaceDropReason =
   | "slot-occupied"
   | "same-target"
   | "same-space"
+  | "host-not-standalone"
   | "max-slots"
   | "renderer-capacity"
   | "source-not-tab"
@@ -55,6 +56,12 @@ export type WorkspaceDropPlan =
       accepted: true;
       operation: "new-space";
       source: Extract<WorkspaceDragSource, { tabId: number }>;
+    }
+  | {
+      accepted: true;
+      operation: "split-new-space";
+      source: Extract<WorkspaceDragSource, { tabId: number }>;
+      hostTabKey: TabKey;
     }
   | {
       accepted: true;
@@ -116,6 +123,28 @@ export function planWorkspaceDrop({
     return tab
       ? { accepted: true, operation: "new-space", source: tab }
       : invalid("source-not-tab");
+  }
+  if (target.kind === "tab-split") {
+    if (resource) return invalid("resource-requires-view");
+    if (!tab) return invalid("source-not-tab");
+    if (tab.tabKey === target.tabKey) return invalid("same-target");
+    if (viewSpaces.some((space) => space.memberOrder.includes(target.tabKey))) {
+      return invalid("host-not-standalone");
+    }
+    if (maxSlots < 2) return invalid("max-slots");
+    const budget = tabAssignmentPaneBudget(
+      tabs,
+      [target.tabKey],
+      tab.tabKey,
+      maxVisiblePanes,
+    );
+    if (!budget.allowed) return invalid("renderer-capacity");
+    return {
+      accepted: true,
+      operation: "split-new-space",
+      source: tab,
+      hostTabKey: target.tabKey,
+    };
   }
   if (!tab && !resource) return invalid("source-not-tab");
 

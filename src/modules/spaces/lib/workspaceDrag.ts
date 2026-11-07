@@ -41,7 +41,8 @@ export type WorkspaceDropTarget =
     }
   | { kind: "space"; viewSpaceId: ViewSpaceId }
   | { kind: "loose-strip" }
-  | { kind: "new-space" };
+  | { kind: "new-space" }
+  | { kind: "tab-split"; tabKey: TabKey };
 
 export type WorkspaceDragState = {
   active: boolean;
@@ -139,6 +140,10 @@ function targetFromPoint(x: number, y: number): WorkspaceDropTarget | null {
   const slotId = element.dataset.workspaceSlotId as SlotId | undefined;
   if (kind === "loose-strip") return { kind: "loose-strip" };
   if (kind === "new-space") return { kind: "new-space" };
+  if (kind === "tab-split") {
+    const tabKey = element.dataset.workspaceTabKey as TabKey | undefined;
+    return tabKey ? { kind: "tab-split", tabKey } : null;
+  }
   if (kind === "space" && viewSpaceId) return { kind: "space", viewSpaceId };
   if (kind === "slot" && viewSpaceId && slotId) {
     return { kind: "slot", viewSpaceId, slotId };
