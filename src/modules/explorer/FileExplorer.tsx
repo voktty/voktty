@@ -73,9 +73,9 @@ import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
 import { isRemoteProjectUri } from "./lib/remoteProjectDir";
+import { isExplorerSourceReachable } from "@/modules/explorer/lib/sourceReachability";
 import { useExplorerVisibleRoot } from "@/modules/explorer/lib/useExplorerVisibleRoot";
 import { t as translate, useTranslation } from "@/modules/i18n";
-import { isPathInWorkspace } from "@/modules/remote";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { useGlobalShortcuts } from "@/modules/shortcuts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -281,9 +281,10 @@ export const FileExplorer = memo(
     const { t } = useTranslation();
     const iconCatalogVersion = useIconCatalogVersion();
     const loadingMessage = t("common.loading");
-    const sourceRootIsReachable =
-      sourceRootPath === null ||
-      isPathInWorkspace(workspaceEnv, sourceRootPath);
+    const sourceRootIsReachable = isExplorerSourceReachable(
+      workspaceEnv,
+      sourceRootPath,
+    );
     const {
       rootPath,
       navigate: setVisibleRootPath,
@@ -365,7 +366,7 @@ export const FileExplorer = memo(
       if (!rootPath || !parentPath || parentPath === rootPath) return;
       if (
         workspaceEnv.kind === "ssh" &&
-        !isPathInWorkspace(workspaceEnv, parentPath)
+        !isExplorerSourceReachable(workspaceEnv, parentPath)
       ) {
         try {
           const prepared =
@@ -382,31 +383,49 @@ export const FileExplorer = memo(
       setVisibleRootPath(parentPath);
     }, [onPrepareNavigationRoot, parentPath, rootPath, setVisibleRootPath, t, workspaceEnv]);
 
+    const moveExplorerToRef = useRef<
+      (targetPath: string, silent: boolean) => Promise<boolean>
+    >(async () => false);
+    const queuedMoveRef = useRef<{ targetPath: string; silent: boolean } | null>(
+      null,
+    );
     const moveExplorerTo = useCallback(
-      async (targetPath: string, silent: boolean) => {
-        if (refreshPendingNavigationRef.current === navigationKey) return;
+      async (targetPath: string, silent: boolean): Promise<boolean> => {
+        // A cd that arrives while a session is still being prepared is queued:
+        // dropping it would leave the tree on the previous folder for good.
+        if (refreshPendingNavigationRef.current === navigationKey) {
+          queuedMoveRef.current = { targetPath, silent };
+          return true;
+        }
         refreshPendingNavigationRef.current = navigationKey;
         const request = ++refreshRequestRef.current;
         let environmentChanged = false;
+        let failed = false;
         try {
           environmentChanged =
             (await onPrepareNavigationRoot?.(targetPath)) ?? false;
         } catch {
-          if (request !== refreshRequestRef.current) return;
-          if (!silent) toast.error(t("feedback.remoteSessionFailed"));
-          return;
+          failed = true;
+          if (request === refreshRequestRef.current && !silent) {
+            toast.error(t("feedback.remoteSessionFailed"));
+          }
         } finally {
           if (refreshPendingNavigationRef.current === navigationKey) {
             refreshPendingNavigationRef.current = null;
           }
         }
-        if (request !== refreshRequestRef.current) return;
+        const queued = queuedMoveRef.current;
+        queuedMoveRef.current = null;
+        if (queued && queued.targetPath !== targetPath) {
+          return moveExplorerToRef.current(queued.targetPath, queued.silent);
+        }
+        if (failed || request !== refreshRequestRef.current) return !failed;
         setVisibleRootPath(targetPath);
         if (!environmentChanged) tree.refresh(targetPath);
+        return true;
       },
       [navigationKey, onPrepareNavigationRoot, setVisibleRootPath, t, tree],
     );
-    const moveExplorerToRef = useRef(moveExplorerTo);
     moveExplorerToRef.current = moveExplorerTo;
 
     const handleSyncToTerminal = useCallback(async () => {
@@ -435,7 +454,13 @@ export const FileExplorer = memo(
       }
       if (followedSourceRef.current === sourceRootPath) return;
       followedSourceRef.current = sourceRootPath;
-      void moveExplorerToRef.current(sourceRootPath, true);
+      const followed = sourceRootPath;
+      void moveExplorerToRef.current(followed, true).then((ok) => {
+        // A failed follow must be retried the next time this folder is reported.
+        if (!ok && followedSourceRef.current === followed) {
+          followedSourceRef.current = null;
+        }
+      });
     }, [sourceRootIsReachable, sourceRootPath, workspaceEnv.kind]);
 
     const handleRefreshCurrent = useCallback(() => {

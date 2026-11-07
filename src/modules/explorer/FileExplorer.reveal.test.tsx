@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 vi.mock("@/modules/remote", () => ({
   isPathInWorkspace: () => true,
+  isPathWithinRemoteRoot: () => true,
   remoteReadDir: mocks.remoteRead,
 }));
 vi.mock("@/modules/explorer/lib/watch", () => ({
