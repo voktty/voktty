@@ -3281,6 +3281,9 @@ export const es: TranslationSchema = {
     devServerDetected: "Servidor dev detectado en {url}",
     openPreview: "Abrir vista previa",
     openProjectPreview: "Servir {{root}} y verlo junto a esta vista",
+    serveRemoteProject: "Inicia el servidor en esta terminal en el puerto {{port}} y lo muestra por un túnel SSH",
+    remoteNoTerminal: "No hay una terminal activa donde ejecutar el servidor.",
+    tunnelFailed: "No se pudo abrir el túnel SSH de la vista previa.",
     xfoHint:
       "Muchos sitios públicos no permiten embeberse (X-Frame-Options). Si la página está en blanco, ábrela externamente.",
     title: "Vista previa",

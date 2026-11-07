@@ -3196,6 +3196,9 @@ export const en = {
     devServerDetected: "Dev server detected at {url}",
     openPreview: "Open Preview",
     openProjectPreview: "Serve {{root}} and preview it beside this view",
+    serveRemoteProject: "Starts the server in this terminal on port {{port}} and previews it through an SSH tunnel",
+    remoteNoTerminal: "There is no active terminal to run the server in.",
+    tunnelFailed: "The SSH tunnel for the preview could not be opened.",
     xfoHint:
       "Many public sites refuse to embed (X-Frame-Options). If the page is blank, open it externally.",
     title: "Preview",

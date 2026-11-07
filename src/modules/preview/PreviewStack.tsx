@@ -108,6 +108,7 @@ export function PreviewStack({
             <PreviewPane
               ref={getRefCallback(t.id)}
               url={t.url}
+              viaProxy={t.inspectViaProxy}
               visible={visible}
               onUrlChange={getUrlCallback(t.id)}
             />

@@ -184,3 +184,52 @@ fn requests_cannot_leave_the_document_root() {
         assert!(!reply.text().contains("TOP-SECRET"), "{path} leaked");
     }
 }
+
+#[test]
+fn the_proxy_injects_the_inspector_into_a_plain_remote_style_php_server() {
+    php_or_return!();
+    let dir = tempfile::tempdir().unwrap();
+    let public = dir.path().canonicalize().unwrap().join("public");
+    fs::create_dir_all(&public).unwrap();
+    fs::write(
+        public.join("index.php"),
+        "<?php echo '<!DOCTYPE html><html><head></head><body>front:' . $_SERVER['REQUEST_URI'] . '</body></html>';",
+    )
+    .unwrap();
+    let port = {
+        let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+        probe.local_addr().unwrap().port()
+    };
+    // The same command a remote terminal runs: no router, no helper files.
+    let child = Command::new("php")
+        .args(["-S", &format!("127.0.0.1:{port}"), "-t"])
+        .arg(&public)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let _server = Server(child);
+    // The proxy does not retry, so wait until PHP is listening.
+    for _ in 0..100 {
+        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let (proxy_port, stop) = start_proxy_server_thread().unwrap();
+
+    let target = url_encode(&format!("http://127.0.0.1:{port}/about"));
+    let reply = request(
+        proxy_port,
+        &format!("/__voktty_proxy?url={target}"),
+        BROWSER,
+    );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let html = reply.text();
+    assert!(html.contains("front:/about"), "{html}");
+    assert_eq!(html.matches("__VOKTTY_IS_PROXIED__ = true").count(), 1);
+    assert_eq!(html.matches("__VOKTTY_INSPECTOR_INSTALLED__ = true").count(), 1);
+    assert!(html.contains("<base href="), "base tag missing");
+}

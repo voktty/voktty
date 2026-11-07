@@ -671,6 +671,7 @@ impl RemoteSession {
         session_id: u64,
         tunnel_id: u64,
         remote_port: u16,
+        preferred_local_port: Option<u16>,
     ) -> Result<RemoteTunnelInfo, RemoteTunnelOpenError> {
         if remote_port == 0 {
             return Err("remote port must be greater than zero".to_string().into());
@@ -687,7 +688,7 @@ impl RemoteSession {
             return Err("duplicate remote tunnel id".to_string().into());
         }
 
-        let local_port = allocate_loopback_port()?;
+        let local_port = pick_tunnel_local_port(preferred_local_port)?;
         let args = build_tunnel_ssh_args(&self.connection, local_port, remote_port)?;
         let mut command = Command::new("ssh");
         command
@@ -1084,11 +1085,12 @@ pub async fn remote_tunnel_open(
     state: State<'_, RemoteState>,
     session_id: u64,
     remote_port: u16,
+    preferred_local_port: Option<u16>,
 ) -> Result<RemoteTunnelInfo, RemoteTunnelOpenError> {
     let session = remote_session(&state, session_id)?;
     let tunnel_id = state.next_tunnel_id.fetch_add(1, Ordering::Relaxed);
     tauri::async_runtime::spawn_blocking(move || {
-        session.open_tunnel(session_id, tunnel_id, remote_port)
+        session.open_tunnel(session_id, tunnel_id, remote_port, preferred_local_port)
     })
     .await
     .map_err(|error| {
@@ -2481,6 +2483,18 @@ pub(crate) fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     args
 }
 
+/// Mirrors the remote port locally when it is free so pages that hard-code
+/// `localhost:<port>` (absolute URLs, hot reload sockets) keep working;
+/// otherwise any free loopback port. Privileged ports are never requested.
+fn pick_tunnel_local_port(preferred: Option<u16>) -> Result<u16, String> {
+    if let Some(port) = preferred.filter(|port| *port >= 1024) {
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return Ok(port);
+        }
+    }
+    allocate_loopback_port()
+}
+
 fn allocate_loopback_port() -> Result<u16, String> {
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .map_err(|error| format!("could not allocate a local tunnel port: {error}"))?;
@@ -3614,6 +3628,22 @@ mod retirement_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tunnel_mirrors_a_free_preferred_port_and_otherwise_falls_back() {
+        let free = allocate_loopback_port().unwrap();
+        assert!(free >= 1024);
+        assert_eq!(pick_tunnel_local_port(Some(free)).unwrap(), free);
+
+        let held = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let busy = held.local_addr().unwrap().port();
+        let picked = pick_tunnel_local_port(Some(busy)).unwrap();
+        assert_ne!(picked, busy);
+
+        let privileged = pick_tunnel_local_port(Some(80)).unwrap();
+        assert!(privileged >= 1024);
+        assert!(pick_tunnel_local_port(None).unwrap() >= 1024);
+    }
+
     use super::*;
 
     #[cfg(unix)]
