@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   archiveProject,
   forgetProject,
+  isProjectSuppressedFromImport,
   loadArchivedProjects,
   loadPinnedProjects,
   loadProjectRailOrder,
@@ -262,5 +263,24 @@ describe("looksLikeProject", () => {
     expect(looksLikeProject("/Users/me/code/app")).toBe(true);
     expect(looksLikeProject("/Users/me/Desktop")).toBe(true);
     expect(looksLikeProject("/tmp/scratch")).toBe(true);
+  });
+});
+
+describe("projects removed on purpose", () => {
+  beforeEach(() => mockLocalStorage());
+
+  it("keeps a forgotten project out of automatic imports until it is opened again", () => {
+    rememberProject("/work/gone");
+    forgetProject("/work/gone");
+    expect(isProjectSuppressedFromImport("/work/gone")).toBe(true);
+    rememberProject("/work/gone");
+    expect(isProjectSuppressedFromImport("/work/gone")).toBe(false);
+  });
+
+  it("keeps an archived project out of automatic imports", () => {
+    rememberProject("/work/old");
+    archiveProject("/work/old");
+    expect(isProjectSuppressedFromImport("/work/old")).toBe(true);
+    expect(isProjectSuppressedFromImport("/work/other")).toBe(false);
   });
 });
