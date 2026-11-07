@@ -7,7 +7,6 @@ import {
   PanelLeft,
   Plus,
   Search,
-  Settings,
   StickyNote,
   Terminal,
   X,
@@ -116,7 +115,6 @@ type Props = {
   onNewTerminal?: () => void;
   onShowTerminal?: () => void;
   projectTerminalActive?: boolean;
-  onOpenSettings?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
   onClose: (id: string) => void;
@@ -919,7 +917,6 @@ function TitleBarComponent({
   onNewTerminal,
   onShowTerminal,
   projectTerminalActive = false,
-  onOpenSettings,
   onOpenInbox,
   onOpenNotes,
   onClose,
@@ -1338,14 +1335,6 @@ function TitleBarComponent({
             active={sourceControlActive}
             onClick={onShowSourceControl}
           />
-        ) : null}
-        {deckLayout &&
-        !projectRailOpen &&
-        !showCurrentProject &&
-        onOpenSettings ? (
-          <IconButton label={t("harness.chrome.settingsShortcut", { shortcut: `${MOD},` })} onClick={onOpenSettings}>
-            <Settings className="size-3.5" strokeWidth={1.75} />
-          </IconButton>
         ) : null}
       </div>
     </div>

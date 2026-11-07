@@ -38,14 +38,16 @@ import {
   savePickerProviderVisible,
   subscribeModels,
 } from "@/modules/harness/lib/models";
-import { MOD, ALT } from "@/modules/harness/lib/platform";
+import { MOD, ALT, IS_WIN } from "@/modules/harness/lib/platform";
 import {
   loadClaudeHooks,
+  loadCloseToTray,
   loadComposerRunner,
   loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
+  saveCloseToTray,
   saveComposerRunner,
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
@@ -177,6 +179,7 @@ function GeneralBlock() {
   const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(loadLiveAgentsEnabled);
   const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
   const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
+  const [closeToTray, setCloseToTray] = useState(loadCloseToTray);
 
   useEffect(() => {
     const onZen = (event: Event) => {
@@ -255,6 +258,11 @@ function GeneralBlock() {
       <Row label={t("harness.settings.claudeHooks")} description={t("harness.settings.claudeHooksDesc")}>
         <HarnessToggle label={t("harness.settings.claudeHooks")} on={claudeHooks} onChange={(next) => { saveClaudeHooks(next); setClaudeHooks(next); }} />
       </Row>
+      {IS_WIN ? (
+        <Row label={t("harness.settings.closeToTray")} description={t("harness.settings.closeToTrayDesc")}>
+          <HarnessToggle label={t("harness.settings.closeToTray")} on={closeToTray} onChange={(next) => { saveCloseToTray(next); setCloseToTray(next); }} />
+        </Row>
+      ) : null}
     </>
   );
 }

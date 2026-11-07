@@ -53,6 +53,7 @@ import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChatBackgroundSettings } from "@/modules/harness/surfaces/SettingsView";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
@@ -685,6 +686,8 @@ export function ThemesSection() {
           </p>
         )}
       </div>
+
+      <ChatBackgroundSettings />
     </div>
   );
 }

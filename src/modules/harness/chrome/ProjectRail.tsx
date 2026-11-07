@@ -20,7 +20,6 @@ import {
   File,
   Plus,
   Search,
-  Settings,
   Trash2,
   Zap,
 } from "./icons";
@@ -98,11 +97,9 @@ import { RemoveUnavailableProjectsDialog } from "./RemoveUnavailableProjectsDial
 import { removableUnavailableProjects } from "../lib/projectCleanup";
 import { ProjectBackgroundDialog } from "./ProjectBackgroundDialog";
 import { TabVisitNav } from "./TitleBar";
-import { SettingsNav } from "./SettingsRail";
 import { Shimmer } from "../surfaces/Shimmer";
 import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
 import { TerminalSpinner } from "./TerminalSpinner";
-import type { SettingsSectionId } from "../lib/settings";
 import { HarnessProjectMemoryButton } from "@/modules/harness/chrome/HarnessProjectMemoryButton";
 
 function projectMenuExtraItems(
@@ -223,11 +220,6 @@ type Props = {
   liveAgents?: LiveAgent[];
   activeSessionId?: string;
   onSelectAgent?: (sessionId: string) => void;
-  settingsOpen?: boolean;
-  settingsSection?: SettingsSectionId;
-  onOpenSettings?: () => void;
-  onSelectSettingsSection?: (section: SettingsSectionId) => void;
-  onCloseSettings?: () => void;
 };
 
 export function ProjectRail({
@@ -255,11 +247,6 @@ export function ProjectRail({
   liveAgents = [],
   activeSessionId,
   onSelectAgent,
-  settingsOpen = false,
-  settingsSection = "general",
-  onOpenSettings,
-  onSelectSettingsSection,
-  onCloseSettings,
 }: Props) {
   const { t } = useTranslation();
   const resize = useDragResize({
@@ -669,19 +656,12 @@ export function ProjectRail({
           canGoForward={canGoForward}
           onGoBack={onGoBack}
           onGoForward={onGoForward}
-          onTogglePanel={settingsOpen ? undefined : onTogglePanel}
+          onTogglePanel={onTogglePanel}
           panelActive
         />
       </div>
 
-      {settingsOpen ? (
-        <SettingsNav
-          section={settingsSection}
-          onSelect={(next) => onSelectSettingsSection?.(next)}
-          onClose={() => onCloseSettings?.()}
-        />
-      ) : (
-        <>
+      <>
           <div className="flex shrink-0 flex-col gap-px px-2 pb-2 pt-0.5">
             <RailSearch
               label={t("harness.chrome.search")}
@@ -859,18 +839,8 @@ export function ProjectRail({
           />
           <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
             <HarnessProjectMemoryButton cwd={cwd} />
-            <RailAction
-              label={t("harness.chrome.settings")}
-              icon={Settings}
-              onClick={onOpenSettings}
-              shortcut={`${MOD},`}
-              ariaLabel={t("harness.chrome.settingsShortcut", {
-                shortcut: `${MOD},`,
-              })}
-            />
           </div>
-        </>
-      )}
+      </>
       {projectMenu ? (
         <TabGroupMenu
           x={projectMenu.x}

@@ -30,6 +30,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useState } from "react";
+import { KeybindingsPage } from "@/modules/harness/surfaces/SettingsView";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ShortcutsSection() {
@@ -161,6 +162,14 @@ export function ShortcutsSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <div className="flex flex-col gap-2 pt-4">
+        <SectionHeader
+          title={t("settings.shortcuts.harnessTitle")}
+          description={t("settings.shortcuts.harnessDescription")}
+        />
+        <KeybindingsPage />
+      </div>
     </div>
   );
 }

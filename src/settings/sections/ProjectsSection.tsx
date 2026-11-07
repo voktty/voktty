@@ -2,6 +2,7 @@ import { useTranslation } from "@/modules/i18n";
 import { useHarnessSettingsBridge } from "@/modules/harness/lib/settingsBridge";
 import { ArchivePage } from "@/modules/harness/surfaces/SettingsView";
 import { removeWorktree } from "@/modules/harness/lib/worktrees";
+import { HarnessConnectionsPage } from "@/modules/harness/surfaces/HarnessConnectionsPage";
 import { WorktreesPage } from "@/modules/harness/surfaces/WorktreesPage";
 import { SectionHeader } from "../components/SectionHeader";
 
@@ -32,6 +33,13 @@ export function ProjectsSection() {
         recents={context.recents}
         onRemove={removeWorktree}
       />
+      <section className="space-y-3">
+        <SectionHeader
+          title={t("settings.projects.remoteTitle")}
+          description={t("settings.projects.remoteDescription")}
+        />
+        <HarnessConnectionsPage cwd={context.cwd} />
+      </section>
       <ArchivePage
         cwd={context.cwd}
         sessions={context.sessions}
