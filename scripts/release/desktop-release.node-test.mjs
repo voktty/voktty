@@ -139,7 +139,7 @@ test("build-only version changes keep native metadata and locked internal crates
       before[index].replace(`version = "${current}"`, `version = "${target}"`),
     );
   }
-  assert.equal(changed, 10);
+  assert.equal(changed, 13);
   assert.deepEqual(versionUpdates(files, current), {});
   const stale = {
     ...files,
