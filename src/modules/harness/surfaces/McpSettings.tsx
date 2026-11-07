@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { useTranslation } from "@/modules/i18n";
 import {
   useCallback,
   useEffect,
@@ -171,6 +172,7 @@ function AddServerModal({
   onClose: () => void;
   onAdded: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [provider, setProvider] = useState<Provider>(initialProvider);
   const [scope, setScope] = useState<Scope>(SCOPES[initialProvider][0]);
   const [name, setName] = useState("");
@@ -205,14 +207,14 @@ function AddServerModal({
 
   return (
     <Modal
-      title="Add MCP server"
-      description="Paste a server configuration and choose where to add it."
+      title={t("harness.mcpUI.addServerTitle")}
+      description={t("harness.mcpUI.addServerDesc")}
       onClose={onClose}
     >
       <form onSubmit={(event) => void add(event)} className="space-y-4 p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <McpPicker
-            label="Provider"
+            label={t("harness.mcpUI.provider")}
             value={provider}
             options={PROVIDERS.map((option) => ({
               value: option,
@@ -225,7 +227,7 @@ function AddServerModal({
             }}
           />
           <McpPicker
-            label="Scope"
+            label={t("harness.mcpUI.scope")}
             value={scope}
             options={SCOPES[provider].map((option) => ({
               value: option,
@@ -235,20 +237,20 @@ function AddServerModal({
           />
         </div>
         <label className="block text-xs text-content/65">
-          Name{" "}
+          {t("harness.mcpUI.name")}{" "}
           <span className="text-content/40">
-            (optional for an mcpServers block)
+            {t("harness.mcpUI.nameOptional")}
           </span>
           <input
             value={name}
             pattern={provider === "opencode" ? undefined : "[A-Za-z0-9_-]*"}
             onChange={(event) => setName(event.target.value)}
             className="mt-1 block w-full rounded-md border border-stroke bg-background-base px-2 py-1.5 text-sm text-content"
-            placeholder="my-server"
+            placeholder={t("harness.mcpUI.serverPlaceholder")}
           />
         </label>
         <label className="block text-xs text-content/65">
-          JSON configuration
+          {t("harness.mcpUI.jsonConfig")}
           <textarea
             required
             value={config}
@@ -262,8 +264,7 @@ function AddServerModal({
           />
         </label>
         <p className="text-xs text-content/45">
-          Paste one entry from an mcpServers block, or a single server object
-          with a name above.
+          {t("harness.mcpUI.pasteHint")}
         </p>
         {error ? (
           <p
@@ -279,14 +280,14 @@ function AddServerModal({
             onClick={onClose}
             className="rounded-md border border-stroke px-3 py-1.5 text-xs hover:bg-content/5"
           >
-            Cancel
+            {t("harness.mcpUI.cancel")}
           </button>
           <button
             type="submit"
             disabled={busy}
             className="rounded-md border border-stroke px-3 py-1.5 text-xs hover:bg-content/5 disabled:opacity-50"
           >
-            {busy ? "Adding…" : "Add server"}
+            {busy ? t("harness.mcpUI.adding") : t("harness.mcpUI.addServer")}
           </button>
         </div>
       </form>
@@ -331,6 +332,7 @@ function McpConnections({
   cwd: string;
   projectPicker: ReactNode;
 }) {
+  const { t } = useTranslation();
   const cached = getCachedMcpSettings(cwd);
   const [servers, setServers] = useState<ServerRow[]>(cached?.servers ?? []);
   const [filter, setFilter] = useState<Filter>("all");
@@ -419,8 +421,8 @@ function McpConnections({
       ? server.scope
       : (removeScopes[server.name] ?? "local");
     if (
-      !(await ask(`Remove ${server.name} from ${selectedScope} scope?`, {
-        title: "Remove MCP server",
+      !(await ask(t("harness.mcpUI.removeConfirm", { name: server.name, scope: selectedScope }), {
+        title: t("harness.mcpUI.removeServer"),
       }))
     )
       return;
@@ -449,12 +451,11 @@ function McpConnections({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-sm font-semibold">MCP connections</h2>
+            <h2 className="text-sm font-semibold">{t("harness.mcpUI.mcpConnections")}</h2>
             {projectPicker}
           </div>
           <p className="mt-1 text-xs text-content/55">
-            Configured servers for the selected project and your provider
-            accounts.
+            {t("harness.mcpUI.configuredDesc")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -465,7 +466,7 @@ function McpConnections({
             className="flex items-center gap-1.5 rounded-md border border-stroke px-3 py-1.5 text-xs hover:bg-content/5 disabled:opacity-50"
           >
             <RefreshCw className="size-3.5" />
-            Refresh
+            {t("harness.mcpUI.refresh")}
           </button>
           <button
             type="button"
@@ -487,7 +488,7 @@ function McpConnections({
           </button>
           <button
             type="button"
-            aria-label="Add MCP server"
+            aria-label={t("harness.mcpUI.addServerTitle")}
             onClick={() => setAddOpen(true)}
             className="grid size-7 place-items-center rounded-md border border-stroke hover:bg-content/5"
           >
@@ -498,7 +499,7 @@ function McpConnections({
       <div
         role="group"
         className="inline-flex max-w-full flex-wrap gap-0.5 rounded-md border border-content/10 p-0.5 text-[12px]"
-        aria-label="Filter MCP servers by provider"
+        aria-label={t("harness.mcpUI.filterByProvider")}
       >
         {(["all", ...filterProviders] as const).map((provider) => (
           <button
@@ -513,7 +514,7 @@ function McpConnections({
             ) : (
               <ProviderIcon provider={provider} />
             )}
-            {provider === "all" ? "All" : MCP_PROVIDER_LABELS[provider]}
+            {provider === "all" ? t("harness.mcpUI.all") : MCP_PROVIDER_LABELS[provider]}
             <span className="opacity-60">
               {provider === "all"
                 ? servers.length
@@ -533,14 +534,14 @@ function McpConnections({
       ) : null}
       {claudeError && (filter === "all" || filter === "claude") ? (
         <p className="text-xs text-content/55">
-          Claude connection status unavailable: {claudeError}
+          {t("harness.mcpUI.claudeUnavailable", { error: claudeError })}
         </p>
       ) : null}
       {loading ? (
-        <p className="text-sm text-content/55">Checking servers…</p>
+        <p className="text-sm text-content/55">{t("harness.mcpUI.checkingServers")}</p>
       ) : visible.length === 0 ? (
         <p className="text-sm text-content/55">
-          No MCP servers configured for this provider.
+          {t("harness.mcpUI.noConfiguredForProvider")}
         </p>
       ) : (
         <div className="overflow-hidden rounded-xl border border-content/10 bg-content/3">
@@ -578,16 +579,16 @@ function McpConnections({
                   onClick={() => void login(server)}
                   className="rounded-md border border-stroke px-2 py-1 text-xs hover:bg-content/5 disabled:opacity-50"
                 >
-                  Sign in
+                  {t("harness.mcpUI.signIn")}
                 </button>
               ) : null}
               {server.provider === "claude" ? (
                 <>
                   {!server.configPath ? (
                     <label className="text-xs text-content/55">
-                      Scope{" "}
+                      {t("harness.mcpUI.scope")}
                       <select
-                        aria-label={`Scope to remove ${server.name} from`}
+                        aria-label={t("harness.mcpUI.scopeToRemoveFrom", { name: server.name })}
                         value={removeScopes[server.name] ?? "local"}
                         onChange={(event) =>
                           setRemoveScopes((current) => ({
@@ -597,9 +598,9 @@ function McpConnections({
                         }
                         className="rounded border border-stroke bg-background-base px-1 py-1 text-content"
                       >
-                        <option value="local">Local</option>
-                        <option value="project">Project</option>
-                        <option value="user">User</option>
+                        <option value="local">{t("harness.mcpUI.local")}</option>
+                        <option value="project">{t("harness.mcpUI.project")}</option>
+                        <option value="user">{t("harness.mcpUI.user")}</option>
                       </select>
                     </label>
                   ) : null}
@@ -609,7 +610,7 @@ function McpConnections({
                     onClick={() => void remove(server)}
                     className="rounded-md border border-stroke px-2 py-1 text-xs hover:bg-content/5 disabled:opacity-50"
                   >
-                    Remove
+                    {t("harness.mcpUI.remove")}
                   </button>
                 </>
               ) : (
@@ -622,7 +623,7 @@ function McpConnections({
                   }
                   className="rounded-md border border-stroke px-2 py-1 text-xs hover:bg-content/5"
                 >
-                  Show config
+                  {t("harness.mcpUI.showConfig")}
                 </button>
               )}
             </div>
@@ -630,8 +631,7 @@ function McpConnections({
         </div>
       )}
       <p className="text-xs text-content/45">
-        Claude Code status comes from its CLI. Other providers show configured
-        entries. Sign in opens your browser when supported.
+        {t("harness.mcpUI.claudeStatusFooter")}
       </p>
       {addOpen ? (
         <AddServerModal

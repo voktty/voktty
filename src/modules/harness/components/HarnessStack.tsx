@@ -116,7 +116,7 @@ function HarnessWorkbench({
           >
             {item === "harness"
               ? t("harness.agentDevelopment")
-              : `Voktty ${t("shortcuts.groups.ai")}`}
+              : t("harness.commonUI.vokttyAi", { ai: t("shortcuts.groups.ai") })}
           </button>
         ))}
       </div>

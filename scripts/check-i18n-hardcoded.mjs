@@ -25,7 +25,8 @@ const internalMetadataPaths = [
   /\/modules\/api-client\/lib\/presets\.ts$/,
   /\/modules\/notes-board\/lib\/mcpKanbanTools\.ts$/,
   /\/modules\/theme\/(?:packs\.ts|themes\/|skins\/)/,
-  /\/modules\/(?:harness|orchestration|quick-composer|skills|connections|notifications)\//,
+  /\/modules\/(?:orchestration|quick-composer|skills|connections|notifications)\//,
+  /\/modules\/harness\/(?:lib|mcp)\//,
 ];
 
 
@@ -72,16 +73,16 @@ const feedbackCalls = new Set([
 ]);
 
 const technicalPatterns = [
-  /^(?:Voktty|MonoCode|Git|GitHub|SSH|RDP|Docker|Redis|LSP|AI|CPU|RAM|MEM|DISK|NET|NETWORK|SHA|URL|Shell|WSL|Windows|DTR|RTS|TCP EST|cwd|exit|ping|binary|main|pac-man|snake)$/i,
+  /^(?:Voktty|MonoCode|Git|GitHub|GitLab|Jira|Linear|Azure DevOps|SSH|RDP|Docker|Redis|LSP|AI|CPU|RAM|MEM|DISK|NET|NETWORK|SHA|URL|Shell|WSL|Windows|DTR|RTS|TCP EST|cwd|exit|ping|binary|main|pac-man|snake)$/i,
   /^(?:Postman|gRPC|GraphQL|JSON|Bearer|AKIA\.\.\.|sk_test_\.\.\.|oauth2_access_token\.\.\.|whsec_\.\.\.|X-API-Key|us-east-1|s3 \/ execute-api|user|password|Value)$/i,
   /^(?:text|bg|border|from|to|dark:text|hover:text)-[a-z]+-\d+(?:\/\d+)?$/,
   /^(?:JSON|GraphQL) \(application\/json\)$/,
-  /^(?:\{…\} (?:B|KB)|\{…\} ms|\{ "limit": \d+, "offset": \d+, "type": "[a-z]+" \})$/,
+  /^(?:\{…\} (?:B|KB)|\{…\} ms|\{ "limit": \d+, "offset": \d+, "type": "[a-z]+" \}|\{"mcpServers":\{.*\}\})$/,
   /^(?:(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win)(?:\s*\+?\s*(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win|Del|Home|Insert|Break|Fin|[A-Z0-9]))*)$/,
   /^(?:https?|wss?):\/\//i,
   /^(?:[A-Z]:[\\/]|[.~]?[\\/]|--?[a-z\d-]+\b)/i,
   /^(?:[\d./:_*{}()[\]<>|+%=,@#-]+|[A-Z\d_-]{1,8})$/,
-  /^(?:sk-|ssh-|ecdsa-|ghp_|gpt-|qwen|glm-|whisper-|127\.0\.0\.1|192\.168\.)/i,
+  /^(?:sk-|ssh-|ecdsa-|ghp_|glpat-|gpt-|qwen|glm-|whisper-|127\.0\.0\.1|192\.168\.)/i,
   /^(?:…\s*\{…\})$/,
   /^(?:dev\.voktty|voktty\/voktty|voktty\.dev|Apache 2\.0|Microsoft mstsc\.exe|package\.json|utf-8)$/i,
   /^(?:px|ms|s|v|x|of|line|active|[⇧↵↑↓×✕✓·•−—→$?❯]+)$/i,
@@ -89,7 +90,9 @@ const technicalPatterns = [
   /^(?:Administrator|WORKGROUP|root(?:\s*\/\s*ubuntu)?)$/i,
   /^(?:example\.ts|production, aws, git|mytool --fix \{file\}|\.pem|\.pub)$/i,
   /^(?:\d{3,4}\s*x\s*\d{3,4}\s*\([^)]*\))$/i,
-  /^(?:\{…\}|[():/\s-])+$/,
+  /^(?:\{…\}|[():/\s\-×x])+$/,
+  /^(?:\{…\}\s*[x×]\s*\{…\})$/,
+  /^(?:\{…\}:00|\{…\}:30)$/,
   /^(?:[\p{Extended_Pictographic}\p{Emoji_Presentation}✎ⓘ…]+)$/u,
   /^(?:\$ voktty --ready|px \(Terminal\)|ms ping|\(-[LRD]\))$/i,
   /^(?:stdout|stderr|cwd →|(?:\{…\})?⇧[A-Z\d]|&gt;|Alt\+|ms\)|\(Esc)$/i,

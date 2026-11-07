@@ -170,7 +170,7 @@ export function InboxComments({
       <div className="flex items-center gap-2 text-[12px] text-content/50">
         {thread.commits ? (
           <>
-            <h2 className="text-content/70">Activity</h2>
+            <h2 className="text-content/70">{t("harness.inboxUI.activity")}</h2>
             <span>
               {label}
               {commitCount > 0 ? ` · ${commitLabel}` : ""}
@@ -181,8 +181,7 @@ export function InboxComments({
         )}
         {thread.truncated ? (
           <span>
-            {t("harness.chrome.latestCommentsMoreOn", { name: moreOn }) ||
-              `Latest comments · more on ${moreOn}`}
+            {t("harness.chrome.latestCommentsMoreOn", { name: moreOn })}
           </span>
         ) : null}
         {loading ? (
@@ -300,12 +299,12 @@ export function InboxCommentForm({
           <span className="min-w-0 truncate">
             {t("harness.chrome.replyToAuthor", {
               name: replyTo.author || t("harness.chrome.commentFallback"),
-            }) || `Replying to ${replyTo.author || "comment"}`}
+            })}
           </span>
           <button
             type="button"
-            title={t("harness.chrome.cancelReply") || "Cancel reply"}
-            aria-label={t("harness.chrome.cancelReply") || "Cancel reply"}
+            title={t("harness.chrome.cancelReply")}
+            aria-label={t("harness.chrome.cancelReply")}
             onClick={onCancelReply}
             className="grid size-5 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
           >
@@ -323,10 +322,10 @@ export function InboxCommentForm({
             replyTo
               ? t("harness.chrome.writeReplyShortcut", {
                   shortcut: `${MOD}↩`,
-                }) || `Write a reply (${MOD}↩)`
+                })
               : t("harness.chrome.leaveCommentShortcut", {
                   shortcut: `${MOD}↩`,
-                }) || `Leave a comment (${MOD}↩)`
+                })
           }
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
@@ -339,10 +338,10 @@ export function InboxCommentForm({
             className="inline-flex h-7 items-center rounded-md bg-content px-3 text-[12px] text-background-base hover:bg-content/80 disabled:cursor-default disabled:opacity-40"
           >
             {posting
-              ? t("harness.chrome.posting") || "Posting..."
+              ? t("harness.chrome.posting")
               : replyTo
-                ? t("harness.chrome.reply") || "Reply"
-                : t("harness.chrome.comment") || "Comment"}
+                ? t("harness.chrome.reply")
+                : t("harness.chrome.comment")}
           </button>
         </div>
       </div>
@@ -358,7 +357,7 @@ function CommentsPending() {
   return (
     <div className="flex items-center gap-2 border-t border-content/10 pt-5 text-[12px] text-content/45">
       <LoaderCircle className="size-3.5 animate-spin" strokeWidth={1.75} />
-      {t("harness.chrome.loadingComments") || "Loading comments"}
+      {t("harness.chrome.loadingComments")}
     </div>
   );
 }
@@ -466,7 +465,7 @@ function InboxComment({
               }
               className="hover:text-content"
             >
-              {t("harness.chrome.reply") || "Reply"}
+              {t("harness.chrome.reply")}
             </button>
           </span>
         ) : null}
@@ -526,6 +525,7 @@ const CLAMPED_BODY_PX = 180;
 
 /** Bot reviews and long write-ups start clamped so the timeline stays scannable. */
 function CollapsibleBody({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const inner = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -558,7 +558,7 @@ function CollapsibleBody({ children }: { children: ReactNode }) {
           onClick={() => setExpanded((current) => !current)}
           className="mt-1.5 text-[12px] text-content/50 hover:text-content"
         >
-          {expanded ? "Show less" : "Show more"}
+          {expanded ? t("harness.inboxUI.showLess") : t("harness.inboxUI.showMore")}
         </button>
       ) : null}
     </>

@@ -4,6 +4,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { prettyCwd } from "../lib/paths";
 import type { Worktree } from "../lib/worktrees";
 import { Modal } from "./Modal";
@@ -60,6 +61,7 @@ export function DeleteWorktreeDialog({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [deleteSessions, setDeleteSessions] = useState(false);
   const [error, setError] = useState<string>();
@@ -81,9 +83,13 @@ export function DeleteWorktreeDialog({
     }
   };
 
+  const actionText = deleteSessions
+    ? t("harness.worktrees.actionPermanentlyDeleted")
+    : t("harness.worktrees.actionKept");
+
   return (
     <Modal
-      title="Delete worktree?"
+      title={t("harness.worktrees.deleteTitle")}
       size="sm"
       onClose={() => {
         if (!busy) onClose();
@@ -94,7 +100,7 @@ export function DeleteWorktreeDialog({
         onSubmit={(e) => void submit(e)}
       >
         <p className="text-content/75">
-          This permanently deletes the working copy and everything inside it.
+          {t("harness.worktrees.deleteDescription")}
         </p>
         <div className="rounded-lg border border-content/10 bg-content/5 p-3">
           <p className="flex items-start gap-2.5 text-[12px] text-content/55">
@@ -109,41 +115,35 @@ export function DeleteWorktreeDialog({
                 icon={MessageSquare}
                 tone={deleteSessions ? "danger" : "muted"}
               >
-                {sessionCount} session{sessionCount === 1 ? "" : "s"} using this
-                worktree {sessionCount === 1 ? "is" : "are"}{" "}
-                {deleteSessions
-                  ? "permanently deleted."
-                  : "kept. Select a branch or worktree to continue them."}
+                {sessionCount === 1
+                  ? t("harness.worktrees.sessionsCount", { count: sessionCount, action: actionText })
+                  : t("harness.worktrees.sessionsCountPlural", { count: sessionCount, action: actionText })}
               </Consequence>
             )}
             {tree.dirty && (
               <Consequence icon={FileDiff} tone="warn">
-                All uncommitted and untracked changes here are discarded.
+                {t("harness.worktrees.dirtyDiscarded")}
               </Consequence>
             )}
             {tree.dirty == null && (
               <Consequence icon={CircleAlert} tone="warn">
-                Changes could not be checked. Anything uncommitted here is
-                discarded.
+                {t("harness.worktrees.dirtyUnknownDiscarded")}
               </Consequence>
             )}
             <Consequence icon={GitBranch}>
               {tree.branch ? (
                 <>
-                  The{" "}
-                  <span className="font-medium text-content">
-                    {tree.branch}
-                  </span>{" "}
-                  branch and its commits are kept.
+                  {t("harness.worktrees.branchKept", { branch: tree.branch })}
                 </>
               ) : (
-                "The branch is kept."
+                t("harness.worktrees.branchKeptFallback")
               )}
             </Consequence>
             {!!tree.unpushed && (
               <Consequence icon={CloudUpload}>
-                {tree.unpushed} commit{tree.unpushed === 1 ? " is" : "s are"}{" "}
-                not on a remote. They stay on the branch.
+                {tree.unpushed === 1
+                  ? t("harness.worktrees.unpushedSingle", { count: tree.unpushed })
+                  : t("harness.worktrees.unpushedPlural", { count: tree.unpushed })}
               </Consequence>
             )}
           </ul>
@@ -154,7 +154,7 @@ export function DeleteWorktreeDialog({
               id="delete-worktree-sessions-label"
               className="text-[12.5px] text-content/75"
             >
-              Also delete associated sessions
+              {t("harness.worktrees.deleteSessionsToggle")}
             </span>
             <button
               type="button"
@@ -183,7 +183,7 @@ export function DeleteWorktreeDialog({
             onClick={onClose}
             className="rounded-md px-3 py-1.5 hover:bg-content/8 active:scale-[0.97]"
           >
-            Cancel
+            {t("harness.worktrees.cancel")}
           </button>
           <button
             type="submit"
@@ -192,8 +192,10 @@ export function DeleteWorktreeDialog({
           >
             {busy && <Loader className="size-3.5 animate-spin" />}
             {sessionCount && deleteSessions
-              ? `Delete worktree and session${sessionCount === 1 ? "" : "s"}`
-              : "Delete worktree"}
+              ? sessionCount === 1
+                ? t("harness.worktrees.deleteWithSessionsButton")
+                : t("harness.worktrees.deleteWithSessionsButtonPlural")
+              : t("harness.worktrees.deleteButton")}
           </button>
         </div>
       </form>

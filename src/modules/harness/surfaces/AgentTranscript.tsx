@@ -1728,7 +1728,12 @@ function SubagentStepRow({
           <button
             type="button"
             aria-expanded={errorOpen}
-            aria-label={`${errorOpen ? "Hide" : "Show"} error details for ${label}`}
+            aria-label={t(
+              errorOpen
+                ? "harness.commonUI.hideErrorDetails"
+                : "harness.commonUI.showErrorDetails",
+              { label },
+            )}
             onClick={() => setErrorOpen((v) => !v)}
             className="-m-1 shrink-0 rounded p-1 text-content/40 hover:text-content/70"
           >
@@ -2525,7 +2530,7 @@ function ActivityToolRow({
     <div className="flex min-w-0 flex-col">
       {errorDetail ? (
         <div
-          aria-label={`Failed tool call: ${label}`}
+          aria-label={t("harness.commonUI.failedToolCall", { label })}
           className="group flex min-w-0 items-center gap-1.5 py-1"
         >
           {bare ? null : <ActivityToolIcon state={state} live={live} />}
@@ -2539,7 +2544,12 @@ function ActivityToolRow({
           <button
             type="button"
             aria-expanded={errorOpen}
-            aria-label={`${errorOpen ? "Hide" : "Show"} error details for ${label}`}
+            aria-label={t(
+              errorOpen
+                ? "harness.commonUI.hideErrorDetails"
+                : "harness.commonUI.showErrorDetails",
+              { label },
+            )}
             onClick={() => setErrorOpen((value) => !value)}
             className="-m-1 shrink-0 rounded p-1"
           >

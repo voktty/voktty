@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { ChevronLeft, ChevronRight, Clock } from "./icons";
 
 export function toLocalDateTime(date: Date): string {
@@ -51,6 +52,7 @@ export function DateTimePicker({
   minDate,
   autoFocus = false,
 }: Props) {
+  const { t } = useTranslation();
   const today = new Date(Date.now());
   const selected = parseLocalDateTime(`${value.slice(0, 10)}T12:00`) ?? today;
   const minimum = minDate ? parseLocalDateTime(`${minDate}T12:00`) : null;
@@ -165,7 +167,7 @@ export function DateTimePicker({
         <div className="flex gap-0.5">
           <button
             type="button"
-            aria-label="Previous month"
+            aria-label={t("harness.commonUI.previousMonth")}
             disabled={previousDisabled}
             onClick={() => navigate(shiftMonth(focusedDate, -1), false)}
             className="grid size-7 place-items-center rounded text-content/55 hover:bg-content/5 hover:text-content focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-30"
@@ -174,7 +176,7 @@ export function DateTimePicker({
           </button>
           <button
             type="button"
-            aria-label="Next month"
+            aria-label={t("harness.commonUI.nextMonth")}
             onClick={() => navigate(shiftMonth(focusedDate, 1), false)}
             className="grid size-7 place-items-center rounded text-content/55 hover:bg-content/5 hover:text-content focus-visible:outline-2 focus-visible:outline-accent"
           >
@@ -243,10 +245,10 @@ export function DateTimePicker({
               className="size-3 shrink-0 text-content/40"
               aria-hidden="true"
             />
-            Time
+            {t("harness.commonUI.time")}
           </label>
           <p id={timeHintId} className="mt-0.5 text-[10px] text-content/40">
-            Local time, 24-hour
+            {t("harness.commonUI.localTime24")}
           </p>
         </div>
         <div className="w-20 rounded border border-content/10 bg-content/5 focus-within:border-content/40 focus-within:outline-2 focus-within:outline-accent">
@@ -256,7 +258,7 @@ export function DateTimePicker({
             aria-describedby={timeHintId}
             autoComplete="off"
             spellCheck={false}
-            placeholder="HH:mm"
+            placeholder={t("harness.commonUI.hhMm")}
             value={time}
             onChange={(event) =>
               onChange(`${dateKey(selected)}T${event.target.value}`)
