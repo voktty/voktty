@@ -9,11 +9,28 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { IS_WINDOWS } from "@/lib/platform";
 
+export type SshAuthType = "auto" | "password" | "key" | "interactive";
+
+export type SshProxyType = "http" | "https" | "socks5" | "socks4";
+
+export type SshProxyConfig = {
+  enabled: boolean;
+  proxyType: SshProxyType;
+  host: string;
+  port: number;
+  user?: string;
+  password?: string;
+};
+
 export type SshConnectionConfig = {
   host: string;
   user?: string;
   port?: number;
+  authType?: SshAuthType;
+  password?: string;
   identityFile?: string;
+  passphrase?: string;
+  proxy?: SshProxyConfig;
   extraArgs?: string;
   initialDirectory?: string;
   multiplexerMode?: "none" | "auto" | "tmux" | "screen" | "ask";

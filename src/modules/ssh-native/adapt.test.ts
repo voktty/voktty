@@ -161,10 +161,51 @@ describe("target and credentials", () => {
     ]);
   });
 
+  it("carries proxy configuration when enabled", () => {
+    const target = toTarget({
+      host: "h",
+      proxy: {
+        enabled: true,
+        proxyType: "socks5",
+        host: "127.0.0.1",
+        port: 1080,
+      },
+    });
+    expect(target.proxy).toEqual({
+      enabled: true,
+      proxyType: "socks5",
+      host: "127.0.0.1",
+      port: 1080,
+    });
+  });
+
   it("offers the agent first and the connection key after it", () => {
     expect(defaultCredentials({ host: "h", identityFile: "~/.ssh/id" })).toEqual([
       { kind: "agent" },
       { kind: "privateKey", path: "~/.ssh/id" },
+    ]);
+  });
+
+  it("offers password credential when password auth and secret are configured", () => {
+    const credentials = defaultCredentials({
+      host: "h",
+      authType: "password",
+      password: "secretpassword",
+    });
+    expect(credentials).toEqual([
+      { kind: "password", secret: "secretpassword" },
+    ]);
+  });
+
+  it("offers privateKey with passphrase when passphrase is configured", () => {
+    const credentials = defaultCredentials({
+      host: "h",
+      identityFile: "~/.ssh/id_rsa",
+      passphrase: "keypassphrase",
+    });
+    expect(credentials).toEqual([
+      { kind: "agent" },
+      { kind: "privateKey", path: "~/.ssh/id_rsa", passphrase: "keypassphrase" },
     ]);
   });
 

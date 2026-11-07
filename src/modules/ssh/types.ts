@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { SshConnectionConfig } from "@/modules/workspace";
+import type {
+  SshAuthType,
+  SshConnectionConfig,
+  SshProxyConfig,
+  SshProxyType,
+} from "@/modules/workspace";
 
-export type { SshConnectionConfig };
+export type { SshAuthType, SshConnectionConfig, SshProxyConfig, SshProxyType };
 
 /** Which surface opens when the saved connection is chosen. */
 export type SshSurface = "terminal" | "harness";
@@ -92,6 +97,23 @@ export function buildSshCommand(conn: SshConnection): string {
   }
   if (conn.identityFile && conn.identityFile.trim()) {
     parts.push(`-i "${conn.identityFile.trim()}"`);
+  }
+  if (conn.authType === "password") {
+    parts.push("-o PreferredAuthentications=password,keyboard-interactive");
+  } else if (conn.authType === "key") {
+    parts.push("-o PreferredAuthentications=publickey");
+  }
+  if (conn.proxy?.enabled && conn.proxy.host.trim() && conn.proxy.port > 0) {
+    const proxy = conn.proxy;
+    let proxyCmd = `voktty ssh-proxy --type ${proxy.proxyType || "http"} --proxy-host ${proxy.host.trim()} --proxy-port ${proxy.port}`;
+    if (proxy.user?.trim()) {
+      proxyCmd += ` --user ${proxy.user.trim()}`;
+    }
+    if (proxy.password?.trim()) {
+      proxyCmd += ` --password ${proxy.password.trim()}`;
+    }
+    proxyCmd += " %h %p";
+    parts.push(`-o ProxyCommand="${proxyCmd}"`);
   }
   if (conn.extraArgs && conn.extraArgs.trim()) {
     parts.push(conn.extraArgs.trim());

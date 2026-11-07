@@ -6,6 +6,10 @@ fn main() {
         std::process::exit(code);
     }
 
+    if let Some(code) = voktty_lib::modules::ssh_proxy::maybe_run() {
+        std::process::exit(code);
+    }
+
     #[cfg(target_os = "macos")]
     {
         // Disable macOS press-and-hold character popup, so key repeat works in terminal.

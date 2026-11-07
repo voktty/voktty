@@ -319,20 +319,25 @@ pub async fn connect(
 
     for (index, hop) in chain.into_iter().enumerate() {
         let stream = match hops.last() {
-            None => HopStream::Tcp(
-                tokio::time::timeout(
-                    CONNECT_TIMEOUT,
-                    tokio::net::TcpStream::connect((hop.host.as_str(), hop.port())),
-                )
-                .await
-                .map_err(|_| {
-                    SshNativeError::new(
-                        SshErrorCode::Timeout,
-                        format!("connection to {} timed out", hop.host),
+            None => {
+                let tcp = if let Some(proxy) = target.proxy.as_ref().filter(|p| p.enabled) {
+                    crate::modules::ssh_proxy::connect_via_proxy(proxy, &hop.host, hop.port()).await?
+                } else {
+                    tokio::time::timeout(
+                        CONNECT_TIMEOUT,
+                        tokio::net::TcpStream::connect((hop.host.as_str(), hop.port())),
                     )
-                })?
-                .map_err(|e| unreachable(&hop, e))?,
-            ),
+                    .await
+                    .map_err(|_| {
+                        SshNativeError::new(
+                            SshErrorCode::Timeout,
+                            format!("connection to {} timed out", hop.host),
+                        )
+                    })?
+                    .map_err(|e| unreachable(&hop, e))?
+                };
+                HopStream::Tcp(tcp)
+            }
             Some(previous) => HopStream::Tunnelled(Box::new(
                 tokio::time::timeout(
                     CONNECT_TIMEOUT,
@@ -466,6 +471,7 @@ mod tests {
             destination: hop("dest"),
             jumps: (0..MAX_HOPS).map(|i| hop(&format!("j{i}"))).collect(),
             legacy_algorithms: false,
+            proxy: None,
         };
         let error = connect(target, Vec::new(), HostKeyApproval::None)
             .await

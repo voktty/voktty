@@ -1,5 +1,16 @@
 /** Mirrors of the DTOs in `src-tauri/src/modules/ssh_native`. */
 
+export type SshProxyType = "http" | "https" | "socks5" | "socks4";
+
+export type SshNativeProxy = {
+  enabled: boolean;
+  proxyType: SshProxyType;
+  host: string;
+  port: number;
+  user?: string;
+  password?: string;
+};
+
 export type SshNativeHop = {
   host: string;
   port?: number;
@@ -9,6 +20,7 @@ export type SshNativeHop = {
 
 export type SshNativeTarget = SshNativeHop & {
   jumps?: SshNativeHop[];
+  proxy?: SshNativeProxy;
   legacyAlgorithms?: boolean;
 };
 

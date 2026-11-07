@@ -1066,6 +1066,7 @@ mod tests {
             tmux_session_name: None,
             active_multiplexer_session: None,
             multiplexer_action: None,
+            ..Default::default()
         };
         let mut other = connection.clone();
         other.port = Some(22);

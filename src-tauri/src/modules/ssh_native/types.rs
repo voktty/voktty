@@ -23,12 +23,29 @@ impl SshNativeHop {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct SshNativeProxy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(rename = "type")]
+    pub proxy_type: String,
+    pub host: String,
+    pub port: u16,
+    #[serde(default)]
+    pub user: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SshNativeTarget {
     #[serde(flatten)]
     pub destination: SshNativeHop,
     /// Traversed in order before the destination.
     #[serde(default)]
     pub jumps: Vec<SshNativeHop>,
+    #[serde(default)]
+    pub proxy: Option<SshNativeProxy>,
     #[serde(default)]
     pub legacy_algorithms: bool,
 }

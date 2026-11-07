@@ -9,13 +9,23 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "@/modules/i18n";
-import { ServerStack03Icon } from "@hugeicons/core-free-icons";
+import {
+  ServerStack03Icon,
+  ViewIcon,
+  ViewOffSlashIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
 import { SshPromptDialog } from "./SshPromptDialog";
 import { addSshConnection, updateSshConnection } from "../sshStore";
-import type { SshConnection } from "../types";
+import type {
+  SshAuthType,
+  SshConnection,
+  SshProxyConfig,
+  SshProxyType,
+} from "../types";
 
 type Props = {
   open: boolean;
@@ -36,7 +46,22 @@ export function SshConnectionDialog({
   const [host, setHost] = useState("");
   const [user, setUser] = useState("");
   const [port, setPort] = useState("22");
+  const [authType, setAuthType] = useState<SshAuthType>("auto");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [identityFile, setIdentityFile] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [showPassphrase, setShowPassphrase] = useState(false);
+
+  // Proxy state
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [proxyType, setProxyType] = useState<SshProxyType>("http");
+  const [proxyHost, setProxyHost] = useState("");
+  const [proxyPort, setProxyPort] = useState("8080");
+  const [proxyUser, setProxyUser] = useState("");
+  const [proxyPassword, setProxyPassword] = useState("");
+  const [showProxyPassword, setShowProxyPassword] = useState(false);
+
   const [extraArgs, setExtraArgs] = useState("");
   const [initialDirectory, setInitialDirectory] = useState("");
   const [multiplexerMode, setMultiplexerMode] = useState<"none" | "auto" | "ask">("auto");
@@ -51,7 +76,16 @@ export function SshConnectionDialog({
       setHost(connection.host);
       setUser(connection.user ?? "");
       setPort(String(connection.port ?? 22));
+      setAuthType(connection.authType ?? "auto");
+      setPassword(connection.password ?? "");
       setIdentityFile(connection.identityFile ?? "");
+      setPassphrase(connection.passphrase ?? "");
+      setProxyEnabled(Boolean(connection.proxy?.enabled));
+      setProxyType(connection.proxy?.proxyType ?? "http");
+      setProxyHost(connection.proxy?.host ?? "");
+      setProxyPort(connection.proxy?.port ? String(connection.proxy.port) : "8080");
+      setProxyUser(connection.proxy?.user ?? "");
+      setProxyPassword(connection.proxy?.password ?? "");
       setExtraArgs(connection.extraArgs ?? "");
       setInitialDirectory(connection.initialDirectory ?? "");
       setMultiplexerMode(
@@ -65,12 +99,24 @@ export function SshConnectionDialog({
       setHost("");
       setUser("");
       setPort("22");
+      setAuthType("auto");
+      setPassword("");
       setIdentityFile("");
+      setPassphrase("");
+      setProxyEnabled(false);
+      setProxyType("http");
+      setProxyHost("");
+      setProxyPort("8080");
+      setProxyUser("");
+      setProxyPassword("");
       setExtraArgs("");
       setInitialDirectory("");
       setMultiplexerMode("auto");
       setTmuxSessionName("");
     }
+    setShowPassword(false);
+    setShowPassphrase(false);
+    setShowProxyPassword(false);
     setError(null);
     setTimeout(() => hostInputRef.current?.focus(), 50);
   }, [open, connection]);
@@ -88,6 +134,29 @@ export function SshConnectionDialog({
       return;
     }
     const finalPort = Number(portText);
+
+    let proxyConfig: SshProxyConfig | undefined;
+    if (proxyEnabled) {
+      const trimmedProxyHost = proxyHost.trim();
+      if (!trimmedProxyHost) {
+        setError(t("ssh.errors.proxyHostRequired"));
+        return;
+      }
+      const proxyPortText = proxyPort.trim();
+      if (!/^\d+$/.test(proxyPortText) || Number(proxyPortText) < 1 || Number(proxyPortText) > 65535) {
+        setError(t("ssh.errors.invalidProxyPort"));
+        return;
+      }
+      proxyConfig = {
+        enabled: true,
+        proxyType,
+        host: trimmedProxyHost,
+        port: Number(proxyPortText),
+        user: proxyUser.trim() || undefined,
+        password: proxyPassword.trim() || undefined,
+      };
+    }
+
     const finalName = name.trim() || (user.trim() ? `${user.trim()}@${trimmedHost}` : trimmedHost);
     const sanitizedExtraArgs = extraArgs.trim()
       ? extraArgs.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
@@ -98,7 +167,11 @@ export function SshConnectionDialog({
       host: trimmedHost,
       user: user.trim() || undefined,
       port: finalPort,
-      identityFile: identityFile.trim() || undefined,
+      authType: authType !== "auto" ? authType : undefined,
+      password: authType === "password" && password.trim() ? password.trim() : undefined,
+      identityFile: (authType === "auto" || authType === "key") && identityFile.trim() ? identityFile.trim() : undefined,
+      passphrase: (authType === "auto" || authType === "key") && passphrase.trim() ? passphrase.trim() : undefined,
+      proxy: proxyConfig,
       extraArgs: sanitizedExtraArgs,
       initialDirectory: initialDirectory.trim() || undefined,
       multiplexerMode,
@@ -236,17 +309,227 @@ export function SshConnectionDialog({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="ssh-key" className="text-[11px] text-muted-foreground">
-                {t("ssh.dialog.identityFile")}
+            <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+              <Label className="text-[11px] font-medium text-foreground">
+                {t("ssh.dialog.authType")}
               </Label>
-              <Input
-                id="ssh-key"
-                value={identityFile}
-                onChange={(e) => setIdentityFile(e.target.value)}
-                placeholder="~/.ssh/id_ed25519 or C:/keys/server.pem"
-                className="h-8 text-xs font-mono"
-              />
+              <div className="grid grid-cols-4 gap-1">
+                {(
+                  [
+                    { id: "auto", label: t("ssh.dialog.authAuto") },
+                    { id: "password", label: t("ssh.dialog.authPassword") },
+                    { id: "key", label: t("ssh.dialog.authKey") },
+                    { id: "interactive", label: t("ssh.dialog.authInteractive") },
+                  ] as const
+                ).map((method) => (
+                  <button
+                    key={method.id}
+                    type="button"
+                    onClick={() => setAuthType(method.id)}
+                    className={`rounded-md px-1 py-1.5 text-[10.5px] font-medium cursor-pointer transition-colors text-center border truncate ${
+                      authType === method.id
+                        ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                        : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                    }`}
+                    title={method.label}
+                  >
+                    {method.label}
+                  </button>
+                ))}
+              </div>
+
+              {authType === "password" && (
+                <div className="flex flex-col gap-1 pt-1">
+                  <Label htmlFor="ssh-password" className="text-[10.5px] text-muted-foreground">
+                    {t("ssh.dialog.password")}
+                  </Label>
+                  <div className="relative flex items-center">
+                    <Input
+                      id="ssh-password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={t("ssh.dialog.passwordPlaceholder")}
+                      className="h-8 text-xs font-mono pr-8"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                      tabIndex={-1}
+                    >
+                      <HugeiconsIcon
+                        icon={showPassword ? ViewOffSlashIcon : ViewIcon}
+                        size={14}
+                      />
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {t("ssh.dialog.passwordDescription")}
+                  </span>
+                </div>
+              )}
+
+              {(authType === "auto" || authType === "key") && (
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="ssh-key" className="text-[10.5px] text-muted-foreground">
+                      {t("ssh.dialog.identityFile")}
+                    </Label>
+                    <Input
+                      id="ssh-key"
+                      value={identityFile}
+                      onChange={(e) => setIdentityFile(e.target.value)}
+                      placeholder="~/.ssh/id_ed25519 or C:/keys/server.pem"
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="ssh-passphrase" className="text-[10.5px] text-muted-foreground">
+                      {t("ssh.dialog.passphrase")}
+                    </Label>
+                    <div className="relative flex items-center">
+                      <Input
+                        id="ssh-passphrase"
+                        type={showPassphrase ? "text" : "password"}
+                        value={passphrase}
+                        onChange={(e) => setPassphrase(e.target.value)}
+                        placeholder={t("ssh.dialog.passphrasePlaceholder")}
+                        className="h-8 text-xs font-mono pr-8"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassphrase(!showPassphrase)}
+                        className="absolute right-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        <HugeiconsIcon
+                          icon={showPassphrase ? ViewOffSlashIcon : ViewIcon}
+                          size={14}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <Label className="text-[11px] font-medium text-foreground">
+                    {t("ssh.dialog.proxyTitle")}
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    {t("ssh.dialog.proxyEnable")}
+                  </span>
+                </div>
+                <Switch
+                  checked={proxyEnabled}
+                  onCheckedChange={setProxyEnabled}
+                />
+              </div>
+
+              {proxyEnabled && (
+                <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10.5px] text-muted-foreground">
+                      {t("ssh.dialog.proxyType")}
+                    </Label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {(
+                        [
+                          { id: "http", label: t("ssh.dialog.proxyHttp") },
+                          { id: "https", label: t("ssh.dialog.proxyHttps") },
+                          { id: "socks5", label: t("ssh.dialog.proxySocks5") },
+                          { id: "socks4", label: t("ssh.dialog.proxySocks4") },
+                        ] as const
+                      ).map((typeItem) => (
+                        <button
+                          key={typeItem.id}
+                          type="button"
+                          onClick={() => setProxyType(typeItem.id)}
+                          className={`rounded-md px-1.5 py-1 text-[10.5px] font-medium cursor-pointer transition-colors text-center border truncate ${
+                            proxyType === typeItem.id
+                              ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                              : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                          }`}
+                        >
+                          {typeItem.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <Label htmlFor="ssh-proxy-host" className="text-[10.5px] text-muted-foreground">
+                        {t("ssh.dialog.proxyHost")} *
+                      </Label>
+                      <Input
+                        id="ssh-proxy-host"
+                        value={proxyHost}
+                        onChange={(e) => setProxyHost(e.target.value)}
+                        placeholder="127.0.0.1 / proxy.company.com"
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="ssh-proxy-port" className="text-[10.5px] text-muted-foreground">
+                        {t("ssh.dialog.proxyPort")}
+                      </Label>
+                      <Input
+                        id="ssh-proxy-port"
+                        value={proxyPort}
+                        onChange={(e) => setProxyPort(e.target.value)}
+                        placeholder={proxyType.startsWith("socks") ? "1080" : "8080"}
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="ssh-proxy-user" className="text-[10.5px] text-muted-foreground">
+                        {t("ssh.dialog.proxyUser")}
+                      </Label>
+                      <Input
+                        id="ssh-proxy-user"
+                        value={proxyUser}
+                        onChange={(e) => setProxyUser(e.target.value)}
+                        placeholder={t("ssh.dialog.proxyUserPlaceholder")}
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="ssh-proxy-password" className="text-[10.5px] text-muted-foreground">
+                        {t("ssh.dialog.proxyPassword")}
+                      </Label>
+                      <div className="relative flex items-center">
+                        <Input
+                          id="ssh-proxy-password"
+                          type={showProxyPassword ? "text" : "password"}
+                          value={proxyPassword}
+                          onChange={(e) => setProxyPassword(e.target.value)}
+                          placeholder={t("ssh.dialog.proxyPasswordPlaceholder")}
+                          className="h-8 text-xs font-mono pr-8"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowProxyPassword(!showProxyPassword)}
+                          className="absolute right-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                          tabIndex={-1}
+                        >
+                          <HugeiconsIcon
+                            icon={showProxyPassword ? ViewOffSlashIcon : ViewIcon}
+                            size={14}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">

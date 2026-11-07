@@ -308,6 +308,29 @@ fn build_remote_ssh(
         cmd.arg("-i");
         cmd.arg(crate::modules::remote::expand_tilde(identity_file));
     }
+
+    if connection.auth_type.as_deref() == Some("password") {
+        if !crate::modules::remote::has_ssh_option(&user_extra, "PreferredAuthentications") {
+            cmd.arg("-o");
+            cmd.arg("PreferredAuthentications=password,keyboard-interactive");
+        }
+    } else if connection.auth_type.as_deref() == Some("key")
+        && !crate::modules::remote::has_ssh_option(&user_extra, "PreferredAuthentications")
+    {
+        cmd.arg("-o");
+        cmd.arg("PreferredAuthentications=publickey");
+    }
+
+    if let Some(proxy) = &connection.proxy {
+        if proxy.enabled && !proxy.host.trim().is_empty() && proxy.port > 0
+            && !crate::modules::remote::has_ssh_option(&user_extra, "ProxyCommand")
+        {
+            if let Ok(proxy_cmd) = crate::modules::ssh_proxy::build_proxy_command(proxy) {
+                cmd.arg("-o");
+                cmd.arg(format!("ProxyCommand={proxy_cmd}"));
+            }
+        }
+    }
     for arg in user_extra {
         cmd.arg(arg);
     }
@@ -1527,13 +1550,10 @@ mod tests {
             host: "server.example".into(),
             user: Some("ubuntu".into()),
             port: Some(22),
-            identity_file: None,
-            extra_args: None,
-            initial_directory: None,
             multiplexer_mode: Some("auto".into()),
             tmux_session_name: Some("my-work".into()),
-            active_multiplexer_session: None,
             multiplexer_action: Some("attach_force".into()),
+            ..Default::default()
         };
         let command = remote_shell_command(Some("/srv/work"), false, Some(&conn)).unwrap();
         assert!(command.contains("if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; tmux set -g default-command"));
@@ -1550,11 +1570,8 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".into()),
             extra_args: Some("-o ConnectTimeout=5".into()),
-            initial_directory: None,
             multiplexer_mode: Some("none".into()),
-            tmux_session_name: None,
-            active_multiplexer_session: None,
-            multiplexer_action: None,
+            ..Default::default()
         };
         let command = build_remote_ssh(Some("/srv/project".into()), connection, false).unwrap();
         let args: Vec<String> = command
@@ -1576,6 +1593,34 @@ mod tests {
             voktty_remote_protocol::REMOTE_SHELL_INTEGRATION_VERSION
         )));
         assert_eq!(args[args.len() - 2], "ubuntu@server.example");
+    }
+
+    #[test]
+    fn remote_ssh_command_configures_password_auth_and_proxy() {
+        let connection = RemoteSshConnection {
+            host: "server.example".into(),
+            user: Some("ubuntu".into()),
+            auth_type: Some("password".into()),
+            proxy: Some(crate::modules::remote::RemoteSshProxy {
+                enabled: true,
+                proxy_type: "socks5".into(),
+                host: "127.0.0.1".into(),
+                port: 1080,
+                user: None,
+                password: None,
+            }),
+            ..Default::default()
+        };
+        let command = build_remote_ssh(None, connection, false).unwrap();
+        let args: Vec<String> = command
+            .get_argv()
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.iter().any(|arg| arg == "PreferredAuthentications=password,keyboard-interactive"));
+        let proxy_arg = args.iter().find(|arg| arg.starts_with("ProxyCommand=")).expect("ProxyCommand arg");
+        assert!(proxy_arg.contains("ssh-proxy"));
+        assert!(proxy_arg.contains("--type socks5"));
     }
 
     #[test]

@@ -75,7 +75,7 @@ export function isHostKeyError(code: SshErrorCode): boolean {
 
 /**
  * Build the connect target from a saved workspace connection, including its
- * `ProxyJump` chain.
+ * `ProxyJump` chain and proxy settings.
  */
 export function toTarget(connection: SshConnectionConfig): SshNativeTarget {
   const jumps = parseJumps(connection.extraArgs);
@@ -85,21 +85,29 @@ export function toTarget(connection: SshConnectionConfig): SshNativeTarget {
     user: connection.user,
     identityFile: connection.identityFile,
     ...(jumps.length > 0 ? { jumps } : {}),
+    ...(connection.proxy?.enabled ? { proxy: connection.proxy } : {}),
   };
 }
 
 /**
  * Credentials the app can offer without asking anything: the agent first, then
- * the connection's own key. A password is never assembled here, because it
- * only exists after the user types it into a prompt.
+ * the connection's own key or password if pre-configured.
  */
 export function defaultCredentials(
   connection: SshConnectionConfig,
 ): SshCredential[] {
+  if (connection.authType === "password" && connection.password) {
+    return [{ kind: "password", secret: connection.password }];
+  }
+
   const credentials: SshCredential[] = [{ kind: "agent" }];
   const identity = connection.identityFile?.trim();
   if (identity) {
-    credentials.push({ kind: "privateKey", path: identity });
+    credentials.push({
+      kind: "privateKey",
+      path: identity,
+      ...(connection.passphrase ? { passphrase: connection.passphrase } : {}),
+    });
   }
   return credentials;
 }

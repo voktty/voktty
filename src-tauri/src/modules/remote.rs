@@ -36,15 +36,42 @@ const REMOTE_FISH_INIT: &str = include_str!("pty/scripts/init.fish");
 const BUNDLED_LINUX_X86_64_HELPER: &[u8] =
     include_bytes!("../../resources/remote/linux-x86_64/voktty-remote");
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSshProxy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(rename = "type", default = "default_proxy_type")]
+    pub proxy_type: String,
+    pub host: String,
+    pub port: u16,
+    #[serde(default)]
+    pub user: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
+fn default_proxy_type() -> String {
+    "http".to_string()
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct RemoteSshConnection {
     pub host: String,
     #[serde(default)]
     pub user: Option<String>,
     #[serde(default)]
     pub port: Option<u16>,
+    #[serde(rename = "authType", default)]
+    pub auth_type: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub passphrase: Option<String>,
     #[serde(rename = "identityFile", default)]
     pub identity_file: Option<String>,
+    #[serde(default)]
+    pub proxy: Option<RemoteSshProxy>,
     #[serde(rename = "extraArgs", default)]
     pub extra_args: Option<String>,
     #[serde(rename = "initialDirectory", default)]
@@ -262,10 +289,32 @@ struct SshPromptEvent {
     confirm: bool,
 }
 
-pub(crate) fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<Askpass, String> {
+pub(crate) fn start_ssh_askpass_with_conn(
+    app: &AppHandle,
+    state: &RemoteState,
+    connection: Option<&RemoteSshConnection>,
+) -> Result<Askpass, String> {
     let app = app.clone();
     let prompts = Arc::clone(&state.ssh_prompts);
+    let saved_password = connection.and_then(|c| c.password.clone());
+    let saved_passphrase = connection.and_then(|c| c.passphrase.clone());
     Askpass::start(move |message, confirm| {
+        if !confirm {
+            let lower = message.to_ascii_lowercase();
+            if lower.contains("passphrase") {
+                if let Some(passphrase) = &saved_passphrase {
+                    if !passphrase.is_empty() {
+                        return Some(passphrase.clone());
+                    }
+                }
+            } else if lower.contains("password") {
+                if let Some(password) = &saved_password {
+                    if !password.is_empty() {
+                        return Some(password.clone());
+                    }
+                }
+            }
+        }
         let id = uuid::Uuid::new_v4().to_string();
         let (sender, receiver) = mpsc::sync_channel(1);
         prompts.lock().ok()?.insert(id.clone(), sender);
@@ -290,6 +339,10 @@ pub(crate) fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<
         }
         answer
     })
+}
+
+pub(crate) fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<Askpass, String> {
+    start_ssh_askpass_with_conn(app, state, None)
 }
 
 #[tauri::command]
@@ -1829,7 +1882,7 @@ pub async fn ssh_fetch_metrics(
         }
 
         permit.prepare()?;
-        let askpass = Arc::new(start_ssh_askpass(&app, &state)?);
+        let askpass = Arc::new(start_ssh_askpass_with_conn(&app, &state, Some(&connection))?);
         *permit
             .owner
             .askpass
@@ -1858,7 +1911,7 @@ pub async fn ssh_upload_files(
     let state = state.inner().clone();
 
     tokio::task::spawn_blocking(move || {
-        let askpass = start_ssh_askpass(&app, &state)?;
+        let askpass = start_ssh_askpass_with_conn(&app, &state, Some(&connection))?;
         let mut cmd = std::process::Command::new("scp");
         cmd.arg("-r");
         let user_extra = connection
@@ -1935,7 +1988,7 @@ pub async fn ssh_download_files(
     let state = state.inner().clone();
 
     tokio::task::spawn_blocking(move || {
-        let askpass = start_ssh_askpass(&app, &state)?;
+        let askpass = start_ssh_askpass_with_conn(&app, &state, Some(&connection))?;
         let mut cmd = std::process::Command::new("scp");
         cmd.arg("-r");
         cmd.arg("-o").arg("BatchMode=no");
@@ -1998,7 +2051,7 @@ pub async fn ssh_list_multiplexer_sessions(
     let permit = state.reserve_bootstrap(&connection)?;
     run_bootstrap_task(permit, move |permit| {
         permit.prepare()?;
-        let askpass = Arc::new(start_ssh_askpass(&app, &state)?);
+        let askpass = Arc::new(start_ssh_askpass_with_conn(&app, &state, Some(&connection))?);
         *permit
             .owner
             .askpass
@@ -2384,6 +2437,32 @@ pub(crate) fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
         .filter(|path| !path.trim().is_empty())
     {
         args.extend(["-i".to_string(), expand_tilde(identity_file)]);
+    }
+
+    if connection.auth_type.as_deref() == Some("password") {
+        if !has_ssh_option(&user_extra, "PreferredAuthentications") {
+            args.extend([
+                "-o".to_string(),
+                "PreferredAuthentications=password,keyboard-interactive".to_string(),
+            ]);
+        }
+    } else if connection.auth_type.as_deref() == Some("key")
+        && !has_ssh_option(&user_extra, "PreferredAuthentications")
+    {
+        args.extend([
+            "-o".to_string(),
+            "PreferredAuthentications=publickey".to_string(),
+        ]);
+    }
+
+    if let Some(proxy) = &connection.proxy {
+        if proxy.enabled && !proxy.host.trim().is_empty() && proxy.port > 0
+            && !has_ssh_option(&user_extra, "ProxyCommand")
+        {
+            if let Ok(proxy_cmd) = crate::modules::ssh_proxy::build_proxy_command(proxy) {
+                args.extend(["-o".to_string(), format!("ProxyCommand={proxy_cmd}")]);
+            }
+        }
     }
     args.extend(user_extra);
     // Everything after `--` is the destination, never an option.
@@ -2912,7 +2991,7 @@ fn open_remote_session(
     permit: &BootstrapPermit,
 ) -> Result<(Arc<RemoteSession>, RemoteSessionInfo), String> {
     permit.prepare()?;
-    let askpass = Arc::new(start_ssh_askpass(&app, &state)?);
+    let askpass = Arc::new(start_ssh_askpass_with_conn(&app, &state, Some(&connection))?);
     *permit
         .owner
         .askpass
@@ -3773,11 +3852,7 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".to_string()),
             extra_args: Some("-o ConnectTimeout=5".to_string()),
-            initial_directory: None,
-            multiplexer_mode: None,
-            tmux_session_name: None,
-            active_multiplexer_session: None,
-            multiplexer_action: None,
+            ..Default::default()
         }
     }
 
@@ -3909,11 +3984,7 @@ mod tests {
             port: Some(9194),
             identity_file: Some("~/.ssh/id_ed25519".to_string()),
             extra_args: Some("-o HostKeyAlias=forgenex-code4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR".to_string()),
-            initial_directory: None,
-            multiplexer_mode: None,
-            tmux_session_name: None,
-            active_multiplexer_session: None,
-            multiplexer_action: None,
+            ..Default::default()
         };
         let args = ssh_args(&conn);
         assert!(!args.iter().any(|a| a == "StrictHostKeyChecking=ask"));
@@ -3923,6 +3994,44 @@ mod tests {
         assert!(args.iter().any(|a| a == "LogLevel=ERROR"));
         assert_eq!(args.last().map(String::as_str), Some("abc@192.168.1.4"));
         assert_eq!(args[args.len() - 2], "--");
+    }
+
+    #[test]
+    fn builds_ssh_arguments_with_preferred_authentications_password() {
+        let conn = RemoteSshConnection {
+            host: "server.example".to_string(),
+            auth_type: Some("password".to_string()),
+            ..Default::default()
+        };
+        let args = ssh_args(&conn);
+        assert!(args
+            .iter()
+            .any(|a| a == "PreferredAuthentications=password,keyboard-interactive"));
+    }
+
+    #[test]
+    fn builds_ssh_arguments_with_proxy_command() {
+        let conn = RemoteSshConnection {
+            host: "server.example".to_string(),
+            proxy: Some(RemoteSshProxy {
+                enabled: true,
+                proxy_type: "socks5".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 1080,
+                user: None,
+                password: None,
+            }),
+            ..Default::default()
+        };
+        let args = ssh_args(&conn);
+        let proxy_arg = args
+            .iter()
+            .find(|a| a.starts_with("ProxyCommand="))
+            .expect("ProxyCommand option");
+        assert!(proxy_arg.contains("ssh-proxy"));
+        assert!(proxy_arg.contains("--type socks5"));
+        assert!(proxy_arg.contains("--proxy-host 127.0.0.1"));
+        assert!(proxy_arg.contains("--proxy-port 1080"));
     }
 
     #[test]

@@ -47,6 +47,53 @@ describe("SSH Module", () => {
       };
       expect(buildSshCommand(conn)).toBe("ssh -X -C server.local");
     });
+
+    it("builds command with password auth preferred options", () => {
+      const conn: SshConnection = {
+        id: "1",
+        name: "Password Auth",
+        host: "server.com",
+        user: "root",
+        authType: "password",
+      };
+      expect(buildSshCommand(conn)).toBe(
+        "ssh -o PreferredAuthentications=password,keyboard-interactive root@server.com",
+      );
+    });
+
+    it("builds command with key auth preferred options", () => {
+      const conn: SshConnection = {
+        id: "1",
+        name: "Key Auth",
+        host: "server.com",
+        user: "root",
+        authType: "key",
+        identityFile: "~/.ssh/id_rsa",
+      };
+      expect(buildSshCommand(conn)).toBe(
+        'ssh -i "~/.ssh/id_rsa" -o PreferredAuthentications=publickey root@server.com',
+      );
+    });
+
+    it("builds command with proxy command", () => {
+      const conn: SshConnection = {
+        id: "1",
+        name: "Proxy Ssh",
+        host: "server.com",
+        user: "root",
+        proxy: {
+          enabled: true,
+          proxyType: "socks5",
+          host: "127.0.0.1",
+          port: 1080,
+          user: "proxyuser",
+          password: "proxypass",
+        },
+      };
+      expect(buildSshCommand(conn)).toBe(
+        'ssh -o ProxyCommand="voktty ssh-proxy --type socks5 --proxy-host 127.0.0.1 --proxy-port 1080 --user proxyuser --password proxypass %h %p" root@server.com',
+      );
+    });
   });
 
   describe("formatSshSubtitle", () => {

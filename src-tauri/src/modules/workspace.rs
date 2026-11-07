@@ -486,6 +486,7 @@ fn compute_appimage_env_overrides(
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
+#[allow(clippy::large_enum_variant)]
 pub enum WorkspaceEnv {
     #[default]
     Local,
