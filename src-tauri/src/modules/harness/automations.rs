@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
-use super::session_store::{now_millis, validate_id, SessionStore};
+use super::session_store::{now_millis, validate_id, SessionStoreState};
 
 #[path = "automations_pending.rs"]
 mod pending;
@@ -660,7 +660,7 @@ fn apply_run_summary(automation: &mut Automation, run: &AutomationRun) {
 }
 
 #[tauri::command(async)]
-pub fn automations_list(store: State<'_, SessionStore>) -> Result<Vec<Automation>, String> {
+pub fn automations_list(store: State<'_, SessionStoreState>) -> Result<Vec<Automation>, String> {
     let conn = store.lock_conn()?;
     list(&conn)
 }
@@ -668,7 +668,7 @@ pub fn automations_list(store: State<'_, SessionStore>) -> Result<Vec<Automation
 #[tauri::command(async)]
 pub fn automations_upsert(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     automation: AutomationUpsert,
 ) -> Result<Automation, String> {
     let now = now_millis();
@@ -728,7 +728,7 @@ pub fn automations_upsert(
 #[tauri::command(async)]
 pub fn automations_delete(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     id: String,
 ) -> Result<(), String> {
     validate_id(&id, "automation")?;
@@ -742,7 +742,7 @@ pub fn automations_delete(
 
 #[tauri::command(async)]
 pub fn automation_runs_list(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     automation_id: String,
 ) -> Result<Vec<AutomationRun>, String> {
     validate_id(&automation_id, "automation")?;
@@ -758,7 +758,7 @@ pub fn automation_runs_list(
 
 #[tauri::command(async)]
 pub fn automation_runs_pending(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     after: Option<String>,
 ) -> Result<PendingAutomationPage, String> {
     pending::validate_cursor(after.as_deref())?;
@@ -769,7 +769,7 @@ pub fn automation_runs_pending(
 #[tauri::command(async)]
 pub fn automation_run_start(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     run_id: String,
     session_id: String,
 ) -> Result<Option<AutomationRun>, String> {
@@ -786,7 +786,7 @@ pub fn automation_run_start(
 #[tauri::command(async)]
 pub fn automation_runs_recover(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     started_before: i64,
     now: i64,
     include_pending: Option<bool>,
@@ -866,7 +866,7 @@ pub fn automation_runs_recover(
 #[tauri::command(async)]
 pub fn automation_run_now(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     automation_id: String,
     now: i64,
 ) -> Result<AutomationRun, String> {
@@ -891,7 +891,7 @@ pub fn automation_run_now(
 #[tauri::command(async)]
 pub fn automations_claim_due(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     automation_id: String,
     expected_next_run_at: i64,
     next_run_at: i64,
@@ -952,7 +952,7 @@ pub fn automations_claim_due(
 #[tauri::command(async)]
 pub fn automations_claim_event(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     automation_id: String,
     claim: AutomationEventClaim,
     now: i64,
@@ -1019,7 +1019,7 @@ pub fn automations_claim_event(
 #[tauri::command(async)]
 pub fn automation_run_update(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     run_id: String,
     status: String,
     session_id: Option<String>,
@@ -1077,6 +1077,30 @@ pub fn automation_run_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn commands_use_the_managed_session_store_state() {
+        let source = include_str!("automations.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        let unmanaged = ["State<'_, ", "SessionStore>"].concat();
+        assert!(
+            !production.contains(&unmanaged),
+            "automation commands must take the managed SessionStoreState"
+        );
+    }
+
+    #[test]
+    fn managed_state_serves_automation_queries() {
+        let dir = std::env::temp_dir().join(format!("voktty-automations-{}", uuid_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let state = SessionStoreState::new(dir.join("harness.db"));
+        {
+            let conn = state.lock_conn().unwrap();
+            ensure_tables(&conn).unwrap();
+            assert!(list(&conn).unwrap().is_empty());
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn validates_time_fields() {
