@@ -12,6 +12,8 @@ export type RateLimitWindow = {
   windowMinutes: number;
   /** Unix ms timestamp when the window resets, if known. */
   resetsAt: number | null;
+  /** Model-specific cap when it is the tightest one; absent for the overall limit. */
+  scope?: "opus" | "sonnet";
 };
 
 export type RateLimitResetCredit = {
@@ -268,7 +270,8 @@ export function rateLimitWindowTooltip(
   showRemaining = false,
 ): string {
   const pct = clampUsedPercent(window.usedPercent);
-  const usage = `${formatUsagePercent(showRemaining ? 100 - pct : pct)} ${showRemaining ? "remaining" : "used"}`;
+  const scope = window.scope === "opus" ? " (Opus)" : window.scope === "sonnet" ? " (Sonnet)" : "";
+  const usage = `${formatUsagePercent(showRemaining ? 100 - pct : pct)} ${showRemaining ? "remaining" : "used"}${scope}`;
   if (window.resetsAt == null) {
     return `${usage} · ${formatWindowLabel(window.windowMinutes)} window`;
   }
@@ -335,7 +338,7 @@ export function parseClaudeOAuthUsage(body: string): ProviderRateLimits {
   return {
     provider: "claude",
     session: mapUsageWindow(rec.five_hour, SESSION_WINDOW_MINUTES),
-    weekly: mapUsageWindow(rec.seven_day, WEEKLY_WINDOW_MINUTES),
+    weekly: tightestClaudeWeeklyWindow(rec),
     monthly: null,
     resetCredits: null,
     updatedAt: Date.now(),
@@ -344,15 +347,66 @@ export function parseClaudeOAuthUsage(body: string): ProviderRateLimits {
   };
 }
 
+const CLAUDE_WEEKLY_BUCKETS = [
+  ["seven_day", undefined],
+  ["seven_day_opus", "opus"],
+  ["seven_day_sonnet", "sonnet"],
+] as const;
+
+/**
+ * Claude enforces a weekly cap per bucket (all models, Opus, Sonnet). The one
+ * closest to its limit is the one that blocks the user, so it is the weekly
+ * figure; showing only the overall bucket hides a nearly spent model cap.
+ */
+function tightestClaudeWeeklyWindow(
+  rec: Record<string, unknown>,
+): RateLimitWindow | null {
+  let best: RateLimitWindow | null = null;
+  for (const [key, scope] of CLAUDE_WEEKLY_BUCKETS) {
+    const window = mapUsageWindow(rec[key], WEEKLY_WINDOW_MINUTES);
+    if (!window) continue;
+    if (!best || window.usedPercent > best.usedPercent) {
+      best = scope ? { ...window, scope } : window;
+    }
+  }
+  return best;
+}
+
 type CodexWindowSnapshot = {
   usedPercent: number;
   windowDurationMins: number | null;
   resetsAt: unknown;
 };
 
+/**
+ * Codex 0.167 answers with the historical single-bucket `rateLimits` and a
+ * `rateLimitsByLimitId` map. When the historical view carries no window, the
+ * metered bucket (`codex` first) holds the figures.
+ */
+function codexBucketWrapper(
+  rec: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  const legacy = asRecord(rec?.rateLimits) ?? rec;
+  const hasWindows = (bucket: Record<string, unknown> | null) =>
+    Boolean(
+      snapshotFrom(asRecord(bucket?.primary)) ||
+        snapshotFrom(asRecord(bucket?.secondary)),
+    );
+  if (hasWindows(legacy)) return legacy;
+  const buckets = asRecord(rec?.rateLimitsByLimitId ?? rec?.rate_limits_by_limit_id);
+  if (!buckets) return legacy;
+  const preferred = asRecord(buckets.codex);
+  if (hasWindows(preferred)) return preferred;
+  for (const value of Object.values(buckets)) {
+    const bucket = asRecord(value);
+    if (hasWindows(bucket)) return bucket;
+  }
+  return legacy;
+}
+
 export function parseCodexRateLimits(result: unknown): ProviderRateLimits {
   const rec = asRecord(result);
-  const wrapper = asRecord(rec?.rateLimits) ?? rec;
+  const wrapper = codexBucketWrapper(rec);
   const classified = classifyCodexWindows({
     primary: snapshotFrom(asRecord(wrapper?.primary)),
     secondary: snapshotFrom(asRecord(wrapper?.secondary)),

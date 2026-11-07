@@ -217,6 +217,10 @@ async function readCodexRateLimits(
     }
     const rec = asRecord(result);
     if (rec) {
+      // Key names only, never values: enough to see which protocol shape arrived.
+      console.warn(
+        `[usage] codex answered without usage windows; keys: ${Object.keys(rec).join(", ") || "none"}`,
+      );
       return unavailableRateLimits("codex", "No Codex usage data");
     }
     return parsed;

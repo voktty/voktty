@@ -134,6 +134,32 @@ describe("parseClaudeOAuthUsage", () => {
     );
   });
 
+  it("reports the model cap that is closest to its limit as the weekly window", () => {
+    const limits = parseClaudeOAuthUsage(
+      JSON.stringify({
+        five_hour: { utilization: 10, resets_at: 1_738_425_600 },
+        seven_day: { utilization: 2, resets_at: "2026-09-01T00:00:00.000Z" },
+        seven_day_opus: { utilization: 15, resets_at: "2026-09-02T00:00:00.000Z" },
+        seven_day_sonnet: { utilization: 90, resets_at: "2026-09-03T00:00:00.000Z" },
+        seven_day_oauth_apps: { utilization: 99, resets_at: "2026-09-04T00:00:00.000Z" },
+      }),
+    );
+    expect(limits.weekly?.usedPercent).toBe(90);
+    expect(limits.weekly?.scope).toBe("sonnet");
+    expect(limits.weekly?.resetsAt).toBe(Date.parse("2026-09-03T00:00:00.000Z"));
+  });
+
+  it("keeps the overall weekly window when it is the tightest", () => {
+    const limits = parseClaudeOAuthUsage(
+      JSON.stringify({
+        seven_day: { utilization: 60, resets_at: "2026-09-01T00:00:00.000Z" },
+        seven_day_sonnet: { utilization: 20, resets_at: "2026-09-03T00:00:00.000Z" },
+      }),
+    );
+    expect(limits.weekly?.usedPercent).toBe(60);
+    expect(limits.weekly?.scope).toBeUndefined();
+  });
+
   it("returns an error for garbage", () => {
     const limits = parseClaudeOAuthUsage("not json");
     expect(limits.status).toBe("error");
@@ -154,6 +180,42 @@ describe("mapUsageWindow", () => {
 });
 
 describe("parseCodexRateLimits", () => {
+  it("reads the metered bucket when the historical view has no windows", () => {
+    const limits = parseCodexRateLimits({
+      rateLimits: { limitId: "codex", primary: null, secondary: null },
+      rateLimitsByLimitId: {
+        codex_other: { primary: { usedPercent: 99, windowDurationMins: 300 } },
+        codex: {
+          primary: { usedPercent: 31, windowDurationMins: 300, resetsAt: 1_738_425_600 },
+          secondary: { usedPercent: 64, windowDurationMins: 10_080, resetsAt: 1_738_900_000 },
+        },
+      },
+    });
+    expect(limits.session?.usedPercent).toBe(31);
+    expect(limits.weekly?.usedPercent).toBe(64);
+  });
+
+  it("prefers the historical view when it has windows", () => {
+    const limits = parseCodexRateLimits({
+      rateLimits: { primary: { usedPercent: 12, windowDurationMins: 300 } },
+      rateLimitsByLimitId: {
+        codex: { primary: { usedPercent: 77, windowDurationMins: 300 } },
+      },
+    });
+    expect(limits.session?.usedPercent).toBe(12);
+  });
+
+  it("falls back to any bucket with windows when no codex bucket exists", () => {
+    const limits = parseCodexRateLimits({
+      rateLimits: {},
+      rateLimitsByLimitId: {
+        empty: { primary: null },
+        spark: { primary: { usedPercent: 8, windowDurationMins: 300 } },
+      },
+    });
+    expect(limits.session?.usedPercent).toBe(8);
+  });
+
   it("classifies primary/secondary by duration", () => {
     const limits = parseCodexRateLimits({
       rateLimits: {
