@@ -790,124 +790,14 @@ pub const INSPECTOR_BUNDLE_JS: &str = r####"(function() {
   } catch(_) {}
 })();"####;
 
-pub fn ensure_php_helpers() -> Result<(PathBuf, PathBuf), String> {
+pub fn ensure_php_helpers() -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join("voktty_web_server");
-    let _ = fs::create_dir_all(&dir);
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let js_path = dir.join("voktty_inspector.js");
+    fs::write(dir.join("voktty_inspector.js"), INSPECTOR_BUNDLE_JS).map_err(|e| e.to_string())?;
     let router_path = dir.join("voktty_router.php");
-    let append_path = dir.join("voktty_append.php");
-
-    let _ = fs::write(&js_path, INSPECTOR_BUNDLE_JS);
-
-    let router_code = r#"<?php
-$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-if ($uri === '/__voktty_inspector.js') {
-    header('Content-Type: application/javascript; charset=utf-8');
-    header('Access-Control-Allow-Origin: *');
-    header('Cache-Control: no-cache, no-store, must-revalidate');
-    echo file_get_contents(__DIR__ . '/voktty_inspector.js');
-    exit;
-}
-if (strpos($uri, '/__voktty_proxy') === 0) {
-    $targetUrl = $_GET['url'] ?? '';
-    if ($targetUrl) {
-        $content = @file_get_contents($targetUrl);
-        if ($content !== false) {
-            header('Content-Type: text/html; charset=utf-8');
-            header('Access-Control-Allow-Origin: *');
-            $base = "<base href=\"" . htmlspecialchars($targetUrl, ENT_QUOTES) . "\">\n<script>window.__VOKTTY_IS_PROXIED__ = true;</script>";
-            if (strpos($content, '<head>') !== false) {
-                $content = str_replace('<head>', "<head>\n" . $base, $content);
-            } else {
-                $content = "<head>" . $base . "</head>" . $content;
-            }
-            $script = "<script src=\"/__voktty_inspector.js\"></script>";
-            if (strpos($content, '__voktty_inspector.js') === false) {
-                $pos = strripos($content, '</body>');
-                if ($pos !== false) {
-                    $content = substr_replace($content, $script . '</body>', $pos, 7);
-                } else {
-                    $content .= "\n" . $script;
-                }
-            }
-            echo $content;
-            exit;
-        }
-    }
-}
-
-$docroot = $_SERVER['DOCUMENT_ROOT'] ?? getcwd();
-$filePath = $docroot . $uri;
-
-if (is_dir($filePath)) {
-    if (file_exists($filePath . '/index.php')) {
-        $filePath = $filePath . '/index.php';
-    } else if (file_exists($filePath . '/index.html')) {
-        $filePath = $filePath . '/index.html';
-    } else if (file_exists($filePath . '/index.htm')) {
-        $filePath = $filePath . '/index.htm';
-    }
-}
-
-if (file_exists($filePath) && !is_dir($filePath)) {
-    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-    if ($ext === 'html' || $ext === 'htm') {
-        header('Content-Type: text/html; charset=utf-8');
-        header('Access-Control-Allow-Origin: *');
-        $html = file_get_contents($filePath);
-        $script = "<script src=\"/__voktty_inspector.js\"></script>";
-        if (strpos($html, '__voktty_inspector.js') === false) {
-            $pos = strripos($html, '</body>');
-            if ($pos !== false) {
-                $html = substr_replace($html, $script . '</body>', $pos, 7);
-            } else {
-                $pos = strripos($html, '</html>');
-                if ($pos !== false) {
-                    $html = substr_replace($html, $script . '</html>', $pos, 7);
-                } else {
-                    $html .= "\n" . $script;
-                }
-            }
-        }
-        echo $html;
-        exit;
-    }
-    if ($ext === 'php') {
-        ob_start(function($buffer) {
-            $script = "<script src=\"/__voktty_inspector.js\"></script>";
-            if (strpos($buffer, '__voktty_inspector.js') === false) {
-                $pos = strripos($buffer, '</body>');
-                if ($pos !== false) {
-                    return substr_replace($buffer, $script . '</body>', $pos, 7);
-                }
-                $pos = strripos($buffer, '</html>');
-                if ($pos !== false) {
-                    return substr_replace($buffer, $script . '</html>', $pos, 7);
-                }
-                return $buffer . "\n" . $script;
-            }
-            return $buffer;
-        });
-        include $filePath;
-        ob_end_flush();
-        exit;
-    }
-}
-
-return false;
-"#;
-    let _ = fs::write(&router_path, router_code);
-
-    let append_code = r#"<?php
-if (!isset($GLOBALS['__VOKTTY_APPEND_DONE__'])) {
-    $GLOBALS['__VOKTTY_APPEND_DONE__'] = true;
-    echo "\n<script src=\"/__voktty_inspector.js\"></script>\n";
-}
-"#;
-    let _ = fs::write(&append_path, append_code);
-
-    Ok((router_path, append_path))
+    fs::write(&router_path, include_str!("voktty_router.php")).map_err(|e| e.to_string())?;
+    Ok(router_path)
 }
 
 enum RunningServer {
@@ -1545,20 +1435,11 @@ fn start_php_server(root: &Path, preferred_port: Option<u16>) -> Result<(u16, Ch
     }
     let root_str = doc_root.to_string_lossy().to_string();
 
-    let (router_path, append_path) =
-        ensure_php_helpers().unwrap_or_else(|_| (PathBuf::new(), PathBuf::new()));
+    let router_path = ensure_php_helpers()?;
 
     let mut cmd = Command::new("php");
     cmd.args(["-S", &bind_target, "-t", &root_str]);
-    if append_path.exists() {
-        cmd.arg("-d").arg(format!(
-            "auto_append_file={}",
-            append_path.to_string_lossy()
-        ));
-    }
-    if router_path.exists() {
-        cmd.arg(router_path.to_string_lossy().to_string());
-    }
+    cmd.arg(router_path.to_string_lossy().to_string());
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
 
     crate::modules::proc::hide_console(&mut cmd);
@@ -2743,3 +2624,7 @@ mod tests {
         assert_eq!(path, None);
     }
 }
+
+#[cfg(test)]
+#[path = "php_router_tests.rs"]
+mod php_router_tests;
