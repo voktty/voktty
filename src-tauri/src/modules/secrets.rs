@@ -799,8 +799,17 @@ mod tests {
         assert!(!path.exists());
     }
 
+    fn running_as_root() -> bool {
+        // SAFETY: geteuid has no preconditions and cannot fail.
+        unsafe { libc::geteuid() == 0 }
+    }
+
     #[test]
     fn linux_failed_file_write_keeps_the_cached_value_unchanged() {
+        if running_as_root() {
+            // Root ignores the read-only directory this test relies on.
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("secrets.json");
         let store = TestSecureStore::unavailable();
@@ -968,6 +977,10 @@ mod tests {
 
     #[test]
     fn linux_failed_file_cleanup_preserves_the_secure_value() {
+        if running_as_root() {
+            // Root ignores the read-only directory this test relies on.
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("secrets.json");
         let mut values = HashMap::new();
