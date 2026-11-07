@@ -51,7 +51,10 @@ import {
   type SpaceSplitHandlePlacement,
 } from "../lib/spaceGeometry";
 import { useSlotTints, WINDOW_TINT_PRESETS } from "../lib/slotTints";
-import { WorkspaceDropOverlay } from "./WorkspaceDropOverlay";
+import {
+  StandaloneSplitDropZone,
+  WorkspaceDropOverlay,
+} from "./WorkspaceDropOverlay";
 
 type SurfaceProps = Omit<WorkspaceSurfaceProps, "placements">;
 
@@ -173,6 +176,13 @@ export function SpaceWorkspace({
         tabs={tabs}
         placements={isComposite ? (placements ?? []) : undefined}
       />
+      {!isComposite && surfaceProps.activeTab ? (
+        <StandaloneSplitDropZone
+          hostTab={surfaceProps.activeTab}
+          viewSpaces={viewSpaces}
+          tabs={tabs}
+        />
+      ) : null}
       {isComposite && viewSpace && geometry && (
         <>
           <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">

@@ -1345,6 +1345,7 @@ export const es: TranslationSchema = {
     resourceOpenFailed: "No se pudo abrir la ruta soltada.",
     dragReady: "Arrastre activo. Muévelo a un espacio o slot resaltado.",
     dropReady: "Suelta para colocar la pestaña aquí.",
+    splitDropReady: "Suelta para dividir la vista y crear un espacio nuevo.",
     resourceDragReady:
       "Arrastre activo. Muévelo sobre una vista para citarlo en la IA.",
     resourceDropReady: "Suelta aquí para citar este archivo en la IA.",

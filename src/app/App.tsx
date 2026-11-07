@@ -3470,6 +3470,36 @@ function DesktopApp() {
     [moveTabToSpace, setActiveId],
   );
 
+  const handleSplitIntoNewSpace = useCallback(
+    (host: Tab, dragged: Tab, limit: number): boolean => {
+      const state = useSpaces.getState();
+      const sourceSpace = state.spaces.find((space) => space.id === host.spaceId);
+      if (!sourceSpace) return false;
+      state.extractMemberFromViewSpace(dragged.tabKey);
+      const created = state.create({
+        name: `${sourceSpace.name} · ${labelFor(host)}`,
+        root: sourceSpace.root,
+        env: sourceSpace.env,
+      });
+      moveTabToSpace(host.id, created.id);
+      moveTabToSpace(dragged.id, created.id);
+      const viewSpaceId = state.ensureViewSpace({
+        workspaceId: created.id,
+        name: created.name,
+        initialMember: host.tabKey,
+      });
+      if (!state.addMemberToViewSpace(viewSpaceId, dragged.tabKey, limit)) {
+        return false;
+      }
+      state.openViewSpace(viewSpaceId);
+      state.focusVisualMember(dragged.tabKey);
+      state.setActive(created.id);
+      setActiveId(dragged.id);
+      return true;
+    },
+    [moveTabToSpace, setActiveId],
+  );
+
   const handleWorkspaceDrop = useCallback(
     async (source: WorkspaceDragSource, target: WorkspaceDropTarget, isCurrent: () => boolean = () => true) => {
       if (!isCurrent()) return;
@@ -3545,6 +3575,15 @@ function DesktopApp() {
         handleCreateSpaceFromTab(tab);
         return;
       }
+      if (plan.operation === "split-new-space") {
+        const host = tabsRef.current.find(
+          (candidate) => candidate.tabKey === plan.hostTabKey,
+        );
+        if (!host || !handleSplitIntoNewSpace(host, tab, spaceViewLimit)) {
+          toast.error(t("spaces.invalidDrop"));
+        }
+        return;
+      }
 
       const targetSpaceId = plan.viewSpaceId.slice("view-".length);
       if (plan.operation === "assign" || plan.operation === "append") {
@@ -3578,6 +3617,7 @@ function DesktopApp() {
       activeSpaceId,
       handleAttachFileToAgent,
       handleCreateSpaceFromTab,
+      handleSplitIntoNewSpace,
       handleOpenFile,
       moveTabToSpace,
       newTab,

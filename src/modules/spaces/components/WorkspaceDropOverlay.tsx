@@ -69,6 +69,60 @@ export function WorkspaceDropOverlay({
   );
 }
 
+export function StandaloneSplitDropZone({
+  hostTab,
+  viewSpaces,
+  tabs,
+}: {
+  hostTab: Tab;
+  viewSpaces: readonly ViewSpace[];
+  tabs: readonly Tab[];
+}) {
+  const { t } = useTranslation();
+  const spaceViewLimit = usePreferencesStore((state) => state.spaceViewLimit);
+  const drag = useWorkspaceDrag();
+  const source = drag.source;
+  if (!drag.active || !source || !("tabId" in source)) return null;
+  if (source.tabKey === hostTab.tabKey) return null;
+  const isTarget =
+    drag.target?.kind === "tab-split" && drag.target.tabKey === hostTab.tabKey;
+  const plan = planWorkspaceDrop({
+    source,
+    target: { kind: "tab-split", tabKey: hostTab.tabKey },
+    viewSpaces,
+    tabs,
+    maxSlots: spaceViewLimit,
+  });
+  return (
+    <div
+      className={cn(
+        "pointer-events-auto absolute inset-0 z-35 rounded-md border transition-colors",
+        isTarget &&
+          (plan.accepted
+            ? "border-primary/90 bg-primary/25 shadow-[inset_0_0_0_1px_var(--primary)]"
+            : "border-destructive/90 bg-destructive/20"),
+      )}
+      data-workspace-drop-kind="tab-split"
+      data-workspace-tab-key={hostTab.tabKey}
+      data-workspace-drop-overlay
+      aria-hidden
+      onPointerDown={(event) => event.preventDefault()}
+    >
+      {isTarget ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/35 px-4 text-center text-sm font-medium text-foreground backdrop-blur-[1px]">
+          {plan.accepted
+            ? t("spaces.splitDropReady")
+            : plan.reason === "max-slots"
+              ? t("spaces.maxSlots")
+              : plan.reason === "renderer-capacity"
+                ? t("spaces.rendererCapacity")
+                : t("spaces.invalidDrop")}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function WorkspaceDragLiveRegion({
   viewSpaces,
   tabs,
