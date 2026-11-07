@@ -15,6 +15,9 @@ export type SettingsTab =
   | "vault"
   | "aliases"
   | "harness"
+  | "agentic"
+  | "integrations"
+  | "projects"
   | "companion"
   | "about";
 

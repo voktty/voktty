@@ -273,8 +273,25 @@ export const es: TranslationSchema = {
       vault: "Bóveda",
       aliases: "Alias",
       harness: "Agent Harness",
+      agentic: "Agentes y chat",
+      integrations: "Integraciones",
+      projects: "Proyectos",
       companion: "Companion móvil",
       about: "Acerca de",
+    },
+    agentic: {
+      title: "Agentes y chat",
+      description:
+        "Cómo se leen las conversaciones, las skills que pueden usar los agentes y los servidores MCP de tus cuentas de proveedor.",
+    },
+    integrations: {
+      title: "Integraciones",
+      description: "Conecta los servicios que aparecen en tu bandeja de entrada.",
+    },
+    projects: {
+      title: "Proyectos",
+      description: "Worktrees, proyectos archivados y conversaciones archivadas.",
+      openHarness: "Abre un proyecto en el Harness para gestionar sus worktrees y su archivo.",
     },
     companion: {
       title: "Companion móvil",

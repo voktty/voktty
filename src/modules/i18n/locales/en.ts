@@ -266,8 +266,25 @@ export const en = {
       vault: "Vault",
       aliases: "Aliases",
       harness: "Agent Harness",
+      agentic: "Agents and chat",
+      integrations: "Integrations",
+      projects: "Projects",
       companion: "Mobile Companion",
       about: "About",
+    },
+    agentic: {
+      title: "Agents and chat",
+      description:
+        "How conversations read, the skills agents can use and the MCP servers of your provider accounts.",
+    },
+    integrations: {
+      title: "Integrations",
+      description: "Connect the services that appear in your Inbox.",
+    },
+    projects: {
+      title: "Projects",
+      description: "Worktrees, archived projects and archived conversations.",
+      openHarness: "Open a project in the Harness to manage its worktrees and archive.",
     },
     companion: {
       title: "Mobile Companion",
