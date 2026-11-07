@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
-import type { DockerContainerInfo, DockerContainerStats, DockerDaemonStatus } from "./types";
+import { describe, expect, it, vi } from "vitest";
+import type {
+  DockerContainerInfo,
+  DockerContainerStats,
+  DockerDaemonStatus,
+} from "./types";
+import { useDockerStore } from "./useDockerStore";
+
+const mockInvoke = vi.fn();
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
 
 describe("Docker module types and contracts", () => {
   it("validates DockerDaemonStatus structure", () => {
@@ -64,5 +74,68 @@ describe("Docker module types and contracts", () => {
 
     expect(stats.cpu_percent).toBeGreaterThan(0);
     expect(stats.memory_percent).toBeLessThan(100);
+  });
+
+  it("updates store on pingDaemon and refreshContainers", async () => {
+    const mockStatus: DockerDaemonStatus = {
+      connected: true,
+      version: "27.5.1",
+      os: "linux",
+      containers_running: 1,
+      containers_total: 1,
+      images_count: 5,
+      driver: "overlay2",
+      error: null,
+    };
+    const mockContainer: DockerContainerInfo = {
+      id: "c1",
+      short_id: "c1",
+      names: ["box"],
+      image: "alpine",
+      image_id: "sha256:alpine",
+      command: "sh",
+      created: 100,
+      state: "running",
+      status: "Up",
+      ports: [],
+      compose_project: null,
+      compose_service: null,
+    };
+    const mockStats: DockerContainerStats = {
+      id: "c1",
+      name: "box",
+      cpu_percent: 1.0,
+      memory_usage_bytes: 1024,
+      memory_limit_bytes: 4096,
+      memory_percent: 25.0,
+      net_rx_bytes: 0,
+      net_tx_bytes: 0,
+      block_read_bytes: 0,
+      block_write_bytes: 0,
+      pids_current: 1,
+    };
+
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "docker_ping") return mockStatus;
+      if (cmd === "docker_list_containers") return [mockContainer];
+      if (cmd === "docker_get_stats") return mockStats;
+      if (cmd === "docker_get_logs") return "hello from container\n";
+      return null;
+    });
+
+    const store = useDockerStore.getState();
+    const pingRes = await store.pingDaemon();
+    expect(pingRes.connected).toBe(true);
+    expect(useDockerStore.getState().status?.version).toBe("27.5.1");
+
+    await store.refreshContainers();
+    expect(useDockerStore.getState().containers).toHaveLength(1);
+    expect(useDockerStore.getState().containers[0].names).toEqual(["box"]);
+
+    const logs = await store.fetchLogs("c1", 50);
+    expect(logs).toBe("hello from container\n");
+
+    store.setLogsModalContainer(mockContainer);
+    expect(useDockerStore.getState().logsModalContainer?.id).toBe("c1");
   });
 });

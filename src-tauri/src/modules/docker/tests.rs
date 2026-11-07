@@ -57,4 +57,21 @@ mod docker_stats_tests {
         assert!((res.memory_percent - 9.77).abs() < 0.1);
         assert!((res.cpu_percent - 40.0).abs() < 0.1);
     }
+
+    #[tokio::test]
+    async fn test_docker_ping_and_list_live_or_fallback() {
+        use crate::modules::docker::commands::{docker_list_containers, docker_ping};
+
+        let status = docker_ping(None).await.expect("ping should return status");
+        if status.connected {
+            assert!(status.version.is_some());
+            assert!(status.os.is_some());
+            let containers = docker_list_containers(Some(true), None)
+                .await
+                .expect("listing containers on connected daemon should succeed");
+            assert_eq!(containers.len(), status.containers_total);
+        } else {
+            assert!(status.error.is_some());
+        }
+    }
 }
