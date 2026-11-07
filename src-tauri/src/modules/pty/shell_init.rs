@@ -1485,10 +1485,11 @@ mod tests {
     use portable_pty::CommandBuilder;
 
     use super::{
-        apply_common, build_remote_ssh, remote_shell_command, sanitize_shell_override,
-        ShellControlEnv,
+        apply_common, build_command, build_remote_ssh, remote_shell_command,
+        sanitize_shell_override, ShellControlEnv,
     };
     use crate::modules::remote::RemoteSshConnection;
+    use crate::modules::workspace::WorkspaceEnv;
 
     #[test]
     fn rejects_non_enumerated_override() {
@@ -1608,5 +1609,77 @@ mod tests {
                 .and_then(|path| std::env::split_paths(path).next()),
             Some(std::path::PathBuf::from("/app/bin"))
         );
+    }
+
+    #[test]
+    fn build_command_for_docker_workspace_default_shell() {
+        let workspace = WorkspaceEnv::Docker {
+            container_id: "c-123456789abc".into(),
+            container_name: Some("web-container".into()),
+            image: Some("alpine:latest".into()),
+            shell: None,
+            user: None,
+            workdir: None,
+        };
+        let cmd = build_command(None, workspace, false, None, None)
+            .expect("build_command docker should succeed");
+        let args: Vec<String> = cmd
+            .get_argv()
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args[0].ends_with("docker") || args[0].ends_with("podman"));
+        assert_eq!(args[1], "exec");
+        assert_eq!(args[2], "-it");
+        assert_eq!(args[3], "c-123456789abc");
+        assert_eq!(args[4], "/bin/sh");
+    }
+
+    #[test]
+    fn build_command_for_docker_workspace_with_user_workdir_and_shell() {
+        let workspace = WorkspaceEnv::Docker {
+            container_id: "c-987654321fed".into(),
+            container_name: Some("db-container".into()),
+            image: Some("postgres:16".into()),
+            shell: Some("/bin/bash".into()),
+            user: Some("postgres".into()),
+            workdir: Some("/var/lib/postgresql".into()),
+        };
+        let cmd = build_command(None, workspace, false, None, None)
+            .expect("build_command docker should succeed");
+        let args: Vec<String> = cmd
+            .get_argv()
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args[0].ends_with("docker") || args[0].ends_with("podman"));
+        assert_eq!(args[1], "exec");
+        assert_eq!(args[2], "-it");
+        assert_eq!(args[3], "-u");
+        assert_eq!(args[4], "postgres");
+        assert_eq!(args[5], "-w");
+        assert_eq!(args[6], "/var/lib/postgresql");
+        assert_eq!(args[7], "c-987654321fed");
+        assert_eq!(args[8], "/bin/bash");
+    }
+
+    #[test]
+    fn build_command_for_docker_workspace_caller_shell_override() {
+        let workspace = WorkspaceEnv::Docker {
+            container_id: "c-111222333444".into(),
+            container_name: None,
+            image: None,
+            shell: None,
+            user: None,
+            workdir: None,
+        };
+        let cmd = build_command(None, workspace, false, Some("/bin/zsh".into()), None)
+            .expect("build_command docker with caller shell override should succeed");
+        let args: Vec<String> = cmd
+            .get_argv()
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[4], "/bin/zsh");
     }
 }
