@@ -25,9 +25,15 @@ impl Drop for Acl {
 /// Extended allow entries can override mode bits. Refuse them until their
 /// principals and effective permissions have a verified native policy.
 pub(crate) fn restrictive_only(file: &File) -> Result<(), ReadError> {
+    unsafe {
+        if let Some(ptr) = crate::reader_unix::errno_pointer() {
+            *ptr = 0;
+        }
+    }
     let pointer = unsafe { acl_get_fd_np(file.as_raw_fd(), ACL_TYPE_EXTENDED) };
     if pointer.is_null() {
-        return if std::io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT) {
+        let err = std::io::Error::last_os_error().raw_os_error();
+        return if err == Some(libc::ENOENT) || err == Some(0) {
             Ok(())
         } else {
             Err(ReadError::Unsupported)
@@ -114,6 +120,8 @@ mod tests {
     #[test]
     fn absent_extended_acl_is_distinct_from_an_unavailable_acl_query() {
         let dir = tempfile::tempdir().unwrap();
+        assert_eq!(restrictive_only(&File::open(dir.path()).unwrap()), Ok(()));
+        chmod(dir.path(), &["+a", "everyone deny delete"]);
         chmod(dir.path(), &["-N"]);
         assert_eq!(restrictive_only(&File::open(dir.path()).unwrap()), Ok(()));
     }

@@ -1882,7 +1882,11 @@ pub async fn ssh_fetch_metrics(
         }
 
         permit.prepare()?;
-        let askpass = Arc::new(start_ssh_askpass_with_conn(&app, &state, Some(&connection))?);
+        let askpass = Arc::new(start_ssh_askpass_with_conn(
+            &app,
+            &state,
+            Some(&connection),
+        )?);
         *permit
             .owner
             .askpass
@@ -2051,7 +2055,11 @@ pub async fn ssh_list_multiplexer_sessions(
     let permit = state.reserve_bootstrap(&connection)?;
     run_bootstrap_task(permit, move |permit| {
         permit.prepare()?;
-        let askpass = Arc::new(start_ssh_askpass_with_conn(&app, &state, Some(&connection))?);
+        let askpass = Arc::new(start_ssh_askpass_with_conn(
+            &app,
+            &state,
+            Some(&connection),
+        )?);
         *permit
             .owner
             .askpass
@@ -2456,7 +2464,9 @@ pub(crate) fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     }
 
     if let Some(proxy) = &connection.proxy {
-        if proxy.enabled && !proxy.host.trim().is_empty() && proxy.port > 0
+        if proxy.enabled
+            && !proxy.host.trim().is_empty()
+            && proxy.port > 0
             && !has_ssh_option(&user_extra, "ProxyCommand")
         {
             if let Ok(proxy_cmd) = crate::modules::ssh_proxy::build_proxy_command(proxy) {
@@ -2991,7 +3001,11 @@ fn open_remote_session(
     permit: &BootstrapPermit,
 ) -> Result<(Arc<RemoteSession>, RemoteSessionInfo), String> {
     permit.prepare()?;
-    let askpass = Arc::new(start_ssh_askpass_with_conn(&app, &state, Some(&connection))?);
+    let askpass = Arc::new(start_ssh_askpass_with_conn(
+        &app,
+        &state,
+        Some(&connection),
+    )?);
     *permit
         .owner
         .askpass

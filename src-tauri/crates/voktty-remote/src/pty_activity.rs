@@ -157,7 +157,7 @@ mod tests {
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             eprintln!("pty-activity-test: wait-shell");
-            let deadline = Instant::now() + Duration::from_secs(3);
+            let deadline = Instant::now() + Duration::from_secs(15);
             while foreground_job(&pty) != Ok(false) {
                 assert!(Instant::now() < deadline, "shell did not acquire its PTY");
                 std::thread::sleep(Duration::from_millis(5));

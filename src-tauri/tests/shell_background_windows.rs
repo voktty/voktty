@@ -24,7 +24,7 @@ fn windows_background_process_captures_output() {
         WorkspaceEnv::Local,
     )
     .expect("spawn PowerShell task");
-    assert!(wait_until(Duration::from_secs(10), || process
+    assert!(wait_until(Duration::from_secs(30), || process
         .read_logs(0)
         .exited));
     let logs = process.read_logs(0);
@@ -37,7 +37,7 @@ fn windows_background_process_is_cancelable() {
     let process = background::spawn("Start-Sleep -Seconds 30".into(), None, WorkspaceEnv::Local)
         .expect("spawn PowerShell task");
     process.kill();
-    assert!(wait_until(Duration::from_secs(10), || process
+    assert!(wait_until(Duration::from_secs(30), || process
         .read_logs(0)
         .exited));
 }

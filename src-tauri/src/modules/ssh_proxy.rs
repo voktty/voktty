@@ -21,7 +21,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Builds the OpenSSH `ProxyCommand` string invoking the Voktty binary in `ssh-proxy` mode.
-pub fn build_proxy_command(proxy: &crate::modules::remote::RemoteSshProxy) -> Result<String, String> {
+pub fn build_proxy_command(
+    proxy: &crate::modules::remote::RemoteSshProxy,
+) -> Result<String, String> {
     let exe = std::env::current_exe()
         .map_err(|e| format!("cannot resolve current executable path for ProxyCommand: {e}"))?;
     let exe_str = exe.to_string_lossy().replace('\\', "/");
@@ -282,7 +284,10 @@ fn http_connect_handshake_sync(
             let first_line = header_str.lines().next().unwrap_or("");
             if !first_line.contains(" 200") {
                 if first_line.contains(" 407") {
-                    return Err("HTTP proxy authentication failed (407 Proxy Authentication Required)".into());
+                    return Err(
+                        "HTTP proxy authentication failed (407 Proxy Authentication Required)"
+                            .into(),
+                    );
                 }
                 return Err(format!("HTTP proxy CONNECT failed: {first_line}"));
             }
@@ -295,11 +300,7 @@ fn http_connect_handshake_sync(
 
 fn find_header_end(buf: &[u8]) -> Option<usize> {
     for i in 3..buf.len() {
-        if buf[i - 3] == b'\r'
-            && buf[i - 2] == b'\n'
-            && buf[i - 1] == b'\r'
-            && buf[i] == b'\n'
-        {
+        if buf[i - 3] == b'\r' && buf[i - 2] == b'\n' && buf[i - 1] == b'\r' && buf[i] == b'\n' {
             return Some(i + 1);
         }
     }
@@ -316,17 +317,26 @@ fn socks5_handshake_sync(
     let has_auth = user.is_some() || password.is_some();
     if has_auth {
         // Version 5, 2 methods: 0 (NoAuth), 2 (Username/Password)
-        stream.write_all(&[0x05, 0x02, 0x00, 0x02]).map_err(|e| e.to_string())?;
+        stream
+            .write_all(&[0x05, 0x02, 0x00, 0x02])
+            .map_err(|e| e.to_string())?;
     } else {
         // Version 5, 1 method: 0 (NoAuth)
-        stream.write_all(&[0x05, 0x01, 0x00]).map_err(|e| e.to_string())?;
+        stream
+            .write_all(&[0x05, 0x01, 0x00])
+            .map_err(|e| e.to_string())?;
     }
     stream.flush().map_err(|e| e.to_string())?;
 
     let mut method_resp = [0u8; 2];
-    stream.read_exact(&mut method_resp).map_err(|e| format!("SOCKS5 greeting failed: {e}"))?;
+    stream
+        .read_exact(&mut method_resp)
+        .map_err(|e| format!("SOCKS5 greeting failed: {e}"))?;
     if method_resp[0] != 0x05 {
-        return Err(format!("invalid SOCKS version in response: {}", method_resp[0]));
+        return Err(format!(
+            "invalid SOCKS version in response: {}",
+            method_resp[0]
+        ));
     }
 
     if method_resp[1] == 0x02 {
@@ -342,12 +352,17 @@ fn socks5_handshake_sync(
         stream.flush().map_err(|e| e.to_string())?;
 
         let mut auth_resp = [0u8; 2];
-        stream.read_exact(&mut auth_resp).map_err(|e| format!("SOCKS5 auth read failed: {e}"))?;
+        stream
+            .read_exact(&mut auth_resp)
+            .map_err(|e| format!("SOCKS5 auth read failed: {e}"))?;
         if auth_resp[1] != 0x00 {
             return Err("SOCKS5 username/password authentication failed".into());
         }
     } else if method_resp[1] != 0x00 {
-        return Err(format!("no acceptable SOCKS5 authentication method (got 0x{:02x})", method_resp[1]));
+        return Err(format!(
+            "no acceptable SOCKS5 authentication method (got 0x{:02x})",
+            method_resp[1]
+        ));
     }
 
     // Connect request: [0x05, 0x01 (CONNECT), 0x00 (RSV), ATYP, ADDR, PORT]
@@ -373,7 +388,9 @@ fn socks5_handshake_sync(
     stream.flush().map_err(|e| e.to_string())?;
 
     let mut resp_header = [0u8; 4];
-    stream.read_exact(&mut resp_header).map_err(|e| format!("SOCKS5 connect response failed: {e}"))?;
+    stream
+        .read_exact(&mut resp_header)
+        .map_err(|e| format!("SOCKS5 connect response failed: {e}"))?;
     if resp_header[0] != 0x05 {
         return Err("invalid SOCKS5 connect response version".into());
     }
@@ -444,9 +461,14 @@ fn socks4_handshake_sync(
     stream.flush().map_err(|e| e.to_string())?;
 
     let mut resp = [0u8; 8];
-    stream.read_exact(&mut resp).map_err(|e| format!("SOCKS4 response failed: {e}"))?;
+    stream
+        .read_exact(&mut resp)
+        .map_err(|e| format!("SOCKS4 response failed: {e}"))?;
     if resp[1] != 0x5a {
-        return Err(format!("SOCKS4 request rejected or failed (code 0x{:02x})", resp[1]));
+        return Err(format!(
+            "SOCKS4 request rejected or failed (code 0x{:02x})",
+            resp[1]
+        ));
     }
 
     Ok(())
@@ -461,43 +483,47 @@ pub async fn connect_via_proxy(
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let proxy_addr = format!("{}:{}", proxy.host, proxy.port);
-    let mut stream = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        tokio::net::TcpStream::connect(&proxy_addr),
-    )
-    .await
-    .map_err(|_| {
-        SshNativeError::new(
-            SshErrorCode::Timeout,
-            format!("connection to proxy {proxy_addr} timed out"),
-        )
-    })?
-    .map_err(|e| {
-        SshNativeError::new(
-            SshErrorCode::Unreachable,
-            format!("cannot connect to proxy {proxy_addr}: {e}"),
-        )
-    })?;
+    let mut stream =
+        tokio::time::timeout(CONNECT_TIMEOUT, tokio::net::TcpStream::connect(&proxy_addr))
+            .await
+            .map_err(|_| {
+                SshNativeError::new(
+                    SshErrorCode::Timeout,
+                    format!("connection to proxy {proxy_addr} timed out"),
+                )
+            })?
+            .map_err(|e| {
+                SshNativeError::new(
+                    SshErrorCode::Unreachable,
+                    format!("cannot connect to proxy {proxy_addr}: {e}"),
+                )
+            })?;
 
     match proxy.proxy_type.to_ascii_lowercase().as_str() {
         "socks5" => {
             let has_auth = proxy.user.is_some() || proxy.password.is_some();
             if has_auth {
-                stream.write_all(&[0x05, 0x02, 0x00, 0x02]).await.map_err(|e| {
-                    SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-                })?;
+                stream
+                    .write_all(&[0x05, 0x02, 0x00, 0x02])
+                    .await
+                    .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
             } else {
-                stream.write_all(&[0x05, 0x01, 0x00]).await.map_err(|e| {
-                    SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-                })?;
+                stream
+                    .write_all(&[0x05, 0x01, 0x00])
+                    .await
+                    .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
             }
-            stream.flush().await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
+            stream
+                .flush()
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
 
             let mut method_resp = [0u8; 2];
             stream.read_exact(&mut method_resp).await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Protocol, format!("SOCKS5 greeting failed: {e}"))
+                SshNativeError::new(
+                    SshErrorCode::Protocol,
+                    format!("SOCKS5 greeting failed: {e}"),
+                )
             })?;
 
             if method_resp[1] == 0x02 {
@@ -508,12 +534,14 @@ pub async fn connect_via_proxy(
                 auth_pkt.push(p.len() as u8);
                 auth_pkt.extend_from_slice(p.as_bytes());
 
-                stream.write_all(&auth_pkt).await.map_err(|e| {
-                    SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-                })?;
-                stream.flush().await.map_err(|e| {
-                    SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-                })?;
+                stream
+                    .write_all(&auth_pkt)
+                    .await
+                    .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
+                stream
+                    .flush()
+                    .await
+                    .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
 
                 let mut auth_resp = [0u8; 2];
                 stream.read_exact(&mut auth_resp).await.map_err(|e| {
@@ -528,7 +556,10 @@ pub async fn connect_via_proxy(
             } else if method_resp[1] != 0x00 {
                 return Err(SshNativeError::new(
                     SshErrorCode::AuthFailed,
-                    format!("no acceptable SOCKS5 authentication method (0x{:02x})", method_resp[1]),
+                    format!(
+                        "no acceptable SOCKS5 authentication method (0x{:02x})",
+                        method_resp[1]
+                    ),
                 ));
             }
 
@@ -553,22 +584,30 @@ pub async fn connect_via_proxy(
             }
             connect_pkt.extend_from_slice(&target_port.to_be_bytes());
 
-            stream.write_all(&connect_pkt).await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
-            stream.flush().await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
+            stream
+                .write_all(&connect_pkt)
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
+            stream
+                .flush()
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
 
             let mut resp_header = [0u8; 4];
             stream.read_exact(&mut resp_header).await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Protocol, format!("SOCKS5 connect response failed: {e}"))
+                SshNativeError::new(
+                    SshErrorCode::Protocol,
+                    format!("SOCKS5 connect response failed: {e}"),
+                )
             })?;
 
             if resp_header[1] != 0x00 {
                 return Err(SshNativeError::new(
                     SshErrorCode::Unreachable,
-                    format!("SOCKS5 proxy connect failed with error code 0x{:02x}", resp_header[1]),
+                    format!(
+                        "SOCKS5 proxy connect failed with error code 0x{:02x}",
+                        resp_header[1]
+                    ),
                 ));
             }
 
@@ -576,25 +615,29 @@ pub async fn connect_via_proxy(
             match resp_header[3] {
                 0x01 => {
                     let mut discard = [0u8; 6];
-                    stream.read_exact(&mut discard).await.map_err(|e| {
-                        SshNativeError::new(SshErrorCode::Protocol, e.to_string())
-                    })?;
+                    stream
+                        .read_exact(&mut discard)
+                        .await
+                        .map_err(|e| SshNativeError::new(SshErrorCode::Protocol, e.to_string()))?;
                 }
                 0x04 => {
                     let mut discard = [0u8; 18];
-                    stream.read_exact(&mut discard).await.map_err(|e| {
-                        SshNativeError::new(SshErrorCode::Protocol, e.to_string())
-                    })?;
+                    stream
+                        .read_exact(&mut discard)
+                        .await
+                        .map_err(|e| SshNativeError::new(SshErrorCode::Protocol, e.to_string()))?;
                 }
                 0x03 => {
                     let mut len = [0u8; 1];
-                    stream.read_exact(&mut len).await.map_err(|e| {
-                        SshNativeError::new(SshErrorCode::Protocol, e.to_string())
-                    })?;
+                    stream
+                        .read_exact(&mut len)
+                        .await
+                        .map_err(|e| SshNativeError::new(SshErrorCode::Protocol, e.to_string()))?;
                     let mut discard = vec![0u8; len[0] as usize + 2];
-                    stream.read_exact(&mut discard).await.map_err(|e| {
-                        SshNativeError::new(SshErrorCode::Protocol, e.to_string())
-                    })?;
+                    stream
+                        .read_exact(&mut discard)
+                        .await
+                        .map_err(|e| SshNativeError::new(SshErrorCode::Protocol, e.to_string()))?;
                 }
                 _ => {}
             }
@@ -618,16 +661,21 @@ pub async fn connect_via_proxy(
                 pkt.push(0x00);
             }
 
-            stream.write_all(&pkt).await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
-            stream.flush().await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
+            stream
+                .write_all(&pkt)
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
+            stream
+                .flush()
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
 
             let mut resp = [0u8; 8];
             stream.read_exact(&mut resp).await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Protocol, format!("SOCKS4 response error: {e}"))
+                SshNativeError::new(
+                    SshErrorCode::Protocol,
+                    format!("SOCKS4 response error: {e}"),
+                )
             })?;
             if resp[1] != 0x5a {
                 return Err(SshNativeError::new(
@@ -650,20 +698,28 @@ pub async fn connect_via_proxy(
             }
             req.push_str("\r\n");
 
-            stream.write_all(req.as_bytes()).await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
-            stream.flush().await.map_err(|e| {
-                SshNativeError::new(SshErrorCode::Unreachable, e.to_string())
-            })?;
+            stream
+                .write_all(req.as_bytes())
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
+            stream
+                .flush()
+                .await
+                .map_err(|e| SshNativeError::new(SshErrorCode::Unreachable, e.to_string()))?;
 
             let mut response_buf = [0u8; 4096];
             let mut total_read = 0;
 
             loop {
-                let n = stream.read(&mut response_buf[total_read..]).await.map_err(|e| {
-                    SshNativeError::new(SshErrorCode::Protocol, format!("failed reading HTTP response: {e}"))
-                })?;
+                let n = stream
+                    .read(&mut response_buf[total_read..])
+                    .await
+                    .map_err(|e| {
+                        SshNativeError::new(
+                            SshErrorCode::Protocol,
+                            format!("failed reading HTTP response: {e}"),
+                        )
+                    })?;
                 if n == 0 {
                     return Err(SshNativeError::new(
                         SshErrorCode::Unreachable,

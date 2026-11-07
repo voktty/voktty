@@ -379,9 +379,7 @@ pub(crate) fn decode_utf16_le(bytes: &[u8]) -> Option<String> {
         .iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .collect();
-    char::decode_utf16(u16s)
-        .collect::<Result<String, _>>()
-        .ok()
+    char::decode_utf16(u16s).collect::<Result<String, _>>().ok()
 }
 
 pub(crate) fn decode_utf16_be(bytes: &[u8]) -> Option<String> {
@@ -394,9 +392,7 @@ pub(crate) fn decode_utf16_be(bytes: &[u8]) -> Option<String> {
         .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect();
-    char::decode_utf16(u16s)
-        .collect::<Result<String, _>>()
-        .ok()
+    char::decode_utf16(u16s).collect::<Result<String, _>>().ok()
 }
 
 pub(crate) fn is_likely_text(s: &str) -> bool {
@@ -505,11 +501,7 @@ pub(crate) fn looks_like_latin1_text(bytes: &[u8]) -> bool {
     control == 0 && (printable_or_ws * 100 / sample.len()) >= 85
 }
 
-pub(crate) fn decode_text_bytes(
-    path: Option<&Path>,
-    bytes: &[u8],
-    force: bool,
-) -> Option<String> {
+pub(crate) fn decode_text_bytes(path: Option<&Path>, bytes: &[u8], force: bool) -> Option<String> {
     if bytes.is_empty() {
         return Some(String::new());
     }

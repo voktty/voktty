@@ -321,7 +321,8 @@ pub async fn connect(
         let stream = match hops.last() {
             None => {
                 let tcp = if let Some(proxy) = target.proxy.as_ref().filter(|p| p.enabled) {
-                    crate::modules::ssh_proxy::connect_via_proxy(proxy, &hop.host, hop.port()).await?
+                    crate::modules::ssh_proxy::connect_via_proxy(proxy, &hop.host, hop.port())
+                        .await?
                 } else {
                     tokio::time::timeout(
                         CONNECT_TIMEOUT,

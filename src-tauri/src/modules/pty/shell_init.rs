@@ -322,7 +322,9 @@ fn build_remote_ssh(
     }
 
     if let Some(proxy) = &connection.proxy {
-        if proxy.enabled && !proxy.host.trim().is_empty() && proxy.port > 0
+        if proxy.enabled
+            && !proxy.host.trim().is_empty()
+            && proxy.port > 0
             && !crate::modules::remote::has_ssh_option(&user_extra, "ProxyCommand")
         {
             if let Ok(proxy_cmd) = crate::modules::ssh_proxy::build_proxy_command(proxy) {
@@ -1617,8 +1619,13 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args.iter().any(|arg| arg == "PreferredAuthentications=password,keyboard-interactive"));
-        let proxy_arg = args.iter().find(|arg| arg.starts_with("ProxyCommand=")).expect("ProxyCommand arg");
+        assert!(args
+            .iter()
+            .any(|arg| arg == "PreferredAuthentications=password,keyboard-interactive"));
+        let proxy_arg = args
+            .iter()
+            .find(|arg| arg.starts_with("ProxyCommand="))
+            .expect("ProxyCommand arg");
         assert!(proxy_arg.contains("ssh-proxy"));
         assert!(proxy_arg.contains("--type socks5"));
     }

@@ -52,7 +52,10 @@ impl Access {
             return false;
         };
         anchor.ancestors().skip(1).any(|ancestor| {
-            let expected = suffix.map_or_else(|| ancestor.to_owned(), |s| ancestor.join(s));
+            let target = suffix.map_or_else(|| ancestor.to_owned(), |s| ancestor.join(s));
+            let Ok(expected) = native_spelling(&target) else {
+                return false;
+            };
             path == expected && path.to_str().is_some_and(path_policy::readable)
         })
     }
@@ -167,6 +170,10 @@ impl NativeMemorySource {
         if text.len() > 4096 || requested.components().count() > 128 {
             return Err(ReadError::Limit.into());
         }
+        let ancestor_inspection = ancestor_inspection
+            .as_deref()
+            .map(native_spelling)
+            .transpose()?;
         let roots = authorized_roots(registry)?;
         let access = Arc::new(Access {
             roots,
