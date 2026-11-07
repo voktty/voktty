@@ -250,7 +250,6 @@ type Props = {
   onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
-  onOpenAutomations?: () => void;
   onGoToFile?: () => void;
   searchActive?: boolean;
   inboxActive?: boolean;
@@ -321,7 +320,6 @@ function SidebarComponent({
   onSearch,
   onOpenInbox,
   onOpenNotes,
-  onOpenAutomations,
   onGoToFile,
   searchActive = false,
   inboxActive = false,
@@ -1336,11 +1334,9 @@ function SidebarComponent({
               onSearch={onSearch}
               onOpenInbox={onOpenInbox}
               onOpenNotes={notesEnabled ? onOpenNotes : undefined}
-              onOpenAutomations={onOpenAutomations}
               searchActive={searchActive}
               inboxActive={inboxActive}
               notesActive={notesActive}
-              automationsActive={automationsActive}
               inboxUnseen={inboxUnseen}
             />
           ) : null}
@@ -1882,7 +1878,6 @@ function SidebarComponent({
           notesEnabled={notesEnabled}
           onOpenNotes={onOpenNotes}
           notesActive={notesActive}
-          onOpenAutomations={onOpenAutomations}
           automationsActive={automationsActive}
           onTogglePanel={onToggleProjectRail}
           onSelectProject={onSelectProject}
@@ -1907,11 +1902,9 @@ function SidebarProjectPicker({
   onSearch,
   onOpenInbox,
   onOpenNotes,
-  onOpenAutomations,
   searchActive = false,
   inboxActive = false,
   notesActive = false,
-  automationsActive = false,
   inboxUnseen = false,
 }: {
   cwd: string;
@@ -1923,7 +1916,6 @@ function SidebarProjectPicker({
   onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
-  onOpenAutomations?: () => void;
   searchActive?: boolean;
   inboxActive?: boolean;
   notesActive?: boolean;
@@ -2215,15 +2207,6 @@ function SidebarProjectPicker({
             onClick={onOpenNotes}
           >
             <StickyNote className="size-3.5" strokeWidth={1.75} />
-          </IconButton>
-        ) : null}
-        {onOpenAutomations ? (
-          <IconButton
-            label="Automations"
-            active={automationsActive}
-            onClick={onOpenAutomations}
-          >
-            <Zap className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
       </div>

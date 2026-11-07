@@ -116,6 +116,7 @@ import { useTabExplorerReveal } from "@/modules/explorer/lib/useTabExplorerRevea
 import { useNativeFolderOpening } from "@/modules/explorer/lib/useNativeFolderOpening";
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
+import { useAutomationsRequest } from "@/modules/harness/lib/automationsRequest";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   Header,
@@ -3738,6 +3739,18 @@ function DesktopApp() {
     [setActiveId],
   );
 
+  const handleOpenAutomations = useCallback(() => {
+    const harnessTab =
+      tabsRef.current.find((tab) => tab.id === activeId && tab.kind === "harness") ??
+      tabsRef.current.find((tab) => tab.kind === "harness");
+    useAutomationsRequest.getState().request();
+    if (harnessTab) {
+      jumpToTab(harnessTab.id);
+    } else {
+      newHarnessTab();
+    }
+  }, [activeId, jumpToTab, newHarnessTab]);
+
   const handleSelectViewSpace = useCallback(
     (viewSpaceId: string) => {
       const state = useSpaces.getState();
@@ -5131,6 +5144,7 @@ function DesktopApp() {
               onToggleAi={togglePanelAndFocus}
               onOpenAi={togglePanelAndFocus}
               onOpenSettings={() => void openSettingsWindow()}
+              onOpenAutomations={handleOpenAutomations}
               onRunCommand={handleRunTerminalCommand}
               runCommandDisabledReason={terminalCommandDisabledReason}
               toolkitTarget={toolkitTarget}

@@ -1396,6 +1396,18 @@ export const es: TranslationSchema = {
       "{name} se quitará del layout visual. Sus pestañas vivas seguirán abiertas como pestañas sueltas.",
   },
   statusbar: {
+    automations: {
+      title: "Automatizaciones",
+      openAll: "Ver todas",
+      empty: "Aún no hay automatizaciones. Abre la vista completa para crear una.",
+      loadFailed: "No se pudieron cargar las automatizaciones.",
+      lastFailed: "La última ejecución falló",
+      next: "Próxima ejecución {{time}}",
+      paused: "En pausa",
+      runNow: "Ejecutar ahora",
+      queued: "{{name}} en cola",
+      runFailed: "No se pudo iniciar la ejecución: {{message}}",
+    },
     terminal: "Terminal",
     editor: "Editor",
     spaces: "Espacios",

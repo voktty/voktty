@@ -21,7 +21,6 @@ import {
   Plus,
   Search,
   Trash2,
-  Zap,
 } from "./icons";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { t, useTranslation } from "@/modules/i18n";
@@ -216,7 +215,6 @@ type Props = {
   notesEnabled?: boolean;
   onOpenNotes?: () => void;
   notesActive?: boolean;
-  onOpenAutomations?: () => void;
   automationsActive?: boolean;
   onTogglePanel?: () => void;
   onSelectProject: (path: string) => void;
@@ -243,7 +241,6 @@ export function ProjectRail({
   notesEnabled = true,
   onOpenNotes,
   notesActive = false,
-  onOpenAutomations,
   automationsActive = false,
   onTogglePanel,
   onSelectProject,
@@ -701,13 +698,6 @@ export function ProjectRail({
                 ariaLabel={t("harness.chrome.notes")}
               />
             ) : null}
-            <RailAction
-              label="Automations"
-              icon={Zap}
-              onClick={onOpenAutomations}
-              active={automationsActive}
-              ariaLabel="Automations"
-            />
           </div>
 
           <div
