@@ -54,7 +54,10 @@ vi.mock("@/modules/explorer/lib/useExplorerFileDrop", () => ({
 vi.mock("@/modules/explorer/ExplorerSearch", () => ({
   ExplorerSearch: () => null,
 }));
-vi.mock("@/modules/remote", () => ({ isPathInWorkspace: () => true }));
+vi.mock("@/modules/remote", () => ({
+  isPathInWorkspace: () => true,
+  isPathWithinRemoteRoot: () => true,
+}));
 vi.mock("@/modules/shortcuts", () => ({ useGlobalShortcuts: () => {} }));
 vi.mock("@/modules/explorer/TreeRow", () => ({
   EntryRow: ({
