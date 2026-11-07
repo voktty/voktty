@@ -60,6 +60,7 @@ vi.mock("@/modules/harness/chrome/ProjectMascot", () => ({
 vi.mock("@/modules/harness/hooks/useProjectAvailability", () => ({
   useProjectAvailability: () => ({
     unavailablePaths: new Set(),
+    unavailableReasons: new Map(),
     recheckPath: vi.fn(),
   }),
 }));
