@@ -3,6 +3,9 @@ import {
   ensurePreviewTunnel,
   forgetPreviewTunnels,
   markPreviewLaunch,
+  registerRemotePreview,
+  remotePreviewForUrl,
+  saveAffectsRemotePreview,
   resetPreviewTunnels,
   wasLaunchedByPreview,
 } from "./previewTunnels";
@@ -55,5 +58,26 @@ describe("launch registry", () => {
     expect(wasLaunchedByPreview(7, 8124)).toBe(false);
     forgetPreviewTunnels(7);
     expect(wasLaunchedByPreview(7, 8123)).toBe(false);
+  });
+});
+
+describe("remote preview targets", () => {
+  const env = {} as never;
+  it("matches saves inside the project of the same session only", () => {
+    registerRemotePreview(8123, { sessionId: 7, root: "/srv/site", env });
+    const url = "http://127.0.0.1:8123/about";
+    expect(saveAffectsRemotePreview(url, { sessionId: 7, path: "/srv/site/a.php" })).toBe(true);
+    expect(saveAffectsRemotePreview(url, { sessionId: 7, path: "/srv/site2/a.php" })).toBe(false);
+    expect(saveAffectsRemotePreview(url, { sessionId: 8, path: "/srv/site/a.php" })).toBe(false);
+    expect(saveAffectsRemotePreview("http://127.0.0.1:9999/", { sessionId: 7, path: "/srv/site/a.php" })).toBe(false);
+  });
+  it("treats any save of the session as relevant when the root is unknown", () => {
+    registerRemotePreview(8124, { sessionId: 7, root: null, env });
+    expect(saveAffectsRemotePreview("http://localhost:8124", { sessionId: 7, path: "/x/y.php" })).toBe(true);
+  });
+  it("forgets targets with the session", () => {
+    registerRemotePreview(8125, { sessionId: 7, root: null, env });
+    forgetPreviewTunnels(7);
+    expect(remotePreviewForUrl("http://127.0.0.1:8125")).toBeNull();
   });
 });

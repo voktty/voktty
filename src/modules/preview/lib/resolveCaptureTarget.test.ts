@@ -17,6 +17,7 @@ function deps(env: WorkspaceEnv | undefined, launched = false) {
       .fn()
       .mockResolvedValue({ url: "http://127.0.0.1:8123", localPort: 8123 }),
     launched: vi.fn().mockReturnValue(launched),
+    register: vi.fn(),
   };
 }
 
@@ -37,6 +38,18 @@ describe("resolveCaptureTarget", () => {
     );
     expect(d.tunnel).toHaveBeenCalledWith(9, 8123);
     expect(target).toEqual({ url: "http://127.0.0.1:8123", inspectViaProxy: false });
+  });
+
+  it("records the remote project behind the tunneled port", async () => {
+    const d = deps(ssh(9));
+    await resolveCaptureTarget(
+      { leafId: 1, url: "http://127.0.0.1:8123", cwd: "/srv/site" },
+      d,
+    );
+    expect(d.register).toHaveBeenCalledWith(
+      8123,
+      expect.objectContaining({ sessionId: 9, root: "/srv/site" }),
+    );
   });
 
   it("uses the inspector proxy only for servers the preview started", async () => {

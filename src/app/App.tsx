@@ -2601,10 +2601,14 @@ function DesktopApp() {
         path: string;
         line?: number;
         column?: number;
+        workspaceEnv?: WorkspaceEnv;
       }>;
       const detail = customEvent.detail;
       if (!detail?.path) return;
-      const tabId = openFileTab(detail.path, true, { activate: true });
+      const tabId = openFileTab(detail.path, true, {
+        activate: true,
+        ...(detail.workspaceEnv ? { workspaceEnv: detail.workspaceEnv } : {}),
+      });
       if (typeof detail.line === "number" && detail.line > 0) {
         setTimeout(() => {
           const handle = editorRefs.current.get(tabId);
