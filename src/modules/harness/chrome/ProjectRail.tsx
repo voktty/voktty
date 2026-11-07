@@ -736,7 +736,7 @@ export function ProjectRail({
 
             {projectGroups.length > 0 ? (
               <div className="mb-2 shrink-0">
-                <ProjectSectionHeader label="Groups" onAddGroup={createGroup} />
+                <ProjectSectionHeader label={t("harness.commonUI.groups")} onAddGroup={createGroup} />
                 <div className="flex flex-col gap-px px-2">
                   {groupedProjectSections.grouped.map(({ group, items }) => (
                     <ProjectGroupSection
@@ -1722,8 +1722,8 @@ function ProjectCard({
         )}
         {unavailable ? (
           <span
-            title={t(unavailableKeys(reason ?? "missing-directory").title)}
-            aria-label={t(unavailableKeys(reason ?? "missing-directory").short)}
+            title={t(unavailableKeys(reason ?? "missing-directory").titleKey)}
+            aria-label={t(unavailableKeys(reason ?? "missing-directory").shortKey)}
             className="flex shrink-0 items-center justify-center text-amber-500 dark:text-amber-400 group-hover:hidden"
           >
             <CircleAlert className="size-3.5 shrink-0 text-amber-400" strokeWidth={2} />
@@ -1825,7 +1825,7 @@ function projectCardTitle(
   unavailable: ProjectUnavailableReason | null = null,
 ): string {
   const parts = [name, path];
-  if (unavailable) parts.push(t(unavailableKeys(unavailable).tag));
+  if (unavailable) parts.push(t(unavailableKeys(unavailable).tagKey));
   if (busy) parts.push(t("harness.working"));
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
@@ -1851,7 +1851,7 @@ function projectCardAriaLabel(
   unavailable: ProjectUnavailableReason | null = null,
 ): string {
   const parts = [name];
-  if (unavailable) parts.push(t(unavailableKeys(unavailable).short));
+  if (unavailable) parts.push(t(unavailableKeys(unavailable).shortKey));
   if (busy) parts.push(t("harness.working"));
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;

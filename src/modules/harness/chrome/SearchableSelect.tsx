@@ -7,6 +7,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { Check, ChevronDown, Search } from "./icons";
 import { LAYER } from "../lib/layers";
 import type { PopoverAlign } from "../lib/popover";
@@ -23,7 +24,7 @@ export function SearchableSelect({
   value,
   options,
   onChange,
-  placeholder = "Choose an option…",
+  placeholder: customPlaceholder,
   searchPlaceholder = "Search options…",
   emptyLabel = "No matching options",
   disabled = false,
@@ -45,6 +46,8 @@ export function SearchableSelect({
   searchable?: boolean;
   align?: PopoverAlign;
 }) {
+  const { t } = useTranslation();
+  const placeholder = customPlaceholder ?? t("harness.commonUI.chooseOption");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -231,7 +234,7 @@ export function SearchableSelect({
           constrainHeight={longMenu}
           layer={popoverLayer}
           role="dialog"
-          aria-label={`${label} options`}
+          aria-label={t("harness.commonUI.optionsLabel", { label })}
           data-dialog-popover
           onDismiss={(reason) => close(reason === "escape")}
           className="flex flex-col overflow-hidden"

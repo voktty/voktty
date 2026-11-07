@@ -358,7 +358,7 @@ export function SessionChangesCommit({
         void openExternalUrl(parsed.href);
       }
     } catch {
-      setError("GitHub returned an invalid pull request URL");
+      setError(t("harness.commonUI.invalidPrUrl"));
     }
   };
 

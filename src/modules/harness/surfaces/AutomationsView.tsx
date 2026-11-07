@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { t, useTranslation } from "@/modules/i18n";
 import { AccessPicker } from "../chrome/AccessPicker";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import {
@@ -143,10 +144,11 @@ export function AutomationsView({
   onLaunch,
   onOpenSession,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       role="region"
-      aria-label="Automations"
+      aria-label={t("harness.automationsUI.automations")}
       data-app-automations
       className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
     >
@@ -164,7 +166,7 @@ export function AutomationsView({
             className="size-3.5 shrink-0 text-content/45"
             strokeWidth={1.75}
           />
-          <span className="min-w-0 truncate text-content">Automations</span>
+          <span className="min-w-0 truncate text-content">{t("harness.automationsUI.automations")}</span>
         </div>
       </div>
       <AutomationsContent
@@ -183,6 +185,7 @@ function AutomationsContent({
   onLaunch,
   onOpenSession,
 }: Pick<Props, "cwd" | "recents" | "onLaunch" | "onOpenSession">) {
+  const { t } = useTranslation();
   const [automations, setAutomations] = useState<Automation[]>(
     () => peekAutomations() ?? [],
   );
@@ -322,7 +325,7 @@ function AutomationsContent({
   };
 
   const onDelete = async (automation: Automation) => {
-    if (!window.confirm(`Delete “${automation.name}” and its run history?`))
+    if (!window.confirm(t("harness.automationsUI.deleteConfirm", { name: automation.name })))
       return;
     try {
       await deleteAutomation(automation.id);
@@ -353,11 +356,11 @@ function AutomationsContent({
         <div className="flex h-9 shrink-0 items-center gap-1 border-b border-stroke px-2">
           <label className="relative flex h-7 min-w-0 flex-1 items-center">
             <Search className="pointer-events-none absolute left-2 size-3 shrink-0 text-content/40" />
-            <span className="sr-only">Filter automations</span>
+            <span className="sr-only">{t("harness.automationsUI.filterAutomations")}</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter automations"
+              placeholder={t("harness.automationsUI.filterAutomations")}
               spellCheck={false}
               autoComplete="off"
               className="h-7 w-full rounded-md bg-transparent pl-7 pr-2 text-[12px] outline-none placeholder:text-content/40"
@@ -365,8 +368,8 @@ function AutomationsContent({
           </label>
           <button
             type="button"
-            title="New automation"
-            aria-label="New automation"
+            title={t("harness.automationsUI.newAutomation")}
+            aria-label={t("harness.automationsUI.newAutomation")}
             onClick={beginCreate}
             className="grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
           >
@@ -409,7 +412,9 @@ function AutomationsContent({
             </ul>
           ) : (
             <p className="px-3 py-8 text-center text-[12px] text-content/45">
-              {query.trim() ? "No matching automations" : "No automations yet"}
+              {query.trim()
+                ? t("harness.automationsUI.noMatchingAutomations")
+                : t("harness.automationsUI.noAutomationsYet")}
             </p>
           )}
         </div>
@@ -490,6 +495,7 @@ function AutomationCard({
   onSelect: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const seed = projectName(automation.cwd);
   const key = projectKey(automation.cwd);
   const project = resolveTabGroupLabel(key, labels, seed);
@@ -511,7 +517,7 @@ function AutomationCard({
       <button
         type="button"
         aria-current={active ? "true" : undefined}
-        aria-label={`Open ${automation.name}`}
+        aria-label={t("harness.automationsUI.openAutomation", { name: automation.name })}
         onClick={onSelect}
         className="block w-full rounded-md px-2.5 py-2 text-left"
       >
@@ -580,6 +586,7 @@ function AutomationPicker({
   onBlank: () => void;
   onPick: (template: AutomationTemplate) => void;
 }) {
+  const { t } = useTranslation();
   const [category, setCategory] =
     useState<AutomationTemplateCategoryId>("popular");
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
@@ -592,10 +599,10 @@ function AutomationPicker({
     >
       <div className="mx-auto w-full max-w-5xl px-8 pt-5 pb-10">
         <h1 className="text-[20px] font-semibold leading-tight text-content">
-          New automation
+          {t("harness.automationsUI.newAutomation")}
         </h1>
         <p className="mt-1.5 text-[13px] text-content/50">
-          Pick an example or start from scratch.
+          {t("harness.automationsUI.pickExampleOrScratch")}
         </p>
         <div className="mt-4 flex flex-wrap gap-1.5">
           {AUTOMATION_TEMPLATE_CATEGORIES.map((option) => {
@@ -628,10 +635,10 @@ function AutomationPicker({
               </span>
               <span className="min-w-0">
                 <span className="block text-[13px] font-medium text-content">
-                  Start from scratch
+                  {t("harness.automationsUI.startFromScratch")}
                 </span>
                 <span className="mt-1 block text-[12px] leading-snug text-content/50">
-                  Write your own instructions and choose a trigger.
+                  {t("harness.automationsUI.startFromScratchDesc")}
                 </span>
               </span>
             </div>
@@ -764,7 +771,7 @@ function runTriggerMeta(
   run: AutomationRun,
   draft: AutomationDraft,
 ): { kind: AutomationTriggerKind; label: string } {
-  if (run.trigger === "manual") return { kind: "time", label: "Test run" };
+  if (run.trigger === "manual") return { kind: "time", label: t("harness.automationsUI.testRun") };
   if (run.trigger === "event") {
     const kind = run.eventKind ?? draft.triggerKind;
     const event = run.event ?? draft.triggerEvent;
@@ -779,11 +786,13 @@ function runTriggerMeta(
   if (times[0]) {
     return {
       kind: "time",
-      label: `Scheduled · ${automationScheduleLabel(times[0])}`,
+      label: t("harness.automationsUI.scheduledWithDetails", {
+        details: automationScheduleLabel(times[0]),
+      }),
     };
   }
   const first = draft.triggers[0];
-  if (!first) return { kind: "time", label: "Scheduled" };
+  if (!first) return { kind: "time", label: t("harness.automationsUI.scheduled") };
   const event =
     findTriggerEvent(first.kind, first.event)?.label ?? triggerName(first.kind);
   return { kind: first.kind, label: event };
@@ -816,6 +825,7 @@ function AutomationEditor({
   onDelete?: () => void;
   onOpenSession: (sessionId: string) => void | Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<"settings" | "history">("settings");
   const settingsTabId = useId();
   const historyTabId = useId();
@@ -896,7 +906,7 @@ function AutomationEditor({
   }, [draft.cwd]);
   const folderOptions = useMemo(() => {
     const options = [
-      { value: "", label: "None" },
+      { value: "", label: t("harness.automationsUI.none") },
       ...sessionFolders.map((folder) => ({
         value: folder.id,
         label: folder.name,
@@ -909,12 +919,12 @@ function AutomationEditor({
     ) {
       options.push({
         value: draft.sessionFolderId,
-        label: "Removed folder",
+        label: t("harness.automationsUI.removedFolder"),
         keywords: draft.sessionFolderId,
       });
     }
     return options;
-  }, [draft.sessionFolderId, sessionFolders]);
+  }, [draft.sessionFolderId, sessionFolders, t]);
   const update = <K extends keyof AutomationDraft>(
     key: K,
     value: AutomationDraft[K],
@@ -969,10 +979,10 @@ function AutomationEditor({
             <div className="flex items-start gap-6">
               <input
                 autoFocus
-                aria-label="Automation name"
+                aria-label={t("harness.automationsUI.automationName")}
                 value={draft.name}
                 onChange={(event) => update("name", event.target.value)}
-                placeholder="Untitled"
+                placeholder={t("harness.automationsUI.untitled")}
                 className="min-w-0 flex-1 bg-transparent text-[20px] font-semibold leading-tight text-content outline-none placeholder:text-content/35"
               />
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -982,7 +992,7 @@ function AutomationEditor({
                     onClick={onClose}
                     className={ACTION_OUTLINE}
                   >
-                    {draft.id ? "Reset" : "Cancel"}
+                    {draft.id ? t("harness.automationsUI.reset") : t("harness.automationsUI.cancel")}
                   </button>
                 ) : null}
                 {onRun ? (
@@ -997,7 +1007,7 @@ function AutomationEditor({
                     ) : (
                       <Play className="size-3.5" />
                     )}
-                    Run now
+                    {t("harness.automationsUI.runNow")}
                   </button>
                 ) : null}
                 <button
@@ -1008,19 +1018,23 @@ function AutomationEditor({
                   {saving ? (
                     <LoaderCircle className="size-3.5 animate-spin" />
                   ) : null}
-                  {draft.id ? "Save" : "Create"}
+                  {draft.id ? t("harness.automationsUI.save") : t("harness.automationsUI.create")}
                 </button>
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[12px] text-content/50">
               <ToggleSwitch
-                label={draft.enabled ? "Pause automation" : "Enable automation"}
+                label={
+                  draft.enabled
+                    ? t("harness.automationsUI.pauseAutomation")
+                    : t("harness.automationsUI.enableAutomation")
+                }
                 on={draft.enabled}
                 onChange={(enabled) => update("enabled", enabled)}
                 compact
               />
               <span className="shrink-0">
-                {draft.enabled ? "Active" : "Inactive"}
+                {draft.enabled ? t("harness.automationsUI.active") : t("harness.automationsUI.inactive")}
               </span>
               <span
                 aria-hidden
@@ -1042,8 +1056,8 @@ function AutomationEditor({
                   <button
                     ref={menuButton}
                     type="button"
-                    title="Automation actions"
-                    aria-label="Automation actions"
+                    title={t("harness.automationsUI.automationActions")}
+                    aria-label={t("harness.automationsUI.automationActions")}
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
                     onClick={() => setMenuOpen((open) => !open)}
@@ -1064,7 +1078,7 @@ function AutomationEditor({
                       width={200}
                       constrainHeight={false}
                       role="menu"
-                      aria-label="Automation actions"
+                      aria-label={t("harness.automationsUI.automationActions")}
                       onDismiss={() => setMenuOpen(false)}
                       className="p-1"
                     >
@@ -1078,7 +1092,7 @@ function AutomationEditor({
                         className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-red-300/90 hover:bg-red-500/15"
                       >
                         <Trash2 className="size-3.5" strokeWidth={1.75} />
-                        Delete automation
+                        {t("harness.automationsUI.deleteAutomation")}
                       </button>
                     </Popover>
                   ) : null}
@@ -1089,20 +1103,20 @@ function AutomationEditor({
           {historyAvailable ? (
             <div
               role="tablist"
-              aria-label="Automation view"
+              aria-label={t("harness.automationsUI.automationView")}
               className="flex h-9 items-stretch gap-4"
             >
               <PageTab
                 id={settingsTabId}
                 controls={tabPanelId}
-                label="Settings"
+                label={t("harness.automationsUI.settings")}
                 selected={!showingHistory}
                 onSelect={() => setTab("settings")}
               />
               <PageTab
                 id={historyTabId}
                 controls={tabPanelId}
-                label="Run history"
+                label={t("harness.automationsUI.runHistory")}
                 selected={showingHistory}
                 onSelect={() => setTab("history")}
               />
@@ -1129,7 +1143,7 @@ function AutomationEditor({
         {!showingHistory ? (
           <div className="mx-auto w-full max-w-5xl space-y-8 px-8 py-5 pb-10">
             <section>
-              <SectionTitle>Triggers</SectionTitle>
+              <SectionTitle>{t("harness.automationsUI.triggers")}</SectionTitle>
               <div className="mt-3 rounded-md border border-content/10">
                 {draft.triggers.length > 0 ? (
                   <ul className="px-3 py-1.5">
@@ -1170,7 +1184,7 @@ function AutomationEditor({
                   }`}
                 >
                   <Plus className="size-3.5" />
-                  Add Trigger
+                  {t("harness.automationsUI.addTrigger")}
                 </button>
               </div>
               {triggerOpen ? (
@@ -1181,7 +1195,7 @@ function AutomationEditor({
                   gap={4}
                   width={250}
                   role="menu"
-                  aria-label="Choose automation trigger"
+                  aria-label={t("harness.automationsUI.chooseTrigger")}
                   layer={LAYER.popover}
                   ignore="[data-trigger-submenu]"
                   onDismiss={() => {
@@ -1192,12 +1206,12 @@ function AutomationEditor({
                 >
                   <label className="flex h-11 items-center gap-2.5 border-b border-stroke px-3 text-content/45 focus-within:text-content/70">
                     <Search className="size-3.5 shrink-0" strokeWidth={1.75} />
-                    <span className="sr-only">Search triggers</span>
+                    <span className="sr-only">{t("harness.automationsUI.searchTriggers")}</span>
                     <input
                       autoFocus
                       value={triggerQuery}
                       onChange={(event) => setTriggerQuery(event.target.value)}
-                      placeholder="Search triggers"
+                      placeholder={t("harness.automationsUI.searchTriggers")}
                       className="min-w-0 flex-1 bg-transparent text-[13px] text-content outline-none placeholder:text-content/35"
                     />
                   </label>
@@ -1255,7 +1269,7 @@ function AutomationEditor({
                             <ChevronRight className="size-3.5 text-content/45" />
                           ) : (
                             <span className="shrink-0 text-[11px] text-content/35">
-                              Not connected
+                              {t("harness.automationsUI.notConnected")}
                             </span>
                           )}
                         </button>
@@ -1263,7 +1277,7 @@ function AutomationEditor({
                     })}
                     {triggerCategories.length === 0 ? (
                       <p className="px-2 py-5 text-center text-[12px] text-content/40">
-                        No matching triggers
+                        {t("harness.automationsUI.noMatchingTriggers")}
                       </p>
                     ) : null}
                   </div>
@@ -1285,7 +1299,7 @@ function AutomationEditor({
                   width={220}
                   maxHeight={360}
                   role="menu"
-                  aria-label={`${triggerName(triggerCategory)} events`}
+                  aria-label={t("harness.automationsUI.events", { source: triggerName(triggerCategory) })}
                   layer={LAYER.submenu}
                   data-trigger-submenu
                   onDismiss={(reason) => {
@@ -1309,7 +1323,7 @@ function AutomationEditor({
             </section>
 
             <section>
-              <SectionTitle>Instructions</SectionTitle>
+              <SectionTitle>{t("harness.automationsUI.instructions")}</SectionTitle>
               <div className="relative mt-3 rounded-md border border-content/10 bg-content/3 backdrop-blur-sm has-focus:border-content/20">
                 <PromptField
                   value={draft.prompt}
@@ -1344,19 +1358,19 @@ function AutomationEditor({
                 </div>
               </div>
               <p className="mt-2 px-1 text-[11px] text-content/35">
-                Skills, @file references, and built-in commands work here.
+                {t("harness.automationsUI.instructionsHint")}
               </p>
             </section>
 
             <section>
-              <SectionTitle>Session</SectionTitle>
+              <SectionTitle>{t("harness.automationsUI.session")}</SectionTitle>
               <div className="mt-3 divide-y divide-content/7 rounded-md border border-content/10">
                 <SettingsRow
-                  label="Working copy"
+                  label={t("harness.automationsUI.workingCopy")}
                   hint="This repo, or a fresh worktree"
                 >
                   <SettingsSelect
-                    label="Working copy"
+                    label={t("harness.automationsUI.workingCopy")}
                     value={
                       draft.workspaceMode === "worktree"
                         ? "worktree"
@@ -1374,11 +1388,11 @@ function AutomationEditor({
                   />
                 </SettingsRow>
                 <SettingsRow
-                  label="Conversation"
+                  label={t("harness.automationsUI.conversation")}
                   hint="New chat, or continue the last run"
                 >
                   <SettingsSelect
-                    label="Conversation"
+                    label={t("harness.automationsUI.conversation")}
                     value={draft.reuseSession ? "reuse" : "fresh"}
                     disabled={draft.workspaceMode === "worktree"}
                     options={CONVERSATION_OPTIONS}
@@ -1388,14 +1402,14 @@ function AutomationEditor({
                   />
                 </SettingsRow>
                 <SettingsRow
-                  label="Session folder"
+                  label={t("harness.automationsUI.sessionFolder")}
                   hint="Where runs appear in the sidebar"
                 >
                   <SearchableSelect
                     variant="pill"
                     searchable={folderOptions.length > 6}
                     align="end"
-                    label="Session folder"
+                    label={t("harness.automationsUI.sessionFolder")}
                     value={draft.sessionFolderId}
                     options={folderOptions}
                     onChange={(value) => update("sessionFolderId", value)}
@@ -1408,21 +1422,21 @@ function AutomationEditor({
               <summary className="flex min-h-14 cursor-default list-none items-center justify-between gap-3 px-4 active:opacity-75">
                 <span>
                   <span className="block text-[13px] font-medium text-content/75">
-                    Advanced
+                    {t("harness.automationsUI.advanced")}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-content/40">
-                    Catch-up window for missed runs
+                    {t("harness.automationsUI.graceWindow")}
                   </span>
                 </span>
                 <ChevronDown className="size-3.5 text-content/40" />
               </summary>
               <div className="divide-y divide-content/7 border-t border-content/8">
                 <SettingsRow
-                  label="Missed-run grace"
+                  label={t("harness.automationsUI.graceLabel")}
                   hint="Catch up if a scheduled run was missed"
                 >
                   <SettingsSelect
-                    label="Missed-run grace"
+                    label={t("harness.automationsUI.graceLabel")}
                     value={String(draft.missedRunGraceMinutes)}
                     options={GRACE_OPTIONS}
                     onChange={(value) =>
@@ -1435,14 +1449,14 @@ function AutomationEditor({
           </div>
         ) : (
           <section className="mx-auto w-full max-w-5xl px-8 py-5 pb-10">
-            <SectionTitle>Run history</SectionTitle>
+            <SectionTitle>{t("harness.automationsUI.runHistory")}</SectionTitle>
             {runs.length > 0 ? (
               <div className="mt-3 overflow-hidden rounded-md border border-content/10">
                 <div className={`${RUN_GRID} h-10 text-[11px] text-content/40`}>
-                  <span>Trigger</span>
-                  <span>Triggered</span>
-                  <span>Status</span>
-                  <span className="text-right">Duration</span>
+                  <span>{t("harness.automationsUI.trigger")}</span>
+                  <span>{t("harness.automationsUI.triggered")}</span>
+                  <span>{t("harness.automationsUI.status")}</span>
+                  <span className="text-right">{t("harness.automationsUI.duration")}</span>
                 </div>
                 <ul className="divide-y divide-content/8 border-t border-content/8">
                   {runs.slice(0, 100).map((run) => (
@@ -1457,7 +1471,7 @@ function AutomationEditor({
               </div>
             ) : (
               <div className="mt-3 rounded-md border border-dashed border-content/10 px-4 py-16 text-center text-[12px] text-content/40">
-                This automation has not run yet.
+                {t("harness.automationsUI.notRunYet")}
               </div>
             )}
           </section>
@@ -1613,21 +1627,21 @@ function ToggleSwitch({
 }
 
 const WORKSPACE_OPTIONS = [
-  { value: "current", label: "Current" },
-  { value: "worktree", label: "Fresh worktree" },
+  { value: "current", get label() { return t("harness.automationsUI.workingCopyCurrent"); } },
+  { value: "worktree", get label() { return t("harness.automationsUI.workingCopyFresh"); } },
 ] as const;
 
 const CONVERSATION_OPTIONS = [
-  { value: "fresh", label: "Start fresh" },
-  { value: "reuse", label: "Continue last" },
+  { value: "fresh", get label() { return t("harness.automationsUI.conversationStartFresh"); } },
+  { value: "reuse", get label() { return t("harness.automationsUI.conversationContinueLast"); } },
 ] as const;
 
 const GRACE_OPTIONS = [
-  { value: "0", label: "Do not catch up" },
-  { value: "30", label: "30 minutes" },
-  { value: "120", label: "2 hours" },
-  { value: "720", label: "12 hours" },
-  { value: "1440", label: "24 hours" },
+  { value: "0", get label() { return t("harness.automationsUI.graceDoNotCatchUp"); } },
+  { value: "30", get label() { return t("harness.automationsUI.grace30m"); } },
+  { value: "120", get label() { return t("harness.automationsUI.grace2h"); } },
+  { value: "720", get label() { return t("harness.automationsUI.grace12h"); } },
+  { value: "1440", get label() { return t("harness.automationsUI.grace24h"); } },
 ] as const;
 
 const TEMPLATE_ICONS: Record<AutomationTemplateIcon, typeof Search> = {
@@ -1645,9 +1659,9 @@ const TEMPLATE_ICONS: Record<AutomationTemplateIcon, typeof Search> = {
 
 const TRIGGER_CATEGORIES: readonly {
   value: AutomationTriggerKind;
-  label: string;
+  readonly label: string;
 }[] = [
-  { value: "time", label: "Scheduled" },
+  { value: "time", get label() { return t("harness.automationsUI.scheduled"); } },
   { value: "github", label: "GitHub" },
   { value: "linear", label: "Linear" },
   { value: "jira", label: "Jira" },
@@ -1657,31 +1671,43 @@ const TRIGGER_CATEGORIES: readonly {
 
 type TriggerEvent = {
   value: string;
-  label: string;
+  readonly label: string;
 };
 
 const TRIGGER_EVENTS: Record<AutomationTriggerKind, readonly TriggerEvent[]> = {
-  time: [
-    { value: "hourly", label: "Hourly" },
-    { value: "daily", label: "Daily" },
-    { value: "weekdays", label: "Weekdays" },
-    { value: "weekly", label: "Weekly" },
-  ],
-  github: [
-    { value: "draft_opened", label: "Draft opened" },
-    { value: "pull_request_opened", label: "Pull request opened" },
-    { value: "issue_opened", label: "Issue opened" },
-  ],
-  linear: [{ value: "issue_created", label: "Issue created" }],
-  jira: [{ value: "issue_created", label: "Issue appeared" }],
-  gitlab: [
-    { value: "merge_request_opened", label: "Merge request opened" },
-    { value: "issue_opened", label: "Issue opened" },
-  ],
-  azuredevops: [
-    { value: "pull_request_appeared", label: "Pull request appeared" },
-    { value: "work_item_appeared", label: "Work item appeared" },
-  ],
+  get time() {
+    return [
+      { value: "hourly", get label() { return t("harness.automationsUI.hourly"); } },
+      { value: "daily", get label() { return t("harness.automationsUI.daily"); } },
+      { value: "weekdays", get label() { return t("harness.automationsUI.weekdays"); } },
+      { value: "weekly", get label() { return t("harness.automationsUI.weekly"); } },
+    ];
+  },
+  get github() {
+    return [
+      { value: "draft_opened", get label() { return t("harness.automationsUI.draftOpened"); } },
+      { value: "pull_request_opened", get label() { return t("harness.automationsUI.pullRequestOpened"); } },
+      { value: "issue_opened", get label() { return t("harness.automationsUI.issueOpened"); } },
+    ];
+  },
+  get linear() {
+    return [{ value: "issue_created", get label() { return t("harness.automationsUI.issueCreated"); } }];
+  },
+  get jira() {
+    return [{ value: "issue_created", get label() { return t("harness.automationsUI.issueAppeared"); } }];
+  },
+  get gitlab() {
+    return [
+      { value: "merge_request_opened", get label() { return t("harness.automationsUI.mergeRequestOpened"); } },
+      { value: "issue_opened", get label() { return t("harness.automationsUI.issueOpened"); } },
+    ];
+  },
+  get azuredevops() {
+    return [
+      { value: "pull_request_appeared", get label() { return t("harness.automationsUI.pullRequestAppeared"); } },
+      { value: "work_item_appeared", get label() { return t("harness.automationsUI.workItemAppeared"); } },
+    ];
+  },
 };
 
 function TriggerMark({
@@ -1712,7 +1738,7 @@ function findTriggerEvent(
 
 function triggerLabel(automation: Automation): string {
   const triggers = automationTriggers(automation);
-  if (triggers.length === 0) return "No trigger";
+  if (triggers.length === 0) return t("harness.automationsUI.none");
   const first = triggers[0]!;
   const label =
     first.kind === "time"
@@ -1787,7 +1813,7 @@ function TriggerRow({
       </div>
       <button
         type="button"
-        aria-label="Remove trigger"
+        aria-label={t("harness.automationsUI.removeTrigger")}
         onClick={onRemove}
         className="grid size-7 shrink-0 place-items-center rounded-md text-content/35 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-content/8 hover:text-content focus-visible:opacity-100"
       >
@@ -1816,38 +1842,38 @@ function TimeTriggerSentence({
   }));
   const prefix =
     trigger.scheduleKind === "hourly"
-      ? "Every hour at"
+      ? t("harness.automationsUI.everyHourAt")
       : trigger.scheduleKind === "daily"
-        ? "Every day at"
+        ? t("harness.automationsUI.everyDayAt")
         : trigger.scheduleKind === "weekdays"
-          ? "Every weekday at"
-          : "Every week on";
+          ? t("harness.automationsUI.everyWeekdayAt")
+          : t("harness.automationsUI.everyWeekOn");
   return (
     <>
       <span>{prefix}</span>
       {trigger.scheduleKind === "weekly" ? (
         <>
           <TriggerPill
-            label="Day"
+            label={t("harness.automationsUI.day")}
             value={String(trigger.dayOfWeek)}
             options={dayOptions}
             onChange={(value) =>
               onChange({ ...trigger, dayOfWeek: Number(value) })
             }
           />
-          <span>at</span>
+          <span>{t("harness.automationsUI.atTime")}</span>
         </>
       ) : null}
       {trigger.scheduleKind === "hourly" ? (
         <TriggerPill
-          label="Minute"
+          label={t("harness.automationsUI.minute")}
           value={String(trigger.minute)}
           options={minuteOptions}
           onChange={(value) => onChange({ ...trigger, minute: Number(value) })}
         />
       ) : (
         <TriggerPill
-          label="Time"
+          label={t("harness.automationsUI.time")}
           value={trigger.time}
           options={timeOptions(trigger.time)}
           onChange={(value) => onChange({ ...trigger, time: value })}
@@ -1872,7 +1898,7 @@ function EventTriggerSentence({
 }) {
   const stem =
     trigger.event === "push_to_branch"
-      ? "Push"
+      ? t("harness.automationsUI.push")
       : (findTriggerEvent(trigger.kind, trigger.event)?.label ?? trigger.event);
   const push = trigger.event === "push_to_branch";
   return (
@@ -1880,25 +1906,27 @@ function EventTriggerSentence({
       <span>{stem}</span>
       {push ? (
         <>
-          <span>on</span>
+          <span>{t("harness.automationsUI.onBranch")}</span>
           <TriggerPill
-            label="Branch"
+            label={t("harness.automationsUI.branch")}
             value={trigger.branch}
             options={branchOptions}
-            placeholder="Select a branch"
+            placeholder={t("harness.automationsUI.selectBranch")}
             disabled={!projectChosen}
             emptyLabel={
-              projectChosen ? "No branches found" : "Choose a project first"
+              projectChosen
+                ? t("harness.automationsUI.noBranchesFound")
+                : t("harness.automationsUI.chooseProjectFirst")
             }
             onChange={(value) => onChange({ ...trigger, branch: value })}
           />
         </>
       ) : null}
-      <span>by</span>
+      <span>{t("harness.automationsUI.byActor")}</span>
       <TriggerPill
-        label="Actor"
+        label={t("harness.automationsUI.actor")}
         value={trigger.actor || "anyone"}
-        options={[{ value: "anyone", label: "Anyone" }]}
+        options={[{ value: "anyone", label: t("harness.automationsUI.anyone") }]}
         onChange={(value) => onChange({ ...trigger, actor: value })}
       />
     </>

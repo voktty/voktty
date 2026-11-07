@@ -344,6 +344,18 @@ export const native = {
     const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);
     if (isPathInRemoteWorkspace(workspace, path)) {
       await remoteWriteFile(workspace, path, content);
+      if (
+        typeof window !== "undefined" &&
+        workspace.kind === "ssh" &&
+        workspace.sessionId !== undefined
+      ) {
+        // Lets a tunneled preview of this project reload itself.
+        window.dispatchEvent(
+          new CustomEvent("voktty:remote-file-saved", {
+            detail: { sessionId: workspace.sessionId, path },
+          }),
+        );
+      }
       return;
     }
     await invoke<void>("fs_write_file", {

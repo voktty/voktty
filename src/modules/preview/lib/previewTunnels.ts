@@ -1,3 +1,4 @@
+import type { RemoteWorkspaceEnv } from "@/modules/remote";
 import { openRemoteTunnel } from "@/modules/remote/client";
 
 type Tunnel = { tunnelId: number; localPort: number };
@@ -47,6 +48,9 @@ export function forgetPreviewTunnels(sessionId: number): void {
   for (const id of [...launches]) {
     if (id.startsWith(prefix)) launches.delete(id);
   }
+  for (const [port, target] of [...remoteTargets]) {
+    if (target.sessionId === sessionId) remoteTargets.delete(port);
+  }
 }
 
 /** The preview itself typed the command that serves this port. */
@@ -62,6 +66,54 @@ export function wasLaunchedByPreview(
 }
 
 export function resetPreviewTunnels(): void {
+  remoteTargets.clear();
   tunnels.clear();
   launches.clear();
+}
+
+export type RemotePreviewTarget = {
+  /** Session whose files the page is built from. */
+  sessionId: number;
+  /** Project folder on the host; null when it is not known. */
+  root: string | null;
+  env: RemoteWorkspaceEnv;
+};
+
+const remoteTargets = new Map<number, RemotePreviewTarget>();
+
+/** Remember which remote project a tunneled local port shows. */
+export function registerRemotePreview(
+  localPort: number,
+  target: RemotePreviewTarget,
+): void {
+  remoteTargets.set(localPort, target);
+}
+
+function loopbackPort(url: string): number | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:") return null;
+    if (!["127.0.0.1", "localhost"].includes(parsed.hostname)) return null;
+    const port = Number(parsed.port);
+    return Number.isInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+export function remotePreviewForUrl(url: string): RemotePreviewTarget | null {
+  const port = loopbackPort(url);
+  return port === null ? null : (remoteTargets.get(port) ?? null);
+}
+
+/** A file saved on a host belongs to the page when it lies in the project folder. */
+export function saveAffectsRemotePreview(
+  url: string,
+  save: { sessionId: number; path: string },
+): boolean {
+  const target = remotePreviewForUrl(url);
+  if (!target || target.sessionId !== save.sessionId) return false;
+  if (target.root === null) return true;
+  const root = target.root.replace(/\/+$/, "");
+  return save.path === root || save.path.startsWith(`${root}/`);
 }

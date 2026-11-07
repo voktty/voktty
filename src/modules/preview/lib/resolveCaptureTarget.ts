@@ -1,5 +1,10 @@
 import type { WorkspaceEnv } from "@/modules/workspace";
-import { ensurePreviewTunnel, wasLaunchedByPreview } from "./previewTunnels";
+import type { RemoteWorkspaceEnv } from "@/modules/remote";
+import {
+  type ensurePreviewTunnel,
+  registerRemotePreview,
+  type wasLaunchedByPreview,
+} from "./previewTunnels";
 import { portOfUrl } from "./remoteServer";
 
 export type CaptureTarget = {
@@ -12,6 +17,7 @@ type Deps = {
   leafEnv: (leafId: number) => WorkspaceEnv | undefined;
   tunnel: typeof ensurePreviewTunnel;
   launched: typeof wasLaunchedByPreview;
+  register?: typeof registerRemotePreview;
 };
 
 export function isRemoteCapture(
@@ -30,7 +36,7 @@ export function isRemoteCapture(
  * hot reload keeps working.
  */
 export async function resolveCaptureTarget(
-  capture: { leafId: number; url: string },
+  capture: { leafId: number; url: string; cwd?: string | null },
   deps: Deps,
 ): Promise<CaptureTarget> {
   const env = deps.leafEnv(capture.leafId);
@@ -42,6 +48,12 @@ export async function resolveCaptureTarget(
     return { url: capture.url, inspectViaProxy: false };
   }
   const tunnel = await deps.tunnel(env.sessionId, remotePort);
+  // Saves and "go to source" need to know which host project the port shows.
+  (deps.register ?? registerRemotePreview)(tunnel.localPort, {
+    sessionId: env.sessionId,
+    root: capture.cwd?.startsWith("/") ? capture.cwd : null,
+    env: env as RemoteWorkspaceEnv,
+  });
   return {
     url: tunnel.url,
     inspectViaProxy: deps.launched(env.sessionId, remotePort),

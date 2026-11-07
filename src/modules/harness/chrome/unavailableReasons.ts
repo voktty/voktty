@@ -21,21 +21,21 @@ export function unavailableKeys(reason: ProjectUnavailableReason) {
   switch (reason) {
     case "host-unreachable":
       return {
-        title: "harness.unavailableHost",
-        short: "harness.unavailableHostShort",
-        tag: "harness.unavailableHostTag",
+        titleKey: "harness.unavailableHost",
+        shortKey: "harness.unavailableHostShort",
+        tagKey: "harness.unavailableHostTag",
       } as const;
     case "profile-missing":
       return {
-        title: "harness.unavailableProfile",
-        short: "harness.unavailableProfileShort",
-        tag: "harness.unavailableProfileTag",
+        titleKey: "harness.unavailableProfile",
+        shortKey: "harness.unavailableProfileShort",
+        tagKey: "harness.unavailableProfileTag",
       } as const;
     default:
       return {
-        title: "harness.unavailableDir",
-        short: "harness.unavailableDirShort",
-        tag: "harness.unavailableDirTag",
+        titleKey: "harness.unavailableDir",
+        shortKey: "harness.unavailableDirShort",
+        tagKey: "harness.unavailableDirTag",
       } as const;
   }
 }

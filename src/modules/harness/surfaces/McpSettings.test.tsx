@@ -12,6 +12,14 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ ask }));
 vi.mock("@/modules/i18n", () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "harness.mcpUI.mcpConnections": "MCP connections",
+        "harness.mcpUI.addServerTitle": "Add MCP server",
+        "harness.mcpUI.refresh": "Refresh",
+        "harness.mcpUI.all": "All",
+        "harness.mcpUI.checkingServers": "Checking servers…",
+      };
+      if (map[key]) return map[key];
       if (key === "harness.mcp.serversConfigured") {
         return `${params?.count ?? 0} configured`;
       }

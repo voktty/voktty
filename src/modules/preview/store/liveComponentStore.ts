@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { remotePreviewForUrl } from "../lib/previewTunnels";
+import { resolveRemoteElementSource } from "../lib/remoteSourceResolver";
 import type { LiveComponentMetadata } from "../types";
 import { useWebServerStore } from "./webServerStore";
 
@@ -223,6 +226,8 @@ export interface ResolvedSourceResult {
   column_number: number;
   framework: string;
   matched_by: string;
+  /** Set when the file lives on a remote host. */
+  workspaceEnv?: WorkspaceEnv;
 }
 
 export async function resolveElementSource(
@@ -230,6 +235,26 @@ export async function resolveElementSource(
   workspaceRoot?: string | null,
 ): Promise<ResolvedSourceResult | null> {
   if (comp.filePath) return null;
+  const remote = comp.url ? remotePreviewForUrl(comp.url) : null;
+  if (remote) {
+    const root = remote.root ?? workspaceRoot;
+    if (!root || !root.startsWith("/")) return null;
+    try {
+      const match = await resolveRemoteElementSource(
+        {
+          tagName: comp.tagName,
+          idAttr: comp.idAttr,
+          classList: comp.classList,
+          innerText: comp.innerText,
+        },
+        { env: remote.env, root },
+      );
+      return match ? { ...match, workspaceEnv: remote.env } : null;
+    } catch (err) {
+      console.debug("[LiveComponentStore] Remote source resolution skipped:", err);
+      return null;
+    }
+  }
   try {
     let root = workspaceRoot || "";
     if (!root && comp.url) {
@@ -339,6 +364,9 @@ export const useLiveComponentStore = create<LiveComponentState>((set, get) => ({
                     path: targetPath,
                     line: resolved.line_number,
                     column: resolved.column_number,
+                    ...(resolved.workspaceEnv
+                      ? { workspaceEnv: resolved.workspaceEnv }
+                      : {}),
                   },
                 }),
               );

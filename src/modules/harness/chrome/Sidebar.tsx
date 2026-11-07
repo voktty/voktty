@@ -2854,8 +2854,8 @@ function SessionCard({
           <span
             data-automation-icon
             role="img"
-            title="Started by an automation"
-            aria-label="Started by an automation"
+            title={t("harness.commonUI.startedByAutomation")}
+            aria-label={t("harness.commonUI.startedByAutomation")}
             className="grid size-5 -mr-1 shrink-0 place-items-center text-amber-400"
           >
             <Zap className="size-3" strokeWidth={1.75} />

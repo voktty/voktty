@@ -1,3 +1,4 @@
+import { t, useTranslation } from "@/modules/i18n";
 import {
   AiIdea,
   CircleDashed,
@@ -24,46 +25,58 @@ export const MODE_COMMAND_STYLES: Record<string, ModeCommandStyle> = {
   [PLAN_COMMAND.name]: {
     Icon: AiIdea,
     className: "text-yellow-700 dark:text-yellow-200/90",
-    pill: {
-      label: "Plan",
-      title: "Plan mode",
-      className:
-        "bg-yellow-300/12 text-yellow-700 hover:bg-yellow-300/18 dark:text-yellow-200/90",
+    get pill() {
+      return {
+        label: t("harness.modesUI.plan"),
+        title: t("harness.modesUI.planMode"),
+        className:
+          "bg-yellow-300/12 text-yellow-700 hover:bg-yellow-300/18 dark:text-yellow-200/90",
+      };
     },
-    menu: {
-      label: "Plan mode",
-      description: "Review a plan before building",
-      iconClassName: "text-yellow-300/80",
+    get menu() {
+      return {
+        label: t("harness.modesUI.planMode"),
+        description: t("harness.modesUI.planDesc"),
+        iconClassName: "text-yellow-300/80",
+      };
     },
   },
   [ORCHESTRATOR_COMMAND.name]: {
     Icon: GitBranch,
     className: "text-fuchsia-700 dark:text-fuchsia-200/90",
-    pill: {
-      label: "Orchestrator",
-      title: "Orchestrator mode",
-      className:
-        "bg-fuchsia-500/15 font-medium text-fuchsia-700 hover:bg-fuchsia-500/20 dark:bg-fuchsia-400/10 dark:text-fuchsia-200/90 dark:hover:bg-fuchsia-400/15",
+    get pill() {
+      return {
+        label: t("harness.modesUI.orchestrator"),
+        title: t("harness.modesUI.orchestratorMode"),
+        className:
+          "bg-fuchsia-500/15 font-medium text-fuchsia-700 hover:bg-fuchsia-500/20 dark:bg-fuchsia-400/10 dark:text-fuchsia-200/90 dark:hover:bg-fuchsia-400/15",
+      };
     },
-    menu: {
-      label: "Orchestrator",
-      description: "Plan and coordinate agent work",
-      iconClassName: "text-fuchsia-300/65",
+    get menu() {
+      return {
+        label: t("harness.modesUI.orchestrator"),
+        description: t("harness.modesUI.orchestratorDesc"),
+        iconClassName: "text-fuchsia-300/65",
+      };
     },
   },
   [DRAFT_COMMAND.name]: {
     Icon: CircleDashed,
     className: "text-content/70",
-    pill: {
-      label: "Draft",
-      title: "Draft mode",
-      className:
-        "border border-dashed border-content/25 bg-content/5 text-content/70 hover:bg-content/10 hover:text-content",
+    get pill() {
+      return {
+        label: t("harness.modesUI.draft"),
+        title: t("harness.modesUI.draftMode"),
+        className:
+          "border border-dashed border-content/25 bg-content/5 text-content/70 hover:bg-content/10 hover:text-content",
+      };
     },
-    menu: {
-      label: "Draft",
-      description: "Save this message without starting the agent",
-      iconClassName: "text-content/60",
+    get menu() {
+      return {
+        label: t("harness.modesUI.draft"),
+        description: t("harness.modesUI.draftDesc"),
+        iconClassName: "text-content/60",
+      };
     },
   },
   btw: {
@@ -73,16 +86,20 @@ export const MODE_COMMAND_STYLES: Record<string, ModeCommandStyle> = {
   operator: {
     Icon: WandSparkles,
     className: "text-sky-700 dark:text-sky-200/90",
-    pill: {
-      label: "Operator",
-      title: "Operator",
-      className:
-        "bg-sky-500/15 font-medium text-sky-700 hover:bg-sky-500/20 dark:bg-sky-400/10 dark:text-sky-200/90 dark:hover:bg-sky-400/15",
+    get pill() {
+      return {
+        label: t("harness.modesUI.operator"),
+        title: t("harness.modesUI.operator"),
+        className:
+          "bg-sky-500/15 font-medium text-sky-700 hover:bg-sky-500/20 dark:bg-sky-400/10 dark:text-sky-200/90 dark:hover:bg-sky-400/15",
+      };
     },
-    menu: {
-      label: "Operator",
-      description: "Give this thread access to Voktty",
-      iconClassName: "text-sky-300/80",
+    get menu() {
+      return {
+        label: t("harness.modesUI.operator"),
+        description: t("harness.modesUI.operatorDesc"),
+        iconClassName: "text-sky-300/80",
+      };
     },
   },
 };
@@ -148,14 +165,15 @@ export function ModeCommandPill({
   name: string;
   onClear: () => void;
 }) {
+  const { t } = useTranslation();
   const style = MODE_COMMAND_STYLES[name];
   if (!style?.pill) return null;
   const { Icon, pill } = style;
   return (
     <button
       type="button"
-      title={`Turn off ${pill.title}`}
-      aria-label={`Turn off ${pill.title}`}
+      title={t("harness.modesUI.turnOff", { mode: pill.title })}
+      aria-label={t("harness.modesUI.turnOff", { mode: pill.title })}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClear}
       className={`flex h-6.5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] ${pill.className}`}

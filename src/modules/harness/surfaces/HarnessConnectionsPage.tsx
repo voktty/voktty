@@ -148,8 +148,9 @@ export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
             {t("harness.connections.profilesTitle")}
           </h2>
           <span className="text-[11.5px] text-content/45 font-medium">
-            {connections.length}{" "}
-            {connections.length === 1 ? "perfil" : "perfiles"}
+            {connections.length === 1
+              ? t("harness.commonUI.profileCount", { count: connections.length })
+              : t("harness.commonUI.profileCountPlural", { count: connections.length })}
           </span>
         </div>
 
@@ -229,7 +230,7 @@ export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
                           ) : pingStatus?.online ? (
                             <span
                               className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-emerald-500"
-                              title="Online"
+                              title={t("harness.commonUI.online")}
                             >
                               <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               <span>{pingStatus.latencyMs ?? 0} ms</span>
@@ -264,7 +265,7 @@ export function HarnessConnectionsPage({ cwd }: { cwd: string }) {
                               title={connectionError ?? undefined}
                             >
                               <CircleAlert className="size-3" strokeWidth={2} />
-                              <span>Error</span>
+                              <span>{t("common.error")}</span>
                             </span>
                           ) : null}
 

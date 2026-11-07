@@ -117,7 +117,10 @@ fn static_assets_are_served_with_valid_headers_and_untouched() {
     let (_dir, _server, port) = fixture();
     let css = request(port, "/app.css", "text/css,*/*");
     assert_eq!(css.status, 200);
-    assert!(css.headers.to_ascii_lowercase().contains("content-type: text/css"));
+    assert!(css
+        .headers
+        .to_ascii_lowercase()
+        .contains("content-type: text/css"));
     assert_eq!(css.text(), "body{color:red}");
     assert_eq!(request(port, "/real.txt", "*/*").text(), "plain");
 }
@@ -159,7 +162,9 @@ fn pretty_urls_reach_the_front_controller_but_missing_assets_stay_404() {
     let (_dir, _server, port) = fixture();
     let page = request(port, "/posts/42?draft=1", BROWSER);
     assert_eq!(page.status, 200);
-    assert!(page.text().contains("front:/posts/42?draft=1 script=/index.php"));
+    assert!(page
+        .text()
+        .contains("front:/posts/42?draft=1 script=/index.php"));
     assert_eq!(request(port, "/missing.css", "text/css").status, 404);
 }
 
@@ -179,7 +184,11 @@ fn php_globals_and_path_info_behave_like_a_normal_server() {
 fn requests_cannot_leave_the_document_root() {
     php_or_return!();
     let (_dir, _server, port) = fixture();
-    for path in ["/../secret.txt", "/%2e%2e/secret.txt", "/sub/../../secret.txt"] {
+    for path in [
+        "/../secret.txt",
+        "/%2e%2e/secret.txt",
+        "/sub/../../secret.txt",
+    ] {
         let reply = request(port, path, "*/*");
         assert!(!reply.text().contains("TOP-SECRET"), "{path} leaked");
     }
@@ -189,7 +198,7 @@ fn requests_cannot_leave_the_document_root() {
 fn the_proxy_injects_the_inspector_into_a_plain_remote_style_php_server() {
     php_or_return!();
     let dir = tempfile::tempdir().unwrap();
-    let public = dir.path().canonicalize().unwrap().join("public");
+    let public = clean_path(&dir.path().canonicalize().unwrap().join("public"));
     fs::create_dir_all(&public).unwrap();
     fs::write(
         public.join("index.php"),
@@ -230,6 +239,10 @@ fn the_proxy_injects_the_inspector_into_a_plain_remote_style_php_server() {
     let html = reply.text();
     assert!(html.contains("front:/about"), "{html}");
     assert_eq!(html.matches("__VOKTTY_IS_PROXIED__ = true").count(), 1);
-    assert_eq!(html.matches("__VOKTTY_INSPECTOR_INSTALLED__ = true").count(), 1);
+    assert_eq!(
+        html.matches("__VOKTTY_INSPECTOR_INSTALLED__ = true")
+            .count(),
+        1
+    );
     assert!(html.contains("<base href="), "base tag missing");
 }

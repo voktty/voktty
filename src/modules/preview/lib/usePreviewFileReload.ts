@@ -10,6 +10,7 @@ import {
   type WebServerInfo,
 } from "@/modules/preview/store/webServerStore";
 import { isLocalUrl } from "@/modules/preview/lib/urlSafety";
+import { saveAffectsRemotePreview } from "@/modules/preview/lib/previewTunnels";
 
 export function usePreviewFileReload(
   url: string,
@@ -90,12 +91,28 @@ export function usePreviewFileReload(
         }
       })
       .catch(() => () => {});
+    const remoteSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: unknown; path?: unknown }>)
+        .detail;
+      if (
+        typeof detail?.sessionId === "number" &&
+        typeof detail.path === "string" &&
+        saveAffectsRemotePreview(url, {
+          sessionId: detail.sessionId,
+          path: detail.path,
+        })
+      ) {
+        schedule();
+      }
+    };
+    window.addEventListener("voktty:remote-file-saved", remoteSaved);
     const manual = () => schedule();
     window.addEventListener("voktty:reload-preview", manual);
     return () => {
       active = false;
       if (timer !== undefined) clearTimeout(timer);
       window.removeEventListener("voktty:reload-preview", manual);
+      window.removeEventListener("voktty:remote-file-saved", remoteSaved);
       void written.then((unlisten) => unlisten());
       void changed.then((unlisten) => unlisten());
     };

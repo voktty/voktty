@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { IS_WINDOWS } from "@/lib/platform";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { isExplorerSourceReachable } from "./sourceReachability";
 
@@ -32,7 +33,12 @@ describe("isExplorerSourceReachable", () => {
   });
 
   it("keeps local behavior and a missing source reachable", () => {
-    expect(isExplorerSourceReachable({ kind: "local" } as WorkspaceEnv, "/tmp")).toBe(true);
+    expect(
+      isExplorerSourceReachable(
+        { kind: "local" } as WorkspaceEnv,
+        IS_WINDOWS ? "C:/tmp" : "/tmp",
+      ),
+    ).toBe(true);
     expect(isExplorerSourceReachable(ssh("/a"), null)).toBe(true);
   });
 });

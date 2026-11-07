@@ -39,9 +39,9 @@ function reloadActionHint(): string {
   return `${MOD}${SHIFT}R`;
 }
 
-const ACTIONS: Action[] = [
-  { id: "reload", label: "Reload Voktty", hint: reloadActionHint() },
-];
+function getActions(): Action[] {
+  return [{ id: "reload", label: t("harness.commonUI.reloadVoktty"), hint: reloadActionHint() }];
+}
 
 type Props = {
   open: boolean;
@@ -103,14 +103,15 @@ export function FilePicker({
   );
   const actionResults = useMemo((): RankedAction[] => {
     if (!paletteMode) return [];
+    const actions = getActions();
     if (!actionQuery) {
-      return ACTIONS.map((action) => ({
+      return actions.map((action) => ({
         ...action,
         score: 0,
         positions: [],
       }));
     }
-    return ACTIONS.flatMap((action) => {
+    return actions.flatMap((action) => {
       const hit = fuzzyMatch(actionQuery, action.label);
       return hit ? [{ ...action, ...hit }] : [];
     }).sort((a, b) => b.score - a.score);
