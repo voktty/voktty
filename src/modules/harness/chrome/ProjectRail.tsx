@@ -100,7 +100,6 @@ import { TabVisitNav } from "./TitleBar";
 import { Shimmer } from "../surfaces/Shimmer";
 import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { HarnessProjectMemoryButton } from "@/modules/harness/chrome/HarnessProjectMemoryButton";
 
 function projectMenuExtraItems(
   pinned: boolean,
@@ -837,9 +836,6 @@ export function ProjectRail({
             groupCustomColors={groupCustomColors}
             groupMascots={groupMascots}
           />
-          <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
-            <HarnessProjectMemoryButton cwd={cwd} />
-          </div>
       </>
       {projectMenu ? (
         <TabGroupMenu
