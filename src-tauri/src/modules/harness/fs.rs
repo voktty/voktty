@@ -108,6 +108,9 @@ pub(crate) fn list_project_files_sync(cwd: &str) -> Result<Vec<ProjectFile>, Str
 
 pub(crate) fn git_cmd() -> Command {
     let mut cmd = Command::new("git");
+    // Callers recognize git failures by their English text (for example a
+    // checkout blocked by local changes); a translated message would slip past.
+    cmd.env("LC_ALL", "C");
     #[cfg(test)]
     cmd.arg("-c")
         .arg(format!("core.hooksPath={}", test_git_hooks_path()));

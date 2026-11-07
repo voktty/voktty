@@ -59,10 +59,15 @@ export async function runPowerShell(script: string): Promise<string> {
         else resolve(stdout);
       },
     );
-    child.stdin!.on("error", () => {
+    const stdin = child.stdin;
+    if (!stdin) {
+      reject(new Error("PowerShell stdin is unavailable"));
+      return;
+    }
+    stdin.on("error", () => {
       /* execFile reports an early exit */
     });
-    child.stdin!.end(script, "utf8");
+    stdin.end(script, "utf8");
   });
 }
 

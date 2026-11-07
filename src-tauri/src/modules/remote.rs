@@ -2554,11 +2554,20 @@ fn read_capped(mut stream: impl Read, reject_overflow: bool) -> Result<Vec<u8>, 
     }
 }
 
+/// The bootstrap reservation is process-wide, so tests that take it must not
+/// overlap: one test leaving cleanup pending would fail the next reservation.
+#[cfg(test)]
+fn bootstrap_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|error| error.into_inner())
+}
+
 #[cfg(test)]
 fn command_output_with_timeout(
     command: &mut Command,
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
+    let _guard = bootstrap_test_lock();
     let permit = reserve_global_bootstrap(&tests::connection())?;
     let result = command_output_with_timeout_owned(command, timeout, &permit);
     permit.finish(result)
@@ -2579,6 +2588,7 @@ fn command_output_with_stdin_timeout(
     input: &[u8],
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
+    let _guard = bootstrap_test_lock();
     let permit = reserve_global_bootstrap(&tests::connection())?;
     let result = command_output_with_stdin_timeout_owned(command, input, timeout, &permit);
     permit.finish(result)
@@ -3695,6 +3705,7 @@ mod tests {
             crate::modules::proc::hide_console(&mut command);
             let mut connection = connection();
             connection.host = "held-output-fixture".to_string();
+            let _guard = bootstrap_test_lock();
             let permit = reserve_global_bootstrap(&connection).unwrap();
             let owner = permit.owner.clone();
             let registry = permit.registry.clone();
@@ -3782,6 +3793,7 @@ mod tests {
         let second = RemoteState::default();
         assert!(Arc::ptr_eq(&first.bootstrap, &second.bootstrap));
         assert!(Arc::ptr_eq(&first.next_id, &second.next_id));
+        let _guard = bootstrap_test_lock();
         let permit = reserve_global_bootstrap(&connection()).unwrap();
         assert!(Arc::ptr_eq(&first.bootstrap, &permit.registry));
         assert!(permit.finish(Ok(())).is_ok());
