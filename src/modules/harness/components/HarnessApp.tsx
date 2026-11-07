@@ -242,9 +242,7 @@ import {
 import {
   loadLiveAgentsEnabled,
   loadNotesEnabled,
-  loadSettingsSection,
   type SettingsSectionId,
-  saveSettingsSection,
   subscribeLiveAgentsEnabled,
   subscribeNotesEnabled,
 } from "../lib/settings";
@@ -255,6 +253,7 @@ import {
   openSettingsWindow,
 } from "@/modules/settings/openSettingsWindow";
 import { publishHarnessSettingsContext } from "../lib/settingsBridge";
+import { settingsTabForSection } from "../lib/settingsTabs";
 import {
   addTabsToNewGroup,
   addTabToGroup,
@@ -329,7 +328,6 @@ import {
   TranscriptPool,
   TranscriptPoolOutlet,
 } from "../surfaces/TranscriptPool";
-import type { SettingsAnchor } from "../surfaces/SettingsView";
 import type { ConnectableInboxSource } from "../lib/inboxFilters";
 
 const LazyDiffPane = lazy(() =>
@@ -366,11 +364,6 @@ const LazyAutomationsView = lazySurface(
 const LazySearchView = lazy(() =>
   import("../surfaces/SearchView").then((module) => ({
     default: module.SearchView,
-  })),
-);
-const LazySettingsView = lazy(() =>
-  import("../surfaces/SettingsView").then((module) => ({
-    default: module.SettingsView,
   })),
 );
 const LazyApprovalToasts = lazy(() =>
@@ -622,20 +615,8 @@ export function HarnessApp({
     loadLiveAgentsEnabled,
     () => true,
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsBridgeOwner] = useState(() => Symbol("harness-settings"));
-  const settingsReturnViewRef = useRef({
-    search: false,
-    inbox: false,
-    notes: false,
-    automations: false,
-  });
   const [updateNotice, setUpdateNotice] = useState(installedUpdate);
-  const [settingsSection, setSettingsSection] =
-    useState<SettingsSectionId>(loadSettingsSection);
-  const [settingsAnchor, setSettingsAnchor] = useState<SettingsAnchor | null>(
-    null,
-  );
   const [editorNavigation, setEditorNavigation] =
     useState<EditorNavigationTarget | null>(null);
   const editorNavigationToken = useRef(0);
@@ -700,8 +681,6 @@ export function HarnessApp({
   notesViewOpenRef.current = notesViewOpen;
   const automationsViewOpenRef = useRef(automationsViewOpen);
   automationsViewOpenRef.current = automationsViewOpen;
-  const settingsOpenRef = useRef(settingsOpen);
-  settingsOpenRef.current = settingsOpen;
   const filePickerOpenRef = useRef(filePickerOpen);
   filePickerOpenRef.current = filePickerOpen;
   const sessionNavigationIdsRef = useRef<readonly string[]>([]);
@@ -744,7 +723,6 @@ export function HarnessApp({
       !inboxViewOpen &&
       !notesViewOpen &&
       !automationsViewOpen &&
-      !settingsOpen &&
       !classicInbox,
     inboxSessionId: inboxViewOpen ? inboxAskPortal?.sessionId : undefined,
   };
@@ -1027,7 +1005,6 @@ export function HarnessApp({
             !inboxViewOpenRef.current &&
             !notesViewOpenRef.current &&
             !automationsViewOpenRef.current &&
-            !settingsOpenRef.current &&
             !projectTerminalFocusedRef.current
           ) {
             setComposerFocused(true);
@@ -1218,7 +1195,6 @@ export function HarnessApp({
       setInboxViewOpen(false);
       setNotesViewOpen(false);
       setAutomationsViewOpen(false);
-      setSettingsOpen(false);
 
       const plan = planReleaseNotesOpen(tabsRef.current, version);
       if (plan.kind === "focus") {
@@ -3274,7 +3250,7 @@ export function HarnessApp({
 
   const sessionScopeKey = JSON.stringify(sessions.map((session) => [session.id, session.cwd, session.worktreeCwd ?? ""]).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const viewRevision = useMemo(() => ({}), [tabs, activeTabId, projectCwd, projectTerminals, sessionScopeKey,
-    visible, searchViewOpen, inboxViewOpen, notesViewOpen, automationsViewOpen, settingsOpen,
+    visible, searchViewOpen, inboxViewOpen, notesViewOpen, automationsViewOpen,
     classicInbox, inboxAskPortal?.sessionId, workspaceNavigation.revision]);
   const [seedSessions] = useState(() => windowTransfer?.sessions ?? resumed?.sessions ?? [seed.session]);
   useHarnessViewRegistration({
@@ -3663,7 +3639,6 @@ export function HarnessApp({
             inboxViewOpenRef.current ||
             notesViewOpenRef.current ||
             automationsViewOpenRef.current ||
-            settingsOpenRef.current ||
             filePickerOpenRef.current,
           ),
         },
@@ -4591,7 +4566,6 @@ export function HarnessApp({
     workspaceNavigation.cancel();
     startTransition(() => {
       setFilePickerOpen(false);
-      setSettingsOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
       setAutomationsViewOpen(false);
@@ -4608,7 +4582,6 @@ export function HarnessApp({
     workspaceNavigation.cancel();
     startTransition(() => {
       setFilePickerOpen(false);
-      setSettingsOpen(false);
       setSearchViewOpen(false);
       setNotesViewOpen(false);
       setAutomationsViewOpen(false);
@@ -4632,7 +4605,6 @@ export function HarnessApp({
     if (!loadNotesEnabled()) return;
     startTransition(() => {
       setFilePickerOpen(false);
-      setSettingsOpen(false);
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setAutomationsViewOpen(false);
@@ -4648,7 +4620,6 @@ export function HarnessApp({
     workspaceNavigation.cancel();
     startTransition(() => {
       setFilePickerOpen(false);
-      setSettingsOpen(false);
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
@@ -4671,60 +4642,16 @@ export function HarnessApp({
   );
 
   const openSettings = useCallback(
-    (section?: SettingsSectionId, anchor?: SettingsAnchor) => {
+    (section?: SettingsSectionId) => {
       workspaceNavigation.cancel();
-      if (!settingsOpenRef.current) {
-        settingsReturnViewRef.current = {
-          search: searchViewOpenRef.current,
-          inbox: inboxViewOpenRef.current,
-          notes: notesViewOpenRef.current,
-          automations: automationsViewOpenRef.current,
-        };
-      }
-      startTransition(() => {
-        setFilePickerOpen(false);
-        setSearchViewOpen(false);
-        setInboxViewOpen(false);
-        setNotesViewOpen(false);
-        setAutomationsViewOpen(false);
-        if (section) {
-          setSettingsSection(section);
-          saveSettingsSection(section);
-        }
-        setSettingsAnchor(anchor ?? null);
-        setSettingsOpen(true);
-      });
+      void openSettingsWindow(settingsTabForSection(section));
     },
     [workspaceNavigation.cancel],
   );
 
-  const onOpenSettings = useCallback(() => openSettings(), [openSettings]);
-
   const onOpenInboxIntegrations = useCallback(
-    (source: ConnectableInboxSource) => openSettings("inbox", source),
+    (_source: ConnectableInboxSource) => openSettings("inbox"),
     [openSettings],
-  );
-
-  const onCloseSettings = useCallback(() => {
-    const returnView = settingsReturnViewRef.current;
-    setSearchViewOpen(returnView.search);
-    setInboxViewOpen(returnView.inbox);
-    setNotesViewOpen(returnView.notes && loadNotesEnabled());
-    setAutomationsViewOpen(returnView.automations);
-    setSettingsOpen(false);
-  }, []);
-
-  const onSelectSettingsSection = useCallback((section: SettingsSectionId) => {
-    setSettingsSection(section);
-    saveSettingsSection(section);
-  }, []);
-
-  const onOpenArchivedSession = useCallback(
-    (sessionId: string) => {
-      setSettingsOpen(false);
-      void onSelectHistorySession(sessionId);
-    },
-    [onSelectHistorySession],
   );
 
   useEffect(() => {
@@ -4762,10 +4689,6 @@ export function HarnessApp({
   ]);
 
   const onRailBack = useCallback(() => {
-    if (settingsOpen) {
-      onCloseSettings();
-      return;
-    }
     if (searchViewOpen) {
       setSearchViewOpen(false);
       return;
@@ -4784,10 +4707,8 @@ export function HarnessApp({
     }
     onVisitBack();
   }, [
-    onCloseSettings,
     onVisitBack,
     searchViewOpen,
-    settingsOpen,
     inboxViewOpen,
     notesViewOpen,
     automationsViewOpen,
@@ -4795,7 +4716,6 @@ export function HarnessApp({
 
   const onRailForward = useCallback(() => {
     setSearchViewOpen(false);
-    setSettingsOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
     setAutomationsViewOpen(false);
@@ -5008,7 +4928,6 @@ export function HarnessApp({
             inboxViewOpenRef.current ||
             notesViewOpenRef.current ||
             automationsViewOpenRef.current ||
-            settingsOpenRef.current ||
             filePickerOpenRef.current;
           if (
             !shouldHandleListNavigation({
@@ -5213,7 +5132,7 @@ export function HarnessApp({
             ? workspaceNavigation.error.message
             : undefined
         }
-        open={deckLayout || sidebarOpen || settingsOpen}
+        open={deckLayout || sidebarOpen}
         layout={sidebarLayout}
         tab={sidebarTab}
         onTabChange={setSidebarTab}
@@ -5247,7 +5166,6 @@ export function HarnessApp({
         canGoBack={
           tabVisitNav.canBack ||
           searchViewOpen ||
-          settingsOpen ||
           inboxViewOpen ||
           notesViewOpen ||
           automationsViewOpen
@@ -5286,19 +5204,13 @@ export function HarnessApp({
         projectRailOpen={projectRailOpen}
         onToggleProjectRail={onToggleProjectRail}
         unseenFinishedIds={unseenFinishedIds}
-        settingsOpen={settingsOpen}
-        settingsSection={settingsSection}
-        onOpenSettings={onOpenSettings}
-        onSelectSettingsSection={onSelectSettingsSection}
-        onCloseSettings={onCloseSettings}
       />
 
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           className={
             searchViewOpen ||
-            settingsOpen ||
-            inboxViewOpen ||
+              inboxViewOpen ||
             notesViewOpen ||
             automationsViewOpen
               ? "hidden"
@@ -5306,15 +5218,13 @@ export function HarnessApp({
           }
           aria-hidden={
             searchViewOpen ||
-            settingsOpen ||
-            inboxViewOpen ||
+              inboxViewOpen ||
             notesViewOpen ||
             automationsViewOpen
           }
           inert={
             searchViewOpen ||
-            settingsOpen ||
-            inboxViewOpen ||
+              inboxViewOpen ||
             notesViewOpen ||
             automationsViewOpen ||
             undefined
@@ -5348,7 +5258,6 @@ export function HarnessApp({
               currentProjectDock.open &&
               currentProjectDock.pane.files.length > 0
             }
-            onOpenSettings={onOpenSettings}
             onOpenInbox={onOpenInbox}
             onOpenNotes={notesEnabled ? onOpenNotes : undefined}
             onClose={onCloseTitleTab}
@@ -5594,32 +5503,10 @@ export function HarnessApp({
             />
           </Suspense>
         ) : null}
-        {settingsOpen ? (
-          <Suspense fallback={null}>
-            <LazySettingsView
-              section={settingsSection}
-              onSelectSection={onSelectSettingsSection}
-              anchor={settingsAnchor}
-              cwd={sidebarCwd}
-              sessions={sidebarHistory}
-              besideRail={deckLayout || sidebarOpen || settingsOpen}
-              onClose={onCloseSettings}
-              onOpenSession={onOpenArchivedSession}
-              onArchiveSession={onArchiveHistorySession}
-              onDeleteSession={onDeleteHistorySession}
-              onRestoreProject={onRestoreProject}
-              onDeleteProject={(path) =>
-                onRemoveProject(path, { purgeData: true })
-              }
-              onOpenWhatsNew={onOpenWhatsNew}
-            />
-          </Suspense>
-        ) : null}
         {searchViewOpen ||
         inboxViewOpen ||
         notesViewOpen ||
-        automationsViewOpen ||
-        settingsOpen ? null : (
+        automationsViewOpen ? null : (
           <Suspense fallback={null}>
             <LazyUsageFooter
               providers={usageProviders}

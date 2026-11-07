@@ -292,6 +292,8 @@ export const es: TranslationSchema = {
       title: "Proyectos",
       description: "Worktrees, proyectos archivados y conversaciones archivadas.",
       openHarness: "Abre un proyecto en el Harness para gestionar sus worktrees y su archivo.",
+      remoteTitle: "Proyectos remotos",
+      remoteDescription: "Abre carpetas de proyecto en tus máquinas SSH guardadas.",
     },
     companion: {
       title: "Companion móvil",
@@ -680,6 +682,8 @@ export const es: TranslationSchema = {
       },
     },
     shortcuts: {
+      harnessTitle: "Atajos del Harness",
+      harnessDescription: "Atajos del espacio de agentes, del menú de la app y del gestor de teclas.",
       title: "Atajos",
       description: "Consulta y personaliza las combinaciones de teclas.",
       searchPlaceholder: "Buscar atajos por acción o tecla...",

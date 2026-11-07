@@ -1,10 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
-  ArrowDownCircle,
   Check,
   ImagePlus,
   Loader,
-  RefreshCw,
   Search,
 } from "../chrome/icons";
 import {
@@ -15,30 +13,19 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "@/modules/i18n";
-import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import { playCue } from "../lib/sounds";
 import {
   keybindingCommandLabel,
   keybindingWhenLabel,
-  settingsEntryLabel,
-  settingsSectionDescription,
-  settingsSectionLabel,
 } from "../lib/catalogLabels";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
-import { Popover } from "../chrome/Popover";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
-import { SkillsPage } from "./SkillsPage";
-import { McpSettings } from "./McpSettings";
-import { WorktreesPage } from "./WorktreesPage";
-import { HarnessConnectionsPage } from "./HarnessConnectionsPage";
-import { removeWorktree, type RemoveWorktree } from "../lib/worktrees";
 import { ProjectNotificationSettings } from "@/modules/notifications";
 import type { RecentProject } from "../lib/recents";
-import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyChatBackground,
   applyChatBackgroundOpacity,
@@ -49,21 +36,18 @@ import {
   loadChatBackgroundOpacity,
   loadChatBackgroundPath,
   loadChatBackgroundScope,
-  loadSidebarLayout,
   loadTranscriptLayout,
   loadTranscriptZen,
   loadTranscriptAnchor,
   saveChatBackgroundOpacity,
   saveChatBackgroundPath,
   saveChatBackgroundScope,
-  saveSidebarLayout,
   saveTranscriptLayout,
   saveTranscriptZen,
   saveTranscriptAnchor,
   TRANSCRIPT_ZEN_CHANGE_EVENT,
   TRANSCRIPT_ANCHOR_CHANGE_EVENT,
   type ChatBackgroundScope,
-  type SidebarLayout,
   type TranscriptLayout,
 } from "../lib/appearance";
 import {
@@ -71,7 +55,7 @@ import {
   removeChatBackground,
 } from "../lib/chatBackground";
 import { prettyCwd, projectKey, projectName } from "../lib/paths";
-import { ALT, IS_MAC, IS_WIN, MOD } from "../lib/platform";
+import { ALT, MOD } from "../lib/platform";
 import {
   loadArchivedProjects,
   looksLikeProject,
@@ -80,7 +64,6 @@ import {
 } from "../lib/recents";
 import {
   sessionDisplayTitle,
-  type Session,
 } from "../lib/session";
 import {
   loadSessionSidebarFilters,
@@ -112,525 +95,24 @@ import { loadTabGroupLabels, resolveTabGroupLabel } from "../lib/tabGroups";
 import {
   filterKeybindings,
   KEYBINDINGS,
-  loadClaudeHooks,
-  loadCloseToTray,
   loadComposerRunner,
   loadFollowUpBehavior,
   loadGridArcadeEnabled,
-  loadLiveAgentsEnabled,
-  loadNotesEnabled,
-  saveClaudeHooks,
-  saveCloseToTray,
   saveComposerRunner,
   saveFollowUpBehavior,
   saveGridArcadeEnabled,
-  saveLiveAgentsEnabled,
-  saveNotesEnabled,
-  searchSettings,
   settingDomId,
   type FollowUpBehavior,
-  type SettingsSearchResult,
-  type SettingsSectionId,
 } from "../lib/settings";
-import { loadSoundsEnabled, playCue, saveSoundsEnabled } from "../lib/sounds";
-import {
-  installPendingUpdate,
-  readAppVersion,
-  runUpdateFlow,
-  type UpdaterSnapshot,
-} from "../lib/updater";
 
-export type SettingsAnchor =
-  | "github"
-  | "gitlab"
-  | "linear"
-  | "project-notifications"
-  | "project-worktrees";
-
-const ANCHOR_IDS: Record<SettingsAnchor, string> = {
+const ANCHOR_IDS = {
   github: "settings-github",
   gitlab: "settings-gitlab",
   linear: "settings-linear",
   "project-notifications": "settings-project-notifications",
-  "project-worktrees": "setting-project-worktrees",
-};
+} as const;
 
 const RevealedSettingContext = createContext<string | null>(null);
-
-type Props = {
-  section: SettingsSectionId;
-  onSelectSection?: (section: SettingsSectionId) => void;
-  /** Card to scroll to; the General page is too long to land at the top. */
-  anchor?: SettingsAnchor | null;
-  cwd: string;
-  sessions: SessionSummary[];
-  besideRail?: boolean;
-  recents?: RecentProject[];
-  notificationProjectPath?: string | null;
-  notificationSettingsRequest?: number;
-  liveSessions?: Session[];
-  onRemoveWorktree?: RemoveWorktree;
-  onCheckWorktreeRemoval?: RemoveWorktree;
-  onDeleteWorktreeSessions?: (
-    sessionIds: readonly string[],
-  ) => Promise<boolean>;
-  onClose: () => void;
-  onOpenSession: (sessionId: string) => void;
-  onArchiveSession: (sessionId: string, archived: boolean) => void;
-  onDeleteSession: (sessionId: string) => void;
-  onRestoreProject?: (path: string) => void;
-  onDeleteProject?: (path: string) => void;
-  onOpenWhatsNew: (version: string) => void;
-};
-
-export function SettingsView({
-  section,
-  onSelectSection,
-  anchor = null,
-  cwd,
-  sessions,
-  besideRail = false,
-  recents = [],
-  notificationProjectPath = null,
-  notificationSettingsRequest = 0,
-  liveSessions = [],
-  onRemoveWorktree = removeWorktree,
-  onCheckWorktreeRemoval,
-  onDeleteWorktreeSessions,
-  onClose,
-  onOpenSession,
-  onArchiveSession,
-  onDeleteSession,
-  onRestoreProject,
-  onDeleteProject,
-  onOpenWhatsNew,
-}: Props) {
-  const { t } = useTranslation();
-  const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const [revealedSetting, setRevealedSetting] = useState<string | null>(null);
-  const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!anchor) return;
-    document.getElementById(ANCHOR_IDS[anchor])?.scrollIntoView({
-      block: "start",
-    });
-  }, [anchor]);
-
-  const onReveal = useCallback(
-    (item: SettingsSearchResult) => {
-      if (item.section !== section && onSelectSection) {
-        onSelectSection(item.section);
-      }
-      if (item.settingId) {
-        if (revealTimeoutRef.current) clearTimeout(revealTimeoutRef.current);
-        setRevealedSetting(item.settingId);
-        revealTimeoutRef.current = setTimeout(() => {
-          setRevealedSetting(null);
-        }, 2500);
-
-        setTimeout(() => {
-          const el = document.getElementById(settingDomId(item.settingId!));
-          if (el) {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }, 80);
-      }
-    },
-    [section, onSelectSection],
-  );
-
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const appearance = useAppearanceSettings();
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onCloseRef.current();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
-
-  return (
-    <RevealedSettingContext.Provider value={revealedSetting}>
-      <div
-        role="region"
-        aria-label={t("harness.chrome.settings")}
-        data-app-settings
-        className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
-      >
-        <div
-          className="flex h-10 shrink-0 select-none items-center justify-between gap-4 border-b border-content/10 pr-3"
-          data-tauri-drag-region="deep"
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]">
-            {IS_MAC && !besideRail ? <div className="w-[78px] shrink-0" /> : null}
-            <span className="shrink-0 text-content/45">
-              {t("harness.chrome.settings")}
-            </span>
-            <span aria-hidden className="shrink-0 text-content/25">
-              /
-            </span>
-            <span className="min-w-0 truncate text-content">
-              {settingsSectionLabel(t, section)}
-            </span>
-          </div>
-          <SettingsSearch onSelectResult={onReveal} />
-        </div>
-
-        <div
-          ref={lockOverscroll}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-none"
-        >
-          <div className="mx-auto w-full max-w-5xl px-8 py-8">
-            <PageHeader
-              title={settingsSectionLabel(t, section)}
-              description={settingsSectionDescription(t, section)}
-            />
-            {section === "general" ? (
-              <GeneralPage onOpenWhatsNew={onOpenWhatsNew} />
-            ) : null}
-            {section === "appearance" ? (
-              <AppearancePage appearance={appearance} />
-            ) : null}
-            {section === "chat" ? <ChatPage /> : null}
-            {section === "keybindings" ? <KeybindingsPage /> : null}
-            {section === "providers" ? <ProvidersPage /> : null}
-            {section === "inbox" ? (
-              <InboxPage
-                cwd={cwd}
-                recents={recents}
-                notificationProjectPath={notificationProjectPath}
-                notificationSettingsRequest={notificationSettingsRequest}
-              />
-            ) : null}
-            {section === "connections" ? <HarnessConnectionsPage cwd={cwd} /> : null}
-            {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
-            {section === "mcp" ? <McpSettings cwd={cwd} /> : null}
-            {section === "worktrees" ? (
-              <WorktreesPage
-                cwd={cwd}
-                recents={recents}
-                liveSessions={liveSessions}
-                onRemove={onRemoveWorktree}
-                onCheckRemove={onCheckWorktreeRemoval}
-                onDeleteSessions={onDeleteWorktreeSessions}
-              />
-            ) : null}
-            {section === "archive" ? (
-              <ArchivePage
-                cwd={cwd}
-                sessions={sessions}
-                onOpenSession={onOpenSession}
-                onArchiveSession={onArchiveSession}
-                onDeleteSession={onDeleteSession}
-                onRestoreProject={onRestoreProject}
-                onDeleteProject={onDeleteProject}
-              />
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </RevealedSettingContext.Provider>
-  );
-}
-
-function SettingsSearch({
-  onSelectResult,
-}: {
-  onSelectResult: (item: SettingsSearchResult) => void;
-}) {
-  const { t } = useTranslation();
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    return searchSettings(
-      query,
-      (section) => settingsSectionLabel(t, section),
-      undefined,
-      (id) => settingsEntryLabel(t, id),
-    );
-  }, [query, t]);
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [results]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f" && !e.shiftKey && !e.altKey) {
-        const target = e.target as HTMLElement | null;
-        if (!target?.closest("[data-app-settings]")) return;
-        e.preventDefault();
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const handleSelect = (item: SettingsSearchResult) => {
-    setOpen(false);
-    setQuery("");
-    inputRef.current?.blur();
-    onSelectResult(item);
-  };
-
-  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelectedIndex((prev) =>
-        results.length > 0 ? (prev + 1) % results.length : 0,
-      );
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelectedIndex((prev) =>
-        results.length > 0 ? (prev - 1 + results.length) % results.length : 0,
-      );
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (results[selectedIndex]) {
-        handleSelect(results[selectedIndex]);
-      }
-    } else if (e.key === "Escape") {
-      setOpen(false);
-      inputRef.current?.blur();
-    }
-  };
-
-  return (
-    <div ref={containerRef} className="relative max-w-xs flex-1">
-      <div className="relative flex items-center">
-        <Search
-          className="pointer-events-none absolute left-2.5 size-3.5 text-content/40"
-          strokeWidth={1.75}
-        />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => {
-            if (query.trim()) setOpen(true);
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={t("harness.settings.searchPlaceholder")}
-          className="w-full rounded-md border border-content/10 bg-content/5 py-1 pl-8 pr-7 text-[12px] text-content placeholder:text-content/40 outline-none transition-colors focus:border-content/25 focus:bg-content/10"
-        />
-        {query ? (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setOpen(false);
-              inputRef.current?.focus();
-            }}
-            className="absolute right-2 text-[11px] text-content/40 hover:text-content"
-          >
-            ✕
-          </button>
-        ) : null}
-      </div>
-
-      {open && results.length > 0 ? (
-        <Popover
-          anchor={containerRef}
-          side="bottom"
-          align="end"
-          width={340}
-          maxHeight={360}
-          autoFocus={false}
-          onDismiss={() => setOpen(false)}
-          className="z-50 overflow-y-auto overscroll-contain p-1"
-        >
-          <div className="flex flex-col gap-0.5">
-            {results.map((item, idx) => {
-              const active = idx === selectedIndex;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  onClick={() => handleSelect(item)}
-                  className={`flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left text-[12px] ${
-                    active
-                      ? "bg-content/10 text-content"
-                      : "text-content/80 hover:bg-content/5"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-content">
-                      {item.title}
-                    </span>
-                    <span className="shrink-0 rounded bg-content/10 px-1.5 py-0.5 font-mono text-[10px] text-content/60">
-                      {settingsSectionLabel(t, item.section)}
-                    </span>
-                  </div>
-                  {item.settingId == null ? (
-                    <span className="line-clamp-1 text-[11px] text-content/50">
-                      {settingsSectionDescription(t, item.section)}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </Popover>
-      ) : open && query.trim() ? (
-        <Popover
-          anchor={containerRef}
-          side="bottom"
-          align="end"
-          width={300}
-          autoFocus={false}
-          onDismiss={() => setOpen(false)}
-          className="z-50 p-3 text-center text-[12px] text-content/50"
-        >
-          {t("harness.settings.noResults")}
-        </Popover>
-      ) : null}
-    </div>
-  );
-}
-
-function GeneralPage({
-  onOpenWhatsNew,
-}: {
-  onOpenWhatsNew: (version: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
-  const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
-  const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(
-    loadLiveAgentsEnabled,
-  );
-  const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
-  const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
-  const [closeToTray, setCloseToTray] = useState(loadCloseToTray);
-
-  const onLayout = (next: SidebarLayout) => {
-    saveSidebarLayout(next);
-    setLayout(next);
-  };
-
-  const onNotesEnabled = (next: boolean) => {
-    saveNotesEnabled(next);
-    setNotesEnabled(next);
-  };
-
-  const onLiveAgentsEnabled = (next: boolean) => {
-    saveLiveAgentsEnabled(next);
-    setLiveAgentsEnabled(next);
-  };
-
-  const onSoundsEnabled = (next: boolean) => {
-    saveSoundsEnabled(next);
-    setSoundsEnabled(next);
-  };
-
-  const onClaudeHooks = (next: boolean) => {
-    saveClaudeHooks(next);
-    setClaudeHooks(next);
-  };
-
-  const onCloseToTray = (next: boolean) => {
-    saveCloseToTray(next);
-    setCloseToTray(next);
-  };
-
-  return (
-    <>
-      <Row
-        settingId="workspaceLayout"
-        label={t("harness.settings.workspaceLayout")}
-        description={t("harness.settings.workspaceLayoutDesc")}
-      >
-        <Segmented
-          label={t("harness.settings.workspaceLayout")}
-          value={layout}
-          options={[
-            { value: "deck", label: t("harness.settings.deck") },
-            { value: "classic", label: t("harness.settings.classic") },
-          ]}
-          onChange={onLayout}
-        />
-      </Row>
-      <Row
-        settingId="notes"
-        label={t("harness.settings.notes")}
-        description={t("harness.settings.notesDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.notes")}
-          on={notesEnabled}
-          onChange={onNotesEnabled}
-        />
-      </Row>
-      <Row
-        settingId="workingAgents"
-        label={t("harness.settings.workingAgents")}
-        description={t("harness.settings.workingAgentsDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.workingAgents")}
-          on={liveAgentsEnabled}
-          onChange={onLiveAgentsEnabled}
-        />
-      </Row>
-      <Row
-        settingId="sounds"
-        label={t("harness.settings.sounds")}
-        description={t("harness.settings.soundsDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.sounds")}
-          on={soundsEnabled}
-          onChange={onSoundsEnabled}
-        />
-      </Row>
-      <Row
-        settingId="claudeHooks"
-        label={t("harness.settings.claudeHooks")}
-        description={t("harness.settings.claudeHooksDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.claudeHooks")}
-          on={claudeHooks}
-          onChange={onClaudeHooks}
-        />
-      </Row>
-      {IS_WIN && (
-        <Row
-          settingId="closeToTray"
-          label={t("harness.settings.closeToTray")}
-          description={t("harness.settings.closeToTrayDesc")}
-        >
-          <Toggle
-            label={t("harness.settings.closeToTray")}
-            on={closeToTray}
-            onChange={onCloseToTray}
-          />
-        </Row>
-      )}
-
-      <Heading title={t("harness.chrome.about")} />
-      <UpdateRow onOpenWhatsNew={onOpenWhatsNew} />
-    </>
-  );
-}
 
 export function ChatPage() {
   const { t } = useTranslation();
@@ -1181,92 +663,6 @@ function LinearSettings() {
   );
 }
 
-function UpdateRow({
-  onOpenWhatsNew,
-}: {
-  onOpenWhatsNew: (version: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [snapshot, setSnapshot] = useState<UpdaterSnapshot>({
-    phase: "idle",
-    currentVersion: "…",
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    void readAppVersion().then((currentVersion) => {
-      if (cancelled) return;
-      setSnapshot((current) => ({ ...current, currentVersion }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const busy =
-    snapshot.phase === "checking" || snapshot.phase === "downloading";
-  const hasUpdate = snapshot.phase === "available";
-
-  const onClick = async () => {
-    if (busy) return;
-    if (hasUpdate) {
-      await installPendingUpdate(setSnapshot);
-      return;
-    }
-    await runUpdateFlow(true, setSnapshot);
-  };
-
-  const status =
-    snapshot.phase === "available"
-      ? t("harness.chrome.updateAvailable", {
-          version: snapshot.availableVersion ?? snapshot.currentVersion,
-        })
-      : snapshot.phase === "downloading"
-        ? `Downloading${snapshot.progress != null ? ` ${snapshot.progress}%` : "…"}`
-        : snapshot.phase === "checking"
-          ? t("harness.chrome.checkingForUpdates")
-          : snapshot.phase === "current"
-            ? t("harness.chrome.latestVersion")
-            : snapshot.phase === "error"
-              ? (snapshot.error ?? t("harness.chrome.updateCheckFailed"))
-              : t("harness.chrome.updatesFromReleaseFeed");
-
-  return (
-    <Row
-      label={
-        <span className="flex items-baseline gap-2">
-          {t("harness.chrome.version")}
-          <span className="font-mono text-[12px] text-content/45">
-            {snapshot.currentVersion}
-          </span>
-        </span>
-      }
-      description={status}
-    >
-      <div className="flex items-center gap-2">
-        <SecondaryButton
-          onClick={() => onOpenWhatsNew(snapshot.currentVersion)}
-          disabled={snapshot.currentVersion === "…"}
-        >
-          {t("harness.chrome.whatsNew")}
-        </SecondaryButton>
-        <SecondaryButton onClick={() => void onClick()} disabled={busy}>
-          {busy ? (
-          <Loader className="size-3.5 animate-spin" aria-hidden />
-        ) : hasUpdate ? (
-          <ArrowDownCircle className="size-3.5 text-accent" aria-hidden />
-        ) : (
-          <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
-        )}
-          {hasUpdate
-            ? t("harness.chrome.download")
-            : t("harness.chrome.checkForUpdates")}
-        </SecondaryButton>
-      </div>
-    </Row>
-  );
-}
-
 type AppearanceSettings = ReturnType<typeof useAppearanceSettings>;
 
 function useAppearanceSettings() {
@@ -1343,7 +739,8 @@ function useAppearanceSettings() {
   };
 }
 
-function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
+export function ChatBackgroundSettings() {
+  const appearance = useAppearanceSettings();
   return <ChatBackgroundCard appearance={appearance} />;
 }
 
@@ -1471,7 +868,7 @@ function ChatBackgroundCard({
   );
 }
 
-function KeybindingsPage() {
+export function KeybindingsPage() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const rows = useMemo(
@@ -1536,24 +933,6 @@ function KeybindingsPage() {
         {t("harness.chrome.keybindingsDesc")}
       </p>
     </>
-  );
-}
-
-function ProvidersPage() {
-  const { t } = useTranslation();
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <p className="max-w-2xl text-[12px] leading-relaxed text-content/50">
-        {t("harness.settings.providersIntro")}
-      </p>
-      <button
-        type="button"
-        onClick={() => void openSettingsWindow("harness")}
-        className="flex h-8 items-center rounded-md border border-content/10 px-3 text-[11px] font-medium text-content/75 transition-colors hover:bg-content/5 hover:text-content"
-      >
-        {t("common.open")} {t("harness.settings.title")}
-      </button>
-    </div>
   );
 }
 
@@ -1735,27 +1114,6 @@ function formatDate(value: number): string {
   } catch {
     return "";
   }
-}
-
-function PageHeader({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <header className="pb-4">
-      <h1 className="text-[20px] font-semibold leading-tight text-content">
-        {title}
-      </h1>
-      {description ? (
-        <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-content/45">
-          {description}
-        </p>
-      ) : null}
-    </header>
-  );
 }
 
 function Heading({

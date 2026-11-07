@@ -12,7 +12,6 @@ import {
   Pin,
   Plus,
   Search,
-  Settings,
   StickyNote,
   Zap,
 } from "./icons";
@@ -114,7 +113,6 @@ import {
 import type { HarnessId } from "../lib/session";
 import type { LiveAgent } from "../lib/liveAgents";
 import type { SessionSummary } from "../lib/sessionStore";
-import type { SettingsSectionId } from "../lib/settings";
 import {
   loadTabGroupColors,
   loadTabGroupCustomColors,
@@ -146,8 +144,6 @@ import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectRail } from "./ProjectRail";
-import { RailAction } from "./RailAction";
-import { SettingsNav } from "./SettingsRail";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
@@ -267,11 +263,6 @@ type Props = {
   reminders?: SessionReminder[];
   onSetReminders?: (sessionIds: readonly string[], dueAt: number) => void;
   onCancelReminders?: (sessionIds: readonly string[]) => void;
-  settingsOpen?: boolean;
-  settingsSection?: SettingsSectionId;
-  onOpenSettings?: () => void;
-  onSelectSettingsSection?: (section: SettingsSectionId) => void;
-  onCloseSettings?: () => void;
   /** Open tabs per worktree path key, for the worktree switcher. */
   worktreeTabStats?: ReadonlyMap<string, { tabs: number; busy: boolean }>;
   onSelectWorkspace?: (focus?: WorktreeFocus) => void;
@@ -343,11 +334,6 @@ function SidebarComponent({
   reminders = [],
   onSetReminders,
   onCancelReminders,
-  settingsOpen = false,
-  settingsSection = "general",
-  onOpenSettings,
-  onSelectSettingsSection,
-  onCloseSettings,
   worktreeTabStats,
   onSelectWorkspace,
   workspaceSwitchPending,
@@ -627,22 +613,17 @@ function SidebarComponent({
   }, [deckLayout, tab, onTabChange]);
   const showProjectRail =
     deckLayout && Boolean(onSelectProject && onOpenProject);
-  // Settings live in the rail slot, so they keep it visible even when the
-  // project rail itself is collapsed.
-  const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
+  const railVisible = showProjectRail && projectRailOpen;
   const inProject = looksLikeProject(cwd);
-  const classicSettings = settingsOpen && !deckLayout;
-  const showSidebarFooter = !deckLayout || !projectRailOpen;
   // A blank session has no project to browse, so the shell stands alone until
-  // one is picked, whether or not the rail is open. Classic settings keep the
-  // sidebar so it can host the section nav the rail would otherwise carry.
+  // one is picked, whether or not the rail is open.
   const sidebarVisible =
     open &&
     !searchActive &&
     !inboxActive &&
     !notesActive &&
     !automationsActive &&
-    (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
+    !(deckLayout && !inProject);
   const explorer = useRef<string | null>(null);
   if (sidebarVisible && tab === "files") explorer.current = gitRoot;
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
@@ -1363,7 +1344,7 @@ function SidebarComponent({
               inboxUnseen={inboxUnseen}
             />
           ) : null}
-          {classicSettings || visibleTabs.length <= 1 ? null : (
+          {visibleTabs.length <= 1 ? null : (
             <div
               role="tablist"
               aria-label={t("harness.chrome.workspace")}
@@ -1378,14 +1359,7 @@ function SidebarComponent({
           )}
         </>
       )}
-      {classicSettings ? (
-        <SettingsNav
-          section={settingsSection}
-          onSelect={(next) => onSelectSettingsSection?.(next)}
-          onClose={() => onCloseSettings?.()}
-        />
-      ) : (
-        <>
+      <>
           <div
             className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
               tab === "files" ? "" : "hidden"
@@ -1822,19 +1796,7 @@ function SidebarComponent({
               </Suspense>
             </div>
           ) : null}
-          {showSidebarFooter ? (
-            <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
-              <RailAction
-                label={t("harness.chrome.settings")}
-                icon={Settings}
-                onClick={onOpenSettings}
-                shortcut={`${MOD},`}
-                ariaLabel={`Settings (${MOD},)`}
-              />
-            </div>
-          ) : null}
-        </>
-      )}
+      </>
       {sessionMenu ? (
         <ExplorerMenu
           x={sessionMenu.x}
@@ -1926,11 +1888,6 @@ function SidebarComponent({
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
           onRemoveProject={onRemoveProject}
-          settingsOpen={settingsOpen}
-          settingsSection={settingsSection}
-          onOpenSettings={onOpenSettings}
-          onSelectSettingsSection={onSelectSettingsSection}
-          onCloseSettings={onCloseSettings}
         />
       ) : null}
       {sidebarVisible ? sidebarContent : null}

@@ -285,6 +285,8 @@ export const en = {
       title: "Projects",
       description: "Worktrees, archived projects and archived conversations.",
       openHarness: "Open a project in the Harness to manage its worktrees and archive.",
+      remoteTitle: "Remote projects",
+      remoteDescription: "Open project folders on your saved SSH machines.",
     },
     companion: {
       title: "Mobile Companion",
@@ -667,6 +669,8 @@ export const en = {
       },
     },
     shortcuts: {
+      harnessTitle: "Harness shortcuts",
+      harnessDescription: "Shortcuts of the agent workspace, from the app menu and the key handler.",
       title: "Shortcuts",
       description: "View and customize keyboard shortcuts.",
       searchPlaceholder: "Search shortcuts by action or key...",
