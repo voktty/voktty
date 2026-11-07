@@ -204,7 +204,7 @@ it("migrates wildcard ignore with an allowlist, leaving reserved and unknown dat
       join(directory, ".voktty/.gitignore"),
       ignore?.proposed ?? "",
     );
-    for (const path of [
+    const privatePaths = [
       "sessions/id.json",
       "state/agents.json",
       "mailbox/a/inbox/id.json",
@@ -214,24 +214,29 @@ it("migrates wildcard ignore with an allowlist, leaving reserved and unknown dat
       "tools.json",
       "unknown.json",
       "team/private.json",
-    ]) {
-      expect(
-        spawnSync(
-          "git",
-          ["check-ignore", "--no-index", "-q", `.voktty/${path}`],
-          { cwd: directory },
-        ).status,
-        path,
-      ).toBe(0);
-    }
-    for (const entry of plan.entries) {
-      expect(
-        spawnSync("git", ["check-ignore", "--no-index", "-q", entry.path], {
-          cwd: directory,
-        }).status,
-        entry.path,
-      ).toBe(1);
-    }
+    ].map((p) => `.voktty/${p}`);
+    const privateResult = spawnSync(
+      "git",
+      ["check-ignore", "--no-index", ...privatePaths],
+      { cwd: directory, encoding: "utf8" },
+    );
+    const ignoredPrivate = (privateResult.stdout ?? "")
+      .split(/\r?\n/)
+      .map((p) => p.trim().replace(/\\/g, "/"))
+      .filter(Boolean);
+    expect(ignoredPrivate.sort()).toEqual(privatePaths.sort());
+
+    const planPaths = plan.entries.map((entry) => entry.path);
+    const planResult = spawnSync(
+      "git",
+      ["check-ignore", "--no-index", ...planPaths],
+      { cwd: directory, encoding: "utf8" },
+    );
+    const ignoredPlan = (planResult.stdout ?? "")
+      .split(/\r?\n/)
+      .map((p) => p.trim().replace(/\\/g, "/"))
+      .filter(Boolean);
+    expect(ignoredPlan).toEqual([]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -244,7 +249,7 @@ it("migrates wildcard ignore with an allowlist, leaving reserved and unknown dat
       (entry) => entry.path === ".voktty/.gitignore",
     )?.action,
   ).toBe("skip");
-});
+}, 30_000);
 
 it.each([
   ".voktty/sessions/id.json",
