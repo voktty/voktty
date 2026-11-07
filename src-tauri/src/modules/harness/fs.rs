@@ -3446,10 +3446,8 @@ fn read_text_file_sync(path: &str) -> Result<String, String> {
     }
 
     let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if bytes.contains(&0) {
-        return Err("Binary files cannot be edited.".into());
-    }
-    String::from_utf8(bytes).map_err(|_| "File is not valid UTF-8.".into())
+    crate::modules::fs::file::decode_text_bytes(Some(&path), &bytes, false)
+        .ok_or_else(|| "Binary files cannot be edited.".into())
 }
 
 /// Atomically replace a text file from a temporary file in the same directory.

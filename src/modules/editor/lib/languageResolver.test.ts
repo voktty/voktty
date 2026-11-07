@@ -21,6 +21,15 @@ describe("resolveDisplayName", () => {
     expect(resolveDisplayName("Dockerfile")).toBe("Dockerfile");
     expect(resolveDisplayName(".env")).toBe("Dotenv");
     expect(resolveDisplayName(".eslintrc")).toBe("JSON");
+    expect(resolveDisplayName(".gitconfig")).toBe("Properties");
+    expect(resolveDisplayName(".npmrc")).toBe("Properties");
+  });
+
+  it("resolves properties and ini-like file extensions", () => {
+    expect(resolveDisplayName("settings.ini")).toBe("Properties");
+    expect(resolveDisplayName("setup.inf")).toBe("Properties");
+    expect(resolveDisplayName("registry.reg")).toBe("Properties");
+    expect(resolveDisplayName("app.config")).toBe("Properties");
   });
 
   // Regression: removing isDockerfileLike dropped highlighting for Dockerfile

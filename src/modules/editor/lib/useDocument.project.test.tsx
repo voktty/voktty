@@ -221,3 +221,26 @@ it("keeps edits typed while a namespace write is settling dirty", async () => {
   });
   expect(document.dirty).toBe(true);
 });
+
+it("transitions from binary status to ready when openAnyway is invoked", async () => {
+  io.read.mockResolvedValueOnce({ kind: "binary", size: 1024 });
+  await act(async () => root.render(<Reader />));
+  await vi.waitFor(() =>
+    expect(document.doc).toEqual({ status: "binary", size: 1024 }),
+  );
+
+  io.read.mockResolvedValueOnce({
+    kind: "text",
+    content: "forced text",
+    size: 1024,
+    mtime: 1,
+  });
+  await act(async () => document.openAnyway());
+  await vi.waitFor(() =>
+    expect(document.doc).toEqual({
+      status: "ready",
+      content: "forced text",
+      size: 1024,
+    }),
+  );
+});

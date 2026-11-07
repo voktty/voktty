@@ -1526,7 +1526,8 @@ export const EditorPane = memo(
       }
 
       const canForce =
-        doc.status === "toolarge" && doc.size <= FORCE_READ_LIMIT;
+        (doc.status === "toolarge" || doc.status === "binary") &&
+        doc.size <= FORCE_READ_LIMIT;
       return (
         <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
           <div className="text-sm text-foreground">

@@ -275,9 +275,10 @@ impl NativeSftp {
     }
 
     pub async fn read_text(&self, path: String) -> Result<String, SshNativeError> {
-        let bytes = self.read_bytes(path, MAX_TEXT_BYTES).await?;
-        String::from_utf8(bytes)
-            .map_err(|_| SshNativeError::new(SshErrorCode::BinaryFile, "file is not valid UTF-8"))
+        let bytes = self.read_bytes(path.clone(), MAX_TEXT_BYTES).await?;
+        let p = std::path::Path::new(&path);
+        crate::modules::fs::file::decode_text_bytes(Some(p), &bytes, false)
+            .ok_or_else(|| SshNativeError::new(SshErrorCode::BinaryFile, "file is not valid UTF-8"))
     }
 
     /// Reads a whole file with an explicit ceiling. The size is checked before

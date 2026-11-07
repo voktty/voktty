@@ -386,14 +386,14 @@ export const LANGUAGES: LanguageDefinition[] = [
   },
   {
     name: "Properties",
-    extensions: ["ini", "cfg", "properties"],
+    extensions: ["ini", "cfg", "config", "properties", "inf", "reg"],
     loader: () =>
       defineLanguage(
         import("@codemirror/legacy-modes/mode/properties").then(
           (m) => m.properties,
         ),
       ),
-    filenames: [".editorconfig"],
+    filenames: [".editorconfig", ".gitconfig", ".npmrc"],
   },
   {
     name: "Lua",
