@@ -41,7 +41,6 @@ import { SearchableProjectPicker } from "../chrome/SearchableProjectPicker";
 import { SearchableSelect } from "../chrome/SearchableSelect";
 import { SkillPromptField } from "../chrome/SkillPromptField";
 import { OverlayNav } from "../chrome/TitleBar";
-import { WindowControls } from "@/components/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
@@ -167,7 +166,6 @@ export function AutomationsView({
           />
           <span className="min-w-0 truncate text-content">Automations</span>
         </div>
-        {IS_MAC ? null : <WindowControls />}
       </div>
       <AutomationsContent
         cwd={cwd}
