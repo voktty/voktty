@@ -254,6 +254,7 @@ import {
 } from "@/modules/settings/openSettingsWindow";
 import { publishHarnessSettingsContext } from "../lib/settingsBridge";
 import { settingsTabForSection } from "../lib/settingsTabs";
+import { useAutomationsRequest } from "../lib/automationsRequest";
 import {
   addTabsToNewGroup,
   addTabToGroup,
@@ -4627,6 +4628,12 @@ export function HarnessApp({
     });
   }, [workspaceNavigation.cancel]);
 
+  const automationsRequested = useAutomationsRequest((state) => state.pending);
+  useEffect(() => {
+    if (!automationsRequested || !visible || !focused) return;
+    if (useAutomationsRequest.getState().consume()) onOpenAutomations();
+  }, [automationsRequested, visible, focused, onOpenAutomations]);
+
   const onLeaveAutomations = useCallback(() => {
     setAutomationsViewOpen(false);
   }, []);
@@ -5194,7 +5201,6 @@ export function HarnessApp({
         onSearch={onOpenSearch}
         onOpenInbox={onOpenInbox}
         onOpenNotes={notesEnabled ? onOpenNotes : undefined}
-        onOpenAutomations={onOpenAutomations}
         onGoToFile={deckLayout ? onGoToFile : undefined}
         searchActive={searchViewOpen}
         inboxActive={inboxViewOpen}

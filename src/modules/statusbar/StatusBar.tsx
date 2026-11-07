@@ -39,6 +39,7 @@ import { PacmanIcon } from "./components/PacmanIcon";
 import Note01Icon from "@hugeicons/core-free-icons/Note01Icon";
 import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore";
 import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
+import { AutomationsPopover } from "@/modules/statusbar/components/AutomationsPopover";
 import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
 import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
 import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
@@ -79,6 +80,7 @@ type Props = {
   /** Opens the panel, or Settings > Models when no API key is loaded. */
   onOpenAi: () => void;
   onOpenSettings: () => void;
+  onOpenAutomations?: () => void;
   onRunCommand?: (command: string) => boolean;
   runCommandDisabledReason?: string;
   toolkitTarget?: { path: string; workspace: WorkspaceEnv } | null;
@@ -115,6 +117,7 @@ export function StatusBar({
   onToggleAi,
   onOpenAi,
   onOpenSettings,
+  onOpenAutomations,
   onRunCommand,
   runCommandDisabledReason,
   toolkitTarget,
@@ -280,6 +283,9 @@ export function StatusBar({
           captureConversation={harnessMemory?.captureConversation}
           target={memoryTarget}
         />
+        {onOpenAutomations ? (
+          <AutomationsPopover onOpenAll={onOpenAutomations} />
+        ) : null}
         <ProjectToolkitPopover
           cwd={toolkitTarget === undefined ? cwd : toolkitTarget?.path}
           workspace={toolkitTarget?.workspace}

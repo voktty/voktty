@@ -1355,6 +1355,18 @@ export const en = {
       "{name} will be removed from the visual layout. Its live tabs will remain open as standalone tabs.",
   },
   statusbar: {
+    automations: {
+      title: "Automations",
+      openAll: "Open all",
+      empty: "No automations yet. Open the full view to create one.",
+      loadFailed: "Automations could not be loaded.",
+      lastFailed: "Last run failed",
+      next: "Next run {{time}}",
+      paused: "Paused",
+      runNow: "Run now",
+      queued: "{{name}} queued",
+      runFailed: "Could not start the run: {{message}}",
+    },
     terminal: "Terminal",
     editor: "Editor",
     spaces: "Spaces",
