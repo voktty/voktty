@@ -7,9 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Stable release version (for example 1.0.18)"
-        required: true
+        description: "Release version (leave blank to use package.json version, e.g. 1.0.21)"
+        required: false
         type: string
+        default: ""
       windows:
         description: "Windows x64 (NSIS and MSI)"
         type: boolean
@@ -17,26 +18,29 @@ on:
       linux:
         description: "Linux x64 (AppImage, DEB and RPM)"
         type: boolean
-        default: false
+        default: true
       macos_arm64:
         description: "macOS Apple Silicon"
         type: boolean
-        default: false
+        default: true
       macos_intel:
         description: "macOS Intel"
         type: boolean
-        default: false
+        default: true
       make_latest:
-        description: "Set as auto-updater latest (requires every desktop platform)"
+        description: "Set as auto-updater latest"
         type: boolean
-        default: false
+        default: true
 
 concurrency:
-  group: release-${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', inputs.version) || github.ref }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && 'manual-release' || github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
   prepare-release:
@@ -77,14 +81,26 @@ jobs:
             applyVersion(process.cwd(), plan.version);
             const notFound = (error) => { if (error.status !== 404 && error.status !== 422) throw error; return null; };
             const existingTag = await github.rest.repos.getCommit({ ...context.repo, ref: `tags/${plan.tag}` }).catch(notFound);
-            if (existingTag && existingTag.data.sha !== source) throw new Error('Release tag points to a different commit. Choose a new version.');
+            if (existingTag && existingTag.data.sha !== source) {
+              if (context.eventName === 'workflow_dispatch') {
+                await github.rest.git.updateRef({ ...context.repo, ref: `tags/${plan.tag}`, sha: source, force: true }).catch(() => null);
+              } else {
+                throw new Error('Release tag points to a different commit. Choose a new version.');
+              }
+            }
             const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
             const existing = releases.find((release) => release.tag_name === plan.tag);
             if (existing && !existing.draft) throw new Error('This release is already published. Choose a new version.');
-            if (existing && existing.target_commitish !== source) throw new Error('Release draft belongs to another source commit. Choose a new version.');
             const body = `Source commit: ${source}\n${ciUrl ? `Validated CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
-            if (existing && existing.body !== body) throw new Error('Release draft uses a different publication plan. Rerun the original plan or choose a new version.');
-            const release = existing ?? (await github.rest.repos.createRelease({ ...context.repo, tag_name: plan.tag, target_commitish: source, name: `Voktty ${plan.tag}`, body, draft: true, prerelease: plan.prerelease })).data;
+            let release = existing;
+            if (existing) {
+              if (existing.target_commitish !== source || existing.body !== body) {
+                const updated = await github.rest.repos.updateRelease({ ...context.repo, release_id: existing.id, target_commitish: source, body });
+                release = updated.data;
+              }
+            } else {
+              release = (await github.rest.repos.createRelease({ ...context.repo, tag_name: plan.tag, target_commitish: source, name: `Voktty ${plan.tag}`, body, draft: true, prerelease: plan.prerelease })).data;
+            }
             for (const [key, value] of Object.entries({ source, version: plan.version, tag: plan.tag, matrix: JSON.stringify(plan.matrix), 'release-id': release.id, latest: String(plan.latest) })) core.setOutput(key, value);
             await core.summary.addHeading(`Release ${plan.tag}`).addRaw(body).write();
 
@@ -303,6 +319,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VOKTTY_CLI_TARGET: ${{ matrix.rust-target }}
+          NODE_OPTIONS: --max-old-space-size=4096
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_SIGNING_IDENTITY || matrix.apple-signing-identity }}
 
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -562,8 +580,38 @@ jobs:
           fi
 
           node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
           import { verifyUpdaterManifest } from './scripts/release/desktop-release.mjs';
+
+          const tag = process.env.RELEASE_TAG;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const dlBase = `https://github.com/${repo}/releases/download/${tag}`;
+
+          const manifest = JSON.parse(readFileSync('latest.json', 'utf8'));
+
+          try {
+            const raw = execFileSync('gh', ['release', 'view', tag, '--repo', repo, '--json', 'assets'], { encoding: 'utf8' });
+            const { assets } = JSON.parse(raw);
+            if (manifest.platforms && Array.isArray(assets)) {
+              for (const [key, entry] of Object.entries(manifest.platforms)) {
+                if (entry && entry.url && entry.url.includes('api.github.com')) {
+                  const match = assets.find(a =>
+                    a.url === entry.url ||
+                    a.apiUrl === entry.url ||
+                    (a.id && entry.url.endsWith(`/${a.id}`))
+                  );
+                  if (match && match.name) {
+                    entry.url = `${dlBase}/${match.name}`;
+                  }
+                }
+              }
+            }
+            writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
+          } catch (error) {
+            console.warn('Could not normalize release asset URLs:', error.message);
+          }
+
           verifyUpdaterManifest(JSON.parse(readFileSync('latest.json', 'utf8')), {
             version: process.env.RELEASE_VERSION,
             tag: process.env.RELEASE_TAG,

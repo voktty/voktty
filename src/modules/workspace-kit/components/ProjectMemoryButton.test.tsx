@@ -2,8 +2,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
-import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -11,6 +9,9 @@ vi.mock("@/modules/i18n", () => ({
   t: (key: string) => key,
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+
+import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
+import type { MemoryPanelTarget } from "@/modules/workspace-kit/lib/memoryPanel";
 let root: Root;
 let container: HTMLDivElement;
 const target: MemoryPanelTarget = {
@@ -54,6 +55,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  document.body.replaceChildren();
   vi.unstubAllGlobals();
 });
 

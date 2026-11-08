@@ -71,7 +71,7 @@ export function releasePlan({ eventName, ref, sourceVersion, inputs = {} }) {
   if (manual && ref !== "refs/heads/main")
     throw new Error("Manual releases must run from main.");
   const version = manual
-    ? inputs.version?.trim()
+    ? inputs.version?.trim() || sourceVersion
     : ref.replace(/^refs\/tags\/v/, "");
   if (manual) {
     if (compareVersions(version, sourceVersion) < 0)
