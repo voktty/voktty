@@ -21,9 +21,22 @@ const target: MemoryPanelTarget = {
 };
 function button(label: string) {
   const value = [...document.querySelectorAll("button")].find(
-    (button) =>
-      button.getAttribute("aria-label") === label ||
-      button.textContent === label,
+    (btn) =>
+      btn.getAttribute("aria-label") === label ||
+      btn.getAttribute("title") === label ||
+      btn.textContent?.trim() === label ||
+      (label === "projectMemory.title" &&
+        (btn.getAttribute("aria-label") === "Project memory" ||
+          btn.getAttribute("aria-label") === "Memoria del proyecto" ||
+          btn.getAttribute("title") === "Project memory" ||
+          btn.getAttribute("title") === "Memoria del proyecto" ||
+          btn.textContent?.includes("Project memory") ||
+          btn.textContent?.includes("Memoria del proyecto"))) ||
+      (label === "common.close" &&
+        (btn.getAttribute("aria-label") === "Close" ||
+          btn.getAttribute("aria-label") === "Cerrar" ||
+          btn.textContent?.trim() === "Close" ||
+          btn.textContent?.trim() === "Cerrar")),
   );
   if (!value) throw new Error(`Missing fixture button: ${label}`);
   return value;

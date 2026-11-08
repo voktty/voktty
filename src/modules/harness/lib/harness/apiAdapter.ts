@@ -9,7 +9,7 @@ import type {
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
-import { streamText, type LanguageModel, type ModelMessage } from "ai";
+import type { LanguageModel, ModelMessage } from "ai";
 
 const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
 
@@ -91,6 +91,7 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
     const history = historyBySession.get(input.sessionId) ?? [];
     history.push({ role: "user", content: input.text });
 
+    const { streamText } = await import("ai");
     const result = streamText({
       model,
       messages: history,
