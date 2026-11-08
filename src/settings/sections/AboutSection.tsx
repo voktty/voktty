@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/modules/i18n";
 import { useUpdater } from "@/modules/updater";
-import { GithubIcon, Globe02Icon } from "@hugeicons/core-free-icons";
+import { GithubIcon, Globe02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -150,10 +150,10 @@ export function AboutSection() {
             variant="outline"
             size="sm"
             onClick={() => void openUrl(REPO_URL)}
-            className="gap-1.5"
+            className="gap-1.5 hover:border-amber-500/50 hover:text-amber-400 transition-colors"
           >
-            <HugeiconsIcon icon={GithubIcon} size={12} strokeWidth={1.75} />
-            {t("settings.about.viewOnGithub")}
+            <HugeiconsIcon icon={StarIcon} size={13} strokeWidth={1.75} className="text-amber-400 fill-amber-400/30" />
+            {t("settings.about.starOnGithub")}
           </Button>
           <Button
             variant="ghost"

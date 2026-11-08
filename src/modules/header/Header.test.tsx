@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Header, isInteractiveHeaderTarget } from "./Header";
 
 const mockStartDragging = vi.fn();
+const mockOpenUrl = vi.fn();
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: (...args: unknown[]) => mockOpenUrl(...args),
+}));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     startDragging: mockStartDragging,
@@ -376,5 +380,24 @@ describe("Header drag and double-click interactions", () => {
     });
 
     expect(onNewMock).not.toHaveBeenCalled();
+  });
+
+  it("renders the Star on GitHub button and triggers openUrl on click", async () => {
+    await renderHeader();
+
+    const starButton = container.querySelector(
+      "button[aria-label='header.starOnGithub']",
+    );
+    expect(starButton).not.toBeNull();
+
+    act(() => {
+      starButton?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(mockOpenUrl).toHaveBeenCalledWith(
+      "https://github.com/voktty/voktty",
+    );
   });
 });

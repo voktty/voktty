@@ -992,6 +992,7 @@ export const en = {
       sourceCode: "Source code",
       website: "Website",
       viewOnGithub: "View on GitHub",
+      starOnGithub: "Star on GitHub",
       reportIssue: "Report an issue",
       updates: "Updates",
       checkForUpdates: "Check for Updates",
@@ -1203,6 +1204,7 @@ export const en = {
     commandPalette: "Command palette",
     settings: "Settings",
     notifications: "Notifications",
+    starOnGithub: "Star on GitHub ⭐",
   },
   tabs: {
     iconPicker: "Icon",

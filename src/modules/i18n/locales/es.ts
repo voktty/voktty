@@ -1028,6 +1028,7 @@ export const es: TranslationSchema = {
       sourceCode: "Código fuente",
       website: "Sitio Web",
       viewOnGithub: "Ver en GitHub",
+      starOnGithub: "Dar estrella en GitHub",
       reportIssue: "Informar de un error",
       updates: "Actualizaciones",
       checkForUpdates: "Buscar Actualizaciones",
@@ -1242,6 +1243,7 @@ export const es: TranslationSchema = {
     commandPalette: "Paleta de comandos",
     settings: "Ajustes",
     notifications: "Notificaciones",
+    starOnGithub: "Danos una estrella en GitHub ⭐",
   },
   tabs: {
     iconPicker: "Icono",
