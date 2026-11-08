@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/voktty.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#121214" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Voktty</title>
     <script>
       (function () {
@@ -25,6 +30,38 @@
         } catch (e) {}
       })();
     </script>
+    <style>
+      :root {
+        --frame-bg-init: #121214;
+        --frame-fg-init: #f4f5f8;
+      }
+      html.light {
+        --frame-bg-init: #fafafc;
+        --frame-fg-init: #0e0f11;
+      }
+      html, body, #root {
+        background-color: var(--frame-bg-init) !important;
+        color: var(--frame-fg-init);
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+      }
+      img, a {
+        -webkit-user-drag: none;
+      }
+    </style>
   </head>
 
   <body>

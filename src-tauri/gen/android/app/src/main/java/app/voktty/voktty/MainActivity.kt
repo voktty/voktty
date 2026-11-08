@@ -30,6 +30,20 @@ class MainActivity : TauriActivity() {
   private val CAMERA_PERMISSION_REQUEST_CODE = 1002
 
   private fun configureWebView(wv: WebView) {
+    wv.setBackgroundColor(Color.parseColor("#121214"))
+    wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+    wv.overScrollMode = View.OVER_SCROLL_NEVER
+    wv.isVerticalScrollBarEnabled = false
+    wv.isHorizontalScrollBarEnabled = false
+    wv.settings.apply {
+      domStorageEnabled = true
+      databaseEnabled = true
+      mediaPlaybackRequiresUserGesture = false
+      displayZoomControls = false
+      builtInZoomControls = false
+      setSupportZoom(false)
+      cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+    }
     wv.addJavascriptInterface(BackInterface(this), "VokttyBack")
     wv.addJavascriptInterface(CompanionKeyStore(), "VokttyCompanionKeyStore")
     wv.webChromeClient = object : WebChromeClient() {
@@ -56,6 +70,9 @@ class MainActivity : TauriActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+
+    window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.parseColor("#121214")))
+    window.decorView.setBackgroundColor(Color.parseColor("#121214"))
 
     WebView.setWebContentsDebuggingEnabled(true)
 
@@ -89,23 +106,27 @@ class MainActivity : TauriActivity() {
       insets
     }
 
-    // Add JS interface so frontend can manage the Android Back button and camera permissions
-    window.decorView.postDelayed({
-      val wv = findWebViewRecursive(window.decorView)
-      if (wv != null) {
-        configureWebView(wv)
-      } else {
-        Log.w(TAG, "WebView not found — retrying in 500ms")
-        window.decorView.postDelayed({
-          val wv2 = findWebViewRecursive(window.decorView)
-          if (wv2 != null) {
-            configureWebView(wv2)
-          } else {
-            Log.e(TAG, "WebView not found after retry")
-          }
-        }, 500)
+    // Add JS interface and native GPU settings for WebView with fast discovery
+    val immediateWv = findWebViewRecursive(window.decorView)
+    if (immediateWv != null) {
+      configureWebView(immediateWv)
+    } else {
+      window.decorView.post {
+        val wv = findWebViewRecursive(window.decorView)
+        if (wv != null) {
+          configureWebView(wv)
+        } else {
+          window.decorView.postDelayed({
+            val wv2 = findWebViewRecursive(window.decorView)
+            if (wv2 != null) {
+              configureWebView(wv2)
+            } else {
+              Log.w(TAG, "WebView not found after retry")
+            }
+          }, 150)
+        }
       }
-    }, 500)
+    }
 
     onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
       override fun handleOnBackPressed() {

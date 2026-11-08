@@ -1635,6 +1635,8 @@ function attachWebgl(slot: Slot): void {
     for (const c of after) {
       if (!before.has(c)) {
         c.style.contain = "strict";
+        c.style.transform = "translateZ(0)";
+        c.style.backfaceVisibility = "hidden";
         added.push(c);
       }
     }

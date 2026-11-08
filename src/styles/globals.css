@@ -418,6 +418,8 @@ html.diff-palette-high-contrast.light {
     background: var(--frame);
     margin: 0;
     overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
   html, body, #root, #settings-root {
     height: 100%;
@@ -428,6 +430,8 @@ html.diff-palette-high-contrast.light {
     background: var(--frame);
     -webkit-font-smoothing: var(--ui-font-smoothing, antialiased);
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
   html[data-vibrancy="on"],
   html[data-vibrancy="on"] body,
@@ -663,6 +667,20 @@ textarea,
 .select-text * {
   -webkit-user-select: text;
   user-select: text;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+.xterm .xterm-screen canvas {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 .cm-color-swatch {
