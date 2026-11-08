@@ -380,7 +380,7 @@ fn handle_request(
     } else if request.starts_with(b"OPTIONS ") {
         http_response(204, "No Content", b"")
     } else if request.starts_with(b"POST /v1/companion/pair HTTP/") {
-        handle_pairing_request(request, pairing)
+        handle_pairing_request(request, pairing, app)
     } else if request.starts_with(b"GET /v1/companion/pair/") {
         handle_pairing_status_request(request, pairing)
     } else if request.starts_with(b"POST /v1/companion/session/") {
@@ -671,6 +671,7 @@ fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
 fn handle_pairing_request(
     request: &[u8],
     pairing: &Arc<Mutex<Option<PairingRegistry>>>,
+    app: &Option<tauri::AppHandle>,
 ) -> Vec<u8> {
     let Some(body_start) = request.windows(4).position(|part| part == b"\r\n\r\n") else {
         return http_response(400, "Bad Request", b"");
@@ -690,11 +691,25 @@ fn handle_pairing_request(
             .map(|registry| registry.request(request, now_ms(), request_id))
     });
     match result {
-        Some(Ok(pending)) => json_response(
-            202,
-            "Accepted",
-            &serde_json::json!({ "requestId": pending.id }),
-        ),
+        Some(Ok(pending)) => {
+            if let Some(app) = app {
+                use tauri::Emitter;
+                let _ = app.emit(
+                    "companion:pairing-requested",
+                    serde_json::json!({
+                        "id": pending.id,
+                        "deviceName": pending.device_name,
+                        "fingerprint": pending.fingerprint,
+                        "expiresAtMs": pending.expires_at_ms,
+                    }),
+                );
+            }
+            json_response(
+                202,
+                "Accepted",
+                &serde_json::json!({ "requestId": pending.id }),
+            )
+        }
         Some(Err(PairingError::Expired | PairingError::Consumed)) => {
             http_response(410, "Gone", b"")
         }

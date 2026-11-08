@@ -390,29 +390,62 @@ export function CompanionMobileApp() {
     }
   };
 
+  useEffect(() => {
+    if (!scanning) {
+      scannerRef.current?.stop();
+      scannerRef.current = null;
+      return;
+    }
+
+    let active = true;
+
+    async function startScanner() {
+      try {
+        const { BrowserQRCodeReader } = await import("@zxing/browser");
+        if (!active) return;
+        if (!videoRef.current) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        }
+        if (!active || !videoRef.current) return;
+        const reader = new BrowserQRCodeReader();
+        const controls = await reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result) => {
+            if (!result || !active) return;
+            setPayload(result.getText());
+            setScanning(false);
+          },
+        );
+        if (!active) {
+          controls.stop();
+        } else {
+          scannerRef.current = controls;
+        }
+      } catch (err) {
+        if (!active) return;
+        console.error("Camera scanner error:", err);
+        setScanning(false);
+        setError(t("companion.mobile.cameraError"));
+      }
+    }
+
+    void startScanner();
+
+    return () => {
+      active = false;
+      scannerRef.current?.stop();
+      scannerRef.current = null;
+    };
+  }, [scanning, t]);
+
   const stopScanner = () => {
-    scannerRef.current?.stop();
-    scannerRef.current = null;
     setScanning(false);
   };
 
-  const scan = async () => {
+  const scan = () => {
     setError(null);
     setScanning(true);
-    try {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
-      if (!videoRef.current) throw new Error("camera");
-      const reader = new BrowserQRCodeReader();
-      scannerRef.current = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-        if (!result) return;
-        setPayload(result.getText());
-        stopScanner();
-      });
-    } catch {
-      stopScanner();
-      setError(t("companion.mobile.cameraError"));
-    }
   };
 
   if (state === "approved") {
@@ -650,7 +683,7 @@ export function CompanionMobileApp() {
                   </Button>
                 </div>
               ) : (
-                <Button className="mt-2 w-full" variant="outline" onClick={() => void scan()}>
+                <Button className="mt-2 w-full" variant="outline" onClick={scan}>
                   {t("companion.mobile.scanQr")}
                 </Button>
               )}

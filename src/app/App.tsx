@@ -90,6 +90,7 @@ import {
   ToolLauncher,
 } from "@/modules/launcher";
 import { useControlBridge } from "@/modules/control";
+import { useCompanionPairingPrompt } from "@/modules/companion/useCompanionPairingPrompt";
 import {
   type EditorGroupHandle,
   type EditorPaneHandle,
@@ -4476,6 +4477,8 @@ function DesktopApp() {
     onOpen: openControlFile,
     onNewHarness: handleNewHarness,
   });
+
+  useCompanionPairingPrompt();
 
   useEffect(() => {
     setLspNavigator({ openFile: openContentHit });

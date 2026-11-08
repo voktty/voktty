@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Copy01Icon, StopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useState } from "react";
@@ -51,6 +52,21 @@ export function CompanionSection() {
 
   useEffect(() => {
     void refreshStatus().catch(() => {});
+  }, [refreshStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void listen("companion:pairing-requested", () => {
+      if (!cancelled) void refreshStatus().catch(() => {});
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [refreshStatus]);
 
   useEffect(() => {

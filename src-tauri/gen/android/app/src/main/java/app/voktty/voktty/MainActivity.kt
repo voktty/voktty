@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -23,6 +25,34 @@ class MainActivity : TauriActivity() {
 
   @Volatile
   var backConsumedByJs = false
+
+  private var pendingPermissionRequest: PermissionRequest? = null
+  private val CAMERA_PERMISSION_REQUEST_CODE = 1002
+
+  private fun configureWebView(wv: WebView) {
+    wv.addJavascriptInterface(BackInterface(this), "VokttyBack")
+    wv.addJavascriptInterface(CompanionKeyStore(), "VokttyCompanionKeyStore")
+    wv.webChromeClient = object : WebChromeClient() {
+      override fun onPermissionRequest(request: PermissionRequest) {
+        runOnUiThread {
+          val resources = request.resources
+          val needsCamera = resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+          if (needsCamera) {
+            val hasPermission = checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+              request.grant(resources)
+            } else {
+              pendingPermissionRequest = request
+              requestPermissions(arrayOf(android.Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST_CODE)
+            }
+          } else {
+            request.grant(resources)
+          }
+        }
+      }
+    }
+    Log.i(TAG, "WebView configured with JS interfaces and WebChromeClient")
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -59,20 +89,17 @@ class MainActivity : TauriActivity() {
       insets
     }
 
-    // Add JS interface so frontend can manage the Android Back button
+    // Add JS interface so frontend can manage the Android Back button and camera permissions
     window.decorView.postDelayed({
       val wv = findWebViewRecursive(window.decorView)
       if (wv != null) {
-        wv.addJavascriptInterface(BackInterface(this), "VokttyBack")
-        wv.addJavascriptInterface(CompanionKeyStore(), "VokttyCompanionKeyStore")
-        Log.i(TAG, "VokttyBack JS interface added to WebView")
+        configureWebView(wv)
       } else {
         Log.w(TAG, "WebView not found — retrying in 500ms")
         window.decorView.postDelayed({
           val wv2 = findWebViewRecursive(window.decorView)
           if (wv2 != null) {
-            wv2.addJavascriptInterface(BackInterface(this), "VokttyBack")
-            Log.i(TAG, "VokttyBack JS interface added (retry)")
+            configureWebView(wv2)
           } else {
             Log.e(TAG, "WebView not found after retry")
           }
@@ -153,5 +180,24 @@ class MainActivity : TauriActivity() {
       }
     }
     return null
+  }
+
+  override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+  ) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+      val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+      runOnUiThread {
+        if (granted) {
+          pendingPermissionRequest?.let { it.grant(it.resources) }
+        } else {
+          pendingPermissionRequest?.deny()
+        }
+        pendingPermissionRequest = null
+      }
+    }
   }
 }

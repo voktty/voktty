@@ -1224,6 +1224,13 @@ export const es: TranslationSchema = {
       thinking: "Pensamiento del agente",
       toolExecution: "Ejecución de herramienta",
     },
+    pairing: {
+      promptTitle: "Solicitud de emparejamiento Companion de {{device}}",
+      promptDesc: "Huella del dispositivo: {{fingerprint}}",
+      allow: "Permitir",
+      deny: "Rechazar",
+      allowedSuccess: "Dispositivo Companion {{device}} emparejado con éxito",
+    },
   },
   docker: {
     activeLabel: "Activos",

@@ -1186,6 +1186,13 @@ export const en = {
       thinking: "Agent reasoning",
       toolExecution: "Tool execution",
     },
+    pairing: {
+      promptTitle: "Companion pairing request from {{device}}",
+      promptDesc: "Device fingerprint: {{fingerprint}}",
+      allow: "Allow",
+      deny: "Deny",
+      allowedSuccess: "Companion device {{device}} paired successfully",
+    },
   },
   docker: {
     activeLabel: "Active",
