@@ -34,6 +34,7 @@ const CLI: Record<HarnessId, { name: string; install?: string }> = {
   fx: { name: "fx CLI", install: "curl -fsSL https://fx.sh/setup.sh | bash" },
   gemini: { name: "Gemini CLI" },
   hermes: { name: "Hermes CLI" },
+  api: { name: "API Models" },
 };
 
 let availability: HarnessAvailability = {
@@ -47,6 +48,7 @@ let availability: HarnessAvailability = {
   fx: false,
   gemini: false,
   hermes: false,
+  api: true,
 };
 let version = 0;
 const probeFlights = new Map<HarnessId, Promise<readonly [HarnessId, boolean]>>();
@@ -73,6 +75,7 @@ const RESOLVERS: Record<HarnessId, () => Promise<unknown>> = {
   fx: resolveFxBinary,
   gemini: resolveGeminiBinary,
   hermes: resolveHermesBinary,
+  api: async () => true,
 };
 
 function emit() {

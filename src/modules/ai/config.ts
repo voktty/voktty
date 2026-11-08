@@ -145,11 +145,20 @@ export type CompatibleCompletionProfile = Exclude<
   "anthropic" | "native"
 >;
 
+export type ApiProtocol =
+  | "openai-chat-completions"
+  | "openai-responses"
+  | "anthropic-messages";
+
 export type CustomEndpoint = {
   id: string;
   name: string;
   baseURL: string;
   modelId: string;
+  models?: string[];
+  protocol?: ApiProtocol;
+  isThirdParty?: boolean;
+  providerType?: string;
   contextLimit: number;
   autocompleteProfile?: CompatibleCompletionProfile;
 };
@@ -207,7 +216,13 @@ export function harnessIdFromModelId(modelId: string): string {
 
 const COMPAT_MODEL_PREFIX = "compat-";
 
-export function compatModelIdForEndpoint(endpointId: string): string {
+export function compatModelIdForEndpoint(
+  endpointId: string,
+  subModelId?: string,
+): string {
+  if (subModelId) {
+    return `${COMPAT_MODEL_PREFIX}${endpointId}:${subModelId}`;
+  }
   return `${COMPAT_MODEL_PREFIX}${endpointId}`;
 }
 
@@ -215,10 +230,24 @@ export function isCompatModelId(modelId: string): boolean {
   return modelId.startsWith(COMPAT_MODEL_PREFIX);
 }
 
+export function parseCompatModelId(modelId: string): {
+  endpointId: string;
+  subModelId?: string;
+} {
+  if (!isCompatModelId(modelId)) return { endpointId: "" };
+  const raw = modelId.slice(COMPAT_MODEL_PREFIX.length);
+  const colonIndex = raw.indexOf(":");
+  if (colonIndex === -1) {
+    return { endpointId: raw };
+  }
+  return {
+    endpointId: raw.slice(0, colonIndex),
+    subModelId: raw.slice(colonIndex + 1),
+  };
+}
+
 export function endpointIdFromCompatModel(modelId: string): string {
-  return isCompatModelId(modelId)
-    ? modelId.slice(COMPAT_MODEL_PREFIX.length)
-    : "";
+  return parseCompatModelId(modelId).endpointId;
 }
 
 /** One-shot migration of the legacy single OpenAI-compatible config into the
@@ -812,16 +841,17 @@ export function getCompatModelInfo(
   modelId: string,
   endpoints: readonly CustomEndpoint[],
 ): ModelInfo {
-  const eid = endpointIdFromCompatModel(modelId);
-  const ep = endpoints.find((e) => e.id === eid);
+  const { endpointId, subModelId } = parseCompatModelId(modelId);
+  const ep = endpoints.find((e) => e.id === endpointId);
   const name = ep?.name || "Custom endpoint";
+  const activeModel = subModelId || ep?.modelId || name;
   return {
     id: modelId,
     provider: "openai-compatible",
-    label: ep?.modelId || name,
+    label: activeModel,
     hint: name,
     description: ep
-      ? `${name} — ${ep.baseURL}`
+      ? `${name} (${activeModel}) — ${ep.baseURL}`
       : "Custom OpenAI-compatible endpoint",
     capabilities: { intelligence: 3, speed: 3, cost: 3 },
   };
@@ -832,6 +862,25 @@ export function resolveModel(
   endpoints: readonly CustomEndpoint[] = [],
 ): ModelInfo {
   if (isCompatModelId(modelId)) return getCompatModelInfo(modelId, endpoints);
+  if (modelId.startsWith("api:")) {
+    const raw = modelId.slice(4);
+    const colonIndex = raw.indexOf(":");
+    const eid = colonIndex === -1 ? raw : raw.slice(0, colonIndex);
+    const sub = colonIndex === -1 ? "" : raw.slice(colonIndex + 1);
+    const ep = endpoints.find((e) => e.id === eid);
+    const name = ep?.name || "API Model";
+    const label = sub || ep?.modelId || name;
+    return {
+      id: modelId,
+      provider: "openai-compatible",
+      label,
+      hint: name,
+      description: ep
+        ? `${name} (${label}) — ${ep.baseURL}`
+        : "API Model Endpoint",
+      capabilities: { intelligence: 3, speed: 3, cost: 3 },
+    };
+  }
   if (isHarnessModelId(modelId)) return getHarnessModelInfo(modelId);
   const m = MODELS.find((x) => x.id === canonicalModelId(modelId));
   if (!m) throw new Error(`Unknown model: ${modelId}`);

@@ -19,6 +19,7 @@ import {
   MLX_DEFAULT_BASE_URL,
   modelKeepsReasoning,
   OLLAMA_DEFAULT_BASE_URL,
+  parseCompatModelId,
   providerNeedsKey,
   resolveModel,
   selectSystemPrompt,
@@ -259,7 +260,7 @@ export type LocalProviderConfig = {
   customEndpointKeys?: CustomEndpointKeys;
 };
 
-export function buildConfiguredLanguageModel(
+export async function buildConfiguredLanguageModel(
   modelId: string,
   keys: ProviderKeys,
   local: LocalProviderConfig = {},
@@ -269,19 +270,42 @@ export function buildConfiguredLanguageModel(
   if (isHarnessModelId(modelId)) {
     return buildLanguageModel("harness", keys, modelId, {});
   }
-  if (isCompatModelId(modelId)) {
-    const eid = endpointIdFromCompatModel(modelId);
+  if (isCompatModelId(modelId) || modelId.startsWith("api:")) {
+    let eid: string;
+    let subModelId: string | undefined;
+    if (isCompatModelId(modelId)) {
+      const parsed = parseCompatModelId(modelId);
+      eid = parsed.endpointId;
+      subModelId = parsed.subModelId;
+    } else {
+      const raw = modelId.slice(4);
+      const colonIndex = raw.indexOf(":");
+      eid = colonIndex === -1 ? raw : raw.slice(0, colonIndex);
+      subModelId = colonIndex === -1 ? undefined : raw.slice(colonIndex + 1);
+    }
     const ep = local.customEndpoints?.find((e) => e.id === eid);
     if (!ep) throw new Error(`Custom endpoint not found: ${eid}`);
-    if (!ep.modelId.trim()) {
+    const activeModelId = (subModelId || ep.modelId).trim();
+    if (!activeModelId) {
       throw new Error(`${ep.name}: no model id set. Open Settings → Models.`);
+    }
+    const activeKey = local.customEndpointKeys?.[eid] ?? "";
+    if (ep.protocol === "anthropic-messages") {
+      const { createAnthropic } = await import("@ai-sdk/anthropic");
+      return createAnthropic({
+        baseURL: ep.baseURL,
+        apiKey: activeKey,
+        headers: activeKey
+          ? { "x-api-key": activeKey, "anthropic-version": "2023-06-01" }
+          : undefined,
+      })(activeModelId);
     }
     return buildLanguageModel(
       "openai-compatible",
       keys,
-      ep.modelId.trim(),
+      activeModelId,
       { openaiCompatibleBaseURL: ep.baseURL },
-      local.customEndpointKeys?.[eid],
+      activeKey,
     );
   }
   const m = resolveModel(modelId);

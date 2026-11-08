@@ -432,6 +432,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   pi: "pi:default",
   omp: "omp:default",
   fx: "fx:zai/glm-5.2-fast",
+  api: "",
 };
 
 const FAVORITES_KEY = "monocode.favoriteModels";
@@ -461,6 +462,7 @@ const HARNESS_ORDER: HarnessId[] = [
   "pi",
   "omp",
   "fx",
+  "api",
 ];
 
 const EMPTY_MODELS: AgentModel[] = [];
@@ -490,13 +492,65 @@ export function getModelSnapshot(): number {
 }
 
 export function setHarnessModels(harness: HarnessId, models: AgentModel[]) {
-  if (models.length === 0) return;
+  if (models.length === 0) {
+    if (overlays[harness]) {
+      const next = { ...overlays };
+      delete next[harness];
+      overlays = next;
+      const nextDefaults = { ...overlayDefaults };
+      delete nextDefaults[harness];
+      overlayDefaults = nextDefaults;
+      emit();
+    }
+    return;
+  }
   overlays = { ...overlays, [harness]: models };
   overlayDefaults = {
     ...overlayDefaults,
     [harness]: pickDefaultId(harness, models),
   };
   emit();
+}
+
+/**
+ * Sync configured custom endpoints and their discovered models into the
+ * harness model catalog under the "api" provider tab.
+ */
+export function syncCustomEndpointsToHarness(
+  endpoints: readonly {
+    id: string;
+    name: string;
+    baseURL: string;
+    modelId: string;
+    models?: string[];
+    contextLimit?: number;
+  }[],
+): void {
+  const models: AgentModel[] = [];
+  for (const ep of endpoints) {
+    const list =
+      ep.models && ep.models.length > 0
+        ? ep.models
+        : ep.modelId
+          ? [ep.modelId]
+          : [];
+    for (const m of list) {
+      const trimmed = m.trim();
+      if (!trimmed) continue;
+      models.push({
+        id: `api:${ep.id}:${trimmed}`,
+        harness: "api",
+        name: trimmed,
+        nativeId: trimmed,
+        provider: {
+          id: ep.id,
+          name: ep.name || "API",
+        },
+        contextWindow: ep.contextLimit || 128_000,
+      });
+    }
+  }
+  setHarnessModels("api", models);
 }
 
 /** True after a live CLI catalog has replaced the built-in fallback list. */

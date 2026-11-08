@@ -803,6 +803,25 @@ export const es: TranslationSchema = {
       modelsFound: "{count} modelos encontrados",
       customModelManual: "+ ID de modelo personalizado…",
       selectModelPlaceholder: "Selecciona un modelo",
+      thirdPartyTab: "Proveedor de terceros",
+      customApiTab: "API personalizada",
+      providerId: "ID del proveedor",
+      providerIdPlaceholder: "ej. acme-gateway",
+      displayName: "Nombre visible",
+      displayNamePlaceholder: "ej. Acme Gateway",
+      apiProtocol: "Protocolo API",
+      protocolOpenAiChat: "OpenAI Chat Completions",
+      protocolOpenAiResponses: "OpenAI Responses",
+      protocolAnthropic: "Anthropic Messages",
+      selectProvider: "Seleccionar proveedor",
+      addModel: "+ Añadir modelo",
+      addModelPlaceholder: "ID de modelo (ej. meta-llama/llama-3-70b)",
+      saveEndpoint: "Guardar endpoint",
+      configuredEndpoints: "Endpoints configurados",
+      noEndpoints:
+        "No hay endpoints de terceros o personalizados configurados todavía.",
+      harnessSyncNotice:
+        "Los endpoints configurados y sus modelos descubiertos están disponibles tanto en Voktty Agente como en el Arnés.",
       localMeta: {
         lmstudioDescription:
           "Ejecuta modelos GGUF mediante el servidor HTTP de LM Studio (actívalo en la pestaña Developer).",

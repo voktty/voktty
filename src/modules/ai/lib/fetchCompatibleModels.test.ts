@@ -130,4 +130,51 @@ describe("fetchCompatibleModels", () => {
       }),
     ).rejects.toThrow("HTTP 401: Unauthorized: Invalid subscription key");
   });
+
+  it("handles Anthropic protocol headers and anthropic-version", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [{ id: "claude-sonnet-4-6" }],
+      }),
+    });
+
+    const models = await fetchCompatibleModels("https://api.anthropic.com/v1", {
+      apiKey: "sk-ant-test-key",
+      protocol: "anthropic-messages",
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    expect(models).toEqual(["claude-sonnet-4-6"]);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://api.anthropic.com/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-api-key": "sk-ant-test-key",
+          "anthropic-version": "2023-06-01",
+        }),
+      }),
+    );
+  });
+
+  it("handles Google / Ollama models array and strips prefix", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [
+          { name: "models/gemini-2.5-flash" },
+          { name: "models/gemini-2.5-pro" },
+        ],
+      }),
+    });
+
+    const models = await fetchCompatibleModels("https://generativelanguage.googleapis.com/v1beta", {
+      apiKey: "test-ai-za",
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    expect(models).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
+  });
 });

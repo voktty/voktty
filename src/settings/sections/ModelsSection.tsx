@@ -124,6 +124,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
 import { AgentsSection } from "./AgentsSection";
+import { ModelEndpointManager } from "../components/ModelEndpointManager";
 import { ProviderIcon } from "../components/ProviderIcon";
 import { ProviderKeyCard } from "../components/ProviderKeyCard";
 import { SectionHeader } from "../components/SectionHeader";
@@ -434,6 +435,8 @@ export function ModelsSection() {
           <AgentsSection hideHeader />
         ) : (
           <div className="flex flex-col gap-7">
+            <ModelEndpointManager />
+
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Label>{t("settings.models.providers")}</Label>
