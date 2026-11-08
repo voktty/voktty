@@ -6,8 +6,13 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
+      commit_sha:
+        description: "Commit SHA on main to release (leave blank for latest green commit on main)"
+        required: false
+        type: string
+        default: ""
       version:
-        description: "Release version (leave blank to use package.json version, e.g. 1.0.21)"
+        description: "Release version (leave blank to auto-increment or use package.json version)"
         required: false
         type: string
         default: ""
@@ -59,6 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           ref: ${{ github.sha }}
       - name: Validate source and create release draft
         id: plan
@@ -70,14 +76,45 @@ jobs:
             const { pathToFileURL } = require('node:url');
             const { resolve } = require('node:path');
             const { releasePlan, requireGreenMain, applyVersion } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
-            const source = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-            const sourceVersion = require('./package.json').version;
-            const plan = releasePlan({ eventName: context.eventName, ref: context.ref, sourceVersion, inputs: JSON.parse(process.env.RELEASE_INPUTS) });
+            const inputs = JSON.parse(process.env.RELEASE_INPUTS || '{}');
+            let source = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
             let ciUrl = '';
             if (context.eventName === 'workflow_dispatch') {
-              const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', branch: 'main', event: 'push', head_sha: source, per_page: 100 });
-              ciUrl = requireGreenMain(data.workflow_runs, source);
+              const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', branch: 'main', event: 'push', per_page: 100 });
+              const greenRuns = (data.workflow_runs || []).filter(r => r.status === 'completed' && r.conclusion === 'success');
+              const requestedCommit = (inputs.commit_sha || '').trim();
+              if (requestedCommit) {
+                const match = greenRuns.find(r => r.head_sha === requestedCommit || r.head_sha.startsWith(requestedCommit));
+                if (!match) {
+                  throw new Error(`Commit ${requestedCommit} does not have a successful completed CI run on main.`);
+                }
+                source = match.head_sha;
+                ciUrl = match.html_url;
+              } else {
+                const headRun = greenRuns.find(r => r.head_sha === source);
+                if (headRun) {
+                  ciUrl = headRun.html_url;
+                } else if (greenRuns.length > 0) {
+                  source = greenRuns[0].head_sha;
+                  ciUrl = greenRuns[0].html_url;
+                  core.info(`HEAD commit does not have completed green CI yet; releasing latest verified green commit on main: ${source} (${ciUrl})`);
+                } else {
+                  throw new Error(`main commit ${source} needs a successful completed CI run before publication.`);
+                }
+              }
+              require('node:child_process').execFileSync('git', ['checkout', source], { encoding: 'utf8' });
             }
+            const sourceVersion = require('./package.json').version;
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+            const publishedTags = new Set(releases.filter(r => !r.draft).map(r => r.tag_name));
+            if (!inputs.version) {
+              let [major, minor, patch] = sourceVersion.split('.').map(Number);
+              while (publishedTags.has(`v${major}.${minor}.${patch}`)) {
+                patch++;
+              }
+              inputs.version = `${major}.${minor}.${patch}`;
+            }
+            const plan = releasePlan({ eventName: context.eventName, ref: context.ref, sourceVersion, inputs });
             applyVersion(process.cwd(), plan.version);
             const notFound = (error) => { if (error.status !== 404 && error.status !== 422) throw error; return null; };
             const existingTag = await github.rest.repos.getCommit({ ...context.repo, ref: `tags/${plan.tag}` }).catch(notFound);
@@ -88,7 +125,6 @@ jobs:
                 throw new Error('Release tag points to a different commit. Choose a new version.');
               }
             }
-            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
             const existing = releases.find((release) => release.tag_name === plan.tag);
             if (existing && !existing.draft) throw new Error('This release is already published. Choose a new version.');
             const body = `Source commit: ${source}\n${ciUrl ? `Validated CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
