@@ -38,6 +38,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
 jobs:
   prepare-release:
     runs-on: ubuntu-22.04
@@ -303,6 +306,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VOKTTY_CLI_TARGET: ${{ matrix.rust-target }}
+          NODE_OPTIONS: --max-old-space-size=4096
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_SIGNING_IDENTITY || matrix.apple-signing-identity }}
 
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
