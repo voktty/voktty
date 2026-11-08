@@ -26,6 +26,8 @@ test("manual Windows release selects only Windows and preserves the global updat
     plan.matrix.include.map((target) => target.platform),
     ["windows-latest"],
   );
+  const defaultVersionPlan = manual({ version: "" });
+  assert.equal(defaultVersionPlan.tag, "v1.2.3");
 });
 
 test("tag releases select every desktop target and require source version equality", () => {
