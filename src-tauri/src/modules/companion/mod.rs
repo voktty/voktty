@@ -11,9 +11,10 @@ pub async fn companion_start(
     app: tauri::AppHandle,
     custom_cloudflared_path: Option<String>,
 ) -> Result<state::CompanionInvite, String> {
+    let app_handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<CompanionState>()
-            .start(custom_cloudflared_path.as_deref())
+            .start(Some(app_handle), custom_cloudflared_path.as_deref())
     })
     .await
     .map_err(|error| format!("companion startup task failed: {error}"))?
@@ -43,4 +44,13 @@ pub fn companion_decide_pairing(
     approved: bool,
 ) -> Result<(), String> {
     state.decide_pairing(&request_id, approved)
+}
+
+#[tauri::command]
+pub fn companion_set_session_state(
+    state: tauri::State<'_, CompanionState>,
+    session_id: String,
+    agent_state: voktty_companion_protocol::AgentState,
+) {
+    state.set_session_state(session_id, agent_state);
 }

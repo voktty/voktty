@@ -4,8 +4,8 @@ use hmac::{Hmac, Mac};
 use ring::aead::{self, Aad, LessSafeKey, Nonce, UnboundKey};
 use sha2::Sha256;
 use voktty_companion_protocol::{
-    EncryptedFrame, FrameDirection, ProtocolError, SessionControl, MAX_ENCRYPTED_FRAME_BYTES,
-    PROTOCOL_VERSION,
+    ClientMessage, EncryptedFrame, FrameDirection, ProtocolError, ServerMessage, SessionControl,
+    MAX_ENCRYPTED_FRAME_BYTES, PROTOCOL_VERSION,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -72,21 +72,16 @@ impl CompanionTransport {
         })
     }
 
-    pub(super) fn seal(
-        &mut self,
-        control: &SessionControl,
-    ) -> Result<EncryptedFrame, TransportError> {
-        control.validate().map_err(protocol_error)?;
+    fn seal_raw(&mut self, payload: &[u8]) -> Result<EncryptedFrame, TransportError> {
         let counter = self
             .send_counter
             .checked_add(1)
             .ok_or(TransportError::CounterExhausted)?;
         let header = header(self.send_direction, counter);
-        let mut ciphertext =
-            serde_json::to_vec(control).map_err(|_| TransportError::InvalidFrame)?;
-        if ciphertext.len() > MAX_ENCRYPTED_FRAME_BYTES.saturating_sub(TAG_BYTES) {
+        if payload.len() > MAX_ENCRYPTED_FRAME_BYTES.saturating_sub(TAG_BYTES) {
             return Err(TransportError::MessageTooLarge);
         }
+        let mut ciphertext = payload.to_vec();
         self.send_key
             .seal_in_place_append_tag(
                 nonce(self.send_direction, counter),
@@ -103,10 +98,7 @@ impl CompanionTransport {
         })
     }
 
-    pub(super) fn open(
-        &mut self,
-        frame: &EncryptedFrame,
-    ) -> Result<SessionControl, TransportError> {
+    fn open_raw(&mut self, frame: &EncryptedFrame) -> Result<Vec<u8>, TransportError> {
         frame.validate().map_err(protocol_error)?;
         if frame.direction != self.receive_direction {
             return Err(TransportError::WrongDirection);
@@ -133,11 +125,71 @@ impl CompanionTransport {
                 &mut ciphertext,
             )
             .map_err(|_| TransportError::Authentication)?;
-        let control: SessionControl =
-            serde_json::from_slice(plaintext).map_err(|_| TransportError::InvalidFrame)?;
-        control.validate().map_err(protocol_error)?;
+        let data = plaintext.to_vec();
         self.receive_counter = frame.counter;
+        Ok(data)
+    }
+
+    pub(super) fn seal(
+        &mut self,
+        control: &SessionControl,
+    ) -> Result<EncryptedFrame, TransportError> {
+        control.validate().map_err(protocol_error)?;
+        let bytes = serde_json::to_vec(control).map_err(|_| TransportError::InvalidFrame)?;
+        self.seal_raw(&bytes)
+    }
+
+    pub(super) fn open(
+        &mut self,
+        frame: &EncryptedFrame,
+    ) -> Result<SessionControl, TransportError> {
+        let bytes = self.open_raw(frame)?;
+        let control: SessionControl =
+            serde_json::from_slice(&bytes).map_err(|_| TransportError::InvalidFrame)?;
+        control.validate().map_err(protocol_error)?;
         Ok(control)
+    }
+
+    pub(super) fn seal_server_message(
+        &mut self,
+        message: &ServerMessage,
+    ) -> Result<EncryptedFrame, TransportError> {
+        message.validate().map_err(protocol_error)?;
+        let bytes = serde_json::to_vec(message).map_err(|_| TransportError::InvalidFrame)?;
+        self.seal_raw(&bytes)
+    }
+
+    pub(super) fn open_client_message(
+        &mut self,
+        frame: &EncryptedFrame,
+    ) -> Result<ClientMessage, TransportError> {
+        let bytes = self.open_raw(frame)?;
+        let message: ClientMessage =
+            serde_json::from_slice(&bytes).map_err(|_| TransportError::InvalidFrame)?;
+        message.validate().map_err(protocol_error)?;
+        Ok(message)
+    }
+
+    #[cfg(test)]
+    pub(super) fn seal_client_message(
+        &mut self,
+        message: &ClientMessage,
+    ) -> Result<EncryptedFrame, TransportError> {
+        message.validate().map_err(protocol_error)?;
+        let bytes = serde_json::to_vec(message).map_err(|_| TransportError::InvalidFrame)?;
+        self.seal_raw(&bytes)
+    }
+
+    #[cfg(test)]
+    pub(super) fn open_server_message(
+        &mut self,
+        frame: &EncryptedFrame,
+    ) -> Result<ServerMessage, TransportError> {
+        let bytes = self.open_raw(frame)?;
+        let message: ServerMessage =
+            serde_json::from_slice(&bytes).map_err(|_| TransportError::InvalidFrame)?;
+        message.validate().map_err(protocol_error)?;
+        Ok(message)
     }
 }
 
@@ -229,5 +281,30 @@ mod tests {
             })
             .expect("seal");
         assert_eq!(host.open(&frame), Err(TransportError::Authentication));
+    }
+
+    #[test]
+    fn messages_round_trip_cleanly_between_client_and_host() {
+        let mut host = CompanionTransport::for_host(&[9; 32], "session-test").expect("host");
+        let mut client = CompanionTransport::for_client(&[9; 32], "session-test").expect("client");
+
+        let client_msg = ClientMessage::AgentMessage {
+            protocol: PROTOCOL_VERSION,
+            agent_id: "agent-alpha".into(),
+            message: "Hello from mobile".into(),
+        };
+        let frame = client.seal_client_message(&client_msg).expect("seal");
+        let received = host.open_client_message(&frame).expect("open");
+        assert_eq!(received, client_msg);
+
+        let server_msg = ServerMessage::AgentDelta {
+            protocol: PROTOCOL_VERSION,
+            agent_id: "agent-alpha".into(),
+            cursor: 42,
+            content: "Delta content".into(),
+        };
+        let frame = host.seal_server_message(&server_msg).expect("seal");
+        let received = client.open_server_message(&frame).expect("open");
+        assert_eq!(received, server_msg);
     }
 }

@@ -616,6 +616,7 @@ pub fn run() {
             companion::companion_status,
             companion::companion_pending_pairings,
             companion::companion_decide_pairing,
+            companion::companion_set_session_state,
             collab::collab_host_start,
             collab::collab_host_stop,
             collab::collab_host_snapshot_barrier,

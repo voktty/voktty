@@ -1,5 +1,7 @@
 import { t } from "@/modules/i18n";
 
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { flushSync } from "react-dom";
 import {
   displayAttachments,
@@ -1697,6 +1699,63 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     },
     [],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlistenMsg: UnlistenFn | undefined;
+    let unlistenAppr: UnlistenFn | undefined;
+
+    void listen<{ sessionId: string; message: string }>(
+      "companion:agent-message",
+      (event) => {
+        const { sessionId, message } = event.payload;
+        if (sessionId && message) {
+          onSubmit(sessionId, message);
+        }
+      },
+    ).then((unlisten) => {
+      if (cancelled) unlisten();
+      else unlistenMsg = unlisten;
+    }).catch(() => {});
+
+    void listen<{ sessionId: string; grantId: string; approved: boolean }>(
+      "companion:approval-decision",
+      (event) => {
+        const { sessionId, grantId, approved } = event.payload;
+        if (sessionId && grantId) {
+          onApproval(sessionId, Number(grantId), approved ? "allow" : "deny");
+        }
+      },
+    ).then((unlisten) => {
+      if (cancelled) unlisten();
+      else unlistenAppr = unlisten;
+    }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      unlistenMsg?.();
+      unlistenAppr?.();
+    };
+  }, [onSubmit, onApproval]);
+
+  useEffect(() => {
+    for (const session of sessions) {
+      const hasPendingApproval = session.blocks.some(
+        (b) => b.approval && !b.approval.decided,
+      );
+      const state = session.busy
+        ? hasPendingApproval
+          ? "attention"
+          : "working"
+        : hasPendingApproval
+          ? "attention"
+          : "idle";
+      void invoke("companion_set_session_state", {
+        sessionId: session.id,
+        agentState: state,
+      }).catch(() => {});
+    }
+  }, [sessions]);
 
   const captureSessionLifetime = useCallback((id: string) => {
     const owner = owners.current.get(id);

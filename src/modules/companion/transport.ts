@@ -8,6 +8,39 @@ export type EncryptedFrame = {
   ciphertext: string;
 };
 
+export type AgentState = "working" | "attention" | "finished" | "idle";
+
+export type AgentCapabilities = {
+  canRead: boolean;
+  canSendMessage: boolean;
+  canApprove: boolean;
+};
+
+export type AgentSummary = {
+  agentId: string;
+  provider: string;
+  state: AgentState;
+  title: string;
+  transcriptCursor: number;
+  capabilities: AgentCapabilities;
+};
+
+export type ClientMessage =
+  | { type: "inventory_subscribe"; protocol: number }
+  | { type: "agent_snapshot"; protocol: number; agentId: string; after: number }
+  | { type: "agent_message"; protocol: number; agentId: string; message: string }
+  | { type: "approval_respond"; protocol: number; agentId: string; grantId: string; approved: boolean }
+  | { type: "ping"; protocol: number }
+  | { type: "revoke"; protocol: number; deviceId: string };
+
+export type ServerMessage =
+  | { type: "inventory"; protocol: number; agents: AgentSummary[] }
+  | { type: "agent_delta"; protocol: number; agentId: string; cursor: number; content: string }
+  | { type: "approval_request"; protocol: number; agentId: string; grantId: string; prompt: string }
+  | { type: "pong"; protocol: number }
+  | { type: "error"; protocol: number; code: string; message: string }
+  | { type: "closed"; protocol: number; reason: string };
+
 type SessionControl = {
   type: "key_confirm" | "key_confirmed";
   protocol: number;
@@ -159,5 +192,83 @@ export class CompanionTransport {
       throw new Error("invalid-session-frame");
     }
     this.receiveCounter = frame.counter;
+  }
+
+  async sealClientMessage(message: ClientMessage): Promise<EncryptedFrame> {
+    const counter = this.sendCounter + 1;
+    if (!Number.isSafeInteger(counter)) throw new Error("counter-exhausted");
+    const direction = "client_to_host" as const;
+    const aad = header(direction, counter);
+    const plaintext = new TextEncoder().encode(JSON.stringify(message));
+    const ciphertext = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: nonce(direction, counter).buffer as ArrayBuffer,
+        additionalData: aad.buffer as ArrayBuffer,
+      },
+      this.sendKey,
+      plaintext,
+    );
+    this.sendCounter = counter;
+    return {
+      protocol: PROTOCOL_VERSION,
+      direction,
+      counter,
+      ciphertext: encodeBase64Url(ciphertext),
+    };
+  }
+
+  async openServerMessage(frame: EncryptedFrame): Promise<ServerMessage> {
+    const expected = this.receiveCounter + 1;
+    if (
+      frame.protocol !== PROTOCOL_VERSION ||
+      frame.direction !== "host_to_client" ||
+      frame.counter !== expected ||
+      !Number.isSafeInteger(frame.counter)
+    ) {
+      throw new Error("invalid-session-frame");
+    }
+    const aad = header(frame.direction, frame.counter);
+    let plaintext: ArrayBuffer;
+    try {
+      plaintext = await crypto.subtle.decrypt(
+        {
+          name: "AES-GCM",
+          iv: nonce(frame.direction, frame.counter).buffer as ArrayBuffer,
+          additionalData: aad.buffer as ArrayBuffer,
+        },
+        this.receiveKey,
+        decodeBase64Url(frame.ciphertext).buffer as ArrayBuffer,
+      );
+    } catch {
+      throw new Error("invalid-session-frame");
+    }
+    const message = JSON.parse(new TextDecoder().decode(plaintext)) as ServerMessage;
+    if (message.protocol !== PROTOCOL_VERSION) {
+      throw new Error("unsupported-protocol-version");
+    }
+    this.receiveCounter = frame.counter;
+    return message;
+  }
+
+  async exchange(
+    publicUrl: string,
+    sessionId: string,
+    message: ClientMessage,
+  ): Promise<ServerMessage> {
+    const frame = await this.sealClientMessage(message);
+    const response = await fetch(
+      new URL(`/v1/companion/session/${encodeURIComponent(sessionId)}/message`, publicUrl),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(frame),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`request-failed-${response.status}`);
+    }
+    const resFrame = (await response.json()) as EncryptedFrame;
+    return this.openServerMessage(resFrame);
   }
 }

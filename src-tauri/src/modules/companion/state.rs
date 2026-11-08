@@ -10,9 +10,10 @@ use base64::Engine;
 use ring::agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, ECDH_P256};
 use ring::rand::SystemRandom;
 use serde::Serialize;
+use tauri::Manager;
 use voktty_companion_protocol::{
-    EncryptedFrame, PairingRequest, QrInvitation, SessionControl, INVITATION_TTL_SECS,
-    PROTOCOL_VERSION,
+    AgentCapabilities, AgentState, AgentSummary, ClientMessage, EncryptedFrame, PairingRequest,
+    QrInvitation, ServerMessage, SessionControl, INVITATION_TTL_SECS, PROTOCOL_VERSION,
 };
 
 use crate::modules::collab::quick_tunnel::{verified_executable, CloudflaredTunnel};
@@ -22,11 +23,11 @@ use super::transport::CompanionTransport;
 
 const ACCEPT_POLL: Duration = Duration::from_millis(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-const MAX_REQUEST_BYTES: usize = 4096;
+const MAX_REQUEST_BYTES: usize = 512 * 1024;
 
 struct CompanionRuntime {
     _server: CompanionLoopback,
-    _tunnel: CloudflaredTunnel,
+    _tunnel: Option<CloudflaredTunnel>,
     host_private_key: Option<EphemeralPrivateKey>,
     sessions: Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
     pairing: Arc<Mutex<Option<PairingRegistry>>>,
@@ -41,6 +42,7 @@ struct CompanionSession {
 #[derive(Default)]
 pub struct CompanionState {
     runtime: Mutex<Option<CompanionRuntime>>,
+    session_states: Arc<Mutex<std::collections::HashMap<String, AgentState>>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -67,7 +69,17 @@ pub struct PendingPairingInfo {
 }
 
 impl CompanionState {
-    pub fn start(&self, custom_cloudflared_path: Option<&str>) -> Result<CompanionInvite, String> {
+    pub fn set_session_state(&self, session_id: String, state: AgentState) {
+        if let Ok(mut states) = self.session_states.lock() {
+            states.insert(session_id, state);
+        }
+    }
+
+    pub fn start(
+        &self,
+        app: Option<tauri::AppHandle>,
+        custom_cloudflared_path: Option<&str>,
+    ) -> Result<CompanionInvite, String> {
         let mut runtime = self
             .runtime
             .lock()
@@ -78,8 +90,13 @@ impl CompanionState {
 
         let pairing = Arc::new(Mutex::new(None));
         let sessions = Arc::new(Mutex::new(std::collections::HashMap::new()));
-        let server = CompanionLoopback::start(pairing.clone(), sessions.clone())
-            .map_err(|error| error.to_string())?;
+        let server = CompanionLoopback::start(
+            app.clone(),
+            pairing.clone(),
+            sessions.clone(),
+            self.session_states.clone(),
+        )
+        .map_err(|error| error.to_string())?;
         // Android WebCrypto supports P-256 ECDH across current WebView versions.
         // Keeping both ends on this curve is required before a session key can be derived.
         let private_key = EphemeralPrivateKey::generate(&ECDH_P256, &SystemRandom::new())
@@ -87,14 +104,33 @@ impl CompanionState {
         let public_key = private_key
             .compute_public_key()
             .map_err(|_| "could not derive companion host key".to_string())?;
-        let tunnel = CloudflaredTunnel::start(
-            &verified_executable(custom_cloudflared_path)?,
-            &format!("http://127.0.0.1:{}", server.address().port()),
-        )?;
+
+        let lan_ip = detect_lan_ip().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
+        let local_url = format!("http://{}:{}", lan_ip, server.address().port());
+        let tunnel = if let Some(path) = custom_cloudflared_path {
+            CloudflaredTunnel::start(
+                &verified_executable(Some(path))?,
+                &format!("http://127.0.0.1:{}", server.address().port()),
+            )
+            .ok()
+        } else if let Ok(path) = verified_executable(None) {
+            CloudflaredTunnel::start(
+                &path,
+                &format!("http://127.0.0.1:{}", server.address().port()),
+            )
+            .ok()
+        } else {
+            None
+        };
+        let public_url = tunnel
+            .as_ref()
+            .map(|t| t.public_url().to_string())
+            .unwrap_or(local_url);
+
         let expires_at_ms = now_ms().saturating_add(INVITATION_TTL_SECS.saturating_mul(1000));
         let invite = QrInvitation {
             protocol: PROTOCOL_VERSION,
-            public_url: tunnel.public_url().to_string(),
+            public_url,
             invitation_id: random_token(16)?,
             host_public_key: URL_SAFE_NO_PAD.encode(public_key.as_ref()),
             secret: random_token(32)?,
@@ -237,6 +273,23 @@ fn pairing_error(error: PairingError) -> String {
     }
 }
 
+fn detect_lan_ip() -> Option<IpAddr> {
+    let candidates = [("0.0.0.0:0", "192.0.2.1:9"), ("[::]:0", "[2001:db8::1]:9")];
+    for (bind, destination) in candidates {
+        if let Ok(socket) = std::net::UdpSocket::bind(bind) {
+            if socket.connect(destination).is_ok() {
+                if let Ok(local) = socket.local_addr() {
+                    let ip = local.ip();
+                    if !ip.is_unspecified() && !ip.is_loopback() {
+                        return Some(ip);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 struct CompanionLoopback {
     address: SocketAddr,
     stop: Arc<AtomicBool>,
@@ -245,10 +298,12 @@ struct CompanionLoopback {
 
 impl CompanionLoopback {
     fn start(
+        app: Option<tauri::AppHandle>,
         pairing: Arc<Mutex<Option<PairingRegistry>>>,
         sessions: Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
+        session_states: Arc<Mutex<std::collections::HashMap<String, AgentState>>>,
     ) -> io::Result<Self> {
-        let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))?;
+        let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0))?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
         let stop = Arc::new(AtomicBool::new(false));
@@ -259,10 +314,18 @@ impl CompanionLoopback {
                 while !thread_stop.load(Ordering::Acquire) {
                     match listener.accept() {
                         Ok((stream, _)) => {
+                            let app = app.clone();
                             let pairing = pairing.clone();
                             let sessions = sessions.clone();
+                            let session_states = session_states.clone();
                             thread::spawn(move || {
-                                let _ = handle_request(stream, &pairing, &sessions);
+                                let _ = handle_request(
+                                    stream,
+                                    &app,
+                                    &pairing,
+                                    &sessions,
+                                    &session_states,
+                                );
                             });
                         }
                         Err(error) if error.kind() == ErrorKind::WouldBlock => {
@@ -298,8 +361,10 @@ impl Drop for CompanionLoopback {
 
 fn handle_request(
     mut stream: TcpStream,
+    app: &Option<tauri::AppHandle>,
     pairing: &Arc<Mutex<Option<PairingRegistry>>>,
     sessions: &Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
+    session_states: &Arc<Mutex<std::collections::HashMap<String, AgentState>>>,
 ) -> io::Result<()> {
     stream.set_read_timeout(Some(REQUEST_TIMEOUT))?;
     stream.set_write_timeout(Some(REQUEST_TIMEOUT))?;
@@ -308,14 +373,25 @@ fn handle_request(
     let health = request.starts_with(b"GET /health HTTP/");
     let response = if health {
         b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".to_vec()
-    } else if request.starts_with(b"OPTIONS /v1/companion/pair HTTP/") {
+    } else if request.starts_with(b"OPTIONS ") {
         http_response(204, "No Content", b"")
     } else if request.starts_with(b"POST /v1/companion/pair HTTP/") {
         handle_pairing_request(request, pairing)
     } else if request.starts_with(b"GET /v1/companion/pair/") {
         handle_pairing_status_request(request, pairing)
     } else if request.starts_with(b"POST /v1/companion/session/") {
-        handle_session_confirmation_request(request, sessions)
+        let line_end = request
+            .windows(2)
+            .position(|part| part == b"\r\n")
+            .unwrap_or(0);
+        let path = std::str::from_utf8(&request[..line_end]).unwrap_or("");
+        if path.contains("/confirm") {
+            handle_session_confirmation_request(request, sessions)
+        } else if path.contains("/message") {
+            handle_session_message_request(request, sessions, app, session_states)
+        } else {
+            http_response(404, "Not Found", b"")
+        }
     } else {
         b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec()
     };
@@ -323,6 +399,179 @@ fn handle_request(
     stream.flush()?;
     let _ = stream.shutdown(std::net::Shutdown::Write);
     Ok(())
+}
+
+fn handle_session_message_request(
+    request: &[u8],
+    sessions: &Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
+    app: &Option<tauri::AppHandle>,
+    session_states: &Arc<Mutex<std::collections::HashMap<String, AgentState>>>,
+) -> Vec<u8> {
+    let Some(line_end) = request.windows(2).position(|part| part == b"\r\n") else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let Some(session_id) = std::str::from_utf8(&request[..line_end])
+        .ok()
+        .and_then(|line| line.strip_prefix("POST /v1/companion/session/"))
+        .and_then(|rest| {
+            rest.strip_suffix("/message HTTP/1.1")
+                .or_else(|| rest.strip_suffix("/message HTTP/1.0"))
+        })
+    else {
+        return http_response(404, "Not Found", b"");
+    };
+    let Some(body_start) = request.windows(4).position(|part| part == b"\r\n\r\n") else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let frame = match serde_json::from_slice::<EncryptedFrame>(&request[body_start + 4..]) {
+        Ok(frame) => frame,
+        Err(_) => return http_response(400, "Bad Request", b""),
+    };
+    let Ok(mut sessions) = sessions.lock() else {
+        return http_response(503, "Service Unavailable", b"");
+    };
+    let Some(session) = sessions.get_mut(session_id) else {
+        return http_response(403, "Forbidden", b"");
+    };
+    if !session.key_confirmed {
+        return http_response(403, "Forbidden", b"");
+    }
+
+    let client_msg = match session.transport.open_client_message(&frame) {
+        Ok(msg) => msg,
+        Err(_) => return http_response(403, "Forbidden", b""),
+    };
+
+    let server_response: ServerMessage = match client_msg {
+        ClientMessage::InventorySubscribe { .. } => {
+            let mut agents = Vec::new();
+            if let Some(app) = app {
+                if let Some(store) =
+                    app.try_state::<crate::modules::harness::session_store::SessionStoreState>()
+                {
+                    if let Ok(conn) = store.lock_conn() {
+                        if let Ok(summaries) =
+                            crate::modules::harness::session_store::list_recent_sessions(
+                                &conn,
+                                voktty_companion_protocol::MAX_INVENTORY_AGENTS,
+                            )
+                        {
+                            let state_map = session_states.lock().ok();
+                            for s in summaries {
+                                let state = state_map
+                                    .as_ref()
+                                    .and_then(|m| m.get(&s.id).copied())
+                                    .unwrap_or(AgentState::Idle);
+                                agents.push(AgentSummary {
+                                    agent_id: s.id,
+                                    provider: s.harness,
+                                    state,
+                                    title: s.title,
+                                    transcript_cursor: s.updated_at as u64,
+                                    capabilities: AgentCapabilities {
+                                        can_read: true,
+                                        can_send_message: true,
+                                        can_approve: true,
+                                    },
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            ServerMessage::Inventory {
+                protocol: PROTOCOL_VERSION,
+                agents,
+            }
+        }
+        ClientMessage::AgentSnapshot { agent_id, .. } => {
+            let mut content = "[]".to_string();
+            let mut cursor = 0;
+            if let Some(app) = app {
+                if let Some(store) =
+                    app.try_state::<crate::modules::harness::session_store::SessionStoreState>()
+                {
+                    if let Ok(conn) = store.lock_conn() {
+                        if let Ok(Some(record)) =
+                            crate::modules::harness::session_store::get_session(&conn, &agent_id)
+                        {
+                            cursor = record.updated_at as u64;
+                            let mut serialized = serde_json::to_string(&record.blocks)
+                                .unwrap_or_else(|_| "[]".into());
+                            if serialized.len()
+                                > voktty_companion_protocol::MAX_TRANSCRIPT_DELTA_BYTES
+                            {
+                                if let serde_json::Value::Array(blocks) = record.blocks {
+                                    let truncated = serde_json::Value::Array(
+                                        blocks.into_iter().rev().take(30).rev().collect(),
+                                    );
+                                    serialized = serde_json::to_string(&truncated)
+                                        .unwrap_or_else(|_| "[]".into());
+                                }
+                            }
+                            content = serialized;
+                        }
+                    }
+                }
+            }
+            ServerMessage::AgentDelta {
+                protocol: PROTOCOL_VERSION,
+                agent_id,
+                cursor,
+                content,
+            }
+        }
+        ClientMessage::AgentMessage {
+            agent_id, message, ..
+        } => {
+            if let Some(app) = app {
+                use tauri::Emitter;
+                let _ = app.emit(
+                    "companion:agent-message",
+                    serde_json::json!({
+                        "sessionId": agent_id,
+                        "message": message,
+                    }),
+                );
+            }
+            ServerMessage::Pong {
+                protocol: PROTOCOL_VERSION,
+            }
+        }
+        ClientMessage::ApprovalRespond {
+            agent_id,
+            grant_id,
+            approved,
+            ..
+        } => {
+            if let Some(app) = app {
+                use tauri::Emitter;
+                let _ = app.emit(
+                    "companion:approval-decision",
+                    serde_json::json!({
+                        "sessionId": agent_id,
+                        "grantId": grant_id,
+                        "approved": approved,
+                    }),
+                );
+            }
+            ServerMessage::Pong {
+                protocol: PROTOCOL_VERSION,
+            }
+        }
+        ClientMessage::Ping { .. } => ServerMessage::Pong {
+            protocol: PROTOCOL_VERSION,
+        },
+        ClientMessage::Revoke { .. } => ServerMessage::Closed {
+            protocol: PROTOCOL_VERSION,
+            reason: "revoked".to_string(),
+        },
+    };
+
+    match session.transport.seal_server_message(&server_response) {
+        Ok(frame) => json_response(200, "OK", &frame),
+        Err(_) => http_response(500, "Internal Server Error", b""),
+    }
 }
 
 fn handle_session_confirmation_request(
@@ -530,7 +779,9 @@ mod tests {
     #[test]
     fn listener_accepts_only_its_health_probe() {
         let listener = CompanionLoopback::start(
+            None,
             Arc::new(Mutex::new(None)),
+            Arc::new(Mutex::new(std::collections::HashMap::new())),
             Arc::new(Mutex::new(std::collections::HashMap::new())),
         )
         .expect("listener");
@@ -546,6 +797,34 @@ mod tests {
         let n = stream.read(&mut buf).expect("read");
         let response = String::from_utf8_lossy(&buf[..n]);
         assert!(response.starts_with("HTTP/1.1 200"));
+    }
+
+    #[test]
+    fn options_preflight_is_accepted_for_cors() {
+        let listener = CompanionLoopback::start(
+            None,
+            Arc::new(Mutex::new(None)),
+            Arc::new(Mutex::new(std::collections::HashMap::new())),
+            Arc::new(Mutex::new(std::collections::HashMap::new())),
+        )
+        .expect("listener");
+        let mut stream = TcpStream::connect(listener.address()).expect("connect");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("timeout");
+        stream
+            .write_all(b"OPTIONS /v1/companion/session/s1/message HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .expect("request");
+        stream.flush().expect("flush");
+        let mut buf = [0_u8; 1024];
+        let n = stream.read(&mut buf).expect("read");
+        let response = String::from_utf8_lossy(&buf[..n]);
+        assert!(response.starts_with("HTTP/1.1 204"));
+    }
+
+    #[test]
+    fn detects_lan_ip_without_panicking() {
+        let _ = detect_lan_ip();
     }
 
     #[test]
