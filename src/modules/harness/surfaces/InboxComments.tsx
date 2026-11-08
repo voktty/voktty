@@ -426,8 +426,8 @@ function InboxComment({
                 type="button"
                 title={
                   provider === "linear"
-                    ? t("harness.chrome.openInLinear") || "Open in Linear"
-                    : t("harness.chrome.openOnGitHub") || "Open on GitHub"
+                    ? t("harness.chrome.openInLinear")
+                    : t("harness.chrome.openOnGitHub")
                 }
                 onClick={() => void openUrl(comment.url)}
                 className="hover:text-content"
@@ -794,6 +794,7 @@ function InboxCommitStop({
   commit: InboxCommit;
   last: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <li className="flex gap-3">
       {/* The rail runs through commit dots, so a push reads as one stretch. */}
@@ -805,7 +806,7 @@ function InboxCommitStop({
       <div className={`min-w-0 flex-1 ${last ? "" : TIMELINE_GAP}`}>
         <button
           type="button"
-          title={commit.url ? "Open commit" : commit.messageHeadline}
+          title={commit.url ? t("harness.chrome.openCommit") : commit.messageHeadline}
           disabled={!commit.url}
           onClick={() => void openUrl(commit.url)}
           className="group flex h-5 w-full min-w-0 items-center gap-3 text-left text-[12px]"

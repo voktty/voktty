@@ -405,14 +405,14 @@ export function SessionChangesCommit({
   };
 
   const preparePush = async () => {
-    if (!activeRepo) throw new Error("No Git repository is selected");
+    if (!activeRepo) throw new Error(t("harness.chrome.noRepoSelected"));
     const initial = await native.gitStatus(activeRepo.repoRoot, workspace);
-    if (initial.isDetached) throw new Error("Cannot push a detached HEAD");
+    if (initial.isDetached) throw new Error(t("harness.chrome.cannotPushDetachedHead"));
     if (
       !initial.upstream &&
       !(await native.gitRemoteUrl(activeRepo.repoRoot, "origin", workspace))
     ) {
-      throw new Error("No origin remote is configured");
+      throw new Error(t("harness.chrome.noOriginRemote"));
     }
     await native.gitFetch(activeRepo.repoRoot, workspace);
     const latest = await native.gitStatus(activeRepo.repoRoot, workspace);
@@ -426,9 +426,9 @@ export function SessionChangesCommit({
   };
 
   const pushCurrentBranch = async () => {
-    if (!activeRepo) throw new Error("No Git repository is selected");
+    if (!activeRepo) throw new Error(t("harness.chrome.noRepoSelected"));
     const latest = await native.gitStatus(activeRepo.repoRoot, workspace);
-    if (latest.isDetached) throw new Error("Cannot push a detached HEAD");
+    if (latest.isDetached) throw new Error(t("harness.chrome.cannotPushDetachedHead"));
     if (latest.behind > 0) throw new Error(t("git.pullBeforePush"));
     if (latest.upstream) {
       await native.gitPush(activeRepo.repoRoot, workspace);
@@ -438,20 +438,20 @@ export function SessionChangesCommit({
         "origin",
         workspace,
       );
-      if (!remoteUrl) throw new Error("No origin remote is configured");
+      if (!remoteUrl) throw new Error(t("harness.chrome.noOriginRemote"));
       await native.gitPublish(activeRepo.repoRoot, "origin", workspace);
     }
     notifyGitChanged();
   };
 
   const createPullRequest = async () => {
-    if (!activeRepo) throw new Error("No Git repository is selected");
+    if (!activeRepo) throw new Error(t("harness.chrome.noRepoSelected"));
     const status = await native.gitStatus(activeRepo.repoRoot, workspace);
     if (status.isDetached || !status.branch) {
-      throw new Error("Checkout a branch before creating a pull request");
+      throw new Error(t("harness.chrome.checkoutBranchBeforePr"));
     }
     if (status.ahead > 0 && status.behind > 0) {
-      throw new Error("Branch has diverged from upstream; sync it first");
+      throw new Error(t("harness.chrome.branchDivergedSyncFirst"));
     }
     if (status.behind > 0) throw new Error(t("git.pullBeforePush"));
     const remoteUrl = await native.gitRemoteUrl(
@@ -460,7 +460,7 @@ export function SessionChangesCommit({
       workspace,
     );
     const ownerRepo = githubOwnerRepoFromRemote(remoteUrl);
-    if (!ownerRepo) throw new Error("No GitHub origin remote is configured");
+    if (!ownerRepo) throw new Error(t("harness.chrome.noGitHubRemote"));
     if (!(await isGithubConnected())) {
       throw new Error(t("gitHistory.pulls.tokenRequiredTitle"));
     }
@@ -471,20 +471,20 @@ export function SessionChangesCommit({
     );
     if (branchStatus.defaultBranch === status.branch) {
       throw new Error(
-        `Cannot create a pull request from the default branch "${status.branch}"`,
+        t("harness.chrome.cannotPrDefaultBranch", { branch: status.branch }),
       );
     }
     if (branchStatus.pullRequest) {
-      throw new Error("A pull request is already open for this branch");
+      throw new Error(t("harness.chrome.prAlreadyOpen"));
     }
     if (branchStatus.behindBy == null || branchStatus.behindBy > 0) {
       throw new Error(
-        "Update the branch from the default branch before creating a pull request",
+        t("harness.chrome.updateBranchBeforePr"),
       );
     }
     if (branchStatus.aheadBy == null || branchStatus.aheadBy === 0) {
       throw new Error(
-        "Push at least one commit before creating a pull request",
+        t("harness.chrome.pushCommitBeforePr"),
       );
     }
 
@@ -495,7 +495,7 @@ export function SessionChangesCommit({
       workspace,
     );
     if (comparison.ahead.length !== branchStatus.aheadBy) {
-      throw new Error("Could not load the complete pull request commit range");
+      throw new Error(t("harness.chrome.couldNotLoadPrCommitRange"));
     }
     const context = await buildSessionPullRequestContext(
       branchStatus.defaultBranch,
@@ -508,7 +508,7 @@ export function SessionChangesCommit({
     const title =
       generated?.title.trim().slice(0, 256) ||
       message.trim().split(/\r?\n/g)[0]?.trim().slice(0, 256) ||
-      `Update ${status.branch}`;
+      t("harness.chrome.updateBranchPrTitle", { branch: status.branch });
     const body = generated?.body.trim() || message.trim();
     return createGithubPullRequest({
       ownerRepo,

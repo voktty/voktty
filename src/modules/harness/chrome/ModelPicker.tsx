@@ -1028,10 +1028,14 @@ function ModelFlyout({
                   <button
                     type="button"
                     title={
-                      favorited ? "Remove from favorites" : "Add to favorites"
+                      favorited
+                        ? t("harness.chrome.removeFromFavorites")
+                        : t("harness.chrome.addToFavorites")
                     }
                     aria-label={
-                      favorited ? "Remove from favorites" : "Add to favorites"
+                      favorited
+                        ? t("harness.chrome.removeFromFavorites")
+                        : t("harness.chrome.addToFavorites")
                     }
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {

@@ -205,7 +205,7 @@ export function FilePicker({
       <div className="absolute inset-0" onMouseDown={onClose} />
       <div
         role="dialog"
-        aria-label={paletteMode ? "Command Palette" : t("harness.chrome.goToFile")}
+        aria-label={paletteMode ? t("harness.chrome.commandPalette") : t("harness.chrome.goToFile")}
         data-file-picker
         onMouseDown={(e) => e.stopPropagation()}
         className="voktty-floating-surface absolute left-1/2 top-[12%] flex w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border text-popover-foreground shadow-2xl"
@@ -219,10 +219,10 @@ export function FilePicker({
               value={query}
               placeholder={
                 paletteMode
-                  ? "Command Palette"
-                  : `${t("harness.chrome.goToFile")} (type > for commands)`
+                  ? t("harness.chrome.commandPalette")
+                  : t("harness.chrome.goToFileWithCommandHint")
               }
-              aria-label={paletteMode ? "Command Palette" : t("harness.chrome.goToFile")}
+              aria-label={paletteMode ? t("harness.chrome.commandPalette") : t("harness.chrome.goToFile")}
               spellCheck={false}
               autoComplete="off"
               autoCorrect="off"
@@ -282,7 +282,7 @@ function emptyLabel({
   paletteMode: boolean;
   actionCount: number;
 }): string | null {
-  if (paletteMode) return actionCount === 0 ? "No matching commands" : null;
+  if (paletteMode) return actionCount === 0 ? t("harness.chrome.noMatchingCommands") : null;
   if (error && fileCount === 0) return error;
   if (!looksLikeProject(cwd)) return t("harness.chrome.openProjectToSearchFiles");
   if (loading && fileCount === 0) return t("harness.chrome.indexingFiles");

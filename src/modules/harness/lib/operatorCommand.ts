@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import type { BuiltinSkill } from "./skills";
 import type { Block } from "./session";
 
@@ -5,8 +6,9 @@ export const OPERATOR_COMMAND: BuiltinSkill = {
   kind: "builtin",
   name: "operator",
   invocation: "operator",
-  description:
-    "Give this thread access to Voktty sessions, folders, and notes.",
+  get description() {
+    return t("harness.commands.operatorDesc");
+  },
   scope: "builtin",
   source: "monocode",
 };

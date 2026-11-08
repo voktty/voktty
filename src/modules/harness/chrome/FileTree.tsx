@@ -579,7 +579,7 @@ export const FileTree = memo(function FileTree({
       clip.isDir &&
       (destParent === clip.path || destParent.startsWith(`${clip.path}/`))
     ) {
-      throw new Error("Cannot paste a folder into itself.");
+      throw new Error(t("harness.chrome.cannotPasteFolderIntoItself"));
     }
     const from = clip.path;
     const mode = clip.mode;

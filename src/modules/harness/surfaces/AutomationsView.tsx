@@ -569,7 +569,11 @@ function AutomationCard({
       </button>
       <span className="absolute right-2.5 top-2 flex">
         <ToggleSwitch
-          label={`${automation.enabled ? "Pause" : "Enable"} ${automation.name}`}
+          label={
+            automation.enabled
+              ? t("harness.automationsUI.pauseItem", { name: automation.name })
+              : t("harness.automationsUI.enableItem", { name: automation.name })
+          }
           on={automation.enabled}
           onChange={onToggle}
           compact
@@ -607,6 +611,8 @@ function AutomationPicker({
         <div className="mt-4 flex flex-wrap gap-1.5">
           {AUTOMATION_TEMPLATE_CATEGORIES.map((option) => {
             const selected = option.id === category;
+            const catKey = `harness.automationsUI.category_${option.id}`;
+            const label = t(catKey) !== catKey ? t(catKey) : option.label;
             return (
               <button
                 key={option.id}
@@ -618,7 +624,7 @@ function AutomationPicker({
                     : "text-content/55 hover:bg-content/8 hover:text-content"
                 }`}
               >
-                {option.label}
+                {label}
               </button>
             );
           })}
@@ -704,8 +710,8 @@ function RunRow({
         disabled={!sessionId}
         title={
           sessionId
-            ? "Open session"
-            : (run.error ?? "This run has no session yet")
+            ? t("harness.automationsUI.openSession")
+            : (run.error ?? t("harness.automationsUI.noSessionYet"))
         }
         onClick={() => {
           if (!sessionId) return;
@@ -1238,7 +1244,9 @@ function AutomationEditor({
                           title={
                             ready
                               ? undefined
-                              : `Connect ${option.label} in Settings`
+                              : t("harness.automationsUI.connectInSettings", {
+                                  provider: option.label,
+                                })
                           }
                           onMouseEnter={() =>
                             setTriggerCategory(ready ? option.value : null)
@@ -1367,7 +1375,7 @@ function AutomationEditor({
               <div className="mt-3 divide-y divide-content/7 rounded-md border border-content/10">
                 <SettingsRow
                   label={t("harness.automationsUI.workingCopy")}
-                  hint="This repo, or a fresh worktree"
+                  hint={t("harness.automationsUI.hintRepoOrWorktree")}
                 >
                   <SettingsSelect
                     label={t("harness.automationsUI.workingCopy")}
@@ -1389,7 +1397,7 @@ function AutomationEditor({
                 </SettingsRow>
                 <SettingsRow
                   label={t("harness.automationsUI.conversation")}
-                  hint="New chat, or continue the last run"
+                  hint={t("harness.automationsUI.hintChatOrContinue")}
                 >
                   <SettingsSelect
                     label={t("harness.automationsUI.conversation")}
@@ -1403,7 +1411,7 @@ function AutomationEditor({
                 </SettingsRow>
                 <SettingsRow
                   label={t("harness.automationsUI.sessionFolder")}
-                  hint="Where runs appear in the sidebar"
+                  hint={t("harness.automationsUI.hintWhereRunsAppear")}
                 >
                   <SearchableSelect
                     variant="pill"
@@ -1433,7 +1441,7 @@ function AutomationEditor({
               <div className="divide-y divide-content/7 border-t border-content/8">
                 <SettingsRow
                   label={t("harness.automationsUI.graceLabel")}
-                  hint="Catch up if a scheduled run was missed"
+                  hint={t("harness.automationsUI.hintCatchUpMissed")}
                 >
                   <SettingsSelect
                     label={t("harness.automationsUI.graceLabel")}

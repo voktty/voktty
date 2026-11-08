@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { LAYER } from "../lib/layers";
 import { Check, ChevronRight } from "./icons";
 import { Popover } from "./Popover";
@@ -56,12 +57,13 @@ export function ExplorerMenu({
   x,
   y,
   items,
-  ariaLabel = "File actions",
+  ariaLabel,
   header,
   width = MENU_WIDTH,
   onPick,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
@@ -267,7 +269,7 @@ export function ExplorerMenu({
         data-explorer-menu={menuId}
         role="menu"
         tabIndex={-1}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? t("harness.chrome.fileActions")}
         aria-activedescendant={`${menuId}-${active}`}
         onKeyDown={onMenuKey}
         onContextMenu={(e) => e.preventDefault()}

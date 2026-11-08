@@ -411,7 +411,9 @@ export function hasRunningSubagent(blocks: Block[]): boolean {
 }
 
 export function activityPreviousLabel(count: number): string {
-  return `+${count} previous ${count === 1 ? "tool call" : "tool calls"}`;
+  return count === 1
+    ? t("harness.transcript.previousToolCall", { count })
+    : t("harness.transcript.previousToolCalls", { count });
 }
 
 /**
@@ -582,7 +584,7 @@ function tallySteps(steps: Block[]): PhaseTally {
 function fileLabel(paths: Set<string>): string {
   const [first] = paths;
   if (paths.size === 1 && first) return leafName(first) || first;
-  return `${paths.size} files`;
+  return t("harness.transcript.filesCount", { count: paths.size });
 }
 
 /** What the calls of one kind add up to: "Edited 2 files", "Ran 3 commands". */
@@ -593,27 +595,39 @@ function workSummary(
 ): string {
   switch (kind) {
     case "edit":
-      return `${live ? "Editing" : "Edited"} ${fileLabel(tally.edits)}`;
+      return live
+        ? t("harness.transcript.editingFiles", { files: fileLabel(tally.edits) })
+        : t("harness.transcript.editedFiles", { files: fileLabel(tally.edits) });
     case "research":
       if (tally.reads.size > 0 && tally.searches === 0) {
-        return `${live ? "Reading" : "Read"} ${fileLabel(tally.reads)}`;
+        return live
+          ? t("harness.transcript.readingFiles", { files: fileLabel(tally.reads) })
+          : t("harness.transcript.readFiles", { files: fileLabel(tally.reads) });
       }
       if (tally.reads.size === 0) {
-        return live ? "Searching the project" : "Searched the project";
+        return live
+          ? t("harness.transcript.searchingProject")
+          : t("harness.transcript.searchedProject");
       }
-      return live ? "Exploring the project" : "Explored the project";
+      return live
+        ? t("harness.transcript.exploringProject")
+        : t("harness.transcript.exploredProject");
     case "run":
       return tally.runs === 1
         ? live
-          ? "Running a command"
-          : "Ran a command"
-        : `${live ? "Running" : "Ran"} ${tally.runs} commands`;
+          ? t("harness.transcript.runningCommand")
+          : t("harness.transcript.ranCommand")
+        : live
+          ? t("harness.transcript.runningCommands", { count: tally.runs })
+          : t("harness.transcript.ranCommands", { count: tally.runs });
     default:
       return tally.others === 1
         ? live
-          ? "Running a tool"
-          : "Ran a tool"
-        : `${live ? "Running" : "Ran"} ${tally.others} tools`;
+          ? t("harness.transcript.runningTool")
+          : t("harness.transcript.ranTool")
+        : live
+          ? t("harness.transcript.runningTools", { count: tally.others })
+          : t("harness.transcript.ranTools", { count: tally.others });
   }
 }
 
@@ -633,7 +647,10 @@ function currentWorkKind(steps: Block[]): ActivityWorkKind | undefined {
  */
 export function workSummaryLine(steps: Block[], live = false): string {
   const tally = tallySteps(steps);
-  if (tally.order.length === 0) return live ? "Thinking" : "Thought";
+  if (tally.order.length === 0)
+    return live
+      ? t("harness.transcript.thinking")
+      : t("harness.transcript.thought");
   const running = live ? currentWorkKind(steps) : undefined;
   return tally.order
     .map((kind) => workSummary(kind, tally, kind === running))
@@ -653,7 +670,9 @@ export function activityPhaseTitle(phase: ActivityPhase, live = false): string {
   if (phase.headline) {
     const summary = proseSummary(phase.headline.text);
     if (summary) return summary;
-    return phase.headline.role === "reasoning" ? "Thinking" : "Working";
+    return phase.headline.role === "reasoning"
+      ? t("harness.transcript.thinking")
+      : t("harness.transcript.working");
   }
   return workSummaryLine(phase.steps, live);
 }

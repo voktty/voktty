@@ -2117,7 +2117,7 @@ export function Composer({
               <ComposerAction
                 busy={busy}
                 hasValue={hasValue}
-                label={draftActive ? "Save draft" : undefined}
+                label={draftActive ? t("harness.chrome.saveDraft") : undefined}
                 onSend={() => submit(ref.current?.value ?? "")}
                 onStop={() => onStop?.()}
               />

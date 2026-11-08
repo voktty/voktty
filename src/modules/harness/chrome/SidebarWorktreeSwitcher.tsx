@@ -57,14 +57,14 @@ export function SidebarWorktreeSwitcher({
           path: main?.path ?? cwd,
           branch: main?.branch ?? null,
           isMain: true,
-          label: main?.branch ?? "Project folder",
-          detail: "Project folder · all sessions",
+          label: main?.branch ?? t("harness.worktrees.projectFolder"),
+          detail: t("harness.worktrees.projectFolderAllSessions"),
         },
         ...worktrees.map((tree) => ({
           path: tree.path,
           branch: tree.branch,
           isMain: false,
-          label: tree.branch ?? `Detached ${tree.head.slice(0, 7)}`,
+          label: tree.branch ?? t("harness.worktrees.detachedLabel", { sha: tree.head.slice(0, 7) }),
           detail: prettyCwd(tree.path),
         })),
       ].filter((tree) =>
@@ -73,7 +73,7 @@ export function SidebarWorktreeSwitcher({
           .includes(normalizedQuery),
       );
     },
-    [cwd, data, normalizedQuery],
+    [cwd, data, normalizedQuery, t],
   );
   const activeIndex = Math.max(
     0,
@@ -180,8 +180,8 @@ export function SidebarWorktreeSwitcher({
         disabled={creating}
         title={
           focus
-            ? `${focus.branch ?? "detached"}\n${prettyCwd(focus.path)}`
-            : (main?.branch ?? "Project folder")
+            ? `${focus.branch ?? t("harness.worktrees.detached")}\n${prettyCwd(focus.path)}`
+            : (main?.branch ?? t("harness.worktrees.projectFolder"))
         }
         onClick={() => {
           if (open) closePicker();
@@ -197,7 +197,7 @@ export function SidebarWorktreeSwitcher({
         <span className="min-w-0 truncate">{title}</span>
         {pending || creating ? (
           <Loader
-            aria-label={creating ? "Creating worktree" : "Switching working copy"}
+            aria-label={creating ? t("harness.worktrees.creatingWorktree") : t("harness.worktrees.switchingWorkingCopy")}
             className="size-3.5 shrink-0 animate-spin text-content/45"
           />
         ) : (

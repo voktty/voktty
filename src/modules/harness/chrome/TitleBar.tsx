@@ -535,10 +535,10 @@ function GroupLabel({
       type="button"
       title={
         collapsed
-          ? `Expand ${project} · ${count} tabs`
-          : `Drag to reorder · Click to collapse ${project}`
+          ? t("harness.chrome.expandGroupTabs", { project, count })
+          : t("harness.chrome.collapseGroupTooltip", { project })
       }
-      aria-label={collapsed ? `Expand ${project}` : `Collapse ${project}`}
+      aria-label={collapsed ? t("harness.chrome.expandGroup", { project }) : t("harness.chrome.collapseGroup", { project })}
       aria-expanded={!collapsed}
       data-tauri-drag-region="false"
       onClick={() => {
@@ -1019,7 +1019,7 @@ function TitleBarComponent({
         label: resolveTabGroupLabel(
           segment.key,
           groupLabels,
-          shared || "Group",
+          shared || t("harness.chrome.group"),
         ),
       },
     ];
@@ -1460,7 +1460,7 @@ function TitleBarComponent({
                     displayLabel={resolveTabGroupLabel(
                       segment.key,
                       groupLabels,
-                      shared || "Group",
+                      shared || t("harness.chrome.group"),
                     )}
                     projectKey={shared || segment.key}
                     mascotName={resolveTabGroupMascot(
