@@ -29,9 +29,10 @@ mod template_inputs;
 mod workers;
 pub use coordination::{
     acquire_claims_guard, acquire_reservation, complete_mailbox_note, list_mailbox_inbox,
-    list_reservations, release_claims_guard, release_reservation, send_mailbox_note,
-    with_claims_guard, AutoClaimsGuard, ClaimsGuard, CoordinationError, MailboxEntry, MailboxNote,
-    NoteKind, ReservationConflict, ReservationEntry, WorkReservation,
+    list_reservations, recover_abandoned_reservation, release_claims_guard, release_reservation,
+    send_mailbox_note, transfer_reservation, with_claims_guard, AutoClaimsGuard, ClaimsGuard,
+    CoordinationError, MailboxEntry, MailboxNote, NoteKind, ReservationConflict, ReservationEntry,
+    WorkReservation,
 };
 pub use discovery::{DiscoveryControl, DiscoveryPurpose, NativeScopeObservation, ScopeDirectory};
 pub use origin::{resolve_memory_application_parent, MemoryOriginError, MEMORY_APPLICATION_ID};

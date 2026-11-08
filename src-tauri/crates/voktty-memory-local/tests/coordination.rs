@@ -2,9 +2,9 @@ use std::fs;
 use tempfile::tempdir;
 use voktty_memory_local::{
     acquire_claims_guard, acquire_reservation, complete_mailbox_note, list_mailbox_inbox,
-    list_reservations, release_claims_guard, release_reservation, send_mailbox_note,
-    with_claims_guard, CoordinationError, MailboxNote, NoteKind, ReservationConflict,
-    WorkReservation,
+    list_reservations, recover_abandoned_reservation, release_claims_guard, release_reservation,
+    send_mailbox_note, transfer_reservation, with_claims_guard, CoordinationError, MailboxNote,
+    NoteKind, ReservationConflict, WorkReservation,
 };
 
 #[test]
@@ -283,4 +283,199 @@ fn oversized_coordination_file_is_rejected() {
     // list_reservations fails closed on corrupted/oversized files
     let result = list_reservations(root);
     assert!(matches!(result, Err(CoordinationError::Parse(_))));
+}
+
+#[test]
+fn concurrent_competing_threads_guarantee_exact_one_acquires_conflicting_reservation() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    let temp = tempdir().unwrap();
+    let root = temp.path().to_path_buf();
+
+    // 4 threads racing to acquire an overlapping reservation on "src/core/"
+    let num_threads = 4;
+    let barrier = Arc::new(Barrier::new(num_threads));
+    let mut handles = Vec::new();
+
+    for i in 0..num_threads {
+        let b = Arc::clone(&barrier);
+        let r = root.clone();
+        let handle = thread::spawn(move || {
+            let res = WorkReservation {
+                agent: format!("agent-{}", i),
+                owner: format!("owner-{}", i),
+                task: format!("T-race-{}", i),
+                paths: vec!["src/core/".into()],
+                resources: vec![],
+                updated_at: "2030-01-01T12:00:00Z".into(),
+            };
+            b.wait(); // sync all threads to start at the exact same instant
+            acquire_reservation(&r, &format!("T-race-{}", i), &res)
+        });
+        handles.push(handle);
+    }
+
+    let mut successes = 0;
+    let mut conflicts = 0;
+
+    for handle in handles {
+        let res = handle.join().unwrap();
+        match res {
+            Ok(_) => successes += 1,
+            Err(CoordinationError::Conflict(ReservationConflict::Path { .. })) => conflicts += 1,
+            Err(other) => panic!("unexpected result: {:?}", other),
+        }
+    }
+
+    // In a race of 4 overlapping reservations, EXACTLY 1 must succeed and 3 must conflict!
+    assert_eq!(
+        successes, 1,
+        "exactly one thread must acquire the reservation"
+    );
+    assert_eq!(conflicts, 3, "remaining threads must receive Conflict");
+}
+
+#[test]
+fn concurrent_competing_threads_succeed_for_disjoint_scopes() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    let temp = tempdir().unwrap();
+    let root = temp.path().to_path_buf();
+
+    let num_threads = 4;
+    let barrier = Arc::new(Barrier::new(num_threads));
+    let mut handles = Vec::new();
+
+    let scopes = [
+        ("src/editor/", "T-editor"),
+        ("src/search/", "T-search"),
+        ("docs/api/", "T-docs"),
+        ("tests/e2e/", "T-tests"),
+    ];
+
+    for (i, &(path, task_id)) in scopes.iter().enumerate().take(num_threads) {
+        let b = Arc::clone(&barrier);
+        let r = root.clone();
+        let handle = thread::spawn(move || {
+            let res = WorkReservation {
+                agent: format!("agent-{}", i),
+                owner: format!("owner-{}", i),
+                task: task_id.into(),
+                paths: vec![path.into()],
+                resources: vec![],
+                updated_at: "2030-01-01T12:00:00Z".into(),
+            };
+            b.wait();
+            acquire_reservation(&r, task_id, &res)
+        });
+        handles.push(handle);
+    }
+
+    let mut successes = 0;
+    for handle in handles {
+        let res = handle.join().unwrap();
+        assert!(
+            res.is_ok(),
+            "disjoint reservation should succeed: {:?}",
+            res
+        );
+        successes += 1;
+    }
+
+    assert_eq!(successes, 4, "all 4 disjoint threads must succeed");
+}
+
+#[test]
+fn successor_reservation_transfer_preserves_atomic_lock_continuity() {
+    let temp = tempdir().unwrap();
+    let root = temp.path();
+
+    let res_initial = WorkReservation {
+        agent: "agent-alpha".into(),
+        owner: "owner-alpha-1".into(),
+        task: "T-transfer: refactor database".into(),
+        paths: vec!["src/db/".into()],
+        resources: vec!["db-migration".into()],
+        updated_at: "2030-01-01T10:00:00Z".into(),
+    };
+
+    acquire_reservation(root, "T-transfer", &res_initial).unwrap();
+
+    // Imposter cannot transfer the reservation
+    let bad_transfer = transfer_reservation(
+        root,
+        "T-transfer",
+        "imposter-owner",
+        "owner-beta-1",
+        "agent-beta",
+    );
+    assert!(matches!(
+        bad_transfer,
+        Err(CoordinationError::UnauthorizedOwner { .. })
+    ));
+
+    // Valid owner transfers to successor agent-beta
+    let path = transfer_reservation(
+        root,
+        "T-transfer",
+        "owner-alpha-1",
+        "owner-beta-1",
+        "agent-beta",
+    )
+    .unwrap();
+    assert!(path.exists());
+
+    // Old owner cannot release anymore
+    let old_release = release_reservation(root, "T-transfer", "owner-alpha-1");
+    assert!(matches!(
+        old_release,
+        Err(CoordinationError::UnauthorizedOwner { .. })
+    ));
+
+    // Successor owner can update their reservation
+    let mut res_updated = res_initial.clone();
+    res_updated.owner = "owner-beta-1".into();
+    res_updated.agent = "agent-beta".into();
+    res_updated.updated_at = "2030-01-01T11:00:00Z".into();
+    acquire_reservation(root, "T-transfer", &res_updated).unwrap();
+
+    // Successor owner releases cleanly
+    release_reservation(root, "T-transfer", "owner-beta-1").unwrap();
+    assert!(!path.exists());
+}
+
+#[test]
+fn abandoned_and_corrupted_reservation_recovery_unblocks_subsequent_claims() {
+    let temp = tempdir().unwrap();
+    let root = temp.path();
+
+    let locks_dir = root.join(".voktty").join("locks");
+    fs::create_dir_all(&locks_dir).unwrap();
+
+    // Simulate an abandoned or corrupted lock file left behind by a crashed agent
+    let corrupt_lock = locks_dir.join("T-crashed.lock");
+    fs::write(&corrupt_lock, b"{\"broken_json\": true").unwrap();
+
+    // Normal listing fails on the corrupted reservation
+    assert!(list_reservations(root).is_err());
+
+    // Explicit recovery removes the abandoned lock
+    recover_abandoned_reservation(root, "T-crashed", "recovery-operator").unwrap();
+    assert!(!corrupt_lock.exists());
+
+    // Normal operations can resume immediately
+    let res = WorkReservation {
+        agent: "agent-recovered".into(),
+        owner: "owner-recovered-1".into(),
+        task: "T-fresh".into(),
+        paths: vec!["src/main.rs".into()],
+        resources: vec![],
+        updated_at: "2030-01-01T12:00:00Z".into(),
+    };
+
+    let path = acquire_reservation(root, "T-fresh", &res).unwrap();
+    assert!(path.exists());
+    release_reservation(root, "T-fresh", "owner-recovered-1").unwrap();
 }
