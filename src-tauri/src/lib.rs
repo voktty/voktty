@@ -20,19 +20,30 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_window_state::StateFlags;
 
 pub(crate) fn dirs_home() -> Option<String> {
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = home.to_string_lossy().into_owned();
-        if !home.is_empty() {
-            return Some(home);
-        }
+    #[cfg(target_os = "android")]
+    {
+        Some(
+            crate::modules::bootstrap::home_dir()
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
-    if let Some(userprofile) = std::env::var_os("USERPROFILE") {
-        let up = userprofile.to_string_lossy().into_owned();
-        if !up.is_empty() {
-            return Some(up);
+    #[cfg(not(target_os = "android"))]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = home.to_string_lossy().into_owned();
+            if !home.is_empty() {
+                return Some(home);
+            }
         }
+        if let Some(userprofile) = std::env::var_os("USERPROFILE") {
+            let up = userprofile.to_string_lossy().into_owned();
+            if !up.is_empty() {
+                return Some(up);
+            }
+        }
+        dirs::home_dir().map(|h| h.to_string_lossy().into_owned())
     }
-    None
 }
 
 pub(crate) struct PasswdIdentity {
@@ -770,6 +781,7 @@ pub fn run() {
             harness::fs::copy_path,
             harness::fs::move_path,
             harness::fs::reveal_path,
+            harness::fs::home_dir,
             harness::pasteboard::clipboard_file_paths,
             harness::pasteboard::copy_file_to_clipboard,
             harness::external_editor::list_external_editors,

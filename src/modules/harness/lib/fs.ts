@@ -404,8 +404,21 @@ export async function copyFileToClipboard(path: string): Promise<void> {
   return invoke<void>("copy_file_to_clipboard", { path });
 }
 
-export function homeDir(): Promise<string> {
-  return invoke<string>("home_dir");
+export async function homeDir(): Promise<string> {
+  try {
+    const dir = await invoke<string>("home_dir");
+    if (dir) return dir;
+  } catch {
+    // If invoke fails, try Tauri path API or fallback to "/"
+  }
+  try {
+    const { homeDir: getTauriHomeDir } = await import("@tauri-apps/api/path");
+    const path = await getTauriHomeDir();
+    if (path) return path;
+  } catch {
+    // ignore
+  }
+  return "/";
 }
 
 export async function pickFolder(title = "Open project"): Promise<string | null> {

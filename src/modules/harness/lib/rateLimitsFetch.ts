@@ -197,7 +197,7 @@ async function readCodexRateLimits(
     return unavailableRateLimits("codex", "Codex CLI not found");
   }
 
-  const cwd = await homeDir();
+  const cwd = await homeDir().catch(() => "/");
   try {
     const result = await requestCodexAccount<unknown>(
       path,
@@ -245,7 +245,7 @@ export async function consumeCodexRateLimitResetCredit(
   accountId = "default",
 ): Promise<CodexRateLimitResetOutcome> {
   const path = (await resolveCodexBinary()).path;
-  const cwd = await homeDir();
+  const cwd = await homeDir().catch(() => "/");
   const result = await requestCodexAccount<unknown>(
     path,
     cwd,
