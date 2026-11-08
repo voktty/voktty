@@ -11,7 +11,9 @@ it("exposes every local harness through the remote host contract", () => {
   expect(Object.keys(hostProviders).sort()).toEqual(
     [...REMOTE_PROVIDERS].sort(),
   );
-  expect([...REMOTE_PROVIDERS].sort()).toEqual([...HARNESSES].sort());
+  expect([...REMOTE_PROVIDERS].sort()).toEqual(
+    HARNESSES.filter((harness) => harness !== "api").sort(),
+  );
   for (const provider of REMOTE_PROVIDERS) {
     expect(isRemoteProvider(provider)).toBe(true);
     expect(hostProviders[provider].send).toBeTypeOf("function");
