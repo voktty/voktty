@@ -818,6 +818,7 @@ export const es: TranslationSchema = {
       addModelPlaceholder: "ID de modelo (ej. meta-llama/llama-3-70b)",
       saveEndpoint: "Guardar endpoint",
       configuredEndpoints: "Endpoints configurados",
+      manageEndpoints: "Gestionar proveedores y endpoints…",
       noEndpoints:
         "No hay endpoints de terceros o personalizados configurados todavía.",
       harnessSyncNotice:

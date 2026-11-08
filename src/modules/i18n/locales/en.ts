@@ -804,6 +804,7 @@ export const en = {
       addModelPlaceholder: "Model ID (e.g. meta-llama/llama-3-70b)",
       saveEndpoint: "Save provider endpoint",
       configuredEndpoints: "Configured model endpoints",
+      manageEndpoints: "Manage providers & endpoints…",
       noEndpoints: "No third-party or custom endpoints configured yet.",
       harnessSyncNotice:
         "Configured endpoints and discovered models are available in both Voktty Agent and Harness.",

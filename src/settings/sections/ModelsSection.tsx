@@ -21,7 +21,6 @@ import { cn } from "@/lib/utils";
 import { getBindingTokens, SHORTCUTS } from "@/modules/shortcuts/shortcuts";
 import {
   type CustomEndpoint,
-  type CompatibleCompletionProfile,
   compatModelIdForEndpoint,
   DEFAULT_MODEL_ID,
   getAutocompleteEligibleModels,
@@ -47,12 +46,10 @@ import {
 } from "@/modules/ai/lib/harnessCatalog";
 import {
   type CustomEndpointKeys,
-  clearCustomEndpointKey,
   clearKey,
   EMPTY_PROVIDER_KEYS,
   getAllCustomEndpointKeys,
   getAllKeys,
-  setCustomEndpointKey,
   setKey,
 } from "@/modules/ai/lib/keyring";
 import { useChatStore } from "@/modules/ai/store/chatStore";
@@ -86,9 +83,7 @@ import {
   getAiConfigRevision,
   recordAiHealthCheck,
   setAiEnabled,
-  setCustomEndpoints,
   setDefaultModel,
-  setFavoriteModelIds,
   setGroqSttModel,
   setHarnessProviderEnabled,
   setLmstudioBaseURL,
@@ -101,7 +96,6 @@ import {
   setOpenaiCompatibleContextLimit,
   setOpenaiCompatibleModelId,
   setOpenrouterModelId,
-  setRecentModelIds,
   setSttProvider,
   setWhispercppBaseURL,
 } from "@/modules/settings/store";
@@ -112,7 +106,6 @@ import {
   ArrowUpRight01Icon,
   Cancel01Icon,
   CheckmarkCircle02Icon,
-  ChevronDown,
   InformationCircleIcon,
   Mic01Icon,
   Refresh01Icon,
@@ -220,75 +213,6 @@ export function ModelsSection() {
     await clearKey(provider);
     setKeys((prev) => (prev ? { ...prev, [provider]: null } : prev));
     await emitKeysChanged();
-  };
-
-  const onSaveEndpointKey = async (endpointId: string, value: string) => {
-    await setCustomEndpointKey(endpointId, value);
-    setEpKeys((prev) => ({ ...prev, [endpointId]: value }));
-    await emitKeysChanged();
-  };
-
-  const onClearEndpointKey = async (endpointId: string) => {
-    await clearCustomEndpointKey(endpointId);
-    setEpKeys((prev) => ({ ...prev, [endpointId]: null }));
-    await emitKeysChanged();
-  };
-
-  const addCustomEndpoint = async () => {
-    const ep: CustomEndpoint = {
-      id: crypto.randomUUID().slice(0, 8),
-      name: "",
-      baseURL: "",
-      modelId: "",
-      contextLimit: 128_000,
-    };
-    await setCustomEndpoints([...customEndpoints, ep]);
-  };
-
-  const updateCustomEndpoint = async (
-    id: string,
-    patch: Partial<CustomEndpoint>,
-  ) => {
-    await setCustomEndpoints(
-      customEndpoints.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-    );
-  };
-
-  const removeCustomEndpoint = async (id: string) => {
-    await clearCustomEndpointKey(id);
-    setEpKeys((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-
-    // Drop the now-dead model id from favorites/recents before touching the
-    // selection, so the recents push from a selection reset can't race it.
-    const deadModelId = compatModelIdForEndpoint(id);
-    const { favoriteModelIds, recentModelIds } = usePreferencesStore.getState();
-    if (favoriteModelIds.includes(deadModelId)) {
-      await setFavoriteModelIds(
-        favoriteModelIds.filter((m) => m !== deadModelId),
-      );
-    }
-    if (recentModelIds.includes(deadModelId)) {
-      await setRecentModelIds(recentModelIds.filter((m) => m !== deadModelId));
-    }
-
-    // If the deleted endpoint was the active model, the selection would dangle
-    // and the next send throws "Custom endpoint not found". Fall back to another
-    // endpoint when one remains, else the default model.
-    const remaining = customEndpoints.filter((e) => e.id !== id);
-    const { selectedModelId, setSelectedModelId } = useChatStore.getState();
-    if (selectedModelId === deadModelId) {
-      setSelectedModelId(
-        remaining[0]
-          ? compatModelIdForEndpoint(remaining[0].id)
-          : DEFAULT_MODEL_ID,
-      );
-    }
-
-    await setCustomEndpoints(remaining);
   };
 
   const localConfig = (id: ProviderId): LocalConfig | null => {
@@ -443,7 +367,6 @@ export function ModelsSection() {
                 <AddProviderMenu
                   providers={addableProviders}
                   onAdd={addProvider}
-                  onAddCompat={addCustomEndpoint}
                 />
               </div>
 
@@ -514,17 +437,6 @@ export function ModelsSection() {
                       />
                     );
                   })}
-                  {customEndpoints.map((ep) => (
-                    <CustomEndpointCard
-                      key={ep.id}
-                      endpoint={ep}
-                      endpointKey={epKeys[ep.id] ?? null}
-                      onSaveKey={(v) => onSaveEndpointKey(ep.id, v)}
-                      onClearKey={() => onClearEndpointKey(ep.id)}
-                      onUpdate={(patch) => updateCustomEndpoint(ep.id, patch)}
-                      onRemove={() => removeCustomEndpoint(ep.id)}
-                    />
-                  ))}
                 </div>
               )}
             </div>
@@ -560,11 +472,9 @@ type LocalConfig = {
 function AddProviderMenu({
   providers,
   onAdd,
-  onAddCompat,
 }: {
   providers: readonly ProviderInfo[];
   onAdd: (id: ProviderId) => void;
-  onAddCompat: () => void;
 }) {
   const { t } = useTranslation();
   const cloud = providers.filter((p) => !isLocalProvider(p.id));
@@ -595,19 +505,16 @@ function AddProviderMenu({
             ))}
           </>
         ) : null}
-        <DropdownMenuLabel className="px-2 text-[10px] tracking-wide text-muted-foreground uppercase">
-          {t("settings.models.localCustom")}
-        </DropdownMenuLabel>
-        {local.map((p) => (
-          <ProviderMenuItem key={p.id} provider={p} onAdd={onAdd} />
-        ))}
-        <DropdownMenuItem
-          onSelect={() => onAddCompat()}
-          className="flex items-center gap-2 text-[12px]"
-        >
-          <ProviderIcon provider="openai-compatible" size={13} />
-          <span>{t("ai.openAiCompatible")}</span>
-        </DropdownMenuItem>
+        {local.length > 0 ? (
+          <>
+            <DropdownMenuLabel className="px-2 text-[10px] tracking-wide text-muted-foreground uppercase">
+              {t("settings.models.localCustom")}
+            </DropdownMenuLabel>
+            {local.map((p) => (
+              <ProviderMenuItem key={p.id} provider={p} onAdd={onAdd} />
+            ))}
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -917,7 +824,7 @@ function DefaultsBlock({
     }
   };
 
-  const isAiActive = aiEnabled && healthCurrent;
+  const isAiActive = aiEnabled;
 
   return (
     <div className="flex flex-col gap-3">
@@ -926,18 +833,10 @@ function DefaultsBlock({
         <FieldRow label={t("settings.models.aiActivation")}>
           <div className="flex flex-1 items-center gap-2">
             <Switch
-              checked={aiEnabled && healthCurrent}
-              disabled={!hasAny || healthStatus.phase === "testing"}
+              checked={aiEnabled}
+              disabled={!hasAny}
               onCheckedChange={async (value) => {
-                if (value) {
-                  if (!healthCurrent) {
-                    await testAi();
-                  } else {
-                    await setAiEnabled(true);
-                  }
-                } else {
-                  await setAiEnabled(false);
-                }
+                await setAiEnabled(value);
               }}
               aria-label={t("settings.models.aiActivation")}
             />
@@ -968,7 +867,7 @@ function DefaultsBlock({
                     : t("settings.models.aiHealthFailed")
                   : healthCurrent
                     ? t("settings.models.aiHealthVerified")
-                    : t("settings.models.aiHealthRequired")}
+                    : ""}
             </span>
           </div>
         </FieldRow>
@@ -1863,375 +1762,6 @@ function LocalProviderCard({
           </p>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function CustomEndpointCard({
-  endpoint,
-  endpointKey,
-  onSaveKey,
-  onClearKey,
-  onUpdate,
-  onRemove,
-}: {
-  endpoint: CustomEndpoint;
-  endpointKey: string | null;
-  onSaveKey: (v: string) => Promise<void>;
-  onClearKey: () => Promise<void>;
-  onUpdate: (patch: Partial<CustomEndpoint>) => Promise<void>;
-  onRemove: () => void;
-}) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(!endpoint.baseURL.trim());
-  const [nameDraft, setNameDraft] = useState(endpoint.name);
-  const [urlDraft, setUrlDraft] = useState(endpoint.baseURL);
-  const [modelDraft, setModelDraft] = useState(endpoint.modelId);
-  const [contextDraft, setContextDraft] = useState(
-    String(endpoint.contextLimit ?? ""),
-  );
-  const [keyDraft, setKeyDraft] = useState("");
-  const { status: testStatus, detail: testDetail, test } =
-    useEndpointProbe(urlDraft);
-
-  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
-  const [isFetchingModels, setIsFetchingModels] = useState(false);
-  const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
-  const [manualModelMode, setManualModelMode] = useState(false);
-
-  const fetchModels = async (overrideUrl?: string) => {
-    const targetUrl = (overrideUrl ?? urlDraft).trim();
-    if (!targetUrl) return;
-    setIsFetchingModels(true);
-    setFetchModelsError(null);
-    try {
-      const keyToUse = endpointKey ?? (keyDraft.trim() || undefined);
-      const models = await fetchCompatibleModels(targetUrl, {
-        apiKey: keyToUse,
-      });
-      setDiscoveredModels(models);
-      if (models.length > 0) {
-        setManualModelMode(false);
-        if (!modelDraft.trim() || !models.includes(modelDraft.trim())) {
-          const nextModel = models[0];
-          setModelDraft(nextModel);
-          void onUpdate({ modelId: nextModel });
-        }
-      } else {
-        setManualModelMode(true);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setFetchModelsError(msg);
-      setManualModelMode(true);
-    } finally {
-      setIsFetchingModels(false);
-    }
-  };
-
-  useEffect(() => setNameDraft(endpoint.name), [endpoint.name]);
-  useEffect(() => setUrlDraft(endpoint.baseURL), [endpoint.baseURL]);
-  useEffect(() => setModelDraft(endpoint.modelId), [endpoint.modelId]);
-  useEffect(
-    () => setContextDraft(String(endpoint.contextLimit ?? "")),
-    [endpoint.contextLimit],
-  );
-
-  const configured = !!endpoint.baseURL.trim() && !!endpoint.modelId.trim();
-
-  return (
-    <div className="flex flex-col rounded-lg border border-border/60 bg-card/60">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 px-3 py-2 text-left"
-      >
-        <HugeiconsIcon
-          icon={ChevronDown}
-          size={12}
-          strokeWidth={2}
-          className={cn(
-            "shrink-0 text-muted-foreground/60 transition-transform",
-            !expanded && "-rotate-90",
-          )}
-        />
-        <ProviderIcon provider="openai-compatible" size={15} />
-        <span className="text-[12.5px] font-medium truncate">
-          {endpoint.name || t("ai.openAiCompatible")}
-        </span>
-        {endpoint.modelId.trim() && (
-          <span className="text-[10.5px] text-muted-foreground truncate font-mono">
-            {endpoint.modelId}
-          </span>
-        )}
-        {configured && testStatus === "ok" ? (
-          <Badge
-            variant="outline"
-            className="ml-1 h-4 gap-1 border-border/60 bg-muted/40 px-1.5 text-[10px] font-normal text-muted-foreground"
-          >
-            <HugeiconsIcon
-              icon={CheckmarkCircle02Icon}
-              size={9}
-              strokeWidth={2}
-            />
-            {t("settings.models.connected")}
-          </Badge>
-        ) : null}
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          title={t("settings.models.removeProvider")}
-          className="ml-auto size-7 text-muted-foreground hover:text-destructive"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={1.75} />
-        </Button>
-      </button>
-
-      {expanded && (
-        <div className="flex flex-col gap-2.5 border-t border-border/40 px-3 py-2.5">
-          <FieldRow label={t("settings.agents.name")}>
-            <Input
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={() => {
-                const v = nameDraft.trim();
-                if (v !== endpoint.name) void onUpdate({ name: v });
-              }}
-              placeholder={t("settings.models.endpointNamePlaceholder")}
-              spellCheck={false}
-              className="h-8 flex-1 text-[11.5px]"
-            />
-          </FieldRow>
-
-          <FieldRow label={t("settings.models.baseUrl")}>
-            <div className="flex flex-1 gap-1.5">
-              <Input
-                value={urlDraft}
-                onChange={(e) => setUrlDraft(e.target.value)}
-                onBlur={() => {
-                  const v = urlDraft.trim();
-                  if (v !== endpoint.baseURL) void onUpdate({ baseURL: v });
-                }}
-                placeholder="https://api.example.com/v1"
-                spellCheck={false}
-                className="h-8 flex-1 font-mono text-[11.5px]"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  await test();
-                  void fetchModels();
-                }}
-                disabled={!urlDraft.trim() || testStatus === "testing"}
-                className="h-8 px-3 text-[11px]"
-              >
-                {t("settings.models.test")}
-              </Button>
-            </div>
-          </FieldRow>
-
-          <FieldRow label={t("settings.models.modelId")}>
-            <div className="flex flex-col flex-1 gap-1.5">
-              <div className="flex flex-1 gap-1.5">
-                {discoveredModels.length > 0 && !manualModelMode ? (
-                  <Select
-                    value={modelDraft}
-                    onValueChange={(val) => {
-                      if (val === "__manual__") {
-                        setManualModelMode(true);
-                      } else {
-                        setModelDraft(val);
-                        if (val !== endpoint.modelId) void onUpdate({ modelId: val });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 flex-1 font-mono text-[11.5px]">
-                      <SelectValue
-                        placeholder={t("settings.models.selectModelPlaceholder")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-56">
-                      {discoveredModels.map((m) => (
-                        <SelectItem
-                          key={m}
-                          value={m}
-                          className="font-mono text-[11.5px]"
-                        >
-                          {m}
-                        </SelectItem>
-                      ))}
-                      <SelectItem
-                        value="__manual__"
-                        className="text-[11.5px] text-muted-foreground border-t border-border/40 mt-1"
-                      >
-                        {t("settings.models.customModelManual")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={modelDraft}
-                    onChange={(e) => setModelDraft(e.target.value)}
-                    onBlur={() => {
-                      const v = modelDraft.trim();
-                      if (v !== endpoint.modelId) void onUpdate({ modelId: v });
-                    }}
-                    placeholder="gpt-4o, qwen3-max, glm-4.6, …"
-                    spellCheck={false}
-                    className="h-8 flex-1 font-mono text-[11.5px]"
-                  />
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void fetchModels()}
-                  disabled={!urlDraft.trim() || isFetchingModels}
-                  className="h-8 px-2.5 text-[11px] gap-1 shrink-0"
-                  title={t("settings.models.fetchModelsTitle")}
-                >
-                  <HugeiconsIcon
-                    icon={Refresh01Icon}
-                    size={11}
-                    className={cn(isFetchingModels && "animate-spin")}
-                  />
-                  {isFetchingModels
-                    ? t("settings.models.fetchingModels")
-                    : t("settings.models.fetchModels")}
-                </Button>
-                {discoveredModels.length > 0 && manualModelMode ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setManualModelMode(false)}
-                    className="h-8 px-2 text-[10.5px] text-muted-foreground hover:text-foreground shrink-0"
-                  >
-                    {t("settings.models.modelsFound", {
-                      count: discoveredModels.length,
-                    })}
-                  </Button>
-                ) : null}
-              </div>
-              {fetchModelsError ? (
-                <span className="text-[10.5px] text-destructive/80 truncate">
-                  {fetchModelsError}
-                </span>
-              ) : null}
-            </div>
-          </FieldRow>
-
-          <FieldRow label={t("settings.models.autocompleteProfile")}>
-            <Select
-              value={endpoint.autocompleteProfile ?? "auto"}
-              onValueChange={(value) =>
-                void onUpdate({
-                  autocompleteProfile: value as CompatibleCompletionProfile,
-                })
-              }
-            >
-              <SelectTrigger className="h-8 w-full text-[11.5px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(
-                  [
-                    "auto",
-                    "generic",
-                    "openai",
-                    "deepseek",
-                    "ollama",
-                    "lmstudio",
-                  ] as const
-                ).map((profile) => (
-                  <SelectItem
-                    key={profile}
-                    value={profile}
-                    className="text-[11.5px]"
-                  >
-                    {t(`settings.models.autocompleteProfiles.${profile}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldRow>
-
-          <FieldRow label={t("settings.models.contextLabel")}>
-            <div className="flex flex-1 items-center gap-1.5">
-              <Input
-                value={contextDraft}
-                onChange={(e) => setContextDraft(e.target.value)}
-                onBlur={() => {
-                  const v = parseInt(contextDraft, 10);
-                  if (Number.isFinite(v) && v >= 1000)
-                    void onUpdate({ contextLimit: v });
-                  else setContextDraft(String(endpoint.contextLimit ?? ""));
-                }}
-                placeholder="128000"
-                spellCheck={false}
-                className="h-8 w-28 font-mono text-[11.5px]"
-              />
-              <span className="text-[10.5px] text-muted-foreground">
-                {t("settings.models.tokensUnit")}
-              </span>
-            </div>
-          </FieldRow>
-
-          <FieldRow label={t("settings.models.apiKey")}>
-            {endpointKey ? (
-              <div className="flex flex-1 items-center gap-1.5">
-                <code className="flex-1 truncate rounded bg-muted/40 px-2 py-1 font-mono text-[11px] text-muted-foreground">
-                  {`${endpointKey.slice(0, 4)}${"•".repeat(8)}${endpointKey.slice(-4)}`}
-                </code>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => void onClearKey()}
-                  title={t("settings.models.deleteKey")}
-                  className="size-7 text-muted-foreground hover:text-destructive"
-                >
-                  <HugeiconsIcon
-                    icon={Cancel01Icon}
-                    size={12}
-                    strokeWidth={1.75}
-                  />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-1 gap-1.5">
-                <Input
-                  type="password"
-                  value={keyDraft}
-                  onChange={(e) => setKeyDraft(e.target.value)}
-                  placeholder={t("settings.models.optionalKeyPlaceholder")}
-                  spellCheck={false}
-                  className="h-8 flex-1 font-mono text-[11.5px]"
-                />
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    const v = keyDraft.trim();
-                    if (!v) return;
-                    await onSaveKey(v);
-                    setKeyDraft("");
-                  }}
-                  disabled={!keyDraft.trim()}
-                  className="h-8 px-3 text-[11px]"
-                >
-                  {t("common.save")}
-                </Button>
-              </div>
-            )}
-          </FieldRow>
-
-          <StatusLine status={testStatus} detail={testDetail} />
-        </div>
-      )}
     </div>
   );
 }

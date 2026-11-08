@@ -66,7 +66,7 @@ import { Button } from "@/components/ui/button";
 import { HarnessProviderAccounts } from "@/modules/harness/components/HarnessProviderAccounts";
 import { HarnessUsageDisplaySettings } from "@/modules/harness/components/HarnessUsageDisplaySettings";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
-import { ServerStack01Icon } from "@hugeicons/core-free-icons";
+import { AiScanIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 function Row({
@@ -407,6 +407,30 @@ function RemoteConnectionsBlock() {
     </section>
   );
 }
+function ApiModelsLinkBlock() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border/60 bg-card/40 p-3">
+      <div className="flex flex-col gap-0.5 min-w-0 pr-3">
+        <span className="text-xs font-semibold">{t("settings.models.title")}</span>
+        <span className="text-[11px] text-muted-foreground">
+          {t("settings.models.harnessSyncNotice")}
+        </span>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => void openSettingsWindow("models")}
+        className="h-7 text-xs gap-1.5 shrink-0 cursor-pointer"
+      >
+        <HugeiconsIcon icon={AiScanIcon} size={12} />
+        <span>{t("settings.models.manageEndpoints")}</span>
+      </Button>
+    </div>
+  );
+}
+
 export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { t } = useTranslation();
   return (
@@ -420,6 +444,7 @@ export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
       <SubHeading title={t("harness.settings.general")} />
       <GeneralBlock />
       <HarnessProviderAccounts />
+      <ApiModelsLinkBlock />
       <HarnessUsageDisplaySettings />
       <RemoteConnectionsBlock />
       <SubHeading title={t("harness.settings.providers")} />

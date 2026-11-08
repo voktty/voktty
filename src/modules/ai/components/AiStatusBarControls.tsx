@@ -36,6 +36,7 @@ import {
   Mic01Icon,
   PlugIcon,
   ServerStack01Icon,
+  Settings01Icon,
   Search01Icon,
   StarIcon,
   StopCircleIcon,
@@ -602,6 +603,16 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
                 />
               ))
             )}
+          </div>
+          <div className="border-t border-border/50 px-2.5 py-1.5 bg-muted/20 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => void openSettingsWindow("models")}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <HugeiconsIcon icon={Settings01Icon} size={11} strokeWidth={1.75} />
+              <span>{t("settings.models.manageEndpoints")}</span>
+            </button>
           </div>
         </div>
       </DropdownMenuContent>
