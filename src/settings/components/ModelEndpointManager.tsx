@@ -10,9 +10,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import {
-  type CustomEndpoint,
-  type ApiProtocol,
+import type {
+  CustomEndpoint,
+  ApiProtocol,
 } from "@/modules/ai/config";
 import {
   THIRD_PARTY_PROVIDERS,
