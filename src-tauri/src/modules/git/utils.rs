@@ -72,13 +72,79 @@ pub fn canonical_dir(
     })
 }
 
+pub fn is_git_system_authorized(path: &Path, workspace: &WorkspaceEnv) -> bool {
+    if workspace.is_remote()
+        || !path.is_dir()
+        || !crate::modules::workspace_trust::is_trustable_root(path)
+    {
+        return false;
+    }
+    let norm = path.to_string_lossy().replace('\\', "/");
+    let norm_clean = norm.trim_end_matches('/');
+
+    // 1. Check safe.directory in git config (handles global/system/local safe.directory exceptions)
+    if let Ok(output) = crate::modules::git::process::run_git(
+        workspace,
+        None,
+        ["config", "--get-all", "safe.directory"],
+        5,
+    ) {
+        if output.exit_code == Some(0) {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let entry = line.trim().trim_end_matches('/');
+                if entry == "*"
+                    || (!entry.is_empty()
+                        && (entry == norm_clean || norm_clean.starts_with(&format!("{entry}/"))))
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // 2. Check if git itself can query the repo without dubious ownership or permission errors
+    let path_str = path.to_string_lossy();
+    if let Ok(output) = crate::modules::git::process::run_git(
+        workspace,
+        Some(&path_str),
+        ["rev-parse", "--is-inside-work-tree"],
+        5,
+    ) {
+        if output.exit_code == Some(0) {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.trim() == "true" {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+pub fn ensure_repo_authorized(
+    registry: &WorkspaceRegistry,
+    path: &Path,
+    workspace: &WorkspaceEnv,
+) -> bool {
+    if workspace.is_remote() || registry.is_authorized(path) {
+        return true;
+    }
+    if is_git_system_authorized(path, workspace) {
+        let _ = crate::modules::workspace_trust::authorize_and_remember(registry, path);
+        return true;
+    }
+    false
+}
+
 pub fn authorized_repo_root(
     registry: &WorkspaceRegistry,
     path: &str,
     workspace: &WorkspaceEnv,
 ) -> Result<ResolvedGitDirectory> {
     let canonical = canonical_dir(registry, path, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&canonical.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &canonical.local_path, workspace)
+    {
         return Err(GitError::PathOutsideWorkspace(canonical.local_path));
     }
     Ok(canonical)

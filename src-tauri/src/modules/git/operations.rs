@@ -15,8 +15,8 @@ use crate::modules::git::types::{
     DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
-    authorized_repo_root, canonical_dir, resolve_literal_within_repo, resolve_within_repo,
-    split_upstream, ResolvedGitDirectory,
+    authorized_repo_root, canonical_dir, ensure_repo_authorized, resolve_literal_within_repo,
+    resolve_within_repo, split_upstream, ResolvedGitDirectory,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 use crate::modules::workspace_trust::authorize_and_remember;
@@ -27,7 +27,7 @@ pub fn resolve_repo(
     workspace: &WorkspaceEnv,
 ) -> Result<Option<GitRepoInfo>> {
     let cwd = canonical_dir(registry, cwd, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&cwd.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &cwd.local_path, workspace) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
     ensure_git_available(&cwd.workspace)?;
@@ -48,7 +48,7 @@ fn resolve_repo_in_authorized(
     };
     let canonical_root = canonical_dir(registry, &root_line, &cwd.workspace)?;
     if !cwd.workspace.is_remote() {
-        let _ = registry.authorize(&canonical_root.local_path);
+        let _ = authorize_and_remember(registry, &canonical_root.local_path);
     }
 
     let head = match git_stdout_lines(
@@ -91,7 +91,7 @@ pub fn panel_snapshot(
     workspace: &WorkspaceEnv,
 ) -> Result<GitPanelSnapshot> {
     let cwd = canonical_dir(registry, cwd, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&cwd.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &cwd.local_path, workspace) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
     ensure_git_available(&cwd.workspace)?;
@@ -108,7 +108,7 @@ pub fn panel_snapshot(
     };
     let canonical_root = canonical_dir(registry, &root_line, &cwd.workspace)?;
     if !workspace.is_remote() {
-        let _ = registry.authorize(&canonical_root.local_path);
+        let _ = authorize_and_remember(registry, &canonical_root.local_path);
     }
 
     let status = status_inner(&canonical_root)?;
@@ -1682,7 +1682,7 @@ fn safe_directory_path(path: &str) -> Result<&str> {
 
 pub fn init(registry: &WorkspaceRegistry, cwd: &str, workspace: &WorkspaceEnv) -> Result<()> {
     let cwd = canonical_dir(registry, cwd, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&cwd.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &cwd.local_path, workspace) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
     ensure_git_available(&cwd.workspace)?;
@@ -1694,7 +1694,7 @@ pub fn init(registry: &WorkspaceRegistry, cwd: &str, workspace: &WorkspaceEnv) -
     )?;
     ensure_success(&output, "failed to initialize git repository")?;
     if !workspace.is_remote() {
-        let _ = registry.authorize(&cwd.local_path);
+        let _ = authorize_and_remember(registry, &cwd.local_path);
     }
     Ok(())
 }
@@ -1707,7 +1707,7 @@ pub fn clone(
     workspace: &WorkspaceEnv,
 ) -> Result<String> {
     let parent = canonical_dir(registry, parent_dir, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&parent.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &parent.local_path, workspace) {
         return Err(GitError::PathOutsideWorkspace(parent.local_path));
     }
     ensure_git_available(&parent.workspace)?;
@@ -1762,7 +1762,7 @@ pub fn clone(
     };
     let cloned_path = Path::new(&parent.local_path).join(&repo_dir_name);
     if !workspace.is_remote() {
-        let _ = registry.authorize(&cloned_path);
+        let _ = authorize_and_remember(registry, &cloned_path);
     }
     Ok(cloned_path.to_string_lossy().to_string())
 }

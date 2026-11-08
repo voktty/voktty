@@ -1396,3 +1396,20 @@ fn cherry_pick_commit_rejects_invalid_sha() {
         Ok(_) => panic!("expected error for invalid sha"),
     }
 }
+
+#[test]
+fn git_system_authorized_repository_is_automatically_trusted_without_manual_authorization() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    let unauthenticated_registry = WorkspaceRegistry::default();
+    assert!(!unauthenticated_registry.is_authorized(&fx.repo_path));
+
+    let repo_info =
+        operations::resolve_repo(&unauthenticated_registry, &fx.repo_str(), &fx.workspace)
+            .expect("git system authorized repo should resolve without manual authorization");
+
+    assert!(repo_info.is_some());
+    assert!(unauthenticated_registry.is_authorized(&fx.repo_path));
+}

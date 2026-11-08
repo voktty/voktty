@@ -35,6 +35,7 @@ import {
   subscribeModels,
   mergeModelSettings,
   loadLastModelSettings,
+  saveLastModelChoice,
   saveLastModelSettings,
   saveRecentModelChoice,
 } from "@/modules/harness/lib/models";
@@ -388,6 +389,7 @@ export function QuickComposer({ onShown }: { onShown: () => void }) {
       rememberQuickProject(cwd);
       saveLastModelSettings(settings);
       saveRecentModelChoice(picked.harness, picked.model);
+      saveLastModelChoice(picked.harness, picked.model);
       setPrompt("");
       setPicker(null);
       setSlash(null);

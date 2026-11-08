@@ -175,7 +175,7 @@ fn list_worktrees(
             match std::fs::symlink_metadata(&local_path) {
                 Ok(metadata) if metadata.file_type().is_symlink() => missing = true,
                 Ok(metadata) if metadata.is_dir() => {
-                    registry.authorize(&local_path)?;
+                    crate::modules::workspace_trust::authorize_and_remember(registry, &local_path)?;
                 }
                 _ => missing = true,
             }
