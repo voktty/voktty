@@ -346,7 +346,11 @@ impl CompanionLoopback {
     }
 
     fn address(&self) -> SocketAddr {
-        self.address
+        if self.address.ip().is_unspecified() {
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), self.address.port())
+        } else {
+            self.address
+        }
     }
 }
 

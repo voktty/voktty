@@ -153,7 +153,7 @@ function renderBlock(
       {block.tool ? (
         <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2 text-xs">
           <p className="font-mono text-[11px] font-medium text-muted-foreground">
-            {t("companion.mobile.toolExecution")}: {block.tool.title || block.tool.kind || "command"}
+            {t("companion.mobile.toolExecution")}: {block.tool.title || block.tool.kind || ""}
           </p>
           {block.tool.detail || block.tool.preview?.path || block.tool.preview?.query ? (
             <pre className="mt-1.5 overflow-x-auto rounded bg-background/70 p-2 font-mono text-[10px] text-foreground">
@@ -172,7 +172,7 @@ function renderBlock(
           <p className="text-[11px] text-muted-foreground">
             {t("companion.mobile.approvalDescription")}{" "}
             <span className="font-mono text-foreground">
-              {block.tool?.title || block.tool?.kind || block.text || "action"}
+              {block.tool?.title || block.tool?.kind || block.text || ""}
             </span>
           </p>
           <div className="flex gap-2 pt-1">
@@ -431,7 +431,9 @@ export function CompanionMobileApp() {
           <div className="flex items-center gap-2.5">
             <img src="/voktty-icon.png" alt="Voktty" className="size-7 rounded-lg" />
             <div>
-              <p className="text-xs font-semibold tracking-tight text-foreground">Voktty Companion</p>
+              <p className="text-xs font-semibold tracking-tight text-foreground">
+                {t("companion.mobile.title")}
+              </p>
               <div className="flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-[10px] font-medium text-muted-foreground">

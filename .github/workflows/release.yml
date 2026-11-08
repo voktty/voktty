@@ -610,6 +610,17 @@ jobs:
           echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
           TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
           echo "$TOOLCHAIN" >> $GITHUB_PATH
+          TARGET_ENV=$(echo "${{ matrix.rust_target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          CLANG="$TOOLCHAIN/${{ matrix.ndk_prefix }}28-clang"
+          echo "CC_${{ matrix.rust_target }}=$CLANG" >> $GITHUB_ENV
+          echo "CC_${TARGET_ENV}=$CLANG" >> $GITHUB_ENV
+          echo "CARGO_TARGET_${TARGET_ENV}_LINKER=$CLANG" >> $GITHUB_ENV
+          echo "AR_${{ matrix.rust_target }}=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          echo "AR_${TARGET_ENV}=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_${TARGET_ENV}_AR=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.rust_target }}-clang" || true
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.rust_target }}28-clang" || true
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.ndk_prefix }}-clang" || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
