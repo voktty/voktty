@@ -30,18 +30,6 @@ jobs:
             abi: x86_64
             bootstrap_arch: x86_64
             apk_suffix: x64
-          - rust_target: armv7-linux-androideabi
-            tauri_target: armv7
-            ndk_prefix: armv7a-linux-androideabi
-            abi: armeabi-v7a
-            bootstrap_arch: arm
-            apk_suffix: arm32
-          - rust_target: i686-linux-android
-            tauri_target: i686
-            ndk_prefix: i686-linux-android
-            abi: x86
-            bootstrap_arch: i686
-            apk_suffix: x86
 
     steps:
       - name: Checkout

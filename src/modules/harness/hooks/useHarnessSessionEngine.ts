@@ -1738,6 +1738,8 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
     };
   }, [onSubmit, onApproval]);
 
+  const reportedCompanionStates = useRef<Map<string, string>>(new Map());
+
   useEffect(() => {
     for (const session of sessions) {
       const hasPendingApproval = session.blocks.some(
@@ -1750,6 +1752,14 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         : hasPendingApproval
           ? "attention"
           : "idle";
+      const previous = reportedCompanionStates.current.get(session.id);
+      if (state === "idle" && previous === undefined) {
+        continue;
+      }
+      if (previous === state) {
+        continue;
+      }
+      reportedCompanionStates.current.set(session.id, state);
       void invoke("companion_set_session_state", {
         sessionId: session.id,
         agentState: state,
