@@ -1543,6 +1543,28 @@ export function Composer({
       taggedMcpServers(text, selectedMcp),
       text,
     );
+
+    if (ref.current) {
+      ref.current.value = "";
+      ref.current.style.height = "auto";
+    }
+    setDraft("");
+    onDraftChange?.("");
+    invalidateDropReads();
+    borrowedAttachmentIdsRef.current.clear();
+    attachmentsRef.current = [];
+    setAttachments([]);
+    setSelectedMcp([]);
+    setResendEdited(false);
+    setPlanSelected(false);
+    setOrchestrationSelected(false);
+    setDraftSelected(false);
+    onEditingLastTurnChange?.(false);
+    setSlash(null);
+    setMention(null);
+    setCreatingSkill(false);
+    syncHasValue("", []);
+
     const accepted = onSubmit(
       submittedText,
       files,
@@ -1560,28 +1582,10 @@ export function Composer({
         : undefined,
     );
     if (accepted === false) {
-      restoreDraft(text, files);
+      restoreDraft(text, files, resendBorrowedAttachmentIds);
+      setSelectedMcp(resendSelectedMcp);
       return;
     }
-    if (!ref.current) return;
-    ref.current.value = "";
-    ref.current.style.height = "auto";
-    setDraft("");
-    onDraftChange?.("");
-    invalidateDropReads();
-    borrowedAttachmentIdsRef.current.clear();
-    attachmentsRef.current = [];
-    setAttachments([]);
-    setSelectedMcp([]);
-    setResendEdited(false);
-    setPlanSelected(false);
-    setOrchestrationSelected(false);
-    setDraftSelected(false);
-    onEditingLastTurnChange?.(false);
-    setSlash(null);
-    setMention(null);
-    setCreatingSkill(false);
-    syncHasValue("", []);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

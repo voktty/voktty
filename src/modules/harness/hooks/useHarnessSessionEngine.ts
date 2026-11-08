@@ -700,6 +700,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
                     inboxCard: undefined,
                     noteCard: undefined,
                     handoffCard: undefined,
+                    composerSeed: undefined,
                     queuedMessages: [...(s.queuedMessages ?? []), message],
                     queueStatus:
                       s.queueStatus === "paused" ? "paused" : "active",
@@ -762,6 +763,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             inboxCard: undefined,
             noteCard: undefined,
             handoffCard: undefined,
+            composerSeed: undefined,
           };
           if (options?.queuedMessageId) {
             next = dequeueQueuedMessage(next, options.queuedMessageId);
@@ -880,6 +882,7 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
             inboxCard: undefined,
             noteCard: undefined,
             handoffCard: undefined,
+            composerSeed: undefined,
           };
           if (approvedPlan && intent === "build") {
             next = {

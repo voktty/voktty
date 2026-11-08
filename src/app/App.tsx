@@ -2629,6 +2629,24 @@ function DesktopApp() {
     };
   }, [openFileTab]);
 
+  useEffect(() => {
+    const handleOpenPreview = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        target?: string;
+        sourceId?: number;
+      }>;
+      const target = customEvent.detail?.target ?? "";
+      const source = customEvent.detail?.sourceId
+        ? tabs.find((t) => t.id === customEvent.detail.sourceId)
+        : tabs.find((t) => t.id === effectiveActiveId);
+      void openPreviewTab(target, { source });
+    };
+    window.addEventListener("voktty:open-preview", handleOpenPreview);
+    return () => {
+      window.removeEventListener("voktty:open-preview", handleOpenPreview);
+    };
+  }, [effectiveActiveId, openPreviewTab, tabs]);
+
   const openNewBrowser = useCallback(() => {
     return newPreviewTab("about:blank");
   }, [newPreviewTab]);

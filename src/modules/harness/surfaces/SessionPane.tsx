@@ -365,9 +365,10 @@ export const SessionPane = memo(function SessionPane({
       onNetworkSandboxChange={(config) =>
         onNetworkSandboxChange?.(session.id, config)
       }
-      onSubmit={(text, attachments, options) =>
-        onSubmit(session.id, text, attachments, options)
-      }
+      onSubmit={(text, attachments, options) => {
+        draftRef.current = "";
+        return onSubmit(session.id, text, attachments, options);
+      }}
       onStop={() => onStop(session.id)}
       onCompactContext={() => onCompactContext(session.id)}
       onRecallLastTurnReady={onRecallLastTurnReady}
