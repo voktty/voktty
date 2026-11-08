@@ -79,47 +79,43 @@ pub fn is_git_system_authorized(path: &Path, workspace: &WorkspaceEnv) -> bool {
     {
         return false;
     }
-    let norm = path.to_string_lossy().replace('\\', "/");
-    let norm_clean = norm.trim_end_matches('/');
 
-    // 1. Check safe.directory in git config (handles global/system/local safe.directory exceptions)
-    if let Ok(output) = crate::modules::git::process::run_git(
-        workspace,
-        None,
-        ["config", "--get-all", "safe.directory"],
-        5,
-    ) {
-        if output.exit_code == Some(0) {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                let entry = line.trim().trim_end_matches('/');
-                if entry == "*"
-                    || (!entry.is_empty()
-                        && (entry == norm_clean || norm_clean.starts_with(&format!("{entry}/"))))
-                {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // 2. Check if git itself can query the repo without dubious ownership or permission errors
     let path_str = path.to_string_lossy();
-    if let Ok(output) = crate::modules::git::process::run_git(
+    let Ok(output) = crate::modules::git::process::run_git(
         workspace,
         Some(&path_str),
-        ["rev-parse", "--is-inside-work-tree"],
+        ["rev-parse", "--show-toplevel"],
         5,
-    ) {
-        if output.exit_code == Some(0) {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if stdout.trim() == "true" {
-                return true;
-            }
-        }
+    ) else {
+        return false;
+    };
+
+    if output.exit_code != Some(0) {
+        return false;
     }
 
-    false
+    let toplevel = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if toplevel.is_empty() {
+        return false;
+    }
+
+    let toplevel_path = Path::new(&toplevel);
+    if !toplevel_path.join(".git").exists() {
+        return false;
+    }
+
+    let Ok(canonical_toplevel) = std::fs::canonicalize(toplevel_path) else {
+        return false;
+    };
+    let Ok(canonical_path) = std::fs::canonicalize(path) else {
+        return false;
+    };
+
+    if !canonical_path.starts_with(&canonical_toplevel) {
+        return false;
+    }
+
+    crate::modules::workspace_trust::is_trustable_root(&canonical_toplevel)
 }
 
 pub fn ensure_repo_authorized(
@@ -131,7 +127,7 @@ pub fn ensure_repo_authorized(
         return true;
     }
     if is_git_system_authorized(path, workspace) {
-        let _ = crate::modules::workspace_trust::authorize_and_remember(registry, path);
+        let _ = registry.authorize(path);
         return true;
     }
     false
@@ -143,8 +139,7 @@ pub fn authorized_repo_root(
     workspace: &WorkspaceEnv,
 ) -> Result<ResolvedGitDirectory> {
     let canonical = canonical_dir(registry, path, workspace)?;
-    if !workspace.is_remote() && !ensure_repo_authorized(registry, &canonical.local_path, workspace)
-    {
+    if !workspace.is_remote() && !registry.is_authorized(&canonical.local_path) {
         return Err(GitError::PathOutsideWorkspace(canonical.local_path));
     }
     Ok(canonical)
