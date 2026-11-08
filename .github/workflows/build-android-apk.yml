@@ -1,12 +1,14 @@
 name: Build Android APK
 
 on:
-  # Desactivado temporalmente del pipeline automatico hasta estabilizar movil/Android.
-  # Se puede reactivar descomentando el bloque 'push' cuando sea estable.
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -135,11 +137,8 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             KEYSTORE_PATH="src-tauri/gen/android/app/voktty-release.keystore"
             echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-            cat > src-tauri/gen/android/local.properties << EOF
-          VOKTTY_STORE_PASSWORD=$STORE_PASSWORD
-          VOKTTY_KEY_ALIAS=$KEY_ALIAS
-          VOKTTY_KEY_PASSWORD=$KEY_PASSWORD
-          EOF
+            printf "VOKTTY_STORE_PASSWORD=%s\nVOKTTY_KEY_ALIAS=%s\nVOKTTY_KEY_PASSWORD=%s\n" \
+              "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > src-tauri/gen/android/local.properties
           fi
 
       - name: Build APK

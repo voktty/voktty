@@ -28,6 +28,12 @@ test("manual Windows release selects only Windows and preserves the global updat
   );
   const defaultVersionPlan = manual({ version: "" });
   assert.equal(defaultVersionPlan.tag, "v1.2.3");
+  const planWithAndroid = manual({ android: true });
+  assert.equal(planWithAndroid.tag, "v1.2.4");
+  assert.deepEqual(
+    planWithAndroid.matrix.include.map((target) => target.platform),
+    ["windows-latest"],
+  );
 });
 
 test("tag releases select every desktop target and require source version equality", () => {
