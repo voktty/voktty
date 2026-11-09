@@ -25,6 +25,7 @@ import { EditorView } from "@codemirror/view";
 import {
   CheckmarkCircle02Icon,
   Comment01Icon,
+  GitCompareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
@@ -71,6 +72,7 @@ type Props = {
   chipLabel?: string;
   active: boolean;
   review?: GitReviewQueueConfig;
+  hideHeaderPath?: boolean;
 };
 
 const LARGE_FILE_THRESHOLD = 256 * 1024;
@@ -238,7 +240,13 @@ function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
   };
 }
 
-export function GitDiffPane({ source, chipLabel, active, review }: Props) {
+export function GitDiffPane({
+  source,
+  chipLabel,
+  active,
+  review,
+  hideHeaderPath = false,
+}: Props) {
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const themeExt = useEditorThemeExt();
   const { t } = useTranslation();
@@ -569,32 +577,90 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
       dir="ltr"
       className="flex h-full min-h-0 flex-col bg-background text-left"
     >
-      <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Badge
-            variant="outline"
-            className="text-[10px] uppercase tracking-wide"
-          >
-            {chipLabel ?? mode}
-          </Badge>
-          {isBinary ? (
-            <Badge variant="secondary" className="text-[10px]">
-              {t("git.diffBinaryFallback")}
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 select-none",
+          hideHeaderPath ? "h-8 border-border/40 bg-muted/10" : "h-10",
+        )}
+      >
+        {hideHeaderPath ? (
+          <div className="flex min-w-0 items-center gap-2">
+            {hasReviewedBaseline ? (
+              <div className="flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setViewMode(repoRoot, "worktree", path, "unreviewed")
+                  }
+                  className={cn(
+                    "rounded px-2 py-0.5 font-medium transition-colors cursor-pointer",
+                    viewMode === "unreviewed"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t("git.unreviewedDelta")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode(repoRoot, "worktree", path, "full")}
+                  className={cn(
+                    "rounded px-2 py-0.5 font-medium transition-colors cursor-pointer",
+                    viewMode === "full"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t("git.fullDiff")}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                <HugeiconsIcon
+                  icon={GitCompareIcon}
+                  size={13}
+                  className="text-primary/70"
+                />
+                <span>{t("notesBoard.tabReview")}</span>
+              </div>
+            )}
+            {isBinary ? (
+              <Badge variant="secondary" className="text-[10px] shrink-0">
+                {t("git.diffBinaryFallback")}
+              </Badge>
+            ) : isTooLarge ? (
+              <Badge variant="secondary" className="text-[10px] shrink-0">
+                {t("git.diffLargeFile")}
+              </Badge>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wide shrink-0"
+            >
+              {chipLabel ?? mode}
             </Badge>
-          ) : isTooLarge ? (
-            <Badge variant="secondary" className="text-[10px]">
-              {t("git.diffLargeFile")}
-            </Badge>
-          ) : null}
-          <span
-            className="truncate font-mono text-[11px] text-muted-foreground"
-            title={path}
-          >
-            {path}
-          </span>
-        </div>
+            {isBinary ? (
+              <Badge variant="secondary" className="text-[10px] shrink-0">
+                {t("git.diffBinaryFallback")}
+              </Badge>
+            ) : isTooLarge ? (
+              <Badge variant="secondary" className="text-[10px] shrink-0">
+                {t("git.diffLargeFile")}
+              </Badge>
+            ) : null}
+            <span
+              className="truncate font-mono text-[11px] text-muted-foreground"
+              title={path}
+            >
+              {path}
+            </span>
+          </div>
+        )}
         <div className="flex shrink-0 items-center gap-2 text-[10.5px] tabular-nums text-muted-foreground">
-          {hasReviewedBaseline ? (
+          {!hideHeaderPath && hasReviewedBaseline ? (
             <div className="flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[10px]">
               <button
                 type="button"
@@ -602,7 +668,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                   setViewMode(repoRoot, "worktree", path, "unreviewed")
                 }
                 className={cn(
-                  "rounded px-2 py-0.5 font-medium transition-colors",
+                  "rounded px-2 py-0.5 font-medium transition-colors cursor-pointer",
                   viewMode === "unreviewed"
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -614,7 +680,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                 type="button"
                 onClick={() => setViewMode(repoRoot, "worktree", path, "full")}
                 className={cn(
-                  "rounded px-2 py-0.5 font-medium transition-colors",
+                  "rounded px-2 py-0.5 font-medium transition-colors cursor-pointer",
                   viewMode === "full"
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -631,12 +697,12 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                 type="button"
                 size="sm"
                 variant="secondary"
-                className="h-7 gap-1.5 px-2 text-[10.5px]"
+                className="h-6.5 gap-1.5 px-2 text-[10.5px] cursor-pointer hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400"
                 onClick={() => setCommentDialogOpen(true)}
               >
                 <HugeiconsIcon
                   icon={Comment01Icon}
-                  size={13}
+                  size={12}
                   className="text-amber-500"
                 />
                 <span>{t("git.addComment")}</span>
@@ -651,12 +717,12 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                 type="button"
                 size="sm"
                 variant={isReviewed ? "outline" : "secondary"}
-                className="h-7 gap-1.5 px-2 text-[10.5px]"
+                className="h-6.5 gap-1.5 px-2 text-[10.5px] cursor-pointer"
                 onClick={() => void handleToggleReview()}
               >
                 <HugeiconsIcon
                   icon={CheckmarkCircle02Icon}
-                  size={13}
+                  size={12}
                   className={isReviewed ? "text-emerald-500" : ""}
                 />
                 <span>
@@ -669,9 +735,6 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
             </>
           ) : null}
 
-          <span className="truncate max-w-80 font-mono hidden md:inline-block">
-            {repoRoot}
-          </span>
           {useFallback ? (
             <>
               <span className="text-diff-add-fg">

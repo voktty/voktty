@@ -62,12 +62,14 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { TabSummary } from "../lib/agentHandoff";
+import { useNotesBoardStore } from "../store/notesBoardStore";
 
 type Props = {
   onRunCommand?: (command: string) => void;
   cwd?: string | null;
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
+  isMaximized?: boolean;
 };
 
 function reviewFileMenuItems(t: (key: string) => string, nativeUnavailableReason?: string): ExplorerMenuItem[] {
@@ -116,10 +118,19 @@ function statusBadge(statusCode: string) {
   };
 }
 
-export function GitReviewTab({ cwd = null }: Props) {
+export function GitReviewTab({
+  cwd = null,
+  onRunCommand: _onRunCommand,
+  tabs: _tabs,
+  onActivateAgent: _onActivateAgent,
+  isMaximized = false,
+}: Props) {
   const { t } = useTranslation();
   const sourceControl = useSourceControl(cwd ?? null);
   const activeWorkspaceEnv = useWorkspaceEnvStore((s) => s.env);
+  const modalWidth = useNotesBoardStore((s) => s.width);
+  const isWide = isMaximized || modalWidth >= 1150;
+  const isCompact = !isMaximized && modalWidth < 820;
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
@@ -423,16 +434,16 @@ export function GitReviewTab({ cwd = null }: Props) {
     <TooltipProvider delayDuration={400}>
       <div className="flex h-full w-full flex-col overflow-hidden bg-background/85 text-foreground backdrop-blur-xs">
         {/* Top Action & Stats Bar */}
-        <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/50 bg-muted/25 px-2.5 text-[11px] select-none gap-2">
+        <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/50 bg-muted/25 px-2.5 text-[11px] select-none gap-2 overflow-hidden">
           {/* Left: Branch & Counts */}
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             {branchName && (
               <Badge
                 variant="outline"
                 className="h-5 gap-1 rounded-md px-1.5 font-mono text-[10px] font-medium border-border/60 bg-background/50 shrink-0"
               >
-                <HugeiconsIcon icon={GitBranchIcon} size={11} className="text-primary" />
-                <span className="truncate max-w-32">{branchName}</span>
+                <HugeiconsIcon icon={GitBranchIcon} size={11} className="text-primary shrink-0" />
+                <span className="truncate max-w-28">{branchName}</span>
               </Badge>
             )}
             <span className="text-[11px] font-medium text-foreground shrink-0">
@@ -443,12 +454,12 @@ export function GitReviewTab({ cwd = null }: Props) {
             </span>
             {stagedCount > 0 && (
               <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 font-mono text-[9.5px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
-                +{stagedCount} {t("notesBoard.staged")}
+                +{stagedCount} {!isCompact && t("notesBoard.staged")}
               </span>
             )}
             {unstagedCount > 0 && (
               <span className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 font-mono text-[9.5px] font-semibold text-amber-600 dark:text-amber-400 shrink-0">
-                {unstagedCount} {t("notesBoard.unstaged")}
+                {unstagedCount} {!isCompact && t("notesBoard.unstaged")}
               </span>
             )}
           </div>
@@ -461,11 +472,14 @@ export function GitReviewTab({ cwd = null }: Props) {
                 size="sm"
                 onClick={handleStageAll}
                 disabled={busy !== null}
-                className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400"
+                className={cn(
+                  "h-6.5 text-[10.5px] gap-1 cursor-pointer hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400",
+                  isCompact ? "size-6.5 p-0" : "px-2",
+                )}
                 title={t("notesBoard.stageAll")}
               >
                 <HugeiconsIcon icon={Tick02Icon} size={12} />
-                <span>{t("notesBoard.stageAll")}</span>
+                {!isCompact && <span>{t("notesBoard.stageAll")}</span>}
               </Button>
             )}
             {stagedCount > 0 && (
@@ -474,11 +488,14 @@ export function GitReviewTab({ cwd = null }: Props) {
                 size="sm"
                 onClick={handleUnstageAll}
                 disabled={busy !== null}
-                className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400"
+                className={cn(
+                  "h-6.5 text-[10.5px] gap-1 cursor-pointer hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400",
+                  isCompact ? "size-6.5 p-0" : "px-2",
+                )}
                 title={t("notesBoard.unstageAll")}
               >
                 <HugeiconsIcon icon={RemoveSquareIcon} size={12} />
-                <span>{t("notesBoard.unstageAll")}</span>
+                {!isCompact && <span>{t("notesBoard.unstageAll")}</span>}
               </Button>
             )}
 
@@ -487,45 +504,65 @@ export function GitReviewTab({ cwd = null }: Props) {
               size="sm"
               onClick={() => setWalkthroughOpen(true)}
               disabled={entries.length === 0}
-              className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-primary/15 hover:text-primary"
+              className={cn(
+                "h-6.5 text-[10.5px] gap-1 cursor-pointer hover:bg-primary/15 hover:text-primary",
+                isCompact ? "size-6.5 p-0" : "px-2",
+              )}
               title={t("notesBoard.walkthroughAi")}
             >
               <HugeiconsIcon icon={SparklesIcon} size={12} className="text-primary" />
-              <span>{t("notesBoard.walkthroughAi")}</span>
+              {!isCompact && <span>{t("notesBoard.walkthroughAi")}</span>}
             </Button>
+
+            <span className="h-3 w-px bg-border/60 mx-0.5" />
 
             <Button
               variant="ghost"
-              size="sm"
+              size={isWide ? "sm" : "icon"}
               onClick={() => { openHistory(); }}
-              className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-muted"
+              className={cn(
+                "text-[10.5px] gap-1 cursor-pointer hover:bg-muted",
+                isWide
+                  ? "h-6.5 px-2"
+                  : "size-6.5 text-muted-foreground hover:text-foreground",
+              )}
               title={t("gitHistory.openCommitGraph")}
             >
               <HugeiconsIcon icon={FolderGitTwoIcon} size={12} className="text-primary" />
-              <span>{t("gitHistory.openCommitGraph")}</span>
+              {isWide && <span>{t("gitHistory.openCommitGraph")}</span>}
             </Button>
 
             <Button
               variant="ghost"
-              size="sm"
+              size={isWide ? "sm" : "icon"}
               onClick={() => setGithubOpen(true)}
-              className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-muted"
+              className={cn(
+                "text-[10.5px] gap-1 cursor-pointer hover:bg-muted",
+                isWide
+                  ? "h-6.5 px-2"
+                  : "size-6.5 text-muted-foreground hover:text-foreground",
+              )}
               title={t("notesBoard.githubPrReview")}
             >
               <HugeiconsIcon icon={GithubIcon} size={12} />
-              <span>{t("notesBoard.githubPrReview")}</span>
+              {isWide && <span>{t("notesBoard.githubPrReview")}</span>}
             </Button>
 
             <Button
               variant="ghost"
-              size="sm"
+              size={isWide ? "sm" : "icon"}
               onClick={() => setHandoffOpen(true)}
               disabled={entries.length === 0}
-              className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-primary/15 hover:text-primary"
+              className={cn(
+                "text-[10.5px] gap-1 cursor-pointer hover:bg-primary/15 hover:text-primary",
+                isWide
+                  ? "h-6.5 px-2"
+                  : "size-6.5 text-muted-foreground hover:text-primary",
+              )}
               title={t("notesBoard.sendReviewToAgent")}
             >
               <HugeiconsIcon icon={BotIcon} size={12} />
-              <span>{t("notesBoard.sendToAgent")}</span>
+              {isWide && <span>{t("notesBoard.sendToAgent")}</span>}
             </Button>
 
             {entries.length > 0 && (
@@ -534,7 +571,7 @@ export function GitReviewTab({ cwd = null }: Props) {
                 size="icon"
                 onClick={() => setDiscardAllOpen(true)}
                 disabled={busy !== null}
-                className="size-6 text-muted-foreground hover:bg-destructive/15 hover:text-destructive cursor-pointer"
+                className="size-6.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive cursor-pointer"
                 title={t("notesBoard.discardAll")}
               >
                 <HugeiconsIcon icon={Delete02Icon} size={13} />
@@ -546,7 +583,7 @@ export function GitReviewTab({ cwd = null }: Props) {
               size="icon"
               onClick={() => void sourceControl.refresh({ remote: "never" })}
               disabled={sourceControl.isLoading}
-              className="size-6 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              className="size-6.5 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
               title={t("common.refresh")}
             >
               <HugeiconsIcon
@@ -584,17 +621,19 @@ export function GitReviewTab({ cwd = null }: Props) {
                     type="button"
                     onClick={() => setFilterMode(mode)}
                     className={cn(
-                      "flex-1 rounded py-0.5 font-medium transition-colors cursor-pointer text-center",
+                      "flex-1 min-w-0 truncate rounded py-0.5 px-1 font-medium transition-colors cursor-pointer text-center",
                       filterMode === mode
                         ? "bg-muted text-foreground font-semibold shadow-2xs"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {mode === "all"
-                      ? t("notesBoard.allChanges")
-                      : mode === "staged"
-                        ? `${t("notesBoard.staged")} (${stagedCount})`
-                        : `${t("notesBoard.unstaged")} (${unstagedCount})`}
+                    <span className="truncate">
+                      {mode === "all"
+                        ? t("notesBoard.allChanges")
+                        : mode === "staged"
+                          ? `${t("notesBoard.staged")} (${stagedCount})`
+                          : `${t("notesBoard.unstaged")} (${unstagedCount})`}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -747,14 +786,20 @@ export function GitReviewTab({ cwd = null }: Props) {
                     e.stopPropagation();
                     setFileMenu({ x: e.clientX, y: e.clientY, entry: selectedEntry });
                   }}
-                  className="flex h-8 shrink-0 items-center justify-between border-b border-border/50 bg-muted/15 px-3 text-[11px] select-none"
+                  className="flex h-8 shrink-0 items-center justify-between border-b border-border/50 bg-muted/15 px-3 text-[11px] select-none gap-2 overflow-hidden"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono text-xs font-semibold text-foreground truncate">
+                  <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                    <span
+                      className="font-mono text-xs font-semibold text-foreground truncate"
+                      title={selectedEntry.path}
+                    >
                       {selectedEntry.path}
                     </span>
                     {selectedEntry.originalPath && (
-                      <span className="font-mono text-[10px] text-muted-foreground truncate">
+                      <span
+                        className="font-mono text-[10px] text-muted-foreground truncate"
+                        title={selectedEntry.originalPath}
+                      >
                         {t("notesBoard.renamedFrom", {
                           path: selectedEntry.originalPath,
                         })}
@@ -762,7 +807,7 @@ export function GitReviewTab({ cwd = null }: Props) {
                     )}
                     <span
                       className={cn(
-                        "rounded px-1.5 py-0.2 font-mono text-[9px] font-semibold uppercase",
+                        "rounded px-1.5 py-0.2 font-mono text-[9px] font-semibold uppercase shrink-0",
                         selectedEntry.unstaged
                           ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                           : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -830,6 +875,7 @@ export function GitReviewTab({ cwd = null }: Props) {
                 <div className="relative flex-1 min-h-0 overflow-hidden">
                   <GitDiffPane
                     active={true}
+                    hideHeaderPath={true}
                     source={{
                       kind: "working",
                       repoRoot,
