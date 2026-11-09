@@ -22,12 +22,16 @@ import type { GitDiffOpenInput, Tab } from "@/modules/tabs";
 import type { TabIconId } from "@/modules/tabs/lib/tabIcon";
 import {
   Cancel01Icon,
+  GithubIcon,
   Rocket01Icon,
   SidebarRightIcon,
   SparklesIcon,
+  StarIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { OFFICIAL_REPOSITORY } from "@/lib/identity";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 type Props = {
@@ -537,6 +541,30 @@ export function Header({
           onActivateLocal={onActivateLocalAgent}
           onOpenDiff={onOpenDiff}
         />
+
+        <Button
+          onClick={() => {
+            void Promise.resolve(openUrl(OFFICIAL_REPOSITORY)).catch(() => {});
+          }}
+          title={t("header.starOnGithub")}
+          aria-label={t("header.starOnGithub")}
+          variant="ghost"
+          size="icon-sm"
+          className="group relative shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <HugeiconsIcon
+            icon={GithubIcon}
+            size={16}
+            strokeWidth={1.75}
+            className="transition-transform group-hover:scale-105"
+          />
+          <HugeiconsIcon
+            icon={StarIcon}
+            size={8}
+            strokeWidth={2}
+            className="absolute -top-0.5 -right-0.5 text-amber-400 fill-amber-400 drop-shadow-[0_0_3px_rgba(251,191,36,0.6)] transition-transform group-hover:scale-125"
+          />
+        </Button>
 
         {!hideTabStyleToggle && (
           <Button

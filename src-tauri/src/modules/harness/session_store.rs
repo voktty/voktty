@@ -1305,7 +1305,50 @@ fn set_pinned(conn: &Connection, session_id: &str, pinned: bool) -> rusqlite::Re
     Ok(())
 }
 
-fn get_session(conn: &Connection, session_id: &str) -> rusqlite::Result<Option<SessionRecord>> {
+pub(crate) fn list_recent_sessions(
+    conn: &Connection,
+    limit: usize,
+) -> rusqlite::Result<Vec<SessionSummary>> {
+    let mut statement = conn.prepare(
+        "SELECT id, cwd, harness, model, runtime_mode, title, provider_session_id,
+                created_at, updated_at, branch, archived, pinned,
+                linked_work_item_json
+         FROM sessions
+         WHERE has_user_message = 1
+         ORDER BY updated_at DESC, id ASC
+         LIMIT ?1",
+    )?;
+    let rows = statement.query_map(params![limit as i64], |row| {
+        let archived: i64 = row.get(10)?;
+        let pinned: i64 = row.get(11)?;
+        Ok(SessionSummary {
+            id: row.get(0)?,
+            cwd: row.get(1)?,
+            harness: row.get(2)?,
+            model: row.get(3)?,
+            runtime_mode: row.get(4)?,
+            title: row.get(5)?,
+            provider_session_id: row.get(6)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            branch: nonempty(row.get(9)?),
+            repo: None,
+            additions: 0,
+            deletions: 0,
+            archived: archived != 0,
+            pinned: pinned != 0,
+            linked_work_item: optional_json(row.get(12)?),
+            orchestration: None,
+            orchestration_lead_id: None,
+        })
+    })?;
+    rows.collect()
+}
+
+pub(crate) fn get_session(
+    conn: &Connection,
+    session_id: &str,
+) -> rusqlite::Result<Option<SessionRecord>> {
     conn.query_row(
         "SELECT id, cwd, harness, model, model_settings, runtime_mode, title,
                 provider_session_id, blocks_json, created_at, updated_at,

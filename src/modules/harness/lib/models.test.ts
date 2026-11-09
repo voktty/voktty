@@ -463,3 +463,39 @@ describe("model effort helpers", () => {
   });
 });
 
+describe("syncCustomEndpointsToHarness", () => {
+  it("syncs dynamic endpoints and models into the api harness catalog", async () => {
+    const { syncCustomEndpointsToHarness, modelsFor } = await import("./models");
+
+    syncCustomEndpointsToHarness([
+      {
+        id: "deepseek-custom",
+        name: "DeepSeek Custom",
+        baseURL: "https://api.deepseek.com/v1",
+        modelId: "deepseek-chat",
+        models: ["deepseek-chat", "deepseek-reasoner"],
+        contextLimit: 64_000,
+      },
+    ]);
+
+    const apiModels = modelsFor("api");
+    expect(apiModels).toHaveLength(2);
+    expect(apiModels[0]).toMatchObject({
+      id: "api:deepseek-custom:deepseek-chat",
+      harness: "api",
+      name: "deepseek-chat",
+      provider: { id: "deepseek-custom", name: "DeepSeek Custom" },
+      contextWindow: 64_000,
+    });
+    expect(apiModels[1]).toMatchObject({
+      id: "api:deepseek-custom:deepseek-reasoner",
+      harness: "api",
+      name: "deepseek-reasoner",
+    });
+
+    // Syncing empty list clears the overlay
+    syncCustomEndpointsToHarness([]);
+    expect(modelsFor("api")).toEqual([]);
+  });
+});
+

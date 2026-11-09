@@ -594,4 +594,21 @@ describe("Composer file drops", () => {
       invoke.mock.calls.filter(([command]) => command === "inspect_paths"),
     ).toHaveLength(1);
   });
+
+  it("clears textarea value and calls onDraftChange with empty string on submit", async () => {
+    const onDraftChange = vi.fn();
+    await render({ initialDraft: "hello agent", onDraftChange });
+    const textarea = container.querySelector("textarea");
+    expect(textarea?.value).toBe("hello agent");
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+        ?.click();
+    });
+
+    expect(submitSpy).toHaveBeenCalledWith("hello agent", [], undefined);
+    expect(textarea?.value).toBe("");
+    expect(onDraftChange).toHaveBeenCalledWith("");
+  });
 });

@@ -6,8 +6,13 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
+      commit_sha:
+        description: "Commit SHA on main to release (leave blank for latest green commit on main)"
+        required: false
+        type: string
+        default: ""
       version:
-        description: "Release version (leave blank to use package.json version, e.g. 1.0.21)"
+        description: "Release version (leave blank to auto-increment or use package.json version)"
         required: false
         type: string
         default: ""
@@ -27,6 +32,10 @@ on:
         description: "macOS Intel"
         type: boolean
         default: true
+      android:
+        description: "Android APK (arm64, x64)"
+        type: boolean
+        default: false
       make_latest:
         description: "Set as auto-updater latest"
         type: boolean
@@ -56,9 +65,11 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       release-id: ${{ steps.plan.outputs.release-id }}
       latest: ${{ steps.plan.outputs.latest }}
+      android: ${{ steps.plan.outputs.android }}
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           ref: ${{ github.sha }}
       - name: Validate source and create release draft
         id: plan
@@ -70,14 +81,45 @@ jobs:
             const { pathToFileURL } = require('node:url');
             const { resolve } = require('node:path');
             const { releasePlan, requireGreenMain, applyVersion } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
-            const source = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-            const sourceVersion = require('./package.json').version;
-            const plan = releasePlan({ eventName: context.eventName, ref: context.ref, sourceVersion, inputs: JSON.parse(process.env.RELEASE_INPUTS) });
+            const inputs = JSON.parse(process.env.RELEASE_INPUTS || '{}');
+            let source = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
             let ciUrl = '';
             if (context.eventName === 'workflow_dispatch') {
-              const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', branch: 'main', event: 'push', head_sha: source, per_page: 100 });
-              ciUrl = requireGreenMain(data.workflow_runs, source);
+              const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', branch: 'main', event: 'push', per_page: 100 });
+              const greenRuns = (data.workflow_runs || []).filter(r => r.status === 'completed' && r.conclusion === 'success');
+              const requestedCommit = (inputs.commit_sha || '').trim();
+              if (requestedCommit) {
+                const match = greenRuns.find(r => r.head_sha === requestedCommit || r.head_sha.startsWith(requestedCommit));
+                if (!match) {
+                  throw new Error(`Commit ${requestedCommit} does not have a successful completed CI run on main.`);
+                }
+                source = match.head_sha;
+                ciUrl = match.html_url;
+              } else {
+                const headRun = greenRuns.find(r => r.head_sha === source);
+                if (headRun) {
+                  ciUrl = headRun.html_url;
+                } else if (greenRuns.length > 0) {
+                  source = greenRuns[0].head_sha;
+                  ciUrl = greenRuns[0].html_url;
+                  core.info(`HEAD commit does not have completed green CI yet; releasing latest verified green commit on main: ${source} (${ciUrl})`);
+                } else {
+                  throw new Error(`main commit ${source} needs a successful completed CI run before publication.`);
+                }
+              }
+              require('node:child_process').execFileSync('git', ['checkout', source], { encoding: 'utf8' });
             }
+            const sourceVersion = require('./package.json').version;
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+            const publishedTags = new Set(releases.filter(r => !r.draft).map(r => r.tag_name));
+            if (!inputs.version) {
+              let [major, minor, patch] = sourceVersion.split('.').map(Number);
+              while (publishedTags.has(`v${major}.${minor}.${patch}`)) {
+                patch++;
+              }
+              inputs.version = `${major}.${minor}.${patch}`;
+            }
+            const plan = releasePlan({ eventName: context.eventName, ref: context.ref, sourceVersion, inputs });
             applyVersion(process.cwd(), plan.version);
             const notFound = (error) => { if (error.status !== 404 && error.status !== 422) throw error; return null; };
             const existingTag = await github.rest.repos.getCommit({ ...context.repo, ref: `tags/${plan.tag}` }).catch(notFound);
@@ -88,10 +130,10 @@ jobs:
                 throw new Error('Release tag points to a different commit. Choose a new version.');
               }
             }
-            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+            const android = Boolean(inputs.android);
             const existing = releases.find((release) => release.tag_name === plan.tag);
             if (existing && !existing.draft) throw new Error('This release is already published. Choose a new version.');
-            const body = `Source commit: ${source}\n${ciUrl ? `Validated CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
+            const body = `Source commit: ${source}\n${ciUrl ? `Validated CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}${android ? '\nAndroid APKs: arm64, x64' : ''}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
             let release = existing;
             if (existing) {
               if (existing.target_commitish !== source || existing.body !== body) {
@@ -101,7 +143,7 @@ jobs:
             } else {
               release = (await github.rest.repos.createRelease({ ...context.repo, tag_name: plan.tag, target_commitish: source, name: `Voktty ${plan.tag}`, body, draft: true, prerelease: plan.prerelease })).data;
             }
-            for (const [key, value] of Object.entries({ source, version: plan.version, tag: plan.tag, matrix: JSON.stringify(plan.matrix), 'release-id': release.id, latest: String(plan.latest) })) core.setOutput(key, value);
+            for (const [key, value] of Object.entries({ source, version: plan.version, tag: plan.tag, matrix: JSON.stringify(plan.matrix), 'release-id': release.id, latest: String(plan.latest), android: String(android) })) core.setOutput(key, value);
             await core.summary.addHeading(`Release ${plan.tag}`).addRaw(body).write();
 
   build-remote-helper:
@@ -502,8 +544,183 @@ jobs:
           gh release upload "$RELEASE_TAG" ./*.tar.gz ./*.zip ./*.sha256 \
             --clobber --repo "$GITHUB_REPOSITORY"
 
+  publish-android-apk:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.android == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: aarch64-linux-android
+            tauri_target: aarch64
+            ndk_prefix: aarch64-linux-android
+            abi: arm64-v8a
+            bootstrap_arch: aarch64
+            apk_suffix: arm64
+          - rust_target: x86_64-linux-android
+            tauri_target: x86_64
+            ndk_prefix: x86_64-linux-android
+            abi: x86_64
+            bootstrap_arch: x86_64
+            apk_suffix: x64
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare-release.outputs.source }}
+
+      - name: Apply release version in build workspace
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: node scripts/release/desktop-release.mjs "$RELEASE_VERSION"
+        shell: bash
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android NDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;28.2.13676358" || true
+          NDK_DIR="$ANDROID_HOME/ndk/28.2.13676358"
+          if [ ! -d "$NDK_DIR" ]; then
+            LATEST_NDK=$(ls -1d $ANDROID_HOME/ndk/* 2>/dev/null | sort -V | tail -n 1)
+            if [ -n "$LATEST_NDK" ]; then
+              NDK_DIR="$LATEST_NDK"
+            fi
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "$TOOLCHAIN" >> $GITHUB_PATH
+          TARGET_ENV=$(echo "${{ matrix.rust_target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          CLANG="$TOOLCHAIN/${{ matrix.ndk_prefix }}28-clang"
+          echo "CC_${{ matrix.rust_target }}=$CLANG" >> $GITHUB_ENV
+          echo "CC_${TARGET_ENV}=$CLANG" >> $GITHUB_ENV
+          echo "CARGO_TARGET_${TARGET_ENV}_LINKER=$CLANG" >> $GITHUB_ENV
+          echo "AR_${{ matrix.rust_target }}=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          echo "AR_${TARGET_ENV}=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_${TARGET_ENV}_AR=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.rust_target }}-clang" || true
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.rust_target }}28-clang" || true
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.ndk_prefix }}-clang" || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-${{ matrix.rust_target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ matrix.rust_target }}-
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          PNPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS: "true"
+
+      - name: Download bootstrap zip if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p src-tauri/bootstrap-zips
+          mkdir -p src-tauri/gen/android/app/src/main/jniLibs/${{ matrix.abi }}
+          ZIP_FILE="src-tauri/bootstrap-zips/bootstrap-${{ matrix.bootstrap_arch }}.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "Downloading bootstrap zip for ${{ matrix.bootstrap_arch }}..."
+            gh release download bootstrap-v15 \
+              --repo zico20047/terax-ai-android \
+              --pattern "bootstrap-${{ matrix.bootstrap_arch }}.zip" \
+              --dir src-tauri/bootstrap-zips \
+              --clobber
+          fi
+          SIZE=$(stat -c%s "$ZIP_FILE")
+          echo "Bootstrap zip size: $SIZE bytes"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "ERROR: Bootstrap zip too small ($SIZE bytes)!"
+            exit 1
+          fi
+          echo "OK: bootstrap zip verified ($SIZE bytes)"
+
+      - name: Compile LD_PRELOAD library
+        run: |
+          TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+          $TOOLCHAIN/${{ matrix.ndk_prefix }}28-clang \
+            -shared -fPIC -O2 \
+            -o src-tauri/gen/android/app/src/main/jniLibs/${{ matrix.abi }}/libvoktty-path-translate.so \
+            src-tauri/src/modules/path-translate/path-translate.c
+
+      - name: Configure Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VOKTTY_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VOKTTY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VOKTTY_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VOKTTY_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            KEYSTORE_PATH="src-tauri/gen/android/app/voktty-release.keystore"
+            echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            printf "VOKTTY_STORE_PASSWORD=%s\nVOKTTY_KEY_ALIAS=%s\nVOKTTY_KEY_PASSWORD=%s\n" \
+              "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > src-tauri/gen/android/local.properties
+          fi
+
+      - name: Build APK
+        run: pnpm tauri android build --apk --target ${{ matrix.tauri_target }}
+
+      - name: Rename APK
+        run: |
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/universal"
+          APK=$(find "$APK_DIR" -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            APK_DIR="src-tauri/gen/android/app/build/outputs/apk"
+            APK=$(find "$APK_DIR" -name "*.apk" | head -1)
+          fi
+          cp "$APK" \
+            voktty-android-${{ needs.prepare-release.outputs.tag }}-${{ matrix.apk_suffix }}.apk
+
+      - name: Upload APK to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "voktty-android-${RELEASE_TAG}-${{ matrix.apk_suffix }}.apk" \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: voktty-android-${{ matrix.apk_suffix }}
+          path: voktty-android-*.apk
+
   patch-updater-manifest:
-    needs: [prepare-release, publish-tauri, publish-host-packages]
+    needs: [prepare-release, publish-tauri, publish-host-packages, publish-android-apk]
+    if: |
+      always() &&
+      !cancelled() &&
+      !contains(needs.*.result, 'failure') &&
+      needs.prepare-release.result == 'success' &&
+      needs.publish-tauri.result == 'success' &&
+      needs.publish-host-packages.result == 'success'
     runs-on: ubuntu-latest
     concurrency:
       group: desktop-release-publication

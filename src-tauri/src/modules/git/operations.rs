@@ -15,8 +15,8 @@ use crate::modules::git::types::{
     DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
-    authorized_repo_root, canonical_dir, resolve_literal_within_repo, resolve_within_repo,
-    split_upstream, ResolvedGitDirectory,
+    authorized_repo_root, canonical_dir, ensure_repo_authorized, resolve_literal_within_repo,
+    resolve_within_repo, split_upstream, ResolvedGitDirectory,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 use crate::modules::workspace_trust::authorize_and_remember;
@@ -27,7 +27,7 @@ pub fn resolve_repo(
     workspace: &WorkspaceEnv,
 ) -> Result<Option<GitRepoInfo>> {
     let cwd = canonical_dir(registry, cwd, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&cwd.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &cwd.local_path, workspace) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
     ensure_git_available(&cwd.workspace)?;
@@ -91,7 +91,7 @@ pub fn panel_snapshot(
     workspace: &WorkspaceEnv,
 ) -> Result<GitPanelSnapshot> {
     let cwd = canonical_dir(registry, cwd, workspace)?;
-    if !workspace.is_remote() && !registry.is_authorized(&cwd.local_path) {
+    if !workspace.is_remote() && !ensure_repo_authorized(registry, &cwd.local_path, workspace) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
     ensure_git_available(&cwd.workspace)?;

@@ -1,10 +1,13 @@
+import { t } from "@/modules/i18n";
 import type { BuiltinSkill } from "./skills";
 
 export const COMPACT_COMMAND: BuiltinSkill = {
   kind: "builtin",
   name: "compact",
   invocation: "compact",
-  description: "Summarize older conversation context to free space.",
+  get description() {
+    return t("harness.commands.compactDesc");
+  },
   scope: "builtin",
   source: "monocode",
 };

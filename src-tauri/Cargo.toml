@@ -1,6 +1,6 @@
 [package]
 name = "voktty"
-version = "1.0.20"
+version = "1.0.21"
 description = "Voktty — an open-source AI-native terminal emulator"
 authors = ["sergewinters"]
 license = "Apache-2.0"
@@ -42,7 +42,7 @@ default-members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.0.20"
+version = "1.0.21"
 edition = "2021"
 license = "Apache-2.0"
 

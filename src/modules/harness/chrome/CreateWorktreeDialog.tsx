@@ -50,7 +50,7 @@ export function CreateWorktreeDialog({
         value: "HEAD",
         label: branches?.current
           ? t("harness.worktrees.currentCommit", { sha: branches.current })
-          : "Current commit",
+          : t("harness.worktrees.currentCommitFallback"),
         keywords: "HEAD current commit",
       },
       ...(branches?.branches ?? []).map((branch) => {
@@ -110,7 +110,7 @@ export function CreateWorktreeDialog({
               setExisting(value === "existing");
               setName("");
             }}
-            searchPlaceholder="Search options…"
+            searchPlaceholder={t("harness.worktrees.searchOptions")}
             layer={LAYER.dialogPopover}
           />
         </div>

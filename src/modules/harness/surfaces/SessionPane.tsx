@@ -365,9 +365,10 @@ export const SessionPane = memo(function SessionPane({
       onNetworkSandboxChange={(config) =>
         onNetworkSandboxChange?.(session.id, config)
       }
-      onSubmit={(text, attachments, options) =>
-        onSubmit(session.id, text, attachments, options)
-      }
+      onSubmit={(text, attachments, options) => {
+        draftRef.current = "";
+        return onSubmit(session.id, text, attachments, options);
+      }}
       onStop={() => onStop(session.id)}
       onCompactContext={() => onCompactContext(session.id)}
       onRecallLastTurnReady={onRecallLastTurnReady}
@@ -458,7 +459,7 @@ export const SessionPane = memo(function SessionPane({
         {isEmpty ? (
           session.inboxAsk ? (
             <div className="scrollbar-none h-full min-h-0 overflow-y-auto">
-              <DiscussionEmpty message="Explore this item with your agent." />
+              <DiscussionEmpty message={t("harness.chrome.exploreItemWithAgent")} />
             </div>
           ) : (
             <EmptySession

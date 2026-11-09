@@ -1,10 +1,13 @@
+import { t } from "@/modules/i18n";
 import type { BuiltinSkill } from "./skills";
 
 export const PLAN_COMMAND: BuiltinSkill = {
   kind: "builtin",
   name: "plan",
   invocation: "plan",
-  description: "Create a reviewable implementation plan before changing files.",
+  get description() {
+    return t("harness.commands.planDesc");
+  },
   scope: "builtin",
   source: "monocode",
 };

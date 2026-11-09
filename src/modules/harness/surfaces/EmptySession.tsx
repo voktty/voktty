@@ -1,4 +1,5 @@
 import { type ReactNode, useSyncExternalStore } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { basename } from "../lib/fs";
 import { projectKey } from "../lib/paths";
@@ -36,9 +37,10 @@ export function EmptySession({ cwd, composer, hasChatBackground }: Props) {
     getProjectLabel,
     getProjectLabel,
   );
+  const { t } = useTranslation();
   const title = project
-    ? `What should we work on in ${project}?`
-    : "What should we work on?";
+    ? t("harness.emptySession.whatShouldWeWorkOnProject", { project })
+    : t("harness.emptySession.whatShouldWeWorkOn");
 
   return (
     <div

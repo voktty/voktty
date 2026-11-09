@@ -1,12 +1,14 @@
 name: Build Android APK
 
 on:
-  # Desactivado temporalmente del pipeline automatico hasta estabilizar movil/Android.
-  # Se puede reactivar descomentando el bloque 'push' cuando sea estable.
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,18 +30,6 @@ jobs:
             abi: x86_64
             bootstrap_arch: x86_64
             apk_suffix: x64
-          - rust_target: armv7-linux-androideabi
-            tauri_target: armv7
-            ndk_prefix: armv7a-linux-androideabi
-            abi: armeabi-v7a
-            bootstrap_arch: arm
-            apk_suffix: arm32
-          - rust_target: i686-linux-android
-            tauri_target: i686
-            ndk_prefix: i686-linux-android
-            abi: x86
-            bootstrap_arch: i686
-            apk_suffix: x86
 
     steps:
       - name: Checkout
@@ -65,6 +55,17 @@ jobs:
           echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
           TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
           echo "$TOOLCHAIN" >> $GITHUB_PATH
+          TARGET_ENV=$(echo "${{ matrix.rust_target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          CLANG="$TOOLCHAIN/${{ matrix.ndk_prefix }}28-clang"
+          echo "CC_${{ matrix.rust_target }}=$CLANG" >> $GITHUB_ENV
+          echo "CC_${TARGET_ENV}=$CLANG" >> $GITHUB_ENV
+          echo "CARGO_TARGET_${TARGET_ENV}_LINKER=$CLANG" >> $GITHUB_ENV
+          echo "AR_${{ matrix.rust_target }}=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          echo "AR_${TARGET_ENV}=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_${TARGET_ENV}_AR=$TOOLCHAIN/llvm-ar" >> $GITHUB_ENV
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.rust_target }}-clang" || true
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.rust_target }}28-clang" || true
+          ln -sf "$CLANG" "$TOOLCHAIN/${{ matrix.ndk_prefix }}-clang" || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -135,11 +136,8 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             KEYSTORE_PATH="src-tauri/gen/android/app/voktty-release.keystore"
             echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-            cat > src-tauri/gen/android/local.properties << EOF
-          VOKTTY_STORE_PASSWORD=$STORE_PASSWORD
-          VOKTTY_KEY_ALIAS=$KEY_ALIAS
-          VOKTTY_KEY_PASSWORD=$KEY_PASSWORD
-          EOF
+            printf "VOKTTY_STORE_PASSWORD=%s\nVOKTTY_KEY_ALIAS=%s\nVOKTTY_KEY_PASSWORD=%s\n" \
+              "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > src-tauri/gen/android/local.properties
           fi
 
       - name: Build APK

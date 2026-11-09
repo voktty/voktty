@@ -1,6 +1,8 @@
-import { ChevronDown, ChevronRight, FileDiff } from "./icons";
+import { ChevronDown, ChevronRight, FileDiff, Play } from "./icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/modules/i18n";
+import { useWebProjectKind } from "@/modules/preview/lib/useWebProjectKind";
+import { isLocalProjectRoot, webProjectLabel } from "@/modules/preview/lib/webProject";
 import {
   checkpointsAvailable,
   keepSessionChanges,
@@ -36,6 +38,7 @@ export function SessionReview({
   onOpenDiff,
 }: Props) {
   const { t } = useTranslation();
+  const project = useWebProjectKind(cwd);
   const [files, setFiles] = useState<CheckpointFile[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState<"keep" | "undo" | null>(null);
@@ -156,6 +159,25 @@ export function SessionReview({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
+            {project && isLocalProjectRoot(cwd) ? (
+              <button
+                type="button"
+                title={t("preview.openProjectPreview", { root: cwd })}
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent("voktty:open-preview", {
+                      detail: { target: cwd },
+                    }),
+                  );
+                }}
+                className="flex h-7 items-center gap-1.5 rounded-md bg-emerald-500/15 px-2.5 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-400"
+              >
+                <Play className="size-3" strokeWidth={1.8} />
+                <span>
+                  {t("preview.openPreview")} ({webProjectLabel(project.kind)})
+                </span>
+              </button>
+            ) : null}
             <button
               type="button"
               title={

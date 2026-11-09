@@ -1,4 +1,5 @@
-import { Check, ChevronDown, ChevronRight, Search, Star } from "./icons";
+import { Check, ChevronDown, ChevronRight, Search, Settings, Star } from "./icons";
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
   useEffect,
   useId,
@@ -25,6 +26,8 @@ import {
   modelsFor,
   resolveModel,
   saveFavoriteModels,
+  saveLastModelChoice,
+  saveRecentModelChoice,
   showProviderInModelPicker,
   subscribeModels,
   subscribePickerVisibility,
@@ -398,6 +401,8 @@ export function ModelPicker({
 
   const pickModel = (item: AgentModel) => {
     if (!isHarnessAvailable(item.harness)) return;
+    saveLastModelChoice(item.harness, item.id);
+    saveRecentModelChoice(item.harness, item.id);
     onChange(item.harness, item.id);
     dismiss(true);
   };
@@ -763,6 +768,7 @@ export function ModelPicker({
               onActive={setActiveModel}
               onPick={pickModel}
               onToggleFavorite={toggleFavorite}
+              onClose={() => dismiss(true)}
             />
           ) : null}
         </>
@@ -852,6 +858,7 @@ function ModelFlyout({
   onActive,
   onPick,
   onToggleFavorite,
+  onClose,
 }: {
   anchor: HTMLButtonElement;
   autoFocusSearch: boolean;
@@ -868,6 +875,7 @@ function ModelFlyout({
   onActive: (index: number) => void;
   onPick: (model: AgentModel) => void;
   onToggleFavorite: (id: string) => void;
+  onClose?: () => void;
 }) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
@@ -1028,10 +1036,14 @@ function ModelFlyout({
                   <button
                     type="button"
                     title={
-                      favorited ? "Remove from favorites" : "Add to favorites"
+                      favorited
+                        ? t("harness.chrome.removeFromFavorites")
+                        : t("harness.chrome.addToFavorites")
                     }
                     aria-label={
-                      favorited ? "Remove from favorites" : "Add to favorites"
+                      favorited
+                        ? t("harness.chrome.removeFromFavorites")
+                        : t("harness.chrome.addToFavorites")
                     }
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
@@ -1065,6 +1077,21 @@ function ModelFlyout({
               );
             })
           )}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between border-t border-content/10 px-2.5 py-1.5 bg-content/[0.02]">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onClose?.();
+              void openSettingsWindow("models");
+            }}
+            className="flex items-center gap-1.5 text-[11px] font-medium text-content/60 hover:text-content transition-colors cursor-pointer"
+          >
+            <Settings className="size-3" />
+            <span>{t("settings.models.manageEndpoints")}</span>
+          </button>
         </div>
       </div>
     </Popover>

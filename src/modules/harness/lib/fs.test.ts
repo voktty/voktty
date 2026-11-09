@@ -1,5 +1,26 @@
-import { describe, expect, it } from "vitest";
-import { isCheckoutBlockedByChanges } from "./fs";
+import { describe, expect, it, vi } from "vitest";
+import { homeDir, isCheckoutBlockedByChanges } from "./fs";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
+
+describe("homeDir", () => {
+  it("resolves the path returned by invoke home_dir", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("/home/user");
+    const result = await homeDir();
+    expect(result).toBe("/home/user");
+  });
+
+  it("falls back to root if invoke rejects and path import fails", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("Command home_dir not found"));
+    const result = await homeDir();
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
+  });
+});
 
 describe("isCheckoutBlockedByChanges", () => {
   it("detects git's tracked-file checkout error", () => {

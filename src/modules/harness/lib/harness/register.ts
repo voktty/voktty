@@ -1,4 +1,5 @@
 import { ensureGeminiRegistered } from "./agyAdapter";
+import { ensureApiRegistered } from "./apiAdapter";
 import { ensureClaudeRegistered } from "./claudeAdapter";
 import { ensureCodexRegistered } from "./codexAdapter";
 import { ensureCursorRegistered } from "./cursorAdapter";
@@ -11,6 +12,7 @@ import { ensurePiRegistered } from "./piAdapter";
 
 /** Register all known live harness adapters. Idempotent. */
 export function registerBuiltinHarnesses(): void {
+  ensureApiRegistered();
   ensureClaudeRegistered();
   ensureCursorRegistered();
   ensureCodexRegistered();

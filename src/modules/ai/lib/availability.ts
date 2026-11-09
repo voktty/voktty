@@ -5,7 +5,9 @@ import type { ProviderKeys } from "./keyring";
 export type AiAvailabilityPreferences = Pick<
   Preferences,
   "aiEnabled" | "aiConfigRevision" | "aiHealthRevision" | "aiHealthCheckedAt"
->;
+> & {
+  customEndpoints?: readonly CustomEndpoint[];
+};
 
 export function hasCurrentAiHealth(
   preferences: AiAvailabilityPreferences,
@@ -18,7 +20,9 @@ export function hasCurrentAiHealth(
 }
 
 export function isAiAvailable(preferences: AiAvailabilityPreferences): boolean {
-  return preferences.aiEnabled && hasCurrentAiHealth(preferences);
+  return (
+    preferences.aiEnabled || (preferences.customEndpoints?.length ?? 0) > 0
+  );
 }
 
 export type ProviderUsabilityPreferences = {
@@ -64,6 +68,13 @@ export function isProviderUsable(
           !!preferences.openaiCompatibleModelId?.trim())
       );
     default:
-      return !!keys[id];
+      return (
+        !!keys[id] ||
+        (preferences.customEndpoints?.some(
+          (e) =>
+            e.id === id || e.providerType === id || (e as { provider?: string }).provider === id,
+        ) ??
+          false)
+      );
   }
 }

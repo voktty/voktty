@@ -3073,6 +3073,11 @@ pub(crate) fn expand_home(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+#[tauri::command]
+pub fn home_dir() -> Result<String, String> {
+    dirs_home().ok_or_else(|| "Could not resolve home directory".to_string())
+}
+
 struct Ignore {
     exact: HashSet<String>,
     suffixes: Vec<String>,
@@ -3822,6 +3827,12 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn home_dir_resolves_non_empty_path() {
+        let home = home_dir().expect("home dir");
+        assert!(!home.trim().is_empty());
+    }
 
     #[test]
     fn stat_files_returns_mtime_for_existing_files_only() {

@@ -259,6 +259,7 @@ pub struct AutoClaimsGuard<'a> {
     root: &'a Path,
     owner: String,
     released: bool,
+    reentered: bool,
 }
 
 impl<'a> AutoClaimsGuard<'a> {
@@ -267,23 +268,66 @@ impl<'a> AutoClaimsGuard<'a> {
         owner: &str,
         acquired_at: Option<&str>,
     ) -> Result<Self, CoordinationError> {
-        acquire_claims_guard(root, owner, acquired_at)?;
-        Ok(Self {
-            root,
-            owner: owner.to_string(),
-            released: false,
-        })
+        match acquire_claims_guard(root, owner, acquired_at) {
+            Ok(_) => Ok(Self {
+                root,
+                owner: owner.to_string(),
+                released: false,
+                reentered: false,
+            }),
+            Err(CoordinationError::GuardOccupied {
+                ref current_owner, ..
+            }) if current_owner == owner => Ok(Self {
+                root,
+                owner: owner.to_string(),
+                released: false,
+                reentered: true,
+            }),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn acquire_with_retry(
+        root: &'a Path,
+        owner: &str,
+        acquired_at: Option<&str>,
+        max_attempts: usize,
+        delay: std::time::Duration,
+    ) -> Result<Self, CoordinationError> {
+        let mut attempts = 0;
+        loop {
+            match Self::acquire(root, owner, acquired_at) {
+                Ok(guard) => return Ok(guard),
+                Err(CoordinationError::GuardOccupied {
+                    current_owner,
+                    acquired_at,
+                }) => {
+                    attempts += 1;
+                    if attempts >= max_attempts {
+                        return Err(CoordinationError::GuardOccupied {
+                            current_owner,
+                            acquired_at,
+                        });
+                    }
+                    std::thread::sleep(delay);
+                }
+                Err(err) => return Err(err),
+            }
+        }
     }
 
     pub fn release(mut self) -> Result<(), CoordinationError> {
         self.released = true;
-        release_claims_guard(self.root, &self.owner)
+        if !self.reentered {
+            release_claims_guard(self.root, &self.owner)?;
+        }
+        Ok(())
     }
 }
 
 impl<'a> Drop for AutoClaimsGuard<'a> {
     fn drop(&mut self) {
-        if !self.released {
+        if !self.released && !self.reentered {
             let _ = release_claims_guard(self.root, &self.owner);
         }
     }
@@ -353,6 +397,14 @@ pub fn acquire_reservation(
     let file_name = normalize_lock_filename(name)?;
     validate_reservation(reservation)
         .map_err(|issues| CoordinationError::Validation(format!("{:?}", issues)))?;
+
+    let _guard = AutoClaimsGuard::acquire_with_retry(
+        root,
+        &reservation.owner,
+        None,
+        50,
+        std::time::Duration::from_millis(10),
+    )?;
 
     let locks_dir = root.join(".voktty").join("locks");
     fs::create_dir_all(&locks_dir)
@@ -432,6 +484,14 @@ pub fn release_reservation(root: &Path, name: &str, owner: &str) -> Result<(), C
         return Err(CoordinationError::NotFound);
     }
 
+    let _guard = AutoClaimsGuard::acquire_with_retry(
+        root,
+        owner,
+        None,
+        50,
+        std::time::Duration::from_millis(10),
+    )?;
+
     let content = read_bounded_file(&target_path)?;
     let reservation = parse_work_reservation(&content).map_err(|issues| {
         CoordinationError::Parse(format!(
@@ -450,6 +510,93 @@ pub fn release_reservation(root: &Path, name: &str, owner: &str) -> Result<(), C
 
     fs::remove_file(&target_path)
         .map_err(|e| CoordinationError::Io(format!("{}: {}", target_path.display(), e)))?;
+
+    Ok(())
+}
+
+pub fn transfer_reservation(
+    root: &Path,
+    name: &str,
+    current_owner: &str,
+    successor_owner: &str,
+    successor_agent: &str,
+) -> Result<PathBuf, CoordinationError> {
+    let _guard = AutoClaimsGuard::acquire_with_retry(
+        root,
+        current_owner,
+        None,
+        50,
+        std::time::Duration::from_millis(10),
+    )?;
+
+    let file_name = normalize_lock_filename(name)?;
+    let target_path = root.join(".voktty").join("locks").join(&file_name);
+
+    if !target_path.exists() {
+        return Err(CoordinationError::NotFound);
+    }
+
+    let content = read_bounded_file(&target_path)?;
+    let mut reservation = parse_work_reservation(&content).map_err(|issues| {
+        CoordinationError::Parse(format!(
+            "invalid reservation at {}: {:?}",
+            target_path.display(),
+            issues
+        ))
+    })?;
+
+    if reservation.owner != current_owner {
+        return Err(CoordinationError::UnauthorizedOwner {
+            expected: reservation.owner,
+            actual: current_owner.to_string(),
+        });
+    }
+
+    reservation.owner = successor_owner.to_string();
+    reservation.agent = successor_agent.to_string();
+    reservation.updated_at = utc_iso_timestamp(SystemTime::now());
+
+    validate_reservation(&reservation)
+        .map_err(|issues| CoordinationError::Validation(format!("{:?}", issues)))?;
+
+    let json_bytes = serde_json::to_vec_pretty(&reservation)
+        .map_err(|e| CoordinationError::Parse(e.to_string()))?;
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&target_path)
+        .map_err(|e| CoordinationError::Io(e.to_string()))?;
+    file.write_all(&json_bytes)
+        .map_err(|e| CoordinationError::Io(e.to_string()))?;
+    file.write_all(b"\n")
+        .map_err(|e| CoordinationError::Io(e.to_string()))?;
+    file.flush()
+        .map_err(|e| CoordinationError::Io(e.to_string()))?;
+
+    Ok(target_path)
+}
+
+pub fn recover_abandoned_reservation(
+    root: &Path,
+    name: &str,
+    recovery_owner: &str,
+) -> Result<(), CoordinationError> {
+    let _guard = AutoClaimsGuard::acquire_with_retry(
+        root,
+        recovery_owner,
+        None,
+        50,
+        std::time::Duration::from_millis(10),
+    )?;
+
+    let file_name = normalize_lock_filename(name)?;
+    let target_path = root.join(".voktty").join("locks").join(&file_name);
+
+    if target_path.exists() {
+        fs::remove_file(&target_path)
+            .map_err(|e| CoordinationError::Io(format!("{}: {}", target_path.display(), e)))?;
+    }
 
     Ok(())
 }

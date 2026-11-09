@@ -113,7 +113,7 @@ it("uses the existing model picker for configured Ollama and custom endpoint mod
     custom!.click();
   });
   expect(useChatStore.getState().selectedModelId).toBe(
-    compatModelIdForEndpoint("lan"),
+    compatModelIdForEndpoint("lan", "fcm"),
   );
   expect(container.querySelector("textarea")).not.toBeNull();
 });

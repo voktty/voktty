@@ -205,8 +205,8 @@ export function SearchableProjectPicker({
         title={inProject ? cwd : undefined}
         aria-label={
           inProject
-            ? `${action}, current project ${label}`
-            : "Choose project for note"
+            ? t("harness.chrome.currentProjectAria", { action, project: label })
+            : t("harness.chrome.chooseProjectForNote")
         }
         aria-expanded={open}
         aria-haspopup="dialog"

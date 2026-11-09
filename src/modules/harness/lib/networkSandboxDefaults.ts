@@ -35,6 +35,7 @@ const HARNESS_ALLOWLIST_HOSTS: Record<HarnessId, string[]> = {
   pi: ["api.openai.com", "api.anthropic.com"],
   omp: [],
   fx: [],
+  api: [],
 };
 
 /** Starting allowlist for a session's harness when the sandbox is first enabled. */

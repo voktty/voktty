@@ -363,6 +363,13 @@ export const native = {
       content,
       workspace: workspaceForNativeFs(workspace, path),
     });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("voktty:file-saved", {
+          detail: { path },
+        }),
+      );
+    }
   },
   canonicalize: (path: string, explicitWorkspace?: WorkspaceEnv) => {
     const workspace = resolveFilesystemWorkspace(path, explicitWorkspace);

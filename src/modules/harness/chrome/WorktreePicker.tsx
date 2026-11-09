@@ -145,8 +145,8 @@ export function WorktreePicker({
         }
         title={
           worktreeRemoved
-            ? "Select a branch or worktree to continue this session"
-            : `Working copy: ${prettyCwd(executionCwd)}`
+            ? t("harness.worktrees.selectBranchOrWorktreeToContinue")
+            : t("harness.worktrees.workingCopyPrefix", { path: prettyCwd(executionCwd) })
         }
         aria-label={t("harness.worktrees.chooseWorkingCopy")}
         aria-haspopup="dialog"
@@ -163,13 +163,13 @@ export function WorktreePicker({
             ? NO_BRANCH_LABEL
             : branches?.current
               ? branches.detached
-                ? `detached ${branches.current}`
+                ? t("harness.worktrees.detachedBranch", { branch: branches.current })
                 : branches.current
               : settled
                 ? inWorktree
-                  ? "Worktree unavailable"
-                  : "No repo"
-                : "Loading…"
+                  ? t("harness.worktrees.worktreeUnavailable")
+                  : t("harness.worktrees.noRepo")
+                : t("harness.worktrees.loadingEllipsis")
         }
         worktree={!worktreeRemoved && inWorktree}
       />

@@ -36,6 +36,7 @@ import {
   Mic01Icon,
   PlugIcon,
   ServerStack01Icon,
+  Settings01Icon,
   Search01Icon,
   StarIcon,
   StopCircleIcon,
@@ -302,9 +303,19 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
   ]);
 
   const epModelInfos = useMemo(() => {
-    return customEndpoints.map((ep) =>
-      getCompatModelInfo(compatModelIdForEndpoint(ep.id), customEndpoints),
-    );
+    const list: ModelInfo[] = [];
+    for (const ep of customEndpoints) {
+      const models =
+        ep.models && ep.models.length > 0
+          ? ep.models
+          : [ep.modelId || ep.name];
+      for (const m of models) {
+        if (!m) continue;
+        const cid = compatModelIdForEndpoint(ep.id, m);
+        list.push(getCompatModelInfo(cid, customEndpoints));
+      }
+    }
+    return list;
   }, [customEndpoints]);
 
   const allModels = useMemo(() => {
@@ -373,6 +384,9 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
     if (isCompatModelId(selected)) {
       return getCompatModelInfo(selected, customEndpoints);
     }
+    if (selected.startsWith("api:")) {
+      return resolveModel(selected, customEndpoints);
+    }
     if (isHarnessModelId(selected)) {
       return (
         harnessChatModelInfo(selected, t) ??
@@ -409,7 +423,7 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
         .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     }
     if (activeProvider === COMPAT_PROVIDER_ID) {
-      pool = pool.filter((m) => isCompatModelId(m.id));
+      pool = pool.filter((m) => isCompatModelId(m.id) || m.id.startsWith("api:"));
     } else if (activeProvider !== null) {
       pool = pool.filter((m) => m.provider === activeProvider);
     }
@@ -602,6 +616,16 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
                 />
               ))
             )}
+          </div>
+          <div className="border-t border-border/50 px-2.5 py-1.5 bg-muted/20 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => void openSettingsWindow("models")}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <HugeiconsIcon icon={Settings01Icon} size={11} strokeWidth={1.75} />
+              <span>{t("settings.models.manageEndpoints")}</span>
+            </button>
           </div>
         </div>
       </DropdownMenuContent>

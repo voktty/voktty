@@ -104,7 +104,7 @@ export function WorktreesPage({
           type="button"
           title={
             loadError
-              ? `Refresh failed: ${loadError}. Click to retry.`
+              ? t("harness.worktrees.refreshFailed", { error: loadError })
               : t("harness.worktrees.refreshWorktrees")
           }
           aria-label={t("harness.worktrees.refreshWorktrees")}
@@ -147,9 +147,9 @@ export function WorktreesPage({
           {worktrees.map((tree) => {
             const count = worktreeSessionIds(tree, liveSessions).length;
             const blocked = tree.locked
-              ? "Unlock this worktree in Git first"
+              ? t("harness.worktrees.unlockFirst")
               : !tree.branch
-                ? "Create a branch before deleting this detached worktree"
+                ? t("harness.worktrees.createBranchBeforeDeleting")
                 : undefined;
             return (
               <div key={tree.path} className="flex items-start gap-3 p-4">
@@ -262,12 +262,12 @@ export function WorktreesPage({
               if (sessionIds.length && deleteSessions) {
                 if (!onDeleteSessions) {
                   throw new Error(
-                    "Sessions still use this worktree and could not be deleted.",
+                    t("harness.worktrees.sessionsStillUseTree"),
                   );
                 }
                 if (!(await onDeleteSessions(sessionIds))) {
                   throw new Error(
-                    "Some sessions could not be deleted, so the worktree was kept.",
+                    t("harness.worktrees.sessionsCouldNotBeDeleted"),
                   );
                 }
                 sessionsDeleted = true;
@@ -276,7 +276,9 @@ export function WorktreesPage({
             } catch (error) {
               const failure = sessionsDeleted
                 ? new Error(
-                    `The sessions were deleted, but the worktree was kept. ${String(error)}`,
+                    t("harness.worktrees.sessionsDeletedTreeKept", {
+                      error: String(error),
+                    }),
                   )
                 : error;
               // A partial deletion invalidates the dialog's saved session IDs.

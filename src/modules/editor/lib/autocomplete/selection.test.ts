@@ -43,6 +43,32 @@ describe("resolveAutocompleteSelection", () => {
     });
   });
 
+  it("resolves a specific submodel from a compatible endpoint", () => {
+    expect(
+      resolveAutocompleteSelection({
+        ...base,
+        autocompleteProvider: "openai-compatible",
+        autocompleteModelId: "compat-deep:deepseek-coder",
+        customEndpoints: [
+          {
+            id: "deep",
+            name: "Private gateway",
+            baseURL: "https://example.test/v1",
+            modelId: "deepseek-r1",
+            contextLimit: 128_000,
+            autocompleteProfile: "deepseek",
+          },
+        ],
+      }),
+    ).toMatchObject({
+      provider: "openai-compatible",
+      modelId: "deepseek-coder",
+      openaiCompatibleBaseURL: "https://example.test/v1",
+      profileOverride: "deepseek",
+      endpointId: "deep",
+    });
+  });
+
   it("uses the configured model id for local runtimes", () => {
     expect(
       resolveAutocompleteSelection({

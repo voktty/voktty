@@ -2800,6 +2800,33 @@ function ToolCall({
   );
 }
 
+function formatToolAction(action: string): string {
+  switch (action) {
+    case "Read":
+      return t("harness.transcript.verbRead");
+    case "Edit":
+      return t("harness.transcript.verbEdit");
+    case "Write":
+      return t("harness.transcript.verbWrite");
+    case "Find":
+      return t("harness.transcript.verbFind");
+    case "List":
+      return t("harness.transcript.verbList");
+    case "Run":
+      return t("harness.transcript.verbRun");
+    case "Delete":
+      return t("harness.transcript.verbDelete");
+    case "Move":
+      return t("harness.transcript.verbMove");
+    case "Create":
+      return t("harness.transcript.verbCreate");
+    case "Skill":
+      return t("harness.transcript.verbSkill");
+    default:
+      return action;
+  }
+}
+
 function ToolCallSummary({
   label,
   preview,
@@ -2914,7 +2941,7 @@ function ToolCallSummary({
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1.5 font-mono text-[13px]">
       <span className={`shrink-0 font-sans text-sm ${actionTone}`}>
-        {action}
+        {formatToolAction(action)}
       </span>
       {isFile ? (
         canPreview ? (

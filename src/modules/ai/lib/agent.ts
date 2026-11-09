@@ -19,6 +19,7 @@ import {
   MLX_DEFAULT_BASE_URL,
   modelKeepsReasoning,
   OLLAMA_DEFAULT_BASE_URL,
+  parseCompatModelId,
   providerNeedsKey,
   resolveModel,
   selectSystemPrompt,
@@ -193,7 +194,12 @@ export async function buildLanguageModel(
         name: "openai-compatible",
         baseURL: compatURL,
         apiKey: activeKey,
-        headers: activeKey ? { "api-key": activeKey } : undefined,
+        headers: activeKey
+          ? {
+              Authorization: `Bearer ${activeKey}`,
+              "api-key": activeKey,
+            }
+          : undefined,
         fetch: localProxyFetch,
       })(resolvedModelId);
       break;
@@ -259,7 +265,7 @@ export type LocalProviderConfig = {
   customEndpointKeys?: CustomEndpointKeys;
 };
 
-export function buildConfiguredLanguageModel(
+export async function buildConfiguredLanguageModel(
   modelId: string,
   keys: ProviderKeys,
   local: LocalProviderConfig = {},
@@ -269,22 +275,65 @@ export function buildConfiguredLanguageModel(
   if (isHarnessModelId(modelId)) {
     return buildLanguageModel("harness", keys, modelId, {});
   }
-  if (isCompatModelId(modelId)) {
-    const eid = endpointIdFromCompatModel(modelId);
+  if (isCompatModelId(modelId) || modelId.startsWith("api:")) {
+    let eid: string;
+    let subModelId: string | undefined;
+    if (isCompatModelId(modelId)) {
+      const parsed = parseCompatModelId(modelId);
+      eid = parsed.endpointId;
+      subModelId = parsed.subModelId;
+    } else {
+      const raw = modelId.slice(4);
+      const colonIndex = raw.indexOf(":");
+      eid = colonIndex === -1 ? raw : raw.slice(0, colonIndex);
+      subModelId = colonIndex === -1 ? undefined : raw.slice(colonIndex + 1);
+    }
     const ep = local.customEndpoints?.find((e) => e.id === eid);
     if (!ep) throw new Error(`Custom endpoint not found: ${eid}`);
-    if (!ep.modelId.trim()) {
+    const activeModelId = (subModelId || ep.modelId).trim();
+    if (!activeModelId) {
       throw new Error(`${ep.name}: no model id set. Open Settings → Models.`);
+    }
+    let activeKey = local.customEndpointKeys?.[eid];
+    if (!activeKey) {
+      const { getCustomEndpointKey } = await import("./keyring");
+      activeKey = (await getCustomEndpointKey(eid)) ?? "";
+    }
+    if (ep.protocol === "anthropic-messages") {
+      const { createAnthropic } = await import("@ai-sdk/anthropic");
+      return createAnthropic({
+        baseURL: ep.baseURL,
+        apiKey: activeKey,
+        headers: activeKey
+          ? { "x-api-key": activeKey, "anthropic-version": "2023-06-01" }
+          : undefined,
+      })(activeModelId);
     }
     return buildLanguageModel(
       "openai-compatible",
       keys,
-      ep.modelId.trim(),
+      activeModelId,
       { openaiCompatibleBaseURL: ep.baseURL },
-      local.customEndpointKeys?.[eid],
+      activeKey,
     );
   }
-  const m = resolveModel(modelId);
+  const m = resolveModel(modelId, local.customEndpoints);
+  let resolvedKeys = keys;
+  if (!resolvedKeys[m.provider] && local.customEndpoints) {
+    const matchingEp = local.customEndpoints.find(
+      (e) => e.provider === m.provider || e.providerType === m.provider,
+    );
+    if (matchingEp) {
+      let epKey = local.customEndpointKeys?.[matchingEp.id];
+      if (!epKey) {
+        const { getCustomEndpointKey } = await import("./keyring");
+        epKey = (await getCustomEndpointKey(matchingEp.id)) ?? undefined;
+      }
+      if (epKey) {
+        resolvedKeys = { ...resolvedKeys, [m.provider]: epKey };
+      }
+    }
+  }
   let resolvedId: string = m.id;
   if (m.id === "lmstudio-local") {
     if (!local.lmstudioModelId?.trim()) {
@@ -322,7 +371,7 @@ export function buildConfiguredLanguageModel(
     }
     resolvedId = local.openrouterModelId.trim();
   }
-  return buildLanguageModel(m.provider, keys, resolvedId, {
+  return buildLanguageModel(m.provider, resolvedKeys, resolvedId, {
     lmstudioBaseURL: local.lmstudioBaseURL,
     mlxBaseURL: local.mlxBaseURL,
     ollamaBaseURL: local.ollamaBaseURL,

@@ -1,10 +1,13 @@
+import { t } from "@/modules/i18n";
 import type { BuiltinSkill } from "./skills";
 
 export const DRAFT_COMMAND: BuiltinSkill = {
   kind: "builtin",
   name: "draft",
   invocation: "draft",
-  description: "Save this message without starting the agent.",
+  get description() {
+    return t("harness.commands.draftDesc");
+  },
   scope: "builtin",
   source: "monocode",
 };

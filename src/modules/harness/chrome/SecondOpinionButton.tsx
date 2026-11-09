@@ -474,7 +474,7 @@ export function SecondOpinionButton({
               maxHeight={SUBMENU_MAX_HEIGHT}
               layer={LAYER.submenu}
               role="menu"
-              aria-label={`${HARNESS_TITLE[activeHarness]} models`}
+              aria-label={t("harness.chrome.providerModels", { provider: HARNESS_TITLE[activeHarness] })}
               ignore={SELF}
               onMouseEnter={() =>
                 setMenuLevel((level) =>
@@ -547,7 +547,7 @@ export function SecondOpinionButton({
               width={EFFORT_MENU_WIDTH}
               layer={LAYER.submenu + 1}
               role="menu"
-              aria-label={`${activeModel.name} effort`}
+              aria-label={t("harness.chrome.modelEffort", { model: activeModel.name })}
               ignore={SELF}
               onMouseEnter={() => setMenuLevel("effort")}
               data-provider-target

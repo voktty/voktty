@@ -90,6 +90,8 @@ import {
   ToolLauncher,
 } from "@/modules/launcher";
 import { useControlBridge } from "@/modules/control";
+import { useCompanionPairingPrompt } from "@/modules/companion/useCompanionPairingPrompt";
+import { CompanionPairingModal } from "@/modules/companion/CompanionPairingModal";
 import {
   type EditorGroupHandle,
   type EditorPaneHandle,
@@ -2629,6 +2631,24 @@ function DesktopApp() {
     };
   }, [openFileTab]);
 
+  useEffect(() => {
+    const handleOpenPreview = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        target?: string;
+        sourceId?: number;
+      }>;
+      const target = customEvent.detail?.target ?? "";
+      const source = customEvent.detail?.sourceId
+        ? tabs.find((t) => t.id === customEvent.detail.sourceId)
+        : tabs.find((t) => t.id === effectiveActiveId);
+      void openPreviewTab(target, { source });
+    };
+    window.addEventListener("voktty:open-preview", handleOpenPreview);
+    return () => {
+      window.removeEventListener("voktty:open-preview", handleOpenPreview);
+    };
+  }, [effectiveActiveId, openPreviewTab, tabs]);
+
   const openNewBrowser = useCallback(() => {
     return newPreviewTab("about:blank");
   }, [newPreviewTab]);
@@ -4459,6 +4479,8 @@ function DesktopApp() {
     onNewHarness: handleNewHarness,
   });
 
+  useCompanionPairingPrompt();
+
   useEffect(() => {
     setLspNavigator({ openFile: openContentHit });
     return () => setLspNavigator(null);
@@ -5231,6 +5253,7 @@ function DesktopApp() {
             />
           ) : null}
           <Toaster position="bottom-right" />
+          <CompanionPairingModal />
           <TransferQueuePanel onDecide={decideTransferConflict} />
 
           {hasComposer && activeAgentSessionId ? (

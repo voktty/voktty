@@ -21,6 +21,7 @@ export const HARNESS_ICONS: Record<HarnessId, string> = {
   omp,
   fx,
   gemini: "",
+  api: "",
 };
 
 /** White marks that must follow `currentColor` so they stay visible in light mode. */
@@ -33,6 +34,7 @@ export const MONOCHROME_HARNESSES = new Set<HarnessId>([
   "pi",
   "omp",
   "fx",
+  "api",
 ]);
 
 function MonoIcon({
@@ -148,6 +150,13 @@ export function HarnessIcon({
           fillRule="evenodd"
           d="M15.5 17H26.5V25.5H15.5V17ZM19 20V22.5H20.5V20H19ZM22.5 20V22.5H24V20H22.5Z"
         />
+      </MonoIcon>
+    );
+  }
+  if (harness === "api") {
+    return (
+      <MonoIcon className={className} viewBox="0 0 24 24">
+        <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6zm3 2v8h2V8H7zm4 0v8h2V8h-2zm4 0v8h2V8h-2z" />
       </MonoIcon>
     );
   }

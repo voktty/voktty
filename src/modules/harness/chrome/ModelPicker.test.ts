@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModelPicker, effortTileTone } from "./ModelPicker";
 import {
+  defaultSessionChoice,
+  loadLastModelChoice,
   loadRecentModelChoices,
+  saveLastModelChoice,
   saveRecentModelChoice,
   type ModelSetting,
 } from "../lib/models";
@@ -85,6 +88,18 @@ describe("ModelPicker", () => {
       { harness: "cursor", model: "cursor:composer-2.5" },
       { harness: "claude", model: "claude:opus-5" },
     ]);
+  });
+
+  it("persists the last chosen model as the default for new sessions", () => {
+    saveLastModelChoice("claude", "claude:opus-5");
+    expect(loadLastModelChoice()).toEqual({
+      harness: "claude",
+      model: "claude:opus-5",
+    });
+    expect(defaultSessionChoice()).toEqual({
+      harness: "claude",
+      model: "claude:opus-5",
+    });
   });
 
   it.each([

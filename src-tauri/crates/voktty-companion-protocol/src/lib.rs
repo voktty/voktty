@@ -233,6 +233,52 @@ pub enum ServerMessage {
     },
 }
 
+impl ServerMessage {
+    pub fn protocol(&self) -> u16 {
+        match self {
+            Self::Inventory { protocol, .. }
+            | Self::AgentDelta { protocol, .. }
+            | Self::ApprovalRequest { protocol, .. }
+            | Self::Pong { protocol }
+            | Self::Error { protocol, .. }
+            | Self::Closed { protocol, .. } => *protocol,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.protocol() != PROTOCOL_VERSION {
+            return Err(ProtocolError::UnsupportedVersion(self.protocol()));
+        }
+        match self {
+            Self::Inventory { agents, .. } => {
+                if agents.len() > MAX_INVENTORY_AGENTS {
+                    return Err(ProtocolError::MessageTooLarge);
+                }
+            }
+            Self::AgentDelta {
+                agent_id, content, ..
+            } => {
+                validate_len(agent_id, MAX_AGENT_ID_BYTES)?;
+                if content.len() > MAX_TRANSCRIPT_DELTA_BYTES {
+                    return Err(ProtocolError::MessageTooLarge);
+                }
+            }
+            Self::ApprovalRequest {
+                agent_id,
+                grant_id,
+                prompt,
+                ..
+            } => {
+                validate_len(agent_id, MAX_AGENT_ID_BYTES)?;
+                validate_len(grant_id, MAX_AGENT_ID_BYTES)?;
+                validate_len(prompt, MAX_MESSAGE_BYTES)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtocolError {
     InvalidField,
@@ -280,6 +326,28 @@ mod tests {
         })
         .expect("serialize");
         assert_eq!(encoded, r#"{"type":"ping","protocol":1}"#);
+    }
+
+    #[test]
+    fn validates_server_message_bounds() {
+        let valid = ServerMessage::Pong {
+            protocol: PROTOCOL_VERSION,
+        };
+        assert_eq!(valid.validate(), Ok(()));
+
+        let bad_version = ServerMessage::Pong { protocol: 99 };
+        assert_eq!(
+            bad_version.validate(),
+            Err(ProtocolError::UnsupportedVersion(99))
+        );
+
+        let huge_delta = ServerMessage::AgentDelta {
+            protocol: PROTOCOL_VERSION,
+            agent_id: "agent-1".into(),
+            cursor: 1,
+            content: "x".repeat(MAX_TRANSCRIPT_DELTA_BYTES + 1),
+        };
+        assert_eq!(huge_delta.validate(), Err(ProtocolError::MessageTooLarge));
     }
 
     #[test]

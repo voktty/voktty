@@ -472,14 +472,14 @@ function McpConnections({
             type="button"
             aria-label={
               showAllProviders
-                ? "Show available providers"
-                : "Show all providers"
+                ? t("harness.mcpUI.showAvailableProviders")
+                : t("harness.mcpUI.showAllProviders")
             }
             aria-pressed={showAllProviders}
             title={
               showAllProviders
-                ? "Showing all providers"
-                : "Showing available providers"
+                ? t("harness.mcpUI.showingAllProviders")
+                : t("harness.mcpUI.showingAvailableProviders")
             }
             onClick={() => setShowAllProviders(!showAllProviders)}
             className={`grid size-7 place-items-center rounded-md border border-content/10 hover:bg-content/5 ${showAllProviders ? "bg-selection text-content" : "text-content/55"}`}

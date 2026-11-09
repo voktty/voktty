@@ -74,4 +74,104 @@ mod docker_stats_tests {
             assert!(status.error.is_some());
         }
     }
+
+    #[test]
+    fn test_docker_real_pty_spawn_input_output_cwd() {
+        use portable_pty::{native_pty_system, PtySize};
+        use std::io::{Read, Write};
+
+        struct DockerCleanup(String);
+        impl Drop for DockerCleanup {
+            fn drop(&mut self) {
+                let _ = std::process::Command::new("docker")
+                    .args(["rm", "-f", &self.0])
+                    .output();
+            }
+        }
+
+        let container_name = format!("voktty_u5_pty_{}", std::process::id());
+        let start = std::process::Command::new("docker")
+            .args([
+                "run",
+                "-d",
+                "--rm",
+                "--name",
+                &container_name,
+                "-w",
+                "/tmp",
+                "alpine",
+                "sleep",
+                "30",
+            ])
+            .output();
+
+        let Ok(output) = start else {
+            // Docker daemon not accessible or docker binary missing in environment
+            return;
+        };
+
+        if !output.status.success() {
+            // Docker daemon not running or access denied in environment
+            return;
+        }
+
+        let _guard = DockerCleanup(container_name.clone());
+
+        let pty_system = native_pty_system();
+        let pair = pty_system.openpty(PtySize::default()).expect("openpty");
+        let cmd = crate::modules::pty::shell_init::build_command(
+            None,
+            crate::modules::workspace::WorkspaceEnv::Docker {
+                container_id: container_name.clone(),
+                container_name: Some(container_name.clone()),
+                image: Some("alpine".into()),
+                shell: Some("/bin/sh".into()),
+                user: None,
+                workdir: Some("/tmp".into()),
+            },
+            false,
+            None,
+            None,
+        )
+        .expect("build docker command");
+
+        let mut child = pair.slave.spawn_command(cmd).expect("spawn command");
+        drop(pair.slave);
+
+        let mut writer = pair.master.take_writer().expect("take_writer");
+        let mut reader = pair.master.try_clone_reader().expect("try_clone_reader");
+
+        std::thread::sleep(std::time::Duration::from_millis(150));
+
+        writeln!(writer, "pwd").expect("write pwd");
+        writeln!(writer, "echo U5_DOCKER_VERIFIED").expect("write echo");
+        writeln!(writer, "exit").expect("write exit");
+        writer.flush().expect("flush writer");
+
+        let mut output_str = String::new();
+        let mut buf = [0u8; 1024];
+        let start_read = std::time::Instant::now();
+        while start_read.elapsed() < std::time::Duration::from_secs(5) {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    output_str.push_str(&String::from_utf8_lossy(&buf[..n]));
+                    if output_str.contains("U5_DOCKER_VERIFIED") && output_str.contains("/tmp") {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+
+        let _ = child.wait();
+        assert!(
+            output_str.contains("/tmp"),
+            "PTY cwd /tmp should be in output: {output_str}"
+        );
+        assert!(
+            output_str.contains("U5_DOCKER_VERIFIED"),
+            "Echo verification should be in output: {output_str}"
+        );
+    }
 }

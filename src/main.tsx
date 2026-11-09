@@ -4,13 +4,14 @@ import "./styles/globals.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import ReactDOM from "react-dom/client";
 import App from "@/app/App";
 import { StartupCommitMarker } from "@/app/StartupCommitMarker";
 import { initLaunchRequests } from "@/lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { markStartupPhase } from "@/lib/startupTiming";
+import { ensureMonoFontsLoaded } from "@/lib/fonts";
+import { revealWindow } from "@/lib/windowReveal";
 import {
   applyDocumentLocale,
   loadLocale,
@@ -32,6 +33,7 @@ const startupLanguage = readFastLanguage();
 const nativeBootstrap = Promise.all([
   invoke("pty_close_all").catch(() => {}),
   initLaunchRequests(),
+  ensureMonoFontsLoaded().catch(() => {}),
 ]);
 
 await loadLocale(startupLanguage);
@@ -132,14 +134,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 // Window starts hidden (per tauri.conf.json) so users never see a transparent
-// shadow-only frame before React paints. Use setTimeout — rAF is throttled
-// while the window is hidden and would never fire.
-const showWindow = () => {
-  getCurrentWindow()
-    .show()
-    .then(() => markStartupPhase("window-visible"))
-    .catch((e) => console.error("window.show failed:", e));
-};
-setTimeout(showWindow, 50);
-// Safety net: if the first show somehow fails to take effect, force again.
-setTimeout(showWindow, 500);
+// shadow-only frame before React paints. StartupCommitMarker triggers revealWindow()
+// synchronously upon the initial React DOM commit.
+// Safety nets: if React takes unusually long or fails to mount, force reveal.
+setTimeout(revealWindow, 150);
+setTimeout(revealWindow, 500);

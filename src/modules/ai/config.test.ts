@@ -30,6 +30,10 @@ describe("compat model id helpers", () => {
     const mid = compatModelIdForEndpoint(endpoint.id);
     expect(isCompatModelId(mid)).toBe(true);
     expect(endpointIdFromCompatModel(mid)).toBe(endpoint.id);
+
+    const subMid = compatModelIdForEndpoint(endpoint.id, "sub-model");
+    expect(isCompatModelId(subMid)).toBe(true);
+    expect(endpointIdFromCompatModel(subMid)).toBe(endpoint.id);
   });
 
   it("treats static model ids as non-compat", () => {
@@ -45,6 +49,18 @@ describe("resolveModel", () => {
     expect(info.provider).toBe("openai-compatible");
     expect(info.id).toBe(mid);
     expect(info.label).toBe(endpoint.modelId);
+
+    const subMid = compatModelIdForEndpoint(endpoint.id, "deepseek-chat");
+    const subInfo = resolveModel(subMid, [endpoint]);
+    expect(subInfo.provider).toBe("openai-compatible");
+    expect(subInfo.id).toBe(subMid);
+    expect(subInfo.label).toBe("deepseek-chat");
+
+    const apiMid = `api:${endpoint.id}:deepseek-chat`;
+    const apiInfo = resolveModel(apiMid, [endpoint]);
+    expect(apiInfo.provider).toBe("openai-compatible");
+    expect(apiInfo.id).toBe(apiMid);
+    expect(apiInfo.label).toBe("deepseek-chat");
   });
 
   it("falls back to a placeholder when the endpoint is gone", () => {

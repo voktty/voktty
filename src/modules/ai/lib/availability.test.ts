@@ -15,16 +15,32 @@ const current = {
 };
 
 describe("AI availability contract", () => {
-  it("requires explicit activation and a current successful health check", () => {
+  it("requires explicit activation and supports optional health check", () => {
     expect(hasCurrentAiHealth(current)).toBe(true);
     expect(isAiAvailable(current)).toBe(true);
     expect(isAiAvailable({ ...current, aiEnabled: false })).toBe(false);
+    expect(
+      isAiAvailable({
+        ...current,
+        aiEnabled: false,
+        customEndpoints: [
+          {
+            id: "ep-1",
+            name: "Custom",
+            baseURL: "https://api.example.com",
+            modelId: "m1",
+            contextLimit: 4096,
+          },
+        ],
+      }),
+    ).toBe(true);
   });
 
-  it("revokes availability after configuration changes", () => {
+  it("tracks health revision independently from basic availability", () => {
+    expect(hasCurrentAiHealth({ ...current, aiConfigRevision: 5 })).toBe(false);
     expect(
       isAiAvailable({ ...current, aiConfigRevision: 5, aiEnabled: true }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("does not accept a revision without a completed check timestamp", () => {
@@ -98,6 +114,14 @@ describe("isProviderUsable", () => {
       isProviderUsable("openai-compatible", noKeys, {
         openaiCompatibleBaseURL: "http://localhost:1234",
         openaiCompatibleModelId: "m",
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts a provider configured via customEndpoints", () => {
+    expect(
+      isProviderUsable("deepseek", noKeys, {
+        customEndpoints: [{ id: "deepseek" } as never],
       }),
     ).toBe(true);
   });

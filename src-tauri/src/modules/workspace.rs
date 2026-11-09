@@ -228,7 +228,8 @@ pub async fn workspace_authorize(
         return Ok(path);
     }
     let resolved = resolve_path(&path, &workspace);
-    let canonical = registry.authorize(&resolved).map_err(|e| e.to_string())?;
+    let canonical = crate::modules::workspace_trust::authorize_and_remember(&registry, &resolved)
+        .map_err(|e| e.to_string())?;
     Ok(crate::modules::fs::to_canon(&canonical))
 }
 

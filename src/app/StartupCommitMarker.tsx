@@ -1,9 +1,11 @@
+import { useLayoutEffect } from "react";
 import { markStartupPhase } from "@/lib/startupTiming";
-import { useEffect } from "react";
+import { revealWindow } from "@/lib/windowReveal";
 
 export function StartupCommitMarker() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     markStartupPhase("react-committed");
+    revealWindow();
   }, []);
   return null;
 }

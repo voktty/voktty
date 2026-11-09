@@ -160,12 +160,12 @@ export function SwitchBranchDialog({
             type="button"
             title={
               generating
-                ? "Cancel commit message generation"
+                ? t("harness.chrome.cancelCommitMessageGeneration")
                 : t("harness.chrome.generateCommit")
             }
             aria-label={
               generating
-                ? "Cancel commit message generation"
+                ? t("harness.chrome.cancelCommitMessageGeneration")
                 : t("harness.chrome.generateCommit")
             }
             disabled={Boolean(busy)}

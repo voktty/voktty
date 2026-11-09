@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -24,8 +26,53 @@ class MainActivity : TauriActivity() {
   @Volatile
   var backConsumedByJs = false
 
+  private var pendingPermissionRequest: PermissionRequest? = null
+  private val CAMERA_PERMISSION_REQUEST_CODE = 1002
+
+  private fun configureWebView(wv: WebView) {
+    wv.setBackgroundColor(Color.parseColor("#121214"))
+    wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+    wv.overScrollMode = View.OVER_SCROLL_NEVER
+    wv.isVerticalScrollBarEnabled = false
+    wv.isHorizontalScrollBarEnabled = false
+    wv.settings.apply {
+      domStorageEnabled = true
+      databaseEnabled = true
+      mediaPlaybackRequiresUserGesture = false
+      displayZoomControls = false
+      builtInZoomControls = false
+      setSupportZoom(false)
+      cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+    }
+    wv.addJavascriptInterface(BackInterface(this), "VokttyBack")
+    wv.addJavascriptInterface(CompanionKeyStore(), "VokttyCompanionKeyStore")
+    wv.webChromeClient = object : WebChromeClient() {
+      override fun onPermissionRequest(request: PermissionRequest) {
+        runOnUiThread {
+          val resources = request.resources
+          val needsCamera = resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+          if (needsCamera) {
+            val hasPermission = checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+              request.grant(resources)
+            } else {
+              pendingPermissionRequest = request
+              requestPermissions(arrayOf(android.Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST_CODE)
+            }
+          } else {
+            request.grant(resources)
+          }
+        }
+      }
+    }
+    Log.i(TAG, "WebView configured with JS interfaces and WebChromeClient")
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+
+    window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.parseColor("#121214")))
+    window.decorView.setBackgroundColor(Color.parseColor("#121214"))
 
     WebView.setWebContentsDebuggingEnabled(true)
 
@@ -59,26 +106,27 @@ class MainActivity : TauriActivity() {
       insets
     }
 
-    // Add JS interface so frontend can manage the Android Back button
-    window.decorView.postDelayed({
-      val wv = findWebViewRecursive(window.decorView)
-      if (wv != null) {
-        wv.addJavascriptInterface(BackInterface(this), "VokttyBack")
-        wv.addJavascriptInterface(CompanionKeyStore(), "VokttyCompanionKeyStore")
-        Log.i(TAG, "VokttyBack JS interface added to WebView")
-      } else {
-        Log.w(TAG, "WebView not found — retrying in 500ms")
-        window.decorView.postDelayed({
-          val wv2 = findWebViewRecursive(window.decorView)
-          if (wv2 != null) {
-            wv2.addJavascriptInterface(BackInterface(this), "VokttyBack")
-            Log.i(TAG, "VokttyBack JS interface added (retry)")
-          } else {
-            Log.e(TAG, "WebView not found after retry")
-          }
-        }, 500)
+    // Add JS interface and native GPU settings for WebView with fast discovery
+    val immediateWv = findWebViewRecursive(window.decorView)
+    if (immediateWv != null) {
+      configureWebView(immediateWv)
+    } else {
+      window.decorView.post {
+        val wv = findWebViewRecursive(window.decorView)
+        if (wv != null) {
+          configureWebView(wv)
+        } else {
+          window.decorView.postDelayed({
+            val wv2 = findWebViewRecursive(window.decorView)
+            if (wv2 != null) {
+              configureWebView(wv2)
+            } else {
+              Log.w(TAG, "WebView not found after retry")
+            }
+          }, 150)
+        }
       }
-    }, 500)
+    }
 
     onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
       override fun handleOnBackPressed() {
@@ -153,5 +201,24 @@ class MainActivity : TauriActivity() {
       }
     }
     return null
+  }
+
+  override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+  ) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+      val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+      runOnUiThread {
+        if (granted) {
+          pendingPermissionRequest?.let { it.grant(it.resources) }
+        } else {
+          pendingPermissionRequest?.deny()
+        }
+        pendingPermissionRequest = null
+      }
+    }
   }
 }

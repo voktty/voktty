@@ -72,6 +72,67 @@ pub fn canonical_dir(
     })
 }
 
+pub fn is_git_system_authorized(path: &Path, workspace: &WorkspaceEnv) -> bool {
+    if workspace.is_remote()
+        || !path.is_dir()
+        || !crate::modules::workspace_trust::is_trustable_root(path)
+    {
+        return false;
+    }
+
+    let path_str = path.to_string_lossy();
+    let Ok(output) = crate::modules::git::process::run_git(
+        workspace,
+        Some(&path_str),
+        ["rev-parse", "--show-toplevel"],
+        5,
+    ) else {
+        return false;
+    };
+
+    if output.exit_code != Some(0) {
+        return false;
+    }
+
+    let toplevel = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if toplevel.is_empty() {
+        return false;
+    }
+
+    let toplevel_path = Path::new(&toplevel);
+    if !toplevel_path.join(".git").exists() {
+        return false;
+    }
+
+    let Ok(canonical_toplevel) = std::fs::canonicalize(toplevel_path) else {
+        return false;
+    };
+    let Ok(canonical_path) = std::fs::canonicalize(path) else {
+        return false;
+    };
+
+    if !canonical_path.starts_with(&canonical_toplevel) {
+        return false;
+    }
+
+    crate::modules::workspace_trust::is_trustable_root(&canonical_toplevel)
+}
+
+pub fn ensure_repo_authorized(
+    registry: &WorkspaceRegistry,
+    path: &Path,
+    workspace: &WorkspaceEnv,
+) -> bool {
+    if workspace.is_remote() || registry.is_authorized(path) {
+        return true;
+    }
+    if is_git_system_authorized(path, workspace) {
+        let _ = registry.authorize(path);
+        return true;
+    }
+    false
+}
+
 pub fn authorized_repo_root(
     registry: &WorkspaceRegistry,
     path: &str,
