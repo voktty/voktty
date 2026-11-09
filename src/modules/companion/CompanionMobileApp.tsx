@@ -17,7 +17,9 @@ import {
   ArrowUp01Icon,
   Cancel01Icon,
   CheckmarkCircle02Icon,
+  Loading03Icon,
   Logout01Icon,
+  QrCodeIcon,
 } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IScannerControls } from "@zxing/browser";
@@ -336,11 +338,13 @@ export function CompanionMobileApp() {
     setBlocks([]);
   };
 
-  const connect = async () => {
+  const connect = async (overridePayload?: string) => {
+    const raw = (typeof overridePayload === "string" ? overridePayload : payload).trim();
+    if (!raw) return;
     setState("connecting");
     setError(null);
     try {
-      const parsed = JSON.parse(payload) as { type?: string; invitation?: Invitation };
+      const parsed = JSON.parse(raw) as { type?: string; invitation?: Invitation };
       if (parsed.type !== "voktty-companion" || !parsed.invitation) throw new Error("invalid-payload");
       const invitation = parsed.invitation;
       const pair = await crypto.subtle.generateKey(
@@ -390,6 +394,20 @@ export function CompanionMobileApp() {
     }
   };
 
+  const handleScanResult = useCallback((code: string) => {
+    if (!code) return;
+    try {
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(80);
+      }
+    } catch {
+      // ignore
+    }
+    setPayload(code);
+    setScanning(false);
+    void connect(code);
+  }, []);
+
   useEffect(() => {
     if (!scanning) {
       scannerRef.current?.stop();
@@ -398,29 +416,114 @@ export function CompanionMobileApp() {
     }
 
     let active = true;
+    let localStream: MediaStream | null = null;
+    let frameId: number | null = null;
 
     async function startScanner() {
       try {
-        const { BrowserQRCodeReader } = await import("@zxing/browser");
-        if (!active) return;
         if (!videoRef.current) {
           await new Promise<void>((resolve) => setTimeout(resolve, 50));
         }
         if (!active || !videoRef.current) return;
-        const reader = new BrowserQRCodeReader();
-        const controls = await reader.decodeFromVideoDevice(
-          undefined,
-          videoRef.current,
+
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: true,
+          });
+        }
+
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        localStream = stream;
+
+        const video = videoRef.current;
+        video.srcObject = stream;
+        await video.play().catch(() => {});
+
+        // 1. Hardware accelerated native BarcodeDetector if available
+        if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+          try {
+            const detector = new (window as unknown as {
+              BarcodeDetector: new (opts: { formats: string[] }) => {
+                detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
+              };
+            }).BarcodeDetector({ formats: ["qr_code"] });
+
+            let detecting = true;
+            const scanFrame = async () => {
+              if (!detecting || !active || !video) return;
+              try {
+                if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                  const barcodes = await detector.detect(video);
+                  if (barcodes.length > 0 && barcodes[0]?.rawValue) {
+                    detecting = false;
+                    handleScanResult(barcodes[0].rawValue);
+                    return;
+                  }
+                }
+              } catch {
+                // frame detection pass skipped
+              }
+              if (detecting && active) {
+                frameId = requestAnimationFrame(scanFrame);
+              }
+            };
+            frameId = requestAnimationFrame(scanFrame);
+
+            scannerRef.current = {
+              stop: () => {
+                detecting = false;
+                if (frameId) cancelAnimationFrame(frameId);
+                stream.getTracks().forEach((t) => t.stop());
+                video.srcObject = null;
+              },
+            };
+            return;
+          } catch {
+            // fallback to ZXing below
+          }
+        }
+
+        // 2. ZXing continuous scanner fallback
+        const { BrowserQRCodeReader } = await import("@zxing/browser");
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        const reader = new BrowserQRCodeReader(undefined, {
+          delayBetweenScanAttempts: 80,
+        });
+        const controls = await reader.decodeFromStream(
+          stream,
+          video,
           (result) => {
             if (!result || !active) return;
-            setPayload(result.getText());
-            setScanning(false);
+            handleScanResult(result.getText());
           },
         );
         if (!active) {
           controls.stop();
         } else {
-          scannerRef.current = controls;
+          scannerRef.current = {
+            stop: () => {
+              controls.stop();
+              stream.getTracks().forEach((t) => t.stop());
+              video.srcObject = null;
+            },
+          };
         }
       } catch (err) {
         if (!active) return;
@@ -434,10 +537,14 @@ export function CompanionMobileApp() {
 
     return () => {
       active = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      if (localStream) {
+        localStream.getTracks().forEach((t) => t.stop());
+      }
       scannerRef.current?.stop();
       scannerRef.current = null;
     };
-  }, [scanning, t]);
+  }, [scanning, t, handleScanResult]);
 
   const stopScanner = () => {
     setScanning(false);
@@ -626,71 +733,133 @@ export function CompanionMobileApp() {
   }
 
   return (
-    <main className="min-h-dvh bg-background px-5 py-10 text-foreground">
-      <div className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-sm flex-col justify-center">
-        <div className="rounded-3xl border border-border/60 bg-card/70 p-6 shadow-xl">
-          <img
-            src="/voktty-icon.png"
-            alt="Voktty"
-            className="mb-5 size-14 rounded-2xl"
-          />
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
-            Voktty
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            {t("companion.mobile.title")}
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+    <main className="min-h-dvh bg-background px-4 py-6 text-foreground">
+      <div className="mx-auto flex min-h-[calc(100dvh-3rem)] max-w-sm flex-col justify-center">
+        <div className="rounded-3xl border border-border/60 bg-card/70 p-5 shadow-xl backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <img
+              src="/voktty-icon.png"
+              alt="Voktty"
+              className="size-11 rounded-xl shadow-sm"
+            />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                Voktty
+              </p>
+              <h1 className="text-lg font-semibold tracking-tight">
+                {t("companion.mobile.title")}
+              </h1>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             {t("companion.mobile.description")}
           </p>
-          <div className="mt-6 rounded-2xl border border-border/50 bg-background/45 p-4">
-            <p className="text-sm font-medium">{t("companion.mobile.agentOnlyTitle")}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+
+          <div className="mt-3.5 rounded-xl border border-border/50 bg-background/50 p-3">
+            <p className="text-xs font-medium text-foreground">{t("companion.mobile.agentOnlyTitle")}</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
               {t("companion.mobile.agentOnlyDescription")}
             </p>
           </div>
+
           {state === "pending" ? (
-            <p className="mt-6 text-center text-xs text-muted-foreground">
-              {t("companion.mobile.waitingForApproval")}
-            </p>
-          ) : (
-            <div className="mt-6">
-              <label className="text-xs font-medium" htmlFor="companion-payload">
-                {t("companion.mobile.payloadLabel")}
-              </label>
-              <Textarea
-                id="companion-payload"
-                className="mt-2 min-h-24 text-xs"
-                value={payload}
-                onChange={(event) => setPayload(event.target.value)}
-                placeholder={t("companion.mobile.payloadPlaceholder")}
-                disabled={state === "connecting"}
-              />
+            <div className="mt-6 flex flex-col items-center py-6 text-center">
+              <div className="relative flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <HugeiconsIcon icon={Loading03Icon} size={28} className="animate-spin" />
+              </div>
+              <h2 className="mt-4 text-sm font-semibold tracking-tight">
+                {t("companion.mobile.waitingForApprovalTitle")}
+              </h2>
+              <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                {t("companion.mobile.waitingForApprovalDesc")}
+              </p>
               <Button
-                className="mt-3 w-full"
-                disabled={!payload.trim() || state === "connecting"}
-                onClick={() => void connect()}
+                variant="ghost"
+                size="sm"
+                className="mt-5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setState("idle");
+                  setError(null);
+                }}
               >
-                {state === "connecting"
-                  ? t("companion.mobile.connecting")
-                  : t("companion.mobile.connect")}
+                {t("common.cancel")}
               </Button>
+            </div>
+          ) : (
+            <div className="mt-5 space-y-4">
               {scanning ? (
-                <div className="mt-3">
-                  <video ref={videoRef} className="aspect-square w-full rounded-xl bg-black" muted playsInline />
-                  <Button className="mt-2 w-full" variant="outline" onClick={stopScanner}>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative aspect-square w-full max-w-[260px] overflow-hidden rounded-2xl border-2 border-primary/40 bg-black shadow-inner">
+                    <video
+                      ref={videoRef}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                    />
+                    {/* Reticle corner accents */}
+                    <div className="pointer-events-none absolute inset-3">
+                      <span className="absolute top-0 left-0 size-4 border-t-2 border-l-2 border-primary rounded-tl" />
+                      <span className="absolute top-0 right-0 size-4 border-t-2 border-r-2 border-primary rounded-tr" />
+                      <span className="absolute bottom-0 left-0 size-4 border-b-2 border-l-2 border-primary rounded-bl" />
+                      <span className="absolute bottom-0 right-0 size-4 border-b-2 border-r-2 border-primary rounded-br" />
+                      <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-primary/40 shadow-[0_0_8px_rgba(var(--primary),0.8)] animate-pulse" />
+                    </div>
+                  </div>
+                  <p className="text-center text-xs text-muted-foreground">
+                    {t("companion.mobile.scanQrPrompt")}
+                  </p>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={stopScanner}
+                  >
                     {t("companion.mobile.stopScanning")}
                   </Button>
                 </div>
               ) : (
-                <Button className="mt-2 w-full" variant="outline" onClick={scan}>
-                  {t("companion.mobile.scanQr")}
+                <Button
+                  size="lg"
+                  className="w-full gap-2 py-5 text-xs font-semibold shadow-sm"
+                  onClick={scan}
+                >
+                  <HugeiconsIcon icon={QrCodeIcon} size={18} />
+                  <span>{t("companion.mobile.scanQr")}</span>
                 </Button>
               )}
+
+              <div className="relative flex items-center justify-center py-1">
+                <div className="w-full border-t border-border/50" />
+                <span className="absolute bg-card px-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {t("companion.mobile.payloadLabel")}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <Textarea
+                  id="companion-payload"
+                  className="min-h-20 text-xs font-mono"
+                  value={payload}
+                  onChange={(event) => setPayload(event.target.value)}
+                  placeholder={t("companion.mobile.payloadPlaceholder")}
+                  disabled={state === "connecting"}
+                />
+                <Button
+                  className="w-full"
+                  variant="secondary"
+                  disabled={!payload.trim() || state === "connecting"}
+                  onClick={() => void connect()}
+                >
+                  {state === "connecting"
+                    ? t("companion.mobile.connecting")
+                    : t("companion.mobile.connect")}
+                </Button>
+              </div>
+
               {state === "error" && error ? (
-                <p className="mt-3 text-center text-xs text-destructive">
+                <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-2.5 text-center text-xs text-destructive">
                   {error}
-                </p>
+                </div>
               ) : null}
             </div>
           )}

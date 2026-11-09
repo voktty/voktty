@@ -74,6 +74,21 @@ export function interpolate(
       continue;
     }
 
+    if (template.startsWith("{{", index)) {
+      const doubleClosing = template.indexOf("}}", index + 2);
+      if (doubleClosing !== -1) {
+        const token = template.slice(index + 2, doubleClosing).trim();
+        if (
+          /^\w+$/.test(token) &&
+          Object.prototype.hasOwnProperty.call(params, token)
+        ) {
+          result += String(params[token]);
+          index = doubleClosing + 2;
+          continue;
+        }
+      }
+    }
+
     const closingIndex = findClosingBrace(template, index);
     if (closingIndex === -1) {
       result += template.slice(index);

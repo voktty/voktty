@@ -91,6 +91,7 @@ import {
 } from "@/modules/launcher";
 import { useControlBridge } from "@/modules/control";
 import { useCompanionPairingPrompt } from "@/modules/companion/useCompanionPairingPrompt";
+import { CompanionPairingModal } from "@/modules/companion/CompanionPairingModal";
 import {
   type EditorGroupHandle,
   type EditorPaneHandle,
@@ -5252,6 +5253,7 @@ function DesktopApp() {
             />
           ) : null}
           <Toaster position="bottom-right" />
+          <CompanionPairingModal />
           <TransferQueuePanel onDecide={decideTransferConflict} />
 
           {hasComposer && activeAgentSessionId ? (

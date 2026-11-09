@@ -1179,9 +1179,14 @@ export const en = {
       connectionError:
         "The pairing request could not be sent. Check the payload and tunnel.",
       scanQr: "Scan pairing QR code",
+      scanQrTitle: "Scan pairing QR code",
+      scanQrPrompt: "Point camera at the QR code on your computer screen",
       stopScanning: "Stop scanning",
       cameraError:
         "Camera access is unavailable. Paste the pairing payload instead.",
+      waitingForApprovalTitle: "Waiting for desktop approval",
+      waitingForApprovalDesc:
+        "Confirm the pairing request in the dialog shown on your desktop screen.",
       disconnect: "Disconnect",
       directLan: "LAN / Direct",
       sessions: "AI Sessions",
@@ -1206,11 +1211,19 @@ export const en = {
       toolExecution: "Tool execution",
     },
     pairing: {
-      promptTitle: "Companion pairing request from {{device}}",
-      promptDesc: "Device fingerprint: {{fingerprint}}",
+      modalTitle: "Companion Pairing Request",
+      modalDesc:
+        "A mobile device is requesting permission to connect to this Voktty instance:",
+      deviceLabel: "Device",
+      unknownDevice: "Mobile device",
+      fingerprintLabel: "Security fingerprint",
+      fingerprintHint:
+        "Verify that this code matches the one on your phone screen.",
+      promptTitle: "Companion pairing request from {device}",
+      promptDesc: "Device fingerprint: {fingerprint}",
       allow: "Allow",
       deny: "Deny",
-      allowedSuccess: "Companion device {{device}} paired successfully",
+      allowedSuccess: "Companion device {device} paired successfully",
     },
   },
   docker: {

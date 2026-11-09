@@ -1218,9 +1218,14 @@ export const es: TranslationSchema = {
       connectionError:
         "No se pudo enviar la solicitud. Comprueba el payload y el túnel.",
       scanQr: "Escanear código QR de emparejamiento",
+      scanQrTitle: "Escanear código QR",
+      scanQrPrompt: "Apunta la cámara al código QR en la pantalla de tu ordenador",
       stopScanning: "Dejar de escanear",
       cameraError:
         "No se puede acceder a la cámara. Pega el payload de emparejamiento.",
+      waitingForApprovalTitle: "Esperando aceptación en Voktty",
+      waitingForApprovalDesc:
+        "Confirma la solicitud en el cuadro de diálogo que aparece en tu escritorio.",
       disconnect: "Desconectar",
       directLan: "LAN / Directo",
       sessions: "Sesiones de IA",
@@ -1245,11 +1250,19 @@ export const es: TranslationSchema = {
       toolExecution: "Ejecución de herramienta",
     },
     pairing: {
-      promptTitle: "Solicitud de emparejamiento Companion de {{device}}",
-      promptDesc: "Huella del dispositivo: {{fingerprint}}",
+      modalTitle: "Solicitud de emparejamiento Companion",
+      modalDesc:
+        "Un dispositivo móvil solicita conectarse a esta instancia de Voktty:",
+      deviceLabel: "Dispositivo",
+      unknownDevice: "Dispositivo móvil",
+      fingerprintLabel: "Huella de seguridad",
+      fingerprintHint:
+        "Verifica que este código coincida con el que aparece en tu móvil.",
+      promptTitle: "Solicitud de emparejamiento Companion de {device}",
+      promptDesc: "Huella del dispositivo: {fingerprint}",
       allow: "Permitir",
       deny: "Rechazar",
-      allowedSuccess: "Dispositivo Companion {{device}} emparejado con éxito",
+      allowedSuccess: "Dispositivo Companion {device} emparejado con éxito",
     },
   },
   docker: {

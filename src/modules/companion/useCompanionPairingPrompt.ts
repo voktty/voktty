@@ -3,13 +3,12 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { t } from "@/modules/i18n";
+import {
+  type CompanionPairingRequestedPayload,
+  useCompanionPairingStore,
+} from "./useCompanionPairingStore";
 
-export interface CompanionPairingRequestedPayload {
-  id: string;
-  deviceName: string;
-  fingerprint: string;
-  expiresAtMs: number;
-}
+export type { CompanionPairingRequestedPayload };
 
 export function useCompanionPairingPrompt(): void {
   useEffect(() => {
@@ -21,6 +20,8 @@ export function useCompanionPairingPrompt(): void {
       (event) => {
         const { id, deviceName, fingerprint } = event.payload;
         if (!id) return;
+
+        useCompanionPairingStore.getState().setPendingRequest(event.payload);
 
         const toastId = `companion-pairing-${id}`;
         toast.info(t("companion.pairing.promptTitle", { device: deviceName }), {

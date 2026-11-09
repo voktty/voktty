@@ -41,7 +41,9 @@ describe("CompanionMobileApp", () => {
       root.render(<CompanionMobileApp />);
     });
 
-    const button = container.querySelector("button");
+    const button = Array.from(container.querySelectorAll("button")).find((btn) =>
+      btn.textContent?.includes("companion.mobile.connect"),
+    );
     expect(button?.hasAttribute("disabled")).toBe(true);
   });
 });
