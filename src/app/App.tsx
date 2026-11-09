@@ -118,7 +118,6 @@ import { useTabExplorerReveal } from "@/modules/explorer/lib/useTabExplorerRevea
 import { useNativeFolderOpening } from "@/modules/explorer/lib/useNativeFolderOpening";
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
-import { HarnessNotch } from "@/modules/harness/chrome/HarnessNotch";
 import { useAutomationsRequest } from "@/modules/harness/lib/automationsRequest";
 import {
   ensurePreviewTunnel,
@@ -414,6 +413,12 @@ function readRightPanelWidth(): number {
 const LazyBroadcastToAgentsDialog = lazy(() =>
   import("@/modules/harness/components/BroadcastToAgentsDialog").then((m) => ({
     default: m.BroadcastToAgentsDialog,
+  })),
+);
+
+const LazyHarnessNotch = lazy(() =>
+  import("@/modules/harness/chrome/HarnessNotch").then((m) => ({
+    default: m.HarnessNotch,
   })),
 );
 
@@ -5253,7 +5258,9 @@ function DesktopApp() {
             />
           )}
 
-          <HarnessNotch />
+          <Suspense fallback={null}>
+            <LazyHarnessNotch />
+          </Suspense>
           <WindowVibrancyBridge />
           <KanbanAgentBridge />
 
