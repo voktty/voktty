@@ -291,7 +291,6 @@ import {
 } from "@/modules/workspace-search";
 import { SettingsModal } from "@/settings/SettingsModal";
 import { BootstrapLoader } from "@/modules/mobile";
-import { CompanionMobileApp } from "@/modules/companion/CompanionMobileApp";
 import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -423,8 +422,19 @@ const LazyAgentHistoryModal = lazy(() =>
   ),
 );
 
+const LazyCompanionMobileApp = lazy(() =>
+  import("@/modules/companion/CompanionMobileApp").then((module) => ({
+    default: module.CompanionMobileApp,
+  })),
+);
+
 export default function App() {
-  if (IS_ANDROID) return <CompanionMobileApp />;
+  if (IS_ANDROID)
+    return (
+      <Suspense fallback={null}>
+        <LazyCompanionMobileApp />
+      </Suspense>
+    );
   return <DesktopApp />;
 }
 
