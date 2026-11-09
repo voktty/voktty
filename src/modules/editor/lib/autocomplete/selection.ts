@@ -1,5 +1,5 @@
 import {
-  endpointIdFromCompatModel,
+  parseCompatModelId,
   type ProviderId,
 } from "@/modules/ai/config";
 import type { Preferences } from "@/modules/settings/store";
@@ -39,9 +39,10 @@ export function resolveAutocompleteSelection(
   snapshot: Snapshot,
 ): AutocompleteSelection {
   const provider = snapshot.autocompleteProvider;
+  const parsed = parseCompatModelId(snapshot.autocompleteModelId);
   const endpointId =
     provider === "openai-compatible"
-      ? endpointIdFromCompatModel(snapshot.autocompleteModelId)
+      ? parsed.endpointId
       : "";
   const endpoint = endpointId
     ? snapshot.customEndpoints.find((item) => item.id === endpointId)
@@ -51,7 +52,7 @@ export function resolveAutocompleteSelection(
     local !== null
       ? local
       : provider === "openai-compatible"
-        ? (endpoint?.modelId ?? snapshot.openaiCompatibleModelId)
+        ? (parsed.subModelId || endpoint?.modelId || snapshot.openaiCompatibleModelId)
         : provider === "openrouter" &&
             snapshot.autocompleteModelId === "openrouter-custom"
           ? snapshot.openrouterModelId
