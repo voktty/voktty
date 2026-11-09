@@ -86,7 +86,8 @@
         "useExhaustiveDependencies": "warn",
         "useHookAtTopLevel": "warn",
         "useParseIntRadix": "warn",
-        "noUnusedVariables": "warn"
+        "noUnusedVariables": "warn",
+        "noComponentHookFactories": "warn"
       },
       "performance": {
         "noAccumulatingSpread": "warn"
