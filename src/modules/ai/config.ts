@@ -159,6 +159,7 @@ export type CustomEndpoint = {
   protocol?: ApiProtocol;
   isThirdParty?: boolean;
   providerType?: string;
+  provider?: string;
   contextLimit: number;
   autocompleteProfile?: CompatibleCompletionProfile;
 };

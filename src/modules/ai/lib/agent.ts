@@ -194,7 +194,12 @@ export async function buildLanguageModel(
         name: "openai-compatible",
         baseURL: compatURL,
         apiKey: activeKey,
-        headers: activeKey ? { "api-key": activeKey } : undefined,
+        headers: activeKey
+          ? {
+              Authorization: `Bearer ${activeKey}`,
+              "api-key": activeKey,
+            }
+          : undefined,
         fetch: localProxyFetch,
       })(resolvedModelId);
       break;
@@ -289,7 +294,11 @@ export async function buildConfiguredLanguageModel(
     if (!activeModelId) {
       throw new Error(`${ep.name}: no model id set. Open Settings → Models.`);
     }
-    const activeKey = local.customEndpointKeys?.[eid] ?? "";
+    let activeKey = local.customEndpointKeys?.[eid];
+    if (!activeKey) {
+      const { getCustomEndpointKey } = await import("./keyring");
+      activeKey = (await getCustomEndpointKey(eid)) ?? "";
+    }
     if (ep.protocol === "anthropic-messages") {
       const { createAnthropic } = await import("@ai-sdk/anthropic");
       return createAnthropic({
@@ -308,7 +317,23 @@ export async function buildConfiguredLanguageModel(
       activeKey,
     );
   }
-  const m = resolveModel(modelId);
+  const m = resolveModel(modelId, local.customEndpoints);
+  let resolvedKeys = keys;
+  if (!resolvedKeys[m.provider] && local.customEndpoints) {
+    const matchingEp = local.customEndpoints.find(
+      (e) => e.provider === m.provider || e.providerType === m.provider,
+    );
+    if (matchingEp) {
+      let epKey = local.customEndpointKeys?.[matchingEp.id];
+      if (!epKey) {
+        const { getCustomEndpointKey } = await import("./keyring");
+        epKey = (await getCustomEndpointKey(matchingEp.id)) ?? undefined;
+      }
+      if (epKey) {
+        resolvedKeys = { ...resolvedKeys, [m.provider]: epKey };
+      }
+    }
+  }
   let resolvedId: string = m.id;
   if (m.id === "lmstudio-local") {
     if (!local.lmstudioModelId?.trim()) {
@@ -346,7 +371,7 @@ export async function buildConfiguredLanguageModel(
     }
     resolvedId = local.openrouterModelId.trim();
   }
-  return buildLanguageModel(m.provider, keys, resolvedId, {
+  return buildLanguageModel(m.provider, resolvedKeys, resolvedId, {
     lmstudioBaseURL: local.lmstudioBaseURL,
     mlxBaseURL: local.mlxBaseURL,
     ollamaBaseURL: local.ollamaBaseURL,

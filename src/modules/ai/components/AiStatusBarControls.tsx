@@ -303,9 +303,19 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
   ]);
 
   const epModelInfos = useMemo(() => {
-    return customEndpoints.map((ep) =>
-      getCompatModelInfo(compatModelIdForEndpoint(ep.id), customEndpoints),
-    );
+    const list: ModelInfo[] = [];
+    for (const ep of customEndpoints) {
+      const models =
+        ep.models && ep.models.length > 0
+          ? ep.models
+          : [ep.modelId || ep.name];
+      for (const m of models) {
+        if (!m) continue;
+        const cid = compatModelIdForEndpoint(ep.id, m);
+        list.push(getCompatModelInfo(cid, customEndpoints));
+      }
+    }
+    return list;
   }, [customEndpoints]);
 
   const allModels = useMemo(() => {
@@ -374,6 +384,9 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
     if (isCompatModelId(selected)) {
       return getCompatModelInfo(selected, customEndpoints);
     }
+    if (selected.startsWith("api:")) {
+      return resolveModel(selected, customEndpoints);
+    }
     if (isHarnessModelId(selected)) {
       return (
         harnessChatModelInfo(selected, t) ??
@@ -410,7 +423,7 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
         .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     }
     if (activeProvider === COMPAT_PROVIDER_ID) {
-      pool = pool.filter((m) => isCompatModelId(m.id));
+      pool = pool.filter((m) => isCompatModelId(m.id) || m.id.startsWith("api:"));
     } else if (activeProvider !== null) {
       pool = pool.filter((m) => m.provider === activeProvider);
     }

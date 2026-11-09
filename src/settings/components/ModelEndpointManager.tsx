@@ -10,9 +10,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type {
-  CustomEndpoint,
-  ApiProtocol,
+import {
+  type CustomEndpoint,
+  type ApiProtocol,
+  type ProviderId,
+  compatModelIdForEndpoint,
+  providerSupportsKey,
 } from "@/modules/ai/config";
 import {
   THIRD_PARTY_PROVIDERS,
@@ -23,10 +26,15 @@ import {
   getCustomEndpointKey,
   setCustomEndpointKey,
   clearCustomEndpointKey,
+  setKey,
 } from "@/modules/ai/lib/keyring";
 import { syncCustomEndpointsToHarness } from "@/modules/harness/lib/models";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { setCustomEndpoints } from "@/modules/settings/store";
+import {
+  setCustomEndpoints,
+  setAiEnabled,
+  setDefaultModel,
+} from "@/modules/settings/store";
 import { useTranslation } from "@/modules/i18n";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -181,6 +189,9 @@ export function ModelEndpointManager() {
 
     if (thirdPartyApiKey.trim()) {
       await setCustomEndpointKey(endpoint.id, thirdPartyApiKey.trim());
+      if (providerSupportsKey(currentProvider.id as ProviderId)) {
+        await setKey(currentProvider.id as ProviderId, thirdPartyApiKey.trim()).catch(() => {});
+      }
     }
 
     const updated = [
@@ -189,6 +200,18 @@ export function ModelEndpointManager() {
     ];
     await setCustomEndpoints(updated);
     syncCustomEndpointsToHarness(updated);
+    await setAiEnabled(true);
+
+    const currentDefault = usePreferencesStore.getState().defaultModelId;
+    if (
+      !currentDefault ||
+      currentDefault === "deepseek-flash" ||
+      currentDefault === "gpt-6.1-sol"
+    ) {
+      const newModelId = compatModelIdForEndpoint(endpoint.id, finalModels[0]);
+      void setDefaultModel(newModelId as any);
+    }
+
     setThirdPartyApiKey("");
   };
 
@@ -224,6 +247,17 @@ export function ModelEndpointManager() {
     ];
     await setCustomEndpoints(updated);
     syncCustomEndpointsToHarness(updated);
+    await setAiEnabled(true);
+
+    const currentDefault = usePreferencesStore.getState().defaultModelId;
+    if (
+      !currentDefault ||
+      currentDefault === "deepseek-flash" ||
+      currentDefault === "gpt-6.1-sol"
+    ) {
+      const newModelId = compatModelIdForEndpoint(endpoint.id, finalModels[0]);
+      void setDefaultModel(newModelId as any);
+    }
 
     // Reset draft fields
     setCustomId("");

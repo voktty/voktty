@@ -27,6 +27,7 @@ import {
   getCompatModelInfo,
   getProvider,
   isCompatModelId,
+  parseCompatModelId,
   MODELS,
   isHarnessModelId,
   resolveModel,
@@ -206,6 +207,7 @@ export function ModelsSection() {
   const onSaveKey = async (provider: ProviderId, value: string) => {
     await setKey(provider, value);
     setKeys((prev) => (prev ? { ...prev, [provider]: value } : prev));
+    await setAiEnabled(true);
     await emitKeysChanged();
   };
 
@@ -311,6 +313,7 @@ export function ModelsSection() {
     if (id === "harness") {
       void setHarnessProviderEnabled(true);
     }
+    void setAiEnabled(true);
     setAdding((prev) => new Set(prev).add(id));
   };
 
@@ -617,7 +620,9 @@ function getFirstConfiguredModelId(
     }
   }
   if (customEndpoints.length > 0 && customEndpoints[0]?.id) {
-    return compatModelIdForEndpoint(customEndpoints[0].id) as ModelId;
+    const ep = customEndpoints[0];
+    const sub = ep.models?.[0] || ep.modelId;
+    return compatModelIdForEndpoint(ep.id, sub) as ModelId;
   }
   return null;
 }
@@ -734,13 +739,40 @@ function DefaultsBlock({
   }, [aiConfigRevision]);
 
   const hasAny = configuredIds.size > 0 || customEndpoints.length > 0;
+  const autoActivatedRef = useRef(false);
+  useEffect(() => {
+    if (!hasAny) {
+      autoActivatedRef.current = false;
+      return;
+    }
+    if (!aiEnabled && !autoActivatedRef.current) {
+      autoActivatedRef.current = true;
+      void setAiEnabled(true);
+    }
+  }, [hasAny, aiEnabled]);
+
   const defaultModelInfo = resolveDisplayModel(defaultModel, customEndpoints);
-  const isDefaultConfigured =
-    configuredIds.has(defaultModelInfo.provider) ||
-    (isCompatModelId(defaultModel) &&
+  const isDefaultConfigured = useMemo(() => {
+    if (configuredIds.has(defaultModelInfo.provider)) return true;
+    if (isCompatModelId(defaultModel)) {
+      const { endpointId } = parseCompatModelId(defaultModel);
+      return customEndpoints.some((e) => e.id === endpointId);
+    }
+    if (defaultModel.startsWith("api:")) {
+      const eid = defaultModel.slice(4).split(":")[0];
+      return customEndpoints.some((e) => e.id === eid);
+    }
+    if (
       customEndpoints.some(
-        (e) => compatModelIdForEndpoint(e.id) === defaultModel,
-      ));
+        (e) =>
+          e.provider === defaultModelInfo.provider ||
+          e.providerType === defaultModelInfo.provider,
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }, [configuredIds, defaultModelInfo.provider, defaultModel, customEndpoints]);
 
   useEffect(() => {
     if (!isDefaultConfigured && hasAny) {
@@ -1001,29 +1033,35 @@ function DefaultModelPicker({
                 <ProviderIcon provider="openai-compatible" size={11} />
                 <span>{t("ai.openAiCompatible")}</span>
               </div>
-              {customEndpoints.map((ep) => {
-                const compatId = compatModelIdForEndpoint(ep.id) as ModelId;
-                return (
-                  <DropdownMenuItem
-                    key={ep.id}
-                    onSelect={() => void setDefaultModel(compatId)}
-                    className={cn(
-                      "flex items-start gap-2 text-[12px]",
-                      compatId === defaultModel && "bg-accent/50",
-                    )}
-                  >
-                    <span className="flex flex-1 flex-col">
-                      <span>
-                        {ep.name ||
-                          ep.modelId ||
-                          t("settings.models.customEndpoint")}
+              {customEndpoints.flatMap((ep) => {
+                const models =
+                  ep.models && ep.models.length > 0
+                    ? ep.models
+                    : [ep.modelId || ep.name];
+                return models.filter(Boolean).map((m) => {
+                  const compatId = compatModelIdForEndpoint(
+                    ep.id,
+                    m,
+                  ) as ModelId;
+                  const display = getCompatModelInfo(compatId, customEndpoints);
+                  return (
+                    <DropdownMenuItem
+                      key={compatId}
+                      onSelect={() => void setDefaultModel(compatId)}
+                      className={cn(
+                        "flex items-start gap-2 text-[12px]",
+                        compatId === defaultModel && "bg-accent/50",
+                      )}
+                    >
+                      <span className="flex flex-1 flex-col">
+                        <span>{display.label}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {ep.baseURL}
+                        </span>
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {ep.baseURL}
-                      </span>
-                    </span>
-                  </DropdownMenuItem>
-                );
+                    </DropdownMenuItem>
+                  );
+                });
               })}
             </div>
           )}
@@ -1101,14 +1139,23 @@ function AutocompleteRow({
     return getBindingTokens(bindings[0]).join("");
   }, [userShortcuts]);
 
-  // One selectable model per fully-configured OpenAI-compatible endpoint.
+  // Selectable models across fully-configured OpenAI-compatible endpoints.
   const compatItems = useMemo(
     () =>
       customEndpoints
-        .filter((e) => e && e.baseURL?.trim() && e.modelId?.trim())
-        .map((e) =>
-          getCompatModelInfo(compatModelIdForEndpoint(e.id), customEndpoints),
-        ),
+        .filter((e) => e && e.baseURL?.trim())
+        .flatMap((e) => {
+          const models =
+            e.models && e.models.length > 0 ? e.models : [e.modelId || e.name];
+          return models
+            .filter(Boolean)
+            .map((m) =>
+              getCompatModelInfo(
+                compatModelIdForEndpoint(e.id, m),
+                customEndpoints,
+              ),
+            );
+        }),
     [customEndpoints],
   );
 

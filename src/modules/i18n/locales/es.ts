@@ -708,7 +708,7 @@ export const es: TranslationSchema = {
         agents: "Agentes",
       },
       aiInactiveBanner:
-        "Conecta un proveedor abajo y prueba su modelo. Voktty activará la IA cuando la comprobación termine correctamente.",
+        "Conecta un proveedor o endpoint abajo, o activa el interruptor para habilitar las funciones de IA.",
       providers: "Proveedores",
       apiKey: "Clave de API",
       configurationRequired: "Configura primero el modelo seleccionado.",

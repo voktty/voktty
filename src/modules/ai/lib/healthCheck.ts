@@ -75,13 +75,21 @@ export async function runAiHealthCheck(
     config.modelId,
     config.customEndpoints,
   ).provider;
+  const endpoint = config.customEndpoints?.find(
+    (e) => e.id === config.modelId.replace(/^compat-/, "").split(":")[0],
+  );
+  const isDeepSeek =
+    provider === "deepseek" ||
+    endpoint?.provider === "deepseek" ||
+    endpoint?.providerType === "deepseek" ||
+    config.modelId.toLowerCase().includes("deepseek");
   const { generateText } = await import("ai");
   const probe = {
     model,
     prompt: "Reply with OK.",
     temperature: 0,
     abortSignal,
-    ...(provider === "deepseek"
+    ...(isDeepSeek
       ? {
           providerOptions: {
             deepseek: { thinking: { type: "disabled" } },
@@ -93,13 +101,14 @@ export async function runAiHealthCheck(
     ...probe,
     maxOutputTokens: 8,
   });
-  // Reasoning models served through OpenRouter can spend the whole tiny
-  // budget on reasoning and stop before emitting any visible text
+  // Reasoning models served through OpenRouter or custom endpoints can spend
+  // the whole tiny budget on reasoning and stop before emitting any visible text
   // (finishReason "length"). Probe once more with a bounded larger budget
   // instead of failing a healthy model.
+  const isRetryEligible = provider === "openrouter" || Boolean(endpoint);
   if (
     !result.text.trim() &&
-    provider === "openrouter" &&
+    isRetryEligible &&
     result.finishReason === "length"
   ) {
     result = await generateText({

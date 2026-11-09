@@ -695,7 +695,7 @@ export const en = {
         agents: "Agents",
       },
       aiInactiveBanner:
-        "Connect a provider below and test its model. Voktty turns AI on after the check succeeds.",
+        "Connect a provider or endpoint below, or toggle the switch to activate AI features.",
       providers: "Providers",
       apiKey: "API Key",
       configurationRequired: "Configure the selected model first.",
