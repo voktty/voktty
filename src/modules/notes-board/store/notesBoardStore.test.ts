@@ -50,7 +50,7 @@ describe("notesBoardStore", () => {
   it("clamps size within valid ranges", () => {
     useNotesBoardStore.getState().setSize({ width: 200, height: 2000 });
     expect(useNotesBoardStore.getState().width).toBe(420); // clamped to min
-    expect(useNotesBoardStore.getState().height).toBe(800); // clamped to max
+    expect(useNotesBoardStore.getState().height).toBe(900); // clamped to max
   });
 
   it("updates and resets draggable position", () => {

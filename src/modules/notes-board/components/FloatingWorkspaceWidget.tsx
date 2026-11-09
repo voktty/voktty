@@ -268,6 +268,7 @@ export function FloatingWorkspaceWidget({
               cwd={cwd}
               tabs={tabs}
               onActivateAgent={onActivateAgent}
+              isMaximized={isMaximized}
             />
           ) : activeTab === "kanban" ? (
             <KanbanTab

@@ -25,12 +25,12 @@ type NotesBoardState = {
   clearPendingNewNote: () => void;
 };
 
-const DEFAULT_WIDTH = 840;
-const DEFAULT_HEIGHT = 580;
+const DEFAULT_WIDTH = 1000;
+const DEFAULT_HEIGHT = 640;
 const MIN_WIDTH = 420;
 const MIN_HEIGHT = 380;
-const MAX_WIDTH = 1000;
-const MAX_HEIGHT = 800;
+const MAX_WIDTH = 1400;
+const MAX_HEIGHT = 900;
 
 function loadStoredPosition(): Position | null {
   try {
