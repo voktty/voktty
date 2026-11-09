@@ -9,7 +9,11 @@ import {
   type AgentState,
   type AgentSummary,
 } from "@/modules/companion/transport";
+import { groupTranscript } from "@/modules/companion/lib/transcript";
+import { ReasoningFold } from "@/modules/companion/ReasoningFold";
 import type { Block } from "@/modules/harness/lib/session";
+import { Badge } from "panelui-web/badge";
+import { Message } from "panelui-web/message";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AlertCircleIcon,
@@ -100,30 +104,28 @@ function renderStateBadge(state: AgentState, t: (key: string) => string) {
   switch (state) {
     case "working":
       return (
-        <span className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-amber-500">
-          <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+        <Badge variant="warning" size="sm" dot="pulse">
           {t("companion.mobile.stateWorking")}
-        </span>
+        </Badge>
       );
     case "attention":
       return (
-        <span className="flex items-center gap-1.5 rounded-full bg-red-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-red-500">
-          <HugeiconsIcon icon={AlertCircleIcon} size={11} />
+        <Badge variant="destructive" size="sm" dot>
           {t("companion.mobile.stateAttention")}
-        </span>
+        </Badge>
       );
     case "finished":
       return (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+        <Badge variant="success" size="sm" dot>
           {t("companion.mobile.stateFinished")}
-        </span>
+        </Badge>
       );
     case "idle":
     default:
       return (
-        <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <Badge variant="secondary" size="sm">
           {t("companion.mobile.stateIdle")}
-        </span>
+        </Badge>
       );
   }
 }
@@ -136,9 +138,15 @@ function renderBlock(
 ) {
   if (block.role === "user") {
     return (
-      <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2.5 text-xs text-primary-foreground shadow-sm break-words whitespace-pre-wrap">
-        {block.text}
-      </div>
+      <Message from="user">
+        <Message.Content>
+          <Message.Bubble>
+            <Message.BubbleContent className="whitespace-pre-wrap break-words text-xs">
+              {block.text}
+            </Message.BubbleContent>
+          </Message.Bubble>
+        </Message.Content>
+      </Message>
     );
   }
 
@@ -147,9 +155,15 @@ function renderBlock(
   return (
     <div className="mr-auto max-w-[92%] space-y-2">
       {block.text ? (
-        <div className="rounded-2xl rounded-tl-sm border border-border/50 bg-card/75 px-3.5 py-2.5 text-xs leading-relaxed text-foreground shadow-sm break-words whitespace-pre-wrap">
-          {block.text}
-        </div>
+        <Message from="assistant" streaming={block.streaming === true}>
+          <Message.Content>
+            <Message.Bubble>
+              <Message.BubbleContent className="whitespace-pre-wrap break-words text-xs">
+                {block.text}
+              </Message.BubbleContent>
+            </Message.Bubble>
+          </Message.Content>
+        </Message>
       ) : null}
 
       {block.tool ? (
@@ -619,11 +633,21 @@ export function CompanionMobileApp() {
                   {selectedSession?.title || selectedAgentId}
                 </p>
               ) : (
-                blocks.map((block) => (
-                  <div key={block.id} className="space-y-1.5">
-                    {renderBlock(block, handleApprovalDecision, isApproving, t)}
-                  </div>
-                ))
+                groupTranscript(blocks).map((item) =>
+                  item.kind === "reasoning" ? (
+                    <ReasoningFold
+                      key={`reasoning-${item.id}`}
+                      text={item.text}
+                      streaming={item.streaming}
+                      label={t("companion.mobile.thinking")}
+                      liveLabel={t("companion.mobile.thinkingLive")}
+                    />
+                  ) : (
+                    <div key={item.block.id} className="space-y-1.5">
+                      {renderBlock(item.block, handleApprovalDecision, isApproving, t)}
+                    </div>
+                  ),
+                )
               )}
             </div>
 

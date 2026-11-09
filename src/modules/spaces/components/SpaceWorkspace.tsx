@@ -90,6 +90,9 @@ export type SpaceWorkspaceProps = SurfaceProps & {
   ) => void;
 };
 
+// Width reserved at the end of in-pane top strips for the floating slot controls.
+const SLOT_CONTROLS_INSET = "6.5rem";
+
 const ROOT_BOUNDS: WorkspaceRect = {
   x: 0,
   y: 0,
@@ -168,6 +171,13 @@ export function SpaceWorkspace({
     <div
       ref={rootRef}
       className="relative h-full min-h-0 w-full overflow-hidden"
+      style={
+        isComposite
+          ? ({
+              "--slot-controls-inset": SLOT_CONTROLS_INSET,
+            } as React.CSSProperties)
+          : undefined
+      }
       onPointerDownCapture={isComposite ? focusSlot : undefined}
     >
       <WorkspaceSurface

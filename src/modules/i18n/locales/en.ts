@@ -1208,6 +1208,7 @@ export const en = {
       deny: "Deny",
       decided: "Decided",
       thinking: "Agent reasoning",
+      thinkingLive: "Thinking...",
       toolExecution: "Tool execution",
     },
     pairing: {

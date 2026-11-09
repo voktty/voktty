@@ -1247,6 +1247,7 @@ export const es: TranslationSchema = {
       deny: "Rechazar",
       decided: "Decidido",
       thinking: "Pensamiento del agente",
+      thinkingLive: "Pensando...",
       toolExecution: "Ejecución de herramienta",
     },
     pairing: {

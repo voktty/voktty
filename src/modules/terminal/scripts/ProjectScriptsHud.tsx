@@ -115,6 +115,7 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
           "flex h-7.5 shrink-0 items-center gap-1 px-2 text-[10.5px] border-b border-border/60 select-none overflow-x-auto [scrollbar-width:none]",
           className,
         )}
+        style={{ paddingInlineEnd: "max(0.5rem, var(--slot-controls-inset, 0px))" }}
       >
         {scripts.length > 0 && (
           <button

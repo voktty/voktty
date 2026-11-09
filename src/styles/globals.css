@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "./fonts.css";
 @import "./code-highlight.css";
+@source "../../node_modules/panelui-web/dist";
 
 @source "../../node_modules/streamdown/dist/index.js";
 
