@@ -124,6 +124,7 @@ const ENTRY_LABEL_KEYS: Record<string, string> = {
   "composer-mascot": "harness.settingsEntries.composerMascot",
   "diff-view": "harness.settingsEntries.diffView",
   "empty-session-games": "harness.settingsEntries.emptySessionGames",
+  "harness-notch": "harness.settingsEntries.notch",
   "claude-hooks": "harness.settingsEntries.claudeHooks",
   github: "harness.settingsEntries.github",
   gitlab: "harness.settingsEntries.gitlab",

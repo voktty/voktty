@@ -575,6 +575,45 @@ export function subscribeLiveAgentsEnabled(onStoreChange: () => void) {
     window.removeEventListener(LIVE_AGENTS_ENABLED_CHANGE_EVENT, onStoreChange);
 }
 
+const HARNESS_NOTCH_ENABLED_KEY = "monocode.harnessNotch";
+
+export const HARNESS_NOTCH_ENABLED_DEFAULT = true;
+
+/** Fired on `window` when the Harness Notch setting flips. */
+export const HARNESS_NOTCH_ENABLED_CHANGE_EVENT =
+  "monocode:harness-notch-enabled-change";
+
+export function loadHarnessNotchEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(HARNESS_NOTCH_ENABLED_KEY);
+    if (raw == null) return HARNESS_NOTCH_ENABLED_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return HARNESS_NOTCH_ENABLED_DEFAULT;
+  }
+}
+
+export function saveHarnessNotchEnabled(value: boolean) {
+  try {
+    localStorage.setItem(HARNESS_NOTCH_ENABLED_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(HARNESS_NOTCH_ENABLED_CHANGE_EVENT, {
+      detail: value,
+    }),
+  );
+}
+
+export function subscribeHarnessNotchEnabled(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(HARNESS_NOTCH_ENABLED_CHANGE_EVENT, onStoreChange);
+  return () =>
+    window.removeEventListener(HARNESS_NOTCH_ENABLED_CHANGE_EVENT, onStoreChange);
+}
+
 const GRID_ARCADE_ENABLED_KEY = "monocode.gridArcadeEnabled";
 
 export const GRID_ARCADE_ENABLED_DEFAULT = true;

@@ -152,6 +152,7 @@ import {
 } from "../lib/layout";
 import { linearIssueDetails, peekLinearIssueDetails } from "../lib/linear";
 import { liveAgentsFromSessions } from "../lib/liveAgents";
+import { useNotchStore } from "../lib/notchStore";
 
 import { mergeModelSettings, resolveModel } from "../lib/models";
 import { ADD_NOTE_TO_CHAT_EVENT, loadNotes, type NoteComposerCard } from "../lib/notes";
@@ -986,6 +987,22 @@ export function HarnessApp({
         : [],
     [liveAgentsEnabled, sessions, unseenFinishedIds],
   );
+
+  useEffect(() => {
+    useNotchStore.getState().syncHarnessState({
+      liveAgents,
+      sessions,
+      onApproval: (sessionId, approvalId, decision) => {
+        onApproval(sessionId, approvalId, decision);
+      },
+      onSubmit: (sessionId, text) => {
+        onSubmit(sessionId, text);
+      },
+    });
+    return () => {
+      useNotchStore.getState().clearHarnessState();
+    };
+  }, [liveAgents, sessions, onApproval, onSubmit]);
 
 
   const hiddenApprovalToasts = useMemo(

@@ -44,12 +44,14 @@ import {
   loadCloseToTray,
   loadComposerRunner,
   loadGridArcadeEnabled,
+  loadHarnessNotchEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
   saveCloseToTray,
   saveComposerRunner,
   saveGridArcadeEnabled,
+  saveHarnessNotchEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
 } from "@/modules/harness/lib/settings";
@@ -175,6 +177,7 @@ function GeneralBlock() {
   const [transcriptAnchor, setTranscriptAnchor] = useState(loadTranscriptAnchor);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
   const [gridArcadeEnabled, setGridArcadeEnabled] = useState(loadGridArcadeEnabled);
+  const [notchEnabled, setNotchEnabled] = useState(loadHarnessNotchEnabled);
   const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
   const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(loadLiveAgentsEnabled);
   const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
@@ -245,6 +248,9 @@ function GeneralBlock() {
       </Row>
       <Row label={t("harness.settings.emptySessionGames")} description={t("harness.settings.emptySessionGamesDesc")}>
         <HarnessToggle label={t("harness.settings.emptySessionGames")} on={gridArcadeEnabled} onChange={(next) => { saveGridArcadeEnabled(next); setGridArcadeEnabled(next); }} />
+      </Row>
+      <Row label={t("harness.settings.notch")} description={t("harness.settings.notchDesc")}>
+        <HarnessToggle label={t("harness.settings.notch")} on={notchEnabled} onChange={(next) => { saveHarnessNotchEnabled(next); setNotchEnabled(next); }} />
       </Row>
       <Row label={t("harness.settings.notes")} description={t("harness.settings.notesDesc")}>
         <HarnessToggle label={t("harness.settings.notes")} on={notesEnabled} onChange={(next) => { saveNotesEnabled(next); setNotesEnabled(next); }} />

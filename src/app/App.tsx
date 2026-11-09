@@ -118,6 +118,7 @@ import { useTabExplorerReveal } from "@/modules/explorer/lib/useTabExplorerRevea
 import { useNativeFolderOpening } from "@/modules/explorer/lib/useNativeFolderOpening";
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
+import { HarnessNotch } from "@/modules/harness/chrome/HarnessNotch";
 import { useAutomationsRequest } from "@/modules/harness/lib/automationsRequest";
 import {
   ensurePreviewTunnel,
@@ -5252,6 +5253,7 @@ function DesktopApp() {
             />
           )}
 
+          <HarnessNotch />
           <WindowVibrancyBridge />
           <KanbanAgentBridge />
 
