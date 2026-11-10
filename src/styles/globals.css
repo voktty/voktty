@@ -593,7 +593,12 @@ html[data-chrome="borderless"] .voktty-bg-surface {
   zoom: var(--app-zoom);
 }
 .zoom-exempt {
-  zoom: calc(1 / var(--app-zoom));
+  zoom: calc(1 / (var(--app-zoom) * var(--chrome-scale, 1)));
+}
+
+/* Interface scale: menus and popovers are portaled to body, so scale there. */
+body {
+  zoom: var(--chrome-scale, 1);
 }
 
 #root,

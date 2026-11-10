@@ -337,6 +337,8 @@ export const es: TranslationSchema = {
       zoom: {
         title: "Escala / Zoom",
         label: "Nivel de zoom de la UI",
+        uiScaleLabel: "Tamaño de la interfaz",
+        uiScaleHint: "Escala menús, barras laterales y botones. El texto del editor y la terminal conserva su propio tamaño de fuente.",
       },
       tabs: {
         title: "Pestañas",

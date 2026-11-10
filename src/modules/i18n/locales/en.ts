@@ -330,6 +330,8 @@ export const en = {
       zoom: {
         title: "Zoom",
         label: "UI zoom level",
+        uiScaleLabel: "Interface size",
+        uiScaleHint: "Scales menus, sidebars and buttons. Editor and terminal text keep their own font size settings.",
       },
       tabs: {
         title: "Tabs",

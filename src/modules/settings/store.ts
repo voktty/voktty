@@ -244,6 +244,7 @@ export type Preferences = {
   terminalSuggestEnabled: boolean;
   lastWslDistro: string | null;
   zoomLevel: number;
+  uiScale: number;
   soundEnabled: boolean;
   soundVolume: number;
   agentAvatarEnabled: boolean;
@@ -388,6 +389,7 @@ const KEY_CONFIRM_CLOSE_RUNNING_TERMINAL = "confirmCloseRunningTerminal";
 const KEY_TERMINAL_SUGGEST_ENABLED = "terminalSuggestEnabled";
 const KEY_LAST_WSL_DISTRO = "lastWslDistro";
 const KEY_ZOOM_LEVEL = "zoomLevel";
+const KEY_UI_SCALE = "uiScale";
 const KEY_SOUND_ENABLED = "soundEnabled";
 const KEY_SOUND_VOLUME = "soundVolume";
 const KEY_AGENT_AVATAR_ENABLED = "agentAvatarEnabled";
@@ -539,6 +541,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalSuggestEnabled: true,
   lastWslDistro: null,
   zoomLevel: 1.0,
+  uiScale: 0.9,
   soundEnabled: true,
   soundVolume: SOUND_VOLUME_DEFAULT,
   agentAvatarEnabled: true,
@@ -852,6 +855,7 @@ export async function loadPreferences(): Promise<Preferences> {
       get<string | null>(KEY_LAST_WSL_DISTRO) ??
       DEFAULT_PREFERENCES.lastWslDistro,
     zoomLevel: get<number>(KEY_ZOOM_LEVEL) ?? getOptimalInitialZoomLevel(),
+    uiScale: get<number>(KEY_UI_SCALE) ?? DEFAULT_PREFERENCES.uiScale,
     soundEnabled:
       get<boolean>(KEY_SOUND_ENABLED) ?? DEFAULT_PREFERENCES.soundEnabled,
     soundVolume: clampSoundVolume(
@@ -1392,6 +1396,11 @@ export async function setZoomLevel(value: number): Promise<void> {
   await writePref(KEY_ZOOM_LEVEL, value);
 }
 
+/** Scales the interface chrome and menus only; editor and terminal text keep their own sizes. */
+export async function setUiScale(value: number): Promise<void> {
+  await writePref(KEY_UI_SCALE, value);
+}
+
 export const AUTO_SAVE_DELAY_MIN = 100;
 export const AUTO_SAVE_DELAY_MAX = 60000;
 
@@ -1575,6 +1584,7 @@ export async function onPreferencesChange(
     [KEY_TERMINAL_SUGGEST_ENABLED]: "terminalSuggestEnabled",
     [KEY_LAST_WSL_DISTRO]: "lastWslDistro",
     [KEY_ZOOM_LEVEL]: "zoomLevel",
+    [KEY_UI_SCALE]: "uiScale",
     [KEY_SOUND_ENABLED]: "soundEnabled",
     [KEY_SOUND_VOLUME]: "soundVolume",
     [KEY_AGENT_AVATAR_ENABLED]: "agentAvatarEnabled",
@@ -1730,6 +1740,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   terminalSuggestEnabled: KEY_TERMINAL_SUGGEST_ENABLED,
   lastWslDistro: KEY_LAST_WSL_DISTRO,
   zoomLevel: KEY_ZOOM_LEVEL,
+  uiScale: KEY_UI_SCALE,
   soundEnabled: KEY_SOUND_ENABLED,
   soundVolume: KEY_SOUND_VOLUME,
   agentAvatarEnabled: KEY_AGENT_AVATAR_ENABLED,

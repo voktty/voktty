@@ -62,6 +62,7 @@ import {
   setTerminalSuggestEnabled,
   setTerminalWebglEnabled,
   setZoomLevel,
+  setUiScale,
   TAB_STYLES,
   SPACE_VIEW_LIMITS,
   TERMINAL_FONT_SIZES,
@@ -172,6 +173,7 @@ export function GeneralSection() {
   );
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
+  const uiScale = usePreferencesStore((s) => s.uiScale);
   const soundEnabled = usePreferencesStore((s) => s.soundEnabled);
   const soundVolume = usePreferencesStore((s) => s.soundVolume);
   const agentAvatarEnabled = usePreferencesStore((s) => s.agentAvatarEnabled);
@@ -404,6 +406,24 @@ export function GeneralSection() {
             step={ZOOM_STEP}
             onValueChange={(v) => void setZoomLevel(v[0] ?? 1)}
           />
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <span className="text-[11px] text-muted-foreground">
+              {t("settings.general.zoom.uiScaleLabel")}
+            </span>
+            <span className="tabular-nums text-[10.5px] text-muted-foreground font-mono">
+              {Math.round(uiScale * 100)}%
+            </span>
+          </div>
+          <Slider
+            value={[uiScale]}
+            min={0.7}
+            max={1.2}
+            step={0.05}
+            onValueChange={(v) => void setUiScale(v[0] ?? 0.9)}
+          />
+          <p className="text-[10px] text-muted-foreground/80">
+            {t("settings.general.zoom.uiScaleHint")}
+          </p>
         </div>
       </div>
 

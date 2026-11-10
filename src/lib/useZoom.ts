@@ -7,6 +7,7 @@ const ZOOM_STEP = 0.1;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const CSS_VAR = "--app-zoom";
+const UI_SCALE_VAR = "--chrome-scale";
 
 function clampZoom(z: number): number {
   const rounded = Math.round(z * 100) / 100;
@@ -25,10 +26,26 @@ if (
   applyToDom(getOptimalInitialZoomLevel());
 }
 
+export const UI_SCALE_MIN = 0.7;
+export const UI_SCALE_MAX = 1.2;
+
+/** Applies the chrome scale. Clamped so a bad stored value cannot make the UI unusable. */
+export function applyUiScale(value: number): void {
+  const safe = Number.isFinite(value)
+    ? Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, value))
+    : 1;
+  document.documentElement.style.setProperty(UI_SCALE_VAR, String(safe));
+}
+
 export function useZoom() {
+  const uiScale = usePreferencesStore((s) => s.uiScale);
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
   const hydrated = usePreferencesStore((s) => s.hydrated);
   const lastAppliedRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    applyUiScale(uiScale);
+  }, [uiScale]);
 
   useEffect(() => {
     if (!hydrated) return;
