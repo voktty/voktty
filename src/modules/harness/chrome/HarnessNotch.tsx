@@ -38,7 +38,9 @@ const OVERLAY_LAUNCHER_WIDTH = 440;
 // Matches the hover trigger strip (w-64 x h-2.5) so the idle window stays tiny.
 const OVERLAY_HOVER_WIDTH = 256;
 const OVERLAY_HOVER_HEIGHT = 10;
-const OVERLAY_PADDING = 24;
+// Two 14px ears plus a little room so the shape is never clipped by the window.
+const OVERLAY_PADDING = 40;
+const OVERLAY_VERTICAL_PADDING = 20;
 const SNAPSHOT_THROTTLE_MS = 250;
 
 /**
@@ -274,16 +276,15 @@ export function HarnessNotch({
     const node = notchRef.current;
     if (!node || typeof ResizeObserver === "undefined") return;
     const fit = () => {
-      const rect = node.getBoundingClientRect();
       const state = useNotchStore.getState();
       const width = state.expanded
         ? OVERLAY_EXPANDED_WIDTH
         : state.idleLauncherOpen
           ? OVERLAY_LAUNCHER_WIDTH
-          : Math.ceil(rect.width) + OVERLAY_PADDING;
+          : node.offsetWidth + OVERLAY_PADDING;
       void invoke("notch_window_fit", {
         width,
-        height: Math.ceil(rect.height) + 8,
+        height: node.offsetHeight + OVERLAY_VERTICAL_PADDING,
       }).catch(() => undefined);
     };
     const observer = new ResizeObserver(fit);
@@ -315,7 +316,7 @@ export function HarnessNotch({
         onMouseLeave={() => {
           setTopHovered(false);
         }}
-        className={`fixed top-0 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center transition-all duration-300 ease-out select-none ${
+        className={`fixed top-0 left-1/2 -translate-x-1/2 z-[9999] flex w-max max-w-none flex-col items-center whitespace-nowrap transition-all duration-300 ease-out select-none ${
           isVisible
             ? "translate-y-0 opacity-100 pointer-events-auto"
             : "-translate-y-full opacity-0 pointer-events-none"

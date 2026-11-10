@@ -17,7 +17,7 @@ export function NotchEar({ side, className = "", ...props }: NotchEarProps) {
       viewBox="0 0 14 12"
       fill="currentColor"
       aria-hidden="true"
-      className={`shrink-0 pointer-events-none ${side === "right" ? "-scale-x-100" : ""} ${className}`}
+      className={`shrink-0 pointer-events-none ${side === "right" ? "-scale-x-100 -ml-px" : "-mr-px"} ${className}`}
       {...props}
     >
       <path d="M0,0 Q0,12 14,12 L14,0 Z" />
