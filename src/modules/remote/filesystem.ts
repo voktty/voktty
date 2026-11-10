@@ -9,6 +9,8 @@ import { toDirEntries, toFileStat } from "@/modules/ssh-native/adapt";
 import { nativeHandleFor } from "@/modules/ssh-native/handles";
 import { SshNativeCallError } from "@/modules/ssh-native/client";
 import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
+import { recoverLostRemoteSession } from "./sessionManager";
+import { isSessionLostError } from "./sessionPool";
 import {
   sftpCanonicalize,
   sftpCreateDir,
@@ -187,13 +189,50 @@ export function remoteConnection(
 function withRemoteBackend<A extends unknown[], T>(
   native: (handle: string, ...args: A) => Promise<T>,
   helper: (env: RemoteWorkspaceEnv, ...args: A) => Promise<T>,
+  retryAfterRecovery = true,
 ): (env: RemoteWorkspaceEnv, ...args: A) => Promise<T> {
   return async (env, ...args) => {
     const handle = await nativeHandleFor(env);
     return handle === undefined
-      ? helper(env, ...args)
+      ? withLostSessionRecovery(env, retryAfterRecovery, () =>
+          helper(env, ...args),
+        )
       : native(handle, ...args);
   };
+}
+
+/**
+ * Runs a helper request and, when the helper session turns out to be lost,
+ * reopens it for the same profile and root. Requests made with the stale id
+ * then reach the replacement, so the workspace keeps working after a dropped
+ * connection without a manual reconnect. Only idempotent operations retry
+ * here: a create, rename or delete may have reached the host before the
+ * session dropped, so it reports the original failure and the next attempt
+ * runs on the recovered session.
+ */
+export async function withLostSessionRecovery<T>(
+  env: RemoteWorkspaceEnv,
+  retry: boolean,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (reason) {
+    if (env.sessionId === undefined || !isSessionLostError(reason))
+      throw reason;
+    try {
+      await recoverLostRemoteSession(
+        env.sessionId,
+        env.connection.id,
+        env.connection,
+        env.root,
+      );
+    } catch {
+      throw reason;
+    }
+    if (!retry) throw reason;
+    return run();
+  }
 }
 
 function validCanonicalPathInput(path: string): boolean {
@@ -219,12 +258,14 @@ export async function remoteCanonicalize(
   const result: unknown =
     handle === undefined
       ? (
-          await requestRemoteResult<{ path: unknown }>(
-            requireSession(env),
-            "fs.canonicalize",
-            {
-              path: remoteRelativePath(env, path),
-            },
+          await withLostSessionRecovery(env, true, () =>
+            requestRemoteResult<{ path: unknown }>(
+              requireSession(env),
+              "fs.canonicalize",
+              {
+                path: remoteRelativePath(env, path),
+              },
+            ),
           )
         )?.path
       : await sftpCanonicalize(handle, parseRemotePath(path)?.hostPath ?? path);
@@ -402,6 +443,7 @@ export const remoteCreateFile = withRemoteBackend(
   (handle, path: string) =>
     sftpCreateFile(handle, normalizePath(path)).then(() => undefined),
   helperCreateFile,
+  false,
 );
 
 function helperCreateDir(
@@ -417,6 +459,7 @@ export const remoteCreateDir = withRemoteBackend(
   (handle, path: string) =>
     sftpCreateDir(handle, normalizePath(path)).then(() => undefined),
   helperCreateDir,
+  false,
 );
 
 function helperRename(
@@ -436,6 +479,7 @@ export const remoteRename = withRemoteBackend(
       () => undefined,
     ),
   helperRename,
+  false,
 );
 
 function helperDelete(
@@ -451,4 +495,5 @@ export const remoteDelete = withRemoteBackend(
   (handle, path: string) =>
     sftpDelete(handle, normalizePath(path)).then(() => undefined),
   helperDelete,
+  false,
 );

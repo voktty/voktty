@@ -9,6 +9,8 @@ import {
   remoteStat,
   remoteWriteFile,
 } from "@/modules/remote";
+import { withLostSessionRecovery } from "@/modules/remote/filesystem";
+import { liveRemoteSessionId } from "@/modules/remote/sessionAliases";
 import {
   currentWorkspaceEnv,
   isWindowsNativePath,
@@ -268,7 +270,22 @@ function resolveGitWorkspace(
       return LOCAL_WORKSPACE;
     }
   }
-  return current;
+  return liveWorkspace(current);
+}
+
+/** A workspace whose helper session was lost and reopened addresses the
+ * replacement, whichever stale copy of the old id the caller held. */
+function liveWorkspace(env: WorkspaceEnv): WorkspaceEnv {
+  if (env.kind !== "ssh" || env.sessionId === undefined) return env;
+  const live = liveRemoteSessionId(env.sessionId);
+  return live === env.sessionId ? env : { ...env, sessionId: live };
+}
+
+/** Git reads on an SSH workspace reopen a lost helper session and retry once. */
+function gitRead<T>(workspace: WorkspaceEnv, run: () => Promise<T>): Promise<T> {
+  return workspace.kind === "ssh"
+    ? withLostSessionRecovery(workspace, true, run)
+    : run();
 }
 
 function resolveFilesystemWorkspace(
@@ -658,13 +675,16 @@ export const native = {
       error: string | null;
     }>("dap_poll", { sessionId }),
   dapStop: (sessionId: number) => invoke<void>("dap_stop", { sessionId }),
-  gitResolveRepo: (cwd: string, workspace?: WorkspaceEnv) =>
-    isDirectSshProfilePath(cwd)
-      ? resolveRemoteGitRepo(cwd)
-      : invoke<GitRepoInfo | null>("git_resolve_repo", {
-          cwd,
-          workspace: resolveGitWorkspace(cwd, workspace),
-        }),
+  gitResolveRepo: (cwd: string, workspace?: WorkspaceEnv) => {
+    if (isDirectSshProfilePath(cwd)) return resolveRemoteGitRepo(cwd);
+    const resolved = resolveGitWorkspace(cwd, workspace);
+    return gitRead(resolved, () =>
+      invoke<GitRepoInfo | null>("git_resolve_repo", {
+        cwd,
+        workspace: liveWorkspace(resolved),
+      }),
+    );
+  },
   gitPanelSnapshot: (cwd: string, workspace?: WorkspaceEnv) =>
     invoke<GitPanelSnapshot>("git_panel_snapshot", {
       cwd,
@@ -677,13 +697,17 @@ export const native = {
           repoRoot,
           workspace: resolveGitWorkspace(repoRoot, workspace),
         }),
-  gitStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
-    isDirectSshProfilePath(repoRoot)
-      ? remoteGitPanel.status(repoRoot)
-      : invoke<GitStatusSnapshot>("git_status", {
-          repoRoot,
-          workspace: resolveGitWorkspace(repoRoot, workspace),
-        }),
+  gitStatus: (repoRoot: string, workspace?: WorkspaceEnv) => {
+    if (isDirectSshProfilePath(repoRoot))
+      return remoteGitPanel.status(repoRoot);
+    const resolved = resolveGitWorkspace(repoRoot, workspace);
+    return gitRead(resolved, () =>
+      invoke<GitStatusSnapshot>("git_status", {
+        repoRoot,
+        workspace: liveWorkspace(resolved),
+      }),
+    );
+  },
   gitDiff: (
     repoRoot: string,
     path: string | null,

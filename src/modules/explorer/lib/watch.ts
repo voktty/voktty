@@ -7,11 +7,75 @@ import {
   type WorkspaceEnv,
 } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
+import { liveRemoteSessionId } from "@/modules/remote/sessionAliases";
+import { onRemoteSessionRecovered } from "@/modules/remote/sessionManager";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 const FS_CHANGED_EVENT = "fs:changed";
 
 export type FsChangedPayload = { paths: string[]; sessionId?: number };
+
+/**
+ * Remote watches per live helper session, counted the way they were added.
+ * A lost session takes its watches with it, so recovery registers the same
+ * paths on the replacement and the explorer keeps updating live.
+ */
+const remoteWatches = new Map<number, Map<string, number>>();
+const remoteTreeWatches = new Map<number, Map<string, number>>();
+
+function track(
+  table: Map<number, Map<string, number>>,
+  sessionId: number,
+  paths: readonly string[],
+  delta: 1 | -1,
+): void {
+  const counts = table.get(sessionId) ?? new Map<string, number>();
+  for (const path of paths) {
+    const next = (counts.get(path) ?? 0) + delta;
+    if (next > 0) counts.set(path, next);
+    else counts.delete(path);
+  }
+  if (counts.size > 0) table.set(sessionId, counts);
+  else table.delete(sessionId);
+}
+
+function moveWatches(
+  table: Map<number, Map<string, number>>,
+  lostId: number,
+  sessionId: number,
+): Map<string, number> | undefined {
+  const lost = table.get(lostId);
+  if (!lost) return undefined;
+  table.delete(lostId);
+  const counts = table.get(sessionId) ?? new Map<string, number>();
+  for (const [path, count] of lost)
+    counts.set(path, (counts.get(path) ?? 0) + count);
+  table.set(sessionId, counts);
+  return lost;
+}
+
+onRemoteSessionRecovered((lostId, sessionId) => {
+  const paths = moveWatches(remoteWatches, lostId, sessionId);
+  if (paths) {
+    for (const [path, count] of paths) {
+      for (let index = 0; index < count; index += 1) {
+        void invoke("remote_watch_add", { sessionId, paths: [path] }).catch(
+          () => {},
+        );
+      }
+    }
+  }
+  const trees = moveWatches(remoteTreeWatches, lostId, sessionId);
+  if (trees) {
+    for (const [root, count] of trees) {
+      for (let index = 0; index < count; index += 1) {
+        void invoke("remote_watch_add_tree", { root, sessionId }).catch(
+          () => {},
+        );
+      }
+    }
+  }
+});
 
 export function isNetworkFilesystemPath(path: string): boolean {
   return /^[/\\]{2}[^/\\]/.test(path);
@@ -65,8 +129,10 @@ export function watchAdd(
     workspace.kind === "ssh" &&
     workspace.sessionId !== undefined
   ) {
+    const sessionId = liveRemoteSessionId(workspace.sessionId);
+    track(remoteWatches, sessionId, workspacePaths, 1);
     void invoke("remote_watch_add", {
-      sessionId: workspace.sessionId,
+      sessionId,
       paths: workspacePaths,
     }).catch(() => {});
   }
@@ -104,8 +170,10 @@ export function watchRemove(
     workspace.kind === "ssh" &&
     workspace.sessionId !== undefined
   ) {
+    const sessionId = liveRemoteSessionId(workspace.sessionId);
+    track(remoteWatches, sessionId, workspacePaths, -1);
     void invoke("remote_watch_remove", {
-      sessionId: workspace.sessionId,
+      sessionId,
       paths: workspacePaths,
     }).catch(() => {});
   }
@@ -128,9 +196,11 @@ export function watchAddTree(
       workspace: LOCAL_WORKSPACE,
     }).catch(() => {});
   } else if (workspace.kind === "ssh" && workspace.sessionId !== undefined) {
+    const sessionId = liveRemoteSessionId(workspace.sessionId);
+    track(remoteTreeWatches, sessionId, [root], 1);
     void invoke("remote_watch_add_tree", {
       root,
-      sessionId: workspace.sessionId,
+      sessionId,
     }).catch(() => {});
   }
 }
@@ -146,9 +216,11 @@ export function watchRemoveTree(
       workspace: LOCAL_WORKSPACE,
     }).catch(() => {});
   } else if (workspace.kind === "ssh" && workspace.sessionId !== undefined) {
+    const sessionId = liveRemoteSessionId(workspace.sessionId);
+    track(remoteTreeWatches, sessionId, [root], -1);
     void invoke("remote_watch_remove_tree", {
       root,
-      sessionId: workspace.sessionId,
+      sessionId,
     }).catch(() => {});
   }
 }
@@ -175,7 +247,11 @@ export function matchesWatchEvent(
   workspace: WorkspaceEnv,
 ): boolean {
   if (event.sessionId === undefined) return workspace.kind !== "ssh";
-  return workspace.kind === "ssh" && workspace.sessionId === event.sessionId;
+  return (
+    workspace.kind === "ssh" &&
+    workspace.sessionId !== undefined &&
+    liveRemoteSessionId(workspace.sessionId) === event.sessionId
+  );
 }
 
 /**

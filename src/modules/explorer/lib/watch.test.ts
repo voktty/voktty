@@ -12,8 +12,20 @@ import {
   watchRemove,
   watchRemoveTree,
 } from "./watch";
+import { recordRemoteSessionReplacement } from "@/modules/remote/sessionAliases";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+const recovery = vi.hoisted(() => ({
+  listener: undefined as undefined | ((lost: number, next: number) => void),
+}));
+vi.mock("@/modules/remote/sessionManager", () => ({
+  onRemoteSessionRecovered: (
+    listener: (lost: number, next: number) => void,
+  ) => {
+    recovery.listener = listener;
+    return () => {};
+  },
+}));
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
   getCurrentWebviewWindow: () => ({ listen: vi.fn() }),
 }));
@@ -35,6 +47,35 @@ describe("filesystem watches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(invoke).mockResolvedValue(undefined);
+  });
+
+  it("re-registers remote watches on a recovered session and routes its events", () => {
+    const lostEnv: WorkspaceEnv = { ...remote, sessionId: 41 };
+    watchAdd(["/srv/app/src"], lostEnv);
+    watchAddTree("/srv/app", lostEnv);
+    vi.mocked(invoke).mockClear();
+
+    recordRemoteSessionReplacement(41, 42);
+    recovery.listener?.(41, 42);
+
+    expect(invoke).toHaveBeenCalledWith("remote_watch_add", {
+      sessionId: 42,
+      paths: ["/srv/app/src"],
+    });
+    expect(invoke).toHaveBeenCalledWith("remote_watch_add_tree", {
+      root: "/srv/app",
+      sessionId: 42,
+    });
+    expect(
+      matchesWatchEvent({ paths: ["/srv/app/src/a"], sessionId: 42 }, lostEnv),
+    ).toBe(true);
+
+    vi.mocked(invoke).mockClear();
+    watchRemove(["/srv/app/src"], lostEnv);
+    expect(invoke).toHaveBeenCalledWith("remote_watch_remove", {
+      sessionId: 42,
+      paths: ["/srv/app/src"],
+    });
   });
 
   it("routes remote watch changes through their helper session", () => {

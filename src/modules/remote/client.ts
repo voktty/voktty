@@ -1,6 +1,7 @@
 import { releaseNativeHandlesForRemoteSession } from "@/modules/ssh-native/handles";
 import type { SshConnectionConfig } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
+import { liveRemoteSessionId } from "./sessionAliases";
 
 export type RemoteSshConnection = SshConnectionConfig;
 export const REMOTE_PROTOCOL_VERSION = 2 as const;
@@ -86,7 +87,7 @@ export function requestRemote(
   request: RemoteRequest,
 ): Promise<RemoteResponse> {
   return invoke<RemoteResponse>("remote_request", {
-    sessionId,
+    sessionId: liveRemoteSessionId(sessionId),
     request,
   });
 }
