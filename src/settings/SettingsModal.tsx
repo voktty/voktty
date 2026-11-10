@@ -435,7 +435,7 @@ export function SettingsModal() {
           <main
             ref={scrollContainerRef}
             onScroll={(e) => setTabScroll(active, e.currentTarget.scrollTop)}
-            className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:rounded-md [&_[data-slot=input]]:text-[11.5px] [&_[data-slot=select-trigger]]:h-7! [&_[data-slot=select-trigger]]:rounded-md [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-[11.5px] [&_button[data-slot=button]]:rounded-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:rounded-md [&_[data-slot=input]]:text-[11.5px] [&_[data-slot=select-trigger]]:h-7! [&_[data-slot=select-trigger]]:rounded-md [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-[11.5px] [&_button[data-slot=button]]:h-7! [&_button[data-slot=button]]:rounded-md [&_button[data-slot=button]]:px-2.5 [&_button[data-slot=button]]:text-[11px] [&_[data-slot=switch]]:h-4! [&_[data-slot=switch]]:w-7! [&_[data-slot=switch-thumb]]:h-3! [&_[data-slot=switch-thumb]]:w-4! [&_[data-slot=checkbox]]:size-3.5! [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             <div className="mx-auto w-full max-w-[46rem]">
               <SettingsSearch onSelect={handleSearchSelect} />

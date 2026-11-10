@@ -85,12 +85,12 @@ function Row({
   return (
     <div
       data-setting-title={settingTitle}
-      className="flex items-start gap-6 border-b border-border/40 py-4 last:border-b-0 data-[settings-search-highlight=true]:rounded-md data-[settings-search-highlight=true]:ring-2 data-[settings-search-highlight=true]:ring-primary/30"
+      className="flex items-start gap-4 border-b border-border/30 py-2 last:border-b-0 data-[settings-search-highlight=true]:rounded-md data-[settings-search-highlight=true]:ring-2 data-[settings-search-highlight=true]:ring-primary/30"
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-foreground">{label}</div>
+        <div className="text-[12px] font-medium text-foreground">{label}</div>
         {description ? (
-          <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+          <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
             {description}
           </p>
         ) : null}
@@ -117,7 +117,7 @@ function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="flex gap-0.5 rounded-md border border-border/60 p-0.5 text-[12px]"
+      className="flex gap-0.5 rounded-md border border-border/60 p-0.5 text-[11px]"
     >
       {options.map((option) => (
         <button
@@ -127,7 +127,7 @@ function Segmented<T extends string>({
           aria-checked={value === option.value}
           onClick={() => onChange(option.value)}
           className={cn(
-            "rounded-[5px] px-3 py-1 transition-colors",
+            "rounded-[5px] px-2 py-0.5 transition-colors",
             value === option.value
               ? "bg-accent text-accent-foreground"
               : "text-muted-foreground hover:text-foreground",

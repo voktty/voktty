@@ -719,6 +719,8 @@ export const es: TranslationSchema = {
       addThirdParty: "Proveedor de terceros",
       addCustomApi: "API personalizada",
       diagnostics: "Diagnóstico (opcional)",
+      diagnosticsModel: "Diagnóstico del modelo (opcional)",
+      diagnosticsAutocomplete: "Diagnóstico de autocompletado (opcional)",
       diagnosticsHint: "Comprobaciones manuales. Nada de esto es necesario para usar la IA.",
       apiKey: "Clave de API",
       configurationRequired: "Configura primero el modelo seleccionado.",

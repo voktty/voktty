@@ -706,6 +706,8 @@ export const en = {
       addThirdParty: "Third-party provider",
       addCustomApi: "Custom API",
       diagnostics: "Diagnostics (optional)",
+      diagnosticsModel: "Model diagnostics (optional)",
+      diagnosticsAutocomplete: "Autocomplete diagnostics (optional)",
       diagnosticsHint: "Manual checks. Nothing here is required to use AI.",
       apiKey: "API Key",
       configurationRequired: "Configure the selected model first.",
