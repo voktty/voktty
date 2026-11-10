@@ -19,6 +19,7 @@ import type {
   MarkdownTab,
   PreviewTab,
   Tab,
+  TeamTab,
   TerminalTab,
 } from "@/modules/tabs/lib/useTabs";
 import {
@@ -51,6 +52,7 @@ export type SerializedTab = (
   | { kind: "editor"; path: string; workspaceEnv?: WorkspaceEnv }
   | { kind: "preview"; url: string; devServerScope?: string }
   | { kind: "markdown"; path: string; workspaceEnv?: WorkspaceEnv }
+  | { kind: "team"; projectPath: string }
 ) & {
   tabKey?: string;
   workspaceScopeId?: string;
@@ -71,6 +73,18 @@ export function isSerializedHarnessTab(
       (typeof tab.sessionId === "string" &&
         tab.sessionId.length <= 256 &&
         /\S/u.test(tab.sessionId)))
+  );
+}
+
+export function isSerializedTeamTab(
+  value: unknown,
+): value is Extract<SerializedTab, { kind: "team" }> {
+  if (!value || typeof value !== "object") return false;
+  const tab = value as Record<string, unknown>;
+  return (
+    tab.kind === "team" &&
+    typeof tab.projectPath === "string" &&
+    tab.projectPath.length > 0
   );
 }
 
@@ -128,6 +142,7 @@ export function isSerializableTab(tab: Tab): boolean {
     case "editor":
     case "preview":
     case "markdown":
+    case "team":
       return true;
     default:
       return false;
@@ -256,6 +271,12 @@ function serializeTab(tab: Tab): SerializedTab | null {
         ...(tab.workspaceEnv && {
           workspaceEnv: persistentWorkspaceEnv(tab.workspaceEnv),
         }),
+        ...baseProps,
+      };
+    case "team":
+      return {
+        kind: "team",
+        projectPath: tab.projectPath,
         ...baseProps,
       };
     default:
@@ -435,6 +456,20 @@ function hydrateTab(
         ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
         ...(s.locked ? { locked: true } : {}),
       } satisfies MarkdownTab;
+    case "team":
+      if (!isSerializedTeamTab(s)) return null;
+      return {
+        id: allocId(),
+        ...hydrateIdentity(s, spaceId),
+        kind: "team",
+        spaceId,
+        cold: false,
+        title: t("teams.tabTitle"),
+        projectPath: s.projectPath,
+        ...(s.color ? { color: s.color } : {}),
+        ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
+        ...(s.locked ? { locked: true } : {}),
+      } satisfies TeamTab;
     default:
       return null;
   }

@@ -6773,6 +6773,33 @@ export const en = {
     statusTruncated:
       "Git returned an incomplete file list. Scoped commits are disabled until the full list is available.",
   },
+  teams: {
+    boardTitle: "Team",
+    tabTitle: "Team: {project}",
+    agentCount: "{active} of {max} agents active",
+    unopened: "Not started",
+    working: "Working",
+    idle: "Idle",
+    waitingApproval: "Waiting for approval",
+    quotaPaused: "Paused by quota",
+    error: "Error",
+    hostUnconfigured: "Host unconfigured",
+    forbiddenModel: "Forbidden model: {model}",
+    forbiddenModelDesc: "This model is prohibited by team policy (forbiddenModels).",
+    startNew: "Start fresh",
+    resume: "Resume",
+    goToTab: "Go to tab",
+    stop: "Stop",
+    resolveApproval: "Resolve approval in agent tab",
+    supervised: "Supervised",
+    automatic: "Automatic",
+    emptyRoster: "No agents configured in team roster.",
+    invalidRoster: "Team roster configuration error",
+    taskLabel: "Current task",
+    lastVerdictLabel: "Last verdict",
+    noTaskAssigned: "No task assigned",
+    refresh: "Refresh",
+  },
 };
 
 export type TranslationSchema = typeof en;

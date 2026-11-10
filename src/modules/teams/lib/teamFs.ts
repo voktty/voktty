@@ -1,0 +1,112 @@
+import { invoke } from "@tauri-apps/api/core";
+import { readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
+import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
+import { validateRoster } from "./rosterValidation";
+import {
+  TEAM_STATE_SCHEMA,
+  type TeamAgentState,
+  type TeamState,
+} from "../types";
+
+export function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+export function teamPath(projectPath: string, ...segments: string[]): string {
+  const base = normalizePath(projectPath);
+  return `${base}/${segments.map((s) => s.replace(/^\/+|\/+$/g, "")).join("/")}`;
+}
+
+export type RosterLoadResult = {
+  roster: AgentRoster | null;
+  raw?: string;
+  error?: string;
+};
+
+export async function readRoster(
+  projectPath: string,
+): Promise<RosterLoadResult> {
+  const filePath = teamPath(projectPath, ".voktty", "team", "agents.json");
+  let content: string;
+  try {
+    content = await readTextFile(filePath);
+  } catch (error) {
+    return {
+      roster: null,
+      error: `Could not read roster at ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const { roster, error } = validateRoster(content);
+  return { roster, raw: content, error };
+}
+
+export async function readRole(
+  projectPath: string,
+  roleRelPath: string,
+): Promise<string | null> {
+  const cleanRole = roleRelPath.replace(/^team\//, "").replace(/^\/+/, "");
+  const filePath = teamPath(projectPath, ".voktty", "team", cleanRole);
+  try {
+    return await readTextFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
+export async function readTeamState(projectPath: string): Promise<TeamState> {
+  const filePath = teamPath(projectPath, ".voktty", "state", "agents.json");
+  try {
+    const content = await readTextFile(filePath);
+    const parsed = JSON.parse(content) as TeamState;
+    if (parsed && typeof parsed === "object") {
+      return {
+        $schema: TEAM_STATE_SCHEMA,
+        version: 1,
+        updatedAt: parsed.updatedAt || new Date().toISOString(),
+        agents: parsed.agents || {},
+      };
+    }
+  } catch {
+    // If state does not exist or cannot be parsed, initialize fresh
+  }
+
+  return {
+    $schema: TEAM_STATE_SCHEMA,
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    agents: {},
+  };
+}
+
+export async function writeTeamState(
+  projectPath: string,
+  state: TeamState,
+): Promise<void> {
+  const stateDir = teamPath(projectPath, ".voktty", "state");
+  const filePath = teamPath(stateDir, "agents.json");
+
+  try {
+    await invoke("fs_create_dir", { path: stateDir });
+  } catch {
+    // Ignore error if directory already exists
+  }
+
+  const cleanAgents: Record<string, TeamAgentState> = {};
+  for (const [name, agentState] of Object.entries(state.agents)) {
+    const { ...rest } = agentState as Record<string, unknown>;
+    // Explicitly guarantee no token or credentials leaked
+    delete rest.agentToken;
+    delete rest.token;
+    cleanAgents[name] = rest as TeamAgentState;
+  }
+
+  const payload: TeamState = {
+    $schema: TEAM_STATE_SCHEMA,
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    agents: cleanAgents,
+  };
+
+  await writeTextFile(filePath, JSON.stringify(payload, null, 2));
+}

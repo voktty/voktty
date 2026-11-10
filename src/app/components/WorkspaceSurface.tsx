@@ -3,6 +3,7 @@ import { AiDiffStack, EditorStack, GitDiffStack } from "@/modules/editor";
 import { GitCommitDiffStack, GitHistoryStack } from "@/modules/git-history";
 import { ApiClientStackLazy } from "@/modules/api-client/components/ApiClientStackLazy";
 import { HarnessStack } from "@/modules/harness/components/HarnessStack";
+import { TeamStackLazy } from "@/modules/teams/components/TeamStackLazy";
 import { MarkdownStack } from "@/modules/markdown";
 import { PreviewStackLazy } from "@/modules/preview/PreviewStackLazy";
 import { RdpStack } from "@/modules/rdp";
@@ -28,7 +29,7 @@ export type WorkspaceSurfaceProps = {
   tabs: Tab[];
   activeId: number;
   activeTab: Tab | undefined;
-  onCreateHarnessTab?: () => number;
+  onCreateHarnessTab?: (spaceId?: string, cwd?: string, sessionId?: string) => number;
   onActivateHarnessTab?: (id: number) => void;
   onCloseTerminalTab?: (id: number, terminalIds?: readonly number[]) => void | Promise<void>;
   onWarmTerminalTabs?: (
@@ -366,6 +367,21 @@ function WorkspaceSurfaceLayers({
           activeId={activeId}
           onActivateTab={onActivateHarnessTab ?? onActivateEditorTab}
           placements={placements ? placementByTabId : undefined}
+        />
+      </div>
+      <div
+        className={cn(
+          LAYER,
+          visualLayout && "pointer-events-none",
+          !layerVisible("team") && "invisible pointer-events-none",
+        )}
+        aria-hidden={!layerVisible("team")}
+      >
+        <TeamStackLazy
+          tabs={tabs}
+          activeId={activeId}
+          onNavigateToTab={onActivateHarnessTab ?? onActivateEditorTab}
+          onNewHarnessTab={onCreateHarnessTab}
         />
       </div>
     </div>

@@ -78,6 +78,7 @@ import {
   SquareLock01Icon,
   SquareUnlock01Icon,
   Tick02Icon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TabPreviewSplitMenuItem } from "@/modules/tabs/components/TabPreviewSplitMenuItem";
@@ -1594,6 +1595,16 @@ export function TabIcon({
         size={14}
         strokeWidth={2}
         className="shrink-0 text-violet-400"
+      />
+    );
+  }
+  if (tab.kind === "team") {
+    return (
+      <HugeiconsIcon
+        icon={UserGroupIcon}
+        size={14}
+        strokeWidth={2}
+        className="shrink-0 text-cyan-400"
       />
     );
   }

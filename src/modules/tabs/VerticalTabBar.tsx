@@ -53,6 +53,7 @@ import {
   SparklesIcon,
   SquareLock01Icon,
   SquareUnlock01Icon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -188,6 +189,16 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
         size={14}
         strokeWidth={1.75}
         className="text-violet-400"
+      />
+    );
+  }
+  if (tab.kind === "team") {
+    return (
+      <HugeiconsIcon
+        icon={UserGroupIcon}
+        size={14}
+        strokeWidth={1.75}
+        className="text-cyan-400"
       />
     );
   }
