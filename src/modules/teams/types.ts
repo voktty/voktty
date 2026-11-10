@@ -81,3 +81,31 @@ export type OpenAgentResult = {
   error?: string;
   reason?: string;
 };
+
+export type TeamMessageKind =
+  | "task"
+  | "verdict"
+  | "decision"
+  | "blocker"
+  | "status"
+  | "question";
+
+export type TeamBusMessage = {
+  id: string;
+  projectPath: string;
+  from: string;
+  to: string;
+  kind: TeamMessageKind;
+  text: string;
+  timestamp: string;
+  replyTo?: string;
+  hop: number;
+  delivered: boolean;
+  read: boolean;
+};
+
+export type TeamBusState = {
+  version: 1;
+  updatedAt: string;
+  messages: TeamBusMessage[];
+};

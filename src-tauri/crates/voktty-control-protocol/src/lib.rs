@@ -19,6 +19,14 @@ pub const METHOD_HARNESS_WAIT: &str = "harness.wait";
 pub const METHOD_HARNESS_STATUS: &str = "harness.status";
 pub const METHOD_HARNESS_RESULT: &str = "harness.result";
 pub const METHOD_HARNESS_LIST: &str = "harness.list";
+pub const METHOD_AGENT_LIST: &str = "agent.list";
+pub const METHOD_AGENT_START: &str = "agent.start";
+pub const METHOD_AGENT_SEND: &str = "agent.send";
+pub const METHOD_AGENT_STATUS: &str = "agent.status";
+pub const METHOD_AGENT_WAIT: &str = "agent.wait";
+pub const METHOD_AGENT_RESULT: &str = "agent.result";
+pub const METHOD_AGENT_STOP: &str = "agent.stop";
+pub const METHOD_AGENT_CLOSE: &str = "agent.close";
 pub const SERVER_RESPONSE_ID: &str = "server";
 pub const METHODS: &[&str] = &[
     METHOD_PING,
@@ -37,12 +45,24 @@ pub const METHODS: &[&str] = &[
     METHOD_HARNESS_STATUS,
     METHOD_HARNESS_RESULT,
     METHOD_HARNESS_LIST,
+    METHOD_AGENT_LIST,
+    METHOD_AGENT_START,
+    METHOD_AGENT_SEND,
+    METHOD_AGENT_STATUS,
+    METHOD_AGENT_WAIT,
+    METHOD_AGENT_RESULT,
+    METHOD_AGENT_STOP,
+    METHOD_AGENT_CLOSE,
 ];
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct CallerContext {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pane_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 #[derive(Clone, Deserialize, PartialEq, Serialize)]
@@ -222,6 +242,85 @@ pub struct HarnessResultParams {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct HarnessListParams {}
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct AgentListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentStartParams {
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervised: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentSendParams {
+    pub to: String,
+    pub kind: String,
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentStatusParams {
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentWaitParams {
+    pub agent: String,
+    #[serde(default = "default_agent_wait_until")]
+    pub until: String,
+    #[serde(default = "default_agent_wait_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+fn default_agent_wait_until() -> String {
+    "verdict".to_string()
+}
+
+fn default_agent_wait_timeout_ms() -> u64 {
+    30_000
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentResultParams {
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentStopParams {
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AgentCloseParams {
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,5 +394,30 @@ mod tests {
         .expect("deserialize click params");
         assert_eq!(params.element_ref, Some(3));
         assert_eq!(params.selector.as_deref(), Some("#pay"));
+    }
+
+    #[test]
+    fn agent_methods_are_advertised() {
+        assert!(METHODS.contains(&METHOD_AGENT_LIST));
+        assert!(METHODS.contains(&METHOD_AGENT_START));
+        assert!(METHODS.contains(&METHOD_AGENT_SEND));
+        assert!(METHODS.contains(&METHOD_AGENT_STATUS));
+        assert!(METHODS.contains(&METHOD_AGENT_WAIT));
+        assert!(METHODS.contains(&METHOD_AGENT_RESULT));
+        assert!(METHODS.contains(&METHOD_AGENT_STOP));
+        assert!(METHODS.contains(&METHOD_AGENT_CLOSE));
+    }
+
+    #[test]
+    fn caller_context_supports_agent_auth() {
+        let ctx = CallerContext {
+            pane_id: Some(1),
+            agent_token: Some("tok_123".to_string()),
+            session_id: Some("s_123".to_string()),
+        };
+        let val = serde_json::to_value(&ctx).expect("serialize");
+        let back: CallerContext = serde_json::from_value(val).expect("deserialize");
+        assert_eq!(back.agent_token.as_deref(), Some("tok_123"));
+        assert_eq!(back.session_id.as_deref(), Some("s_123"));
     }
 }

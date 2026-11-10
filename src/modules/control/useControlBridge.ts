@@ -435,14 +435,36 @@ export function useControlBridge({
           await respond(request.id, { ok: true, result });
           return;
         }
+        if (request.method.startsWith("agent.")) {
+          const { dispatchAgentMethod } = await import(
+            "@/modules/teams/lib/agentControlBridge"
+          );
+          const result = await dispatchAgentMethod(
+            request.method,
+            request.params,
+            request.caller as any,
+            {
+              onNewHarness,
+              tabsRef,
+              activeTabIdRef,
+              activeSpaceIdRef,
+            },
+          );
+          await respond(request.id, { ok: true, result });
+          return;
+        }
         throw new RequestError(
           "unknown_method",
           `unsupported frontend method '${request.method}'`,
         );
       } catch (error) {
         const responseError =
-          error instanceof RequestError
-            ? { code: error.code, message: error.message }
+          error instanceof RequestError ||
+          (error &&
+            typeof error === "object" &&
+            "code" in error &&
+            "message" in error)
+            ? { code: (error as any).code, message: (error as any).message }
             : { code: "frontend_error", message: String(error) };
         await respond(request.id, { ok: false, error: responseError }).catch(
           (responseError) => {
