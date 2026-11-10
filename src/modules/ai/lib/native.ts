@@ -253,10 +253,12 @@ function resolveGitWorkspace(
   repoRootOrPath?: string | null,
   explicitWorkspace?: WorkspaceEnv,
 ): WorkspaceEnv {
-  if (explicitWorkspace) return explicitWorkspace;
-  const current = currentWorkspaceEnv();
-  // If the path is a local Windows path (e.g. starts with C:/ or C:\) or UNC path,
-  // but current workspace is remote/docker/serial, fallback to local workspace.
+  // A local Windows drive or UNC path never lives on an SSH, Docker or serial
+  // host, whether the workspace was passed in or read from the active Space.
+  // Callers such as the Source Control panel pass the active Space's workspace
+  // explicitly, so a local Harness project inside a Space that also holds an
+  // SSH tab sent its Git commands to the remote helper.
+  const current = explicitWorkspace ?? currentWorkspaceEnv();
   if (repoRootOrPath && isWindowsNativePath(repoRootOrPath)) {
     if (
       current.kind === "docker" ||
@@ -273,8 +275,20 @@ function resolveFilesystemWorkspace(
   path: string,
   explicitWorkspace?: WorkspaceEnv,
 ): WorkspaceEnv {
-  if (!explicitWorkspace) return currentWorkspaceEnv();
   if (isWindowsNativePath(path)) return LOCAL_WORKSPACE;
+  if (!explicitWorkspace) {
+    const current = currentWorkspaceEnv();
+    // A remote path the active Space's host does not own must fail here,
+    // not fall through to the local filesystem or another machine.
+    if (
+      path.startsWith("remote://") &&
+      !isPathInRemoteWorkspace(current, path)
+    )
+      throw new Error(
+        "Resolve the remote project before accessing its filesystem.",
+      );
+    return current;
+  }
   if (path.startsWith("remote://"))
     throw new Error(
       "Resolve the remote project before accessing its filesystem.",

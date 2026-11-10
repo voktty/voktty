@@ -84,12 +84,38 @@ export function isWindowsLocalPath(path: string): boolean {
   return /^[a-zA-Z]:[/\\]|^\\\\/.test(path);
 }
 
+const SSH_ENVIRONMENT_PREFIX = "voktty-ssh-";
+
+/**
+ * Whether a `remote://` path names this SSH workspace's host. A path that
+ * belongs to another saved connection must never be resolved against the
+ * active one, or a host path is read or written on the wrong machine. Legacy
+ * environment ids that do not encode a connection id keep the old behavior.
+ */
+export function remotePathBelongsTo(
+  env: RemoteWorkspaceEnv,
+  path: string,
+): boolean {
+  const parsed = parseRemotePath(path);
+  if (!parsed) return false;
+  if (!parsed.environmentId.startsWith(SSH_ENVIRONMENT_PREFIX)) return true;
+  try {
+    return (
+      decodeURIComponent(
+        parsed.environmentId.slice(SSH_ENVIRONMENT_PREFIX.length),
+      ) === env.connection.id
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isPathInRemoteWorkspace(
   env: WorkspaceEnv | undefined,
   path: string,
 ): env is RemoteWorkspaceEnv {
   if (!env || env.kind !== "ssh") return false;
-  if (path.startsWith("remote://")) return true;
+  if (path.startsWith("remote://")) return remotePathBelongsTo(env, path);
   if (isWindowsLocalPath(path)) return false;
   return path.startsWith("/") || path === "." || !path.includes(":");
 }

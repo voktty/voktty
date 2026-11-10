@@ -32,6 +32,18 @@ describe("remote filesystem paths", () => {
     requestRemoteResultMock.mockReset();
   });
 
+  it("routes a remote path only to the SSH host that owns it", () => {
+    expect(
+      isPathInWorkspace(env, "remote://voktty-ssh-ssh-1/srv/project/a.ts"),
+    ).toBe(true);
+    expect(
+      isPathInWorkspace(env, "remote://voktty-ssh-ssh-2/srv/project/a.ts"),
+    ).toBe(false);
+    expect(
+      isPathInWorkspace(env, "remote://voktty-ssh-%E0%A4%A/srv/a.ts"),
+    ).toBe(false);
+  });
+
   it("converts workspace paths to helper-relative paths", () => {
     expect(remoteRelativePath(env, "/srv/project")).toBe(".");
     expect(remoteRelativePath(env, "/srv/project/src/main.rs")).toBe(

@@ -967,6 +967,16 @@ function DesktopApp() {
   );
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
+    // A Harness tab works in its project's folder, not in whatever the Space
+    // last connected to: a local project inside a Space that also holds an SSH
+    // tab must not show, browse or run Git against that SSH host.
+    const harnessFolder =
+      activeTab?.kind === "harness"
+        ? (activeHarnessFolder ?? activeHarnessCwd)
+        : null;
+    if (harnessFolder && !harnessFolder.startsWith("remote://")) {
+      return workspaceForDocumentPath(activeSpace?.env, harnessFolder);
+    }
     if (activeTab?.kind === "terminal") {
       return (
         activeLeafWorkspaceEnv ?? activeTab.workspaceEnv ?? LOCAL_WORKSPACE
@@ -992,6 +1002,7 @@ function DesktopApp() {
     activeTab,
     activeSpace?.env,
     activeHarnessCwd,
+    activeHarnessFolder,
     activeLeafWorkspaceEnv,
   ]);
 

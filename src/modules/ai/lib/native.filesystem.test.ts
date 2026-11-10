@@ -45,6 +45,17 @@ beforeEach(() => {
   io.directory.mockResolvedValue([]);
 });
 
+it("runs Git for a local Windows path locally even when SSH is passed explicitly", async () => {
+  await native.gitResolveRepo("C:\\projects\\invoices", ssh);
+  await native.gitStatus("C:/projects/invoices", ssh);
+  await native.gitResolveRepo("/work/repo", ssh);
+  expect(io.invoke.mock.calls).toEqual([
+    ["git_resolve_repo", { cwd: "C:\\projects\\invoices", workspace: local }],
+    ["git_status", { repoRoot: "C:/projects/invoices", workspace: local }],
+    ["git_resolve_repo", { cwd: "/work/repo", workspace: ssh }],
+  ]);
+});
+
 it.each([local, wsl])(
   "uses explicit $kind scope instead of the selected SSH host",
   async (workspace) => {

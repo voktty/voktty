@@ -2,6 +2,7 @@ import { isPathInWorkspace } from "@/modules/remote";
 import { isRemoteProjectUri } from "@/modules/explorer/lib/remoteProjectDir";
 import {
   currentWorkspaceEnv,
+  isWindowsNativePath,
   LOCAL_WORKSPACE,
   type WorkspaceEnv,
 } from "@/modules/workspace";
@@ -177,6 +178,27 @@ export function matchesWatchEvent(
   return workspace.kind === "ssh" && workspace.sessionId === event.sessionId;
 }
 
+/**
+ * The event paths a listener in `workspace` should see. `watchAdd` sends local
+ * Windows drive and UNC paths to the local watcher even while the Space is on
+ * SSH, so their events must reach that listener too; any other local event
+ * stays out, because its POSIX path could collide with a remote one.
+ */
+export function watchEventPaths(
+  event: FsChangedPayload,
+  workspace: WorkspaceEnv,
+): string[] {
+  if (matchesWatchEvent(event, workspace)) {
+    return event.paths.map((path) =>
+      normalizeWorkspaceEventPath(path, workspace),
+    );
+  }
+  if (event.sessionId === undefined && workspace.kind === "ssh") {
+    return event.paths.filter(isWindowsNativePath);
+  }
+  return [];
+}
+
 export function listenFsChanged(
   handler: (paths: string[]) => void,
   workspace: WorkspaceEnv = currentWorkspaceEnv(),
@@ -184,13 +206,8 @@ export function listenFsChanged(
   return getCurrentWebviewWindow().listen<FsChangedPayload>(
     FS_CHANGED_EVENT,
     (event) => {
-      if (matchesWatchEvent(event.payload, workspace)) {
-        handler(
-          event.payload.paths.map((path) =>
-            normalizeWorkspaceEventPath(path, workspace),
-          ),
-        );
-      }
+      const paths = watchEventPaths(event.payload, workspace);
+      if (paths.length > 0) handler(paths);
     },
   );
 }

@@ -100,6 +100,7 @@ import {
   flattenSourceControlTree,
   type SourceControlTreeRow,
 } from "./lib/tree";
+import { canOfferTrust } from "./gitTrust";
 import type { SourceControlSummary } from "./useSourceControl";
 import {
   useSourceControlPanel,
@@ -1105,7 +1106,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             body={scm.statusError ?? t("git.unknownSourceControlError")}
             action={
               <div className="flex flex-col sm:flex-row items-center gap-2">
-                {sourceControl.contextPath || scm.dubiousOwnershipPath ? (
+                {canOfferTrust(
+                  scm.statusError,
+                  scm.dubiousOwnershipPath ?? sourceControl.contextPath ?? "",
+                ) ? (
                   <Button
                     size="sm"
                     className="gap-1.5 font-medium"

@@ -5,6 +5,7 @@ import {
   isNetworkFilesystemPath,
   isPathWithinTree,
   matchesWatchEvent,
+  watchEventPaths,
   normalizeWorkspaceEventPath,
   watchAdd,
   watchAddTree,
@@ -95,6 +96,15 @@ describe("filesystem watches", () => {
       matchesWatchEvent({ paths: ["C:/project/a"] }, { kind: "local" }),
     ).toBe(true);
     expect(matchesWatchEvent({ paths: ["C:/project/a"] }, remote)).toBe(false);
+  });
+
+  it("still delivers local Windows events to a listener on an SSH Space", () => {
+    expect(
+      watchEventPaths({ paths: ["C:/project/a", "/srv/app/a"] }, remote),
+    ).toEqual(["C:/project/a"]);
+    expect(
+      watchEventPaths({ paths: ["C:/project/a"], sessionId: 8 }, remote),
+    ).toEqual([]);
   });
 
   it("maps native WSL UNC events back to POSIX workspace paths", () => {
