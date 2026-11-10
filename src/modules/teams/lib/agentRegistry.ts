@@ -22,6 +22,10 @@ export function getLiveAgentBySessionId(
   return sessionsById.get(sessionId);
 }
 
+export function isLiveAgentSession(sessionId: string): boolean {
+  return sessionsById.has(sessionId);
+}
+
 export function getLiveAgentByToken(
   token: string,
 ): LiveAgentSession | undefined {
@@ -39,6 +43,31 @@ export function removeLiveAgent(sessionId: string): void {
   if (session) {
     sessionsByToken.delete(session.agentToken);
     sessionsById.delete(sessionId);
+  }
+}
+
+export async function registerLiveAgentWithControl(
+  session: LiveAgentSession,
+): Promise<void> {
+  registerLiveAgent(session);
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("control_register_agent_token", {
+      sessionId: session.sessionId,
+      token: session.agentToken,
+    });
+  } catch {
+    // In unit tests or non-Tauri environments, ignore invoke errors
+  }
+}
+
+export async function revokeLiveAgent(sessionId: string): Promise<void> {
+  removeLiveAgent(sessionId);
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("control_revoke_agent_token", { sessionId });
+  } catch {
+    // In unit tests or non-Tauri environments, ignore invoke errors
   }
 }
 

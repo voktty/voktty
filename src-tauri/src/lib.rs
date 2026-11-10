@@ -524,6 +524,8 @@ pub fn run() {
             workspace::workspace_current_dir,
             control::control_frontend_ready,
             control::control_respond,
+            control::control_register_agent_token,
+            control::control_revoke_agent_token,
             aliases::aliases_get_config_path,
             aliases::aliases_get_state,
             aliases::aliases_save_user,

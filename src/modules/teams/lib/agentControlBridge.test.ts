@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readRoster, readTeamState } from "./teamFs";
+import { readRoster, readTeamState, writeTeamState } from "./teamFs";
 import {
   clearLiveAgentRegistry,
   generateAgentToken,
+  getLiveAgentBySessionId,
+  getLiveAgentByToken,
   registerLiveAgent,
 } from "./agentRegistry";
 import { dispatchAgentMethod } from "./agentControlBridge";
+import { openAgent } from "./agentLauncher";
+import {
+  getHarnessSessionSnapshot,
+  interruptHarnessSession,
+} from "@/modules/harness/lib/harnessControlBridge";
 
 vi.mock("./teamFs", () => ({
   readRoster: vi.fn(),
@@ -15,8 +22,8 @@ vi.mock("./teamFs", () => ({
 }));
 
 vi.mock("./teamBus", () => ({
-  sendMessage: vi.fn(),
-  deliverPendingMessages: vi.fn(),
+  sendMessage: vi.fn().mockResolvedValue({ id: "msg_1", delivered: true }),
+  deliverPendingMessages: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("./agentLauncher", () => ({
@@ -52,18 +59,85 @@ describe("agentControlBridge", () => {
     return session;
   }
 
-  it("rejects caller without agent token or with unregistered token", async () => {
-    // 1. Missing token
+  // --- B1 E2E: Token delivery, authentication and revocation ---
+  it("B1 E2E: authenticates with live agent token, and rejects once closed or revoked", async () => {
+    const orch = createLiveAgent({
+      sessionId: "s_orch",
+      agentName: "orchestrator",
+      projectPath: "/project",
+      role: "roles/orchestrator.md",
+      isOrchestrator: true,
+      permissions: { canManageAgents: true },
+    });
+
+    vi.mocked(readRoster).mockResolvedValue({
+      roster: {
+        version: 1,
+        agents: [
+          { name: "orchestrator", role: "roles/orchestrator.md", start: "always" },
+          { name: "worker", role: "roles/developer.md", start: "on-demand" },
+        ],
+      },
+    });
+
+    vi.mocked(readTeamState).mockResolvedValue({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        orchestrator: { sessionId: "s_orch", status: "idle" },
+        worker: { sessionId: "s_worker", status: "idle" },
+      },
+    });
+
+    // 1. Worker is live with its own token
+    const worker = createLiveAgent({
+      sessionId: "s_worker",
+      agentName: "worker",
+      projectPath: "/project",
+      role: "roles/developer.md",
+      isOrchestrator: false,
+      permissions: { canManageAgents: false },
+    });
+
+    // 2. Worker calls agent.list using its token -> succeeds
+    const listRes: any = await dispatchAgentMethod(
+      "agent.list",
+      {},
+      { agent_token: worker.agentToken },
+    );
+    expect(listRes.project).toBe("/project");
+    expect(listRes.agents).toHaveLength(2);
+
+    // 3. Orchestrator closes worker
+    const closeRes: any = await dispatchAgentMethod(
+      "agent.close",
+      { agent: "worker" },
+      { agent_token: orch.agentToken },
+    );
+    expect(closeRes.closed).toBe(true);
+
+    // 4. Worker token is now revoked in registry
+    expect(getLiveAgentByToken(worker.agentToken)).toBeUndefined();
+    expect(getLiveAgentBySessionId("s_worker")).toBeUndefined();
+
+    // 5. Worker calls agent.list again with old token -> rejected with forbidden
     await expect(
-      dispatchAgentMethod("agent.list", {}, {} as any),
+      dispatchAgentMethod("agent.list", {}, { agent_token: worker.agentToken }),
     ).rejects.toMatchObject({ code: "forbidden" });
 
-    // 2. Unregistered token
+    // 6. Unknown / random token is also rejected with forbidden
     await expect(
-      dispatchAgentMethod("agent.list", {}, { agent_token: "fake_token" } as any),
+      dispatchAgentMethod("agent.list", {}, { agent_token: "unknown_token" }),
+    ).rejects.toMatchObject({ code: "forbidden" });
+
+    // 7. Missing token is rejected with forbidden
+    await expect(
+      dispatchAgentMethod("agent.list", {}, {}),
     ).rejects.toMatchObject({ code: "forbidden" });
   });
 
+  // --- Cross-project security ---
   it("rejects cross-project calls", async () => {
     const liveAgent = createLiveAgent({
       sessionId: "s_orch",
@@ -78,31 +152,53 @@ describe("agentControlBridge", () => {
       dispatchAgentMethod(
         "agent.list",
         { project: "/project-b" },
-        { agent_token: liveAgent.agentToken } as any,
+        { agent_token: liveAgent.agentToken },
       ),
     ).rejects.toMatchObject({ code: "forbidden" });
   });
 
-  it("rejects agent.start from non-orchestrator", async () => {
-    const worker = createLiveAgent({
-      sessionId: "s_worker",
-      agentName: "developer",
+  // --- B6: Management permission strictly based on role roles/orchestrator.md ---
+  it("B6: rejects agent.start/stop/close from agent named 'orchestrator' if role is not roles/orchestrator.md", async () => {
+    // Imposter agent: named "orchestrator" but with role "roles/developer.md"
+    const imposter = createLiveAgent({
+      sessionId: "s_fake_orch",
+      agentName: "orchestrator",
       projectPath: "/project",
       role: "roles/developer.md",
       isOrchestrator: false,
       permissions: { canManageAgents: false },
     });
 
+    // agent.start rejected
     await expect(
       dispatchAgentMethod(
         "agent.start",
         { agent: "tester" },
-        { agent_token: worker.agentToken } as any,
+        { agent_token: imposter.agentToken },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+
+    // agent.stop rejected
+    await expect(
+      dispatchAgentMethod(
+        "agent.stop",
+        { agent: "tester" },
+        { agent_token: imposter.agentToken },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+
+    // agent.close rejected
+    await expect(
+      dispatchAgentMethod(
+        "agent.close",
+        { agent: "tester" },
+        { agent_token: imposter.agentToken },
       ),
     ).rejects.toMatchObject({ code: "forbidden" });
   });
 
-  it("enforces forbiddenModels on agent.start", async () => {
+  // --- B5: Unified forbiddenModels policy check ---
+  it("B5: enforces forbiddenModels on agent.start with wildcards and case-insensitivity", async () => {
     const orch = createLiveAgent({
       sessionId: "s_orch",
       agentName: "orchestrator",
@@ -124,20 +220,31 @@ describe("agentControlBridge", () => {
           },
         ],
         policies: {
-          forbiddenModels: ["gpt-4o", "forbidden-ai"],
+          forbiddenModels: ["gpt-4*", "FORBIDDEN-ai"],
         },
       },
     });
 
+    // 1. Wildcard match (gpt-4o matches gpt-4*)
     await expect(
       dispatchAgentMethod(
         "agent.start",
         { agent: "developer", model: "gpt-4o" },
-        { agent_token: orch.agentToken } as any,
+        { agent_token: orch.agentToken },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden_model" });
+
+    // 2. Case-insensitive match (forbidden-ai matches FORBIDDEN-ai)
+    await expect(
+      dispatchAgentMethod(
+        "agent.start",
+        { agent: "developer", model: "forbidden-ai" },
+        { agent_token: orch.agentToken },
       ),
     ).rejects.toMatchObject({ code: "forbidden_model" });
   });
 
+  // --- Capacity limit check ---
   it("enforces capacity limit of 6 active agents", async () => {
     const orch = createLiveAgent({
       sessionId: "s_orch",
@@ -151,41 +258,30 @@ describe("agentControlBridge", () => {
     vi.mocked(readRoster).mockResolvedValue({
       roster: {
         version: 1,
-        agents: [
-          { name: "a1", role: "roles/1.md", start: "on-demand" },
-          { name: "a2", role: "roles/2.md", start: "on-demand" },
-          { name: "a3", role: "roles/3.md", start: "on-demand" },
-          { name: "a4", role: "roles/4.md", start: "on-demand" },
-          { name: "a5", role: "roles/5.md", start: "on-demand" },
-          { name: "a6", role: "roles/6.md", start: "on-demand" },
-          { name: "a7", role: "roles/7.md", start: "on-demand" },
-        ],
+        agents: [{ name: "a7", role: "roles/7.md", start: "on-demand" }],
       },
     });
 
-    vi.mocked(readTeamState).mockResolvedValue({
-      $schema: "urn:voktty:team-state:1",
-      version: 1,
-      updatedAt: "",
-      agents: {
-        a1: { status: "working" },
-        a2: { status: "idle" },
-        a3: { status: "working" },
-        a4: { status: "idle" },
-        a5: { status: "waiting_approval" },
-        a6: { status: "working" },
-      },
+    vi.mocked(openAgent).mockResolvedValue({
+      ok: false,
+      error: "capacity_exceeded",
+      reason: "Maximum 6 concurrent agents per project",
+      agent: "a7",
+      sessionId: "",
+      supervised: true,
+      mode: "new",
     });
 
     await expect(
       dispatchAgentMethod(
         "agent.start",
         { agent: "a7" },
-        { agent_token: orch.agentToken } as any,
+        { agent_token: orch.agentToken },
       ),
     ).rejects.toMatchObject({ code: "capacity_exceeded" });
   });
 
+  // --- B2 & F3: agent.close behavior ---
   it("rejects agent.close with 'busy' when agent is actively working", async () => {
     const orch = createLiveAgent({
       sessionId: "s_orch",
@@ -205,9 +301,6 @@ describe("agentControlBridge", () => {
       },
     });
 
-    const { getHarnessSessionSnapshot } = await import(
-      "@/modules/harness/lib/harnessControlBridge"
-    );
     vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
       state: "working",
     } as any);
@@ -216,12 +309,140 @@ describe("agentControlBridge", () => {
       dispatchAgentMethod(
         "agent.close",
         { agent: "developer" },
-        { agent_token: orch.agentToken } as any,
+        { agent_token: orch.agentToken },
       ),
     ).rejects.toMatchObject({ code: "busy" });
   });
 
-  it("agent.wait returns matched verdict", async () => {
+  it("F3: agent.close closes mounted tab and revokes token", async () => {
+    const orch = createLiveAgent({
+      sessionId: "s_orch",
+      agentName: "orchestrator",
+      projectPath: "/project",
+      role: "roles/orchestrator.md",
+      isOrchestrator: true,
+      permissions: { canManageAgents: true },
+    });
+
+    createLiveAgent({
+      sessionId: "s_dev",
+      agentName: "developer",
+      projectPath: "/project",
+      role: "roles/developer.md",
+      isOrchestrator: false,
+      permissions: { canManageAgents: false },
+    });
+
+    vi.mocked(readTeamState).mockResolvedValue({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        developer: { sessionId: "s_dev", status: "idle" },
+      },
+    });
+
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      state: "idle",
+    } as any);
+
+    const onCloseTab = vi.fn();
+    const tabsRef = {
+      current: [{ id: 42, kind: "harness", sessionId: "s_dev" }],
+    };
+
+    const res: any = await dispatchAgentMethod(
+      "agent.close",
+      { agent: "developer" },
+      { agent_token: orch.agentToken },
+      { onCloseTab, tabsRef },
+    );
+
+    expect(res.ok).toBe(true);
+    expect(res.closed).toBe(true);
+    expect(onCloseTab).toHaveBeenCalledWith(42);
+    expect(getLiveAgentBySessionId("s_dev")).toBeUndefined();
+  });
+
+  // --- F2: Verdict cursor and task freshness ---
+  it("F2: agent.wait --until verdict ignores verdicts older than currentTaskStartedAt", async () => {
+    const orch = createLiveAgent({
+      sessionId: "s_orch",
+      agentName: "orchestrator",
+      projectPath: "/project",
+      role: "roles/orchestrator.md",
+      isOrchestrator: true,
+      permissions: { canManageAgents: true },
+    });
+
+    const oldVerdictTime = "2026-11-10T10:00:00.000Z";
+    const taskStartTime = "2026-11-10T12:00:00.000Z";
+    const newVerdictTime = "2026-11-10T12:05:00.000Z";
+
+    // 1. Worker has old verdict from earlier task
+    vi.mocked(readTeamState).mockResolvedValue({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        developer: {
+          sessionId: "s_dev",
+          status: "working",
+          currentTaskStartedAt: taskStartTime,
+          lastVerdict: {
+            text: "Old task green",
+            timestamp: oldVerdictTime,
+          },
+        },
+      },
+    });
+
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      state: "working",
+    } as any);
+
+    // Should NOT match old verdict
+    const waitRes1: any = await dispatchAgentMethod(
+      "agent.wait",
+      { agent: "developer", until: "verdict" },
+      { agent_token: orch.agentToken },
+    );
+    expect(waitRes1.matched).toBe(false);
+
+    // 2. Worker produces fresh verdict after currentTaskStartedAt
+    vi.mocked(readTeamState).mockResolvedValue({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        developer: {
+          sessionId: "s_dev",
+          status: "idle",
+          currentTaskStartedAt: taskStartTime,
+          lastVerdict: {
+            text: "Fresh task green",
+            timestamp: newVerdictTime,
+          },
+        },
+      },
+    });
+
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      state: "idle",
+    } as any);
+
+    // Should match fresh verdict
+    const waitRes2: any = await dispatchAgentMethod(
+      "agent.wait",
+      { agent: "developer", until: "verdict" },
+      { agent_token: orch.agentToken },
+    );
+    expect(waitRes2.matched).toBe(true);
+    expect(waitRes2.verdict).toBe("Fresh task green");
+  });
+
+  // --- F3: agent.stop confirmation ---
+  it("F3: agent.stop confirms interruption before marking idle", async () => {
     const orch = createLiveAgent({
       sessionId: "s_orch",
       agentName: "orchestrator",
@@ -236,25 +457,69 @@ describe("agentControlBridge", () => {
       version: 1,
       updatedAt: "",
       agents: {
-        developer: {
-          sessionId: "s_dev",
-          status: "idle",
-          lastVerdict: {
-            text: "All tests green",
-            timestamp: new Date().toISOString(),
+        developer: { sessionId: "s_dev", status: "working" },
+      },
+    });
+
+    // Session snapshot transitions to idle after interrupt
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      state: "idle",
+    } as any);
+
+    const res: any = await dispatchAgentMethod(
+      "agent.stop",
+      { agent: "developer" },
+      { agent_token: orch.agentToken },
+    );
+
+    expect(res.ok).toBe(true);
+    expect(res.stopped).toBe(true);
+    expect(interruptHarnessSession).toHaveBeenCalledWith("s_dev");
+    expect(writeTeamState).toHaveBeenCalled();
+  });
+
+  // --- F5: Model resolution does not invent claude-3-7-sonnet ---
+  it("F5: agent.list resolves model without inventing claude-3-7-sonnet", async () => {
+    const orch = createLiveAgent({
+      sessionId: "s_orch",
+      agentName: "orchestrator",
+      projectPath: "/project",
+      role: "roles/orchestrator.md",
+      isOrchestrator: true,
+      permissions: { canManageAgents: true },
+    });
+
+    vi.mocked(readRoster).mockResolvedValue({
+      roster: {
+        version: 1,
+        agents: [
+          {
+            name: "codex-worker",
+            role: "roles/developer.md",
+            start: "on-demand",
+            runtime: { adapter: "codex" }, // No model specified!
           },
-        },
+        ],
+      },
+    });
+
+    vi.mocked(readTeamState).mockResolvedValue({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        "codex-worker": { status: "unopened" },
       },
     });
 
     const res: any = await dispatchAgentMethod(
-      "agent.wait",
-      { agent: "developer", until: "verdict" },
-      { agent_token: orch.agentToken } as any,
+      "agent.list",
+      {},
+      { agent_token: orch.agentToken },
     );
 
-    expect(res.ok).toBe(true);
-    expect(res.matched).toBe(true);
-    expect(res.verdict).toBe("All tests green");
+    const worker = res.agents.find((a: any) => a.name === "codex-worker");
+    expect(worker.model).toBe("default");
+    expect(worker.model).not.toBe("claude-3-7-sonnet");
   });
 });

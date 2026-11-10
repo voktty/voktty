@@ -17,6 +17,34 @@ export function teamPath(projectPath: string, ...segments: string[]): string {
   return `${base}/${segments.map((s) => s.replace(/^\/+|\/+$/g, "")).join("/")}`;
 }
 
+const projectLocks = new Map<string, Promise<unknown>>();
+
+export function resetProjectLocks(): void {
+  projectLocks.clear();
+}
+
+export async function runProjectExclusive<T>(
+  projectPath: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = normalizePath(projectPath);
+  const prev = projectLocks.get(key) ?? Promise.resolve();
+  let resolveLock!: () => void;
+  const next = new Promise<void>((resolve) => {
+    resolveLock = resolve;
+  });
+  projectLocks.set(key, next);
+  try {
+    await prev;
+    return await operation();
+  } finally {
+    resolveLock();
+    if (projectLocks.get(key) === next) {
+      projectLocks.delete(key);
+    }
+  }
+}
+
 export type RosterLoadResult = {
   roster: AgentRoster | null;
   raw?: string;

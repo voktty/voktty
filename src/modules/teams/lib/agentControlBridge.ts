@@ -2,9 +2,10 @@ import {
   getHarnessSessionSnapshot,
   interruptHarnessSession,
 } from "@/modules/harness/lib/harnessControlBridge";
-import type { TeamAgentStatus } from "../types";
+import type { TeamAgentStatus, TeamMessageKind } from "../types";
 import { openAgent } from "./agentLauncher";
-import { getLiveAgentByToken } from "./agentRegistry";
+import { getLiveAgentByToken, revokeLiveAgent } from "./agentRegistry";
+import { isModelForbidden } from "./rosterValidation";
 import { deliverPendingMessages, sendMessage } from "./teamBus";
 import { readRoster, readTeamState, writeTeamState } from "./teamFs";
 
@@ -19,26 +20,48 @@ export class AgentControlError extends Error {
 }
 
 export type DispatchContext = {
-  onNewHarness?: any;
-  tabsRef?: any;
-  activeTabIdRef?: any;
-  activeSpaceIdRef?: any;
+  onNewHarness?: (params: {
+    harness?: string;
+    cwd?: string;
+    prompt?: string;
+    model?: string;
+    runtimeMode?: string;
+    spaceId?: string;
+  }) => Promise<{ sessionId: string; tabId: number }>;
+  onNewHarnessTab?: (
+    spaceId?: string,
+    cwd?: string,
+    sessionId?: string,
+  ) => number;
+  onCloseTab?: (tabId: number) => void;
+  tabsRef?: {
+    current: Array<{
+      id: number;
+      kind: string;
+      sessionId?: string;
+      [key: string]: unknown;
+    }>;
+  };
+  activeTabIdRef?: { current: number };
+  activeSpaceIdRef?: { current: string | null };
+};
+
+export type AgentCaller = {
+  pane_id?: number;
+  agent_token?: string;
+  agentToken?: string;
+  session_id?: string;
 };
 
 export async function dispatchAgentMethod(
   method: string,
   rawParams: unknown,
-  caller: {
-    pane_id?: number;
-    agent_token?: string;
-    agentToken?: string;
-    session_id?: string;
-  },
+  caller: AgentCaller,
   context: DispatchContext = {},
 ): Promise<unknown> {
   const params =
     typeof rawParams === "object" && rawParams !== null
-      ? (rawParams as Record<string, any>)
+      ? (rawParams as Record<string, unknown>)
       : {};
 
   // 1. Authenticate caller using VOKTTY_AGENT_TOKEN
@@ -59,15 +82,17 @@ export async function dispatchAgentMethod(
   }
 
   // 2. Project scope validation
-  const projectPath = params.project || callerAgent.projectPath;
-  if (params.project && params.project !== callerAgent.projectPath) {
+  const requestedProject =
+    typeof params.project === "string" ? params.project : undefined;
+  const projectPath = requestedProject || callerAgent.projectPath;
+  if (requestedProject && requestedProject !== callerAgent.projectPath) {
     throw new AgentControlError(
       "forbidden",
       "Cross-project agent access is forbidden",
     );
   }
 
-  // 3. Permission verification for management verbs
+  // 3. Permission verification for management verbs (B6)
   const isManagementVerb =
     method === "agent.start" || method === "agent.stop" || method === "agent.close";
   if (isManagementVerb) {
@@ -89,9 +114,14 @@ export async function dispatchAgentMethod(
         const state = teamState.agents[agentDef.name];
         let status: TeamAgentStatus = state?.status ?? "unopened";
         let pendingApprovals = 0;
+        let activeModel = agentDef.runtime?.model || roster?.defaults?.runtime?.model;
+
         if (state?.sessionId) {
           const snap = getHarnessSessionSnapshot(state.sessionId);
           if (snap) {
+            if (snap.model) {
+              activeModel = snap.model;
+            }
             if (snap.pendingApproval) {
               status = "waiting_approval";
               pendingApprovals = 1;
@@ -107,7 +137,7 @@ export async function dispatchAgentMethod(
           name: agentDef.name,
           role: agentDef.role,
           adapter: agentDef.runtime?.adapter ?? "claude-code",
-          model: agentDef.runtime?.model ?? "claude-3-7-sonnet",
+          model: activeModel || "default",
           host: "local",
           status,
           task: state?.task ?? null,
@@ -144,41 +174,22 @@ export async function dispatchAgentMethod(
         );
       }
 
-      // Check forbidden models policy
-      const model = params.model ?? agentDef.runtime?.model ?? roster.defaults?.runtime?.model;
-      if (model && roster.policies?.forbiddenModels) {
-        const isForbidden = roster.policies.forbiddenModels.some((f: string) =>
-          model.toLowerCase().includes(f.toLowerCase()),
-        );
-        if (isForbidden) {
-          throw new AgentControlError(
-            "forbidden_model",
-            `Model '${model}' is forbidden by team policy`,
-          );
-        }
-      }
-
-      // Supervised hardening rule: caller cannot relax supervised if roster says true
-      let supervised = params.supervised;
-      if (supervised === false && (agentDef as any).supervised === true) {
-        supervised = true;
-      }
-
-      // Check 6 concurrent agents capacity limit
-      const teamState = await readTeamState(projectPath);
-      const activeAgents = Object.entries(teamState.agents).filter(
-        ([name, st]) =>
-          name !== agentName &&
-          (st.status === "working" ||
-            st.status === "idle" ||
-            st.status === "waiting_approval"),
-      );
-      if (activeAgents.length >= 6) {
+      // Check forbidden models policy using unified validator (B5)
+      const requestedModel =
+        typeof params.model === "string" ? params.model : undefined;
+      const model =
+        requestedModel ??
+        agentDef.runtime?.model ??
+        roster.defaults?.runtime?.model;
+      if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
         throw new AgentControlError(
-          "capacity_exceeded",
-          "Team capacity limit reached (maximum 6 active agents)",
+          "forbidden_model",
+          `Model '${model}' is forbidden by team policy`,
         );
       }
+
+      const requestedSupervised =
+        typeof params.supervised === "boolean" ? params.supervised : undefined;
 
       const { newSession } = await import("@/modules/harness/lib/session");
       const { cacheSession } = await import("@/modules/harness/lib/sessionStore");
@@ -188,21 +199,31 @@ export async function dispatchAgentMethod(
           projectPath,
           agentName,
           mode: params.mode === "resume" ? "resume" : "new",
-          task: params.task,
-          model: params.model,
-          supervised: supervised ?? true,
-          copy: params.copy,
+          task: typeof params.task === "string" ? params.task : undefined,
+          model: requestedModel,
+          supervised: requestedSupervised,
+          copy: typeof params.copy === "number" ? params.copy : undefined,
         },
         {
-          onNewHarnessTab: context.onNewHarness,
+          onNewHarnessTab:
+            context.onNewHarnessTab ||
+            (context.onNewHarness
+              ? (_spaceId, _cwd, _sid) => 1
+              : undefined),
           newSession,
           cacheSession,
         },
       );
 
       if (!result.ok) {
+        const errCode =
+          result.error === "capacity_exceeded"
+            ? "capacity_exceeded"
+            : result.error === "forbidden_model"
+              ? "forbidden_model"
+              : "request_failed";
         throw new AgentControlError(
-          "request_failed",
+          errCode,
           result.reason ?? result.error ?? "Failed to start agent",
         );
       }
@@ -231,15 +252,29 @@ export async function dispatchAgentMethod(
         throw new AgentControlError("invalid_params", "'text' must be a string");
       }
 
+      const replyTo =
+        typeof params.reply_to === "string"
+          ? params.reply_to
+          : typeof params.replyTo === "string"
+            ? params.replyTo
+            : undefined;
+
       try {
         const msg = await sendMessage({
           projectPath,
           from: callerAgent.agentName,
           to,
-          kind: kind as any,
+          kind: kind as TeamMessageKind,
           text,
-          replyTo: params.reply_to || params.replyTo,
+          replyTo,
         });
+
+        // If sender has any pending messages, deliver now (F1)
+        try {
+          await deliverPendingMessages(projectPath, callerAgent.agentName);
+        } catch {
+          // Ignore
+        }
 
         return {
           ok: true,
@@ -247,8 +282,11 @@ export async function dispatchAgentMethod(
           delivered: msg.delivered,
           status: msg.delivered ? "delivered" : "queued",
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
+        if (msg.startsWith("invalid_params")) {
+          throw new AgentControlError("invalid_params", msg);
+        }
         if (msg.startsWith("rate_limited")) {
           throw new AgentControlError("rate_limited", msg);
         }
@@ -264,7 +302,7 @@ export async function dispatchAgentMethod(
 
     case "agent.status": {
       const agentName = params.agent;
-      if (!agentName) {
+      if (!agentName || typeof agentName !== "string") {
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
@@ -287,6 +325,15 @@ export async function dispatchAgentMethod(
         }
       }
 
+      // If the inspected agent is idle/done, check and deliver pending messages (F1)
+      if (status === "idle" || status === "unopened") {
+        try {
+          await deliverPendingMessages(projectPath, agentName);
+        } catch {
+          // Ignore
+        }
+      }
+
       return {
         agent: agentName,
         status,
@@ -299,11 +346,12 @@ export async function dispatchAgentMethod(
 
     case "agent.wait": {
       const agentName = params.agent;
-      if (!agentName) {
+      if (!agentName || typeof agentName !== "string") {
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
-      const until = params.until || "verdict";
+      const until =
+        typeof params.until === "string" ? params.until : "verdict";
       const teamState = await readTeamState(projectPath);
       const agentState = teamState.agents[agentName];
 
@@ -330,17 +378,35 @@ export async function dispatchAgentMethod(
         );
       }
 
+      // Deliver pending messages to caller and target agent if not working (F1)
+      try {
+        await deliverPendingMessages(projectPath, callerAgent.agentName);
+      } catch {
+        // Ignore
+      }
+      if (currentStatus !== "working") {
+        try {
+          await deliverPendingMessages(projectPath, agentName);
+        } catch {
+          // Ignore
+        }
+      }
+
       if (until === "verdict") {
-        if (agentState?.lastVerdict) {
-          // If caller is orchestrator, deliver pending messages now that it's waiting
-          await deliverPendingMessages(projectPath, callerAgent.agentName);
+        const verdict = agentState?.lastVerdict;
+        const startedAt = agentState?.currentTaskStartedAt;
+        // F2: only return matched if verdict was produced during/after current task started
+        const isCurrentVerdict =
+          verdict && (!startedAt || verdict.timestamp >= startedAt);
+
+        if (isCurrentVerdict) {
           return {
             ok: true,
             matched: true,
             agent: agentName,
             condition: "verdict",
             status: currentStatus,
-            verdict: agentState.lastVerdict.text,
+            verdict: verdict.text,
           };
         }
       } else if (until === "idle" && currentStatus === "idle") {
@@ -351,7 +417,10 @@ export async function dispatchAgentMethod(
           condition: "idle",
           status: currentStatus,
         };
-      } else if (until === "waiting_approval" && currentStatus === "waiting_approval") {
+      } else if (
+        until === "waiting_approval" &&
+        currentStatus === "waiting_approval"
+      ) {
         return {
           ok: true,
           matched: true,
@@ -379,7 +448,7 @@ export async function dispatchAgentMethod(
 
     case "agent.result": {
       const agentName = params.agent;
-      if (!agentName) {
+      if (!agentName || typeof agentName !== "string") {
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
@@ -402,7 +471,7 @@ export async function dispatchAgentMethod(
 
     case "agent.stop": {
       const agentName = params.agent;
-      if (!agentName) {
+      if (!agentName || typeof agentName !== "string") {
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
@@ -410,6 +479,22 @@ export async function dispatchAgentMethod(
       const agentState = teamState.agents[agentName];
       if (agentState?.sessionId) {
         interruptHarnessSession(agentState.sessionId);
+        // F3: confirm that session is no longer working
+        const deadline = Date.now() + 500;
+        while (Date.now() < deadline) {
+          const snap = getHarnessSessionSnapshot(agentState.sessionId);
+          if (!snap || snap.state !== "working") {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        const snap = getHarnessSessionSnapshot(agentState.sessionId);
+        if (snap && snap.state === "working") {
+          throw new AgentControlError(
+            "stop_failed",
+            `Could not stop busy agent '${agentName}'`,
+          );
+        }
         agentState.status = "idle";
         await writeTeamState(projectPath, teamState);
       }
@@ -423,7 +508,7 @@ export async function dispatchAgentMethod(
 
     case "agent.close": {
       const agentName = params.agent;
-      if (!agentName) {
+      if (!agentName || typeof agentName !== "string") {
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
@@ -441,6 +526,21 @@ export async function dispatchAgentMethod(
       }
 
       if (agentState) {
+        // F3 & B2: close tab if mounted
+        if (context.tabsRef?.current && agentState.sessionId && context.onCloseTab) {
+          const tab = context.tabsRef.current.find(
+            (t) => t.kind === "harness" && t.sessionId === agentState.sessionId,
+          );
+          if (tab) {
+            context.onCloseTab(tab.id);
+          }
+        }
+
+        // F3 & B2: revoke live agent token
+        if (agentState.sessionId) {
+          await revokeLiveAgent(agentState.sessionId);
+        }
+
         agentState.status = "unopened";
         agentState.sessionId = undefined;
         await writeTeamState(projectPath, teamState);

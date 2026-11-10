@@ -1,5 +1,39 @@
 import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 
+export const ORCHESTRATOR_ROLE = "roles/orchestrator.md";
+
+export function isOrchestratorRole(role: string): boolean {
+  return role === ORCHESTRATOR_ROLE;
+}
+
+export function isModelForbidden(
+  model: string,
+  forbiddenOrRoster?:
+    | readonly string[]
+    | string[]
+    | { policies?: { forbiddenModels?: readonly string[] | string[] } },
+): boolean {
+  if (!model || !forbiddenOrRoster) return false;
+  const forbiddenModels = Array.isArray(forbiddenOrRoster)
+    ? forbiddenOrRoster
+    : "policies" in forbiddenOrRoster
+      ? forbiddenOrRoster.policies?.forbiddenModels
+      : undefined;
+  if (!forbiddenModels || forbiddenModels.length === 0) return false;
+  const m = model.toLowerCase();
+  return forbiddenModels.some((pattern) => {
+    const p = pattern.toLowerCase();
+    if (p === "*") return true;
+    if (p.includes("*")) {
+      const regex = new RegExp(
+        `^${p.replace(/[-\/\\^$+?.()|[\]{}]/g, "\\$&").replace(/\*/g, ".*")}$`,
+      );
+      return regex.test(m);
+    }
+    return m === p || m.includes(p);
+  });
+}
+
 const VALID_ADAPTERS = new Set([
   "claude",
   "claude-code",
@@ -98,6 +132,13 @@ export function validateRoster(raw: string): {
       return {
         roster: null,
         error: `Field 'agents.${index}.role': role path is required`,
+      };
+    }
+
+    if (a.supervised !== undefined && typeof a.supervised !== "boolean") {
+      return {
+        roster: null,
+        error: `Field 'agents.${index}.supervised': must be a boolean`,
       };
     }
 

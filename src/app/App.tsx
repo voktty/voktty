@@ -4521,6 +4521,7 @@ function DesktopApp() {
     activeSpaceIdRef,
     onOpen: openControlFile,
     onNewHarness: handleNewHarness,
+    onCloseTab: closeTab,
   });
 
   useCompanionPairingPrompt();

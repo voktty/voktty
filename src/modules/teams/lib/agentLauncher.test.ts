@@ -108,7 +108,7 @@ describe("agentLauncher", () => {
     expect(mockState.agents.developer.supervised).toBe(true);
   });
 
-  it("retomar continúa la misma sesión existente sin regenerar", async () => {
+  it("retomar continúa la misma sesión existente sin regenerar y registra token en control", async () => {
     mockState.agents.developer = {
       sessionId: "s_existing_dev",
       status: "idle",
@@ -129,6 +129,11 @@ describe("agentLauncher", () => {
     expect(result.sessionId).toBe("s_existing_dev");
     expect(mockDeps.newSession).not.toHaveBeenCalled();
     expect(mockDeps.onNewHarnessTab).toHaveBeenCalledWith(undefined, "/repo", "s_existing_dev");
+
+    // B2: resumed agent MUST have its token registered
+    const liveSession = getLiveAgentBySessionId("s_existing_dev");
+    expect(liveSession).toBeDefined();
+    expect(liveSession?.agentToken).toHaveLength(32);
   });
 
   it("un modelo prohibido no se abre y devuelve la razón", async () => {
@@ -198,10 +203,50 @@ describe("agentLauncher", () => {
     expect(result.reason).toContain("maximum of 6 concurrent agents");
   });
 
-  it("supervised solo puede endurecer el roster, nunca relajarlo", () => {
-    // If caller requests false, it remains true (hardened default)
-    expect(resolveAgentSupervised(dummyRoster.agents[0], dummyRoster, false)).toBe(true);
-    expect(resolveAgentSupervised(dummyRoster.agents[0], dummyRoster, true)).toBe(true);
-    expect(resolveAgentSupervised(dummyRoster.agents[0], dummyRoster, undefined)).toBe(true);
+  it("supervised solo puede endurecer el roster, nunca relajarlo (B7)", () => {
+    // 1. Roster without explicit supervised defaults to true: requesting false remains true
+    expect(
+      resolveAgentSupervised(dummyRoster.agents[0], dummyRoster, false),
+    ).toBe(true);
+    expect(
+      resolveAgentSupervised(dummyRoster.agents[0], dummyRoster, true),
+    ).toBe(true);
+    expect(
+      resolveAgentSupervised(dummyRoster.agents[0], dummyRoster, undefined),
+    ).toBe(true);
+
+    // 2. Roster with supervised: false: requesting false gives false; requesting true hardens to true
+    const autoAgent = {
+      ...dummyRoster.agents[1],
+      supervised: false,
+    };
+    expect(resolveAgentSupervised(autoAgent as any, dummyRoster, false)).toBe(
+      false,
+    );
+    expect(resolveAgentSupervised(autoAgent as any, dummyRoster, undefined)).toBe(
+      false,
+    );
+    expect(resolveAgentSupervised(autoAgent as any, dummyRoster, true)).toBe(
+      true,
+    );
+  });
+
+  it("B7: passes runtimeMode explicitly to newSession", async () => {
+    await openAgent(
+      {
+        projectPath: "/repo",
+        agentName: "developer",
+        mode: "new",
+        supervised: true,
+      },
+      mockDeps,
+    );
+
+    expect(mockDeps.newSession).toHaveBeenCalledWith(
+      "claude",
+      "/repo",
+      "claude-3-7-sonnet",
+      "supervised",
+    );
   });
 });

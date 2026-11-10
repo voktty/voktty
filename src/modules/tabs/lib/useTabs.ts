@@ -1855,6 +1855,17 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   }, []);
 
   const closeTab = useCallback((id: number, preferredNextId?: number | null) => {
+    const closingTab = tabsRef.current.find((tab) => tab.id === id);
+    if (closingTab?.kind === "harness" && closingTab.sessionId) {
+      const sid = closingTab.sessionId;
+      void import("@/modules/teams/lib/agentRegistry").then(
+        ({ isLiveAgentSession, revokeLiveAgent }) => {
+          if (isLiveAgentSession(sid)) {
+            void revokeLiveAgent(sid);
+          }
+        },
+      );
+    }
     const editor = tabsRef.current.find(
       (tab): tab is EditorTab =>
         tab.id === id && tab.kind === "editor" && !tab.locked,
@@ -1889,7 +1900,18 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       const result = applyCloseTabsPlan(tabsRef.current, anchorId, plan);
       if (!result) return [];
       for (const tab of tabsRef.current) {
-        if (tab.kind !== "editor" || !result.closeIds.includes(tab.id)) continue;
+        if (!result.closeIds.includes(tab.id)) continue;
+        if (tab.kind === "harness" && tab.sessionId) {
+          const sid = tab.sessionId;
+          void import("@/modules/teams/lib/agentRegistry").then(
+            ({ isLiveAgentSession, revokeLiveAgent }) => {
+              if (isLiveAgentSession(sid)) {
+                void revokeLiveAgent(sid);
+              }
+            },
+          );
+        }
+        if (tab.kind !== "editor") continue;
         recentlyClosedEditorsRef.current = pushClosedEditor(
           recentlyClosedEditorsRef.current,
           {

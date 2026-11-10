@@ -45,6 +45,7 @@ struct ControlCore {
     shutting_down: AtomicBool,
     active_connections: AtomicUsize,
     pending: Mutex<HashMap<String, SyncSender<FrontendResponse>>>,
+    agent_tokens: Mutex<HashMap<String, String>>,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ impl Default for ControlState {
             shutting_down: AtomicBool::new(false),
             active_connections: AtomicUsize::new(0),
             pending: Mutex::new(HashMap::new()),
+            agent_tokens: Mutex::new(HashMap::new()),
         }))
     }
 }
@@ -80,6 +82,7 @@ pub struct HarnessControlEnv {
     pub session_id: String,
     pub cli_path: Option<String>,
     pub cli_bin_dir: Option<PathBuf>,
+    pub agent_token: Option<String>,
 }
 
 impl ControlState {
@@ -100,6 +103,18 @@ impl ControlState {
         })
     }
 
+    pub fn register_agent_token(&self, session_id: String, token: String) {
+        if let Ok(mut map) = self.0.agent_tokens.lock() {
+            map.insert(session_id, token);
+        }
+    }
+
+    pub fn revoke_agent_token(&self, session_id: &str) {
+        if let Ok(mut map) = self.0.agent_tokens.lock() {
+            map.remove(session_id);
+        }
+    }
+
     pub fn harness_env(&self, session_id: &str) -> Option<HarnessControlEnv> {
         if self.0.shutting_down.load(Ordering::Acquire) {
             return None;
@@ -108,12 +123,19 @@ impl ControlState {
         if self.0.shutting_down.load(Ordering::Acquire) {
             return None;
         }
+        let agent_token = self
+            .0
+            .agent_tokens
+            .lock()
+            .ok()
+            .and_then(|map| map.get(session_id).cloned());
         Some(HarnessControlEnv {
             address: runtime.address.clone(),
             token: runtime.token.clone(),
             session_id: session_id.to_string(),
             cli_path: runtime.cli_path.as_ref().map(fs::to_canon),
             cli_bin_dir: runtime.launcher_dir.clone(),
+            agent_token,
         })
     }
 
@@ -560,6 +582,23 @@ pub fn control_frontend_ready(state: tauri::State<'_, ControlState>, ready: bool
 }
 
 #[tauri::command]
+pub fn control_register_agent_token(
+    state: tauri::State<'_, ControlState>,
+    session_id: String,
+    token: String,
+) {
+    state.register_agent_token(session_id, token);
+}
+
+#[tauri::command]
+pub fn control_revoke_agent_token(
+    state: tauri::State<'_, ControlState>,
+    session_id: String,
+) {
+    state.revoke_agent_token(&session_id);
+}
+
+#[tauri::command]
 pub fn control_respond(
     state: tauri::State<'_, ControlState>,
     request_id: String,
@@ -999,6 +1038,33 @@ mod tests {
 
         state.shutdown();
         assert!(state.harness_env("session-42").is_none());
+    }
+
+    #[test]
+    fn agent_token_lifecycle_in_control_state() {
+        let state = ControlState::default();
+        assert!(state
+            .0
+            .runtime
+            .set(RuntimeInfo {
+                address: "127.0.0.1:4312".into(),
+                token: "a".repeat(64),
+                descriptor_path: PathBuf::from("unused-control.json"),
+                cli_path: None,
+                launcher_dir: None,
+            })
+            .is_ok());
+
+        let env1 = state.harness_env("s-1").expect("harness env");
+        assert!(env1.agent_token.is_none());
+
+        state.register_agent_token("s-1".into(), "tok-xyz".into());
+        let env2 = state.harness_env("s-1").expect("harness env");
+        assert_eq!(env2.agent_token.as_deref(), Some("tok-xyz"));
+
+        state.revoke_agent_token("s-1");
+        let env3 = state.harness_env("s-1").expect("harness env");
+        assert!(env3.agent_token.is_none());
     }
 
     #[test]

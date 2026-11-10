@@ -67,6 +67,7 @@ type UseControlBridgeOptions = {
   activeSpaceIdRef: RefObject<string | null>;
   onOpen: (request: LaunchRequest & { spaceId: string }) => number | null;
   onNewHarness?: NewHarnessHandler;
+  onCloseTab?: (tabId: number) => void;
 };
 
 class RequestError extends Error {
@@ -343,6 +344,7 @@ export function useControlBridge({
   activeSpaceIdRef,
   onOpen,
   onNewHarness,
+  onCloseTab,
 }: UseControlBridgeOptions): void {
   useEffect(() => {
     if (!ready) return;
@@ -445,6 +447,7 @@ export function useControlBridge({
             request.caller as any,
             {
               onNewHarness,
+              onCloseTab,
               tabsRef,
               activeTabIdRef,
               activeSpaceIdRef,
@@ -496,5 +499,13 @@ export function useControlBridge({
         console.error("[voktty] control bridge cleanup failed:", error);
       });
     };
-  }, [ready, tabsRef, activeTabIdRef, activeSpaceIdRef, onOpen, onNewHarness]);
+  }, [
+    ready,
+    tabsRef,
+    activeTabIdRef,
+    activeSpaceIdRef,
+    onOpen,
+    onNewHarness,
+    onCloseTab,
+  ]);
 }

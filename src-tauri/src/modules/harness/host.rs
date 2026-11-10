@@ -3016,6 +3016,9 @@ fn apply_harness_control_env(cmd: &mut Command, env: &control::HarnessControlEnv
     cmd.env("VOKTTY_CONTROL_TOKEN", &env.token);
     cmd.env("VOKTTY_SESSION_ID", &env.session_id);
     cmd.env("VOKTTY_CLI_HELP", HARNESS_CLI_HELP);
+    if let Some(agent_token) = &env.agent_token {
+        cmd.env("VOKTTY_AGENT_TOKEN", agent_token);
+    }
     if let Some(path) = &env.cli_path {
         cmd.env("VOKTTY_CLI", path);
     }
@@ -3916,6 +3919,7 @@ mod harness_control_env_tests {
             session_id: "session-42".into(),
             cli_path: Some("/opt/voktty/bin/voktty".into()),
             cli_bin_dir: None,
+            agent_token: None,
         };
         apply_harness_control_env(&mut cmd, &env);
 
@@ -3936,6 +3940,26 @@ mod harness_control_env_tests {
             Some("/opt/voktty/bin/voktty")
         );
         assert!(env_value(&cmd, "VOKTTY_CLI_HELP").is_some());
+        assert!(env_value(&cmd, "VOKTTY_AGENT_TOKEN").is_none());
+    }
+
+    #[test]
+    fn injects_agent_token_when_present() {
+        let mut cmd = Command::new("true");
+        let env = control::HarnessControlEnv {
+            address: "127.0.0.1:4312".into(),
+            token: "a".repeat(64),
+            session_id: "session-42".into(),
+            cli_path: None,
+            cli_bin_dir: None,
+            agent_token: Some("secret_agent_token_123".into()),
+        };
+        apply_harness_control_env(&mut cmd, &env);
+
+        assert_eq!(
+            env_value(&cmd, "VOKTTY_AGENT_TOKEN").as_deref(),
+            Some("secret_agent_token_123")
+        );
     }
 
     #[test]
@@ -3953,6 +3977,7 @@ mod harness_control_env_tests {
             session_id: "session-42".into(),
             cli_path: None,
             cli_bin_dir: Some(PathBuf::from("/opt/voktty/launcher")),
+            agent_token: None,
         };
         apply_harness_control_env(&mut cmd, &env);
 

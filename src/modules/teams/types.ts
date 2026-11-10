@@ -31,6 +31,7 @@ export type TeamAgentState = {
   lastOpenedAt?: string;
   status: TeamAgentStatus;
   task?: string;
+  currentTaskStartedAt?: string;
   lastVerdict?: TeamAgentVerdict;
   worktree?: string | null;
   supervised?: boolean;

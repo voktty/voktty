@@ -4,10 +4,13 @@ import type {
 } from "@/modules/workspace-kit/lib/configTypes";
 import {
   generateAgentToken,
+  getLiveAgentBySessionId,
   listLiveAgents,
-  registerLiveAgent,
+  registerLiveAgentWithControl,
 } from "./agentRegistry";
 import { readRole, readRoster, readTeamState, writeTeamState } from "./teamFs";
+import { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
+export { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
 import type { OpenAgentParams, OpenAgentResult, TeamAgentStatus } from "../types";
 
 export const MAX_TEAM_AGENTS = 6;
@@ -28,40 +31,31 @@ export function resolveAgentModel(
   agent: AgentDefinition,
   roster: AgentRoster,
   overrideModel?: string,
-): string {
+): string | undefined {
   return (
     overrideModel ||
     agent.runtime?.model ||
     roster.defaults?.runtime?.model ||
-    "claude-3-7-sonnet"
+    undefined
   );
 }
 
-export function isModelForbidden(
-  model: string,
-  roster: AgentRoster,
-): boolean {
-  const forbidden = roster.policies?.forbiddenModels || [];
-  return forbidden.includes(model);
-}
-
 export function resolveAgentSupervised(
-  _agent: AgentDefinition,
+  agent: AgentDefinition,
   _roster: AgentRoster,
   requested?: boolean,
 ): boolean {
-  // Decision 3: Supervised by default.
+  // Decision 3: Supervised by default, unless roster entry declares automatic.
   // Rule 7: Supervised can only harden, never relax.
-  // If default is supervised (true), requested=false is ignored.
-  const baseSupervised = true;
-  if (baseSupervised && requested === false) {
+  const rosterSupervised = (agent as { supervised?: boolean }).supervised !== false;
+  if (rosterSupervised) {
     return true;
   }
-  return requested ?? baseSupervised;
+  return requested === true;
 }
 
 export type LauncherDependencies = {
-  onNewHarnessTab: (spaceId?: string, cwd?: string, sessionId?: string) => number;
+  onNewHarnessTab?: (spaceId?: string, cwd?: string, sessionId?: string) => number;
   newSession: (
     harnessId?: any,
     cwd?: string,
@@ -102,7 +96,7 @@ export async function openAgent(
   }
 
   const model = resolveAgentModel(agentDef, roster, params.model);
-  if (isModelForbidden(model, roster)) {
+  if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
     return {
       ok: false,
       agent: params.agentName,
@@ -131,19 +125,45 @@ export async function openAgent(
   const supervised = resolveAgentSupervised(agentDef, roster, params.supervised);
   const state = await readTeamState(params.projectPath);
   const mode = params.mode ?? "new";
+  const isOrch = isOrchestratorRole(agentDef.role);
 
   if (mode === "resume" && state.agents[params.agentName]?.sessionId) {
     const existingSessionId = state.agents[params.agentName].sessionId!;
-    const tabId = deps.onNewHarnessTab(
+    const existingLive = getLiveAgentBySessionId(existingSessionId);
+    const agentToken = existingLive?.agentToken ?? generateAgentToken();
+
+    await registerLiveAgentWithControl({
+      sessionId: existingSessionId,
+      agentName: params.agentName,
+      projectPath: params.projectPath,
+      role: agentDef.role,
+      isOrchestrator: isOrch,
+      permissions: {
+        canManageAgents: isOrch,
+      },
+      launchedAt: existingLive?.launchedAt ?? new Date().toISOString(),
+      agentToken,
+    });
+
+    const tabId = deps.onNewHarnessTab?.(
       params.spaceId,
       params.projectPath,
       existingSessionId,
     );
 
+    const now = new Date().toISOString();
     state.agents[params.agentName] = {
       ...state.agents[params.agentName],
-      lastOpenedAt: new Date().toISOString(),
+      lastOpenedAt: now,
       supervised,
+      ...(params.task
+        ? {
+            task: params.task,
+            currentTaskStartedAt: now,
+            lastVerdict: undefined,
+            status: "working" as TeamAgentStatus,
+          }
+        : {}),
     };
     await writeTeamState(params.projectPath, state);
 
@@ -164,17 +184,14 @@ export async function openAgent(
     : params.task || "Await instructions from orchestrator or owner.";
 
   const harnessId = resolveAgentAdapter(agentDef, roster);
-  const session = deps.newSession(harnessId, params.projectPath, model);
+  const runtimeMode = supervised ? "supervised" : "auto";
+  const session = deps.newSession(harnessId, params.projectPath, model, runtimeMode);
   session.composerSeed = promptSeed;
   deps.cacheSession(session);
 
   const agentToken = generateAgentToken();
-  const isOrch =
-    agentDef.name === "orchestrator" ||
-    agentDef.role.toLowerCase().includes("orchestrator") ||
-    agentDef.role.toLowerCase().includes("orquestador");
 
-  registerLiveAgent({
+  await registerLiveAgentWithControl({
     sessionId: session.id,
     agentName: params.agentName,
     projectPath: params.projectPath,
@@ -187,19 +204,22 @@ export async function openAgent(
     agentToken,
   });
 
-  const tabId = deps.onNewHarnessTab(
+  const tabId = deps.onNewHarnessTab?.(
     params.spaceId,
     params.projectPath,
     session.id,
   );
 
   const newStatus: TeamAgentStatus = "working";
+  const now = new Date().toISOString();
   state.agents[params.agentName] = {
     ...state.agents[params.agentName],
     sessionId: session.id,
-    lastOpenedAt: new Date().toISOString(),
+    lastOpenedAt: now,
     status: newStatus,
     task: params.task || "Await assignment.",
+    currentTaskStartedAt: now,
+    lastVerdict: undefined,
     supervised,
   };
   await writeTeamState(params.projectPath, state);
