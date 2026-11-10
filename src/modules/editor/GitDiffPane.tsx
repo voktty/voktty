@@ -4,7 +4,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { native } from "@/modules/ai/lib/native";
-import { listenFsChanged, watchAdd, watchRemove } from "@/modules/explorer/lib/watch";
+import {
+  listenFsChanged,
+  watchAdd,
+  watchRemove,
+} from "@/modules/explorer/lib/watch";
 import {
   EMPTY_COMMENTS,
   fileKey,
@@ -12,6 +16,7 @@ import {
   sessionKey,
   useGitReviewStore,
 } from "@/modules/git-review";
+import { cspStyleNonce } from "@/modules/harness/lib/csp";
 import { useTranslation } from "@/modules/i18n";
 import {
   GitReviewQueue,
@@ -406,16 +411,20 @@ export function GitDiffPane({
       unlisten?.();
       watchRemove([dir], env);
     };
-  }, [active, sourceKind, source.path, source.originalPath, source.workspaceEnv]);
+  }, [
+    active,
+    sourceKind,
+    source.path,
+    source.originalPath,
+    source.workspaceEnv,
+  ]);
 
   const handleAuthorize = async () => {
     setAuthorizing(true);
     try {
       await native.workspaceAuthorize(source.repoRoot).catch(() => {});
       await native.gitAddSafeDirectory(source.repoRoot, source.workspaceEnv);
-      toast.success(
-        t("git.authorizedSuccess"),
-      );
+      toast.success(t("git.authorizedSuccess"));
       setReloadKey((k) => k + 1);
     } catch (e) {
       toast.error(t("common.unknownError"), { description: String(e) });
@@ -555,6 +564,7 @@ export function GitDiffPane({
 
   const extensions = useMemo(
     () => [
+      EditorView.cspNonce.of(cspStyleNonce()),
       ...SHARED_EXT,
       DEFAULT_INDENT,
       languageCompartment.of(langExt ?? []),
@@ -610,7 +620,9 @@ export function GitDiffPane({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode(repoRoot, "worktree", path, "full")}
+                  onClick={() =>
+                    setViewMode(repoRoot, "worktree", path, "full")
+                  }
                   className={cn(
                     "rounded px-2 py-0.5 font-medium transition-colors cursor-pointer",
                     viewMode === "full"
@@ -744,12 +756,8 @@ export function GitDiffPane({
 
           {useFallback ? (
             <>
-              <span className="text-diff-add-fg">
-                +{stats.added}
-              </span>
-              <span className="text-diff-del-fg">
-                −{stats.removed}
-              </span>
+              <span className="text-diff-add-fg">+{stats.added}</span>
+              <span className="text-diff-del-fg">−{stats.removed}</span>
             </>
           ) : null}
         </div>

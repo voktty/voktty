@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,15 +10,16 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { endpointIdFromCompatModel } from "@/modules/ai/config";
+import { getCustomEndpointKey, getKey } from "@/modules/ai/lib/keyring";
 import {
   isAiRuntimeAvailable,
   useAiAvailable,
 } from "@/modules/ai/lib/runtimeAvailability";
-import { getCustomEndpointKey, getKey } from "@/modules/ai/lib/keyring";
 import { useChatStore } from "@/modules/ai/store/chatStore";
+import { useEditorInlineEdit } from "@/modules/editor/lib/useEditorInlineEdit";
+import { useEditorPeek } from "@/modules/editor/lib/useEditorPeek";
+import { cspStyleNonce } from "@/modules/harness/lib/csp";
 import { useTranslation } from "@/modules/i18n";
-import type { WorkspaceTextEditRequest } from "@/modules/workspace-edit";
-import { type WorkspaceEnv, workspaceScopeKey } from "@/modules/workspace";
 import {
   lspFormatDocument,
   lspNavigate,
@@ -25,9 +27,12 @@ import {
   lspRequestSignatureHelp,
   useLspExtension,
 } from "@/modules/lsp";
+import type { PreviewDocumentAction } from "@/modules/preview/lib/previewOpeningTarget";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { onKeysChanged } from "@/modules/settings/store";
 import { playVokttySound } from "@/modules/sound";
+import { type WorkspaceEnv, workspaceScopeKey } from "@/modules/workspace";
+import type { WorkspaceTextEditRequest } from "@/modules/workspace-edit";
 import { acceptCompletion, startCompletion } from "@codemirror/autocomplete";
 import {
   addCursorAbove,
@@ -68,16 +73,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { vim } from "@replit/codemirror-vim";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { Button } from "@/components/ui/button";
-import {
-  documentHighlightExtension,
-  reconcileHighlightsWithDoc,
-  setDocumentHighlightsEffect,
-} from "./lib/documentHighlightExtension";
-import {
-  type HighlightColor,
-  useDocumentHighlightStore,
-} from "./store/documentHighlightStore";
 import {
   forwardRef,
   memo,
@@ -91,7 +86,6 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { EditorBreadcrumbs } from "./components/EditorBreadcrumbs";
-import type { PreviewDocumentAction } from "@/modules/preview/lib/previewOpeningTarget";
 import { InlineAiWidget } from "./components/InlineAiWidget";
 import {
   buildQuickFixPrompt,
@@ -111,16 +105,26 @@ import {
   type CurrentSymbol,
   resolveCurrentSymbol,
 } from "./lib/breadcrumbs/symbolResolver";
-import { extractDocumentSymbols, type IdeSymbol } from "./lib/outlineSymbols";
+import { breakpointGutter } from "./lib/breakpointGutter";
 import { diagnosticsReporter } from "./lib/diagnosticsReporter";
 import { useDiagnosticsStore } from "./lib/diagnosticsStore";
 import { createDiffGutter, diffGutterCompartment } from "./lib/diffGutter";
-import { breakpointGutter } from "./lib/breakpointGutter";
+import {
+  documentHighlightExtension,
+  reconcileHighlightsWithDoc,
+  setDocumentHighlightsEffect,
+} from "./lib/documentHighlightExtension";
+import { registerEditorProbe } from "./lib/editorInstrumentation";
 import { editorSelectionForLocation } from "./lib/editorLocation";
 import {
   deriveEditorCursorStatus,
   useEditorStatusStore,
 } from "./lib/editorStatus";
+import { normalizeEditorViewState } from "./lib/editorViewState";
+import {
+  loadEditorViewState,
+  saveEditorViewState,
+} from "./lib/editorViewStateStore";
 import {
   buildSharedExtensions,
   DEFAULT_INDENT,
@@ -133,28 +137,25 @@ import {
   wordWrapExtension,
   wrapCompartment,
 } from "./lib/extensions";
-import { useEditorFormatting } from "./lib/useEditorFormatting";
 import { detectIndentUnit } from "./lib/indent";
-import { useEditorInlineEdit } from "@/modules/editor/lib/useEditorInlineEdit";
 import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
 import { loadMinimapExtension } from "./lib/minimap";
+import { extractDocumentSymbols, type IdeSymbol } from "./lib/outlineSymbols";
+import { samePeekPath } from "./lib/peekModel";
 import { expandSelectionCommand } from "./lib/selectionExpand";
 import { editorSnippetExtension } from "./lib/snippetExtension";
 import { structureGuidesExtension } from "./lib/structureGuides";
-import { normalizeEditorViewState } from "./lib/editorViewState";
-import {
-  loadEditorViewState,
-  saveEditorViewState,
-} from "./lib/editorViewStateStore";
 import { sendActiveEditorCodeToTerminal } from "./lib/terminalExecution";
-import { registerEditorProbe } from "./lib/editorInstrumentation";
 import { FORCE_READ_LIMIT, useDocument } from "./lib/useDocument";
+import { useEditorFormatting } from "./lib/useEditorFormatting";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
 import { classifyMediaExtension, MediaPreview } from "./MediaPreview";
 import { PeekPanel } from "./PeekPanelLazy";
-import { samePeekPath } from "./lib/peekModel";
-import { useEditorPeek } from "@/modules/editor/lib/useEditorPeek";
+import {
+  type HighlightColor,
+  useDocumentHighlightStore,
+} from "./store/documentHighlightStore";
 
 initVimGlobals();
 
@@ -773,6 +774,7 @@ export const EditorPane = memo(
 
     const extensions = useMemo(
       () => [
+        EditorView.cspNonce.of(cspStyleNonce()),
         // basicSetup is added before user extensions by @uiw/react-codemirror,
         // so we must elevate vim's precedence to win the keymap.
         vimCompartment.of(
@@ -1439,9 +1441,7 @@ export const EditorPane = memo(
       useDocumentHighlightStore
         .getState()
         .removeHighlightsInRange(path, start, end);
-      const updated = useDocumentHighlightStore
-        .getState()
-        .getHighlights(path);
+      const updated = useDocumentHighlightStore.getState().getHighlights(path);
       view.dispatch({
         effects: setDocumentHighlightsEffect.of(updated),
       });
@@ -1858,14 +1858,18 @@ export const EditorPane = memo(
                 className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
               >
                 <span className="h-3 w-3 rounded-full bg-yellow-400 border border-yellow-500/50 shadow-xs" />
-                <span className="flex-1">{t("editor.highlightColorYellow")}</span>
+                <span className="flex-1">
+                  {t("editor.highlightColorYellow")}
+                </span>
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => handleHighlightSelection("green")}
                 className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
               >
                 <span className="h-3 w-3 rounded-full bg-emerald-400 border border-emerald-500/50 shadow-xs" />
-                <span className="flex-1">{t("editor.highlightColorGreen")}</span>
+                <span className="flex-1">
+                  {t("editor.highlightColorGreen")}
+                </span>
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => handleHighlightSelection("blue")}
@@ -1886,21 +1890,31 @@ export const EditorPane = memo(
                 className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
               >
                 <span className="h-3 w-3 rounded-full bg-purple-400 border border-purple-500/50 shadow-xs" />
-                <span className="flex-1">{t("editor.highlightColorPurple")}</span>
+                <span className="flex-1">
+                  {t("editor.highlightColorPurple")}
+                </span>
               </ContextMenuItem>
               <ContextMenuSeparator className="my-1 border-border/30" />
               <ContextMenuItem
                 onSelect={handleRemoveHighlightSelection}
                 className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent text-muted-foreground hover:text-foreground"
               >
-                <HugeiconsIcon icon={Cancel01Icon} size={14} className="text-muted-foreground" />
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  size={14}
+                  className="text-muted-foreground"
+                />
                 <span className="flex-1">{t("editor.removeHighlight")}</span>
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={handleClearAllHighlights}
                 className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-destructive/10 text-destructive"
               >
-                <HugeiconsIcon icon={Delete02Icon} size={14} className="text-destructive" />
+                <HugeiconsIcon
+                  icon={Delete02Icon}
+                  size={14}
+                  className="text-destructive"
+                />
                 <span className="flex-1">{t("editor.clearAllHighlights")}</span>
               </ContextMenuItem>
             </ContextMenuSubContent>
