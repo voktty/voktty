@@ -773,6 +773,8 @@ function DefaultsBlock({
   useEffect(() => {
     if (!hasAny) {
       autoActivatedRef.current = false;
+      // Nothing left to serve a model: keep AI off instead of advertising it.
+      if (aiEnabled) void setAiEnabled(false);
       return;
     }
     if (!aiEnabled && !autoActivatedRef.current) {

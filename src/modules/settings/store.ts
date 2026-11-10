@@ -607,7 +607,6 @@ async function writeAiConfigurationPref<T>(
   const revision = ((await store.get<number>(KEY_AI_CONFIG_REVISION)) ?? 0) + 1;
   await store.set(key, value);
   await store.set(KEY_AI_CONFIG_REVISION, revision);
-  await store.set(KEY_AI_ENABLED, false);
   await store.save();
   await Promise.all([
     emit(PREFS_CHANGED_EVENT, { key, value }),
@@ -615,22 +614,22 @@ async function writeAiConfigurationPref<T>(
       key: KEY_AI_CONFIG_REVISION,
       value: revision,
     }),
-    emit(PREFS_CHANGED_EVENT, { key: KEY_AI_ENABLED, value: false }),
   ]);
 }
 
+/**
+ * A configuration change only makes the last health check stale. It does not
+ * switch AI off: the health check is an optional diagnostic, and turning AI
+ * off on every model or key change forced a test before it could be used.
+ */
 async function invalidateAiConfiguration(): Promise<void> {
   const revision = ((await store.get<number>(KEY_AI_CONFIG_REVISION)) ?? 0) + 1;
   await store.set(KEY_AI_CONFIG_REVISION, revision);
-  await store.set(KEY_AI_ENABLED, false);
   await store.save();
-  await Promise.all([
-    emit(PREFS_CHANGED_EVENT, {
-      key: KEY_AI_CONFIG_REVISION,
-      value: revision,
-    }),
-    emit(PREFS_CHANGED_EVENT, { key: KEY_AI_ENABLED, value: false }),
-  ]);
+  await emit(PREFS_CHANGED_EVENT, {
+    key: KEY_AI_CONFIG_REVISION,
+    value: revision,
+  });
 }
 
 export async function loadPreferences(): Promise<Preferences> {
@@ -1065,13 +1064,6 @@ export async function setHarnessProviderEnabled(value: boolean): Promise<void> {
 }
 
 export async function setAiEnabled(value: boolean): Promise<void> {
-  if (value) {
-    const [revision, healthRevision] = await Promise.all([
-      store.get<number>(KEY_AI_CONFIG_REVISION),
-      store.get<number | null>(KEY_AI_HEALTH_REVISION),
-    ]);
-    if ((revision ?? 0) !== healthRevision) return;
-  }
   await writePref(KEY_AI_ENABLED, value);
 }
 
