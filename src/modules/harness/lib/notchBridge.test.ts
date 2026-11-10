@@ -27,11 +27,13 @@ const session = (id: string, blocks: Block[]): Session =>
   }) as unknown as Session;
 
 describe("shouldShowNotchOverlay", () => {
-  it("shows only with live agents while Voktty is not focused", () => {
-    expect(shouldShowNotchOverlay({ enabled: true, liveAgentCount: 1, appFocused: false })).toBe(true);
-    expect(shouldShowNotchOverlay({ enabled: true, liveAgentCount: 1, appFocused: true })).toBe(false);
-    expect(shouldShowNotchOverlay({ enabled: true, liveAgentCount: 0, appFocused: false })).toBe(false);
-    expect(shouldShowNotchOverlay({ enabled: false, liveAgentCount: 2, appFocused: false })).toBe(false);
+  it("exists whenever Voktty is not focused, with or without activity", () => {
+    expect(shouldShowNotchOverlay({ enabled: true, appFocused: false })).toBe(true);
+  });
+
+  it("is absent while Voktty has focus or the notch is disabled", () => {
+    expect(shouldShowNotchOverlay({ enabled: true, appFocused: true })).toBe(false);
+    expect(shouldShowNotchOverlay({ enabled: false, appFocused: false })).toBe(false);
   });
 });
 

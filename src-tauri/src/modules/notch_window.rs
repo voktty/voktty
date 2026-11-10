@@ -13,7 +13,7 @@ pub const NOTCH_LABEL: &str = "notch";
 
 const MIN_WIDTH: f64 = 120.0;
 const MAX_WIDTH: f64 = 640.0;
-const MIN_HEIGHT: f64 = 24.0;
+const MIN_HEIGHT: f64 = 4.0;
 const MAX_HEIGHT: f64 = 560.0;
 const INITIAL_WIDTH: f64 = 420.0;
 const INITIAL_HEIGHT: f64 = 56.0;

@@ -122,12 +122,13 @@ describe("HarnessNotch", () => {
     expect(container.textContent).not.toContain("42s");
   });
 
-  it("renders nothing in the overlay until the main window sends agents", () => {
+  it("rests as a hover strip in the overlay until the main window sends agents", () => {
     act(() => {
       root.render(createElement(HarnessNotch, { mode: "overlay" }));
     });
 
-    expect(container.innerHTML).toBe("");
+    expect(container.innerHTML).toContain("fixed top-0 left-1/2");
+    expect(container.textContent).not.toContain("42s");
   });
 
   it("renders multi-project mascot avatars when multiple agents are running", () => {

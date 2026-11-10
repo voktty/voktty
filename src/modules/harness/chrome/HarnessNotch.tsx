@@ -34,6 +34,10 @@ interface HarnessNotchProps {
 }
 
 const OVERLAY_EXPANDED_WIDTH = 520;
+const OVERLAY_LAUNCHER_WIDTH = 440;
+// Matches the hover trigger strip (w-64 x h-2.5) so the idle window stays tiny.
+const OVERLAY_HOVER_WIDTH = 256;
+const OVERLAY_HOVER_HEIGHT = 10;
 const OVERLAY_PADDING = 24;
 const SNAPSHOT_THROTTLE_MS = 250;
 
@@ -72,7 +76,6 @@ function useNotchOverlayHost(
 
   const visible = shouldShowNotchOverlay({
     enabled,
-    liveAgentCount: liveAgents.length,
     appFocused,
   });
 
@@ -255,14 +258,29 @@ export function HarnessNotch({
     ),
   );
 
+  // Idle overlay is only the hover strip: a bigger transparent window would
+  // swallow clicks meant for whatever is behind it.
+  const revealed =
+    liveAgents.length > 0 || idleLauncherOpen || topHovered || expanded;
   useEffect(() => {
+    if (!overlay) return;
+    if (!revealed) {
+      void invoke("notch_window_fit", {
+        width: OVERLAY_HOVER_WIDTH,
+        height: OVERLAY_HOVER_HEIGHT,
+      }).catch(() => undefined);
+      return;
+    }
     const node = notchRef.current;
-    if (!overlay || !node || typeof ResizeObserver === "undefined") return;
+    if (!node || typeof ResizeObserver === "undefined") return;
     const fit = () => {
       const rect = node.getBoundingClientRect();
-      const width = useNotchStore.getState().expanded
+      const state = useNotchStore.getState();
+      const width = state.expanded
         ? OVERLAY_EXPANDED_WIDTH
-        : Math.ceil(rect.width) + OVERLAY_PADDING;
+        : state.idleLauncherOpen
+          ? OVERLAY_LAUNCHER_WIDTH
+          : Math.ceil(rect.width) + OVERLAY_PADDING;
       void invoke("notch_window_fit", {
         width,
         height: Math.ceil(rect.height) + 8,
@@ -272,17 +290,14 @@ export function HarnessNotch({
     observer.observe(node);
     fit();
     return () => observer.disconnect();
-  }, [overlay, expanded, liveAgents.length]);
+  }, [overlay, revealed, expanded, idleLauncherOpen]);
 
   if (!enabled && !overlay) return null;
 
   // Live agents are shown only by the native overlay: inside Voktty the
   // Harness already has them, and the overlay is for watching from outside.
   const hasRunningAgents = overlay && liveAgents.length > 0;
-  if (overlay && !hasRunningAgents) return null;
-  const isVisible = overlay
-    ? hasRunningAgents
-    : idleLauncherOpen || topHovered;
+  const isVisible = hasRunningAgents || idleLauncherOpen || topHovered;
 
   return (
     <>

@@ -27,21 +27,21 @@ const MAX_TEXT_LENGTH = 2000;
 
 export type NotchVisibilityInput = {
   enabled: boolean;
-  liveAgentCount: number;
   appFocused: boolean;
 };
 
 /**
  * The overlay is a utility for watching agents while Voktty is not the
- * foreground app. Inside Voktty the Harness already shows everything, so the
- * overlay stays hidden whenever the main window has focus.
+ * foreground app (minimised or behind another window). Inside Voktty the
+ * Harness already shows everything, so the window is absent whenever the main
+ * window has focus. While present it rests as a thin hover strip and reveals
+ * the notch by itself on activity.
  */
 export function shouldShowNotchOverlay({
   enabled,
-  liveAgentCount,
   appFocused,
 }: NotchVisibilityInput): boolean {
-  return enabled && liveAgentCount > 0 && !appFocused;
+  return enabled && !appFocused;
 }
 
 function trimBlock(block: Block): Block {
