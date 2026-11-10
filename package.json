@@ -152,7 +152,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "6.1.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "happy-dom": "^20.14.5",
+    "happy-dom": "^21.0.4",
     "knip": "^6.44.1",
     "react-compiler-healthcheck": "^1.0.0",
     "react-scan": "^0.5.7",
