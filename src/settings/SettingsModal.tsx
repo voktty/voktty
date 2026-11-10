@@ -164,6 +164,28 @@ function SettingsSectionSkeleton() {
   );
 }
 
+const SIZE_KEY = "voktty.settings.size";
+const DEFAULT_SIZE = { width: 1040, height: 700 };
+
+function readStoredSize(): { width: number; height: number } {
+  try {
+    const raw = window.localStorage.getItem(SIZE_KEY);
+    if (!raw) return DEFAULT_SIZE;
+    const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown };
+    if (
+      typeof parsed.width === "number" &&
+      typeof parsed.height === "number" &&
+      parsed.width >= 640 &&
+      parsed.height >= 420
+    ) {
+      return { width: parsed.width, height: parsed.height };
+    }
+  } catch {
+    // Storage can be unavailable; fall back to the default size.
+  }
+  return DEFAULT_SIZE;
+}
+
 export function SettingsModal() {
   const { t } = useTranslation();
   const open = useSettingsModalStore((s) => s.open);
@@ -178,6 +200,35 @@ export function SettingsModal() {
   const headerId = useId();
   const previousOpenRef = React.useRef(open);
   const scrollContainerRef = useRef<HTMLElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [initialSize] = React.useState(readStoredSize);
+
+  useEffect(() => {
+    const node = dialogRef.current;
+    if (!open || !node || typeof ResizeObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          window.localStorage.setItem(
+            SIZE_KEY,
+            JSON.stringify({
+              width: Math.round(node.offsetWidth),
+              height: Math.round(node.offsetHeight),
+            }),
+          );
+        } catch {
+          // Size persistence is a convenience only.
+        }
+      }, 300);
+    });
+    observer.observe(node);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [open]);
 
   const { position, dragHandleProps } = useDraggableModal({
     initialPosition: modalPosition ?? undefined,
@@ -244,8 +295,11 @@ export function SettingsModal() {
       onClick={closeSettings}
     >
       <div
-        className="flex flex-row w-full max-w-3xl h-[80vh] max-h-[580px] rounded-lg border border-border/70 bg-background/95 text-foreground shadow-2xl overflow-hidden duration-150 animate-in zoom-in-95 select-none transition-shadow"
+        className="flex flex-row min-h-[420px] min-w-[640px] max-h-[94vh] max-w-[96vw] resize overflow-hidden rounded-lg border border-border/70 bg-background/95 text-foreground shadow-2xl overflow-hidden duration-150 animate-in zoom-in-95 select-none transition-shadow"
+        ref={dialogRef}
         style={{
+          width: initialSize.width,
+          height: initialSize.height,
           transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -381,9 +435,9 @@ export function SettingsModal() {
           <main
             ref={scrollContainerRef}
             onScroll={(e) => setTabScroll(active, e.currentTarget.scrollTop)}
-            className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:rounded-md [&_[data-slot=input]]:px-2 [&_[data-slot=input]]:text-[11.5px] [&_[data-slot=select-trigger]]:h-7! [&_[data-slot=select-trigger]]:rounded-md [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-[11.5px] [&_button[data-slot=button]]:rounded-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:rounded-md [&_[data-slot=input]]:text-[11.5px] [&_[data-slot=select-trigger]]:h-7! [&_[data-slot=select-trigger]]:rounded-md [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-[11.5px] [&_button[data-slot=button]]:rounded-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <div className="mx-auto w-full max-w-[34rem]">
+            <div className="mx-auto w-full max-w-[46rem]">
               <SettingsSearch onSelect={handleSearchSelect} />
               <div data-settings-section={active} className="mt-3">
                 <Suspense fallback={<SettingsSectionSkeleton />}>
