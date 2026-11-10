@@ -7,6 +7,17 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       default-days: 3
+    # These move as a set and are pinned by hand (see overrides in
+    # pnpm-workspace.yaml). A grouped bump of only some of them broke the diff
+    # editor, so update them together, deliberately.
+    ignore:
+      - dependency-name: "@codemirror/*"
+      - dependency-name: "@lezer/*"
+      - dependency-name: "@uiw/*"
+      - dependency-name: "codemirror-languageserver"
+      - dependency-name: "remend"
+      - dependency-name: "streamdown"
+      - dependency-name: "rolldown"
     groups:
       npm-dev:
         dependency-type: development

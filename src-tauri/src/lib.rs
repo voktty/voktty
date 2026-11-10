@@ -225,6 +225,9 @@ pub fn run() {
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                // The notch overlay sizes and places itself on every show; a restored
+                // size from an expanded card would leave a transparent window over the desktop.
+                .with_denylist(&[notch_window::NOTCH_LABEL])
                 .build(),
         )
         .plugin(tauri_plugin_autostart::Builder::new().build());

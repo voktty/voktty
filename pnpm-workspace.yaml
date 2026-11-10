@@ -11,6 +11,8 @@ overrides:
   '@codemirror/merge': 6.12.2
   '@lezer/common': 1.5.2
   '@lezer/highlight': 1.2.3
+  # The bundler shapes the shipped code; keep the version the app was released with.
+  rolldown: 1.2.4
 allowBuilds:
   esbuild: true
   msgpackr-extract: false
