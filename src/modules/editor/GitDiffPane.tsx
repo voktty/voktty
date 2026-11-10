@@ -515,7 +515,14 @@ export function GitDiffPane({
   const isTooLarge =
     originalContent.length > LARGE_FILE_THRESHOLD ||
     modifiedContent.length > LARGE_FILE_THRESHOLD;
-  const useFallback = isBinary || isTooLarge;
+  // A loaded diff with no text on either side used to render a blank editor with
+  // no explanation (e.g. a file the backend could not read as text).
+  const nothingToCompare =
+    loaded !== null &&
+    !isBinary &&
+    originalContent === "" &&
+    modifiedContent === "";
+  const useFallback = isBinary || isTooLarge || nothingToCompare;
 
   // Staging a single hunk only makes sense out of the unstaged (working tree
   // vs. index) diff — the "+" mode already shows what is staged.

@@ -1,7 +1,16 @@
 minimumReleaseAge: 4320
 minimumReleaseAgeStrict: true
 overrides:
+  # One copy of each CodeMirror package: mixing view/state/language versions
+  # leaves the diff editor with line numbers but no text.
   '@codemirror/state': 6.7.4
+  '@codemirror/view': 6.43.11
+  '@codemirror/language': 6.12.4
+  '@codemirror/commands': 6.11.0
+  '@codemirror/autocomplete': 6.20.3
+  '@codemirror/merge': 6.12.2
+  '@lezer/common': 1.5.2
+  '@lezer/highlight': 1.2.3
 allowBuilds:
   esbuild: true
   msgpackr-extract: false
