@@ -306,9 +306,7 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
     const list: ModelInfo[] = [];
     for (const ep of customEndpoints) {
       const models =
-        ep.models && ep.models.length > 0
-          ? ep.models
-          : [ep.modelId || ep.name];
+        ep.models && ep.models.length > 0 ? ep.models : [ep.modelId || ep.name];
       for (const m of models) {
         if (!m) continue;
         const cid = compatModelIdForEndpoint(ep.id, m);
@@ -423,7 +421,9 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
         .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     }
     if (activeProvider === COMPAT_PROVIDER_ID) {
-      pool = pool.filter((m) => isCompatModelId(m.id) || m.id.startsWith("api:"));
+      pool = pool.filter(
+        (m) => isCompatModelId(m.id) || m.id.startsWith("api:"),
+      );
     } else if (activeProvider !== null) {
       pool = pool.filter((m) => m.provider === activeProvider);
     }
@@ -566,66 +566,72 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
             )}
           </div>
 
-          {/* Models list */}
-          <div className="min-h-0 flex-1 overflow-y-auto py-1">
-            {activeProvider === COMPAT_PROVIDER_ID && (
-              <div className="flex items-center gap-1.5 px-3 pt-1 pb-1.5 text-[11px] font-medium tracking-tight text-muted-foreground/90">
-                <HugeiconsIcon icon={PlugIcon} size={13} strokeWidth={1.75} />
-                <span>{t("ai.openAiCompatible")}</span>
-              </div>
-            )}
-            {activeProvider !== null &&
-            activeProvider !== COMPAT_PROVIDER_ID ? (
-              <ProviderHeader providerId={activeProvider as ProviderId} />
-            ) : null}
-            {!hasAnyConfigured ? (
-              <div className="flex flex-col items-center justify-center gap-2.5 px-4 py-10 text-center">
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.models.noProvidersConnected")}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void openSettingsWindow("models")}
-                  className="h-7 text-[11px]"
-                >
-                  {t("settings.models.title")}
-                </Button>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex items-center justify-center px-4 py-10 text-xs text-muted-foreground/70">
-                {tab === "favorites"
-                  ? t("ai.noFavorites")
-                  : tab === "recent"
-                    ? t("ai.noRecent")
-                    : t("ai.noModelsMatch")}
-              </div>
-            ) : (
-              filtered.map((m) => (
-                <ModelRow
-                  key={m.id}
-                  model={m}
-                  selected={m.id === selected}
-                  hasKey={true}
-                  favorite={favoriteIds.includes(m.id)}
-                  showProviderIcon={activeProvider === null}
-                  onPick={() => {
-                    setSelected(m.id);
-                  }}
-                  onToggleFavorite={() => void toggleFavoriteModel(m.id)}
+          {/* Models list and its footer share one column so the footer never competes for width */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+              {activeProvider === COMPAT_PROVIDER_ID && (
+                <div className="flex items-center gap-1.5 px-3 pt-1 pb-1.5 text-[11px] font-medium tracking-tight text-muted-foreground/90">
+                  <HugeiconsIcon icon={PlugIcon} size={13} strokeWidth={1.75} />
+                  <span>{t("ai.openAiCompatible")}</span>
+                </div>
+              )}
+              {activeProvider !== null &&
+              activeProvider !== COMPAT_PROVIDER_ID ? (
+                <ProviderHeader providerId={activeProvider as ProviderId} />
+              ) : null}
+              {!hasAnyConfigured ? (
+                <div className="flex flex-col items-center justify-center gap-2.5 px-4 py-10 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.noProvidersConnected")}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void openSettingsWindow("models")}
+                    className="h-7 text-[11px]"
+                  >
+                    {t("settings.models.title")}
+                  </Button>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex items-center justify-center px-4 py-10 text-xs text-muted-foreground/70">
+                  {tab === "favorites"
+                    ? t("ai.noFavorites")
+                    : tab === "recent"
+                      ? t("ai.noRecent")
+                      : t("ai.noModelsMatch")}
+                </div>
+              ) : (
+                filtered.map((m) => (
+                  <ModelRow
+                    key={m.id}
+                    model={m}
+                    selected={m.id === selected}
+                    hasKey={true}
+                    favorite={favoriteIds.includes(m.id)}
+                    showProviderIcon={activeProvider === null}
+                    onPick={() => {
+                      setSelected(m.id);
+                    }}
+                    onToggleFavorite={() => void toggleFavoriteModel(m.id)}
+                  />
+                ))
+              )}
+            </div>
+            <div className="shrink-0 border-t border-border/50 px-2.5 py-1.5 bg-muted/20 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => void openSettingsWindow("models")}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                <HugeiconsIcon
+                  icon={Settings01Icon}
+                  size={11}
+                  strokeWidth={1.75}
                 />
-              ))
-            )}
-          </div>
-          <div className="border-t border-border/50 px-2.5 py-1.5 bg-muted/20 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => void openSettingsWindow("models")}
-              className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <HugeiconsIcon icon={Settings01Icon} size={11} strokeWidth={1.75} />
-              <span>{t("settings.models.manageEndpoints")}</span>
-            </button>
+                <span>{t("settings.models.manageEndpoints")}</span>
+              </button>
+            </div>
           </div>
         </div>
       </DropdownMenuContent>
