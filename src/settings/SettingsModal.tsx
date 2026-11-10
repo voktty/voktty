@@ -244,7 +244,7 @@ export function SettingsModal() {
       onClick={closeSettings}
     >
       <div
-        className="flex flex-row w-full max-w-4xl h-[82vh] max-h-[660px] rounded-xl border border-border/70 bg-background/95 text-foreground shadow-2xl overflow-hidden duration-150 animate-in zoom-in-95 select-none transition-shadow"
+        className="flex flex-row w-full max-w-3xl h-[80vh] max-h-[580px] rounded-lg border border-border/70 bg-background/95 text-foreground shadow-2xl overflow-hidden duration-150 animate-in zoom-in-95 select-none transition-shadow"
         style={{
           transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
         }}
@@ -255,7 +255,7 @@ export function SettingsModal() {
         onClickCapture={(event) => scheduleSettingsToggleSound(event.target)}
       >
         {/* Left Fluent Sidebar Navigation */}
-        <aside className="w-48 sm:w-52 shrink-0 border-r border-border/40 bg-card/30 backdrop-blur-md flex flex-col justify-between p-2.5">
+        <aside className="w-40 shrink-0 border-r border-border/40 bg-card/30 flex flex-col justify-between p-2">
           <div className="flex flex-col gap-2 min-h-0 flex-1">
             {/* Sidebar Title / Drag Handle */}
             <div
@@ -285,7 +285,7 @@ export function SettingsModal() {
                     <button
                       type="button"
                       onClick={() => setActive(item.id)}
-                      className={`group relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[11.5px] transition-all text-left cursor-pointer ${
+                      className={`group relative flex w-full items-center gap-2 rounded-md px-2 py-1 text-[11px] transition-all text-left cursor-pointer ${
                         isActive
                           ? "bg-accent text-foreground font-semibold shadow-xs"
                           : "text-muted-foreground hover:bg-accent/40 hover:text-foreground font-medium"
@@ -318,7 +318,7 @@ export function SettingsModal() {
               <button
                 type="button"
                 onClick={() => setActive(aboutTab.id)}
-                className={`group relative flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11.5px] transition-all text-left cursor-pointer ${
+                className={`group relative flex w-full items-center justify-between rounded-md px-2 py-1 text-[11px] transition-all text-left cursor-pointer ${
                   active === aboutTab.id
                     ? "bg-accent text-foreground font-semibold shadow-xs"
                     : "text-muted-foreground hover:bg-accent/40 hover:text-foreground font-medium"
@@ -353,7 +353,7 @@ export function SettingsModal() {
           {/* Header / Drag Handle */}
           <header
             {...dragHandleProps}
-            className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border/40 bg-card/20 px-4 cursor-grab active:cursor-grabbing select-none"
+            className="flex h-8 shrink-0 items-center justify-between gap-3 border-b border-border/40 px-3 cursor-grab active:cursor-grabbing select-none"
           >
             <div className="flex items-center gap-2 text-[11.5px] font-semibold text-foreground pointer-events-none">
               <HugeiconsIcon
@@ -381,11 +381,11 @@ export function SettingsModal() {
           <main
             ref={scrollContainerRef}
             onScroll={(e) => setTabScroll(active, e.currentTarget.scrollTop)}
-            className="min-h-0 flex-1 overflow-y-auto px-5 sm:px-8 py-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:rounded-md [&_[data-slot=input]]:px-2 [&_[data-slot=input]]:text-[11.5px] [&_[data-slot=select-trigger]]:h-7! [&_[data-slot=select-trigger]]:rounded-md [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-[11.5px] [&_button[data-slot=button]]:rounded-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <div className="mx-auto w-full max-w-xl">
+            <div className="mx-auto w-full max-w-[34rem]">
               <SettingsSearch onSelect={handleSearchSelect} />
-              <div data-settings-section={active} className="mt-3.5">
+              <div data-settings-section={active} className="mt-3">
                 <Suspense fallback={<SettingsSectionSkeleton />}>
                   <ErrorBoundary name={`Settings Tab: ${active}`}>
                     <ActiveComponent />

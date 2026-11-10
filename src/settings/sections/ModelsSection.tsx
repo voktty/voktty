@@ -321,41 +321,37 @@ export function ModelsSection() {
 
   return (
     <ErrorBoundary name="Models Section">
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
         <SectionHeader
           title={t("settings.models.title")}
           description={t("settings.models.description")}
         />
 
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/50 w-fit">
+        <div className="flex items-center gap-1 border-b border-border/40">
           <button
             type="button"
             onClick={() => setModelsSubTab("models")}
             className={cn(
-              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
+              "flex items-center gap-1.5 border-b-2 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer -mb-px",
               modelsSubTab === "models"
-                ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-card/40",
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            <HugeiconsIcon icon={AiScanIcon} size={14} strokeWidth={2} />
+            <HugeiconsIcon icon={AiScanIcon} size={12} strokeWidth={2} />
             <span>{t("settings.models.subTabs.models")}</span>
           </button>
           <button
             type="button"
             onClick={() => setModelsSubTab("agents")}
             className={cn(
-              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
+              "flex items-center gap-1.5 border-b-2 px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer -mb-px",
               modelsSubTab === "agents"
-                ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-card/40",
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            <HugeiconsIcon
-              icon={UserMultiple02Icon}
-              size={14}
-              strokeWidth={2}
-            />
+            <HugeiconsIcon icon={UserMultiple02Icon} size={12} strokeWidth={2} />
             <span>{t("settings.models.subTabs.agents")}</span>
           </button>
         </div>
@@ -363,7 +359,17 @@ export function ModelsSection() {
         {modelsSubTab === "agents" ? (
           <AgentsSection hideHeader />
         ) : (
-          <div className="flex flex-col gap-7">
+          <div className="flex flex-col gap-4">
+            {configuredIds.size > 0 || customEndpoints.length > 0 ? (
+              <DefaultsBlock
+                defaultModel={defaultModel}
+                configuredIds={configuredIds}
+                keys={currentKeys}
+                customEndpoints={customEndpoints}
+                endpointKeys={epKeys}
+              />
+            ) : null}
+
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Label>{t("settings.models.connections")}</Label>
@@ -451,16 +457,6 @@ export function ModelsSection() {
                 </div>
               )}
             </div>
-
-            {configuredIds.size > 0 || customEndpoints.length > 0 ? (
-              <DefaultsBlock
-                defaultModel={defaultModel}
-                configuredIds={configuredIds}
-                keys={currentKeys}
-                customEndpoints={customEndpoints}
-                endpointKeys={epKeys}
-              />
-            ) : null}
 
             <VoiceBlock />
           </div>
@@ -594,7 +590,7 @@ function HarnessProviderCard({
     : (models[0]?.id ?? "harness-claude");
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 px-3 py-3">
+    <div className="flex flex-col gap-3 rounded-md border border-border/50 bg-card/40 px-2.5 py-2">
       <div className="flex items-center gap-2">
         <ProviderIcon provider={provider.id} size={16} />
         <span className="text-[12.5px] font-semibold">
@@ -895,7 +891,7 @@ function DefaultsBlock({
   return (
     <div className="flex flex-col gap-3">
       <Label>{t("settings.models.defaults")}</Label>
-      <div className="flex flex-col gap-2.5 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
+      <div className="flex flex-col gap-2.5 rounded-md border border-border/50 bg-card/40 px-2.5 py-2">
         <FieldRow label={t("settings.models.aiActivation")}>
           <div className="flex flex-1 items-center gap-2">
             <Switch
@@ -1609,7 +1605,7 @@ function LocalProviderCard({
     provider.id === "openai-compatible" || provider.id === "openrouter";
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
+    <div className="flex flex-col gap-2 rounded-md border border-border/50 bg-card/40 px-2.5 py-2">
       <div className="flex items-center gap-2">
         <ProviderIcon provider={provider.id} size={15} />
         <span className="text-[12.5px] font-medium">{provider.label}</span>
@@ -1921,7 +1917,7 @@ function VoiceBlock() {
   useEffect(() => setGroqModelDraft(groqSttModel), [groqSttModel]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
+    <div className="flex flex-col gap-3 rounded-md border border-border/50 bg-card/40 px-2.5 py-2">
       <div className="flex items-center gap-2">
         <HugeiconsIcon icon={Mic01Icon} size={15} strokeWidth={1.5} />
         <span className="text-[12.5px] font-medium">

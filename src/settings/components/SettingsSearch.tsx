@@ -79,7 +79,7 @@ export function SettingsSearch({ onSelect }: Props) {
           placeholder={t("settings.search.placeholder")}
           aria-label={t("settings.search.placeholder")}
           aria-autocomplete="list"
-          className="h-8 rounded-lg border-border/60 bg-background/70 pl-8 pr-8 text-[11.5px] shadow-xs"
+          className="h-7 rounded-md border-border/50 bg-transparent pl-7 pr-7 text-[11px]"
         />
         {query ? (
           <button

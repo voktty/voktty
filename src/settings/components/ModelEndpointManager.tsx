@@ -295,16 +295,16 @@ export function ModelEndpointManager({
     <div className="flex flex-col gap-4">
       {/* Tab 1: Third-party model provider */}
       {activeTab === "third-party" && (
-        <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-3.5">
+        <div className="flex flex-col gap-2 rounded-md border border-border/50 bg-card/40 p-2.5">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.5px] font-medium text-foreground">
+            <label className="text-[10.5px] font-medium text-muted-foreground">
               {t("settings.models.selectProvider")}
             </label>
             <Select
               value={selectedProviderId}
               onValueChange={(val) => setSelectedProviderId(val)}
             >
-              <SelectTrigger className="h-8.5 font-mono text-xs">
+              <SelectTrigger className="h-7 font-mono text-xs">
                 <SelectValue
                   placeholder={t("settings.models.selectProvider")}
                 />
@@ -323,7 +323,7 @@ export function ModelEndpointManager({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.5px] font-medium text-foreground">
+            <label className="text-[10.5px] font-medium text-muted-foreground">
               {t("settings.models.apiKey")}
             </label>
             <div className="flex items-center gap-1.5">
@@ -334,7 +334,7 @@ export function ModelEndpointManager({
                   onChange={(e) => setThirdPartyApiKey(e.target.value)}
                   placeholder={currentProvider?.apiKeyHint ?? "sk-..."}
                   spellCheck={false}
-                  className="h-8.5 pr-8 font-mono text-xs"
+                  className="h-7 pr-8 font-mono text-xs"
                 />
                 <button
                   type="button"
@@ -351,7 +351,7 @@ export function ModelEndpointManager({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.5px] font-medium text-foreground">
+            <label className="text-[10.5px] font-medium text-muted-foreground">
               {t("settings.models.baseUrl")}
             </label>
             <Input
@@ -360,7 +360,7 @@ export function ModelEndpointManager({
               onChange={(e) => setThirdPartyBaseUrl(e.target.value)}
               placeholder={currentProvider?.defaultBaseURL}
               spellCheck={false}
-              className="h-8.5 font-mono text-xs"
+              className="h-7 font-mono text-xs"
             />
           </div>
 
@@ -411,10 +411,10 @@ export function ModelEndpointManager({
 
       {/* Tab 2: Custom model API */}
       {activeTab === "custom" && (
-        <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-3.5">
+        <div className="flex flex-col gap-2 rounded-md border border-border/50 bg-card/40 p-2.5">
           <div className="grid grid-cols-2 gap-2.5">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.5px] font-medium text-foreground">
+              <label className="text-[10.5px] font-medium text-muted-foreground">
                 {t("settings.models.providerId")}
               </label>
               <Input
@@ -423,11 +423,11 @@ export function ModelEndpointManager({
                 onChange={(e) => setCustomId(e.target.value)}
                 placeholder={t("settings.models.providerIdPlaceholder")}
                 spellCheck={false}
-                className="h-8.5 font-mono text-xs"
+                className="h-7 font-mono text-xs"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.5px] font-medium text-foreground">
+              <label className="text-[10.5px] font-medium text-muted-foreground">
                 {t("settings.models.displayName")}
               </label>
               <Input
@@ -436,13 +436,13 @@ export function ModelEndpointManager({
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder={t("settings.models.displayNamePlaceholder")}
                 spellCheck={false}
-                className="h-8.5 text-xs"
+                className="h-7 text-xs"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.5px] font-medium text-foreground">
+            <label className="text-[10.5px] font-medium text-muted-foreground">
               {t("settings.models.baseUrl")}
             </label>
             <Input
@@ -451,19 +451,19 @@ export function ModelEndpointManager({
               onChange={(e) => setCustomBaseUrl(e.target.value)}
               placeholder="https://api.mygateway.com/v1"
               spellCheck={false}
-              className="h-8.5 font-mono text-xs"
+              className="h-7 font-mono text-xs"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.5px] font-medium text-foreground">
+            <label className="text-[10.5px] font-medium text-muted-foreground">
               {t("settings.models.apiProtocol")}
             </label>
             <Select
               value={customProtocol}
               onValueChange={(val) => setCustomProtocol(val as ApiProtocol)}
             >
-              <SelectTrigger className="h-8.5 text-xs">
+              <SelectTrigger className="h-7 text-xs">
                 <SelectValue placeholder={t("settings.models.apiProtocol")} />
               </SelectTrigger>
               <SelectContent>
@@ -481,7 +481,7 @@ export function ModelEndpointManager({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.5px] font-medium text-foreground">
+            <label className="text-[10.5px] font-medium text-muted-foreground">
               {t("settings.models.apiKey")}
             </label>
             <div className="relative">
@@ -491,7 +491,7 @@ export function ModelEndpointManager({
                 onChange={(e) => setCustomApiKey(e.target.value)}
                 placeholder="sk-..."
                 spellCheck={false}
-                className="h-8.5 pr-8 font-mono text-xs"
+                className="h-7 pr-8 font-mono text-xs"
               />
               <button
                 type="button"
@@ -597,7 +597,7 @@ export function ModelEndpointManager({
             {customEndpoints.map((ep) => (
               <div
                 key={ep.id}
-                className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/50 p-3"
+                className="flex flex-col gap-2 rounded-md border border-border/50 bg-card/40 p-2"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
