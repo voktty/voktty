@@ -3,6 +3,7 @@ import { Button } from "./button";
 import { Alert02Icon, Refresh01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { t } from "@/modules/i18n";
+import { error as logNative } from "@tauri-apps/plugin-log";
 
 type Props = {
   children: ReactNode;
@@ -31,6 +32,12 @@ export class ErrorBoundary extends Component<Props, State> {
       error,
       errorInfo,
     );
+    // Persist the failure so a crash screen can be diagnosed from Voktty.log.
+    void Promise.resolve(
+      logNative(
+        `[ErrorBoundary:${this.props.name ?? "app"}] ${error.message}\n${error.stack ?? ""}\n${errorInfo.componentStack ?? ""}`,
+      ),
+    ).catch(() => undefined);
   }
 
   public reset = () => {

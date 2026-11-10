@@ -9,7 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import {
   type CustomEndpoint,
   type ApiProtocol,
@@ -46,34 +45,41 @@ import {
   ViewOffSlashIcon,
 } from "@hugeicons/core-free-icons";
 
-export function ModelEndpointManager() {
+export type EndpointAddMode = "third-party" | "custom";
+
+/**
+ * Endpoint rows plus the add form. The form only exists while the unified
+ * "Add" menu in the models section has asked for one, so there is a single
+ * entry point for every kind of connection.
+ */
+export function ModelEndpointManager({
+  addMode = null,
+  onCloseAdd,
+}: {
+  addMode?: EndpointAddMode | null;
+  onCloseAdd?: () => void;
+}) {
   const { t } = useTranslation();
   const customEndpoints = usePreferencesStore((s) => s.customEndpoints) ?? [];
-
-  const [activeTab, setActiveTab] = useState<"third-party" | "custom">(
-    "third-party",
-  );
+  const activeTab = addMode;
 
   // Tab 1: Third-party provider state
-  const [selectedProviderId, setSelectedProviderId] = useState<string>("deepseek");
-  const currentProvider = findThirdPartyProvider(selectedProviderId) ?? THIRD_PARTY_PROVIDERS[0];
+  const [selectedProviderId, setSelectedProviderId] =
+    useState<string>("deepseek");
+  const currentProvider =
+    findThirdPartyProvider(selectedProviderId) ?? THIRD_PARTY_PROVIDERS[0];
   const [thirdPartyBaseUrl, setThirdPartyBaseUrl] = useState<string>(
     currentProvider?.defaultBaseURL ?? "",
   );
   const [thirdPartyApiKey, setThirdPartyApiKey] = useState<string>("");
   const [thirdPartyKeyVisible, setThirdPartyKeyVisible] = useState(false);
   const [thirdPartyModels, setThirdPartyModels] = useState<string[]>([]);
-  const [isFetchingThirdParty, setIsFetchingThirdParty] = useState(false);
-  const [thirdPartyFetchError, setThirdPartyFetchError] = useState<string | null>(
-    null,
-  );
 
   // Update base URL when provider changes
   useEffect(() => {
     if (currentProvider) {
       setThirdPartyBaseUrl(currentProvider.defaultBaseURL);
       setThirdPartyModels([]);
-      setThirdPartyFetchError(null);
     }
   }, [currentProvider]);
 
@@ -88,8 +94,6 @@ export function ModelEndpointManager() {
   const [customKeyVisible, setCustomKeyVisible] = useState(false);
   const [customModels, setCustomModels] = useState<string[]>([]);
   const [manualModelInput, setManualModelInput] = useState<string>("");
-  const [isFetchingCustom, setIsFetchingCustom] = useState(false);
-  const [customFetchError, setCustomFetchError] = useState<string | null>(null);
 
   // Saved endpoints keys cache for display
   const [endpointKeys, setEndpointKeys] = useState<Record<string, string>>({});
@@ -115,45 +119,14 @@ export function ModelEndpointManager() {
     syncCustomEndpointsToHarness(customEndpoints);
   }, [customEndpoints]);
 
-  const handleFetchThirdParty = async () => {
-    const url = thirdPartyBaseUrl.trim();
-    if (!url) return;
-    setIsFetchingThirdParty(true);
-    setThirdPartyFetchError(null);
+  const discoverQuietly = async (
+    url: string,
+    options: { apiKey?: string; protocol: ApiProtocol },
+  ): Promise<string[]> => {
     try {
-      const models = await fetchCompatibleModels(url, {
-        apiKey: thirdPartyApiKey.trim() || undefined,
-        protocol: currentProvider?.protocol ?? "openai-chat-completions",
-      });
-      setThirdPartyModels(models);
-      if (models.length === 0) {
-        setThirdPartyFetchError(t("settings.models.noEndpoints"));
-      }
-    } catch (err) {
-      setThirdPartyFetchError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsFetchingThirdParty(false);
-    }
-  };
-
-  const handleFetchCustom = async () => {
-    const url = customBaseUrl.trim();
-    if (!url) return;
-    setIsFetchingCustom(true);
-    setCustomFetchError(null);
-    try {
-      const models = await fetchCompatibleModels(url, {
-        apiKey: customApiKey.trim() || undefined,
-        protocol: customProtocol,
-      });
-      setCustomModels((prev) => Array.from(new Set([...prev, ...models])));
-      if (models.length === 0) {
-        setCustomFetchError(t("settings.models.noEndpoints"));
-      }
-    } catch (err) {
-      setCustomFetchError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsFetchingCustom(false);
+      return await fetchCompatibleModels(url, options);
+    } catch {
+      return [];
     }
   };
 
@@ -173,8 +146,15 @@ export function ModelEndpointManager() {
   const handleSaveThirdParty = async () => {
     if (!currentProvider) return;
     const url = thirdPartyBaseUrl.trim() || currentProvider.defaultBaseURL;
+    let discovered = thirdPartyModels;
+    if (discovered.length === 0) {
+      discovered = await discoverQuietly(url, {
+        apiKey: thirdPartyApiKey.trim() || undefined,
+        protocol: currentProvider.protocol,
+      });
+    }
     const finalModels =
-      thirdPartyModels.length > 0 ? thirdPartyModels : [currentProvider.id];
+      discovered.length > 0 ? discovered : [currentProvider.id];
     const endpoint: CustomEndpoint = {
       id: currentProvider.id,
       name: currentProvider.name,
@@ -190,7 +170,10 @@ export function ModelEndpointManager() {
     if (thirdPartyApiKey.trim()) {
       await setCustomEndpointKey(endpoint.id, thirdPartyApiKey.trim());
       if (providerSupportsKey(currentProvider.id as ProviderId)) {
-        await setKey(currentProvider.id as ProviderId, thirdPartyApiKey.trim()).catch(() => {});
+        await setKey(
+          currentProvider.id as ProviderId,
+          thirdPartyApiKey.trim(),
+        ).catch(() => {});
       }
     }
 
@@ -213,6 +196,8 @@ export function ModelEndpointManager() {
     }
 
     setThirdPartyApiKey("");
+    setThirdPartyModels([]);
+    onCloseAdd?.();
   };
 
   const handleSaveCustom = async () => {
@@ -222,10 +207,15 @@ export function ModelEndpointManager() {
       .replace(/^-+|-+$/g, "");
     if (!idSlug || !customBaseUrl.trim()) return;
 
+    let discovered = customModels;
+    if (discovered.length === 0 && !manualModelInput.trim()) {
+      discovered = await discoverQuietly(customBaseUrl.trim(), {
+        apiKey: customApiKey.trim() || undefined,
+        protocol: customProtocol,
+      });
+    }
     const finalModels =
-      customModels.length > 0
-        ? customModels
-        : [manualModelInput.trim() || idSlug];
+      discovered.length > 0 ? discovered : [manualModelInput.trim() || idSlug];
     const endpoint: CustomEndpoint = {
       id: idSlug,
       name: customName.trim() || idSlug,
@@ -265,6 +255,8 @@ export function ModelEndpointManager() {
     setCustomBaseUrl("");
     setCustomApiKey("");
     setCustomModels([]);
+    setManualModelInput("");
+    onCloseAdd?.();
   };
 
   const handleRemoveEndpoint = async (endpointId: string) => {
@@ -287,7 +279,9 @@ export function ModelEndpointManager() {
             ? {
                 ...item,
                 models,
-                modelId: models.includes(item.modelId) ? item.modelId : models[0],
+                modelId: models.includes(item.modelId)
+                  ? item.modelId
+                  : models[0],
               }
             : item,
         );
@@ -299,34 +293,6 @@ export function ModelEndpointManager() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Top Navigation Tabs */}
-      <div className="flex items-center gap-1.5 border-b border-border/50 pb-2.5">
-        <button
-          type="button"
-          onClick={() => setActiveTab("third-party")}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-            activeTab === "third-party"
-              ? "bg-accent text-accent-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-          )}
-        >
-          {t("settings.models.thirdPartyTab")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("custom")}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-            activeTab === "custom"
-              ? "bg-accent text-accent-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-          )}
-        >
-          {t("settings.models.customApiTab")}
-        </button>
-      </div>
-
       {/* Tab 1: Third-party model provider */}
       {activeTab === "third-party" && (
         <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-3.5">
@@ -339,7 +305,9 @@ export function ModelEndpointManager() {
               onValueChange={(val) => setSelectedProviderId(val)}
             >
               <SelectTrigger className="h-8.5 font-mono text-xs">
-                <SelectValue placeholder={t("settings.models.selectProvider")} />
+                <SelectValue
+                  placeholder={t("settings.models.selectProvider")}
+                />
               </SelectTrigger>
               <SelectContent className="max-h-64">
                 {THIRD_PARTY_PROVIDERS.map((p) => (
@@ -399,23 +367,6 @@ export function ModelEndpointManager() {
           <div className="flex items-center gap-2 pt-1">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleFetchThirdParty()}
-              disabled={isFetchingThirdParty || !thirdPartyBaseUrl.trim()}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <HugeiconsIcon
-                icon={Refresh01Icon}
-                size={12}
-                className={cn(isFetchingThirdParty && "animate-spin")}
-              />
-              {isFetchingThirdParty
-                ? t("settings.models.fetchingModels")
-                : t("settings.models.fetchModels")}
-            </Button>
-            <Button
-              type="button"
               size="sm"
               onClick={() => void handleSaveThirdParty()}
               disabled={!thirdPartyBaseUrl.trim()}
@@ -424,13 +375,16 @@ export function ModelEndpointManager() {
               <HugeiconsIcon icon={Add01Icon} size={12} />
               {t("settings.models.saveEndpoint")}
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onCloseAdd}
+              className="h-8 text-xs"
+            >
+              {t("common.cancel")}
+            </Button>
           </div>
-
-          {thirdPartyFetchError && (
-            <p className="text-[11.5px] text-destructive">
-              {thirdPartyFetchError}
-            </p>
-          )}
 
           {thirdPartyModels.length > 0 && (
             <div className="flex flex-col gap-1.5 pt-1">
@@ -555,36 +509,27 @@ export function ModelEndpointManager() {
           <div className="flex items-center gap-2 pt-1">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleFetchCustom()}
-              disabled={isFetchingCustom || !customBaseUrl.trim()}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <HugeiconsIcon
-                icon={Refresh01Icon}
-                size={12}
-                className={cn(isFetchingCustom && "animate-spin")}
-              />
-              {isFetchingCustom
-                ? t("settings.models.fetchingModels")
-                : t("settings.models.fetchModels")}
-            </Button>
-            <Button
-              type="button"
               size="sm"
               onClick={() => void handleSaveCustom()}
-              disabled={(!customId.trim() && !customName.trim()) || !customBaseUrl.trim()}
+              disabled={
+                (!customId.trim() && !customName.trim()) ||
+                !customBaseUrl.trim()
+              }
               className="h-8 gap-1.5 text-xs"
             >
               <HugeiconsIcon icon={Add01Icon} size={12} />
               {t("settings.models.saveEndpoint")}
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onCloseAdd}
+              className="h-8 text-xs"
+            >
+              {t("common.cancel")}
+            </Button>
           </div>
-
-          {customFetchError && (
-            <p className="text-[11.5px] text-destructive">{customFetchError}</p>
-          )}
 
           {/* Manual Model Addition Input */}
           <div className="flex items-center gap-1.5 pt-1">
@@ -618,7 +563,9 @@ export function ModelEndpointManager() {
           {customModels.length > 0 && (
             <div className="flex flex-col gap-1.5 pt-1">
               <span className="text-[11px] font-medium text-muted-foreground">
-                {t("settings.models.modelsFound", { count: customModels.length })}
+                {t("settings.models.modelsFound", {
+                  count: customModels.length,
+                })}
               </span>
               <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-border/40 bg-background/50 p-2">
                 {customModels.map((m) => (
@@ -643,26 +590,9 @@ export function ModelEndpointManager() {
         </div>
       )}
 
-      {/* Configured Endpoints Section */}
-      <div className="flex flex-col gap-2.5 pt-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-foreground">
-            {t("settings.models.configuredEndpoints")}
-          </span>
-          <span className="text-[10.5px] text-muted-foreground">
-            {customEndpoints.length}
-          </span>
-        </div>
-
-        <p className="text-[11px] text-muted-foreground/80">
-          {t("settings.models.harnessSyncNotice")}
-        </p>
-
-        {customEndpoints.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
-            {t("settings.models.noEndpoints")}
-          </div>
-        ) : (
+      {/* Configured endpoints */}
+      <div className="flex flex-col gap-2.5">
+        {customEndpoints.length === 0 ? null : (
           <div className="flex flex-col gap-2">
             {customEndpoints.map((ep) => (
               <div
@@ -676,6 +606,12 @@ export function ModelEndpointManager() {
                     </span>
                     <Badge variant="outline" className="font-mono text-[10px]">
                       {ep.id}
+                    </Badge>
+                    <Badge
+                      variant="secondary"
+                      className="text-[9.5px] uppercase tracking-wide"
+                    >
+                      {t("settings.models.kindApi")}
                     </Badge>
                     {ep.protocol && (
                       <Badge

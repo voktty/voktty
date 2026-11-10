@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import type { EndpointAddMode } from "@/settings/components/ModelEndpointManager";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,7 +55,6 @@ import {
   setKey,
 } from "@/modules/ai/lib/keyring";
 import { useChatStore } from "@/modules/ai/store/chatStore";
-import { hasCurrentAiHealth } from "@/modules/ai/lib/availability";
 import { useEndpointProbe } from "@/modules/ai/hooks/useEndpointProbe";
 import {
   aiHealthCheckErrorDetail,
@@ -172,6 +172,8 @@ export function ModelsSection() {
   const [keys, setKeys] = useState<KeysMap | null>(null);
   const [epKeys, setEpKeys] = useState<CustomEndpointKeys>({});
   const [adding, setAdding] = useState<Set<ProviderId>>(new Set());
+  const [endpointAddMode, setEndpointAddMode] =
+    useState<EndpointAddMode | null>(null);
 
   const defaultModel = usePreferencesStore((s) => s.defaultModelId);
   const harnessProviderEnabled = usePreferencesStore(
@@ -362,18 +364,24 @@ export function ModelsSection() {
           <AgentsSection hideHeader />
         ) : (
           <div className="flex flex-col gap-7">
-            <ModelEndpointManager />
-
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <Label>{t("settings.models.providers")}</Label>
+                <Label>{t("settings.models.connections")}</Label>
                 <AddProviderMenu
                   providers={addableProviders}
                   onAdd={addProvider}
+                  onAddEndpoint={setEndpointAddMode}
                 />
               </div>
 
-              {visibleProviders.length === 0 && customEndpoints.length === 0 ? (
+              <ModelEndpointManager
+                addMode={endpointAddMode}
+                onCloseAdd={() => setEndpointAddMode(null)}
+              />
+
+              {visibleProviders.length === 0 &&
+              customEndpoints.length === 0 &&
+              endpointAddMode === null ? (
                 <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center">
                   <p className="text-[12px] text-muted-foreground">
                     {t("settings.models.noProvidersConnected")}
@@ -475,14 +483,20 @@ type LocalConfig = {
 function AddProviderMenu({
   providers,
   onAdd,
+  onAddEndpoint,
 }: {
   providers: readonly ProviderInfo[];
   onAdd: (id: ProviderId) => void;
+  onAddEndpoint: (mode: EndpointAddMode) => void;
 }) {
   const { t } = useTranslation();
+  const harness = providers.find((p) => p.id === "harness");
   const cloud = providers.filter((p) => !isLocalProvider(p.id));
   const local = providers.filter(
-    (p) => isLocalProvider(p.id) && p.id !== "openai-compatible",
+    (p) =>
+      isLocalProvider(p.id) &&
+      p.id !== "openai-compatible" &&
+      p.id !== "harness",
   );
 
   return (
@@ -494,10 +508,31 @@ function AddProviderMenu({
           className="h-7 gap-1.5 px-2.5 text-[11px]"
         >
           <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2} />
-          {t("settings.models.addProvider")}
+          {t("settings.models.addConnection")}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-55 p-1">
+        {harness ? (
+          <DropdownMenuItem
+            onSelect={() => onAdd("harness")}
+            className="flex items-center gap-2 text-[12px]"
+          >
+            <ProviderIcon provider="harness" size={13} />
+            <span>{t("settings.models.addOauthAgent")}</span>
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          onSelect={() => onAddEndpoint("third-party")}
+          className="flex items-center gap-2 text-[12px]"
+        >
+          <span>{t("settings.models.addThirdParty")}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => onAddEndpoint("custom")}
+          className="flex items-center gap-2 text-[12px]"
+        >
+          <span>{t("settings.models.addCustomApi")}</span>
+        </DropdownMenuItem>
         {cloud.length > 0 ? (
           <>
             <DropdownMenuLabel className="px-2 text-[10px] tracking-wide text-muted-foreground uppercase">
@@ -562,9 +597,16 @@ function HarnessProviderCard({
     <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 px-3 py-3">
       <div className="flex items-center gap-2">
         <ProviderIcon provider={provider.id} size={16} />
-        <span className="flex-1 text-[12.5px] font-semibold">
+        <span className="text-[12.5px] font-semibold">
           {provider.label}
         </span>
+        <Badge
+          variant="outline"
+          className="h-4 px-1.5 text-[9.5px] font-normal uppercase tracking-wide text-muted-foreground"
+        >
+          {t("settings.models.kindOauth")}
+        </Badge>
+        <span className="flex-1" />
         {configured ? (
           <Badge variant="secondary" className="h-5 text-[10px]">
             {t("common.enabled")}
@@ -719,14 +761,6 @@ function DefaultsBlock({
   const { t } = useTranslation();
   const aiEnabled = usePreferencesStore((s) => s.aiEnabled);
   const aiConfigRevision = usePreferencesStore((s) => s.aiConfigRevision);
-  const aiHealthRevision = usePreferencesStore((s) => s.aiHealthRevision);
-  const aiHealthCheckedAt = usePreferencesStore((s) => s.aiHealthCheckedAt);
-  const healthCurrent = hasCurrentAiHealth({
-    aiEnabled,
-    aiConfigRevision,
-    aiHealthRevision,
-    aiHealthCheckedAt,
-  });
   const [healthStatus, setHealthStatus] = useState<
     | { phase: "idle" }
     | { phase: "testing" }
@@ -872,35 +906,6 @@ function DefaultsBlock({
               }}
               aria-label={t("settings.models.aiActivation")}
             />
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={healthStatus.phase === "testing" || !hasAny}
-              onClick={() => void testAi()}
-              className="h-8 px-3 text-[11px]"
-            >
-              {healthStatus.phase === "testing"
-                ? t("settings.models.testing")
-                : t("settings.models.testAi")}
-            </Button>
-            <span
-              className={cn(
-                "text-[10.5px] text-muted-foreground",
-                healthStatus.phase === "fail" && "text-destructive/80",
-              )}
-            >
-              {healthStatus.phase === "ok"
-                ? t("settings.models.aiHealthReady", {
-                    latency: String(healthStatus.latencyMs),
-                  })
-                : healthStatus.phase === "fail"
-                  ? healthStatus.error
-                    ? `${t("settings.models.aiHealthFailed")} ${healthStatus.error}`
-                    : t("settings.models.aiHealthFailed")
-                  : healthCurrent
-                    ? t("settings.models.aiHealthVerified")
-                    : ""}
-            </span>
           </div>
         </FieldRow>
         {!isAiActive && (
@@ -932,6 +937,45 @@ function DefaultsBlock({
           endpointKeys={endpointKeys}
           disabled={!isAiActive}
         />
+        <details className="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
+          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
+            {t("settings.models.diagnostics")}
+          </summary>
+          <div className="mt-2 flex flex-col gap-2">
+            <p className="text-[10.5px] text-muted-foreground/80">
+              {t("settings.models.diagnosticsHint")}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={healthStatus.phase === "testing" || !hasAny}
+                onClick={() => void testAi()}
+                className="h-8 px-3 text-[11px]"
+              >
+                {healthStatus.phase === "testing"
+                  ? t("settings.models.testing")
+                  : t("settings.models.testAi")}
+              </Button>
+              <span
+                className={cn(
+                  "text-[10.5px] text-muted-foreground",
+                  healthStatus.phase === "fail" && "text-destructive/80",
+                )}
+              >
+                {healthStatus.phase === "ok"
+                  ? t("settings.models.aiHealthReady", {
+                      latency: String(healthStatus.latencyMs),
+                    })
+                  : healthStatus.phase === "fail"
+                    ? healthStatus.error
+                      ? `${t("settings.models.aiHealthFailed")} ${healthStatus.error}`
+                      : t("settings.models.aiHealthFailed")
+                    : ""}
+              </span>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -1428,6 +1472,11 @@ function AutocompleteRow({
         </FieldRow>
       ) : null}
       {enabled ? (
+        <details className="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
+          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
+            {t("settings.models.diagnostics")}
+          </summary>
+          <div className="mt-2">
         <FieldRow label={t("settings.models.autocompleteTestLabel")}>
           <div className="flex flex-1 items-center gap-2">
             <Button
@@ -1466,6 +1515,8 @@ function AutocompleteRow({
             ) : null}
           </div>
         </FieldRow>
+          </div>
+        </details>
       ) : null}
       {enabled && !hasKey ? (
         <div className="mt-1 rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] text-warning-foreground">
@@ -1562,6 +1613,12 @@ function LocalProviderCard({
       <div className="flex items-center gap-2">
         <ProviderIcon provider={provider.id} size={15} />
         <span className="text-[12.5px] font-medium">{provider.label}</span>
+        <Badge
+          variant="outline"
+          className="h-4 px-1.5 text-[9.5px] font-normal uppercase tracking-wide text-muted-foreground"
+        >
+          {t("settings.models.kindLocal")}
+        </Badge>
         {configured && testStatus === "ok" ? (
           <Badge
             variant="outline"
@@ -1612,25 +1669,15 @@ function LocalProviderCard({
                 onBlur={() => {
                   const v = urlDraft.trim();
                   if (v !== baseURL) void setBaseURL(v);
+                  if (v) {
+                    void test();
+                    if (isCompatible) void fetchModels(v);
+                  }
                 }}
                 placeholder={meta.urlPlaceholder}
                 spellCheck={false}
                 className="h-8 flex-1 font-mono text-[11.5px]"
               />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  await test();
-                  if (isCompatible) {
-                    void fetchModels();
-                  }
-                }}
-                disabled={!urlDraft.trim() || testStatus === "testing"}
-                className="h-8 px-3 text-[11px]"
-              >
-                {t("settings.models.test")}
-              </Button>
             </div>
           </FieldRow>
         )}
