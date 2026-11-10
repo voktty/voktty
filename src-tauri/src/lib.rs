@@ -4,9 +4,9 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions,
-    fs, git, git_review, harness, history, lsp, mcp, net, project_memory, pty, quick_composer,
-    quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel, vibrancy, web_server,
-    workspace,
+    fs, git, git_review, harness, history, lsp, mcp, net, notch_window, project_memory, pty,
+    quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel, vibrancy,
+    web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -294,6 +294,9 @@ pub fn run() {
                         if let Some(settings) = handle.get_webview_window("settings") {
                             let _ = settings.close();
                         }
+                        if let Some(notch) = handle.get_webview_window(notch_window::NOTCH_LABEL) {
+                            let _ = notch.close();
+                        }
                     }
                 });
             }
@@ -524,6 +527,9 @@ pub fn run() {
             aliases::aliases_toggle_alias,
             aliases::aliases_reset_alias,
             open_settings_window,
+            notch_window::notch_window_show,
+            notch_window::notch_window_fit,
+            notch_window::notch_window_hide,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
             secrets::secrets_get,

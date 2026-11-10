@@ -91,12 +91,43 @@ describe("HarnessNotch", () => {
         liveAgents: [mockAgent],
         sessions: [],
       });
-      root.render(createElement(HarnessNotch));
+      root.render(createElement(HarnessNotch, { mode: "overlay" }));
     });
 
     expect(container.textContent).toContain("voktty");
     expect(container.textContent).toContain("42s");
     expect(container.innerHTML).toContain("svg");
+  });
+
+  it("does not show live agents inside the main window", () => {
+    const mockAgent: LiveAgent = {
+      id: "agent-1",
+      cwd: "/projects/voktty",
+      title: "voktty",
+      harness: "codex",
+      activity: "bash",
+      startedAt: Date.now() - 42_000,
+      needsApproval: false,
+      done: false,
+    };
+
+    act(() => {
+      useNotchStore.getState().syncHarnessState({
+        liveAgents: [mockAgent],
+        sessions: [],
+      });
+      root.render(createElement(HarnessNotch));
+    });
+
+    expect(container.textContent).not.toContain("42s");
+  });
+
+  it("renders nothing in the overlay until the main window sends agents", () => {
+    act(() => {
+      root.render(createElement(HarnessNotch, { mode: "overlay" }));
+    });
+
+    expect(container.innerHTML).toBe("");
   });
 
   it("renders multi-project mascot avatars when multiple agents are running", () => {
@@ -126,7 +157,7 @@ describe("HarnessNotch", () => {
         liveAgents: [agent1, agent2],
         sessions: [],
       });
-      root.render(createElement(HarnessNotch));
+      root.render(createElement(HarnessNotch, { mode: "overlay" }));
     });
 
     expect(container.textContent).toContain("voktty");
@@ -186,7 +217,7 @@ describe("HarnessNotch", () => {
         onApproval: onApprovalMock,
       });
       useNotchStore.getState().setExpanded(true);
-      root.render(createElement(HarnessNotch));
+      root.render(createElement(HarnessNotch, { mode: "overlay" }));
     });
 
     expect(container.textContent).toContain("line 1 added");

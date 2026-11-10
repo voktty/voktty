@@ -58,6 +58,7 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
       input: {
         main: path.resolve(rootDir, "index.html"),
         settings: path.resolve(rootDir, "settings.html"),
+        notch: path.resolve(rootDir, "notch.html"),
         quickComposer: path.resolve(rootDir, "quick-composer.html"),
       },
       // Oxc drops `debugger` by default. These calls return undefined, so

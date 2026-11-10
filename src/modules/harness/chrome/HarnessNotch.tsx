@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { captureHarnessProjectOpening } from "@/modules/surfaces/lib/harnessProjectRequest";
 import { loadRecents, type RecentProject } from "@/modules/harness/lib/recents";
@@ -6,6 +9,14 @@ import {
   subscribeHarnessNotchEnabled,
 } from "@/modules/harness/lib/settings";
 import { useNotchStore } from "@/modules/harness/lib/notchStore";
+import {
+  NOTCH_ACTION_EVENT,
+  NOTCH_READY_EVENT,
+  NOTCH_STATE_EVENT,
+  shouldShowNotchOverlay,
+  snapshotForOverlay,
+  type NotchAction,
+} from "@/modules/harness/lib/notchBridge";
 import type { LiveAgent } from "@/modules/harness/lib/liveAgents";
 import { NotchEar } from "./notch/NotchEars";
 import { NotchExpandedCard } from "./notch/NotchExpandedCard";
@@ -14,9 +25,140 @@ import { NotchProjectLauncher } from "./notch/NotchProjectLauncher";
 
 interface HarnessNotchProps {
   onOpenProject?: (path: string) => void;
+  /**
+   * "app" runs inside the main window: it only offers the recent-projects
+   * launcher and drives the native overlay. "overlay" runs inside the
+   * always-on-top notch window and draws the live agents.
+   */
+  mode?: "app" | "overlay";
 }
 
-export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
+const OVERLAY_EXPANDED_WIDTH = 520;
+const OVERLAY_PADDING = 24;
+const SNAPSHOT_THROTTLE_MS = 250;
+
+/**
+ * Main-window side of the overlay: shows or hides the native notch window from
+ * app focus and live agents, feeds it snapshots and applies its actions.
+ */
+function useNotchOverlayHost(
+  enabled: boolean,
+  onOpenProject: (path: string) => void,
+) {
+  const liveAgents = useNotchStore((state) => state.liveAgents);
+  const sessions = useNotchStore((state) => state.sessions);
+  const [appFocused, setAppFocused] = useState(true);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        const win = getCurrentWindow();
+        const focused = await win.isFocused();
+        if (!disposed) setAppFocused(focused);
+        unlisten = await win.onFocusChanged(({ payload }) => {
+          if (!disposed) setAppFocused(payload);
+        });
+      } catch {
+        // Not running inside Tauri (tests, browser preview): no overlay.
+      }
+    })();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  const visible = shouldShowNotchOverlay({
+    enabled,
+    liveAgentCount: liveAgents.length,
+    appFocused,
+  });
+
+  useEffect(() => {
+    void invoke(visible ? "notch_window_show" : "notch_window_hide").catch(
+      () => undefined,
+    );
+  }, [visible]);
+
+  const latest = useRef({ liveAgents, sessions });
+  latest.current = { liveAgents, sessions };
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const publish = useCallback(() => {
+    const { liveAgents: agents, sessions: all } = latest.current;
+    void emit(NOTCH_STATE_EVENT, snapshotForOverlay(agents, all)).catch(
+      () => undefined,
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!visible || timer.current) return;
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      publish();
+    }, SNAPSHOT_THROTTLE_MS);
+  }, [visible, liveAgents, sessions, publish]);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+    void (async () => {
+      try {
+        const offReady = await listen(NOTCH_READY_EVENT, publish);
+        const offAction = await listen<NotchAction>(
+          NOTCH_ACTION_EVENT,
+          ({ payload }) => {
+            if (payload.kind === "approval") {
+              useNotchStore
+                .getState()
+                .onApproval?.(
+                  payload.sessionId,
+                  payload.approvalId,
+                  payload.decision,
+                );
+              return;
+            }
+            if (payload.kind === "open") {
+              const win = getCurrentWindow();
+              void win.unminimize().catch(() => undefined);
+              void win.show().catch(() => undefined);
+              void win.setFocus().catch(() => undefined);
+              onOpenProject(payload.cwd);
+            }
+          },
+        );
+        if (disposed) {
+          offReady();
+          offAction();
+          return;
+        }
+        unlisteners.push(offReady, offAction);
+      } catch {
+        // Not running inside Tauri.
+      }
+    })();
+    return () => {
+      disposed = true;
+      for (const off of unlisteners) off();
+    };
+  }, [publish, onOpenProject]);
+}
+
+export function HarnessNotch({
+  onOpenProject,
+  mode = "app",
+}: HarnessNotchProps) {
+  const overlay = mode === "overlay";
   const enabled = useSyncExternalStore(
     subscribeHarnessNotchEnabled,
     loadHarnessNotchEnabled,
@@ -62,12 +204,14 @@ export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
   }, [expanded, idleLauncherOpen, setExpanded, setIdleLauncherOpen]);
 
   const activeAgent = useMemo(() => {
+    // Inside Voktty the notch is only the project launcher.
+    if (!overlay) return null;
     if (activeAgentId) {
       const match = liveAgents.find((a) => a.id === activeAgentId);
       if (match) return match;
     }
     return liveAgents[0] ?? null;
-  }, [liveAgents, activeAgentId]);
+  }, [liveAgents, activeAgentId, overlay]);
 
   const activeSession = useMemo(() => {
     if (!activeAgent) return null;
@@ -78,6 +222,11 @@ export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
     (path: string) => {
       setExpanded(false);
       setIdleLauncherOpen(false);
+      if (overlay) {
+        const action: NotchAction = { kind: "open", cwd: path };
+        void emit(NOTCH_ACTION_EVENT, action).catch(() => undefined);
+        return;
+      }
       if (onOpenProject) {
         onOpenProject(path);
       }
@@ -88,13 +237,52 @@ export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
         // Fallback or no receiver yet
       }
     },
-    [onOpenProject, setExpanded, setIdleLauncherOpen],
+    [onOpenProject, overlay, setExpanded, setIdleLauncherOpen],
   );
 
-  if (!enabled) return null;
+  useNotchOverlayHost(
+    enabled && !overlay,
+    useCallback(
+      (path: string) => {
+        try {
+          captureHarnessProjectOpening()(path);
+        } catch {
+          // No Harness receiver yet.
+        }
+        onOpenProject?.(path);
+      },
+      [onOpenProject],
+    ),
+  );
 
-  const hasRunningAgents = liveAgents.length > 0;
-  const isVisible = hasRunningAgents || idleLauncherOpen || topHovered;
+  useEffect(() => {
+    const node = notchRef.current;
+    if (!overlay || !node || typeof ResizeObserver === "undefined") return;
+    const fit = () => {
+      const rect = node.getBoundingClientRect();
+      const width = useNotchStore.getState().expanded
+        ? OVERLAY_EXPANDED_WIDTH
+        : Math.ceil(rect.width) + OVERLAY_PADDING;
+      void invoke("notch_window_fit", {
+        width,
+        height: Math.ceil(rect.height) + 8,
+      }).catch(() => undefined);
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(node);
+    fit();
+    return () => observer.disconnect();
+  }, [overlay, expanded, liveAgents.length]);
+
+  if (!enabled && !overlay) return null;
+
+  // Live agents are shown only by the native overlay: inside Voktty the
+  // Harness already has them, and the overlay is for watching from outside.
+  const hasRunningAgents = overlay && liveAgents.length > 0;
+  if (overlay && !hasRunningAgents) return null;
+  const isVisible = overlay
+    ? hasRunningAgents
+    : idleLauncherOpen || topHovered;
 
   return (
     <>
@@ -121,12 +309,12 @@ export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
         {/* Notch Physical Pill Docked to the Top Edge */}
         <div className="relative flex items-start justify-center">
           {/* Left Ear transition curve */}
-          <NotchEar side="left" className="text-black/90 dark:text-black/95 drop-shadow-sm" />
+          <NotchEar side="left" className="text-black" />
 
           {/* Center black notch capsule */}
-          <div className="flex items-center justify-center bg-black/90 dark:bg-black/95 text-foreground rounded-b-2xl shadow-xl shadow-black/40 border-b border-x border-white/10 backdrop-blur-xl">
+          <div className="flex items-center justify-center bg-black text-foreground rounded-b-2xl shadow-xl shadow-black/40">
             <NotchPill
-              liveAgents={liveAgents}
+              liveAgents={overlay ? liveAgents : []}
               activeAgent={activeAgent}
               onSelectAgent={(agent: LiveAgent) => setActiveAgentId(agent.id)}
               onExpand={() => setExpanded(!expanded)}
@@ -137,7 +325,7 @@ export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
           </div>
 
           {/* Right Ear transition curve */}
-          <NotchEar side="right" className="text-black/90 dark:text-black/95 drop-shadow-sm" />
+          <NotchEar side="right" className="text-black" />
         </div>
 
         {/* Expanded View: Code Summary / Diff / Aprobaciones */}
