@@ -119,7 +119,7 @@ export function HarnessNotch({ onOpenProject }: HarnessNotchProps) {
         }`}
       >
         {/* Notch Physical Pill Docked to the Top Edge */}
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-start justify-center">
           {/* Left Ear transition curve */}
           <NotchEar side="left" className="text-black/90 dark:text-black/95 drop-shadow-sm" />
 

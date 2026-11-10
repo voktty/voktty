@@ -593,12 +593,17 @@ html[data-chrome="borderless"] .voktty-bg-surface {
   zoom: var(--app-zoom);
 }
 .zoom-exempt {
-  zoom: calc(1 / (var(--app-zoom) * var(--chrome-scale, 1)));
+  zoom: calc(1 / var(--app-zoom));
 }
 
-/* Interface scale: menus and popovers are portaled to body, so scale there. */
-body {
-  zoom: var(--chrome-scale, 1);
+/*
+ * Interface scale via the root font size. CSS zoom on an ancestor breaks
+ * Radix/floating-ui placement (menus drift from their trigger), while rem
+ * scaling keeps measured and applied coordinates in the same space.
+ * Editor and terminal text use px font settings and are unaffected.
+ */
+html {
+  font-size: calc(16px * var(--chrome-scale, 1));
 }
 
 #root,
