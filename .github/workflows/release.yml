@@ -405,43 +405,49 @@ jobs:
           chmod +x "./$BASENAME"
           "./$BASENAME" --appimage-extract >/dev/null
 
-          # Fail loud if Tauri/linuxdeploy stops bundling these, so a future
-          # layout change cannot silently ship an unfixed AppImage.
-          for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
-            test -e "squashfs-root/usr/lib/$lib" \
-              || { echo "expected bundled lib missing: $lib (layout changed?)"; exit 1; }
-          done
+          # Search for any bundled libwayland-* libraries anywhere in the AppDir.
+          # Historically linuxdeploy bundled these on Ubuntu 22.04, causing EGL/Mesa
+          # conflicts on modern distributions. Newer bundler versions exclude them upstream.
+          FOUND_WAYLAND=$(find squashfs-root -name 'libwayland*.so*' 2>/dev/null || true)
 
-          rm -f squashfs-root/usr/lib/libwayland-client.so.0 \
-                squashfs-root/usr/lib/libwayland-egl.so.1 \
-                squashfs-root/usr/lib/libwayland-cursor.so.0 \
-                squashfs-root/usr/lib/libwayland-server.so.0
+          if [ -n "$FOUND_WAYLAND" ]; then
+            echo "Found bundled wayland libraries; stripping from AppImage:"
+            echo "$FOUND_WAYLAND"
+            find squashfs-root -name 'libwayland*.so*' -delete
 
-          curl -fsSL -o appimagetool.AppImage \
-            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          chmod +x appimagetool.AppImage
-          ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run squashfs-root "$BASENAME"
+            curl -fsSL -o appimagetool.AppImage \
+              https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+            chmod +x appimagetool.AppImage
+            ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run squashfs-root "$BASENAME"
 
-          # Sanity-check the repacked image before it replaces the original.
-          rm -rf squashfs-root
-          chmod +x "./$BASENAME"
-          "./$BASENAME" --appimage-extract >/dev/null
-          for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
-            test ! -e "squashfs-root/usr/lib/$lib" \
-              || { echo "lib still present after repack: $lib"; exit 1; }
-          done
-          test -x squashfs-root/usr/bin/voktty \
-            || { echo "voktty binary missing from repacked AppImage"; exit 1; }
-          popd >/dev/null
+            # Sanity-check the repacked image before it replaces the original.
+            rm -rf squashfs-root
+            chmod +x "./$BASENAME"
+            "./$BASENAME" --appimage-extract >/dev/null
+            LEFTOVER=$(find squashfs-root -name 'libwayland*.so*' 2>/dev/null || true)
+            if [ -n "$LEFTOVER" ]; then
+              echo "libwayland still present after repack: $LEFTOVER"
+              exit 1
+            fi
+            test -x squashfs-root/usr/bin/voktty \
+              || { echo "voktty binary missing from repacked AppImage"; exit 1; }
+            popd >/dev/null
 
-          cp "$WORK/$BASENAME" "$APPIMAGE"
+            cp "$WORK/$BASENAME" "$APPIMAGE"
 
-          rm -f "$APPIMAGE.sig"
-          pnpm tauri signer sign "$APPIMAGE"
+            rm -f "$APPIMAGE.sig"
+            pnpm tauri signer sign "$APPIMAGE"
 
-          TAG="$RELEASE_TAG"
-          gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
-            --clobber --repo "$GITHUB_REPOSITORY"
+            TAG="$RELEASE_TAG"
+            gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
+              --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            echo "No bundled libwayland libraries found in AppImage (already excluded upstream)."
+            test -x squashfs-root/usr/bin/voktty \
+              || { echo "voktty binary missing from AppImage"; exit 1; }
+            popd >/dev/null
+          fi
+          rm -rf "$WORK"
 
       # SignPath Authenticode-signs the Windows installers. Their bytes change,
       # so the minisign updater signatures tauri-action produced over the
