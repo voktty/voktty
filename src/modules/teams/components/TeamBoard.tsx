@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  BookOpen01Icon,
+  Delete02Icon,
+  PencilEdit02Icon,
+  PlusSignIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,8 +20,11 @@ import type {
   AgentDefinition,
   AgentRoster,
 } from "@/modules/workspace-kit/lib/configTypes";
+import { deleteAgent } from "../lib/rosterEditor";
 import { readRoster, readTeamState } from "../lib/teamFs";
 import type { TeamAgentStatus, TeamState } from "../types";
+import { AgentFormDialog } from "./AgentFormDialog";
+import { RulesDialog } from "./RulesDialog";
 
 export type TeamBoardProps = {
   projectPath: string;
@@ -71,6 +81,9 @@ export function TeamBoard({
     isError: boolean;
     message: string;
   } | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     const { roster: loadedRoster, error } = await readRoster(projectPath);
@@ -224,6 +237,29 @@ export function TeamBoard({
     }
   };
 
+  const handleDeleteAgent = async (agentName: string) => {
+    if (!window.confirm(t("teams.confirmDelete", { name: agentName }))) {
+      return;
+    }
+    setFeedback(null);
+    try {
+      const res = await deleteAgent(projectPath, agentName);
+      if (!res.ok) {
+        setFeedback({
+          isError: true,
+          message: res.error ?? "Failed to delete agent",
+        });
+      } else {
+        await loadData();
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        isError: true,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
   const activeCount = Object.values(teamState?.agents ?? {}).filter(
     (a) =>
       a.status === "working" ||
@@ -247,6 +283,28 @@ export function TeamBoard({
             </Badge>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => setRulesOpen(true)}
+          >
+            <HugeiconsIcon icon={BookOpen01Icon} size={14} />
+            <span>{t("teams.editRules")}</span>
+          </Button>
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              setEditingAgent(null);
+              setFormOpen(true);
+            }}
+          >
+            <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={2} />
+            <span>{t("teams.addAgent")}</span>
+          </Button>
+        </div>
       </div>
 
       {feedback && (
@@ -269,8 +327,23 @@ export function TeamBoard({
       )}
 
       {!roster && !rosterError && (
-        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-          {t("teams.emptyRoster")}
+        <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-lg border border-dashed text-sm text-muted-foreground">
+          <p>{t("teams.emptyRoster")}</p>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingAgent(null);
+              setFormOpen(true);
+            }}
+          >
+            <HugeiconsIcon
+              icon={PlusSignIcon}
+              size={14}
+              strokeWidth={2}
+              className="mr-1.5"
+            />
+            {t("teams.addAgent")}
+          </Button>
         </div>
       )}
 
@@ -307,7 +380,7 @@ export function TeamBoard({
                         </p>
                       </div>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1.5">
                       {status === "waiting_approval" && (
                         <Badge
                           variant="destructive"
@@ -337,6 +410,27 @@ export function TeamBoard({
                           {t("teams.unopened")}
                         </Badge>
                       )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        title={t("teams.editAgent")}
+                        onClick={() => {
+                          setEditingAgent(agent);
+                          setFormOpen(true);
+                        }}
+                      >
+                        <HugeiconsIcon icon={PencilEdit02Icon} size={13} />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        title={t("teams.deleteAgent")}
+                        onClick={() => void handleDeleteAgent(agent.name)}
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} size={13} />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -439,6 +533,19 @@ export function TeamBoard({
           })}
         </div>
       )}
+
+      <AgentFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        projectPath={projectPath}
+        initialAgent={editingAgent}
+        onSaved={() => void loadData()}
+      />
+      <RulesDialog
+        open={rulesOpen}
+        onOpenChange={setRulesOpen}
+        projectPath={projectPath}
+      />
     </div>
   );
 }

@@ -111,6 +111,7 @@ type Props = {
   onOpenDiff?: (input: GitDiffOpenInput, pin?: boolean) => void;
   spaceSwitcher: ReactNode;
   onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
+  onOpenTeamBoard?: (projectPath?: string) => void;
 };
 
 const COMPACT_WIDTH = 720;
@@ -190,6 +191,7 @@ export function Header({
   onOpenDiff,
   spaceSwitcher,
   onCardDrop,
+  onOpenTeamBoard,
 }: Props) {
   const { t } = useTranslation();
   const commandPaletteShortcut = useShortcutLabel("commandPalette.open");
@@ -523,6 +525,7 @@ export function Header({
               onRevealInExplorer={onRevealInExplorer}
               compact={compact}
               onCardDrop={onCardDrop}
+              onOpenTeamBoard={onOpenTeamBoard}
             />
           </>
         )}

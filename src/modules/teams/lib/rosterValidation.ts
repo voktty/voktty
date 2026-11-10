@@ -14,6 +14,22 @@ const VALID_ADAPTERS = new Set([
   "together",
 ]);
 
+function normalizeKey(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .split("/")
+    .filter((part) => part && part !== ".")
+    .join("/")
+    .toLowerCase();
+}
+
+function pathsOverlap(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+}
+
 export function validateRoster(raw: string): {
   roster: AgentRoster | null;
   error?: string;
@@ -53,6 +69,8 @@ export function validateRoster(raw: string): {
       : undefined;
 
   const names = new Set<string>();
+  const ownershipEntries: Array<{ key: string; agentIndex: number; offset: number }> = [];
+
   for (let index = 0; index < obj.agents.length; index++) {
     const agent = obj.agents[index];
     if (!agent || typeof agent !== "object") {
@@ -111,6 +129,50 @@ export function validateRoster(raw: string): {
         roster: null,
         error: `Field 'agents.${index}.runtime.command': command is only valid for generic adapter`,
       };
+    }
+
+    // Validate path fields (owns, reads)
+    const checkPaths = (list: unknown, fieldName: "owns" | "reads") => {
+      if (list === undefined) return null;
+      if (!Array.isArray(list)) {
+        return `Field 'agents.${index}.${fieldName}': must be an array of paths`;
+      }
+      for (let offset = 0; offset < list.length; offset++) {
+        const p = list[offset];
+        if (typeof p !== "string") {
+          return `Field 'agents.${index}.${fieldName}.${offset}': path must be a string`;
+        }
+        if (p.includes("..") || p.startsWith("/") || p.startsWith("\\")) {
+          return `Field 'agents.${index}.${fieldName}.${offset}': path must not contain '..' or start with '/'`;
+        }
+        if (/[\u0000-\u001f\u007f]/.test(p)) {
+          return `Field 'agents.${index}.${fieldName}.${offset}': path contains control characters`;
+        }
+      }
+      return null;
+    };
+
+    const ownsErr = checkPaths(a.owns, "owns");
+    if (ownsErr) return { roster: null, error: ownsErr };
+
+    const readsErr = checkPaths(a.reads, "reads");
+    if (readsErr) return { roster: null, error: readsErr };
+
+    // Check ownership overlap across different agents
+    if (Array.isArray(a.owns)) {
+      for (let offset = 0; offset < a.owns.length; offset++) {
+        const rawPath = a.owns[offset] as string;
+        const key = normalizeKey(rawPath);
+        for (const existing of ownershipEntries) {
+          if (existing.agentIndex !== index && pathsOverlap(existing.key, key)) {
+            return {
+              roster: null,
+              error: `Field 'agents.${index}.owns.${offset}': ownership overlaps with another agent`,
+            };
+          }
+        }
+        ownershipEntries.push({ key, agentIndex: index, offset });
+      }
     }
   }
 

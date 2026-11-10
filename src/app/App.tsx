@@ -481,6 +481,7 @@ function DesktopApp() {
     newRdpTab,
     newApiClientTab,
     newHarnessTab,
+    newTeamTab,
     setMarkdownView,
     setOverrideLanguage,
     openAiDiffTab,
@@ -2319,6 +2320,19 @@ function DesktopApp() {
     onError: reportHarnessOpeningError,
     onMissingProject: reportMissingHarnessProject,
   });
+
+  const handleOpenTeamBoard = useCallback(
+    (customPath?: string) => {
+      const p =
+        customPath ??
+        activeSpace?.root ??
+        localLaunchCwd ??
+        initialLaunchCwd ??
+        ".";
+      newTeamTab(p, activeSpaceId ?? undefined);
+    },
+    [activeSpace?.root, localLaunchCwd, initialLaunchCwd, activeSpaceId, newTeamTab],
+  );
 
   const pickAndOpenProjectInHarness = useCallback(async () => {
     const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
@@ -4574,6 +4588,7 @@ function DesktopApp() {
         openNewApiClient: () => newApiClientTab(),
         openNewHarness,
         openNewHarnessInWorktree: () => void openNewHarnessInWorktree(),
+        openTeamBoard: () => handleOpenTeamBoard(),
         openBroadcastToAgents: () => setBroadcastToAgentsOpen(true),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
@@ -4779,6 +4794,7 @@ function DesktopApp() {
                 }
               }}
               onCardDrop={handleCardDropOnTab}
+              onOpenTeamBoard={handleOpenTeamBoard}
             />
           )}
 
@@ -5182,6 +5198,7 @@ function DesktopApp() {
                           onLaunchAgents={launchAgentGroup}
                           onRevealInExplorer={handleRevealInExplorer}
                           onCardDrop={handleCardDropOnTab}
+                          onOpenTeamBoard={handleOpenTeamBoard}
                         />
                       </div>
                       {aiSidebarMounted && hasComposer && (

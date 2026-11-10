@@ -45,6 +45,7 @@ import {
   TerminalIcon,
   Upload01Icon,
   UsbIcon,
+  UserGroupIcon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import type { PaletteItem } from "./types";
@@ -90,6 +91,7 @@ export type CommandPaletteActionContext = {
   openNewApiClient?: () => void;
   openNewHarness?: () => void;
   openNewHarnessInWorktree?: () => void;
+  openTeamBoard?: () => void;
   openBroadcastToAgents?: () => void;
   openActiveTabs: () => void;
   openGitGraph: () => void;
@@ -546,6 +548,22 @@ export function createCommandItems(
       ],
       icon: GitBranchPlusIcon,
       run: () => ctx.openNewHarnessInWorktree?.(),
+    },
+    {
+      id: "teams.openBoard",
+      title: t("teams.openBoard"),
+      group: "General",
+      keywords: [
+        "team",
+        "equipo",
+        "board",
+        "tablero",
+        "agents",
+        "agentes",
+        "roster",
+      ],
+      icon: UserGroupIcon,
+      run: () => ctx.openTeamBoard?.(),
     },
     {
       id: "ai.broadcastToAgents",
