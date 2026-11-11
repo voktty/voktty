@@ -151,7 +151,7 @@ export async function openAgent(
       const existingLive = getLiveAgentBySessionId(existingSessionId);
       const agentToken = existingLive?.agentToken ?? generateAgentToken();
 
-      await registerLiveAgentWithControl({
+      const registered = await registerLiveAgentWithControl({
         sessionId: existingSessionId,
         agentName: params.agentName,
         projectPath: params.projectPath,
@@ -163,6 +163,18 @@ export async function openAgent(
         launchedAt: existingLive?.launchedAt ?? new Date().toISOString(),
         agentToken,
       });
+
+      if (!registered) {
+        return {
+          ok: false,
+          agent: params.agentName,
+          sessionId: existingSessionId,
+          mode: "resume",
+          supervised,
+          error: "request_failed",
+          reason: "Failed to register agent token with native control plane",
+        };
+      }
 
       const tabId = deps.onNewHarnessTab(
         params.spaceId,
@@ -222,7 +234,7 @@ export async function openAgent(
 
     const agentToken = generateAgentToken();
 
-    await registerLiveAgentWithControl({
+    const registered = await registerLiveAgentWithControl({
       sessionId: session.id,
       agentName: params.agentName,
       projectPath: params.projectPath,
@@ -234,6 +246,18 @@ export async function openAgent(
       launchedAt: new Date().toISOString(),
       agentToken,
     });
+
+    if (!registered) {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: session.id,
+        mode: "new",
+        supervised,
+        error: "request_failed",
+        reason: "Failed to register agent token with native control plane",
+      };
+    }
 
     const tabId = deps.onNewHarnessTab(
       params.spaceId,

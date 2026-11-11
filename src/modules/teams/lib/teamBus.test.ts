@@ -125,12 +125,12 @@ describe("teamBus", () => {
       version: 1,
       updatedAt: "",
       messages: [
-        { id: "m0", hop: 0 },
-        { id: "m1", hop: 1 },
-        { id: "m2", hop: 2 },
-        { id: "m3", hop: 3 },
-        { id: "m4", hop: 4 },
-        { id: "m5", hop: 5 },
+        { id: "m0", hop: 0, from: "orchestrator", to: "developer" },
+        { id: "m1", hop: 1, from: "developer", to: "orchestrator", replyTo: "m0" },
+        { id: "m2", hop: 2, from: "orchestrator", to: "developer", replyTo: "m1" },
+        { id: "m3", hop: 3, from: "developer", to: "orchestrator", replyTo: "m2" },
+        { id: "m4", hop: 4, from: "orchestrator", to: "developer", replyTo: "m3" },
+        { id: "m5", hop: 5, from: "developer", to: "orchestrator", replyTo: "m4" },
       ],
     });
 
@@ -303,7 +303,7 @@ describe("teamBus", () => {
     let busJson = JSON.stringify({
       version: 1,
       updatedAt: "",
-      messages: [{ id: "task_0", hop: 0 }],
+      messages: [{ id: "task_0", hop: 0, from: "orchestrator", to: "developer" }],
     });
     vi.mocked(readTextFile).mockImplementation(async (path: string) => {
       if (path.includes("/team/agents.json")) return dummyRoster;
@@ -373,7 +373,10 @@ describe("teamBus", () => {
     let busJson = JSON.stringify({
       version: 1,
       updatedAt: "",
-      messages: [{ id: "root_task", hop: 0 }],
+      messages: [
+        { id: "root_task_dev", hop: 0, from: "orchestrator", to: "developer" },
+        { id: "root_task_tester", hop: 0, from: "orchestrator", to: "tester" },
+      ],
     });
     vi.mocked(readTextFile).mockImplementation(async (path: string) => {
       if (path.includes("/team/agents.json")) return dummyRoster;
@@ -387,7 +390,7 @@ describe("teamBus", () => {
       },
     );
 
-    // Send 5 concurrent messages (each valid under N2 rules)
+    // Send 5 concurrent messages (each valid under N2 and R1 rules)
     await Promise.all([
       sendMessage({
         projectPath: "/project",
@@ -402,7 +405,7 @@ describe("teamBus", () => {
         to: "orchestrator",
         kind: "status",
         text: "Status 2",
-        replyTo: "root_task",
+        replyTo: "root_task_dev",
       }),
       sendMessage({
         projectPath: "/project",
@@ -417,7 +420,7 @@ describe("teamBus", () => {
         to: "orchestrator",
         kind: "status",
         text: "Status 4",
-        replyTo: "root_task",
+        replyTo: "root_task_tester",
       }),
       sendMessage({
         projectPath: "/project",
@@ -429,8 +432,8 @@ describe("teamBus", () => {
     ]);
 
     const finalBus = JSON.parse(busJson);
-    // 1 initial seed + 5 new messages = 6
-    expect(finalBus.messages).toHaveLength(6);
+    // 2 initial seeds + 5 new messages = 7
+    expect(finalBus.messages).toHaveLength(7);
   });
 
   // --- N2: Peer messaging requires reply_to & pair budget ---
@@ -469,7 +472,7 @@ describe("teamBus", () => {
     let busJson = JSON.stringify({
       version: 1,
       updatedAt: "",
-      messages: [{ id: "m0", hop: 0 }],
+      messages: [],
     });
     vi.mocked(readTextFile).mockImplementation(async (path: string) => {
       if (path.includes("/team/agents.json")) return dummyRoster;
@@ -482,15 +485,14 @@ describe("teamBus", () => {
       },
     );
 
-    // Send 10 messages between developer and tester (pair limit)
+    // Send 10 messages between orchestrator and developer (pair limit)
     for (let i = 0; i < 10; i++) {
       await sendMessage({
         projectPath: "/project",
-        from: "developer",
-        to: "tester",
-        kind: "status",
+        from: "orchestrator",
+        to: "developer",
+        kind: "task",
         text: `Ping ${i}`,
-        replyTo: "m0",
       });
     }
 
@@ -498,11 +500,10 @@ describe("teamBus", () => {
     await expect(
       sendMessage({
         projectPath: "/project",
-        from: "tester",
+        from: "orchestrator",
         to: "developer",
-        kind: "status",
+        kind: "task",
         text: "Ping 11",
-        replyTo: "m0",
       }),
     ).rejects.toThrow(/peer exchange budget exceeded/);
   });
@@ -616,5 +617,182 @@ describe("teamBus", () => {
         text: "Task with corrupted roster",
       }),
     ).rejects.toThrow(/recipient 'developer' is not in a valid team roster/);
+  });
+
+  // --- R1: Single reply_to chain ownership & hop escalation ---
+  it("R1: enforces single reply_to per message and validates recipient/sender matching", async () => {
+    let busJson = JSON.stringify({
+      version: 1,
+      updatedAt: "",
+      messages: [
+        {
+          id: "task_root",
+          from: "orchestrator",
+          to: "developer",
+          kind: "task",
+          text: "Root task",
+          timestamp: new Date().toISOString(),
+          hop: 0,
+          delivered: true,
+          read: true,
+        },
+      ],
+    });
+
+    vi.mocked(readTextFile).mockImplementation(async (path: string) => {
+      if (path.includes("/team/agents.json")) return dummyRoster;
+      if (path.endsWith("bus.json")) return busJson;
+      return JSON.stringify({ agents: {} });
+    });
+
+    vi.mocked(writeTextFile).mockImplementation(
+      async (path: string, content: string) => {
+        if (path.endsWith("bus.json")) busJson = content;
+      },
+    );
+
+    // 1. Another agent (tester) attempts to reply to task_root -> rejected (addressed to developer)
+    await expect(
+      sendMessage({
+        projectPath: "/project",
+        from: "tester",
+        to: "orchestrator",
+        kind: "status",
+        text: "I am intercepting this",
+        replyTo: "task_root",
+      }),
+    ).rejects.toThrow(
+      /reply_to message 'task_root' was addressed to 'developer', not 'tester'/,
+    );
+
+    // 2. Developer attempts to reply to task_root but sends to wrong agent (tester instead of orchestrator) -> rejected
+    await expect(
+      sendMessage({
+        projectPath: "/project",
+        from: "developer",
+        to: "tester",
+        kind: "status",
+        text: "Forwarding task",
+        replyTo: "task_root",
+      }),
+    ).rejects.toThrow(
+      /reply_to message 'task_root' was sent by 'orchestrator', not 'tester'/,
+    );
+
+    // 3. Developer sends legitimate first reply to orchestrator -> succeeds
+    const reply1 = await sendMessage({
+      projectPath: "/project",
+      from: "developer",
+      to: "orchestrator",
+      kind: "status",
+      text: "Working on it",
+      replyTo: "task_root",
+    });
+    expect(reply1.hop).toBe(1);
+
+    // 4. Developer (or any agent) attempts a second reply to task_root -> rejected
+    await expect(
+      sendMessage({
+        projectPath: "/project",
+        from: "developer",
+        to: "orchestrator",
+        kind: "verdict",
+        text: "Second answer to root task",
+        replyTo: "task_root",
+      }),
+    ).rejects.toThrow(/message 'task_root' has already been replied to/);
+  });
+
+  it("R1: legitimate conversation chain escalates hop until hop_limit_exceeded cuts it", async () => {
+    let busJson = JSON.stringify({ version: 1, updatedAt: "", messages: [] });
+
+    vi.mocked(readTextFile).mockImplementation(async (path: string) => {
+      if (path.includes("/team/agents.json")) return dummyRoster;
+      if (path.endsWith("bus.json")) return busJson;
+      return JSON.stringify({ agents: {} });
+    });
+
+    vi.mocked(writeTextFile).mockImplementation(
+      async (path: string, content: string) => {
+        if (path.endsWith("bus.json")) busJson = content;
+      },
+    );
+
+    // Hop 0: orchestrator -> developer
+    const m0 = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "developer",
+      kind: "task",
+      text: "Task 0",
+    });
+    expect(m0.hop).toBe(0);
+
+    // Hop 1: developer -> orchestrator
+    const m1 = await sendMessage({
+      projectPath: "/project",
+      from: "developer",
+      to: "orchestrator",
+      kind: "status",
+      text: "Status 1",
+      replyTo: m0.id,
+    });
+    expect(m1.hop).toBe(1);
+
+    // Hop 2: orchestrator -> developer
+    const m2 = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "developer",
+      kind: "task",
+      text: "Refinement 2",
+      replyTo: m1.id,
+    });
+    expect(m2.hop).toBe(2);
+
+    // Hop 3: developer -> orchestrator
+    const m3 = await sendMessage({
+      projectPath: "/project",
+      from: "developer",
+      to: "orchestrator",
+      kind: "status",
+      text: "Status 3",
+      replyTo: m2.id,
+    });
+    expect(m3.hop).toBe(3);
+
+    // Hop 4: orchestrator -> developer
+    const m4 = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "developer",
+      kind: "task",
+      text: "Refinement 4",
+      replyTo: m3.id,
+    });
+    expect(m4.hop).toBe(4);
+
+    // Hop 5: developer -> orchestrator (max allowed hop)
+    const m5 = await sendMessage({
+      projectPath: "/project",
+      from: "developer",
+      to: "orchestrator",
+      kind: "verdict",
+      text: "Final verdict 5",
+      replyTo: m4.id,
+    });
+    expect(m5.hop).toBe(5);
+
+    // Hop 6: orchestrator -> developer exceeds limit of 5 and is cut
+    await expect(
+      sendMessage({
+        projectPath: "/project",
+        from: "orchestrator",
+        to: "developer",
+        kind: "task",
+        text: "One more question",
+        replyTo: m5.id,
+      }),
+    ).rejects.toThrow(/hop_limit_exceeded: message hop count 6 exceeds limit of 5/);
   });
 });

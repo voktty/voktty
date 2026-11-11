@@ -10,6 +10,10 @@ import * as teamFs from "./teamFs";
 import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 import type { TeamState } from "../types";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(true),
+}));
+
 describe("agentLauncher", () => {
   const dummyRoster: AgentRoster = {
     version: 1,
@@ -282,5 +286,56 @@ describe("agentLauncher", () => {
     expect(resultWithFailingOpener.ok).toBe(false);
     expect(resultWithFailingOpener.error).toBe("request_failed");
     expect(resultWithFailingOpener.reason).toContain("Harness tab opener failed to create a tab");
+  });
+
+  it("R2: fails with request_failed and does not open tab if native token registration is rejected", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+
+    const result = await openAgent(
+      {
+        projectPath: "/repo",
+        agentName: "developer",
+        mode: "new",
+        task: "Implement feature X",
+      },
+      mockDeps,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("request_failed");
+    expect(result.reason).toContain("Failed to register agent token");
+    expect(mockDeps.onNewHarnessTab).not.toHaveBeenCalled();
+
+    // Registry must have cleaned up the session
+    expect(getLiveAgentBySessionId(result.sessionId)).toBeUndefined();
+    expect(listLiveAgents("/repo")).toHaveLength(0);
+  });
+
+  it("R2: fails resume with request_failed and does not open tab if native token registration is rejected", async () => {
+    mockState.agents.developer = {
+      sessionId: "s_existing_dev",
+      status: "idle",
+    };
+
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+
+    const result = await openAgent(
+      {
+        projectPath: "/repo",
+        agentName: "developer",
+        mode: "resume",
+      },
+      mockDeps,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("request_failed");
+    expect(result.reason).toContain("Failed to register agent token");
+    expect(mockDeps.onNewHarnessTab).not.toHaveBeenCalled();
+
+    // Session token must not remain in registry
+    expect(getLiveAgentBySessionId("s_existing_dev")).toBeUndefined();
   });
 });

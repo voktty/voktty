@@ -231,7 +231,7 @@ export async function sendMessage(
       throw new Error("invalid_params: reply_to is required for peer agent messages");
     }
 
-    // 6. Hop calculation (B4)
+    // 6. Hop calculation and reply_to validation (B4 & R1)
     const busState = await readBus(projectPath);
     let hop = 0;
     if (replyTo) {
@@ -239,6 +239,27 @@ export async function sendMessage(
       if (!parentMsg) {
         throw new Error(`invalid_params: reply_to message '${replyTo}' not found`);
       }
+
+      // R1: Parent message must be addressed to sender and sent by recipient
+      if (parentMsg.to !== from) {
+        throw new Error(
+          `invalid_params: reply_to message '${replyTo}' was addressed to '${parentMsg.to}', not '${from}'`,
+        );
+      }
+      if (parentMsg.from !== to) {
+        throw new Error(
+          `invalid_params: reply_to message '${replyTo}' was sent by '${parentMsg.from}', not '${to}'`,
+        );
+      }
+
+      // R1: Each message can only be replied to once
+      const alreadyReplied = busState.messages.some((m) => m.replyTo === replyTo);
+      if (alreadyReplied) {
+        throw new Error(
+          `invalid_params: message '${replyTo}' has already been replied to`,
+        );
+      }
+
       hop = parentMsg.hop + 1;
     }
 

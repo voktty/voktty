@@ -48,16 +48,32 @@ export function removeLiveAgent(sessionId: string): void {
 
 export async function registerLiveAgentWithControl(
   session: LiveAgentSession,
-): Promise<void> {
+): Promise<boolean> {
   registerLiveAgent(session);
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("control_register_agent_token", {
+    const ok = await invoke<boolean>("control_register_agent_token", {
       sessionId: session.sessionId,
       token: session.agentToken,
     });
-  } catch {
-    // In unit tests or non-Tauri environments, ignore invoke errors
+    if (ok === false) {
+      removeLiveAgent(session.sessionId);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    const isTest =
+      typeof process !== "undefined" && process.env?.NODE_ENV === "test";
+    const isMissingTauriIpc =
+      error instanceof Error &&
+      (error.message.includes("IPC") ||
+        error.message.includes("__TAURI") ||
+        error.message.includes("not initialized"));
+    if (isTest && isMissingTauriIpc) {
+      return true;
+    }
+    removeLiveAgent(session.sessionId);
+    return false;
   }
 }
 

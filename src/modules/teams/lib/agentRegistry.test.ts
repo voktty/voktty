@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   clearLiveAgentRegistry,
   generateAgentToken,
@@ -6,9 +6,14 @@ import {
   getLiveAgentByToken,
   listLiveAgents,
   registerLiveAgent,
+  registerLiveAgentWithControl,
   removeLiveAgent,
 } from "./agentRegistry";
 import type { LiveAgentSession } from "../types";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(true),
+}));
 
 describe("agentRegistry", () => {
   beforeEach(() => {
@@ -92,6 +97,72 @@ describe("agentRegistry", () => {
     removeLiveAgent("s_rem");
 
     expect(getLiveAgentBySessionId("s_rem")).toBeUndefined();
+    expect(getLiveAgentByToken(token)).toBeUndefined();
+  });
+
+  it("R2: registerLiveAgentWithControl registers session when invoke returns true", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockResolvedValueOnce(true);
+
+    const token = generateAgentToken();
+    const session: LiveAgentSession = {
+      sessionId: "s_ok",
+      agentName: "developer",
+      projectPath: "/repo",
+      role: "roles/developer.md",
+      isOrchestrator: false,
+      permissions: { canManageAgents: false },
+      launchedAt: "2026-11-10T20:00:00.000Z",
+      agentToken: token,
+    };
+
+    const ok = await registerLiveAgentWithControl(session);
+    expect(ok).toBe(true);
+    expect(getLiveAgentBySessionId("s_ok")).toEqual(session);
+    expect(getLiveAgentByToken(token)).toEqual(session);
+  });
+
+  it("R2: registerLiveAgentWithControl rolls back registration and returns false when invoke returns false", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+
+    const token = generateAgentToken();
+    const session: LiveAgentSession = {
+      sessionId: "s_rejected",
+      agentName: "developer",
+      projectPath: "/repo",
+      role: "roles/developer.md",
+      isOrchestrator: false,
+      permissions: { canManageAgents: false },
+      launchedAt: "2026-11-10T20:00:00.000Z",
+      agentToken: token,
+    };
+
+    const ok = await registerLiveAgentWithControl(session);
+    expect(ok).toBe(false);
+    expect(getLiveAgentBySessionId("s_rejected")).toBeUndefined();
+    expect(getLiveAgentByToken(token)).toBeUndefined();
+  });
+
+  it("R2: registerLiveAgentWithControl rolls back registration and returns false when invoke fails outside test IPC fallback", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("Rust backend error"));
+
+    const token = generateAgentToken();
+    const session: LiveAgentSession = {
+      sessionId: "s_err",
+      agentName: "developer",
+      projectPath: "/repo",
+      role: "roles/developer.md",
+      isOrchestrator: false,
+      permissions: { canManageAgents: false },
+      launchedAt: "2026-11-10T20:00:00.000Z",
+      agentToken: token,
+    };
+
+    const ok = await registerLiveAgentWithControl(session);
+    expect(ok).toBe(false);
+    expect(getLiveAgentBySessionId("s_err")).toBeUndefined();
     expect(getLiveAgentByToken(token)).toBeUndefined();
   });
 });
