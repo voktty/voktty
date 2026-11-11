@@ -19,6 +19,7 @@ import {
   writeTeamState,
 } from "./teamFs";
 import { resolveHostForAgent } from "./teamHosts";
+import { nativeProjectPath } from "@/modules/teams/lib/teamFileIo";
 
 export class AgentControlError extends Error {
   constructor(
@@ -376,6 +377,17 @@ export async function dispatchAgentMethod(
           text,
           replyTo,
         });
+        if (kind === "verdict" && projectPath.startsWith("remote://")) {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const canonicalProject = await nativeProjectPath(projectPath);
+          if (getLiveAgentByToken(token) !== callerAgent) {
+            throw new AgentControlError("forbidden", "The verdict sender is no longer authenticated");
+          }
+          await invoke("team_record_verdict", {
+            projectPath: canonicalProject,
+            agentName: callerAgent.agentName, text, messageId: msg.id, emittedAt: msg.timestamp,
+          });
+        }
 
         // If sender has any pending messages, deliver now (F1)
         try {

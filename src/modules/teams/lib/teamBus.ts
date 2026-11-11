@@ -1,4 +1,4 @@
-import { readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
+import { readTextFile, writeTextFile } from "@/modules/teams/lib/teamFileIo";
 import {
   getHarnessSessionSnapshot,
   sendHarnessSessionMessage,

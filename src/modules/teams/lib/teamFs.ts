@@ -1,10 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createPath, listDir, readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
+import { ensureDirectory, nativeProjectPath, readTextFile, writeTextFile } from "@/modules/teams/lib/teamFileIo";
 import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 import { validateRoster } from "./rosterValidation";
 import {
   TEAM_STATE_SCHEMA,
   type TeamAgentState,
+  type TeamAgentVerdict,
   type TeamState,
 } from "../types";
 
@@ -18,16 +19,7 @@ export function teamPath(projectPath: string, ...segments: string[]): string {
 }
 
 export async function ensureTeamDirectory(path: string): Promise<void> {
-  if (path.startsWith("remote://")) {
-    const slash = path.lastIndexOf("/");
-    try {
-      await createPath(path.slice(0, slash), path.slice(slash + 1), true);
-    } catch {
-      await listDir(path);
-    }
-  } else {
-    await invoke("fs_create_dir", { path });
-  }
+  await ensureDirectory(path);
 }
 
 const projectLocks = new Map<string, Promise<unknown>>();
@@ -101,6 +93,19 @@ export async function readTeamState(projectPath: string): Promise<TeamState> {
     const content = await readTextFile(filePath);
     const parsed = JSON.parse(content) as TeamState;
     if (parsed && typeof parsed === "object") {
+      if (projectPath.startsWith("remote://")) {
+        let verdicts: Record<string, TeamAgentVerdict> = {};
+        try {
+          verdicts = await invoke<Record<string, TeamAgentVerdict>>("team_read_verdicts", { projectPath: await nativeProjectPath(projectPath) });
+        } catch {
+          // A failed native read cannot authenticate a workspace verdict.
+        }
+        for (const [name, agent] of Object.entries(parsed.agents ?? {})) {
+          const verdict = verdicts[name];
+          agent.lastVerdict = verdict && (!agent.currentTaskStartedAt || Date.parse(verdict.timestamp) >= Date.parse(agent.currentTaskStartedAt))
+            ? verdict : undefined;
+        }
+      }
       return {
         $schema: TEAM_STATE_SCHEMA,
         version: 1,
@@ -163,7 +168,7 @@ export async function readGenericApprovals(
   try {
     const records = await invoke<
       Record<string, { command: string; approved_at: string }>
-    >("team_read_generic_approvals", { projectPath });
+    >("team_read_generic_approvals", { projectPath: await nativeProjectPath(projectPath) });
     const result: Record<string, GenericApprovalEntry> = {};
     if (records && typeof records === "object") {
       for (const [name, rec] of Object.entries(records)) {
@@ -182,7 +187,7 @@ export async function approveGenericCommand(
   command: string,
 ): Promise<void> {
   await invoke("team_approve_generic_command", {
-    projectPath,
+    projectPath: await nativeProjectPath(projectPath),
     agentName,
     command,
   });
@@ -193,7 +198,7 @@ export async function revokeGenericCommand(
   agentName: string,
 ): Promise<void> {
   await invoke("team_revoke_generic_command", {
-    projectPath,
+    projectPath: await nativeProjectPath(projectPath),
     agentName,
   });
 }
@@ -205,7 +210,7 @@ export async function isGenericCommandApproved(
 ): Promise<boolean> {
   if (!command || !agentName) return false;
   return await invoke<boolean>("team_is_generic_command_approved", {
-    projectPath,
+    projectPath: await nativeProjectPath(projectPath),
     agentName,
     command,
   });
@@ -217,7 +222,7 @@ export async function verifyGenericLaunch(
   command: string,
 ): Promise<void> {
   await invoke("team_verify_generic_launch", {
-    projectPath,
+    projectPath: await nativeProjectPath(projectPath),
     agentName,
     command,
   });

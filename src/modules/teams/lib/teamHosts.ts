@@ -8,6 +8,7 @@ import {
   type TeamHostsState,
 } from "../types";
 import { normalizePath } from "./teamFs";
+import { nativeProjectPath } from "@/modules/teams/lib/teamFileIo";
 
 export type ResolvedHost =
   | { kind: "local" }
@@ -117,7 +118,7 @@ export async function readTeamHosts(projectPath: string): Promise<TeamHostsState
   try {
     const raw = await invoke<Record<string, NativeHostRecord>>(
       "team_read_host_mappings",
-      { projectPath },
+      { projectPath: await nativeProjectPath(projectPath) },
     );
     const hosts: Record<string, TeamHostConfig> = {};
     if (raw && typeof raw === "object") {
@@ -174,7 +175,7 @@ export async function saveTeamHostMapping(
   assertSafeRemotePath(cleanRemotePath);
 
   await invoke("team_save_host_mapping", {
-    projectPath,
+    projectPath: await nativeProjectPath(projectPath),
     alias: parsed.alias,
     connectionId: connectionId.trim(),
     remotePath: cleanRemotePath,
@@ -193,7 +194,7 @@ export async function removeTeamHostMapping(
     throw new Error(parsed.kind === "invalid" ? parsed.reason : "Invalid host alias");
   }
   await invoke("team_remove_host_mapping", {
-    projectPath,
+    projectPath: await nativeProjectPath(projectPath),
     alias: parsed.alias,
   });
 }

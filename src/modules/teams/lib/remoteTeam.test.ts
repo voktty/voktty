@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { setRemoteCommandRunner } from "@/modules/harness/lib/fs";
 import { prepareTeamProject } from "@/modules/teams/lib/teamProject";
 import { remoteProjectFor } from "@/modules/connections/model/remoteProjects";
 import { readRoster, readTeamState, writeTeamState } from "@/modules/teams/lib/teamFs";
@@ -12,17 +11,20 @@ import { clearLiveAgentRegistry, listLiveAgents } from "@/modules/teams/lib/agen
 import { usePreferencesStore } from "@/modules/settings/preferences";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/modules/teams/lib/remoteTeamTransport", () => ({
+  remoteTeamFile: (operation: string, path: string, content?: string) => runner(operation, { path, content }),
+}));
 const project = "remote://voktty-ssh-mini/srv/webserver";
 const roster = { version: 1, agents: [{ name: "worker", role: "roles/worker.md", runtime: { adapter: "claude-code" } }] };
 const files = new Map<string, string>();
 const runner = vi.fn(async (command: string, args: Record<string, unknown>) => {
-  if (command === "read_text_file") {
+  if (command === "read") {
     const text = files.get(String(args.path));
     if (text === undefined) throw new Error("Missing file");
-    return text;
+    return { content: text };
   }
-  if (command === "write_text_file") files.set(String(args.path), String(args.content));
-  if (command === "create_path") return `${args.parent}/${args.name}`;
+  if (command === "write") files.set(String(args.path), String(args.content));
+  if (command === "identity") return { root: "/srv/webserver" };
   return undefined;
 });
 
@@ -35,7 +37,7 @@ describe("remote team project (E8.1)", () => {
     files.clear();
     files.set(`${project}/.voktty/team/agents.json`, JSON.stringify(roster));
     files.set(`${project}/.voktty/team/roles/worker.md`, "# Worker role");
-    setRemoteCommandRunner(runner);
+    vi.mocked(invoke).mockImplementation(async (command) => command === "team_read_verdicts" ? {} : true);
     usePreferencesStore.setState({ sshConnections: [{ id: "mini", name: "Mini", host: "mini.example.test", port: 22 }] });
     await prepareTeamProject(project);
   });
@@ -55,8 +57,8 @@ describe("remote team project (E8.1)", () => {
     expect(await readBus(project)).toEqual(bus);
     const inboxPath = await writeRemoteMailboxMessage(project, "worker", { from: "owner", to: "worker", kind: "task", text: "Run tests" });
     expect(JSON.parse(files.get(inboxPath)!)).toMatchObject({ text: "Run tests" });
-    expect(runner).toHaveBeenCalledWith("create_path", { parent: `${project}/.voktty`, name: "state", isDir: true });
-    expect(invoke).not.toHaveBeenCalled();
+    expect(runner).toHaveBeenCalledWith("mkdir", { path: `${project}/.voktty/state`, content: undefined });
+    expect(vi.mocked(invoke).mock.calls.every(([command]) => command === "team_read_verdicts")).toBe(true);
   });
 
   it("keeps remote messages pending without a live session and deposits an inbox copy without an alias", async () => {
@@ -72,10 +74,8 @@ describe("remote team project (E8.1)", () => {
 
   it("accepts an existing inbox directory but propagates inaccessible directory errors", async () => {
     const { ensureTeamDirectory } = await import("@/modules/teams/lib/teamFs");
-    runner.mockRejectedValueOnce(new Error("Already exists"));
     await expect(ensureTeamDirectory(`${project}/.voktty/mailbox/worker/inbox`)).resolves.toBeUndefined();
-    expect(runner).toHaveBeenLastCalledWith("list_dir", { path: `${project}/.voktty/mailbox/worker/inbox` });
-    runner.mockRejectedValueOnce(new Error("Disconnected"));
+    expect(runner).toHaveBeenLastCalledWith("mkdir", { path: `${project}/.voktty/mailbox/worker/inbox`, content: undefined });
     runner.mockRejectedValueOnce(new Error("Disconnected"));
     await expect(ensureTeamDirectory(`${project}/.voktty/state`)).rejects.toThrow("Disconnected");
     expect(invoke).not.toHaveBeenCalled();
@@ -108,7 +108,7 @@ describe("remote team project (E8.1)", () => {
     expect(JSON.stringify([...files.values()])).not.toContain(live.agentToken);
     expect(JSON.stringify(deps.cacheSession.mock.calls)).not.toContain(live.agentToken);
     expect(invoke).toHaveBeenCalledWith("control_register_agent_token", { sessionId: result.sessionId, token: live.agentToken });
-    expect(vi.mocked(invoke).mock.calls.every(([command]) => command === "control_register_agent_token")).toBe(true);
+    expect(vi.mocked(invoke).mock.calls.every(([command]) => command === "control_register_agent_token" || command === "team_read_verdicts")).toBe(true);
   });
 
   it.each([{ agentName: "worker", copy: 2 }, { agentName: "worker-2" }])("rejects remote worktree copies before creating resources: %o", async (params) => {

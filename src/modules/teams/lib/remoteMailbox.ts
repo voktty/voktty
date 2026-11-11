@@ -3,7 +3,7 @@ import {
   readTextFile,
   writeTextFile,
   type FsEntry,
-} from "@/modules/harness/lib/fs";
+} from "@/modules/teams/lib/teamFileIo";
 import type { TeamMessageKind } from "../types";
 import { ensureTeamDirectory, normalizePath } from "./teamFs";
 

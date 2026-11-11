@@ -1,11 +1,12 @@
-import { readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
+import { readTextFile, writeTextFile } from "@/modules/teams/lib/teamFileIo";
 import type {
   AgentDefinition,
   AgentRoster,
   AgentRuntime,
 } from "@/modules/workspace-kit/lib/configTypes";
 import { validateRoster } from "./rosterValidation";
-import { normalizePath, teamPath } from "./teamFs";
+import { ensureTeamDirectory, normalizePath, runProjectExclusive, teamPath } from "./teamFs";
+import { prepareTeamProject } from "@/modules/teams/lib/teamProject";
 
 const AGENT_NAME_REGEX = /^[a-zA-Z0-9_-]+$/;
 
@@ -190,6 +191,7 @@ export function sanitizePathEntries(entries: string[] | undefined): {
 export async function previewLegacyImport(
   projectRoot: string,
 ): Promise<LegacyImportPreview> {
+  await prepareTeamProject(projectRoot);
   const sourceFile = teamPath(
     projectRoot,
     "PROMPTS",
@@ -523,6 +525,11 @@ export async function applyLegacyImport(
   projectRoot: string,
   preview: LegacyImportPreview,
 ): Promise<void> {
+  return runProjectExclusive(projectRoot, () => applyImport(projectRoot, preview));
+}
+
+async function applyImport(projectRoot: string, preview: LegacyImportPreview): Promise<void> {
+  await prepareTeamProject(projectRoot);
   // B3: Refuse to apply if roster validation fails
   const { error: rosterErr } = validateRoster(JSON.stringify(preview.roster));
   if (rosterErr) {
@@ -532,6 +539,12 @@ export async function applyLegacyImport(
   }
 
   const agentsPath = resolveSafeTeamPath(projectRoot, "agents.json");
+  const roleWrites = Object.entries(preview.roles).map(([relative, content]) => {
+    if (!relative.startsWith("roles/") || !isSafeRelativeFilePath(relative)) {
+      throw new Error("Imported roles must stay inside .voktty/team/roles");
+    }
+    return { path: resolveSafeTeamPath(projectRoot, relative), content };
+  });
 
   // B3 & R3: If agents.json already exists, create backup copy before overwriting.
   // Only treat "file not found" as non-existent; if reading fails with any other error
@@ -547,6 +560,7 @@ export async function applyLegacyImport(
     }
   }
 
+  await ensureTeamDirectory(teamPath(projectRoot, ".voktty", "team"));
   if (existingContent && existingContent.trim()) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const backupPath = resolveSafeTeamPath(
@@ -566,9 +580,9 @@ export async function applyLegacyImport(
   await writeTextFile(agentsPath, JSON.stringify(preview.roster, null, 2));
 
   // Write roles safely inside .voktty/team/
-  for (const [roleRel, content] of Object.entries(preview.roles)) {
-    const rolePath = resolveSafeTeamPath(projectRoot, roleRel);
-    await writeTextFile(rolePath, content);
+  for (const role of roleWrites) {
+    await ensureTeamDirectory(role.path.slice(0, role.path.lastIndexOf("/")));
+    await writeTextFile(role.path, role.content);
   }
 
   // Write MIGRATION.md safely inside .voktty/team/

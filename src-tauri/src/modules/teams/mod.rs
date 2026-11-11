@@ -1,3 +1,8 @@
+mod remote_identity;
+pub mod verdicts;
+#[cfg(test)]
+mod remote_identity_tests;
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -124,11 +129,14 @@ pub fn approval_key(canonical_project: &str, agent_name: &str, command_hash: &st
     format!("{}::{}::{}", canonical_project, agent_name, command_hash)
 }
 
-pub fn canonicalize_project_path(project_path: &str) -> String {
-    fs::canonicalize(project_path)
+pub fn canonicalize_project_path(project_path: &str) -> Result<String, String> {
+    if project_path.starts_with("remote:") {
+        return remote_identity::normalize(project_path);
+    }
+    Ok(fs::canonicalize(project_path)
         .unwrap_or_else(|_| PathBuf::from(project_path))
         .to_string_lossy()
-        .to_string()
+        .to_string())
 }
 
 pub fn store_file_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -192,7 +200,10 @@ pub fn is_generic_command_approved_at(
     if trimmed_cmd.is_empty() || agent_name.is_empty() {
         return false;
     }
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = match canonicalize_project_path(project_path) {
+        Ok(canonical) => canonical,
+        Err(_) => return false,
+    };
     let hash = command_sha256(trimmed_cmd);
     let key = approval_key(&canonical, agent_name, &hash);
 
@@ -235,7 +246,7 @@ pub fn approve_generic_command_at(
     if agent_name.is_empty() {
         return Err("Agent name cannot be empty".to_string());
     }
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = canonicalize_project_path(project_path)?;
     let hash = command_sha256(trimmed_cmd);
     let key = approval_key(&canonical, agent_name, &hash);
 
@@ -263,7 +274,7 @@ pub fn revoke_generic_command_at(
     let _guard = APPROVALS_MUTEX
         .lock()
         .map_err(|e| format!("Approvals lock poisoned: {}", e))?;
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = canonicalize_project_path(project_path)?;
     let base = base_agent_name(agent_name);
     let mut store = read_store_from_file(store_path)?;
     store.approvals.retain(|_, v| {
@@ -278,6 +289,7 @@ pub fn verify_generic_launch_at(
     agent_name: &str,
     command: &str,
 ) -> Result<(), String> {
+    canonicalize_project_path(project_path)?;
     if !is_generic_command_approved_at(store_path, project_path, agent_name, command) {
         return Err(format!(
             "Generic command '{}' for agent '{}' has not been approved on this machine",
@@ -333,7 +345,7 @@ pub fn team_read_generic_approvals(
     project_path: String,
 ) -> Result<HashMap<String, GenericApprovalRecord>, String> {
     let store_path = store_file_path(&app)?;
-    let canonical = canonicalize_project_path(&project_path);
+    let canonical = canonicalize_project_path(&project_path)?;
     let _guard = APPROVALS_MUTEX
         .lock()
         .map_err(|e| format!("Approvals lock poisoned: {}", e))?;
@@ -396,7 +408,7 @@ pub fn set_team_host_mapping_at(
         return Err("Connection ID cannot be empty".to_string());
     }
     let safe_remote_path = validate_remote_path(remote_path)?;
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = canonicalize_project_path(project_path)?;
     let key = host_mapping_key(&canonical, &norm_alias);
 
     let mut store = read_hosts_store_from_file(store_path)?;
@@ -423,7 +435,7 @@ pub fn remove_team_host_mapping_at(
         .lock()
         .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
     let norm_alias = normalize_host_alias(alias)?;
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = canonicalize_project_path(project_path)?;
     let key = host_mapping_key(&canonical, &norm_alias);
 
     let mut store = read_hosts_store_from_file(store_path)?;
@@ -440,7 +452,7 @@ pub fn get_team_host_mapping_at(
         .lock()
         .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
     let norm_alias = normalize_host_alias(alias)?;
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = canonicalize_project_path(project_path)?;
     let key = host_mapping_key(&canonical, &norm_alias);
 
     let store = read_hosts_store_from_file(store_path)?;
@@ -454,7 +466,7 @@ pub fn read_team_hosts_for_project_at(
     let _guard = HOSTS_MUTEX
         .lock()
         .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
-    let canonical = canonicalize_project_path(project_path);
+    let canonical = canonicalize_project_path(project_path)?;
     let store = read_hosts_store_from_file(store_path)?;
     let mut result = HashMap::new();
     for (_, record) in store.hosts {

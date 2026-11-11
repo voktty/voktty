@@ -493,6 +493,8 @@ pub fn run() {
             teams::team_remove_host_mapping,
             teams::team_get_host_mapping,
             teams::team_read_host_mappings,
+            teams::verdicts::team_record_verdict,
+            teams::verdicts::team_read_verdicts,
             git::commands::git_add_safe_directory,
             git::commands::git_init,
             git::commands::git_clone,

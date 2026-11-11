@@ -11,6 +11,7 @@ mod project_memory;
 mod project_memory_host;
 mod pty_activity;
 mod search;
+mod team_fs;
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -359,6 +360,7 @@ impl RemoteServer {
             METHOD_WRITE_FILE => self.write_file(request),
             METHOD_STAT => self.stat(request),
             METHOD_CANONICALIZE => canonical_path::handle(self.root.as_deref(), request),
+            team_fs::METHOD => team_fs::handle(self.root.as_deref(), request),
             METHOD_CREATE_FILE => self.create_file(request),
             METHOD_CREATE_DIR => self.create_dir(request),
             METHOD_RENAME => self.rename(request),
@@ -421,6 +423,7 @@ impl RemoteServer {
                     METHOD_WRITE_FILE,
                     METHOD_STAT,
                     METHOD_CANONICALIZE,
+                    team_fs::METHOD,
                     METHOD_CREATE_FILE,
                     METHOD_CREATE_DIR,
                     METHOD_RENAME,
