@@ -7041,9 +7041,6 @@ export const es: TranslationSchema = {
     rulesSaved: "Reglas guardadas correctamente",
     confirmDelete: "¿Seguro que quieres eliminar este agente del equipo?",
     openBoard: "Equipo: Abrir tablero",
-    remoteProjectUnsupported:
-      "Todavía no se puede abrir el tablero de un proyecto en un servidor SSH. Ábrelo desde un proyecto local.",
-    noProjectFolder: "Abre una carpeta de proyecto para usar su tablero de equipo.",
     openBoardTabMenu: "Abrir tablero de equipo",
     namePlaceholder: "developer",
     rolePlaceholder: "roles/developer.md",

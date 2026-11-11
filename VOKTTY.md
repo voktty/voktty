@@ -464,6 +464,8 @@ Source Control snapshots and shared-cache keys retain the full captured workspac
 
 Voktty coordinates multi-agent teams inside project workspaces through an authentic interactive Harness environment, an asynchronous team bus, an authenticated JSON-RPC control plane, and native Rust state management.
 
+Opening a team board from an SSH workspace retains that connection and project root in the Harness `remote://voktty-ssh-<encoded-profile-id>/...` namespace, without a local launch-directory fallback. Roster, roles, rules, runtime state, bus and inbox files use the existing authenticated helper router. Agents without a host alias run on that project's SSH host; explicit SSH aliases in a remote team's roster are refused. Only Harness adapters with remote support may launch, and remote worktree copies are rejected before allocation. Project registration and team runtime remain lazy. Remote legacy import and the qualification of canonical remote keys for native approvals and host mappings are tracked separately in E8.
+
 #### Roster contract (`.voktty/team/agents.json`)
 
 The team roster conforms to schema `urn:voktty:agent-roster:1` and defines the declarative capabilities of the workspace team:

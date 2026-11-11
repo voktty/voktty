@@ -2334,41 +2334,57 @@ function DesktopApp() {
     onMissingProject: reportMissingHarnessProject,
   });
 
+  const teamOpeningOwner = useMemo(() => ({}), [activeSpaceId, activeSpace?.root, activeSpace?.env]);
+  const teamOpeningOwnerRef = useRef<object | null>(null);
+  const teamOpeningPendingRef = useRef(false);
+  useLayoutEffect(() => {
+    teamOpeningOwnerRef.current = teamOpeningOwner;
+    return () => { teamOpeningOwnerRef.current = null; };
+  }, [teamOpeningOwner]);
   const handleOpenTeamBoard = useCallback(
-    async (customPath?: string) => {
-      if (customPath) {
-        newTeamTab(customPath, activeSpaceId ?? undefined);
-        return;
-      }
+    (customPath?: string) => {
+      if (teamOpeningPendingRef.current || teamOpeningOwnerRef.current !== teamOpeningOwner) return;
       // The board belongs to the project on screen: the Harness folder or
-      // the explorer root, never the folder Voktty was launched from.
-      if (activeTabWorkspaceEnv.kind !== "local") {
-        toast.error(t("teams.remoteProjectUnsupported"));
-        return;
-      }
-      const root = effectiveExplorerRoot || activeSpace?.root || null;
-      if (root) {
-        newTeamTab(root, activeSpaceId ?? undefined);
-        return;
-      }
-      try {
-        const picked = await invoke<string | null>("fs_pick_folder", {
-          defaultPath: localLaunchCwd || localHome || undefined,
+      // the explorer root, local or on the tab's SSH host. Never the folder
+      // Voktty was launched from.
+      const onScreen = customPath ?? (effectiveExplorerRoot || activeSpace?.root || undefined);
+      const env = activeTabWorkspaceEnv;
+      teamOpeningPendingRef.current = true;
+      void (async () => {
+        let project = onScreen;
+        if (!project && env.kind === "local") {
+          project =
+            (await invoke<string | null>("fs_pick_folder", {
+              defaultPath: localLaunchCwd || localHome || undefined,
+            })) ?? undefined;
+          if (!project) return;
+        }
+        const { teamBoardProject } = await import("@/modules/teams/lib/teamProject");
+        if (teamOpeningOwnerRef.current !== teamOpeningOwner) return;
+        const p = teamBoardProject(
+          { root: activeSpace?.root ?? null, env },
+          project,
+          null,
+        );
+        newTeamTab(p, activeSpaceId ?? undefined);
+      })()
+        .catch((error) => {
+          if (teamOpeningOwnerRef.current === teamOpeningOwner) reportHarnessOpeningError(error);
+        })
+        .finally(() => {
+          teamOpeningPendingRef.current = false;
         });
-        if (picked) newTeamTab(picked, activeSpaceId ?? undefined);
-      } catch {
-        toast.error(t("teams.noProjectFolder"));
-      }
     },
     [
-      activeTabWorkspaceEnv.kind,
+      activeTabWorkspaceEnv,
       effectiveExplorerRoot,
       activeSpace?.root,
       localLaunchCwd,
       localHome,
       activeSpaceId,
       newTeamTab,
-      t,
+      reportHarnessOpeningError,
+      teamOpeningOwner,
     ],
   );
 
@@ -4716,6 +4732,7 @@ function DesktopApp() {
       openNewEditor,
       openNewHarness,
       openNewHarnessInWorktree,
+      handleOpenTeamBoard,
       pickAndOpenFile,
       openQuickOpen,
       openWorkspaceSearch,

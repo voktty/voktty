@@ -1,11 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
 import { readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
 import type {
   AgentDefinition,
   AgentRoster,
 } from "@/modules/workspace-kit/lib/configTypes";
 import { validateRoster } from "./rosterValidation";
-import { teamPath } from "./teamFs";
+import { ensureTeamDirectory, teamPath } from "./teamFs";
 
 export type SaveAgentResult = {
   ok: boolean;
@@ -68,7 +67,7 @@ export async function saveAgent(
 
   const teamDir = teamPath(projectPath, ".voktty", "team");
   try {
-    await invoke("fs_create_dir", { path: teamDir });
+    await ensureTeamDirectory(teamDir);
   } catch {
     // Ignore if directory exists
   }
@@ -85,7 +84,7 @@ export async function saveAgent(
     // Create initial role template
     const roleDir = rolePath.substring(0, rolePath.lastIndexOf("/"));
     try {
-      await invoke("fs_create_dir", { path: roleDir });
+      await ensureTeamDirectory(roleDir);
     } catch {
       // Ignore
     }
@@ -138,7 +137,7 @@ export async function saveRules(
 ): Promise<void> {
   const vokttyDir = teamPath(projectPath, ".voktty");
   try {
-    await invoke("fs_create_dir", { path: vokttyDir });
+    await ensureTeamDirectory(vokttyDir);
   } catch {
     // Ignore
   }

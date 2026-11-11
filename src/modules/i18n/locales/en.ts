@@ -6904,9 +6904,6 @@ export const en = {
     rulesSaved: "Rules saved successfully",
     confirmDelete: "Are you sure you want to remove this agent from the team?",
     openBoard: "Team: Open board",
-    remoteProjectUnsupported:
-      "Team boards for projects on an SSH host are not available yet. Open the board from a local project.",
-    noProjectFolder: "Open a project folder to use its team board.",
     openBoardTabMenu: "Open team board",
     namePlaceholder: "developer",
     rolePlaceholder: "roles/developer.md",

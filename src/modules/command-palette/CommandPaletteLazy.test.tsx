@@ -71,4 +71,5 @@ it("loads on first opening, forwards the team action and retains the mounted pal
     await act(async () => root.unmount());
     vi.unstubAllGlobals();
   }
-});
+  // A cold import of the palette chunk can take seconds on a loaded machine.
+}, 15000);

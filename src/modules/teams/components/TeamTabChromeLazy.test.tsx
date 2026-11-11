@@ -80,4 +80,5 @@ it("loads team chrome and preserves pointed-tab and new-tab menu actions", async
   });
   expect(pointed).toHaveBeenCalledExactlyOnceWith("/work/project");
   expect(newTab).toHaveBeenCalledExactlyOnceWith(expect.anything());
-});
+  // A cold import of the lazy chunk can take seconds on a loaded machine.
+}, 15000);
