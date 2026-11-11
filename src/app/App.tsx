@@ -2335,16 +2335,41 @@ function DesktopApp() {
   });
 
   const handleOpenTeamBoard = useCallback(
-    (customPath?: string) => {
-      const p =
-        customPath ??
-        activeSpace?.root ??
-        localLaunchCwd ??
-        initialLaunchCwd ??
-        ".";
-      newTeamTab(p, activeSpaceId ?? undefined);
+    async (customPath?: string) => {
+      if (customPath) {
+        newTeamTab(customPath, activeSpaceId ?? undefined);
+        return;
+      }
+      // The board belongs to the project on screen: the Harness folder or
+      // the explorer root, never the folder Voktty was launched from.
+      if (activeTabWorkspaceEnv.kind !== "local") {
+        toast.error(t("teams.remoteProjectUnsupported"));
+        return;
+      }
+      const root = effectiveExplorerRoot || activeSpace?.root || null;
+      if (root) {
+        newTeamTab(root, activeSpaceId ?? undefined);
+        return;
+      }
+      try {
+        const picked = await invoke<string | null>("fs_pick_folder", {
+          defaultPath: localLaunchCwd || localHome || undefined,
+        });
+        if (picked) newTeamTab(picked, activeSpaceId ?? undefined);
+      } catch {
+        toast.error(t("teams.noProjectFolder"));
+      }
     },
-    [activeSpace?.root, localLaunchCwd, initialLaunchCwd, activeSpaceId, newTeamTab],
+    [
+      activeTabWorkspaceEnv.kind,
+      effectiveExplorerRoot,
+      activeSpace?.root,
+      localLaunchCwd,
+      localHome,
+      activeSpaceId,
+      newTeamTab,
+      t,
+    ],
   );
 
   const pickAndOpenProjectInHarness = useCallback(async () => {
