@@ -48,9 +48,9 @@ export function hydratePersistedSpaceTabs(
 
 /**
  * The Harness tab a launch opens. Only `onlySpaceId` (the active space) gets
- * one: Harness tabs are not persisted, so creating one for every space made
- * each launch add an identical "Agent Development" tab per space to the
- * strip. Other spaces get theirs when the Harness is opened there.
+ * one: creating one for every space made a launch add an identical "Agent
+ * Development" tab per space to the strip, and the session then kept them.
+ * Other spaces get theirs when the Harness is opened there.
  */
 export function missingStartupHarnessTabs(
   spaces: readonly SpaceMeta[],
