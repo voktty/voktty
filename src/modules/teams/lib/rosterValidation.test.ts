@@ -186,4 +186,62 @@ describe("rosterValidation", () => {
     expect(res.roster).toBeNull();
     expect(res.error).toContain("agents.0.runtime.effort");
   });
+
+  it("E4: rejects obsolete adapters without harnesses and accepts all VALID_ADAPTERS", () => {
+    const obsoleteAdapters = [
+      "codestral",
+      "groq",
+      "ollama",
+      "openai",
+      "openrouter",
+      "perplexity",
+      "together",
+    ];
+
+    for (const adapter of obsoleteAdapters) {
+      const raw = JSON.stringify({
+        version: 1,
+        agents: [
+          {
+            name: "agent-1",
+            role: "roles/dev.md",
+            runtime: { adapter },
+          },
+        ],
+      });
+      const res = validateRoster(raw);
+      expect(res.roster).toBeNull();
+      expect(res.error).toContain("agents.0.runtime.adapter");
+    }
+
+    // Verify all VALID_ADAPTERS are accepted
+    const validAdaptersList = [
+      "antigravity",
+      "claude",
+      "claude-code",
+      "codex",
+      "cursor",
+      "gemini",
+      "generic",
+      "grok",
+      "hermes",
+      "opencode",
+      "pi",
+    ];
+    for (const adapter of validAdaptersList) {
+      const raw = JSON.stringify({
+        version: 1,
+        agents: [
+          {
+            name: "agent-1",
+            role: "roles/dev.md",
+            runtime: { adapter, command: adapter === "generic" ? "python3 test.py" : undefined },
+          },
+        ],
+      });
+      const res = validateRoster(raw);
+      expect(res.error).toBeUndefined();
+      expect(res.roster).not.toBeNull();
+    }
+  });
 });

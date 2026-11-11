@@ -5,8 +5,12 @@ import {
   resolveAgentSupervised,
   parseAgentCopyName,
   resolveWorktreePath,
+  resolveAgentAdapter,
+  resolveEffectiveEffort,
   MAX_TEAM_AGENTS,
 } from "./agentLauncher";
+import { VALID_ADAPTERS } from "./rosterValidation";
+import { HARNESSES } from "@/modules/harness/lib/session";
 import { clearLiveAgentRegistry, getLiveAgentBySessionId, listLiveAgents, registerLiveAgent } from "./agentRegistry";
 import * as teamFs from "./teamFs";
 import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
@@ -735,7 +739,28 @@ describe("agentLauncher", () => {
     });
   });
 
-  describe("Fase E5: Multi-provider and generic approvals", () => {
+  describe("Fase E5: Multi-provider, generic rejection and effort resolution", () => {
+    it("E4: all VALID_ADAPTERS map to valid HARNESSES (or throw unsupported for generic)", () => {
+      expect(VALID_ADAPTERS.size).toBeGreaterThan(0);
+      for (const adapter of VALID_ADAPTERS) {
+        const dummyAgent = {
+          name: "test-agent",
+          role: "roles/dev.md",
+          runtime: { adapter },
+        };
+        const dummyRoster = { version: 1, agents: [dummyAgent] };
+
+        if (adapter === "generic") {
+          expect(() => resolveAgentAdapter(dummyAgent as any, dummyRoster as any)).toThrow(
+            /Generic adapter is not supported yet/,
+          );
+        } else {
+          const harnessId = resolveAgentAdapter(dummyAgent as any, dummyRoster as any);
+          expect(HARNESSES).toContain(harnessId);
+        }
+      }
+    });
+
     it("maps adapters to correct harnesses: claude, codex, antigravity (gemini), opencode, cursor, grok, pi, hermes", async () => {
       const multiRoster: AgentRoster = {
         version: 1,
@@ -808,7 +833,7 @@ describe("agentLauncher", () => {
       );
     });
 
-    it("requires local machine approval for generic adapter and runs only when approved", async () => {
+    it("E3: rejects generic adapter when unapproved (approval_required) and when approved (not_supported)", async () => {
       const genericRoster: AgentRoster = {
         version: 1,
         agents: [
@@ -827,7 +852,9 @@ describe("agentLauncher", () => {
       vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: genericRoster });
 
       // 1. Without approval -> fails with approval_required
-      vi.spyOn(teamFs, "isGenericCommandApproved").mockResolvedValue(false);
+      vi.spyOn(teamFs, "verifyGenericLaunch").mockRejectedValueOnce(
+        new Error("Generic command 'python3 my_agent.py --run' for agent 'bot' has not been approved on this machine"),
+      );
 
       const unapprovedRes = await openAgent(
         { projectPath: "/repo", agentName: "bot" },
@@ -835,18 +862,64 @@ describe("agentLauncher", () => {
       );
       expect(unapprovedRes.ok).toBe(false);
       expect(unapprovedRes.error).toBe("approval_required");
-      expect(unapprovedRes.reason).toContain("python3 my_agent.py --run");
       expect(unapprovedRes.reason).toContain("has not been approved on this machine");
 
-      // 2. With approval -> succeeds and launches session
-      vi.spyOn(teamFs, "isGenericCommandApproved").mockResolvedValue(true);
+      // 2. When approved locally, launch still rejects generic adapter with clear not supported error (E3)
+      // Never converts to "claude" or creates a session
+      vi.spyOn(teamFs, "verifyGenericLaunch").mockRejectedValueOnce(
+        new Error("Generic adapter is not supported yet; please use an official adapter (claude-code, codex, antigravity, opencode, cursor, grok, pi, hermes)"),
+      );
 
       const approvedRes = await openAgent(
         { projectPath: "/repo", agentName: "bot" },
         mockDeps,
       );
-      expect(approvedRes.ok).toBe(true);
-      expect(mockDeps.newSession).toHaveBeenCalled();
+      expect(approvedRes.ok).toBe(false);
+      expect(approvedRes.error).toBe("not_supported");
+      expect(approvedRes.reason).toContain("Generic adapter is not supported yet");
+      expect(mockDeps.newSession).not.toHaveBeenCalled();
+    });
+
+    it("I2: rejects unsupported effort on models without effort and degrades unsupported level along the scale", async () => {
+      // 1. Model that doesn't support effort rejects explicitly
+      const resUnsupported = resolveEffectiveEffort("high", "opencode", "deepseek-coder");
+      expect(resUnsupported.ok).toBe(false);
+      if (!resUnsupported.ok) {
+        expect(resUnsupported.error).toBe("unsupported_effort");
+        expect(resUnsupported.reason).toContain("does not support reasoning effort");
+      }
+
+      // 2. Effort supported by model passes through
+      const resSupported = resolveEffectiveEffort("high", "claude");
+      expect(resSupported.ok).toBe(true);
+
+      // 3. Degradation test: gemini only supports low, medium, high. Requesting xhigh degrades to high.
+      const resDegraded = resolveEffectiveEffort("xhigh", "gemini");
+      expect(resDegraded.ok).toBe(true);
+      if (resDegraded.ok) {
+        expect(resDegraded.effectiveEffort).toBe("high");
+        expect(resDegraded.degradedFrom).toBe("xhigh");
+      }
+
+      // 4. Test openAgent rejection when harness doesn't support effort
+      const rosterNoEffort: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "strict-agent",
+            role: "roles/dev.md",
+            start: "on-demand",
+            runtime: { adapter: "opencode", model: "deepseek-coder", effort: "high" },
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: rosterNoEffort });
+      const launchRes = await openAgent(
+        { projectPath: "/repo", agentName: "strict-agent" },
+        mockDeps,
+      );
+      expect(launchRes.ok).toBe(false);
+      expect(launchRes.error).toBe("unsupported_effort");
     });
   });
 });

@@ -144,39 +144,23 @@ export type GenericApprovalEntry = {
   approvedAt: string;
 };
 
-export const GENERIC_APPROVALS_SCHEMA = "urn:voktty:generic-approvals:1" as const;
-
-export type GenericApprovalsState = {
-  $schema: typeof GENERIC_APPROVALS_SCHEMA;
-  version: 1;
-  updatedAt: string;
-  approvals: Record<string, GenericApprovalEntry>;
-};
-
 export async function readGenericApprovals(
   projectPath: string,
 ): Promise<Record<string, GenericApprovalEntry>> {
-  const filePath = teamPath(
-    projectPath,
-    ".voktty",
-    "state",
-    "generic_approvals.json",
-  );
   try {
-    const content = await readTextFile(filePath);
-    const parsed = JSON.parse(content) as GenericApprovalsState;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      parsed.approvals &&
-      typeof parsed.approvals === "object"
-    ) {
-      return parsed.approvals;
+    const records = await invoke<
+      Record<string, { command: string; approved_at: string }>
+    >("team_read_generic_approvals", { projectPath });
+    const result: Record<string, GenericApprovalEntry> = {};
+    if (records && typeof records === "object") {
+      for (const [name, rec] of Object.entries(records)) {
+        result[name] = { command: rec.command, approvedAt: rec.approved_at };
+      }
     }
+    return result;
   } catch {
-    // If state does not exist or cannot be parsed, return empty record
+    return {};
   }
-  return {};
 }
 
 export async function approveGenericCommand(
@@ -184,55 +168,21 @@ export async function approveGenericCommand(
   agentName: string,
   command: string,
 ): Promise<void> {
-  const approvals = await readGenericApprovals(projectPath);
-  approvals[agentName] = {
-    command: command.trim(),
-    approvedAt: new Date().toISOString(),
-  };
-
-  const stateDir = teamPath(projectPath, ".voktty", "state");
-  const filePath = teamPath(stateDir, "generic_approvals.json");
-
-  try {
-    await invoke("fs_create_dir", { path: stateDir });
-  } catch {
-    // Ignore error if directory already exists
-  }
-
-  const payload: GenericApprovalsState = {
-    $schema: GENERIC_APPROVALS_SCHEMA,
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    approvals,
-  };
-
-  await writeTextFile(filePath, JSON.stringify(payload, null, 2));
+  await invoke("team_approve_generic_command", {
+    projectPath,
+    agentName,
+    command,
+  });
 }
 
 export async function revokeGenericCommand(
   projectPath: string,
   agentName: string,
 ): Promise<void> {
-  const approvals = await readGenericApprovals(projectPath);
-  delete approvals[agentName];
-
-  const stateDir = teamPath(projectPath, ".voktty", "state");
-  const filePath = teamPath(stateDir, "generic_approvals.json");
-
-  try {
-    await invoke("fs_create_dir", { path: stateDir });
-  } catch {
-    // Ignore error if directory already exists
-  }
-
-  const payload: GenericApprovalsState = {
-    $schema: GENERIC_APPROVALS_SCHEMA,
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    approvals,
-  };
-
-  await writeTextFile(filePath, JSON.stringify(payload, null, 2));
+  await invoke("team_revoke_generic_command", {
+    projectPath,
+    agentName,
+  });
 }
 
 export async function isGenericCommandApproved(
@@ -241,7 +191,21 @@ export async function isGenericCommandApproved(
   command: string,
 ): Promise<boolean> {
   if (!command || !agentName) return false;
-  const approvals = await readGenericApprovals(projectPath);
-  const entry = approvals[agentName];
-  return Boolean(entry && entry.command.trim() === command.trim());
+  return await invoke<boolean>("team_is_generic_command_approved", {
+    projectPath,
+    agentName,
+    command,
+  });
+}
+
+export async function verifyGenericLaunch(
+  projectPath: string,
+  agentName: string,
+  command: string,
+): Promise<void> {
+  await invoke("team_verify_generic_launch", {
+    projectPath,
+    agentName,
+    command,
+  });
 }

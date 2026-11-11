@@ -895,7 +895,7 @@ describe("agentControlBridge", () => {
       expect(agy.effort).toBe("xhigh");
     });
 
-    it("E5: agent.start enforces approval_required on generic agents and allows agent.approve", async () => {
+    it("E1: agent.approve and agent.revoke are eliminated from agent control plane and rejected", async () => {
       const orch = createLiveAgent({
         sessionId: "s_orch",
         agentName: "orchestrator",
@@ -905,72 +905,23 @@ describe("agentControlBridge", () => {
         permissions: { canManageAgents: true },
       });
 
-      vi.mocked(readRoster).mockResolvedValue({
-        roster: {
-          version: 1,
-          agents: [
-            {
-              name: "orchestrator",
-              role: "roles/orchestrator.md",
-              start: "always",
-            },
-            {
-              name: "custom-bot",
-              role: "roles/bot.md",
-              start: "on-demand",
-              runtime: { adapter: "generic", command: "python3 test.py" },
-            },
-          ],
-        },
-      });
-
-      vi.mocked(openAgent).mockResolvedValueOnce({
-        ok: false,
-        agent: "custom-bot",
-        sessionId: "",
-        mode: "new",
-        supervised: true,
-        error: "approval_required",
-        reason: "Generic command 'python3 test.py' has not been approved on this machine",
-      });
-
-      // 1. Without approval, agent.start fails with approval_required
+      // 1. Calling agent.approve throws unknown_method
       await expect(
         dispatchAgentMethod(
-          "agent.start",
+          "agent.approve",
+          { agent: "custom-bot", command: "python3 test.py" },
+          { agent_token: orch.agentToken },
+        ),
+      ).rejects.toThrow("Unknown agent method 'agent.approve'");
+
+      // 2. Calling agent.revoke throws unknown_method
+      await expect(
+        dispatchAgentMethod(
+          "agent.revoke",
           { agent: "custom-bot" },
           { agent_token: orch.agentToken },
-          { onNewHarnessTab: vi.fn() },
         ),
-      ).rejects.toThrow("Generic command 'python3 test.py' has not been approved");
-
-      // 2. Approve command via agent.approve
-      const approveRes = (await dispatchAgentMethod(
-        "agent.approve",
-        { agent: "custom-bot", command: "python3 test.py" },
-        { agent_token: orch.agentToken },
-      )) as any;
-      expect(approveRes.ok).toBe(true);
-      expect(approveRes.approvedCommand).toBe("python3 test.py");
-
-      // 3. Now start succeeds
-      vi.mocked(openAgent).mockResolvedValueOnce({
-        ok: true,
-        agent: "custom-bot",
-        sessionId: "s_custom",
-        tabId: 99,
-        mode: "new",
-        supervised: true,
-      });
-
-      const startRes = (await dispatchAgentMethod(
-        "agent.start",
-        { agent: "custom-bot" },
-        { agent_token: orch.agentToken },
-        { onNewHarnessTab: vi.fn() },
-      )) as any;
-      expect(startRes.ok).toBe(true);
-      expect(startRes.agent).toBe("custom-bot");
+      ).rejects.toThrow("Unknown agent method 'agent.revoke'");
     });
   });
 });

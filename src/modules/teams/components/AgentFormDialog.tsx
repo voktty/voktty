@@ -32,13 +32,6 @@ const ADAPTER_OPTIONS = [
   "pi",
   "hermes",
   "generic",
-  "codestral",
-  "groq",
-  "ollama",
-  "openai",
-  "openrouter",
-  "perplexity",
-  "together",
 ] as const;
 
 const EFFORT_OPTIONS = ["", "low", "medium", "high", "xhigh", "max"] as const;

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import {
   readRole,
   readRoster,
@@ -124,52 +125,56 @@ describe("teamFs", () => {
     expect(writtenJson.agents.developer.agentToken).toBeUndefined();
   });
 
-  it("manages generic command approvals in .voktty/state/ outside git", async () => {
+  it("E2: manages generic command approvals via native Rust commands outside workspace", async () => {
     const {
       approveGenericCommand,
       isGenericCommandApproved,
+      readGenericApprovals,
       revokeGenericCommand,
     } = await import("./teamFs");
 
-    // Initially when file does not exist, empty
-    vi.mocked(readTextFile).mockRejectedValueOnce(new Error("File not found"));
+    // 1. Check approval invokes team_is_generic_command_approved
+    vi.mocked(invoke).mockResolvedValueOnce(false);
     let approved = await isGenericCommandApproved("/repo", "custom-bot", "python3 runner.py");
     expect(approved).toBe(false);
+    expect(invoke).toHaveBeenCalledWith("team_is_generic_command_approved", {
+      projectPath: "/repo",
+      agentName: "custom-bot",
+      command: "python3 runner.py",
+    });
 
-    // Approve command
-    vi.mocked(readTextFile).mockRejectedValueOnce(new Error("File not found"));
+    // 2. Approve command invokes team_approve_generic_command (does NOT write to .voktty/state)
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
     await approveGenericCommand("/repo", "custom-bot", "python3 runner.py");
-    expect(writeTextFile).toHaveBeenCalledWith(
-      "/repo/.voktty/state/generic_approvals.json",
-      expect.stringContaining("python3 runner.py"),
+    expect(invoke).toHaveBeenCalledWith("team_approve_generic_command", {
+      projectPath: "/repo",
+      agentName: "custom-bot",
+      command: "python3 runner.py",
+    });
+    expect(writeTextFile).not.toHaveBeenCalledWith(
+      expect.stringContaining("generic_approvals.json"),
+      expect.anything(),
     );
 
-    // Mock file content with saved approval
-    const savedState = {
-      $schema: "urn:voktty:generic-approvals:1",
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      approvals: {
-        "custom-bot": {
-          command: "python3 runner.py",
-          approvedAt: new Date().toISOString(),
-        },
+    // 3. Read generic approvals invokes team_read_generic_approvals
+    vi.mocked(invoke).mockResolvedValueOnce({
+      "custom-bot": {
+        command: "python3 runner.py",
+        approved_at: "2026-11-11T12:00:00Z",
       },
-    };
-    vi.mocked(readTextFile).mockResolvedValueOnce(JSON.stringify(savedState));
-    approved = await isGenericCommandApproved("/repo", "custom-bot", "python3 runner.py");
-    expect(approved).toBe(true);
+    });
+    const approvals = await readGenericApprovals("/repo");
+    expect(approvals["custom-bot"]).toEqual({
+      command: "python3 runner.py",
+      approvedAt: "2026-11-11T12:00:00Z",
+    });
 
-    // Mismatched command returns false
-    vi.mocked(readTextFile).mockResolvedValueOnce(JSON.stringify(savedState));
-    approved = await isGenericCommandApproved("/repo", "custom-bot", "bash malicious.sh");
-    expect(approved).toBe(false);
-
-    // Revoke command
-    vi.mocked(readTextFile).mockResolvedValueOnce(JSON.stringify(savedState));
+    // 4. Revoke command invokes team_revoke_generic_command
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
     await revokeGenericCommand("/repo", "custom-bot");
-    const calls = vi.mocked(writeTextFile).mock.calls;
-    const lastWritten = JSON.parse(calls[calls.length - 1][1]);
-    expect(lastWritten.approvals["custom-bot"]).toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith("team_revoke_generic_command", {
+      projectPath: "/repo",
+      agentName: "custom-bot",
+    });
   });
 });

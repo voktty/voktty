@@ -2,6 +2,8 @@ import type {
   AgentDefinition,
   AgentRoster,
 } from "@/modules/workspace-kit/lib/configTypes";
+import { HARNESSES, type HarnessId } from "@/modules/harness/lib/session";
+import { modelEffortSetting, resolveModel } from "@/modules/harness/lib/models";
 import {
   generateAgentToken,
   getLiveAgentBySessionId,
@@ -9,11 +11,11 @@ import {
   registerLiveAgentWithControl,
 } from "./agentRegistry";
 import {
-  isGenericCommandApproved,
   readRole,
   readRoster,
   readTeamState,
   runProjectExclusive,
+  verifyGenericLaunch,
   writeTeamState,
 } from "./teamFs";
 import { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
@@ -175,7 +177,7 @@ export function resolveWorktreePath(
 export function resolveAgentAdapter(
   agent: AgentDefinition,
   roster: AgentRoster,
-): string {
+): HarnessId {
   const adapter =
     agent.runtime?.adapter ?? roster.defaults?.runtime?.adapter ?? "claude-code";
   // Map kit adapter names to HarnessId
@@ -187,8 +189,90 @@ export function resolveAgentAdapter(
   if (adapter === "grok") return "grok";
   if (adapter === "pi") return "pi";
   if (adapter === "hermes") return "hermes";
-  if (adapter === "generic") return "claude";
-  return adapter;
+  if (adapter === "generic") {
+    throw new Error(
+      "Generic adapter is not supported yet; please use an official adapter (claude-code, codex, antigravity, opencode, cursor, grok, pi, hermes)",
+    );
+  }
+  if (HARNESSES.includes(adapter as HarnessId)) {
+    return adapter as HarnessId;
+  }
+  throw new Error(`Unknown or unsupported adapter '${adapter}'`);
+}
+
+const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+const HARNESS_SUPPORTED_EFFORTS: Partial<Record<HarnessId, readonly string[]>> = {
+  claude: ["low", "medium", "high", "xhigh", "max"],
+  codex: ["low", "medium", "high", "xhigh"],
+  gemini: ["low", "medium", "high"],
+  grok: ["low", "medium", "high", "xhigh"],
+  cursor: ["low", "medium", "high"],
+  hermes: ["low", "medium", "high"],
+};
+
+export type EffortResolution =
+  | { ok: true; effectiveEffort?: string; degradedFrom?: string }
+  | { ok: false; error: "unsupported_effort"; reason: string };
+
+export function resolveEffectiveEffort(
+  requestedEffort: string | undefined,
+  harnessId: HarnessId,
+  modelId?: string,
+): EffortResolution {
+  if (!requestedEffort) {
+    return { ok: true, effectiveEffort: undefined };
+  }
+  const model = resolveModel(harnessId, modelId);
+  const setting = modelEffortSetting(model);
+  let supportedValues: readonly string[] | undefined;
+
+  if (setting && setting.options.length > 0) {
+    supportedValues = setting.options.map((o) => o.value);
+  } else {
+    supportedValues = HARNESS_SUPPORTED_EFFORTS[harnessId];
+  }
+
+  if (!supportedValues || supportedValues.length === 0) {
+    return {
+      ok: false,
+      error: "unsupported_effort",
+      reason: `Harness '${harnessId}' with model '${model.id}' does not support reasoning effort`,
+    };
+  }
+
+  if (supportedValues.includes(requestedEffort)) {
+    return { ok: true, effectiveEffort: requestedEffort };
+  }
+
+  // Attempt degradation along EFFORT_LEVELS scale
+  const reqIdx = EFFORT_LEVELS.indexOf(requestedEffort as any);
+  if (reqIdx !== -1) {
+    const supportedWithIndices = supportedValues
+      .map((val) => ({ val, idx: EFFORT_LEVELS.indexOf(val as any) }))
+      .filter((item) => item.idx !== -1);
+
+    if (supportedWithIndices.length > 0) {
+      supportedWithIndices.sort((a, b) => {
+        const distA = Math.abs(a.idx - reqIdx);
+        const distB = Math.abs(b.idx - reqIdx);
+        if (distA !== distB) return distA - distB;
+        return a.idx - b.idx;
+      });
+      const closest = supportedWithIndices[0];
+      return {
+        ok: true,
+        effectiveEffort: closest.val,
+        degradedFrom: requestedEffort,
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "unsupported_effort",
+    reason: `Effort level '${requestedEffort}' is not supported by model '${model.id}' on harness '${harnessId}' and cannot be degraded`,
+  };
 }
 
 export function resolveAgentEffort(
@@ -316,28 +400,45 @@ export async function openAgent(
           reason: `Agent '${effectiveAgentName}' uses generic adapter but has no command specified`,
         };
       }
-      const isApproved =
-        (await isGenericCommandApproved(
+      try {
+        await verifyGenericLaunch(
           params.projectPath,
           effectiveAgentName,
           command,
-        )) ||
-        (await isGenericCommandApproved(
-          params.projectPath,
-          identity.baseName,
-          command,
-        ));
-      if (!isApproved) {
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("has not been approved")) {
+          return {
+            ok: false,
+            agent: effectiveAgentName,
+            sessionId: "",
+            mode: params.mode ?? "new",
+            supervised: true,
+            error: "approval_required",
+            reason: msg,
+          };
+        }
         return {
           ok: false,
           agent: effectiveAgentName,
           sessionId: "",
           mode: params.mode ?? "new",
           supervised: true,
-          error: "approval_required",
-          reason: `Generic command '${command}' for agent '${effectiveAgentName}' has not been approved on this machine`,
+          error: "not_supported",
+          reason: msg,
         };
       }
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: "",
+        mode: params.mode ?? "new",
+        supervised: true,
+        error: "not_supported",
+        reason:
+          "Generic adapter is not supported yet; please use an official adapter (claude-code, codex, antigravity, opencode, cursor, grok, pi, hermes)",
+      };
     }
 
     const live = listLiveAgents(params.projectPath);
@@ -513,9 +614,42 @@ export async function openAgent(
       ? `Role (${agentDef.role}):\n${roleContent}\n\nTask:\n${params.task || "Await instructions from orchestrator or owner."}`
       : params.task || "Await instructions from orchestrator or owner.";
 
-    const harnessId = resolveAgentAdapter(agentDef, roster);
-    const effort = resolveAgentEffort(agentDef, roster);
-    const modelSettings = effort ? { effort } : undefined;
+    let harnessId: HarnessId;
+    try {
+      harnessId = resolveAgentAdapter(agentDef, roster);
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: "",
+        mode: "new",
+        supervised,
+        error: "not_supported",
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    const rawEffort = resolveAgentEffort(agentDef, roster);
+    const effortResolution = resolveEffectiveEffort(
+      rawEffort,
+      harnessId,
+      model,
+    );
+    if (!effortResolution.ok) {
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: "",
+        mode: "new",
+        supervised,
+        error: effortResolution.error,
+        reason: effortResolution.reason,
+      };
+    }
+
+    const modelSettings = effortResolution.effectiveEffort
+      ? { effort: effortResolution.effectiveEffort }
+      : undefined;
     const runtimeMode = supervised ? "supervised" : "auto";
     const session = modelSettings
       ? deps.newSession(harnessId, sessionCwd, model, runtimeMode, modelSettings)

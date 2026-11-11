@@ -315,38 +315,6 @@ export async function dispatchAgentMethod(
       };
     }
 
-    case "agent.approve": {
-      const agentName = params.agent;
-      if (!agentName || typeof agentName !== "string") {
-        throw new AgentControlError("invalid_params", "agent name is required");
-      }
-      const { roster } = await readRoster(projectPath);
-      const agentDef = roster?.agents.find((a) => a.name === agentName);
-      if (!agentDef) {
-        throw new AgentControlError("not_found", `Agent '${agentName}' not found`);
-      }
-      const command =
-        typeof params.command === "string" && params.command.trim()
-          ? params.command.trim()
-          : agentDef.runtime?.command;
-      if (!command) {
-        throw new AgentControlError("invalid_params", "No command to approve");
-      }
-      const { approveGenericCommand } = await import("./teamFs");
-      await approveGenericCommand(projectPath, agentName, command);
-      return { ok: true, agent: agentName, approvedCommand: command };
-    }
-
-    case "agent.revoke": {
-      const agentName = params.agent;
-      if (!agentName || typeof agentName !== "string") {
-        throw new AgentControlError("invalid_params", "agent name is required");
-      }
-      const { revokeGenericCommand } = await import("./teamFs");
-      await revokeGenericCommand(projectPath, agentName);
-      return { ok: true, agent: agentName };
-    }
-
     case "agent.send": {
       const to = params.to;
       const kind = params.kind;

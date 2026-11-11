@@ -5,7 +5,7 @@ pub mod modules;
 use modules::{
     agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions,
     fs, git, git_review, harness, history, lsp, mcp, net, notch_window, project_memory, pty,
-    quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel, vibrancy,
+    quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, teams, tray, tunnel, vibrancy,
     web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -484,6 +484,11 @@ pub fn run() {
             git::worktrees::git_worktree_create,
             git::worktrees::git_worktree_delete,
             git::worktrees::ensure_agent_worktree,
+            teams::team_approve_generic_command,
+            teams::team_revoke_generic_command,
+            teams::team_is_generic_command_approved,
+            teams::team_read_generic_approvals,
+            teams::team_verify_generic_launch,
             git::commands::git_add_safe_directory,
             git::commands::git_init,
             git::commands::git_clone,

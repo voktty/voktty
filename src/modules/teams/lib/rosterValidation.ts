@@ -44,25 +44,18 @@ export function isModelForbidden(
   });
 }
 
-const VALID_ADAPTERS = new Set([
+export const VALID_ADAPTERS = new Set([
   "antigravity",
   "claude",
   "claude-code",
-  "codestral",
   "codex",
   "cursor",
   "gemini",
   "generic",
   "grok",
-  "groq",
   "hermes",
-  "ollama",
-  "openai",
   "opencode",
-  "openrouter",
-  "perplexity",
   "pi",
-  "together",
 ]);
 
 export const VALID_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
