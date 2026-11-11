@@ -1676,8 +1676,18 @@ html.has-chat-background .chat-pane-background::before,
   opacity: var(--chat-background-opacity);
 }
 
+/* Menus, popovers and dialogs stay opaque. With window vibrancy the popover
+ * token follows the vibrancy opacity, and at a low setting menus became see
+ * through over the transcript and composer. The theme's opaque background is
+ * laid underneath, so the popover colour keeps its tint but never shows what
+ * is behind it. */
 .voktty-floating-surface {
-  background: var(--surface-popover, var(--popover));
+  background:
+    linear-gradient(
+      var(--surface-popover, var(--popover)),
+      var(--surface-popover, var(--popover))
+    ),
+    var(--background-base, var(--background));
   border-color: color-mix(
     in srgb,
     var(--border-subtle, var(--border)) calc(var(--material-border-opacity, 1) * 100%),

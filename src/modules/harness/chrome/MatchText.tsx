@@ -19,7 +19,13 @@ export function MatchText({ text, positions, active }: Props): ReactNode {
   }
   return runs.map((run, index) =>
     run.match ? (
-      <span key={index} className="text-accent">
+      // `accent` is a hover surface in most themes (near the menu background),
+      // which made matched characters vanish; the indicator token is a
+      // foreground colour every theme defines for this.
+      <span
+        key={index}
+        className="font-semibold text-[var(--accent-indicator)]"
+      >
         {run.text}
       </span>
     ) : (
