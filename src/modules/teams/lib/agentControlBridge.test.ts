@@ -18,6 +18,7 @@ vi.mock("./teamFs", () => ({
   readRoster: vi.fn(),
   readTeamState: vi.fn(),
   writeTeamState: vi.fn(),
+  runProjectExclusive: vi.fn((_path, op) => op()),
   teamPath: vi.fn((...parts) => parts.join("/")),
 }));
 
@@ -277,6 +278,7 @@ describe("agentControlBridge", () => {
         "agent.start",
         { agent: "a7" },
         { agent_token: orch.agentToken },
+        { onNewHarnessTab: vi.fn().mockReturnValue(42) },
       ),
     ).rejects.toMatchObject({ code: "capacity_exceeded" });
   });
@@ -521,5 +523,93 @@ describe("agentControlBridge", () => {
     const worker = res.agents.find((a: any) => a.name === "codex-worker");
     expect(worker.model).toBe("default");
     expect(worker.model).not.toBe("claude-3-7-sonnet");
+  });
+
+  // --- N1: agent.start requires real tab opener in context ---
+  it("N1: agent.start fails with request_failed when onNewHarnessTab is missing in context", async () => {
+    const orch = createLiveAgent({
+      sessionId: "s_orch",
+      agentName: "orchestrator",
+      projectPath: "/project",
+      role: "roles/orchestrator.md",
+      isOrchestrator: true,
+      permissions: { canManageAgents: true },
+    });
+
+    vi.mocked(readRoster).mockResolvedValue({
+      roster: {
+        version: 1,
+        agents: [
+          { name: "orchestrator", role: "roles/orchestrator.md", start: "always" },
+          { name: "worker", role: "roles/developer.md", start: "on-demand" },
+        ],
+      },
+    });
+
+    await expect(
+      dispatchAgentMethod(
+        "agent.start",
+        { agent: "worker" },
+        { agent_token: orch.agentToken },
+        {}, // context without onNewHarnessTab
+      ),
+    ).rejects.toMatchObject({
+      code: "request_failed",
+      message: expect.stringContaining("No harness tab opener is available"),
+    });
+  });
+
+  // --- M1: agent.stop and agent.close run within runProjectExclusive ---
+  it("M1: agent.stop and agent.close execute under runProjectExclusive", async () => {
+    const orch = createLiveAgent({
+      sessionId: "s_orch",
+      agentName: "orchestrator",
+      projectPath: "/project",
+      role: "roles/orchestrator.md",
+      isOrchestrator: true,
+      permissions: { canManageAgents: true },
+    });
+
+    vi.mocked(readRoster).mockResolvedValue({
+      roster: {
+        version: 1,
+        agents: [
+          { name: "orchestrator", role: "roles/orchestrator.md", start: "always" },
+          { name: "worker", role: "roles/developer.md", start: "on-demand" },
+        ],
+      },
+    });
+
+    vi.mocked(readTeamState).mockResolvedValue({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        worker: { sessionId: "s_worker", status: "idle" },
+      },
+    });
+
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      state: "idle",
+    } as any);
+
+    // Call agent.stop
+    await dispatchAgentMethod(
+      "agent.stop",
+      { agent: "worker" },
+      { agent_token: orch.agentToken },
+    );
+
+    const { runProjectExclusive } = await import("./teamFs");
+    expect(runProjectExclusive).toHaveBeenCalledWith("/project", expect.any(Function));
+
+    // Call agent.close
+    await dispatchAgentMethod(
+      "agent.close",
+      { agent: "worker" },
+      { agent_token: orch.agentToken },
+    );
+
+    expect(runProjectExclusive).toHaveBeenCalledWith("/project", expect.any(Function));
   });
 });

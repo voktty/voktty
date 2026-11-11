@@ -249,4 +249,38 @@ describe("agentLauncher", () => {
       "supervised",
     );
   });
+
+  it("N1: fails with request_failed when onNewHarnessTab is missing or invalid", async () => {
+    const resultWithoutOpener = await openAgent(
+      {
+        projectPath: "/repo",
+        agentName: "developer",
+        mode: "new",
+      },
+      {
+        ...mockDeps,
+        onNewHarnessTab: undefined,
+      },
+    );
+
+    expect(resultWithoutOpener.ok).toBe(false);
+    expect(resultWithoutOpener.error).toBe("request_failed");
+    expect(resultWithoutOpener.reason).toContain("No harness tab opener is available");
+
+    const resultWithFailingOpener = await openAgent(
+      {
+        projectPath: "/repo",
+        agentName: "developer",
+        mode: "new",
+      },
+      {
+        ...mockDeps,
+        onNewHarnessTab: () => undefined as any,
+      },
+    );
+
+    expect(resultWithFailingOpener.ok).toBe(false);
+    expect(resultWithFailingOpener.error).toBe("request_failed");
+    expect(resultWithFailingOpener.reason).toContain("Harness tab opener failed to create a tab");
+  });
 });

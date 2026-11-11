@@ -67,6 +67,11 @@ type UseControlBridgeOptions = {
   activeSpaceIdRef: RefObject<string | null>;
   onOpen: (request: LaunchRequest & { spaceId: string }) => number | null;
   onNewHarness?: NewHarnessHandler;
+  onNewHarnessTab?: (
+    spaceId?: string,
+    cwd?: string,
+    sessionId?: string,
+  ) => number;
   onCloseTab?: (tabId: number) => void;
 };
 
@@ -344,6 +349,7 @@ export function useControlBridge({
   activeSpaceIdRef,
   onOpen,
   onNewHarness,
+  onNewHarnessTab,
   onCloseTab,
 }: UseControlBridgeOptions): void {
   useEffect(() => {
@@ -447,6 +453,7 @@ export function useControlBridge({
             request.caller as any,
             {
               onNewHarness,
+              onNewHarnessTab,
               onCloseTab,
               tabsRef,
               activeTabIdRef,
@@ -506,6 +513,7 @@ export function useControlBridge({
     activeSpaceIdRef,
     onOpen,
     onNewHarness,
+    onNewHarnessTab,
     onCloseTab,
   ]);
 }

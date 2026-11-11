@@ -6,6 +6,16 @@ export function isOrchestratorRole(role: string): boolean {
   return role === ORCHESTRATOR_ROLE;
 }
 
+/**
+ * Checks whether a requested model identifier is forbidden according to team policies.
+ *
+ * Evaluation rules (case-insensitive, evaluated fail-closed):
+ * 1. Global wildcard: "*" forbids all models.
+ * 2. Wildcard pattern: patterns containing "*" (e.g. "gpt-4*") are converted to regex matching
+ *    the entire model identifier.
+ * 3. Exact and substring match: "haiku" matches exact "haiku" or any substring (e.g. "claude-3-haiku-20240307").
+ *    Substring matching is intentional to prevent policy bypasses via provider-specific version suffixes.
+ */
 export function isModelForbidden(
   model: string,
   forbiddenOrRoster?:

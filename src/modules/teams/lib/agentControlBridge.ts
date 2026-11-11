@@ -7,7 +7,12 @@ import { openAgent } from "./agentLauncher";
 import { getLiveAgentByToken, revokeLiveAgent } from "./agentRegistry";
 import { isModelForbidden } from "./rosterValidation";
 import { deliverPendingMessages, sendMessage } from "./teamBus";
-import { readRoster, readTeamState, writeTeamState } from "./teamFs";
+import {
+  readRoster,
+  readTeamState,
+  runProjectExclusive,
+  writeTeamState,
+} from "./teamFs";
 
 export class AgentControlError extends Error {
   constructor(
@@ -194,6 +199,13 @@ export async function dispatchAgentMethod(
       const { newSession } = await import("@/modules/harness/lib/session");
       const { cacheSession } = await import("@/modules/harness/lib/sessionStore");
 
+      if (!context.onNewHarnessTab) {
+        throw new AgentControlError(
+          "request_failed",
+          "No harness tab opener is available in the current window context",
+        );
+      }
+
       const result = await openAgent(
         {
           projectPath,
@@ -205,11 +217,7 @@ export async function dispatchAgentMethod(
           copy: typeof params.copy === "number" ? params.copy : undefined,
         },
         {
-          onNewHarnessTab:
-            context.onNewHarnessTab ||
-            (context.onNewHarness
-              ? (_spaceId, _cwd, _sid) => 1
-              : undefined),
+          onNewHarnessTab: context.onNewHarnessTab,
           newSession,
           cacheSession,
         },
@@ -233,6 +241,7 @@ export async function dispatchAgentMethod(
         agent: result.agent,
         sessionId: result.sessionId,
         tabId: result.tabId,
+        tab_id: result.tabId,
         mode: result.mode,
         supervised: result.supervised,
       };
@@ -475,35 +484,37 @@ export async function dispatchAgentMethod(
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
-      const teamState = await readTeamState(projectPath);
-      const agentState = teamState.agents[agentName];
-      if (agentState?.sessionId) {
-        interruptHarnessSession(agentState.sessionId);
-        // F3: confirm that session is no longer working
-        const deadline = Date.now() + 500;
-        while (Date.now() < deadline) {
-          const snap = getHarnessSessionSnapshot(agentState.sessionId);
-          if (!snap || snap.state !== "working") {
-            break;
+      return runProjectExclusive(projectPath, async () => {
+        const teamState = await readTeamState(projectPath);
+        const agentState = teamState.agents[agentName];
+        if (agentState?.sessionId) {
+          interruptHarnessSession(agentState.sessionId);
+          // F3: confirm that session is no longer working
+          const deadline = Date.now() + 500;
+          while (Date.now() < deadline) {
+            const snap = getHarnessSessionSnapshot(agentState.sessionId);
+            if (!snap || snap.state !== "working") {
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
-          await new Promise((resolve) => setTimeout(resolve, 50));
+          const snap = getHarnessSessionSnapshot(agentState.sessionId);
+          if (snap && snap.state === "working") {
+            throw new AgentControlError(
+              "stop_failed",
+              `Could not stop busy agent '${agentName}'`,
+            );
+          }
+          agentState.status = "idle";
+          await writeTeamState(projectPath, teamState);
         }
-        const snap = getHarnessSessionSnapshot(agentState.sessionId);
-        if (snap && snap.state === "working") {
-          throw new AgentControlError(
-            "stop_failed",
-            `Could not stop busy agent '${agentName}'`,
-          );
-        }
-        agentState.status = "idle";
-        await writeTeamState(projectPath, teamState);
-      }
 
-      return {
-        ok: true,
-        agent: agentName,
-        stopped: true,
-      };
+        return {
+          ok: true,
+          agent: agentName,
+          stopped: true,
+        };
+      });
     }
 
     case "agent.close": {
@@ -512,45 +523,47 @@ export async function dispatchAgentMethod(
         throw new AgentControlError("invalid_params", "agent name is required");
       }
 
-      const teamState = await readTeamState(projectPath);
-      const agentState = teamState.agents[agentName];
+      return runProjectExclusive(projectPath, async () => {
+        const teamState = await readTeamState(projectPath);
+        const agentState = teamState.agents[agentName];
 
-      if (agentState?.sessionId) {
-        const snap = getHarnessSessionSnapshot(agentState.sessionId);
-        if (snap && snap.state === "working") {
-          throw new AgentControlError(
-            "busy",
-            `Agent '${agentName}' is busy working; run agent.stop before closing`,
-          );
-        }
-      }
-
-      if (agentState) {
-        // F3 & B2: close tab if mounted
-        if (context.tabsRef?.current && agentState.sessionId && context.onCloseTab) {
-          const tab = context.tabsRef.current.find(
-            (t) => t.kind === "harness" && t.sessionId === agentState.sessionId,
-          );
-          if (tab) {
-            context.onCloseTab(tab.id);
+        if (agentState?.sessionId) {
+          const snap = getHarnessSessionSnapshot(agentState.sessionId);
+          if (snap && snap.state === "working") {
+            throw new AgentControlError(
+              "busy",
+              `Agent '${agentName}' is busy working; run agent.stop before closing`,
+            );
           }
         }
 
-        // F3 & B2: revoke live agent token
-        if (agentState.sessionId) {
-          await revokeLiveAgent(agentState.sessionId);
+        if (agentState) {
+          // F3 & B2: close tab if mounted
+          if (context.tabsRef?.current && agentState.sessionId && context.onCloseTab) {
+            const tab = context.tabsRef.current.find(
+              (t) => t.kind === "harness" && t.sessionId === agentState.sessionId,
+            );
+            if (tab) {
+              context.onCloseTab(tab.id);
+            }
+          }
+
+          // F3 & B2: revoke live agent token
+          if (agentState.sessionId) {
+            await revokeLiveAgent(agentState.sessionId);
+          }
+
+          agentState.status = "unopened";
+          agentState.sessionId = undefined;
+          await writeTeamState(projectPath, teamState);
         }
 
-        agentState.status = "unopened";
-        agentState.sessionId = undefined;
-        await writeTeamState(projectPath, teamState);
-      }
-
-      return {
-        ok: true,
-        agent: agentName,
-        closed: true,
-      };
+        return {
+          ok: true,
+          agent: agentName,
+          closed: true,
+        };
+      });
     }
 
     default:

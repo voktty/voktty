@@ -8,7 +8,13 @@ import {
   listLiveAgents,
   registerLiveAgentWithControl,
 } from "./agentRegistry";
-import { readRole, readRoster, readTeamState, writeTeamState } from "./teamFs";
+import {
+  readRole,
+  readRoster,
+  readTeamState,
+  runProjectExclusive,
+  writeTeamState,
+} from "./teamFs";
 import { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
 export { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
 import type { OpenAgentParams, OpenAgentResult, TeamAgentStatus } from "../types";
@@ -69,71 +75,155 @@ export async function openAgent(
   params: OpenAgentParams,
   deps: LauncherDependencies,
 ): Promise<OpenAgentResult> {
-  const { roster, error: rosterError } = await readRoster(params.projectPath);
-  if (!roster) {
-    return {
-      ok: false,
-      agent: params.agentName,
-      sessionId: "",
-      mode: params.mode ?? "new",
-      supervised: true,
-      error: "invalid_roster",
-      reason: rosterError ?? "Roster could not be loaded or parsed",
-    };
-  }
+  return runProjectExclusive(params.projectPath, async () => {
+    if (typeof deps.onNewHarnessTab !== "function") {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: "",
+        mode: params.mode ?? "new",
+        supervised: true,
+        error: "request_failed",
+        reason: "No harness tab opener is available in the current window context",
+      };
+    }
 
-  const agentDef = roster.agents.find((a) => a.name === params.agentName);
-  if (!agentDef) {
-    return {
-      ok: false,
-      agent: params.agentName,
-      sessionId: "",
-      mode: params.mode ?? "new",
-      supervised: true,
-      error: "agent_not_found",
-      reason: `Agent '${params.agentName}' was not found in team roster`,
-    };
-  }
+    const { roster, error: rosterError } = await readRoster(params.projectPath);
+    if (!roster) {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: "",
+        mode: params.mode ?? "new",
+        supervised: true,
+        error: "invalid_roster",
+        reason: rosterError ?? "Roster could not be loaded or parsed",
+      };
+    }
 
-  const model = resolveAgentModel(agentDef, roster, params.model);
-  if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
-    return {
-      ok: false,
-      agent: params.agentName,
-      sessionId: "",
-      mode: params.mode ?? "new",
-      supervised: true,
-      error: "forbidden_model",
-      reason: `Model '${model}' is in forbiddenModels policy and cannot be launched`,
-    };
-  }
+    const agentDef = roster.agents.find((a) => a.name === params.agentName);
+    if (!agentDef) {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: "",
+        mode: params.mode ?? "new",
+        supervised: true,
+        error: "agent_not_found",
+        reason: `Agent '${params.agentName}' was not found in team roster`,
+      };
+    }
 
-  const live = listLiveAgents(params.projectPath);
-  const isAlreadyLive = live.some((s) => s.agentName === params.agentName);
-  if (!isAlreadyLive && live.length >= MAX_TEAM_AGENTS) {
-    return {
-      ok: false,
-      agent: params.agentName,
-      sessionId: "",
-      mode: params.mode ?? "new",
-      supervised: true,
-      error: "capacity_exceeded",
-      reason: `Team has reached the maximum of ${MAX_TEAM_AGENTS} concurrent agents`,
-    };
-  }
+    const model = resolveAgentModel(agentDef, roster, params.model);
+    if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: "",
+        mode: params.mode ?? "new",
+        supervised: true,
+        error: "forbidden_model",
+        reason: `Model '${model}' is in forbiddenModels policy and cannot be launched`,
+      };
+    }
 
-  const supervised = resolveAgentSupervised(agentDef, roster, params.supervised);
-  const state = await readTeamState(params.projectPath);
-  const mode = params.mode ?? "new";
-  const isOrch = isOrchestratorRole(agentDef.role);
+    const live = listLiveAgents(params.projectPath);
+    const isAlreadyLive = live.some((s) => s.agentName === params.agentName);
+    if (!isAlreadyLive && live.length >= MAX_TEAM_AGENTS) {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: "",
+        mode: params.mode ?? "new",
+        supervised: true,
+        error: "capacity_exceeded",
+        reason: `Team has reached the maximum of ${MAX_TEAM_AGENTS} concurrent agents`,
+      };
+    }
 
-  if (mode === "resume" && state.agents[params.agentName]?.sessionId) {
-    const existingSessionId = state.agents[params.agentName].sessionId!;
-    const existingLive = getLiveAgentBySessionId(existingSessionId);
-    const agentToken = existingLive?.agentToken ?? generateAgentToken();
+    const supervised = resolveAgentSupervised(agentDef, roster, params.supervised);
+    const state = await readTeamState(params.projectPath);
+    const mode = params.mode ?? "new";
+    const isOrch = isOrchestratorRole(agentDef.role);
+
+    if (mode === "resume" && state.agents[params.agentName]?.sessionId) {
+      const existingSessionId = state.agents[params.agentName].sessionId!;
+      const existingLive = getLiveAgentBySessionId(existingSessionId);
+      const agentToken = existingLive?.agentToken ?? generateAgentToken();
+
+      await registerLiveAgentWithControl({
+        sessionId: existingSessionId,
+        agentName: params.agentName,
+        projectPath: params.projectPath,
+        role: agentDef.role,
+        isOrchestrator: isOrch,
+        permissions: {
+          canManageAgents: isOrch,
+        },
+        launchedAt: existingLive?.launchedAt ?? new Date().toISOString(),
+        agentToken,
+      });
+
+      const tabId = deps.onNewHarnessTab(
+        params.spaceId,
+        params.projectPath,
+        existingSessionId,
+      );
+
+      if (typeof tabId !== "number") {
+        return {
+          ok: false,
+          agent: params.agentName,
+          sessionId: existingSessionId,
+          mode: "resume",
+          supervised,
+          error: "request_failed",
+          reason: "Harness tab opener failed to create a tab",
+        };
+      }
+
+      const now = new Date().toISOString();
+      state.agents[params.agentName] = {
+        ...state.agents[params.agentName],
+        lastOpenedAt: now,
+        supervised,
+        ...(params.task
+          ? {
+              task: params.task,
+              currentTaskStartedAt: now,
+              lastVerdict: undefined,
+              status: "working" as TeamAgentStatus,
+            }
+          : {}),
+      };
+      await writeTeamState(params.projectPath, state);
+
+      return {
+        ok: true,
+        agent: params.agentName,
+        sessionId: existingSessionId,
+        tabId,
+        mode: "resume",
+        supervised,
+      };
+    }
+
+    // Mode: "new"
+    const roleContent = await readRole(params.projectPath, agentDef.role);
+    const promptSeed = roleContent
+      ? `Role (${agentDef.role}):\n${roleContent}\n\nTask:\n${params.task || "Await instructions from orchestrator or owner."}`
+      : params.task || "Await instructions from orchestrator or owner.";
+
+    const harnessId = resolveAgentAdapter(agentDef, roster);
+    const runtimeMode = supervised ? "supervised" : "auto";
+    const session = deps.newSession(harnessId, params.projectPath, model, runtimeMode);
+    session.composerSeed = promptSeed;
+    deps.cacheSession(session);
+
+    const agentToken = generateAgentToken();
 
     await registerLiveAgentWithControl({
-      sessionId: existingSessionId,
+      sessionId: session.id,
       agentName: params.agentName,
       projectPath: params.projectPath,
       role: agentDef.role,
@@ -141,95 +231,49 @@ export async function openAgent(
       permissions: {
         canManageAgents: isOrch,
       },
-      launchedAt: existingLive?.launchedAt ?? new Date().toISOString(),
+      launchedAt: new Date().toISOString(),
       agentToken,
     });
 
-    const tabId = deps.onNewHarnessTab?.(
+    const tabId = deps.onNewHarnessTab(
       params.spaceId,
       params.projectPath,
-      existingSessionId,
+      session.id,
     );
 
+    if (typeof tabId !== "number") {
+      return {
+        ok: false,
+        agent: params.agentName,
+        sessionId: session.id,
+        mode: "new",
+        supervised,
+        error: "request_failed",
+        reason: "Harness tab opener failed to create a tab",
+      };
+    }
+
+    const newStatus: TeamAgentStatus = "working";
     const now = new Date().toISOString();
     state.agents[params.agentName] = {
       ...state.agents[params.agentName],
+      sessionId: session.id,
       lastOpenedAt: now,
+      status: newStatus,
+      task: params.task || "Await assignment.",
+      currentTaskStartedAt: now,
+      lastVerdict: undefined,
       supervised,
-      ...(params.task
-        ? {
-            task: params.task,
-            currentTaskStartedAt: now,
-            lastVerdict: undefined,
-            status: "working" as TeamAgentStatus,
-          }
-        : {}),
     };
     await writeTeamState(params.projectPath, state);
 
     return {
       ok: true,
       agent: params.agentName,
-      sessionId: existingSessionId,
+      sessionId: session.id,
       tabId,
-      mode: "resume",
+      mode: "new",
       supervised,
     };
-  }
-
-  // Mode: "new"
-  const roleContent = await readRole(params.projectPath, agentDef.role);
-  const promptSeed = roleContent
-    ? `Role (${agentDef.role}):\n${roleContent}\n\nTask:\n${params.task || "Await instructions from orchestrator or owner."}`
-    : params.task || "Await instructions from orchestrator or owner.";
-
-  const harnessId = resolveAgentAdapter(agentDef, roster);
-  const runtimeMode = supervised ? "supervised" : "auto";
-  const session = deps.newSession(harnessId, params.projectPath, model, runtimeMode);
-  session.composerSeed = promptSeed;
-  deps.cacheSession(session);
-
-  const agentToken = generateAgentToken();
-
-  await registerLiveAgentWithControl({
-    sessionId: session.id,
-    agentName: params.agentName,
-    projectPath: params.projectPath,
-    role: agentDef.role,
-    isOrchestrator: isOrch,
-    permissions: {
-      canManageAgents: isOrch,
-    },
-    launchedAt: new Date().toISOString(),
-    agentToken,
   });
-
-  const tabId = deps.onNewHarnessTab?.(
-    params.spaceId,
-    params.projectPath,
-    session.id,
-  );
-
-  const newStatus: TeamAgentStatus = "working";
-  const now = new Date().toISOString();
-  state.agents[params.agentName] = {
-    ...state.agents[params.agentName],
-    sessionId: session.id,
-    lastOpenedAt: now,
-    status: newStatus,
-    task: params.task || "Await assignment.",
-    currentTaskStartedAt: now,
-    lastVerdict: undefined,
-    supervised,
-  };
-  await writeTeamState(params.projectPath, state);
-
-  return {
-    ok: true,
-    agent: params.agentName,
-    sessionId: session.id,
-    tabId,
-    mode: "new",
-    supervised,
-  };
 }
