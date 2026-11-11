@@ -600,10 +600,7 @@ pub fn control_register_agent_token(
 }
 
 #[tauri::command]
-pub fn control_revoke_agent_token(
-    state: tauri::State<'_, ControlState>,
-    session_id: String,
-) {
+pub fn control_revoke_agent_token(state: tauri::State<'_, ControlState>, session_id: String) {
     state.revoke_agent_token(&session_id);
 }
 

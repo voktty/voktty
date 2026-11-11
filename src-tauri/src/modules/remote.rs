@@ -3208,7 +3208,8 @@ fn remote_reader_loop(stdout: ChildStdout, routing: Arc<RemoteRouting>) {
                 return;
             }
             Err(error) => {
-                routing.mark_channel_lost(&format!("{REMOTE_CHANNEL_LOST}: protocol error: {error}"));
+                routing
+                    .mark_channel_lost(&format!("{REMOTE_CHANNEL_LOST}: protocol error: {error}"));
                 return;
             }
         }
@@ -3687,10 +3688,8 @@ mod tests {
         let broken = helper_write_error(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
         assert!(broken.starts_with(REMOTE_CHANNEL_LOST));
         #[cfg(windows)]
-        assert!(
-            helper_write_error(std::io::Error::from_raw_os_error(232))
-                .starts_with(REMOTE_CHANNEL_LOST)
-        );
+        assert!(helper_write_error(std::io::Error::from_raw_os_error(232))
+            .starts_with(REMOTE_CHANNEL_LOST));
         let other = helper_write_error(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "frame too large",

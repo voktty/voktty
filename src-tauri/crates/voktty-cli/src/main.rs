@@ -81,7 +81,9 @@ fn current_caller_context() -> CallerContext {
     let pane_id = env::var("VOKTTY_PANE_ID")
         .ok()
         .and_then(|value| value.parse::<u32>().ok());
-    let agent_token = env::var("VOKTTY_AGENT_TOKEN").ok().filter(|s| !s.is_empty());
+    let agent_token = env::var("VOKTTY_AGENT_TOKEN")
+        .ok()
+        .filter(|s| !s.is_empty());
     let session_id = env::var("VOKTTY_SESSION_ID").ok().filter(|s| !s.is_empty());
     CallerContext {
         pane_id,
@@ -320,7 +322,8 @@ fn run_agent_wait(
                     "Voktty rejected the request",
                 )
             });
-            let exit = agent_error_exit_code(METHOD_AGENT_WAIT, &error.code).unwrap_or(EXIT_REQUEST);
+            let exit =
+                agent_error_exit_code(METHOD_AGENT_WAIT, &error.code).unwrap_or(EXIT_REQUEST);
             return Err(CliError::new(error.code, error.message, exit));
         }
         let result = response.result.unwrap_or(Value::Null);
@@ -2403,8 +2406,14 @@ fn print_result(method: &str, result: Value, as_json: bool) {
             println!("Started agent '{agent}' ({mode})");
         }
         METHOD_AGENT_SEND => {
-            let msg_id = result.get("messageId").and_then(Value::as_str).unwrap_or("");
-            let status = result.get("status").and_then(Value::as_str).unwrap_or("sent");
+            let msg_id = result
+                .get("messageId")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let status = result
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("sent");
             println!("Message {msg_id} {status}");
         }
         METHOD_AGENT_STATUS => {
@@ -2414,7 +2423,10 @@ fn print_result(method: &str, result: Value, as_json: bool) {
         }
         METHOD_AGENT_WAIT => {
             let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
-            let matched = result.get("matched").and_then(Value::as_bool).unwrap_or(false);
+            let matched = result
+                .get("matched")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             let status = result.get("status").and_then(Value::as_str).unwrap_or("");
             if matched {
                 if let Some(verdict) = result.get("verdict").and_then(Value::as_str) {
@@ -2883,7 +2895,10 @@ mod tests {
         match start.action {
             Action::Request { method, params } => {
                 assert_eq!(method, METHOD_AGENT_START);
-                assert_eq!(params.get("agent").and_then(Value::as_str), Some("developer"));
+                assert_eq!(
+                    params.get("agent").and_then(Value::as_str),
+                    Some("developer")
+                );
                 assert_eq!(params.get("mode").and_then(Value::as_str), Some("new"));
                 assert_eq!(
                     params.get("task").and_then(Value::as_str),
@@ -2893,7 +2908,10 @@ mod tests {
                     params.get("model").and_then(Value::as_str),
                     Some("claude-3-7-sonnet")
                 );
-                assert_eq!(params.get("supervised").and_then(Value::as_bool), Some(true));
+                assert_eq!(
+                    params.get("supervised").and_then(Value::as_bool),
+                    Some(true)
+                );
             }
             other => panic!("expected Request, got {other:?}"),
         }
@@ -2974,8 +2992,7 @@ mod tests {
             }
         );
 
-        let close =
-            parse_args(args(&["agent", "close", "developer"])).expect("parse agent close");
+        let close = parse_args(args(&["agent", "close", "developer"])).expect("parse agent close");
         assert_eq!(
             close.action,
             Action::Request {
