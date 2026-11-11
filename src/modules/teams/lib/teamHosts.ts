@@ -231,6 +231,29 @@ export async function resolveHostForAgent(
   projectPath: string,
   availableSshConnections?: readonly SshConnection[] | null,
 ): Promise<ResolvedHost> {
+  if (projectPath.startsWith("remote://")) {
+    const { parseRemotePath } = await import("@/modules/connections/model/remoteProjects");
+    const { remoteSshConnectionIdForEnvironment } = await import("@/modules/connections/model/remoteSshProfiles");
+    const remote = parseRemotePath(projectPath);
+    const connectionId = remote && remoteSshConnectionIdForEnvironment(remote.environmentId);
+    const connection = (availableSshConnections ?? usePreferencesStore.getState().sshConnections ?? [])
+      .find((candidate) => candidate.id === connectionId);
+    if (!remote || !connectionId || !connection) {
+      return { kind: "unconfigured", alias: connectionId || "", reason: "The remote team's SSH connection is not configured on this machine" };
+    }
+    try {
+      assertSafeRemotePath(remote.hostPath);
+    } catch (error) {
+      return { kind: "invalid", reason: error instanceof Error ? error.message : String(error) };
+    }
+    if ((agent.host ?? roster.defaults?.host)?.startsWith("ssh:")) {
+      return { kind: "invalid", reason: "A remote team runs on its project's SSH host; remove SSH host aliases from its roster" };
+    }
+    return {
+      kind: "ssh", alias: connection.id, connectionId: connection.id, connection,
+      remoteProjectPath: remote.hostPath, sessionCwd: projectPath,
+    };
+  }
   const hostVal = agent.host ?? roster.defaults?.host;
   const parsed = parseAgentHost(hostVal);
   if (parsed.kind === "local") {

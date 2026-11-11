@@ -37,6 +37,7 @@ import {
   readTeamState,
 } from "../lib/teamFs";
 import { readTeamHosts, saveTeamHostMapping } from "../lib/teamHosts";
+import { prepareTeamProject } from "@/modules/teams/lib/teamProject";
 import type { TeamAgentStatus, TeamHostsState, TeamState } from "../types";
 import { AgentFormDialog } from "./AgentFormDialog";
 import { RulesDialog } from "./RulesDialog";
@@ -117,6 +118,12 @@ export function TeamBoard({
   const sshConnections = usePreferencesStore((s) => s.sshConnections ?? []);
 
   const loadData = useCallback(async () => {
+    try {
+      await prepareTeamProject(projectPath);
+    } catch (error) {
+      setRosterError(error instanceof Error ? error.message : String(error));
+      return;
+    }
     const { roster: loadedRoster, error } = await readRoster(projectPath);
     setRoster(loadedRoster);
     setRosterError(error ?? null);

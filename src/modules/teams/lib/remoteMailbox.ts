@@ -5,7 +5,7 @@ import {
   type FsEntry,
 } from "@/modules/harness/lib/fs";
 import type { TeamMessageKind } from "../types";
-import { normalizePath } from "./teamFs";
+import { ensureTeamDirectory, normalizePath } from "./teamFs";
 
 export const MAX_MAILBOX_READ_FILES = 50;
 export const MAX_MAILBOX_FILE_BYTES = 64 * 1024; // 64 KiB
@@ -122,6 +122,9 @@ export async function writeRemoteMailboxMessage(
   delete raw.secret;
 
   const writer = deps?.writeTextFile ?? writeTextFile;
+  if (!deps?.writeTextFile) {
+    await ensureTeamDirectory(inbox);
+  }
   await writer(filePath, JSON.stringify(payload, null, 2));
   return filePath;
 }

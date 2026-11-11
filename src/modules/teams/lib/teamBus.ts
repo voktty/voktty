@@ -3,13 +3,13 @@ import {
   getHarnessSessionSnapshot,
   sendHarnessSessionMessage,
 } from "@/modules/harness/lib/harnessControlBridge";
-import { invoke } from "@tauri-apps/api/core";
 import type { AgentDefinition } from "@/modules/workspace-kit/lib/configTypes";
 import type { TeamBusMessage, TeamBusState, TeamMessageKind } from "../types";
 import { isOrchestratorRole } from "./rosterValidation";
 import { writeRemoteMailboxMessage } from "./remoteMailbox";
 import {
   readRoster,
+  ensureTeamDirectory,
   readTeamState,
   runProjectExclusive,
   teamPath,
@@ -185,7 +185,7 @@ export async function writeBus(
 ): Promise<void> {
   const stateDir = teamPath(projectPath, ".voktty", "state");
   try {
-    await invoke("fs_create_dir", { path: stateDir });
+    await ensureTeamDirectory(stateDir);
   } catch {
     // Ignore if directory already exists
   }
@@ -335,7 +335,7 @@ export async function sendMessage(
     }
 
     const targetHost = targetAgent?.host ?? targetDef.host ?? roster.defaults?.host;
-    if (targetHost && targetHost.startsWith("ssh:")) {
+    if (projectPath.startsWith("remote://") || targetHost?.startsWith("ssh:")) {
       try {
         const resolved = await resolveHostForAgent(targetDef, roster, projectPath);
         if (resolved.kind === "ssh") {

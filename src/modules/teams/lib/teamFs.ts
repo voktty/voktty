@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
+import { createPath, listDir, readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
 import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 import { validateRoster } from "./rosterValidation";
 import {
@@ -15,6 +15,19 @@ export function normalizePath(path: string): string {
 export function teamPath(projectPath: string, ...segments: string[]): string {
   const base = normalizePath(projectPath);
   return `${base}/${segments.map((s) => s.replace(/^\/+|\/+$/g, "")).join("/")}`;
+}
+
+export async function ensureTeamDirectory(path: string): Promise<void> {
+  if (path.startsWith("remote://")) {
+    const slash = path.lastIndexOf("/");
+    try {
+      await createPath(path.slice(0, slash), path.slice(slash + 1), true);
+    } catch {
+      await listDir(path);
+    }
+  } else {
+    await invoke("fs_create_dir", { path });
+  }
 }
 
 const projectLocks = new Map<string, Promise<unknown>>();
@@ -115,7 +128,7 @@ export async function writeTeamState(
   const filePath = teamPath(stateDir, "agents.json");
 
   try {
-    await invoke("fs_create_dir", { path: stateDir });
+    await ensureTeamDirectory(stateDir);
   } catch {
     // Ignore error if directory already exists
   }

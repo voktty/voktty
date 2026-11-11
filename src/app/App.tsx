@@ -2334,17 +2334,26 @@ function DesktopApp() {
     onMissingProject: reportMissingHarnessProject,
   });
 
+  const teamOpeningOwner = useMemo(() => ({}), [activeSpaceId, activeSpace?.root, activeSpace?.env]);
+  const teamOpeningOwnerRef = useRef<object | null>(null);
+  const teamOpeningPendingRef = useRef(false);
+  useLayoutEffect(() => {
+    teamOpeningOwnerRef.current = teamOpeningOwner;
+    return () => { teamOpeningOwnerRef.current = null; };
+  }, [teamOpeningOwner]);
   const handleOpenTeamBoard = useCallback(
     (customPath?: string) => {
-      const p =
-        customPath ??
-        activeSpace?.root ??
-        localLaunchCwd ??
-        initialLaunchCwd ??
-        ".";
-      newTeamTab(p, activeSpaceId ?? undefined);
+      if (teamOpeningPendingRef.current || teamOpeningOwnerRef.current !== teamOpeningOwner) return;
+      teamOpeningPendingRef.current = true;
+      void import("@/modules/teams/lib/teamProject").then(({ teamBoardProject }) => {
+        if (teamOpeningOwnerRef.current !== teamOpeningOwner) return;
+        const p = teamBoardProject(activeSpace, customPath, localLaunchCwd ?? initialLaunchCwd);
+        newTeamTab(p, activeSpaceId ?? undefined);
+      }).catch((error) => {
+        if (teamOpeningOwnerRef.current === teamOpeningOwner) reportHarnessOpeningError(error);
+      }).finally(() => { teamOpeningPendingRef.current = false; });
     },
-    [activeSpace?.root, localLaunchCwd, initialLaunchCwd, activeSpaceId, newTeamTab],
+    [activeSpace, localLaunchCwd, initialLaunchCwd, activeSpaceId, newTeamTab, reportHarnessOpeningError, teamOpeningOwner],
   );
 
   const pickAndOpenProjectInHarness = useCallback(async () => {
@@ -4691,6 +4700,7 @@ function DesktopApp() {
       openNewEditor,
       openNewHarness,
       openNewHarnessInWorktree,
+      handleOpenTeamBoard,
       pickAndOpenFile,
       openQuickOpen,
       openWorkspaceSearch,

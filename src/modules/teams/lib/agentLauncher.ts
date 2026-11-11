@@ -23,6 +23,8 @@ import { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
 export { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
 import { resolveHostForAgent } from "./teamHosts";
 import { writeRemoteMailboxMessage } from "./remoteMailbox";
+import { prepareTeamProject } from "@/modules/teams/lib/teamProject";
+import { assertRemoteAgentSupported } from "@/modules/harness/lib/harness/remoteAgents";
 import type { OpenAgentParams, OpenAgentResult, TeamAgentStatus } from "../types";
 
 export const MAX_TEAM_AGENTS = 6;
@@ -423,6 +425,14 @@ export async function openAgent(
 
     const { effectiveAgentName, isCopy, agentDef } = identity;
 
+    if (isCopy && params.projectPath.startsWith("remote://")) {
+      return {
+        ok: false, agent: effectiveAgentName, sessionId: "",
+        mode: params.mode ?? "new", supervised: true, error: "invalid_params",
+        reason: "Agent copies with worktrees are not supported on remote SSH hosts",
+      };
+    }
+
     const model = resolveAgentModel(agentDef, roster, params.model);
     if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
       return {
@@ -616,6 +626,17 @@ export async function openAgent(
       hostResolution.kind === "ssh"
         ? hostResolution.sessionCwd
         : copyWorktreePath ?? params.projectPath;
+
+    try {
+      assertRemoteAgentSupported(resolveAgentAdapter(agentDef, roster), sessionCwd);
+      await prepareTeamProject(sessionCwd);
+    } catch (error) {
+      return {
+        ok: false, agent: effectiveAgentName, sessionId: "", mode,
+        supervised, error: "not_supported",
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
 
     if (mode === "resume" && state.agents[effectiveAgentName]?.sessionId) {
       const existingSessionId = state.agents[effectiveAgentName].sessionId!;
