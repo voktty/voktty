@@ -5261,6 +5261,7 @@ function DesktopApp() {
               onOpenAi={togglePanelAndFocus}
               onOpenSettings={() => void openSettingsWindow()}
               onOpenAutomations={handleOpenAutomations}
+              onOpenAgentFeed={() => setAgentFeedOpen(true)}
               onRunCommand={handleRunTerminalCommand}
               runCommandDisabledReason={terminalCommandDisabledReason}
               toolkitTarget={toolkitTarget}

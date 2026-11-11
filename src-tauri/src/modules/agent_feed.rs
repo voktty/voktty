@@ -5,9 +5,7 @@ use voktty_agent_feed::{claude_home, poll, FeedRequest, FeedResponse};
 
 #[tauri::command]
 pub async fn agent_feed_poll(request: FeedRequest) -> Result<FeedResponse, String> {
-    if request.root.trim().is_empty() || request.root.len() > 4096 {
-        return Err("invalid project root".to_string());
-    }
+    request.validate().map_err(str::to_string)?;
     let home = dirs::home_dir().ok_or_else(|| "home folder not found".to_string())?;
     let config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
     tauri::async_runtime::spawn_blocking(move || {

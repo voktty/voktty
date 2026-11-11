@@ -4,14 +4,19 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import type { FeedResponse } from "../lib/types";
 
-const poll = vi.hoisted(() => ({ calls: 0, response: null as FeedResponse | null }));
+const poll = vi.hoisted(() => ({
+  calls: 0,
+  requests: [] as unknown[],
+  response: null as FeedResponse | null,
+}));
 
 vi.mock("../lib/feedSource", async (importActual) => {
   const actual = await importActual<typeof import("../lib/feedSource")>();
   return {
     ...actual,
-    pollFeed: vi.fn(async () => {
+    pollFeed: vi.fn(async (_target: unknown, request: unknown) => {
       poll.calls += 1;
+      poll.requests.push(request);
       if (!poll.response) throw new Error("no response");
       return poll.response;
     }),
@@ -71,6 +76,7 @@ afterEach(() => {
   cleanup?.();
   cleanup = null;
   poll.calls = 0;
+  poll.requests = [];
   poll.response = null;
 });
 
@@ -98,10 +104,28 @@ async function render(root: string | null) {
   };
 }
 
-it("asks for a project when the window has none", async () => {
+it("lists every agent on the machine when the window has no project", async () => {
+  poll.response = FEED;
   await render(null);
-  expect(document.body.textContent).toContain("Open a project folder");
-  expect(poll.calls).toBe(0);
+  expect(poll.requests[0]).toMatchObject({ scope: "host", root: "" });
+  expect(document.body.textContent).toContain("All agents on this computer");
+  const project = [...document.querySelectorAll("button")].find(
+    (button) => button.textContent === "This project",
+  );
+  expect(project?.disabled).toBe(true);
+});
+
+it("reads one project when asked", async () => {
+  poll.response = FEED;
+  await render("/srv/webserver");
+  const project = [...document.querySelectorAll("button")].find(
+    (button) => button.textContent === "This project",
+  );
+  await act(async () => project?.click());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(poll.requests[poll.requests.length - 1]).toMatchObject({ scope: "project", root: "/srv/webserver" });
 });
 
 it("shows the agents, their messages and notes, with secrets redacted", async () => {

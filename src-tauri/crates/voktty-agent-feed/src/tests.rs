@@ -59,6 +59,7 @@ fn human(ts: &str, uuid: &str, text: &str) -> Value {
 fn request(cursor: Option<FeedCursor>) -> FeedRequest {
     FeedRequest {
         root: ROOT.to_string(),
+        scope: FeedScope::Project,
         since_ms: 0,
         cursor,
     }
@@ -386,6 +387,7 @@ fn since_filters_old_records_and_long_text_is_truncated() {
         home,
         &FeedRequest {
             root: ROOT.into(),
+            scope: FeedScope::Project,
             since_ms: since,
             cursor: None,
         },
@@ -421,4 +423,83 @@ fn recipient_and_socket_helpers() {
         Some(2607137)
     );
     assert_eq!(socket_pid("nodo"), None);
+}
+
+#[test]
+fn host_scope_follows_named_sessions_anywhere_and_skips_unnamed_ones() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    // The terminal sits in /root; the agents work elsewhere.
+    write_session(
+        home,
+        1,
+        json!({"sessionId": "orch", "name": "orquestador", "cwd": "/root", "status": "busy"}),
+    );
+    write_session(
+        home,
+        2,
+        json!({"sessionId": "panel", "name": "panel-crm", "cwd": "/srv/webserver-crm-280"}),
+    );
+    write_session(home, 3, json!({"sessionId": "solo", "cwd": "/root"}));
+    transcript(
+        home,
+        "/root",
+        "orch",
+        &[send(
+            "2026-11-11T15:38:00.000Z",
+            "o",
+            "panel-crm",
+            "OK al plan",
+            "OK al plan de la 280",
+        )],
+    );
+    transcript(
+        home,
+        "/srv/webserver-crm-280",
+        "panel",
+        &[recv(
+            "2026-11-11T15:38:00.300Z",
+            "p",
+            1,
+            "orquestador",
+            "OK al plan de la 280",
+        )],
+    );
+    transcript(
+        home,
+        "/root",
+        "solo",
+        &[note("2026-11-11T15:00:00.000Z", "s", "unrelated")],
+    );
+
+    let feed = poll(
+        home,
+        &FeedRequest {
+            root: String::new(),
+            scope: FeedScope::Host,
+            since_ms: 0,
+            cursor: None,
+        },
+    );
+    let sessions: Vec<_> = feed.records.iter().map(|r| r.session_id.as_str()).collect();
+    assert_eq!(sessions, vec!["orch", "panel"]);
+    let names: Vec<_> = feed
+        .sessions
+        .iter()
+        .filter_map(|s| s.name.as_deref())
+        .collect();
+    assert_eq!(names, vec!["orquestador", "panel-crm"]);
+}
+
+#[test]
+fn a_project_scope_needs_a_root() {
+    let mut request = FeedRequest {
+        root: String::new(),
+        scope: FeedScope::Project,
+        since_ms: 0,
+        cursor: None,
+    };
+    assert!(request.validate().is_err());
+    request.scope = FeedScope::Host;
+    assert!(request.validate().is_ok());
 }

@@ -17,6 +17,7 @@ import type { FeedAgent, TimelineItem } from "../lib/feedModel";
 import { type FeedTarget, feedTargetFor } from "../lib/feedSource";
 import { tmuxAttachCommand } from "../lib/tmux";
 import { type FeedStatus, useAgentFeed } from "../lib/useAgentFeed";
+import type { FeedScope } from "../lib/types";
 import "./agentFeed.css";
 
 const HOUR = 3_600_000;
@@ -101,12 +102,15 @@ export default function AgentFeedDialog({
 function FeedView({ target }: { target: FeedTarget }) {
   const { t } = useTranslation();
   const [rangeMs, setRangeMs] = useState<number>(RANGES[1].ms);
+  // The whole machine by default: a terminal often sits in a folder other
+  // than the one the agents work in.
+  const [scope, setScope] = useState<FeedScope>("host");
   const [filters, setFilters] = useState<Set<Filter>>(
     () => new Set(["message", "note", "human", "presence"]),
   );
   const [agentFilter, setAgentFilter] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const { timeline, status, unrecognized, key } = useAgentFeed(target, rangeMs);
+  const { timeline, status, unrecognized, key } = useAgentFeed(target, scope, rangeMs);
   const [lastSeen] = useState(() => readLastSeen(key));
   const newest = timeline.items[timeline.items.length - 1];
   const newestTs = useRef<string | null>(null);
@@ -155,11 +159,32 @@ function FeedView({ target }: { target: FeedTarget }) {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-muted-foreground">
           {target.kind === "ssh"
-            ? t("agentFeed.sourceSsh", { project: target.project, host: target.host })
-            : t("agentFeed.sourceLocal", { project: target.project })}
+            ? scope === "host"
+              ? t("agentFeed.sourceSshHost", { host: target.host })
+              : t("agentFeed.sourceSsh", { project: target.project ?? "", host: target.host })
+            : scope === "host"
+              ? t("agentFeed.sourceLocalHost")
+              : t("agentFeed.sourceLocal", { project: target.project ?? "" })}
         </span>
         <StatusChip status={status} />
         <span className="flex-1" />
+        {(["host", "project"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            disabled={option === "project" && !target.root}
+            title={option === "project" && !target.root ? t("agentFeed.noProject") : undefined}
+            className={cn(
+              "agent-feed-chip cursor-pointer disabled:cursor-not-allowed disabled:opacity-40",
+              scope === option ? "text-foreground" : "text-muted-foreground",
+            )}
+            aria-pressed={scope === option}
+            onClick={() => setScope(option)}
+          >
+            {t(option === "host" ? "agentFeed.scopeHost" : "agentFeed.scopeProject")}
+          </button>
+        ))}
+        <span className="w-2" />
         {RANGES.map((range) => (
           <button
             key={range.ms}

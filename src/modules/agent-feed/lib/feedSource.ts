@@ -9,11 +9,18 @@ import type { FeedRequest, FeedResponse } from "./types";
 
 type SshEnv = Extract<WorkspaceEnv, { kind: "ssh" }>;
 
+/** `root` and `project` are null when the window has no project folder. */
 export type FeedTarget =
-  | { kind: "local"; root: string; project: string }
-  | { kind: "ssh"; root: string; project: string; host: string; env: SshEnv };
+  | { kind: "local"; root: string | null; project: string | null }
+  | {
+      kind: "ssh";
+      root: string | null;
+      project: string | null;
+      host: string;
+      env: SshEnv;
+    };
 
-export type FeedTargetProblem = "noProject" | "disconnected" | "unsupported";
+export type FeedTargetProblem = "disconnected" | "unsupported";
 
 function lastSegment(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -25,23 +32,22 @@ export function feedTargetFor(
   root: string | null,
   env: WorkspaceEnv,
 ): FeedTarget | FeedTargetProblem {
-  if (!root) return "noProject";
-  const remote = root.startsWith("remote://")
+  const remote = root?.startsWith("remote://")
     ? terminalRestoreProject(root)
     : undefined;
-  if (root.startsWith("remote://") && !remote) return "noProject";
-  const path = remote?.hostPath ?? root;
+  const path = root?.startsWith("remote://") ? (remote?.hostPath ?? null) : root;
+  const project = path ? lastSegment(path) : null;
   if (env.kind === "local") {
     return remote
       ? "unsupported"
-      : { kind: "local", root: path, project: lastSegment(path) };
+      : { kind: "local", root: path, project };
   }
   if (env.kind === "ssh") {
     if (env.sessionId == null) return "disconnected";
     return {
       kind: "ssh",
       root: path,
-      project: lastSegment(path),
+      project,
       host: env.connection.name || env.connection.host,
       env,
     };

@@ -23,7 +23,11 @@ import type {
   DockerWorkspaceConnection,
   WorkspaceEnv,
 } from "@/modules/workspace";
-import { IncognitoIcon, Settings01Icon } from "@hugeicons/core-free-icons";
+import {
+  IncognitoIcon,
+  Settings01Icon,
+  UserGroupIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { lazy, Suspense, useEffect, useSyncExternalStore, type RefObject } from "react";
 import { cn } from "@/lib/utils";
@@ -81,6 +85,8 @@ type Props = {
   onOpenAi: () => void;
   onOpenSettings: () => void;
   onOpenAutomations?: () => void;
+  /** Opens the log of what the active host's agents tell each other. */
+  onOpenAgentFeed?: () => void;
   onRunCommand?: (command: string) => boolean;
   runCommandDisabledReason?: string;
   toolkitTarget?: { path: string; workspace: WorkspaceEnv } | null;
@@ -118,6 +124,7 @@ export function StatusBar({
   onOpenAi,
   onOpenSettings,
   onOpenAutomations,
+  onOpenAgentFeed,
   onRunCommand,
   runCommandDisabledReason,
   toolkitTarget,
@@ -286,6 +293,18 @@ export function StatusBar({
           captureConversation={harnessMemory?.captureConversation}
           target={memoryTarget}
         />
+        {onOpenAgentFeed ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            onClick={onOpenAgentFeed}
+            title={t("agentFeed.openButton")}
+            aria-label={t("agentFeed.openButton")}
+          >
+            <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={1.75} />
+          </Button>
+        ) : null}
         {onOpenAutomations ? (
           <AutomationsPopover onOpenAll={onOpenAutomations} />
         ) : null}

@@ -2,8 +2,11 @@
 
 export type FeedCursor = { files: Record<string, number> };
 
+export type FeedScope = "project" | "host";
+
 export type FeedRequest = {
   root: string;
+  scope: FeedScope;
   sinceMs: number;
   cursor?: FeedCursor | null;
 };

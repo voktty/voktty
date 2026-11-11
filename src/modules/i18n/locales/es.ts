@@ -6912,6 +6912,11 @@ export const es: TranslationSchema = {
       "Git devolvió una lista de archivos incompleta. Los commits por selección se desactivan hasta obtener la lista completa.",
   },
   agentFeed: {
+    sourceLocalHost: "Todos los agentes de este equipo",
+    sourceSshHost: "Todos los agentes de {host}",
+    scopeHost: "Todos los agentes",
+    scopeProject: "Este proyecto",
+    openButton: "Comunicaciones del equipo",
     title: "Comunicaciones del equipo",
     description:
       "Lo que tus agentes se dicen entre ellos y te dicen a ti, leído de las sesiones de Claude Code de este proyecto.",

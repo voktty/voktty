@@ -320,8 +320,8 @@ impl RemoteServer {
                 return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
             }
         };
-        if params.root.trim().is_empty() || params.root.len() > 4096 {
-            return RemoteResponse::failure(request.id, "invalid_params", "invalid project root");
+        if let Err(error) = params.validate() {
+            return RemoteResponse::failure(request.id, "invalid_params", error);
         }
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)

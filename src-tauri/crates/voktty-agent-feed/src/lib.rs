@@ -47,11 +47,41 @@ pub struct FeedCursor {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FeedRequest {
     /// Project folder the team works in, as the session's cwd would be.
+    /// Empty with [`FeedScope::Host`].
+    #[serde(default)]
     pub root: String,
+    #[serde(default)]
+    pub scope: FeedScope,
     /// Ignore transcripts not modified since this time (Unix ms).
     pub since_ms: i64,
     #[serde(default)]
     pub cursor: Option<FeedCursor>,
+}
+
+/// What a poll follows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FeedScope {
+    /// The transcripts of one project folder and its siblings.
+    #[default]
+    Project,
+    /// Every named live session on the machine, wherever it runs. Unnamed
+    /// sessions are left out: a name is how Claude Code marks a session
+    /// that takes part in a team.
+    Host,
+}
+
+impl FeedRequest {
+    /// The request is well formed for its scope.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.root.len() > 4096 {
+            return Err("invalid project root");
+        }
+        if self.scope == FeedScope::Project && self.root.trim().is_empty() {
+            return Err("a project scope needs a project root");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -586,7 +616,12 @@ pub fn poll(claude_home: &Path, request: &FeedRequest) -> FeedResponse {
     if !response.available {
         return response;
     }
-    let root_dir = project_dir_name(&request.root);
+    let host = request.scope == FeedScope::Host;
+    let root_dir = if host {
+        String::new()
+    } else {
+        project_dir_name(&request.root)
+    };
     let projects = claude_home.join("projects");
     let previous = request.cursor.clone().unwrap_or_default();
     let all_sessions = read_live_sessions(claude_home);
@@ -599,7 +634,21 @@ pub fn poll(claude_home: &Path, request: &FeedRequest) -> FeedResponse {
         .filter(|key| split_key(key).is_some())
         .cloned()
         .collect();
-    if is_plain_dir(&projects) {
+    if host {
+        for session in &all_sessions {
+            let (Some(_), Some(cwd)) = (&session.name, session.cwd.as_deref()) else {
+                continue;
+            };
+            if session.alive == Some(false) || !safe_component(&session.session_id) {
+                continue;
+            }
+            let key = transcript_key(&project_dir_name(cwd), &session.session_id);
+            if split_key(&key).is_some() {
+                files.insert(key);
+            }
+        }
+    }
+    if !host && is_plain_dir(&projects) {
         if let Ok(dirs) = fs::read_dir(&projects) {
             for dir in dirs.flatten() {
                 let Some(dir_name) = dir.file_name().to_str().map(str::to_string) else {
@@ -753,6 +802,7 @@ pub fn poll(claude_home: &Path, request: &FeedRequest) -> FeedResponse {
         .into_iter()
         .filter(|s| {
             related_sessions.contains(&s.session_id)
+                || (host && s.name.is_some())
                 || s.name.as_ref().is_some_and(|n| peer_names.contains(n))
                 || peer_pids.contains(&s.pid)
                 || s.cwd

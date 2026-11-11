@@ -6775,6 +6775,11 @@ export const en = {
       "Git returned an incomplete file list. Scoped commits are disabled until the full list is available.",
   },
   agentFeed: {
+    sourceLocalHost: "All agents on this computer",
+    sourceSshHost: "All agents on {host}",
+    scopeHost: "All agents",
+    scopeProject: "This project",
+    openButton: "Team communications",
     title: "Team communications",
     description:
       "What your agents say to each other and to you, read from the Claude Code sessions of this project.",
