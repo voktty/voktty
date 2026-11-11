@@ -405,6 +405,107 @@ describe("legacyImporter", () => {
 
       fs.rmSync(testDir, { recursive: true, force: true });
     });
+
+    it("applyLegacyImport aborts without writing if reading existing agents.json fails with a non-ENOENT error (R3)", async () => {
+      const testDir = path.join(
+        os.tmpdir(),
+        `voktty_sec_read_err_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      );
+      const teamDir = path.join(testDir, ".voktty", "team");
+      fs.mkdirSync(teamDir, { recursive: true });
+
+      const originalContent = JSON.stringify({ original: "untouched" }, null, 2);
+      const agentsPath = path.join(teamDir, "agents.json");
+      fs.writeFileSync(agentsPath, originalContent);
+
+      const mockPreview = {
+        sourceFile: "mock",
+        roster: {
+          $schema: "./team.schema.json",
+          version: 1,
+          defaults: { runtime: { adapter: "claude-code" } },
+          agents: [
+            {
+              name: "valid_agent",
+              role: "roles/valid_agent.md",
+              start: "on-demand" as const,
+            },
+          ],
+        },
+        roles: { "roles/valid_agent.md": "# Valid Agent" },
+        warnings: [],
+        unmapped: [],
+      };
+
+      const { readTextFile } = await import("@/modules/harness/lib/fs");
+      vi.mocked(readTextFile).mockImplementationOnce(async (p: string) => {
+        if (p.endsWith("agents.json")) {
+          const err = new Error("EACCES: permission denied, open '" + p + "'");
+          (err as any).code = "EACCES";
+          throw err;
+        }
+        return fs.readFileSync(p, "utf-8");
+      });
+
+      await expect(applyLegacyImport(testDir, mockPreview as any)).rejects.toThrow(
+        "Failed to read existing team roster",
+      );
+
+      // Verify agents.json was NOT modified
+      expect(fs.readFileSync(agentsPath, "utf-8")).toBe(originalContent);
+
+      fs.rmSync(testDir, { recursive: true, force: true });
+    });
+
+    it("applyLegacyImport aborts without writing agents.json if creating backup copy fails (R3)", async () => {
+      const testDir = path.join(
+        os.tmpdir(),
+        `voktty_sec_bak_err_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      );
+      const teamDir = path.join(testDir, ".voktty", "team");
+      fs.mkdirSync(teamDir, { recursive: true });
+
+      const originalContent = JSON.stringify({ original: "preserve-me" }, null, 2);
+      const agentsPath = path.join(teamDir, "agents.json");
+      fs.writeFileSync(agentsPath, originalContent);
+
+      const mockPreview = {
+        sourceFile: "mock",
+        roster: {
+          $schema: "./team.schema.json",
+          version: 1,
+          defaults: { runtime: { adapter: "claude-code" } },
+          agents: [
+            {
+              name: "valid_agent",
+              role: "roles/valid_agent.md",
+              start: "on-demand" as const,
+            },
+          ],
+        },
+        roles: { "roles/valid_agent.md": "# Valid Agent" },
+        warnings: [],
+        unmapped: [],
+      };
+
+      const { writeTextFile } = await import("@/modules/harness/lib/fs");
+      vi.mocked(writeTextFile).mockImplementationOnce(async (p: string) => {
+        if (p.includes("agents.json.bak-")) {
+          throw new Error("ENOSPC: no space left on device");
+        }
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, "utf-8");
+      });
+
+      await expect(applyLegacyImport(testDir, mockPreview as any)).rejects.toThrow(
+        "Failed to create backup copy of agents.json",
+      );
+
+      // Verify agents.json was NOT overwritten
+      expect(fs.readFileSync(agentsPath, "utf-8")).toBe(originalContent);
+
+      fs.rmSync(testDir, { recursive: true, force: true });
+    });
   });
 
   describe("acceptance criterion: importing legacy webserver fixture (B5)", () => {

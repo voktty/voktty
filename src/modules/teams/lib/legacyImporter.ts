@@ -491,6 +491,34 @@ export async function previewLegacyImport(
   };
 }
 
+function isNotFoundError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === "object") {
+    const errorObj = err as { code?: string; message?: string };
+    if (errorObj.code === "ENOENT" || errorObj.code === "not_found") {
+      return true;
+    }
+    const msg = errorObj.message || "";
+    if (
+      msg.includes("ENOENT") ||
+      msg.includes("not found") ||
+      msg.includes("No such file") ||
+      msg.includes("os error 2")
+    ) {
+      return true;
+    }
+  }
+  if (typeof err === "string") {
+    return (
+      err.includes("ENOENT") ||
+      err.includes("not found") ||
+      err.includes("No such file") ||
+      err.includes("os error 2")
+    );
+  }
+  return false;
+}
+
 export async function applyLegacyImport(
   projectRoot: string,
   preview: LegacyImportPreview,
@@ -505,19 +533,33 @@ export async function applyLegacyImport(
 
   const agentsPath = resolveSafeTeamPath(projectRoot, "agents.json");
 
-  // B3: If agents.json already exists, create backup copy before overwriting
+  // B3 & R3: If agents.json already exists, create backup copy before overwriting.
+  // Only treat "file not found" as non-existent; if reading fails with any other error
+  // or if backup copy creation fails, abort without writing any files (R3).
+  let existingContent: string | null = null;
   try {
-    const existingContent = await readTextFile(agentsPath);
-    if (existingContent && existingContent.trim()) {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const backupPath = resolveSafeTeamPath(
-        projectRoot,
-        `agents.json.bak-${timestamp}`,
+    existingContent = await readTextFile(agentsPath);
+  } catch (err: unknown) {
+    if (!isNotFoundError(err)) {
+      throw new Error(
+        `Failed to read existing team roster at ${agentsPath}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      await writeTextFile(backupPath, existingContent);
     }
-  } catch {
-    // File did not exist; no backup needed
+  }
+
+  if (existingContent && existingContent.trim()) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = resolveSafeTeamPath(
+      projectRoot,
+      `agents.json.bak-${timestamp}`,
+    );
+    try {
+      await writeTextFile(backupPath, existingContent);
+    } catch (err: unknown) {
+      throw new Error(
+        `Failed to create backup copy of agents.json at ${backupPath}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // Write agents.json safely inside .voktty/team/

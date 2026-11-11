@@ -316,22 +316,31 @@ export async function openAgent(
     const state = await readTeamState(params.projectPath);
     const isOrch = isOrchestratorRole(agentDef.role);
 
-    const worktreePath = isCopy
-      ? resolveWorktreePath(params.projectPath, effectiveAgentName)
-      : undefined;
-    const sessionCwd = worktreePath ?? params.projectPath;
-
-    // B1: If agent is a copy, ensure worktree exists and is authorized natively in Rust
+    // B1 & R2: If agent is a copy, ensure worktree exists and is authorized natively in Rust.
+    // The path returned by ensure_agent_worktree is used as session cwd, as the value
+    // persisted in team state, and for resume validation (R2).
+    let copyWorktreePath: string | undefined;
     if (isCopy) {
       try {
         if (typeof deps.ensureWorktree === "function") {
-          await deps.ensureWorktree(params.projectPath, effectiveAgentName);
+          copyWorktreePath = await deps.ensureWorktree(
+            params.projectPath,
+            effectiveAgentName,
+          );
         } else {
           const { invoke } = await import("@tauri-apps/api/core");
-          await invoke("ensure_agent_worktree", {
+          const res = await invoke<string>("ensure_agent_worktree", {
             projectPath: params.projectPath,
             copyName: effectiveAgentName,
           });
+          if (typeof res === "string" && res.trim()) {
+            copyWorktreePath = res;
+          } else {
+            copyWorktreePath = resolveWorktreePath(
+              params.projectPath,
+              effectiveAgentName,
+            );
+          }
         }
       } catch (err: unknown) {
         return {
@@ -346,22 +355,25 @@ export async function openAgent(
       }
     }
 
+    const sessionCwd = copyWorktreePath ?? params.projectPath;
+
     if (mode === "resume" && state.agents[effectiveAgentName]?.sessionId) {
       const existingSessionId = state.agents[effectiveAgentName].sessionId!;
 
-      // I5: Validate saved worktree path matches canonical resolution
-      const savedWorktree = state.agents[effectiveAgentName].worktree ?? null;
-      const expectedWorktree = isCopy ? worktreePath ?? null : null;
-      if (isCopy && savedWorktree !== expectedWorktree) {
-        return {
-          ok: false,
-          agent: effectiveAgentName,
-          sessionId: existingSessionId,
-          mode: "resume",
-          supervised,
-          error: "invalid_params",
-          reason: `Saved worktree path '${savedWorktree}' does not match canonical worktree path '${expectedWorktree}'`,
-        };
+      // I5 & R2: Validate saved worktree path matches canonical worktree returned by Rust
+      if (isCopy) {
+        const savedWorktree = state.agents[effectiveAgentName].worktree ?? null;
+        if (savedWorktree !== copyWorktreePath) {
+          return {
+            ok: false,
+            agent: effectiveAgentName,
+            sessionId: existingSessionId,
+            mode: "resume",
+            supervised,
+            error: "invalid_params",
+            reason: `Saved worktree path '${savedWorktree}' does not match canonical worktree path '${copyWorktreePath}'`,
+          };
+        }
       }
 
       const existingLive = getLiveAgentBySessionId(existingSessionId);
@@ -510,7 +522,7 @@ export async function openAgent(
       currentTaskStartedAt: now,
       lastVerdict: undefined,
       supervised,
-      worktree: worktreePath ?? null,
+      worktree: copyWorktreePath ?? null,
     };
     await writeTeamState(params.projectPath, state);
 

@@ -648,5 +648,90 @@ describe("agentLauncher", () => {
       expect(result.reason).toContain("does not match canonical worktree path");
       expect(result.reason).toContain(canonicalWorktree);
     });
+
+    it("R2: uses path returned by ensure_agent_worktree as cwd, in state, and for resume validation with project in repo subfolder", async () => {
+      // Repository root is /workspace/my-repo
+      // Project sits in subfolder /workspace/my-repo/packages/subproject
+      const projectSubfolder = "/workspace/my-repo/packages/subproject";
+      // Rust ensure_agent_worktree computes worktree relative to canonical git root (/workspace/my-repo)
+      const rustCanonicalWorktree = "/workspace/my-repo-worktrees/developer-2";
+
+      const customDeps = {
+        ...mockDeps,
+        onNewHarnessTab: vi.fn().mockReturnValue(77),
+        newSession: vi.fn().mockImplementation((harness, cwd, model) => ({
+          id: "s_dev2_sub",
+          harness,
+          cwd,
+          model,
+        })),
+        ensureWorktree: vi.fn().mockResolvedValue(rustCanonicalWorktree),
+      };
+
+      // 1. Open new copy agent in subfolder project
+      const openResult = await openAgent(
+        {
+          projectPath: projectSubfolder,
+          agentName: "developer-2",
+          mode: "new",
+        },
+        customDeps,
+      );
+
+      expect(openResult.ok).toBe(true);
+      expect(customDeps.ensureWorktree).toHaveBeenCalledWith(
+        projectSubfolder,
+        "developer-2",
+      );
+      // Cwd passed to newSession must be the path returned by Rust
+      expect(customDeps.newSession).toHaveBeenCalledWith(
+        expect.anything(),
+        rustCanonicalWorktree,
+        expect.anything(),
+        expect.anything(),
+      );
+      // Cwd passed to onNewHarnessTab must be the path returned by Rust
+      expect(customDeps.onNewHarnessTab).toHaveBeenCalledWith(
+        undefined,
+        rustCanonicalWorktree,
+        "s_dev2_sub",
+      );
+      // Saved worktree in state must be the path returned by Rust
+      expect(mockState.agents["developer-2"].worktree).toBe(rustCanonicalWorktree);
+
+      // 2. Resume copy agent when state matches path returned by Rust -> succeeds
+      const resumeResult = await openAgent(
+        {
+          projectPath: projectSubfolder,
+          agentName: "developer-2",
+          mode: "resume",
+        },
+        customDeps,
+      );
+
+      expect(resumeResult.ok).toBe(true);
+      expect(customDeps.onNewHarnessTab).toHaveBeenLastCalledWith(
+        undefined,
+        rustCanonicalWorktree,
+        "s_dev2_sub",
+      );
+
+      // 3. Resume copy agent if saved worktree in state differs from Rust return value -> rejects with invalid_params
+      mockState.agents["developer-2"].worktree = "/divergent/path/developer-2";
+      const rejectResult = await openAgent(
+        {
+          projectPath: projectSubfolder,
+          agentName: "developer-2",
+          mode: "resume",
+        },
+        customDeps,
+      );
+
+      expect(rejectResult.ok).toBe(false);
+      expect(rejectResult.error).toBe("invalid_params");
+      expect(rejectResult.reason).toContain(
+        "Saved worktree path '/divergent/path/developer-2' does not match canonical worktree path '/workspace/my-repo-worktrees/developer-2'",
+      );
+    });
   });
 });

@@ -130,6 +130,14 @@ pub fn ensure_agent_worktree_impl(
 ) -> GitResult<String> {
     ensure_supported_workspace(workspace)?;
 
+    // R4: Remote workspaces are not supported for agent worktrees (copies are local only).
+    if workspace.is_remote() {
+        return Err(GitError::command(
+            "git worktree",
+            "remote workspaces are not supported for agent worktrees; copy worktrees are currently local only",
+        ));
+    }
+
     let trimmed = copy_name.trim();
     if trimmed.is_empty()
         || trimmed.len() > 64
@@ -147,12 +155,15 @@ pub fn ensure_agent_worktree_impl(
     let repo = authorized_repo_root(registry, project_path, workspace)?;
     ensure_git_available(&repo.workspace)?;
 
-    let repo_canonical = if repo.workspace.is_remote() {
-        PathBuf::from(&repo.git_path)
-    } else {
-        std::fs::canonicalize(resolve_path(&repo.git_path, &repo.workspace))
-            .map_err(|e| GitError::command("git worktree", format!("failed to canonicalize repo path: {e}")))?
-    };
+    if repo.workspace.is_remote() {
+        return Err(GitError::command(
+            "git worktree",
+            "remote workspaces are not supported for agent worktrees; copy worktrees are currently local only",
+        ));
+    }
+
+    let repo_canonical = std::fs::canonicalize(resolve_path(&repo.git_path, &repo.workspace))
+        .map_err(|e| GitError::command("git worktree", format!("failed to canonicalize repo path: {e}")))?;
 
     let repo_parent = repo_canonical.parent().ok_or_else(|| {
         GitError::command("git worktree", "repository has no parent directory")
@@ -178,27 +189,58 @@ pub fn ensure_agent_worktree_impl(
         ));
     }
 
-    let listed = list_worktrees(registry, project_path, workspace)?;
-    let existing_tree = listed.worktrees.iter().find(|t| {
-        worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace)
-    });
+    // R1: Check existence using symlink_metadata to avoid following symlinks.
+    let meta_opt = match std::fs::symlink_metadata(&worktree_path) {
+        Ok(meta) => Some(meta),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(GitError::Io(e)),
+    };
 
-    if let Some(_existing) = existing_tree {
-        if !repo.workspace.is_remote() {
-            registry.authorize(&worktree_path)?;
+    if let Some(meta) = meta_opt {
+        // Reject symlinks without following them.
+        if meta.file_type().is_symlink() {
+            return Err(GitError::SymlinkRejected(worktree_path));
         }
-        return Ok(worktree_path.to_string_lossy().to_string());
+
+        // If it exists on disk, it MUST be an already registered worktree of THIS repository.
+        let listed = list_worktrees(registry, project_path, workspace)?;
+        let is_registered = listed.worktrees.iter().any(|t| {
+            worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace)
+        });
+
+        if !is_registered {
+            return Err(GitError::command(
+                "git worktree",
+                format!(
+                    "path exists but is not a registered git worktree of this repository: {}",
+                    worktree_path.display()
+                ),
+            ));
+        }
+
+        let canonical = std::fs::canonicalize(&worktree_path)
+            .map_err(|e| GitError::command("git worktree", format!("failed to canonicalize worktree path: {e}")))?;
+        registry.authorize(&canonical)?;
+        return Ok(canonical.to_string_lossy().to_string());
     }
 
-    if worktree_path.exists() {
-        if !repo.workspace.is_remote() {
-            registry.authorize(&worktree_path)?;
-        }
-        return Ok(worktree_path.to_string_lossy().to_string());
+    // Path does not exist on disk. Check if git worktree list thinks it is registered (broken/missing entry).
+    let listed = list_worktrees(registry, project_path, workspace)?;
+    let is_registered = listed.worktrees.iter().any(|t| {
+        worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace)
+    });
+    if is_registered {
+        return Err(GitError::command(
+            "git worktree",
+            format!(
+                "worktree is registered in git but its directory is missing on disk: {}",
+                worktree_path.display()
+            ),
+        ));
     }
 
     if let Some(parent) = worktree_path.parent() {
-        if !repo.workspace.is_remote() && !parent.exists() {
+        if !parent.exists() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 GitError::command(
                     "git worktree",
@@ -220,13 +262,11 @@ pub fn ensure_agent_worktree_impl(
     let output = run_git(&repo.workspace, Some(&repo.git_path), args, 60)?;
     ensure_success(&output, "git worktree add failed")?;
 
-    if !repo.workspace.is_remote() {
-        let canonical_created =
-            std::fs::canonicalize(&worktree_path).unwrap_or(worktree_path.clone());
-        registry.authorize(&canonical_created)?;
-    }
+    let canonical_created =
+        std::fs::canonicalize(&worktree_path).unwrap_or(worktree_path);
+    registry.authorize(&canonical_created)?;
 
-    Ok(worktree_path.to_string_lossy().to_string())
+    Ok(canonical_created.to_string_lossy().to_string())
 }
 
 fn list_worktrees(
@@ -1196,5 +1236,89 @@ mod tests {
             &WorkspaceEnv::Local,
         );
         assert!(err_no_dash.is_err());
+    }
+
+    #[test]
+    fn refuses_existing_directory_that_is_not_a_registered_git_worktree() {
+        let (_parent, repo, registry) = repository();
+        let repo_canonical = std::fs::canonicalize(&repo).unwrap();
+        let repo_parent = repo_canonical.parent().unwrap();
+        let repo_base = repo_canonical.file_name().unwrap().to_string_lossy();
+        let fake_wt = repo_parent.join(format!("{repo_base}-worktrees")).join("unregistered-2");
+        std::fs::create_dir_all(&fake_wt).unwrap();
+
+        let result = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            "unregistered-2",
+            &WorkspaceEnv::Local,
+        );
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("is not a registered git worktree"),
+            "expected 'is not a registered git worktree', got: {err_msg}"
+        );
+        let canonical_fake = std::fs::canonicalize(&fake_wt).unwrap();
+        assert!(
+            !registry.is_authorized(&canonical_fake),
+            "unregistered directory must not be authorized in WorkspaceRegistry"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlinks_for_agent_worktrees_without_following() {
+        let (_parent, repo, registry) = repository();
+        let repo_canonical = std::fs::canonicalize(&repo).unwrap();
+        let repo_parent = repo_canonical.parent().unwrap();
+        let repo_base = repo_canonical.file_name().unwrap().to_string_lossy();
+        let wt_dir = repo_parent.join(format!("{repo_base}-worktrees"));
+        std::fs::create_dir_all(&wt_dir).unwrap();
+
+        let symlink_path = wt_dir.join("symlink-2");
+        let target_dir = repo_parent.join("external_target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        std::os::unix::fs::symlink(&target_dir, &symlink_path).unwrap();
+
+        let result = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            "symlink-2",
+            &WorkspaceEnv::Local,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GitError::SymlinkRejected(_)));
+        assert!(
+            !registry.is_authorized(&target_dir),
+            "symlink target must not be authorized"
+        );
+    }
+
+    #[test]
+    fn refuses_remote_workspaces_for_agent_worktrees() {
+        let (_parent, repo, registry) = repository();
+        let workspace = WorkspaceEnv::Ssh {
+            session_id: None,
+            root: "/remote/project".into(),
+            connection: serde_json::from_value(serde_json::json!({"host": "unreachable.invalid"})).unwrap(),
+        };
+
+        let result = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            "remote-2",
+            &workspace,
+        );
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("remote workspaces are not supported for agent worktrees"),
+            "expected remote unsupported message, got: {err_msg}"
+        );
     }
 }

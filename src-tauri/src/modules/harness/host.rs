@@ -2991,19 +2991,21 @@ pub(crate) fn apply_gui_env(cmd: &mut Command) {
     }
 }
 
-/// Explicit list of Claude Code runtime session markers.
-/// These variables identify an active/child Claude Code session instance and inhibit
+/// Explicit list of Claude Code runtime session markers removed from spawned child sessions.
+/// These variables identify an active/child Claude Code session instance and could inhibit
 /// independent child conversation persistence if inherited from an outer session.
 ///
-/// Sources:
+/// Verified markers:
 /// - `CLAUDECODE`: internal marker set by Claude Code CLI to identify execution environment.
-/// - `CLAUDE_CODE_CHILD_SESSION`: marks a child session, preventing independent transcript persistence.
-/// - `CLAUDE_CODE_SESSION_ID`: active session UUID of the parent Claude process.
-/// - `CLAUDE_CODE_SESSION_ATTENDED`: marks interactive attended session in parent.
 /// - `CLAUDE_CODE_ENTRYPOINT`: indicates parent entrypoint invocation mechanism.
-/// - `CLAUDE_CODE_MESSAGING_SOCKET`: parent IPC communication socket path.
-/// - `CLAUDE_CODE_MESSAGING_TOKEN`: authentication token for parent messaging socket.
-/// - `CLAUDE_PID`: process ID of parent Claude Code instance.
+///
+/// Defensive markers (scrubbed to prevent inheritance from interactive/wrapped parent sessions):
+/// - `CLAUDE_CODE_CHILD_SESSION`
+/// - `CLAUDE_CODE_SESSION_ID`
+/// - `CLAUDE_CODE_SESSION_ATTENDED`
+/// - `CLAUDE_CODE_MESSAGING_SOCKET`
+/// - `CLAUDE_CODE_MESSAGING_TOKEN`
+/// - `CLAUDE_PID`
 ///
 /// Note: Legitimate user configuration variables (e.g. `CLAUDE_CODE_GIT_BASH_PATH` on Windows,
 /// `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`)
