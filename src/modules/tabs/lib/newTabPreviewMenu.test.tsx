@@ -23,6 +23,7 @@ let root: Root;
 let node: HTMLDivElement;
 const preview = vi.fn();
 const browser = vi.fn();
+const team = vi.fn();
 const no = () => {};
 
 beforeEach(() => {
@@ -36,6 +37,7 @@ beforeEach(() => {
   );
   preview.mockClear();
   browser.mockClear();
+  team.mockClear();
   node = document.createElement("div");
   document.body.append(node);
   root = createRoot(node);
@@ -66,6 +68,7 @@ async function render(direction: "horizontal" | "vertical", reason?: string) {
     onNewPreview: preview,
     previewDisabledReason: reason,
     onNewBrowser: browser,
+    onOpenTeamBoard: team,
   };
   await act(async () =>
     root.render(
@@ -90,6 +93,10 @@ async function openMenu() {
       }),
     ),
   );
+  await act(async () => {
+    await import("@/modules/tabs/NewTabMenuItems");
+    await import("@/modules/teams/components/TeamTabChrome");
+  });
 }
 function item(label: string) {
   const result = [
@@ -100,6 +107,15 @@ function item(label: string) {
 }
 
 for (const direction of ["horizontal", "vertical"] as const) {
+  it(`opens the team board from the lazy ${direction} new-tab menu`, async () => {
+    await render(direction);
+    await openMenu();
+    await act(async () => item(t("teams.openBoardTabMenu")).click());
+    expect(team).toHaveBeenCalledOnce();
+    expect(preview).not.toHaveBeenCalled();
+    expect(browser).not.toHaveBeenCalled();
+  });
+
   it(`offers browser and project preview independently in the ${direction} menu`, async () => {
     await render(direction);
     await openMenu();

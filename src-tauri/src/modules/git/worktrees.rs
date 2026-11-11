@@ -145,7 +145,9 @@ pub fn ensure_agent_worktree_impl(
         || trimmed.contains('/')
         || trimmed.contains('\\')
         || trimmed.contains("..")
-        || trimmed.chars().any(|c| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+        || trimmed
+            .chars()
+            .any(|c| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
         || !trimmed.contains('-')
     {
         return Err(GitError::InvalidPath(format!(
@@ -164,11 +166,16 @@ pub fn ensure_agent_worktree_impl(
     }
 
     let repo_canonical = std::fs::canonicalize(resolve_path(&repo.git_path, &repo.workspace))
-        .map_err(|e| GitError::command("git worktree", format!("failed to canonicalize repo path: {e}")))?;
+        .map_err(|e| {
+            GitError::command(
+                "git worktree",
+                format!("failed to canonicalize repo path: {e}"),
+            )
+        })?;
 
-    let repo_parent = repo_canonical.parent().ok_or_else(|| {
-        GitError::command("git worktree", "repository has no parent directory")
-    })?;
+    let repo_parent = repo_canonical
+        .parent()
+        .ok_or_else(|| GitError::command("git worktree", "repository has no parent directory"))?;
     let repo_file_name = repo_canonical.file_name().ok_or_else(|| {
         GitError::command("git worktree", "could not determine repository folder name")
     })?;
@@ -184,7 +191,10 @@ pub fn ensure_agent_worktree_impl(
             "worktree path must sit outside the repository",
         ));
     }
-    if worktree_path.components().any(|c| c.as_os_str() == ".voktty") {
+    if worktree_path
+        .components()
+        .any(|c| c.as_os_str() == ".voktty")
+    {
         return Err(GitError::command(
             "git worktree",
             "worktree path must not sit inside .voktty",
@@ -213,9 +223,10 @@ pub fn ensure_agent_worktree_impl(
 
         // If it exists on disk, it MUST be an already registered worktree of THIS repository.
         let listed = list_worktrees(registry, project_path, workspace)?;
-        let is_registered = listed.worktrees.iter().any(|t| {
-            worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace)
-        });
+        let is_registered = listed
+            .worktrees
+            .iter()
+            .any(|t| worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace));
 
         if !is_registered {
             return Err(GitError::command(
@@ -227,8 +238,12 @@ pub fn ensure_agent_worktree_impl(
             ));
         }
 
-        let canonical = std::fs::canonicalize(&worktree_path)
-            .map_err(|e| GitError::command("git worktree", format!("failed to canonicalize worktree path: {e}")))?;
+        let canonical = std::fs::canonicalize(&worktree_path).map_err(|e| {
+            GitError::command(
+                "git worktree",
+                format!("failed to canonicalize worktree path: {e}"),
+            )
+        })?;
 
         // Nota menor E4C: comprobar que la ruta canónica del worktree queda dentro del contenedor designado.
         if !canonical.starts_with(&expected_container) {
@@ -250,9 +265,10 @@ pub fn ensure_agent_worktree_impl(
 
     // Path does not exist on disk. Check if git worktree list thinks it is registered (broken/missing entry).
     let listed = list_worktrees(registry, project_path, workspace)?;
-    let is_registered = listed.worktrees.iter().any(|t| {
-        worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace)
-    });
+    let is_registered = listed
+        .worktrees
+        .iter()
+        .any(|t| worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace));
     if is_registered {
         return Err(GitError::command(
             "git worktree",
@@ -279,15 +295,14 @@ pub fn ensure_agent_worktree_impl(
         OsString::from("add"),
         OsString::from("--detach"),
         OsString::from("--"),
-        worktree_path.clone().into_os_string(),
+        agent_worktree_git_path(&worktree_path),
         OsString::from("HEAD"),
     ];
 
     let output = run_git(&repo.workspace, Some(&repo.git_path), args, 60)?;
     ensure_success(&output, "git worktree add failed")?;
 
-    let canonical_created =
-        std::fs::canonicalize(&worktree_path).unwrap_or(worktree_path);
+    let canonical_created = std::fs::canonicalize(&worktree_path).unwrap_or(worktree_path);
 
     // Nota menor E4C: comprobar que la ruta canónica creada queda dentro del contenedor designado.
     if !canonical_created.starts_with(&expected_container) {
@@ -305,6 +320,17 @@ pub fn ensure_agent_worktree_impl(
 
     // W1: Devolver la ruta con windows_display_path normalizada para frontend/estado.
     Ok(windows_display_path(&canonical_created.to_string_lossy()))
+}
+
+fn agent_worktree_git_path(path: &Path) -> OsString {
+    #[cfg(windows)]
+    {
+        OsString::from(windows_display_path(&path.to_string_lossy()))
+    }
+    #[cfg(not(windows))]
+    {
+        path.as_os_str().to_owned()
+    }
 }
 
 fn list_worktrees(
@@ -1212,6 +1238,31 @@ mod tests {
     }
 
     #[test]
+    fn agent_worktree_git_paths_preserve_native_spelling() {
+        #[cfg(windows)]
+        for (source, expected) in [
+            (
+                r"\\?\C:\Projects\my project-worktrees\nodo-2",
+                "C:/Projects/my project-worktrees/nodo-2",
+            ),
+            (
+                r"\\?\UNC\server\share\project-worktrees\nodo-2",
+                "//server/share/project-worktrees/nodo-2",
+            ),
+        ] {
+            assert_eq!(
+                agent_worktree_git_path(Path::new(source)),
+                OsString::from(expected)
+            );
+        }
+        #[cfg(not(windows))]
+        {
+            let path = Path::new(r"/tmp/project\literal-worktrees/nodo-2");
+            assert_eq!(agent_worktree_git_path(path), path.as_os_str());
+        }
+    }
+
+    #[test]
     fn ensures_agent_worktree_outside_repo_idempotently_and_authorizes_it() {
         let (_parent, repo, registry) = repository();
         let copy_name = "nodo-2";
@@ -1227,6 +1278,13 @@ mod tests {
 
         let wt_path = PathBuf::from(&path_str);
         assert!(wt_path.is_dir(), "worktree directory must exist on disk");
+        let head = run_git(&wt_path, &["rev-parse", "HEAD"]);
+        let original_head = run_git(&repo, &["rev-parse", "HEAD"]);
+        assert_eq!(head.stdout, original_head.stdout);
+        let metadata =
+            std::fs::read_to_string(wt_path.join(".git")).expect("worktree Git metadata");
+        assert!(metadata.starts_with("gitdir: "));
+        assert!(!metadata.contains(r"\\?\"));
 
         // Validate worktree is outside the repository
         let repo_canonical = std::fs::canonicalize(&repo).expect("canonical repo");
@@ -1236,7 +1294,9 @@ mod tests {
             "worktree must sit outside repository root"
         );
         assert!(
-            !wt_canonical.components().any(|c| c.as_os_str() == ".voktty"),
+            !wt_canonical
+                .components()
+                .any(|c| c.as_os_str() == ".voktty"),
             "worktree must not sit inside .voktty"
         );
 
@@ -1252,8 +1312,14 @@ mod tests {
             windows_display_path(&wt_canonical.to_string_lossy()),
             "returned path must match windows_display_path"
         );
-        assert!(!path_str.contains(r"\\?\"), "returned path must not contain verbatim prefix");
-        assert!(!path_str.contains('\\'), "returned path must not contain backslashes");
+        assert!(
+            !path_str.contains(r"\\?\"),
+            "returned path must not contain verbatim prefix"
+        );
+        assert!(
+            !path_str.contains('\\'),
+            "returned path must not contain backslashes"
+        );
 
         // 2. Test idempotency when called again upon resume
         let resumed_path = ensure_agent_worktree_impl(
@@ -1291,7 +1357,9 @@ mod tests {
         let repo_canonical = std::fs::canonicalize(&repo).unwrap();
         let repo_parent = repo_canonical.parent().unwrap();
         let repo_base = repo_canonical.file_name().unwrap().to_string_lossy();
-        let fake_wt = repo_parent.join(format!("{repo_base}-worktrees")).join("unregistered-2");
+        let fake_wt = repo_parent
+            .join(format!("{repo_base}-worktrees"))
+            .join("unregistered-2");
         std::fs::create_dir_all(&fake_wt).unwrap();
 
         let result = ensure_agent_worktree_impl(
@@ -1351,15 +1419,12 @@ mod tests {
         let workspace = WorkspaceEnv::Ssh {
             session_id: None,
             root: "/remote/project".into(),
-            connection: serde_json::from_value(serde_json::json!({"host": "unreachable.invalid"})).unwrap(),
+            connection: serde_json::from_value(serde_json::json!({"host": "unreachable.invalid"}))
+                .unwrap(),
         };
 
-        let result = ensure_agent_worktree_impl(
-            &registry,
-            &repo.to_string_lossy(),
-            "remote-2",
-            &workspace,
-        );
+        let result =
+            ensure_agent_worktree_impl(&registry, &repo.to_string_lossy(), "remote-2", &workspace);
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();

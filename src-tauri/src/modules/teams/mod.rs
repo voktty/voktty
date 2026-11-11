@@ -5,8 +5,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tempfile::NamedTempFile;
 use tauri::{AppHandle, Manager};
+use tempfile::NamedTempFile;
 
 static APPROVALS_MUTEX: Mutex<()> = Mutex::new(());
 static HOSTS_MUTEX: Mutex<()> = Mutex::new(());
@@ -83,7 +83,9 @@ pub fn validate_remote_path(remote_path: &str) -> Result<String, String> {
         return Err("Remote project path cannot be the root directory ('/')".to_string());
     }
     if !trimmed.starts_with('/') {
-        return Err("Remote project path must be a POSIX absolute path starting with '/'".to_string());
+        return Err(
+            "Remote project path must be a POSIX absolute path starting with '/'".to_string(),
+        );
     }
     if trimmed.contains('\\') {
         return Err("Remote project path cannot contain backslashes".to_string());
@@ -96,7 +98,9 @@ pub fn validate_remote_path(remote_path: &str) -> Result<String, String> {
         return Err("Remote project path cannot be the root directory ('/')".to_string());
     }
     if segments.contains(&"..") || segments.contains(&".") {
-        return Err("Remote project path cannot contain relative segments ('..' or '.')".to_string());
+        return Err(
+            "Remote project path cannot contain relative segments ('..' or '.')".to_string(),
+        );
     }
     Ok(trimmed.to_string())
 }
@@ -165,8 +169,13 @@ pub fn read_store_from_file(path: &Path) -> Result<GenericApprovalsStore, String
         });
     }
     let data = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&data)
-        .map_err(|e| format!("Corrupt approvals store file at '{}': {}", path.display(), e))
+    serde_json::from_str(&data).map_err(|e| {
+        format!(
+            "Corrupt approvals store file at '{}': {}",
+            path.display(),
+            e
+        )
+    })
 }
 
 pub fn write_store_to_file(path: &Path, store: &GenericApprovalsStore) -> Result<(), String> {
@@ -310,7 +319,12 @@ pub fn team_is_generic_command_approved(
     command: String,
 ) -> Result<bool, String> {
     let store_path = store_file_path(&app)?;
-    Ok(is_generic_command_approved_at(&store_path, &project_path, &agent_name, &command))
+    Ok(is_generic_command_approved_at(
+        &store_path,
+        &project_path,
+        &agent_name,
+        &command,
+    ))
 }
 
 #[tauri::command]
@@ -460,7 +474,13 @@ pub fn team_save_host_mapping(
     remote_path: String,
 ) -> Result<(), String> {
     let store_path = team_hosts_store_path(&app)?;
-    set_team_host_mapping_at(&store_path, &project_path, &alias, &connection_id, &remote_path)
+    set_team_host_mapping_at(
+        &store_path,
+        &project_path,
+        &alias,
+        &connection_id,
+        &remote_path,
+    )
 }
 
 #[tauri::command]
@@ -626,8 +646,8 @@ mod tests {
         let native_store_path = app_data_dir.path().join("team_hosts.json");
 
         // 1. Verify that the workspace file concedes NOTHING to Rust native host store
-        let unconfigured = get_team_host_mapping_at(&native_store_path, &project_path, "evil-target")
-            .unwrap();
+        let unconfigured =
+            get_team_host_mapping_at(&native_store_path, &project_path, "evil-target").unwrap();
         assert!(
             unconfigured.is_none(),
             "A workspace file in .voktty/state/hosts.json must not grant or define any host mapping"
@@ -650,10 +670,9 @@ mod tests {
         )
         .unwrap();
 
-        let resolved =
-            get_team_host_mapping_at(&native_store_path, &project_path, "gpu-node")
-                .unwrap()
-                .expect("Expected host mapping to exist");
+        let resolved = get_team_host_mapping_at(&native_store_path, &project_path, "gpu-node")
+            .unwrap()
+            .expect("Expected host mapping to exist");
         assert_eq!(resolved.alias, "gpu-node");
         assert_eq!(resolved.connection_id, "valid-ssh-conn-uuid");
         assert_eq!(resolved.remote_path, "/home/user/workspace/remote-project");
@@ -804,14 +823,9 @@ mod tests {
         assert!(get_err.contains("Corrupt hosts store file"));
 
         // set_team_host_mapping_at fails without overwriting corrupt file
-        let set_err = set_team_host_mapping_at(
-            &hosts_path,
-            project_path,
-            "alias",
-            "conn-1",
-            "/remote/path",
-        )
-        .unwrap_err();
+        let set_err =
+            set_team_host_mapping_at(&hosts_path, project_path, "alias", "conn-1", "/remote/path")
+                .unwrap_err();
         assert!(set_err.contains("Corrupt hosts store file"));
 
         // Verify the file was NOT overwritten or truncated
@@ -827,13 +841,9 @@ mod tests {
         assert!(app_read_err.contains("Corrupt approvals store file"));
 
         // approve_generic_command_at fails without overwriting corrupt file
-        let app_err = approve_generic_command_at(
-            &approvals_path,
-            project_path,
-            "developer",
-            "npm test",
-        )
-        .unwrap_err();
+        let app_err =
+            approve_generic_command_at(&approvals_path, project_path, "developer", "npm test")
+                .unwrap_err();
         assert!(app_err.contains("Corrupt approvals store file"));
 
         let app_after_attempt = fs::read_to_string(&approvals_path).unwrap();
@@ -861,9 +871,10 @@ mod tests {
         let store = read_hosts_store_from_file(&hosts_path).unwrap();
         assert_eq!(store.hosts.len(), 10);
         for i in 0..10 {
-            let record = get_team_host_mapping_at(&hosts_path, project_path, &format!("host-{}", i))
-                .unwrap()
-                .expect("host should exist");
+            let record =
+                get_team_host_mapping_at(&hosts_path, project_path, &format!("host-{}", i))
+                    .unwrap()
+                    .expect("host should exist");
             assert_eq!(record.connection_id, format!("conn-{}", i));
             assert_eq!(record.remote_path, format!("/remote/path/{}", i));
         }

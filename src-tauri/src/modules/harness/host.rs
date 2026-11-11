@@ -769,7 +769,10 @@ fn cmd_shim_script(content: &str) -> Option<String> {
                 .take_while(|&ch| ch != '"' && ch != ' ' && ch != '%' && ch != '\r' && ch != '\n')
                 .collect();
             let lower = path.to_ascii_lowercase();
-            if [".js", ".mjs", ".cjs"].iter().any(|ext| lower.ends_with(ext)) {
+            if [".js", ".mjs", ".cjs"]
+                .iter()
+                .any(|ext| lower.ends_with(ext))
+            {
                 return Some(path);
             }
         }
@@ -4441,7 +4444,10 @@ mod binary_resolution_tests {
             .env("CLAUDE_CODE_ENTRYPOINT", "cli")
             .env("CLAUDE_CODE_SESSION_ID", "parent_123")
             .env("CLAUDE_PID", "4567")
-            .env("CLAUDE_CODE_GIT_BASH_PATH", "C:\\Program Files\\Git\\bin\\bash.exe")
+            .env(
+                "CLAUDE_CODE_GIT_BASH_PATH",
+                "C:\\Program Files\\Git\\bin\\bash.exe",
+            )
             .env("CLAUDE_CODE_USE_BEDROCK", "1")
             .env("CUSTOM_VAR", "keep_me");
 

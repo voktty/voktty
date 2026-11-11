@@ -88,6 +88,10 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
             id.endsWith("/modules/preview/devServerStore.ts") ||
             id.endsWith("/modules/source-control/useSourceControl.ts") ||
             id.endsWith("/modules/terminal/lib/pty-bridge.ts") ||
+            id.endsWith("/modules/tabs/lib/tabMetadata.ts") ||
+            id.endsWith("/modules/teams/components/TeamTabChromeLazy.tsx") ||
+            id.endsWith("/modules/command-palette/hooks/useSurfaceCommands.ts") ||
+            id.endsWith("/modules/command-palette/lib/fuzzy.ts") ||
             id.endsWith("/styles/terminalTheme.ts")
           )
             return "core";

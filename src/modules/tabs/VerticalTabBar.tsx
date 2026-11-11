@@ -1,4 +1,8 @@
 import {
+  TeamContextMenuItemLazy,
+  TeamTabIconLazy,
+} from "@/modules/teams/components/TeamTabChromeLazy";
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -53,7 +57,6 @@ import {
   SparklesIcon,
   SquareLock01Icon,
   SquareUnlock01Icon,
-  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -193,16 +196,7 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
       />
     );
   }
-  if (tab.kind === "team") {
-    return (
-      <HugeiconsIcon
-        icon={UserGroupIcon}
-        size={14}
-        strokeWidth={1.75}
-        className="text-cyan-400"
-      />
-    );
-  }
+  if (tab.kind === "team") return <TeamTabIconLazy />;
   if (
     tab.kind === "git-diff" ||
     tab.kind === "git-history" ||
@@ -959,22 +953,11 @@ export function VerticalTabBar({
                       );
                     })()}
                     {onOpenTeamBoard && (
-                      <ContextMenuItem
+                      <TeamContextMenuItemLazy
+                        tab={tab}
+                        onOpen={onOpenTeamBoard}
                         className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
-                        onSelect={() => {
-                          const tabPath = getTabPath(tab);
-                          onOpenTeamBoard(tabPath ?? undefined);
-                        }}
-                      >
-                        <HugeiconsIcon
-                          icon={UserGroupIcon}
-                          size={13}
-                          strokeWidth={1.75}
-                        />
-                        <span className="flex-1">
-                          {t("teams.openBoardTabMenu")}
-                        </span>
-                      </ContextMenuItem>
+                      />
                     )}
                     {onOpenPreviewSplit && (
                       <TabPreviewSplitMenuItem

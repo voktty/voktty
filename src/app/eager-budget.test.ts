@@ -15,6 +15,22 @@ function heavyEagerHits(entry: string): string[] {
 }
 
 describe("startup bundle budget", () => {
+  it("keeps team menus and runtime behind their lazy boundaries", () => {
+    const { files } = traceEager("src/main.tsx");
+    expect(files.some((file) => file.endsWith("/NewTabMenuItems.tsx"))).toBe(false);
+    expect(files.some((file) => file.endsWith("/CommandPalette.tsx"))).toBe(false);
+    expect(
+      files
+        .map((file) => file.replace(/\\/g, "/"))
+        .filter(
+          (file) =>
+            file.includes("/modules/teams/") &&
+            !file.endsWith("/TeamStackLazy.tsx") &&
+            !file.endsWith("/TeamTabChromeLazy.tsx"),
+        ),
+    ).toEqual([]);
+  }, 15000);
+
   it("main window does not eagerly pull editor/AI/markdown stacks", () => {
     expect(heavyEagerHits("src/main.tsx")).toEqual([]);
   }, 15000);
