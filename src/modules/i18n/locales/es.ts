@@ -6082,6 +6082,7 @@ export const es: TranslationSchema = {
       copyPath: "Copiar ruta",
     },
     modelPicker: {
+      back: "Volver",
       modelAndEffort: "Modelo y esfuerzo",
       model: "Modelo",
       recentHint:

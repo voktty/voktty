@@ -182,3 +182,83 @@ it("shows the effort on the trigger and picks it on a track, low to high", async
     document.body.querySelector('button[data-model-control-index="0"]'),
   ).not.toBeNull();
 });
+
+it("swaps the card for the model list in place and comes back", async () => {
+  await act(async () => {
+    root.render(
+      createElement(ModelPicker, {
+        harness: "grok",
+        model: "grok:grok-4.6",
+        values: { effort: "low" },
+        onChange: vi.fn(),
+        onSettingsChange: vi.fn(),
+      }),
+    );
+  });
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="menu"]',
+  );
+  await act(async () => trigger?.click());
+  const surfaces = () => document.body.querySelectorAll("[data-model-picker]").length;
+  expect(surfaces()).toBe(1);
+  // Hovering the model row opens nothing beside the card.
+  const modelRow = document.body.querySelector<HTMLButtonElement>(
+    'button[data-model-control-index="0"]',
+  );
+  await act(async () => {
+    modelRow?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  });
+  expect(
+    document.body.querySelector('input[placeholder="harness.modelPicker.searchModels"]'),
+  ).toBeNull();
+
+  await act(async () => modelRow?.click());
+  expect(surfaces()).toBe(1);
+  expect(
+    document.body.querySelector('input[placeholder="harness.modelPicker.searchModels"]'),
+  ).not.toBeNull();
+  expect(document.body.querySelector("[data-effort-slider]")).toBeNull();
+
+  const back = document.body.querySelector<HTMLButtonElement>(
+    'button[aria-label="harness.modelPicker.back"]',
+  );
+  await act(async () => back?.click());
+  expect(document.body.querySelector("[data-effort-slider]")).not.toBeNull();
+});
+
+it("drags the effort along the track", async () => {
+  const onSettingsChange = vi.fn();
+  await act(async () => {
+    root.render(
+      createElement(ModelPicker, {
+        harness: "grok",
+        model: "grok:grok-4.6",
+        values: { effort: "low" },
+        onChange: vi.fn(),
+        onSettingsChange,
+      }),
+    );
+  });
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="menu"]',
+  );
+  await act(async () => trigger?.click());
+  const track = document.body.querySelector<HTMLDivElement>(
+    '[data-effort-slider] [role="radiogroup"]',
+  );
+  expect(track).not.toBeNull();
+  if (!track) return;
+  track.getBoundingClientRect = () =>
+    ({ left: 0, width: 400, top: 0, height: 36, right: 400, bottom: 36 }) as DOMRect;
+  const pointer = (type: string, clientX: number) =>
+    new PointerEvent(type, { bubbles: true, button: 0, clientX, pointerId: 1 });
+  await act(async () => {
+    track.dispatchEvent(pointer("pointerdown", 10));
+    track.dispatchEvent(pointer("pointermove", 150));
+    track.dispatchEvent(pointer("pointermove", 390));
+    track.dispatchEvent(pointer("pointerup", 390));
+  });
+  // Four stops over 400px: 150 is Medium, 390 is Extra High.
+  expect(onSettingsChange).toHaveBeenCalledWith({ effort: "medium" });
+  expect(onSettingsChange).toHaveBeenLastCalledWith({ effort: "xhigh" });
+});

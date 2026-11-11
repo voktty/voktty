@@ -5954,6 +5954,7 @@ export const en = {
       copyPath: "Copy path",
     },
     modelPicker: {
+      back: "Back",
       modelAndEffort: "Model and effort",
       model: "Model",
       recentHint:
