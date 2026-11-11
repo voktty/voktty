@@ -3,6 +3,8 @@ import {
   Check,
   CornerDownRight,
   ListEnd,
+  Loader,
+  Mic,
   Pause,
   Pencil,
   Play,
@@ -25,6 +27,8 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "@/modules/i18n";
+import { STT_PROVIDER_LABELS } from "@/modules/ai/config";
+import { useWhisperRecording } from "@/modules/ai/hooks/useWhisperRecording";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   attachmentsFromFiles,
@@ -1731,6 +1735,46 @@ export function Composer({
     );
   };
 
+  // Dictation with the same speech-to-text settings as Voktty's AI chat.
+  // A recording belongs to this composer instance; the text lands at the
+  // end of the current draft.
+  const voiceGeneration = useRef(0);
+  useEffect(
+    () => () => {
+      voiceGeneration.current += 1;
+    },
+    [],
+  );
+  const captureVoice = useCallback(() => {
+    const generation = voiceGeneration.current;
+    return () => voiceGeneration.current === generation && ref.current !== null;
+  }, []);
+  const voice = useWhisperRecording({
+    captureCurrent: captureVoice,
+    onResult: (transcript) => {
+      const el = ref.current;
+      const spoken = transcript.trim();
+      if (!el || !spoken) return;
+      const next = el.value
+        ? `${el.value}${/\s$/.test(el.value) ? "" : " "}${spoken}`
+        : spoken;
+      el.value = next;
+      resizeComposer(el);
+      el.setSelectionRange(next.length, next.length);
+      setDraft(next);
+      onDraftChange?.(next);
+      syncHasValue(next, attachmentsRef.current);
+      el.focus();
+    },
+  });
+  const voiceLabel = !voice.hasKey
+    ? t("ai.voiceNeedsKey", { provider: STT_PROVIDER_LABELS[voice.sttProvider] })
+    : voice.recording
+      ? t("ai.stopTranscribe")
+      : voice.transcribing
+        ? t("ai.transcribing")
+        : t("ai.composerVoice");
+
   const attachFromPicker = () => {
     if (!attachmentsSupported) return;
     readDroppedAttachments((guard) => pickAttachments(guard), true, dropOwner);
@@ -2026,6 +2070,22 @@ export function Composer({
             >
               <Plus className="size-3.5" strokeWidth={1.5} />
             </ToolButton>
+            {voice.supported ? (
+              <ToolButton
+                label={voiceLabel}
+                active={voice.recording}
+                disabled={voice.transcribing || !voice.hasKey}
+                onClick={() => (voice.recording ? voice.stop() : void voice.start())}
+              >
+                {voice.recording ? (
+                  <span className="size-2 animate-pulse rounded-full bg-destructive" />
+                ) : voice.transcribing ? (
+                  <Loader className="size-3.5 animate-spin" strokeWidth={1.5} />
+                ) : (
+                  <Mic className="size-3.5" strokeWidth={1.5} />
+                )}
+              </ToolButton>
+            ) : null}
             {orchestrationActive ? (
               <ModeCommandPill
                 name={ORCHESTRATOR_COMMAND.name}
