@@ -187,6 +187,8 @@ export type Preferences = {
   backgroundOpacity: number;
   backgroundBlur: number;
   windowVibrancy: boolean;
+  /** Windows backdrop: "auto" follows the theme. */
+  windowMaterial: WindowMaterialPref;
   vibrancyOpacity: number;
   aiEnabled: boolean;
   aiConfigRevision: number;
@@ -330,6 +332,7 @@ const KEY_BG_OPACITY = "backgroundOpacity";
 const KEY_BG_BLUR = "backgroundBlur";
 const KEY_WINDOW_VIBRANCY = "windowVibrancy";
 const KEY_VIBRANCY_OPACITY = "vibrancyOpacity";
+const KEY_WINDOW_MATERIAL = "windowMaterial";
 const KEY_AI_ENABLED = "aiEnabled";
 const KEY_AI_CONFIG_REVISION = "aiConfigRevision";
 const KEY_AI_HEALTH_REVISION = "aiHealthRevision";
@@ -495,6 +498,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   customInstructions: "",
   autostart: false,
   windowVibrancy: true,
+  windowMaterial: "auto",
   vibrancyOpacity: 0.85,
   restoreWindowState: true,
   startupSurface: "harness",
@@ -715,6 +719,7 @@ export async function loadPreferences(): Promise<Preferences> {
       DEFAULT_PREFERENCES.restoreWindowState,
     windowVibrancy:
       get<boolean>(KEY_WINDOW_VIBRANCY) ?? DEFAULT_PREFERENCES.windowVibrancy,
+    windowMaterial: normalizeWindowMaterial(get<unknown>(KEY_WINDOW_MATERIAL)),
     vibrancyOpacity: clampVibrancyOpacity(
       get<number>(KEY_VIBRANCY_OPACITY) ?? DEFAULT_PREFERENCES.vibrancyOpacity,
     ),
@@ -1133,6 +1138,24 @@ export async function setRestoreWindowState(value: boolean): Promise<void> {
   await writePref(KEY_RESTORE_WINDOW, value);
 }
 
+export type WindowMaterialPref = "auto" | "mica" | "mica-alt" | "acrylic";
+export const WINDOW_MATERIAL_PREFS: readonly WindowMaterialPref[] = [
+  "auto",
+  "mica",
+  "mica-alt",
+  "acrylic",
+];
+
+export function normalizeWindowMaterial(value: unknown): WindowMaterialPref {
+  return WINDOW_MATERIAL_PREFS.includes(value as WindowMaterialPref)
+    ? (value as WindowMaterialPref)
+    : "auto";
+}
+
+export async function setWindowMaterial(value: WindowMaterialPref): Promise<void> {
+  await writePref(KEY_WINDOW_MATERIAL, normalizeWindowMaterial(value));
+}
+
 export const VIBRANCY_OPACITY_DEFAULT = 0.85;
 export const VIBRANCY_OPACITY_MIN = 0.2;
 export const VIBRANCY_OPACITY_MAX = 1.0;
@@ -1520,6 +1543,7 @@ export async function onPreferencesChange(
     [KEY_BG_BLUR]: "backgroundBlur",
     [KEY_WINDOW_VIBRANCY]: "windowVibrancy",
     [KEY_VIBRANCY_OPACITY]: "vibrancyOpacity",
+    [KEY_WINDOW_MATERIAL]: "windowMaterial",
     [KEY_AI_ENABLED]: "aiEnabled",
     [KEY_AI_CONFIG_REVISION]: "aiConfigRevision",
     [KEY_AI_HEALTH_REVISION]: "aiHealthRevision",
@@ -1676,6 +1700,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   backgroundBlur: KEY_BG_BLUR,
   windowVibrancy: KEY_WINDOW_VIBRANCY,
   vibrancyOpacity: KEY_VIBRANCY_OPACITY,
+  windowMaterial: KEY_WINDOW_MATERIAL,
   aiEnabled: KEY_AI_ENABLED,
   aiConfigRevision: KEY_AI_CONFIG_REVISION,
   aiHealthRevision: KEY_AI_HEALTH_REVISION,

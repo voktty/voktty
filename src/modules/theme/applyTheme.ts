@@ -1,3 +1,4 @@
+import { surfaceAlphas } from "./surfaceAlpha";
 import type { Theme, ThemeColors, ThemeMode, TerminalPalette } from "./types";
 import { applySkin, clearSkin } from "./skins/skinLoader";
 import { getSkin } from "./skins/skinRegistry";
@@ -245,26 +246,20 @@ function writeColors(
 
   if (vibrancyEnabled) {
     root.style.setProperty("--vibrancy-opacity", String(vibrancyOpacity));
-    const frame = colorWithAlpha(rawFrame, Math.min(1, vibrancyOpacity * 0.55));
-    const sidebar = colorWithAlpha(
-      c.surfaceSidebar ?? c.sidebar ?? bg,
-      Math.min(1, vibrancyOpacity * 0.75),
-    );
-    const toolbar = colorWithAlpha(
-      c.surfaceToolbar ?? rawFrame,
-      Math.min(1, vibrancyOpacity * 0.70),
-    );
-    const card = colorWithAlpha(
-      c.surfaceCard ?? c.card ?? bg,
-      Math.min(1, vibrancyOpacity * 0.85),
-    );
+    // One layer of chrome: sidebar, toolbars and canvas sit transparent on
+    // the frame, so they read as the same material at any opacity.
+    const alpha = surfaceAlphas(vibrancyOpacity);
+    const frame = colorWithAlpha(rawFrame, alpha.frame);
+    const sidebar = "transparent";
+    const toolbar = "transparent";
+    const card = colorWithAlpha(c.surfaceCard ?? c.card ?? bg, alpha.card);
     const popover = colorWithAlpha(
       c.surfacePopover ?? c.popover ?? c.card ?? bg,
-      Math.min(1, vibrancyOpacity * 0.95),
+      alpha.popover,
     );
     const activeItem = colorWithAlpha(
       c.surfaceActiveItem ?? c.accent ?? (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"),
-      Math.min(1, vibrancyOpacity * 0.80),
+      alpha.activeItem,
     );
 
     root.style.setProperty("--frame", frame);

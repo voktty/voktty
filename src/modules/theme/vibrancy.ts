@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { WindowMaterial } from "./windowMaterial";
 
 /** Mirrors `Backdrop` in `src-tauri/src/modules/vibrancy.rs`. */
 export type Backdrop = "vibrancy" | "mica" | "none";
@@ -10,6 +11,16 @@ export function getBackdropKind(): Promise<Backdrop> {
     () => "none" as const,
   );
   return kindPromise;
+}
+
+let materialsPromise: Promise<WindowMaterial[]> | null = null;
+
+/** Windows materials this system can paint; empty elsewhere. */
+export function getWindowMaterials(): Promise<WindowMaterial[]> {
+  materialsPromise ??= invoke<WindowMaterial[]>("window_materials").catch(
+    () => [],
+  );
+  return materialsPromise;
 }
 
 /** Last state handed to the native side. Repeating it would rebuild the
@@ -26,8 +37,9 @@ export function applyVibrancy(
   enabled: boolean,
   dark: boolean,
   force = false,
+  material: WindowMaterial | "none" = "mica",
 ): Promise<void> {
-  queue = queue.then(() => run(enabled, dark, force));
+  queue = queue.then(() => run(enabled, dark, force, material));
   return queue;
 }
 
@@ -35,9 +47,10 @@ async function run(
   enabled: boolean,
   dark: boolean,
   force: boolean,
+  material: WindowMaterial | "none",
 ): Promise<void> {
   const kind = await getBackdropKind();
-  const on = enabled && kind !== "none";
+  const on = enabled && kind !== "none" && material !== "none";
   const root = document.documentElement;
 
   const paintOpaque = () => {
@@ -52,11 +65,15 @@ async function run(
 
   // Mica and macOS Vibrancy tint their own backdrop based on the active dark/light mode,
   // so they have to be rebuilt on a mode flip.
-  const key = on ? `on:${dark}` : "off";
+  const key = on ? `on:${dark}:${material}` : "off";
   if (key === applied && !force) return;
 
   try {
-    await invoke("window_set_backdrop", { enabled: on, dark });
+    await invoke("window_set_backdrop", {
+      enabled: on,
+      dark,
+      ...(on ? { material } : {}),
+    });
     applied = key;
   } catch {
     // Never leave the webview transparent over nothing.

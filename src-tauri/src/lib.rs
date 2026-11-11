@@ -588,6 +588,7 @@ pub fn run() {
             history::history_clear,
             vibrancy::window_backdrop_kind,
             vibrancy::window_set_backdrop,
+            vibrancy::window_materials,
             vibrancy::window_set_corner_preference,
             web_server::web_server_start,
             web_server::web_server_stop,

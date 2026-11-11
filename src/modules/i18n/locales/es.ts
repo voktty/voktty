@@ -661,9 +661,22 @@ export const es: TranslationSchema = {
         backdropVibrancy: "Efecto traslúcido (Vibrancy)",
         backdropVibrancyDesc:
           "Aplica translucidez a las barras sobre lo que está tras la ventana. Los paneles quedan opacos.",
+        material: "Material",
+        materials: {
+          auto: "Automático",
+          mica: "Mica",
+          "mica-alt": "Mica Alt",
+          acrylic: "Acrílico",
+        },
+        materialsDesc: {
+          auto: "Según el tema: Acrílico en los temas oscuros modernos, Mica en el resto y opaco en las skins de época.",
+          mica: "Tiñe la ventana con tu fondo de escritorio. Sobrio y fácil de leer en jornadas largas.",
+          "mica-alt": "Como Mica, con un tinte más marcado del fondo de escritorio.",
+          acrylic: "Desenfoca lo que hay detrás de la ventana, incluidas otras ventanas.",
+        },
         vibrancyOpacity: "Opacidad de superficies",
         vibrancyOpacityDesc:
-          "Ajusta cuánto se trasluce el fondo nativo Mica o Vibrancy a través de las superficies de la aplicación.",
+          "Un solo valor para toda la ventana: marco, lateral, barras, terminal y Harness cambian a la vez. Menús y diálogos mantienen un mínimo para que el texto se lea.",
       },
       pack: {
         title: "Pack de apariencia",

@@ -24,7 +24,9 @@ import {
   setBackgroundOpacity,
   setEditorTheme,
   setVibrancyOpacity,
+  setWindowMaterial,
   setWindowVibrancy,
+  WINDOW_MATERIAL_PREFS,
 } from "@/modules/settings/store";
 import {
   useTheme,
@@ -48,7 +50,9 @@ import { validateTheme } from "@/modules/theme/validateTheme";
 import {
   type Backdrop,
   getBackdropKind,
+  getWindowMaterials,
 } from "@/modules/theme/vibrancy";
+import type { WindowMaterial } from "@/modules/theme/windowMaterial";
 import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -108,12 +112,17 @@ export function ThemesSection() {
   const backgroundBlur = usePreferencesStore((s) => s.backgroundBlur);
   const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
   const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
+  const windowMaterial = usePreferencesStore((s) => s.windowMaterial);
 
   const [backdrop, setBackdrop] = useState<Backdrop>("none");
+  const [materials, setMaterials] = useState<WindowMaterial[]>([]);
   useEffect(() => {
     let alive = true;
     void getBackdropKind().then((k) => {
       if (alive) setBackdrop(k);
+    });
+    void getWindowMaterials().then((list) => {
+      if (alive) setMaterials(list);
     });
     return () => {
       alive = false;
@@ -211,6 +220,41 @@ export function ThemesSection() {
               onCheckedChange={(v) => void setWindowVibrancy(v)}
             />
           </div>
+
+          {windowVibrancy && materials.length > 1 ? (
+            <div className="flex flex-col gap-2 border-t border-border/40 pt-2.5">
+              <span className="text-[11.5px] text-muted-foreground">
+                {t("settings.themes.background.material")}
+              </span>
+              <div
+                role="radiogroup"
+                aria-label={t("settings.themes.background.material")}
+                className="flex flex-wrap gap-1"
+              >
+                {WINDOW_MATERIAL_PREFS.filter(
+                  (option) => option === "auto" || materials.includes(option),
+                ).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={(windowMaterial ?? "auto") === option}
+                    onClick={() => void setWindowMaterial(option)}
+                    className={
+                      (windowMaterial ?? "auto") === option
+                        ? "rounded-md border border-primary/60 bg-accent px-2.5 py-1 text-[11.5px] font-medium"
+                        : "rounded-md border border-border/60 px-2.5 py-1 text-[11.5px] text-muted-foreground hover:bg-accent/60"
+                    }
+                  >
+                    {t(`settings.themes.background.materials.${option}`)}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10.5px] text-muted-foreground">
+                {t(`settings.themes.background.materialsDesc.${windowMaterial ?? "auto"}`)}
+              </span>
+            </div>
+          ) : null}
 
           {windowVibrancy ? (
             <div className="flex flex-col gap-2 border-t border-border/40 pt-2.5">

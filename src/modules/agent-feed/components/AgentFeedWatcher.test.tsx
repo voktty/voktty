@@ -19,6 +19,10 @@ vi.mock("../lib/feedSource", () => ({
   }),
 }));
 vi.mock("@/modules/agents/lib/route", () => ({ routeAgentNotification: io.notify }));
+// The real module binds a Tauri event listener on import.
+vi.mock("@/modules/terminal/lib/useTerminalSession", () => ({
+  getLeafWorkspaceEnv: () => undefined,
+}));
 
 import { useAgentAttention } from "../lib/attentionStore";
 import AgentFeedWatcher, { WATCH_INTERVAL_MS } from "./AgentFeedWatcher";
