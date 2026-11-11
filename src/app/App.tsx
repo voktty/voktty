@@ -274,6 +274,7 @@ import { WorkbenchPanel, type WorkbenchBuiltinTab } from "@/modules/workbench";
 import {
   type DockerWorkspaceConnection,
   getWslHome,
+  isWindowsNativePath,
   LOCAL_WORKSPACE,
   type SerialConnectionConfig,
   useWorkspaceEnvStore,
@@ -967,15 +968,17 @@ function DesktopApp() {
   );
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
-    // A Harness tab works in its project's folder, not in whatever the Space
-    // last connected to: a local project inside a Space that also holds an SSH
-    // tab must not show, browse or run Git against that SSH host.
+    // A local Harness project inside a Space that also holds an SSH tab must
+    // not show, browse or run Git against that SSH host. Only a Windows path
+    // is unambiguously local: a remote project's resolved folder is a POSIX
+    // path, and judging it against the Space's root flipped the Space between
+    // local and SSH while the remote project kept reconnecting it.
     const harnessFolder =
       activeTab?.kind === "harness"
         ? (activeHarnessFolder ?? activeHarnessCwd)
         : null;
-    if (harnessFolder && !harnessFolder.startsWith("remote://")) {
-      return workspaceForDocumentPath(activeSpace?.env, harnessFolder);
+    if (harnessFolder && isWindowsNativePath(harnessFolder)) {
+      return LOCAL_WORKSPACE;
     }
     if (activeTab?.kind === "terminal") {
       return (
