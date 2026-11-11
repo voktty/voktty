@@ -82,6 +82,7 @@ export type OpenAgentResult = {
   supervised: boolean;
   error?: string;
   reason?: string;
+  warning?: string;
 };
 
 export type TeamMessageKind =

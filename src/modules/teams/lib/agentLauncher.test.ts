@@ -901,8 +901,8 @@ describe("agentLauncher", () => {
         expect(resDegraded.degradedFrom).toBe("xhigh");
       }
 
-      // 4. Test openAgent rejection when harness doesn't support effort
-      const rosterNoEffort: AgentRoster = {
+      // 4. Test openAgent rejection when harness doesn't support agent-specified effort (N1)
+      const rosterAgentEffort: AgentRoster = {
         version: 1,
         agents: [
           {
@@ -913,13 +913,45 @@ describe("agentLauncher", () => {
           },
         ],
       };
-      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: rosterNoEffort });
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: rosterAgentEffort });
       const launchRes = await openAgent(
         { projectPath: "/repo", agentName: "strict-agent" },
         mockDeps,
       );
       expect(launchRes.ok).toBe(false);
       expect(launchRes.error).toBe("unsupported_effort");
+
+      // 5. N1: Test openAgent ignores effort when inherited from defaults on unsupported harness with warning
+      const rosterDefaultEffort: AgentRoster = {
+        version: 1,
+        defaults: {
+          runtime: {
+            effort: "high",
+          },
+        },
+        agents: [
+          {
+            name: "inherited-agent",
+            role: "roles/dev.md",
+            start: "on-demand",
+            runtime: { adapter: "opencode", model: "deepseek-coder" },
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: rosterDefaultEffort });
+      const inheritedRes = await openAgent(
+        { projectPath: "/repo", agentName: "inherited-agent" },
+        mockDeps,
+      );
+      expect(inheritedRes.ok).toBe(true);
+      expect(inheritedRes.warning).toBeDefined();
+      expect(inheritedRes.warning).toContain("Default effort 'high' ignored");
+      expect(mockDeps.newSession).toHaveBeenLastCalledWith(
+        "opencode",
+        "/repo",
+        "deepseek-coder",
+        "supervised",
+      );
     });
   });
 });

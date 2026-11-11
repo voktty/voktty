@@ -212,13 +212,20 @@ const HARNESS_SUPPORTED_EFFORTS: Partial<Record<HarnessId, readonly string[]>> =
 };
 
 export type EffortResolution =
-  | { ok: true; effectiveEffort?: string; degradedFrom?: string }
+  | {
+      ok: true;
+      effectiveEffort?: string;
+      degradedFrom?: string;
+      ignoredInherited?: boolean;
+      warning?: string;
+    }
   | { ok: false; error: "unsupported_effort"; reason: string };
 
 export function resolveEffectiveEffort(
   requestedEffort: string | undefined,
   harnessId: HarnessId,
   modelId?: string,
+  source: "agent" | "defaults" | "none" = "agent",
 ): EffortResolution {
   if (!requestedEffort) {
     return { ok: true, effectiveEffort: undefined };
@@ -234,6 +241,14 @@ export function resolveEffectiveEffort(
   }
 
   if (!supportedValues || supportedValues.length === 0) {
+    if (source === "defaults") {
+      return {
+        ok: true,
+        effectiveEffort: undefined,
+        ignoredInherited: true,
+        warning: `Default effort '${requestedEffort}' ignored: harness '${harnessId}' does not support reasoning effort`,
+      };
+    }
     return {
       ok: false,
       error: "unsupported_effort",
@@ -268,6 +283,15 @@ export function resolveEffectiveEffort(
     }
   }
 
+  if (source === "defaults") {
+    return {
+      ok: true,
+      effectiveEffort: undefined,
+      ignoredInherited: true,
+      warning: `Default effort '${requestedEffort}' ignored: unsupported on harness '${harnessId}' and cannot be degraded`,
+    };
+  }
+
   return {
     ok: false,
     error: "unsupported_effort",
@@ -275,11 +299,37 @@ export function resolveEffectiveEffort(
   };
 }
 
+export type ResolvedEffortSource = {
+  effort?: string;
+  source: "agent" | "defaults" | "none";
+};
+
 export function resolveAgentEffort(
   agent: AgentDefinition,
   roster: AgentRoster,
 ): string | undefined {
   return agent.runtime?.effort ?? roster.defaults?.runtime?.effort ?? undefined;
+}
+
+export function resolveAgentEffortWithSource(
+  agent: AgentDefinition,
+  roster: AgentRoster,
+): ResolvedEffortSource {
+  if (
+    agent.runtime?.effort &&
+    typeof agent.runtime.effort === "string" &&
+    agent.runtime.effort.trim()
+  ) {
+    return { effort: agent.runtime.effort.trim(), source: "agent" };
+  }
+  if (
+    roster.defaults?.runtime?.effort &&
+    typeof roster.defaults.runtime.effort === "string" &&
+    roster.defaults.runtime.effort.trim()
+  ) {
+    return { effort: roster.defaults.runtime.effort.trim(), source: "defaults" };
+  }
+  return { effort: undefined, source: "none" };
 }
 
 export function resolveAgentModel(
@@ -629,11 +679,12 @@ export async function openAgent(
       };
     }
 
-    const rawEffort = resolveAgentEffort(agentDef, roster);
+    const effortInfo = resolveAgentEffortWithSource(agentDef, roster);
     const effortResolution = resolveEffectiveEffort(
-      rawEffort,
+      effortInfo.effort,
       harnessId,
       model,
+      effortInfo.source,
     );
     if (!effortResolution.ok) {
       return {
@@ -757,6 +808,7 @@ export async function openAgent(
       tabId,
       mode: "new",
       supervised,
+      ...(effortResolution.warning ? { warning: effortResolution.warning } : {}),
     };
   });
 }
