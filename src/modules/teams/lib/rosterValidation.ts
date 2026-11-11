@@ -45,18 +45,27 @@ export function isModelForbidden(
 }
 
 const VALID_ADAPTERS = new Set([
+  "antigravity",
   "claude",
   "claude-code",
   "codestral",
+  "codex",
+  "cursor",
   "gemini",
   "generic",
+  "grok",
   "groq",
+  "hermes",
   "ollama",
   "openai",
+  "opencode",
   "openrouter",
   "perplexity",
+  "pi",
   "together",
 ]);
+
+export const VALID_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 function normalizeKey(path: string): string {
   return path
@@ -111,6 +120,23 @@ export function validateRoster(raw: string): {
     typeof (obj.defaults.runtime as Record<string, unknown>).adapter === "string"
       ? ((obj.defaults.runtime as Record<string, unknown>).adapter as string)
       : undefined;
+
+  if (obj.defaults && typeof obj.defaults === "object") {
+    const defRuntime = (obj.defaults as Record<string, unknown>).runtime;
+    if (defRuntime && typeof defRuntime === "object") {
+      const defEffort = (defRuntime as Record<string, unknown>).effort;
+      if (
+        defEffort !== undefined &&
+        (typeof defEffort !== "string" || !VALID_EFFORTS.has(defEffort))
+      ) {
+        return {
+          roster: null,
+          error:
+            "Field 'defaults.runtime.effort': must be one of low, medium, high, xhigh, max",
+        };
+      }
+    }
+  }
 
   const names = new Set<string>();
   const allNames = new Set<string>(
@@ -198,6 +224,16 @@ export function validateRoster(raw: string): {
       return {
         roster: null,
         error: `Field 'agents.${index}.runtime.command': command is only valid for generic adapter`,
+      };
+    }
+
+    if (
+      runtime.effort !== undefined &&
+      (typeof runtime.effort !== "string" || !VALID_EFFORTS.has(runtime.effort))
+    ) {
+      return {
+        roster: null,
+        error: `Field 'agents.${index}.runtime.effort': must be one of low, medium, high, xhigh, max`,
       };
     }
 

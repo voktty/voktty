@@ -124,4 +124,66 @@ describe("rosterValidation", () => {
     expect(res.roster).toBeNull();
     expect(res.error).toContain("agents.0.runtime.command");
   });
+
+  it("accepts all official adapters: codex, antigravity, opencode, cursor, grok, pi, hermes, etc.", () => {
+    const adapters = [
+      "claude-code",
+      "claude",
+      "codex",
+      "antigravity",
+      "opencode",
+      "gemini",
+      "cursor",
+      "grok",
+      "pi",
+      "hermes",
+    ];
+
+    const raw = JSON.stringify({
+      version: 1,
+      agents: adapters.map((adapter, i) => ({
+        name: `agent-${i}`,
+        role: `roles/agent-${i}.md`,
+        runtime: { adapter },
+      })),
+    });
+
+    const res = validateRoster(raw);
+    expect(res.error).toBeUndefined();
+    expect(res.roster?.agents.length).toBe(adapters.length);
+  });
+
+  it("validates effort levels in defaults and per agent", () => {
+    const validEfforts = ["low", "medium", "high", "xhigh", "max"];
+    for (const effort of validEfforts) {
+      const raw = JSON.stringify({
+        version: 1,
+        defaults: { runtime: { adapter: "claude-code", effort } },
+        agents: [
+          {
+            name: "dev",
+            role: "roles/dev.md",
+            runtime: { effort },
+          },
+        ],
+      });
+      const res = validateRoster(raw);
+      expect(res.error).toBeUndefined();
+      expect(res.roster).not.toBeNull();
+    }
+
+    const invalid = JSON.stringify({
+      version: 1,
+      agents: [
+        {
+          name: "dev",
+          role: "roles/dev.md",
+          runtime: { adapter: "claude-code", effort: "invalid-effort" },
+        },
+      ],
+    });
+    const res = validateRoster(invalid);
+    expect(res.roster).toBeNull();
+    expect(res.error).toContain("agents.0.runtime.effort");
+  });
 });

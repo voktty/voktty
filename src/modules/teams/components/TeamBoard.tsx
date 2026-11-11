@@ -21,7 +21,12 @@ import type {
   AgentRoster,
 } from "@/modules/workspace-kit/lib/configTypes";
 import { deleteAgent } from "../lib/rosterEditor";
-import { readRoster, readTeamState } from "../lib/teamFs";
+import {
+  approveGenericCommand,
+  readGenericApprovals,
+  readRoster,
+  readTeamState,
+} from "../lib/teamFs";
 import type { TeamAgentStatus, TeamState } from "../types";
 import { AgentFormDialog } from "./AgentFormDialog";
 import { RulesDialog } from "./RulesDialog";
@@ -89,12 +94,17 @@ export function TeamBoard({
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [genericApprovals, setGenericApprovals] = useState<
+    Record<string, { command: string }>
+  >({});
 
   const loadData = useCallback(async () => {
     const { roster: loadedRoster, error } = await readRoster(projectPath);
     setRoster(loadedRoster);
     setRosterError(error ?? null);
     const state = await readTeamState(projectPath);
+    const approvals = await readGenericApprovals(projectPath);
+    setGenericApprovals(approvals);
 
     // Sync state with live harness snapshots if available
     try {
@@ -265,6 +275,18 @@ export function TeamBoard({
     }
   };
 
+  const handleApproveGeneric = async (agentName: string, command: string) => {
+    try {
+      await approveGenericCommand(projectPath, agentName, command);
+      await loadData();
+    } catch (err: unknown) {
+      setFeedback({
+        isError: true,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
   const activeCount = Object.values(teamState?.agents ?? {}).filter(
     (a) =>
       a.status === "working" ||
@@ -370,6 +392,17 @@ export function TeamBoard({
             );
             const model = resolveAgentModel(agent, roster);
             const adapter = resolveAgentAdapter(agent, roster);
+            const effort =
+              agent.runtime?.effort ?? roster.defaults?.runtime?.effort;
+            const isGeneric = adapter === "generic";
+            const genericCommand = agent.runtime?.command;
+            const isApproved =
+              !isGeneric ||
+              Boolean(
+                genericCommand &&
+                  genericApprovals[agent.name]?.command.trim() ===
+                    genericCommand.trim(),
+              );
             const isBusy = busyAgent === agent.name;
             const savedAgent = teamState?.agents[agent.name];
 
@@ -451,8 +484,36 @@ export function TeamBoard({
                 <CardContent className="space-y-3 pb-3 text-sm">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span className="font-mono text-foreground">{adapter}</span>
-                    <span className="font-mono text-foreground">{model}</span>
+                    <span className="font-mono text-foreground">
+                      {model}
+                      {effort && (
+                        <span className="ml-1 text-muted-foreground">
+                          ({effort})
+                        </span>
+                      )}
+                    </span>
                   </div>
+
+                  {isGeneric && !isApproved && genericCommand && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs flex items-center justify-between gap-2">
+                      <span
+                        className="font-mono text-xs truncate max-w-[150px]"
+                        title={genericCommand}
+                      >
+                        {genericCommand}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-xs"
+                        onClick={() =>
+                          void handleApproveGeneric(agent.name, genericCommand)
+                        }
+                      >
+                        {t("common.ok")}
+                      </Button>
+                    </div>
+                  )}
 
                   {savedAgent?.task && (
                     <div className="rounded-md bg-muted/50 p-2 text-xs">
@@ -505,7 +566,9 @@ export function TeamBoard({
                   {status === "unopened" ? (
                     <Button
                       size="sm"
-                      disabled={isBusy || isForbidden}
+                      disabled={
+                        isBusy || isForbidden || (isGeneric && !isApproved)
+                      }
                       onClick={() => handleOpen(agent.name, "new")}
                     >
                       {t("teams.startNew")}

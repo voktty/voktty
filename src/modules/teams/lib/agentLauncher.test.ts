@@ -734,4 +734,119 @@ describe("agentLauncher", () => {
       );
     });
   });
+
+  describe("Fase E5: Multi-provider and generic approvals", () => {
+    it("maps adapters to correct harnesses: claude, codex, antigravity (gemini), opencode, cursor, grok, pi, hermes", async () => {
+      const multiRoster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "claude-agent",
+            role: "roles/dev.md",
+            start: "on-demand",
+            runtime: { adapter: "claude-code" },
+          },
+          {
+            name: "codex-agent",
+            role: "roles/dev.md",
+            start: "on-demand",
+            runtime: { adapter: "codex", effort: "high" },
+          },
+          {
+            name: "antigravity-agent",
+            role: "roles/dev.md",
+            start: "on-demand",
+            runtime: { adapter: "antigravity", effort: "medium" },
+          },
+          {
+            name: "opencode-agent",
+            role: "roles/dev.md",
+            start: "on-demand",
+            runtime: { adapter: "opencode" },
+          },
+        ],
+      };
+
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: multiRoster });
+
+      // 1. Claude
+      await openAgent({ projectPath: "/repo", agentName: "claude-agent" }, mockDeps);
+      expect(mockDeps.newSession).toHaveBeenLastCalledWith(
+        "claude",
+        "/repo",
+        undefined,
+        "supervised",
+      );
+
+      // 2. Codex with effort
+      await openAgent({ projectPath: "/repo", agentName: "codex-agent" }, mockDeps);
+      expect(mockDeps.newSession).toHaveBeenLastCalledWith(
+        "codex",
+        "/repo",
+        undefined,
+        "supervised",
+        { effort: "high" },
+      );
+
+      // 3. Antigravity (maps to "gemini") with effort
+      await openAgent({ projectPath: "/repo", agentName: "antigravity-agent" }, mockDeps);
+      expect(mockDeps.newSession).toHaveBeenLastCalledWith(
+        "gemini",
+        "/repo",
+        undefined,
+        "supervised",
+        { effort: "medium" },
+      );
+
+      // 4. OpenCode
+      await openAgent({ projectPath: "/repo", agentName: "opencode-agent" }, mockDeps);
+      expect(mockDeps.newSession).toHaveBeenLastCalledWith(
+        "opencode",
+        "/repo",
+        undefined,
+        "supervised",
+      );
+    });
+
+    it("requires local machine approval for generic adapter and runs only when approved", async () => {
+      const genericRoster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "bot",
+            role: "roles/bot.md",
+            start: "on-demand",
+            runtime: {
+              adapter: "generic",
+              command: "python3 my_agent.py --run",
+            },
+          },
+        ],
+      };
+
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: genericRoster });
+
+      // 1. Without approval -> fails with approval_required
+      vi.spyOn(teamFs, "isGenericCommandApproved").mockResolvedValue(false);
+
+      const unapprovedRes = await openAgent(
+        { projectPath: "/repo", agentName: "bot" },
+        mockDeps,
+      );
+      expect(unapprovedRes.ok).toBe(false);
+      expect(unapprovedRes.error).toBe("approval_required");
+      expect(unapprovedRes.reason).toContain("python3 my_agent.py --run");
+      expect(unapprovedRes.reason).toContain("has not been approved on this machine");
+
+      // 2. With approval -> succeeds and launches session
+      vi.spyOn(teamFs, "isGenericCommandApproved").mockResolvedValue(true);
+
+      const approvedRes = await openAgent(
+        { projectPath: "/repo", agentName: "bot" },
+        mockDeps,
+      );
+      expect(approvedRes.ok).toBe(true);
+      expect(mockDeps.newSession).toHaveBeenCalled();
+    });
+  });
 });

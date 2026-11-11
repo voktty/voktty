@@ -833,4 +833,132 @@ describe("teamBus", () => {
       }),
     ).rejects.toThrow(/message 'task_preserved' has already been replied to/);
   });
+
+  it("E5: messages can be exchanged between different provider agents (Claude, Codex, Antigravity, OpenCode)", async () => {
+    const multiProviderRoster = JSON.stringify({
+      version: 1,
+      agents: [
+        {
+          name: "orchestrator",
+          role: "roles/orchestrator.md",
+          runtime: { adapter: "claude-code" },
+        },
+        {
+          name: "codex-agent",
+          role: "roles/dev.md",
+          runtime: { adapter: "codex" },
+        },
+        {
+          name: "antigravity-agent",
+          role: "roles/verifier.md",
+          runtime: { adapter: "antigravity" },
+        },
+        {
+          name: "opencode-agent",
+          role: "roles/researcher.md",
+          runtime: { adapter: "opencode" },
+        },
+      ],
+    });
+
+    let busJson = JSON.stringify({ version: 1, updatedAt: "", messages: [] });
+    vi.mocked(readTextFile).mockImplementation(async (path: string) => {
+      if (path.includes("/team/agents.json")) return multiProviderRoster;
+      if (path.endsWith("bus.json")) return busJson;
+      if (path.endsWith("agents.json")) {
+        return JSON.stringify({
+          $schema: "urn:voktty:team-state:1",
+          version: 1,
+          updatedAt: "",
+          agents: {
+            orchestrator: { sessionId: "s_orch", status: "idle" },
+            "codex-agent": { sessionId: "s_codex", status: "idle" },
+            "antigravity-agent": { sessionId: "s_agy", status: "idle" },
+            "opencode-agent": { sessionId: "s_opencode", status: "idle" },
+          },
+        });
+      }
+      return "";
+    });
+
+    vi.mocked(writeTextFile).mockImplementation(
+      async (path: string, content: string) => {
+        if (path.endsWith("bus.json")) {
+          busJson = content;
+        }
+      },
+    );
+
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      id: "s_codex",
+      state: "idle",
+      pendingApproval: false,
+    } as any);
+
+    // 1. Claude sends task to Codex
+    const msg1 = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "codex-agent",
+      kind: "task",
+      text: "Codex: implement parser",
+    });
+    expect(msg1.delivered).toBe(true);
+    expect(sendHarnessSessionMessage).toHaveBeenCalledWith(
+      "s_codex",
+      expect.stringContaining("Codex: implement parser"),
+    );
+
+    // 2. Codex replies to Claude with verdict
+    const msg2 = await sendMessage({
+      projectPath: "/project",
+      from: "codex-agent",
+      to: "orchestrator",
+      kind: "verdict",
+      text: "Codex: parser implemented and verified",
+      replyTo: msg1.id,
+    });
+    expect(msg2.delivered).toBe(true);
+    expect(msg2.hop).toBe(1);
+
+    // 3. Orchestrator sends task to Antigravity
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      id: "s_agy",
+      state: "idle",
+      pendingApproval: false,
+    } as any);
+
+    const msg3 = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "antigravity-agent",
+      kind: "task",
+      text: "Antigravity: verify test coverage",
+    });
+    expect(msg3.delivered).toBe(true);
+    expect(sendHarnessSessionMessage).toHaveBeenCalledWith(
+      "s_agy",
+      expect.stringContaining("Antigravity: verify test coverage"),
+    );
+
+    // 4. Orchestrator sends task to OpenCode
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      id: "s_opencode",
+      state: "idle",
+      pendingApproval: false,
+    } as any);
+
+    const msg4 = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "opencode-agent",
+      kind: "task",
+      text: "OpenCode: audit dependencies",
+    });
+    expect(msg4.delivered).toBe(true);
+    expect(sendHarnessSessionMessage).toHaveBeenCalledWith(
+      "s_opencode",
+      expect.stringContaining("OpenCode: audit dependencies"),
+    );
+  });
 });

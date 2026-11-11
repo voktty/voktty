@@ -123,4 +123,53 @@ describe("teamFs", () => {
     expect(writtenJson.agents.developer.sessionId).toBe("s_123");
     expect(writtenJson.agents.developer.agentToken).toBeUndefined();
   });
+
+  it("manages generic command approvals in .voktty/state/ outside git", async () => {
+    const {
+      approveGenericCommand,
+      isGenericCommandApproved,
+      revokeGenericCommand,
+    } = await import("./teamFs");
+
+    // Initially when file does not exist, empty
+    vi.mocked(readTextFile).mockRejectedValueOnce(new Error("File not found"));
+    let approved = await isGenericCommandApproved("/repo", "custom-bot", "python3 runner.py");
+    expect(approved).toBe(false);
+
+    // Approve command
+    vi.mocked(readTextFile).mockRejectedValueOnce(new Error("File not found"));
+    await approveGenericCommand("/repo", "custom-bot", "python3 runner.py");
+    expect(writeTextFile).toHaveBeenCalledWith(
+      "/repo/.voktty/state/generic_approvals.json",
+      expect.stringContaining("python3 runner.py"),
+    );
+
+    // Mock file content with saved approval
+    const savedState = {
+      $schema: "urn:voktty:generic-approvals:1",
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      approvals: {
+        "custom-bot": {
+          command: "python3 runner.py",
+          approvedAt: new Date().toISOString(),
+        },
+      },
+    };
+    vi.mocked(readTextFile).mockResolvedValueOnce(JSON.stringify(savedState));
+    approved = await isGenericCommandApproved("/repo", "custom-bot", "python3 runner.py");
+    expect(approved).toBe(true);
+
+    // Mismatched command returns false
+    vi.mocked(readTextFile).mockResolvedValueOnce(JSON.stringify(savedState));
+    approved = await isGenericCommandApproved("/repo", "custom-bot", "bash malicious.sh");
+    expect(approved).toBe(false);
+
+    // Revoke command
+    vi.mocked(readTextFile).mockResolvedValueOnce(JSON.stringify(savedState));
+    await revokeGenericCommand("/repo", "custom-bot");
+    const calls = vi.mocked(writeTextFile).mock.calls;
+    const lastWritten = JSON.parse(calls[calls.length - 1][1]);
+    expect(lastWritten.approvals["custom-bot"]).toBeUndefined();
+  });
 });

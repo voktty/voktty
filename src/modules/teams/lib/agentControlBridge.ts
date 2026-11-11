@@ -127,6 +127,7 @@ export async function dispatchAgentMethod(
         role: string;
         adapter: string;
         defaultModel?: string;
+        effort?: string;
       }> = [];
 
       for (const agentDef of rosterAgents) {
@@ -136,6 +137,7 @@ export async function dispatchAgentMethod(
           adapter: agentDef.runtime?.adapter ?? "claude-code",
           defaultModel:
             agentDef.runtime?.model || roster?.defaults?.runtime?.model,
+          effort: agentDef.runtime?.effort ?? roster?.defaults?.runtime?.effort,
         });
       }
 
@@ -153,6 +155,8 @@ export async function dispatchAgentMethod(
               adapter: baseDef.runtime?.adapter ?? "claude-code",
               defaultModel:
                 baseDef.runtime?.model || roster?.defaults?.runtime?.model,
+              effort:
+                baseDef.runtime?.effort ?? roster?.defaults?.runtime?.effort,
             });
           }
         }
@@ -193,6 +197,7 @@ export async function dispatchAgentMethod(
           role: entry.role,
           adapter: entry.adapter,
           model: activeModel || "default",
+          effort: entry.effort ?? null,
           host: "local",
           status,
           task: state?.task ?? null,
@@ -290,7 +295,9 @@ export async function dispatchAgentMethod(
                   ? "invalid_params"
                   : result.error === "agent_not_found"
                     ? "not_found"
-                    : "request_failed";
+                    : result.error === "approval_required"
+                      ? "approval_required"
+                      : "request_failed";
         throw new AgentControlError(
           errCode,
           result.reason ?? result.error ?? "Failed to start agent",
@@ -306,6 +313,38 @@ export async function dispatchAgentMethod(
         mode: result.mode,
         supervised: result.supervised,
       };
+    }
+
+    case "agent.approve": {
+      const agentName = params.agent;
+      if (!agentName || typeof agentName !== "string") {
+        throw new AgentControlError("invalid_params", "agent name is required");
+      }
+      const { roster } = await readRoster(projectPath);
+      const agentDef = roster?.agents.find((a) => a.name === agentName);
+      if (!agentDef) {
+        throw new AgentControlError("not_found", `Agent '${agentName}' not found`);
+      }
+      const command =
+        typeof params.command === "string" && params.command.trim()
+          ? params.command.trim()
+          : agentDef.runtime?.command;
+      if (!command) {
+        throw new AgentControlError("invalid_params", "No command to approve");
+      }
+      const { approveGenericCommand } = await import("./teamFs");
+      await approveGenericCommand(projectPath, agentName, command);
+      return { ok: true, agent: agentName, approvedCommand: command };
+    }
+
+    case "agent.revoke": {
+      const agentName = params.agent;
+      if (!agentName || typeof agentName !== "string") {
+        throw new AgentControlError("invalid_params", "agent name is required");
+      }
+      const { revokeGenericCommand } = await import("./teamFs");
+      await revokeGenericCommand(projectPath, agentName);
+      return { ok: true, agent: agentName };
     }
 
     case "agent.send": {

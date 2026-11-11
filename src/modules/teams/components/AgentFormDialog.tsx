@@ -23,9 +23,16 @@ import { saveAgent } from "../lib/rosterEditor";
 const ADAPTER_OPTIONS = [
   "claude-code",
   "claude",
-  "codestral",
+  "codex",
+  "antigravity",
+  "opencode",
   "gemini",
+  "cursor",
+  "grok",
+  "pi",
+  "hermes",
   "generic",
+  "codestral",
   "groq",
   "ollama",
   "openai",
@@ -33,6 +40,8 @@ const ADAPTER_OPTIONS = [
   "perplexity",
   "together",
 ] as const;
+
+const EFFORT_OPTIONS = ["", "low", "medium", "high", "xhigh", "max"] as const;
 
 type Props = {
   open: boolean;
@@ -56,6 +65,7 @@ export function AgentFormDialog({
   const [start, setStart] = useState<"on-demand" | "always">("on-demand");
   const [adapter, setAdapter] = useState<string>("claude-code");
   const [model, setModel] = useState("");
+  const [effort, setEffort] = useState<string>("");
   const [command, setCommand] = useState("");
   const [owns, setOwns] = useState("");
   const [reads, setReads] = useState("");
@@ -70,6 +80,7 @@ export function AgentFormDialog({
       setStart(initialAgent.start ?? "on-demand");
       setAdapter(initialAgent.runtime?.adapter ?? "claude-code");
       setModel(initialAgent.runtime?.model ?? "");
+      setEffort(initialAgent.runtime?.effort ?? "");
       setCommand(initialAgent.runtime?.command ?? "");
       setOwns((initialAgent.owns ?? []).join("\n"));
       setReads((initialAgent.reads ?? []).join("\n"));
@@ -80,6 +91,7 @@ export function AgentFormDialog({
       setStart("on-demand");
       setAdapter("claude-code");
       setModel("claude-3-7-sonnet");
+      setEffort("");
       setCommand("");
       setOwns("");
       setReads("");
@@ -110,6 +122,7 @@ export function AgentFormDialog({
         runtime: {
           adapter,
           ...(model.trim() ? { model: model.trim() } : {}),
+          ...(effort ? { effort: effort as any } : {}),
           ...(adapter === "generic" && command.trim()
             ? { command: command.trim() }
             : {}),
@@ -243,17 +256,41 @@ export function AgentFormDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <label htmlFor="agent-model" className="font-medium">
-              {t("teams.modelLabel")}
-            </label>
-            <Input
-              id="agent-model"
-              disabled={saving}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={t("teams.modelPlaceholder")}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <label htmlFor="agent-model" className="font-medium">
+                {t("teams.modelLabel")}
+              </label>
+              <Input
+                id="agent-model"
+                disabled={saving}
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={t("teams.modelPlaceholder")}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label htmlFor="agent-effort" className="font-medium">
+                {t("harness.modelSettings.reasoning")}
+              </label>
+              <Select
+                value={effort || "none"}
+                onValueChange={(val) => setEffort(val === "none" ? "" : val)}
+              >
+                <SelectTrigger id="agent-effort">
+                  <SelectValue placeholder={t("common.default")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("common.default")}</SelectItem>
+                  {EFFORT_OPTIONS.filter(Boolean).map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {adapter === "generic" && (

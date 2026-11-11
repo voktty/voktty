@@ -20,6 +20,10 @@ vi.mock("./teamFs", () => ({
   writeTeamState: vi.fn(),
   runProjectExclusive: vi.fn((_path, op) => op()),
   teamPath: vi.fn((...parts) => parts.join("/")),
+  approveGenericCommand: vi.fn().mockResolvedValue(undefined),
+  revokeGenericCommand: vi.fn().mockResolvedValue(undefined),
+  readGenericApprovals: vi.fn().mockResolvedValue({}),
+  isGenericCommandApproved: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("./teamBus", () => ({
@@ -830,6 +834,143 @@ describe("agentControlBridge", () => {
           { onNewHarnessTab: vi.fn() },
         ),
       ).rejects.toThrow("Copies of the orchestrator agent are forbidden");
+    });
+
+    it("E5: agent.list reports adapter, model, and reasoning effort", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readRoster).mockResolvedValue({
+        roster: {
+          version: 1,
+          agents: [
+            {
+              name: "orchestrator",
+              role: "roles/orchestrator.md",
+              start: "always",
+              runtime: { adapter: "claude-code", model: "claude-3-7-sonnet" },
+            },
+            {
+              name: "codex-dev",
+              role: "roles/dev.md",
+              start: "on-demand",
+              runtime: { adapter: "codex", model: "gpt-6.1-sol", effort: "high" },
+            },
+            {
+              name: "agy-verifier",
+              role: "roles/verifier.md",
+              start: "on-demand",
+              runtime: { adapter: "antigravity", model: "gemini-3.8-flash", effort: "xhigh" },
+            },
+          ],
+        },
+      });
+
+      vi.mocked(readTeamState).mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: "2026-11-10T20:00:00.000Z",
+        agents: {},
+      });
+
+      const res = (await dispatchAgentMethod(
+        "agent.list",
+        {},
+        { agent_token: orch.agentToken },
+      )) as { agents: any[] };
+
+      expect(res.agents).toHaveLength(3);
+      const codex = res.agents.find((a) => a.name === "codex-dev");
+      expect(codex.adapter).toBe("codex");
+      expect(codex.effort).toBe("high");
+
+      const agy = res.agents.find((a) => a.name === "agy-verifier");
+      expect(agy.adapter).toBe("antigravity");
+      expect(agy.effort).toBe("xhigh");
+    });
+
+    it("E5: agent.start enforces approval_required on generic agents and allows agent.approve", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readRoster).mockResolvedValue({
+        roster: {
+          version: 1,
+          agents: [
+            {
+              name: "orchestrator",
+              role: "roles/orchestrator.md",
+              start: "always",
+            },
+            {
+              name: "custom-bot",
+              role: "roles/bot.md",
+              start: "on-demand",
+              runtime: { adapter: "generic", command: "python3 test.py" },
+            },
+          ],
+        },
+      });
+
+      vi.mocked(openAgent).mockResolvedValueOnce({
+        ok: false,
+        agent: "custom-bot",
+        sessionId: "",
+        mode: "new",
+        supervised: true,
+        error: "approval_required",
+        reason: "Generic command 'python3 test.py' has not been approved on this machine",
+      });
+
+      // 1. Without approval, agent.start fails with approval_required
+      await expect(
+        dispatchAgentMethod(
+          "agent.start",
+          { agent: "custom-bot" },
+          { agent_token: orch.agentToken },
+          { onNewHarnessTab: vi.fn() },
+        ),
+      ).rejects.toThrow("Generic command 'python3 test.py' has not been approved");
+
+      // 2. Approve command via agent.approve
+      const approveRes = (await dispatchAgentMethod(
+        "agent.approve",
+        { agent: "custom-bot", command: "python3 test.py" },
+        { agent_token: orch.agentToken },
+      )) as any;
+      expect(approveRes.ok).toBe(true);
+      expect(approveRes.approvedCommand).toBe("python3 test.py");
+
+      // 3. Now start succeeds
+      vi.mocked(openAgent).mockResolvedValueOnce({
+        ok: true,
+        agent: "custom-bot",
+        sessionId: "s_custom",
+        tabId: 99,
+        mode: "new",
+        supervised: true,
+      });
+
+      const startRes = (await dispatchAgentMethod(
+        "agent.start",
+        { agent: "custom-bot" },
+        { agent_token: orch.agentToken },
+        { onNewHarnessTab: vi.fn() },
+      )) as any;
+      expect(startRes.ok).toBe(true);
+      expect(startRes.agent).toBe("custom-bot");
     });
   });
 });

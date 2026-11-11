@@ -138,3 +138,110 @@ export async function writeTeamState(
 
   await writeTextFile(filePath, JSON.stringify(payload, null, 2));
 }
+
+export type GenericApprovalEntry = {
+  command: string;
+  approvedAt: string;
+};
+
+export const GENERIC_APPROVALS_SCHEMA = "urn:voktty:generic-approvals:1" as const;
+
+export type GenericApprovalsState = {
+  $schema: typeof GENERIC_APPROVALS_SCHEMA;
+  version: 1;
+  updatedAt: string;
+  approvals: Record<string, GenericApprovalEntry>;
+};
+
+export async function readGenericApprovals(
+  projectPath: string,
+): Promise<Record<string, GenericApprovalEntry>> {
+  const filePath = teamPath(
+    projectPath,
+    ".voktty",
+    "state",
+    "generic_approvals.json",
+  );
+  try {
+    const content = await readTextFile(filePath);
+    const parsed = JSON.parse(content) as GenericApprovalsState;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      parsed.approvals &&
+      typeof parsed.approvals === "object"
+    ) {
+      return parsed.approvals;
+    }
+  } catch {
+    // If state does not exist or cannot be parsed, return empty record
+  }
+  return {};
+}
+
+export async function approveGenericCommand(
+  projectPath: string,
+  agentName: string,
+  command: string,
+): Promise<void> {
+  const approvals = await readGenericApprovals(projectPath);
+  approvals[agentName] = {
+    command: command.trim(),
+    approvedAt: new Date().toISOString(),
+  };
+
+  const stateDir = teamPath(projectPath, ".voktty", "state");
+  const filePath = teamPath(stateDir, "generic_approvals.json");
+
+  try {
+    await invoke("fs_create_dir", { path: stateDir });
+  } catch {
+    // Ignore error if directory already exists
+  }
+
+  const payload: GenericApprovalsState = {
+    $schema: GENERIC_APPROVALS_SCHEMA,
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    approvals,
+  };
+
+  await writeTextFile(filePath, JSON.stringify(payload, null, 2));
+}
+
+export async function revokeGenericCommand(
+  projectPath: string,
+  agentName: string,
+): Promise<void> {
+  const approvals = await readGenericApprovals(projectPath);
+  delete approvals[agentName];
+
+  const stateDir = teamPath(projectPath, ".voktty", "state");
+  const filePath = teamPath(stateDir, "generic_approvals.json");
+
+  try {
+    await invoke("fs_create_dir", { path: stateDir });
+  } catch {
+    // Ignore error if directory already exists
+  }
+
+  const payload: GenericApprovalsState = {
+    $schema: GENERIC_APPROVALS_SCHEMA,
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    approvals,
+  };
+
+  await writeTextFile(filePath, JSON.stringify(payload, null, 2));
+}
+
+export async function isGenericCommandApproved(
+  projectPath: string,
+  agentName: string,
+  command: string,
+): Promise<boolean> {
+  if (!command || !agentName) return false;
+  const approvals = await readGenericApprovals(projectPath);
+  const entry = approvals[agentName];
+  return Boolean(entry && entry.command.trim() === command.trim());
+}

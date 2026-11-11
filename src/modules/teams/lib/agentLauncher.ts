@@ -9,6 +9,7 @@ import {
   registerLiveAgentWithControl,
 } from "./agentRegistry";
 import {
+  isGenericCommandApproved,
   readRole,
   readRoster,
   readTeamState,
@@ -178,9 +179,23 @@ export function resolveAgentAdapter(
   const adapter =
     agent.runtime?.adapter ?? roster.defaults?.runtime?.adapter ?? "claude-code";
   // Map kit adapter names to HarnessId
-  if (adapter === "claude-code") return "claude";
-  if (adapter === "antigravity") return "agy";
+  if (adapter === "claude-code" || adapter === "claude") return "claude";
+  if (adapter === "antigravity" || adapter === "gemini") return "gemini";
+  if (adapter === "codex") return "codex";
+  if (adapter === "opencode") return "opencode";
+  if (adapter === "cursor") return "cursor";
+  if (adapter === "grok") return "grok";
+  if (adapter === "pi") return "pi";
+  if (adapter === "hermes") return "hermes";
+  if (adapter === "generic") return "claude";
   return adapter;
+}
+
+export function resolveAgentEffort(
+  agent: AgentDefinition,
+  roster: AgentRoster,
+): string | undefined {
+  return agent.runtime?.effort ?? roster.defaults?.runtime?.effort ?? undefined;
 }
 
 export function resolveAgentModel(
@@ -217,7 +232,8 @@ export type LauncherDependencies = {
     cwd?: string,
     model?: string,
     runtimeMode?: any,
-  ) => { id: string; composerSeed?: string };
+    modelSettings?: Record<string, string>,
+  ) => { id: string; composerSeed?: string; [key: string]: any };
   cacheSession: (session: any) => void;
   sendSessionMessage?: (sessionId: string, message: string) => Promise<boolean>;
   ensureWorktree?: (projectPath: string, copyName: string) => Promise<string>;
@@ -280,6 +296,48 @@ export async function openAgent(
         error: "forbidden_model",
         reason: `Model '${model}' is in forbiddenModels policy and cannot be launched`,
       };
+    }
+
+    const rawAdapter =
+      agentDef.runtime?.adapter ??
+      roster.defaults?.runtime?.adapter ??
+      "claude-code";
+
+    if (rawAdapter === "generic") {
+      const command = agentDef.runtime?.command;
+      if (!command || !command.trim()) {
+        return {
+          ok: false,
+          agent: effectiveAgentName,
+          sessionId: "",
+          mode: params.mode ?? "new",
+          supervised: true,
+          error: "invalid_roster",
+          reason: `Agent '${effectiveAgentName}' uses generic adapter but has no command specified`,
+        };
+      }
+      const isApproved =
+        (await isGenericCommandApproved(
+          params.projectPath,
+          effectiveAgentName,
+          command,
+        )) ||
+        (await isGenericCommandApproved(
+          params.projectPath,
+          identity.baseName,
+          command,
+        ));
+      if (!isApproved) {
+        return {
+          ok: false,
+          agent: effectiveAgentName,
+          sessionId: "",
+          mode: params.mode ?? "new",
+          supervised: true,
+          error: "approval_required",
+          reason: `Generic command '${command}' for agent '${effectiveAgentName}' has not been approved on this machine`,
+        };
+      }
     }
 
     const live = listLiveAgents(params.projectPath);
@@ -456,8 +514,12 @@ export async function openAgent(
       : params.task || "Await instructions from orchestrator or owner.";
 
     const harnessId = resolveAgentAdapter(agentDef, roster);
+    const effort = resolveAgentEffort(agentDef, roster);
+    const modelSettings = effort ? { effort } : undefined;
     const runtimeMode = supervised ? "supervised" : "auto";
-    const session = deps.newSession(harnessId, sessionCwd, model, runtimeMode);
+    const session = modelSettings
+      ? deps.newSession(harnessId, sessionCwd, model, runtimeMode, modelSettings)
+      : deps.newSession(harnessId, sessionCwd, model, runtimeMode);
 
     if (supervised) {
       session.composerSeed = promptSeed;
