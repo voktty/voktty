@@ -136,9 +136,12 @@ export function HarnessUpdateNotice({
       onHeightChange(0);
     };
   }, [visible, onHeightChange]);
+  // Every hook runs before the early return: the notice starts hidden and
+  // appears once an update is found, so a hook after it changed the hook
+  // count between renders and crashed the whole Harness.
+  const { t } = useTranslation();
   if (!visible) return null;
 
-  const { t } = useTranslation();
   const stateOf = (harness: HarnessId): RowState =>
     rows[harness] ?? { status: "idle" };
   const busy = updates.some(
