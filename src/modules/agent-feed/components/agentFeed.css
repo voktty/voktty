@@ -65,7 +65,7 @@
 }
 
 .agent-feed-cut::after {
-  content: "6";
+  content: "...";
 }
 
 /* Dashed pixel rule for arrivals, departures and the unread marker. */

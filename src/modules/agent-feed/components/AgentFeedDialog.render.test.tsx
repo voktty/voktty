@@ -146,3 +146,29 @@ it("reports an empty range", async () => {
   await render("/srv/webserver");
   expect(document.body.textContent).toContain("No messages in this range");
 });
+
+it("floats over the app and moves by its header", async () => {
+  poll.response = FEED;
+  await render("/srv/webserver");
+  // Not modal: no overlay blocks the terminal behind it.
+  expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
+  const header = document.querySelector<HTMLElement>('[data-slot="dialog-header"]');
+  const panel = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+  expect(header && panel).toBeTruthy();
+  const fire = (type: string, x: number, y: number) =>
+    header?.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y, pointerId: 1 }),
+    );
+  await act(async () => {
+    fire("pointerdown", 100, 100);
+    fire("pointermove", 160, 130);
+    fire("pointerup", 160, 130);
+  });
+  expect(panel?.style.left).toBe("calc(50% + 60px)");
+  expect(panel?.style.top).toBe("calc(50% + 30px)");
+  expect(JSON.parse(localStorage.getItem("voktty.agentFeed.position") ?? "null")).toEqual({ x: 60, y: 30 });
+  await act(async () => {
+    header?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  });
+  expect(panel?.style.left).toBe("calc(50% + 0px)");
+});

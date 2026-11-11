@@ -6782,7 +6782,8 @@ export const en = {
     openButton: "Team communications",
     title: "Team communications",
     description:
-      "What your agents say to each other and to you, read from the Claude Code sessions of this project.",
+      "What your Claude Code agents say to each other and to you.",
+    moveHint: "Drag to move. Double click to centre.",
     command: "Team communications",
     sourceLocal: "{project} on this computer",
     sourceSsh: "{project} on {host}",

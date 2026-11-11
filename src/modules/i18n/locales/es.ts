@@ -6919,7 +6919,8 @@ export const es: TranslationSchema = {
     openButton: "Comunicaciones del equipo",
     title: "Comunicaciones del equipo",
     description:
-      "Lo que tus agentes se dicen entre ellos y te dicen a ti, leído de las sesiones de Claude Code de este proyecto.",
+      "Lo que tus agentes de Claude Code se dicen entre ellos y te dicen a ti.",
+    moveHint: "Arrastra para mover. Doble clic para centrar.",
     command: "Comunicaciones del equipo",
     sourceLocal: "{project} en este equipo",
     sourceSsh: "{project} en {host}",

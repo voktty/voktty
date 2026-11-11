@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -58,6 +65,76 @@ function writeLastSeen(key: string, ts: string) {
   }
 }
 
+type Offset = { x: number; y: number };
+const POSITION_KEY = "voktty.agentFeed.position";
+
+function readOffset(): Offset {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(POSITION_KEY) ?? "null");
+    if (Number.isFinite(parsed?.x) && Number.isFinite(parsed?.y))
+      return clampOffset({ x: parsed.x, y: parsed.y });
+  } catch {
+    // Blocked storage only forgets where the panel was.
+  }
+  return { x: 0, y: 0 };
+}
+
+function writeOffset(offset: Offset) {
+  try {
+    localStorage.setItem(POSITION_KEY, JSON.stringify(offset));
+  } catch {
+    // Same as above.
+  }
+}
+
+/** Keeps the panel's header reachable inside the window. */
+function clampOffset({ x, y }: Offset): Offset {
+  const maxX = Math.max(0, window.innerWidth / 2 - 120);
+  const maxY = Math.max(0, window.innerHeight / 2 - 60);
+  return {
+    x: Math.round(Math.min(maxX, Math.max(-maxX, x))),
+    y: Math.round(Math.min(maxY, Math.max(-maxY, y))),
+  };
+}
+
+/** Drag by the header; double click recentres. Position survives reopening. */
+function useMovablePanel() {
+  const [offset, setOffset] = useState<Offset>(readOffset);
+  const drag = useRef<{ startX: number; startY: number; from: Offset } | null>(null);
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    drag.current = { startX: event.clientX, startY: event.clientY, from: offset };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const start = drag.current;
+    if (!start) return;
+    setOffset(
+      clampOffset({
+        x: start.from.x + event.clientX - start.startX,
+        y: start.from.y + event.clientY - start.startY,
+      }),
+    );
+  };
+  const onPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!drag.current) return;
+    drag.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    setOffset((current) => {
+      writeOffset(current);
+      return current;
+    });
+  };
+  const recentre = () => {
+    setOffset({ x: 0, y: 0 });
+    writeOffset({ x: 0, y: 0 });
+  };
+  return {
+    style: { left: `calc(50% + ${offset.x}px)`, top: `calc(50% + ${offset.y}px)` },
+    handle: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick: recentre },
+  };
+}
+
 function formatTime(ts: string): string {
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return ts;
@@ -82,10 +159,21 @@ export default function AgentFeedDialog({
   const envKey = JSON.stringify(env);
   // biome-ignore lint/correctness/useExhaustiveDependencies: env is compared by value through envKey.
   const target = useMemo(() => feedTargetFor(root, env), [root, envKey]);
+  const panel = useMovablePanel();
+  // Floating, not modal: the terminal stays usable while the log is open,
+  // and clicking it does not close the panel.
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(86dvh,860px)] flex-col gap-3 p-4 sm:max-w-4xl">
-        <DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+      <DialogContent
+        className="flex h-[min(86dvh,860px)] flex-col gap-3 p-4 shadow-2xl sm:max-w-4xl"
+        style={panel.style}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader
+          {...panel.handle}
+          className="cursor-move touch-none select-none"
+          title={t("agentFeed.moveHint")}
+        >
           <DialogTitle>{t("agentFeed.title")}</DialogTitle>
           <DialogDescription>{t("agentFeed.description")}</DialogDescription>
         </DialogHeader>
