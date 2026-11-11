@@ -165,5 +165,17 @@ describe("startup Harness migration scope", () => {
       "remote://ssh-project/repo",
     ]);
     expect(id).toBe(6);
+
+    // A launch opens the Harness only in the active space, so several spaces
+    // never add several identical Harness tabs to the strip.
+    let launchId = 0;
+    const launch = missingStartupHarnessTabs(
+      spaces,
+      [],
+      () => ++launchId,
+      "remote",
+    );
+    expect(launch.map((tab) => tab.spaceId)).toEqual(["remote"]);
+    expect(launchId).toBe(1);
   });
 });

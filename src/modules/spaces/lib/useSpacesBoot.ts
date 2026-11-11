@@ -198,7 +198,12 @@ export function useSpacesBoot({
             : spaces[0].id;
         const startupTabs =
           startupSurface === "harness"
-            ? missingStartupHarnessTabs(persistedSpaces, restored, allocId)
+            ? missingStartupHarnessTabs(
+                persistedSpaces,
+                restored,
+                allocId,
+                active,
+              )
             : [];
         const startupHarness = startupTabs.find(
           (tab) => tab.spaceId === active,

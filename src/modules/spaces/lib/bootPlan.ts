@@ -46,15 +46,23 @@ export function hydratePersistedSpaceTabs(
   });
 }
 
+/**
+ * The Harness tab a launch opens. Only `onlySpaceId` (the active space) gets
+ * one: Harness tabs are not persisted, so creating one for every space made
+ * each launch add an identical "Agent Development" tab per space to the
+ * strip. Other spaces get theirs when the Harness is opened there.
+ */
 export function missingStartupHarnessTabs(
   spaces: readonly SpaceMeta[],
   tabs: readonly Tab[],
   allocId: () => number,
+  onlySpaceId?: string,
 ): HarnessTab[] {
   const occupied = new Set(
     tabs.filter((tab) => tab.kind === "harness").map((tab) => tab.spaceId),
   );
   return spaces
+    .filter((space) => onlySpaceId === undefined || space.id === onlySpaceId)
     .filter((space) => !occupied.has(space.id))
     .map((space) =>
       freshHarnessTab(

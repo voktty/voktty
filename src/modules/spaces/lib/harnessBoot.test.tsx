@@ -333,9 +333,10 @@ describe("Harness-first boot", () => {
     });
     const first = await mount();
     const [tabs, active] = first.replaceTabs.mock.calls[0];
+    // Only the active space gets a Harness at launch; "other" opens its own
+    // when the Harness is used there.
     expect(tabs.map((tab: { kind: string }) => tab.kind)).toEqual([
       "editor",
-      "harness",
       "harness",
     ]);
     expect(tabs.find((tab: { id: number }) => tab.id === active)).toMatchObject(
@@ -394,7 +395,7 @@ describe("Harness-first boot", () => {
     });
     const second = await mount();
     const [restored, selected] = second.replaceTabs.mock.calls[0];
-    expect(restored).toHaveLength(3);
+    expect(restored).toHaveLength(2);
     expect(
       restored.find((tab: { id: number }) => tab.id === selected).tabKey,
     ).toBe(editor.tabKey);
