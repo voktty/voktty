@@ -14,6 +14,7 @@ import {
   savePinnedProjects,
   saveProjectRailOrder,
   setRemoteProjectCleaner,
+  sharedProjectRailOrder,
   syncProjectRailOrder,
 } from "./recents";
 
@@ -282,5 +283,21 @@ describe("projects removed on purpose", () => {
     archiveProject("/work/old");
     expect(isProjectSuppressedFromImport("/work/old")).toBe(true);
     expect(isProjectSuppressedFromImport("/work/other")).toBe(false);
+  });
+});
+
+describe("sharedProjectRailOrder", () => {
+  it("is the same for two instances on different projects", () => {
+    const recents = [{ path: "/tmp/older", openedAt: 1 }];
+    let saved: string[] = [];
+    // Each instance saves, the other reloads and syncs again: it must settle.
+    for (let round = 0; round < 4; round += 1) {
+      for (const cwd of ["/tmp/alpha", "/tmp/beta"]) {
+        saved = sharedProjectRailOrder(recents, cwd, [], saved);
+      }
+    }
+    expect(sharedProjectRailOrder(recents, "/tmp/alpha", [], saved)).toEqual(saved);
+    expect(sharedProjectRailOrder(recents, "/tmp/beta", [], saved)).toEqual(saved);
+    expect(saved).toEqual(["/tmp/older", "/tmp/alpha", "/tmp/beta"]);
   });
 });

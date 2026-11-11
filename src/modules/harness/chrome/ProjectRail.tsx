@@ -56,7 +56,7 @@ import {
   savePinnedProjects,
   saveProjectRailOrder,
   subscribeProjectPathsChanged,
-  syncProjectRailOrder,
+  sharedProjectRailOrder,
   type RecentProject,
 } from "../lib/recents";
 import {
@@ -455,17 +455,14 @@ export function ProjectRail({
 
   useEffect(() => {
     setRailOrder((prev) => {
-      const synced = syncProjectRailOrder(
-        prev,
-        allProjects,
-        busy,
-        unavailablePaths,
-      );
+      // Shared by every Harness instance: never sorted by this one's folder,
+      // clock or busy agents, or two instances rewrite it forever.
+      const synced = sharedProjectRailOrder(recents, cwd, pinnedPaths, prev);
       if (synced.join("\0") === prev.join("\0")) return prev;
       saveProjectRailOrder(synced);
       return synced;
     });
-  }, [allProjects, busy, unavailablePaths]);
+  }, [recents, cwd, pinnedPaths, railOrder]);
 
   useEffect(() => {
     setPinnedPaths((prev) => {

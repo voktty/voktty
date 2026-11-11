@@ -230,3 +230,40 @@ it("preserves custom project names over a remote connection name", async () => {
       ?.getAttribute("aria-label"),
   ).toBe("Custom root");
 });
+
+it("keeps two rails on different projects from fighting over the shared order", async () => {
+  // A team board opens a second Harness on another project: both rails stay
+  // mounted and write the same saved order. It must settle, not ping-pong.
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  cleanups.push(() => errors.mockRestore());
+  const element = document.createElement("div");
+  const root = createRoot(element);
+  cleanups.push(async () => {
+    await act(async () => root.unmount());
+  });
+  const rail = (ownerId: number, cwd: string) => (
+    <HarnessProjectOwner value={{ ownerId, tabKey: asTabKey(`tab-${ownerId}`) }}>
+      <ProjectRail
+        cwd={cwd}
+        recents={[{ path: "/older", openedAt: 1 }]}
+        onSelectProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onRemoveProject={vi.fn()}
+      />
+    </HarnessProjectOwner>
+  );
+  await act(async () =>
+    root.render(
+      <>
+        {rail(1, "/tmp/alpha")}
+        {rail(2, "/tmp/beta")}
+      </>,
+    ),
+  );
+  expect(
+    errors.mock.calls.some((call) => String(call[0]).includes("Maximum update depth")),
+  ).toBe(false);
+  expect(element.textContent).toContain("alpha");
+  expect(element.textContent).toContain("beta");
+});

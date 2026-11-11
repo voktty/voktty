@@ -401,6 +401,27 @@ export function sortProjectsByActivityAndRecency(
   });
 }
 
+/**
+ * The rail order every Harness instance saves. It reads only what all of
+ * them share (recents, pins, the saved order) plus each instance's own
+ * folder as a timeless entry, so two instances on different projects agree
+ * on it instead of overwriting each other forever. Activity and "now" only
+ * sort what is displayed.
+ */
+export function sharedProjectRailOrder(
+  recents: RecentProject[],
+  currentCwd: string,
+  pinnedPaths: string[],
+  savedOrder: string[],
+): string[] {
+  const projects = collectRailProjects(recents, "", pinnedPaths, savedOrder);
+  if (currentCwd && looksLikeProject(currentCwd)) {
+    const path = normalize(currentCwd);
+    if (!projects.has(path)) projects.set(path, { path, openedAt: 0 });
+  }
+  return syncProjectRailOrder(savedOrder, projects);
+}
+
 /** Append new projects to the saved order without moving existing entries. */
 export function syncProjectRailOrder(
   _order: string[],
