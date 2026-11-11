@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  ciGate,
   compareVersions,
   releasePlan,
   requireGreenMain,
@@ -220,4 +221,40 @@ test("publication requires signed updater entries for the selected platforms and
         "voktty/voktty",
       ),
     );
+});
+
+test("ciGate waits for the main push CI of the release commit", () => {
+  const run = {
+    head_sha: "abc",
+    head_branch: "main",
+    event: "push",
+    run_number: 1,
+    run_attempt: 1,
+    status: "in_progress",
+    conclusion: null,
+    html_url: "https://example.test/ci/1",
+  };
+  assert.deepEqual(ciGate([], "abc"), { state: "missing", url: "" });
+  assert.equal(ciGate([{ ...run, head_branch: "feature" }], "abc").state, "missing");
+  assert.equal(ciGate([{ ...run, event: "pull_request" }], "abc").state, "missing");
+  assert.deepEqual(ciGate([run], "abc"), { state: "running", url: run.html_url });
+  assert.equal(
+    ciGate([{ ...run, status: "completed", conclusion: "success" }], "abc").state,
+    "passed",
+  );
+  assert.deepEqual(
+    ciGate([{ ...run, status: "completed", conclusion: "cancelled" }], "abc"),
+    { state: "failed", url: run.html_url, conclusion: "cancelled" },
+  );
+  // A rerun of a cancelled run decides, not the cancelled attempt.
+  assert.equal(
+    ciGate(
+      [
+        { ...run, status: "completed", conclusion: "cancelled" },
+        { ...run, run_attempt: 2, status: "completed", conclusion: "success" },
+      ],
+      "abc",
+    ).state,
+    "passed",
+  );
 });

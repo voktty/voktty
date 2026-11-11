@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: "Commit SHA on main to release (leave blank for latest green commit on main)"
+        description: "Commit SHA on main to release (leave blank for the latest commit on main; it publishes once that commit's CI passes)"
         required: false
         type: string
         default: ""
@@ -80,32 +80,31 @@ jobs:
           script: |
             const { pathToFileURL } = require('node:url');
             const { resolve } = require('node:path');
-            const { releasePlan, requireGreenMain, applyVersion } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
+            const { releasePlan, ciGate, applyVersion } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
             const inputs = JSON.parse(process.env.RELEASE_INPUTS || '{}');
             let source = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
             let ciUrl = '';
             if (context.eventName === 'workflow_dispatch') {
+              // Packages build while CI runs; the publish job waits for this
+              // commit's CI to pass, so the release is always the commit asked
+              // for, never an older green one.
               const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', branch: 'main', event: 'push', per_page: 100 });
-              const greenRuns = (data.workflow_runs || []).filter(r => r.status === 'completed' && r.conclusion === 'success');
+              const runs = data.workflow_runs || [];
               const requestedCommit = (inputs.commit_sha || '').trim();
               if (requestedCommit) {
-                const match = greenRuns.find(r => r.head_sha === requestedCommit || r.head_sha.startsWith(requestedCommit));
+                const match = runs.find(r => r.head_sha === requestedCommit || r.head_sha.startsWith(requestedCommit));
                 if (!match) {
-                  throw new Error(`Commit ${requestedCommit} does not have a successful completed CI run on main.`);
+                  throw new Error(`Commit ${requestedCommit} has no CI run on main.`);
                 }
                 source = match.head_sha;
-                ciUrl = match.html_url;
-              } else {
-                const headRun = greenRuns.find(r => r.head_sha === source);
-                if (headRun) {
-                  ciUrl = headRun.html_url;
-                } else if (greenRuns.length > 0) {
-                  source = greenRuns[0].head_sha;
-                  ciUrl = greenRuns[0].html_url;
-                  core.info(`HEAD commit does not have completed green CI yet; releasing latest verified green commit on main: ${source} (${ciUrl})`);
-                } else {
-                  throw new Error(`main commit ${source} needs a successful completed CI run before publication.`);
-                }
+              }
+              const gate = ciGate(runs, source);
+              if (gate.state === 'failed') {
+                throw new Error(`CI for ${source} ended as ${gate.conclusion}: ${gate.url}. Fix or rerun it, or release a newer commit.`);
+              }
+              ciUrl = gate.url;
+              if (gate.state !== 'passed') {
+                core.info(`CI for ${source} has not passed yet; packages build now and the release is published only after it passes.`);
               }
               require('node:child_process').execFileSync('git', ['checkout', source], { encoding: 'utf8' });
             }
@@ -133,7 +132,7 @@ jobs:
             const android = Boolean(inputs.android);
             const existing = releases.find((release) => release.tag_name === plan.tag);
             if (existing && !existing.draft) throw new Error('This release is already published. Choose a new version.');
-            const body = `Source commit: ${source}\n${ciUrl ? `Validated CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}${android ? '\nAndroid APKs: arm64, x64' : ''}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
+            const body = `Source commit: ${source}\n${ciUrl ? `CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}${android ? '\nAndroid APKs: arm64, x64' : ''}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
             let release = existing;
             if (existing) {
               if (existing.target_commitish !== source || existing.body !== body) {
@@ -732,11 +731,41 @@ jobs:
       group: desktop-release-publication
       cancel-in-progress: false
     permissions:
+      actions: read
       contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.source }}
+      - name: Wait for the source commit's CI to pass
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 150
+        uses: actions/github-script@v9
+        env:
+          RELEASE_SOURCE: ${{ needs.prepare-release.outputs.source }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const { resolve } = require('node:path');
+            const { ciGate } = await import(pathToFileURL(resolve('scripts/release/desktop-release.mjs')).href);
+            const source = process.env.RELEASE_SOURCE;
+            const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+            for (let check = 1; ; check++) {
+              const { data } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'ci.yml', head_sha: source, per_page: 20 });
+              const gate = ciGate(data.workflow_runs || [], source);
+              if (gate.state === 'passed') {
+                core.info(`CI passed: ${gate.url}`);
+                break;
+              }
+              if (gate.state === 'failed') {
+                throw new Error(`CI for ${source} ended as ${gate.conclusion}: ${gate.url}. The release stays a draft. A newer push to main cancels this CI; release the newest commit instead.`);
+              }
+              if (gate.state === 'missing' && check > 15) {
+                throw new Error(`No CI run on main for ${source}; the release stays a draft.`);
+              }
+              core.info(`CI for ${source} is ${gate.state}; checking again in 60s.`);
+              await sleep(60000);
+            }
       - name: Patch latest.json with re-signed AppImage and Windows signatures
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

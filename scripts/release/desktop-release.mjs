@@ -100,8 +100,8 @@ export function releasePlan({ eventName, ref, sourceVersion, inputs = {} }) {
   };
 }
 
-export function requireGreenMain(runs, sha) {
-  const latest = runs
+function latestMainRun(runs, sha) {
+  return runs
     .filter(
       (run) =>
         run.head_sha === sha &&
@@ -111,11 +111,33 @@ export function requireGreenMain(runs, sha) {
     .sort(
       (a, b) => b.run_number - a.run_number || b.run_attempt - a.run_attempt,
     )[0];
+}
+
+export function requireGreenMain(runs, sha) {
+  const latest = latestMainRun(runs, sha);
   if (latest?.status !== "completed" || latest?.conclusion !== "success")
     throw new Error(
       `main commit ${sha} needs a successful completed CI run before publication.`,
     );
   return latest.html_url;
+}
+
+/**
+ * Where the main push CI of `sha` stands. A release builds while CI runs and
+ * publishes only on "passed"; "failed" stops it, "running" and "missing" wait.
+ */
+export function ciGate(runs, sha) {
+  const latest = latestMainRun(runs, sha);
+  if (!latest) return { state: "missing", url: "" };
+  if (latest.status !== "completed")
+    return { state: "running", url: latest.html_url };
+  if (latest.conclusion === "success")
+    return { state: "passed", url: latest.html_url };
+  return {
+    state: "failed",
+    url: latest.html_url,
+    conclusion: latest.conclusion,
+  };
 }
 
 export function versionUpdates(files, target) {
