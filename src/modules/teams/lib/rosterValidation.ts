@@ -2,8 +2,17 @@ import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 
 export const ORCHESTRATOR_ROLE = "roles/orchestrator.md";
 
-export function isOrchestratorRole(role: string): boolean {
-  return role === ORCHESTRATOR_ROLE;
+export function isOrchestratorRole(role?: string): boolean {
+  if (!role || typeof role !== "string") return false;
+  const clean = role.toLowerCase().replace(/\\/g, "/");
+  return (
+    clean === ORCHESTRATOR_ROLE ||
+    clean === "roles/orquestador.md" ||
+    clean.endsWith("/orchestrator.md") ||
+    clean.endsWith("/orquestador.md") ||
+    clean === "orchestrator" ||
+    clean === "orquestador"
+  );
 }
 
 /**

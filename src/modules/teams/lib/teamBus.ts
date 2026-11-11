@@ -92,6 +92,19 @@ export function formatBusMessageForHarness(msg: {
   return lines.join("\n");
 }
 
+function findRosterAgent(
+  agents: readonly { name: string; role?: string }[],
+  name: string,
+): { name: string; role?: string } | undefined {
+  const direct = agents.find((a) => a.name === name);
+  if (direct) return direct;
+  const match = name.match(/^(.+)-(\d+)$/);
+  if (match) {
+    return agents.find((a) => a.name === match[1]);
+  }
+  return undefined;
+}
+
 function pruneBusMessages(messages: TeamBusMessage[]): TeamBusMessage[] {
   if (messages.length <= MAX_BUS_MESSAGES) return messages;
   const pending = messages.filter((m) => !m.delivered);
@@ -215,9 +228,10 @@ export async function sendMessage(
   }
 
   return runProjectExclusive(projectPath, async () => {
-    // 5. Validate recipient in team roster (B3 & M3)
+    // 5. Validate recipient in team roster (B3 & M3, supports copy naming e.g. nodo-2)
     const { roster, error: rosterErr } = await readRoster(projectPath);
-    if (!roster || !Array.isArray(roster.agents) || !roster.agents.some((a) => a.name === to)) {
+    const targetDef = roster?.agents ? findRosterAgent(roster.agents, to) : undefined;
+    if (!roster || !Array.isArray(roster.agents) || !targetDef) {
       throw new Error(
         `invalid_params: recipient '${to}' is not in a valid team roster: ${rosterErr || "roster missing or invalid"}`,
       );
@@ -225,7 +239,7 @@ export async function sendMessage(
 
     // N2: non-orchestrator agents cannot bypass hop limits by omitting reply_to.
     // reply_to is strictly required for any peer message that is not a task from the orchestrator.
-    const senderDef = roster.agents.find((a) => a.name === from);
+    const senderDef = findRosterAgent(roster.agents, from);
     const isSenderOrchestrator = senderDef ? isOrchestratorRole(senderDef.role) : false;
     if ((!isSenderOrchestrator || kind !== "task") && !replyTo) {
       throw new Error("invalid_params: reply_to is required for peer agent messages");
@@ -252,14 +266,17 @@ export async function sendMessage(
         );
       }
 
-      // R1: Each message can only be replied to once
-      const alreadyReplied = busState.messages.some((m) => m.replyTo === replyTo);
+      // R1: Each message can only be replied to once (tracked via parent.replied and replyTo references)
+      const alreadyReplied =
+        Boolean(parentMsg.replied) ||
+        busState.messages.some((m) => m.replyTo === replyTo);
       if (alreadyReplied) {
         throw new Error(
           `invalid_params: message '${replyTo}' has already been replied to`,
         );
       }
 
+      parentMsg.replied = true;
       hop = parentMsg.hop + 1;
     }
 

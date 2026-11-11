@@ -27,9 +27,13 @@ vi.mock("./teamBus", () => ({
   deliverPendingMessages: vi.fn().mockResolvedValue(0),
 }));
 
-vi.mock("./agentLauncher", () => ({
-  openAgent: vi.fn(),
-}));
+vi.mock("./agentLauncher", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./agentLauncher")>();
+  return {
+    ...actual,
+    openAgent: vi.fn(),
+  };
+});
 
 vi.mock("@/modules/harness/lib/harnessControlBridge", () => ({
   getHarnessSessionSnapshot: vi.fn(),
@@ -611,5 +615,146 @@ describe("agentControlBridge", () => {
     );
 
     expect(runProjectExclusive).toHaveBeenCalledWith("/project", expect.any(Function));
+  });
+
+  // --- E4: awaiting_owner and copies support in control bridge ---
+  describe("E4: awaiting_owner and copies support in control bridge", () => {
+    it("E4: agent.list includes active copies and preserves awaiting_owner status", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readRoster).mockResolvedValue({
+        roster: {
+          version: 1,
+          agents: [
+            { name: "orchestrator", role: "roles/orchestrator.md", start: "always" },
+            { name: "developer", role: "roles/developer.md", start: "on-demand" },
+          ],
+        },
+      });
+
+      vi.mocked(readTeamState).mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: "",
+        agents: {
+          developer: {
+            sessionId: "s_dev",
+            status: "awaiting_owner",
+            task: "Wait for owner",
+          },
+          "developer-2": {
+            sessionId: "s_dev2",
+            status: "working",
+            worktree: "/project-worktrees/developer-2",
+          },
+        },
+      });
+
+      vi.mocked(getHarnessSessionSnapshot).mockImplementation((sId) => {
+        if (sId === "s_dev") {
+          return { state: "idle" } as any; // session not working yet
+        }
+        if (sId === "s_dev2") {
+          return { state: "working" } as any;
+        }
+        return null;
+      });
+
+      const res: any = await dispatchAgentMethod(
+        "agent.list",
+        {},
+        { agent_token: orch.agentToken },
+      );
+
+      const dev = res.agents.find((a: any) => a.name === "developer");
+      const dev2 = res.agents.find((a: any) => a.name === "developer-2");
+
+      expect(dev).toBeDefined();
+      expect(dev.status).toBe("awaiting_owner");
+
+      expect(dev2).toBeDefined();
+      expect(dev2.role).toBe("roles/developer.md");
+      expect(dev2.status).toBe("working");
+    });
+
+    it("E4: agent.status reports awaiting_owner when agent waits for owner input", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readTeamState).mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: "",
+        agents: {
+          developer: {
+            sessionId: "s_dev",
+            status: "awaiting_owner",
+          },
+        },
+      });
+
+      vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+        state: "idle",
+      } as any);
+
+      const res: any = await dispatchAgentMethod(
+        "agent.status",
+        { agent: "developer" },
+        { agent_token: orch.agentToken },
+      );
+
+      expect(res.status).toBe("awaiting_owner");
+    });
+
+    it("E4: agent.wait returns immediately with awaiting_owner status instead of waiting indefinitely", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readTeamState).mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: "",
+        agents: {
+          developer: {
+            sessionId: "s_dev",
+            status: "awaiting_owner",
+          },
+        },
+      });
+
+      vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+        state: "idle",
+      } as any);
+
+      const res: any = await dispatchAgentMethod(
+        "agent.wait",
+        { agent: "developer", until: "verdict" },
+        { agent_token: orch.agentToken },
+      );
+
+      expect(res.ok).toBe(true);
+      expect(res.matched).toBe(true);
+      expect(res.status).toBe("awaiting_owner");
+      expect(res.info).toContain("awaiting owner input");
+    });
   });
 });

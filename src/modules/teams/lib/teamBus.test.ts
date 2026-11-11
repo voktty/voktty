@@ -795,4 +795,42 @@ describe("teamBus", () => {
       }),
     ).rejects.toThrow(/hop_limit_exceeded: message hop count 6 exceeds limit of 5/);
   });
+
+  it("E4: pruning does not allow a second response to a preserved parent message", async () => {
+    let busJson = JSON.stringify({
+      version: 1,
+      updatedAt: "",
+      messages: [
+        {
+          id: "task_preserved",
+          from: "orchestrator",
+          to: "developer",
+          kind: "task",
+          text: "Important task",
+          timestamp: new Date().toISOString(),
+          hop: 0,
+          delivered: true,
+          read: true,
+          replied: true, // Reply was pruned from historical bus but parent retained replied marker
+        },
+      ],
+    });
+
+    vi.mocked(readTextFile).mockImplementation(async (path: string) => {
+      if (path.includes("/team/agents.json")) return dummyRoster;
+      if (path.endsWith("bus.json")) return busJson;
+      return JSON.stringify({ agents: {} });
+    });
+
+    await expect(
+      sendMessage({
+        projectPath: "/project",
+        from: "developer",
+        to: "orchestrator",
+        kind: "status",
+        text: "Second reply attempting to reuse parent whose reply was pruned",
+        replyTo: "task_preserved",
+      }),
+    ).rejects.toThrow(/message 'task_preserved' has already been replied to/);
+  });
 });

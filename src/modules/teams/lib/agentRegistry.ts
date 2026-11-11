@@ -61,17 +61,7 @@ export async function registerLiveAgentWithControl(
       return false;
     }
     return true;
-  } catch (error) {
-    const isTest =
-      typeof process !== "undefined" && process.env?.NODE_ENV === "test";
-    const isMissingTauriIpc =
-      error instanceof Error &&
-      (error.message.includes("IPC") ||
-        error.message.includes("__TAURI") ||
-        error.message.includes("not initialized"));
-    if (isTest && isMissingTauriIpc) {
-      return true;
-    }
+  } catch {
     removeLiveAgent(session.sessionId);
     return false;
   }

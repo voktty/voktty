@@ -2991,8 +2991,31 @@ pub(crate) fn apply_gui_env(cmd: &mut Command) {
     }
 }
 
+const CLAUDE_HERITAGE_VARS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_PID",
+];
+
+fn clean_claude_heritage_env(cmd: &mut Command) {
+    for var in CLAUDE_HERITAGE_VARS {
+        cmd.env_remove(var);
+    }
+    for (key, _) in std::env::vars() {
+        if key.starts_with("CLAUDE_CODE_") {
+            cmd.env_remove(&key);
+        }
+    }
+}
+
 fn prepare_child(cmd: &mut Command, command: &str) {
     apply_gui_env(cmd);
+    clean_claude_heritage_env(cmd);
     if command_basename(command) == "fx" {
         apply_fx_env(cmd);
     }
@@ -4394,6 +4417,34 @@ mod binary_resolution_tests {
         };
         let error = remote_agent_restrictions(None, Some(&account)).unwrap_err();
         assert!(error.contains("Provider accounts"));
+    }
+
+    #[test]
+    fn cleans_inherited_claude_heritage_markers() {
+        let mut cmd = Command::new("claude");
+        cmd.env("CLAUDECODE", "1")
+            .env("CLAUDE_CODE_ENTRYPOINT", "cli")
+            .env("CLAUDE_CODE_SESSION_ID", "parent_123")
+            .env("CLAUDE_PID", "4567")
+            .env("CUSTOM_VAR", "keep_me");
+
+        clean_claude_heritage_env(&mut cmd);
+
+        let envs: std::collections::HashMap<_, _> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|s| s.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        assert_eq!(envs.get("CLAUDECODE"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_CODE_ENTRYPOINT"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_CODE_SESSION_ID"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_PID"), Some(&None));
+        assert_eq!(envs.get("CUSTOM_VAR"), Some(&Some("keep_me".to_string())));
     }
 }
 

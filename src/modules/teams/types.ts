@@ -5,6 +5,7 @@ export type TeamAgentStatus =
   | "working"
   | "idle"
   | "waiting_approval"
+  | "awaiting_owner"
   | "quota_paused"
   | "error"
   | "host_unconfigured";
@@ -100,6 +101,7 @@ export type TeamBusMessage = {
   text: string;
   timestamp: string;
   replyTo?: string;
+  replied?: boolean;
   hop: number;
   delivered: boolean;
   read: boolean;

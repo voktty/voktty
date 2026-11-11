@@ -21,6 +21,34 @@ import type { OpenAgentParams, OpenAgentResult, TeamAgentStatus } from "../types
 
 export const MAX_TEAM_AGENTS = 6;
 
+export function parseAgentCopyName(name: string): {
+  baseName: string;
+  copyNumber?: number;
+} {
+  const match = /^(.*?)-(\d+)$/.exec(name);
+  if (match && match[1] && match[2]) {
+    const copyNum = parseInt(match[2], 10);
+    if (!Number.isNaN(copyNum) && copyNum > 0) {
+      return { baseName: match[1], copyNumber: copyNum };
+    }
+  }
+  return { baseName: name, copyNumber: undefined };
+}
+
+export function resolveWorktreePath(
+  projectPath: string,
+  copyName: string,
+): string {
+  // Worktree path outside the repository and outside .voktty/
+  const normalized = projectPath.replace(/[\/\\]+$/, "");
+  const isSlash = normalized.includes("/");
+  const sep = isSlash ? "/" : "\\";
+  const lastSep = normalized.lastIndexOf(sep);
+  const parentDir = lastSep > 0 ? normalized.slice(0, lastSep) : normalized;
+  const projBase = lastSep > 0 ? normalized.slice(lastSep + 1) : "workspace";
+  return `${parentDir}${sep}${projBase}-worktrees${sep}${copyName}`;
+}
+
 export function resolveAgentAdapter(
   agent: AgentDefinition,
   roster: AgentRoster,
@@ -69,6 +97,7 @@ export type LauncherDependencies = {
     runtimeMode?: any,
   ) => { id: string; composerSeed?: string };
   cacheSession: (session: any) => void;
+  sendSessionMessage?: (sessionId: string, message: string) => Promise<boolean>;
 };
 
 export async function openAgent(
@@ -76,10 +105,16 @@ export async function openAgent(
   deps: LauncherDependencies,
 ): Promise<OpenAgentResult> {
   return runProjectExclusive(params.projectPath, async () => {
+    const parsedCopy = parseAgentCopyName(params.agentName);
+    const copyNumber = params.copy ?? parsedCopy.copyNumber;
+    const baseName = parsedCopy.baseName;
+    const effectiveAgentName =
+      copyNumber !== undefined ? `${baseName}-${copyNumber}` : baseName;
+
     if (typeof deps.onNewHarnessTab !== "function") {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
@@ -92,7 +127,7 @@ export async function openAgent(
     if (!roster) {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
@@ -101,16 +136,16 @@ export async function openAgent(
       };
     }
 
-    const agentDef = roster.agents.find((a) => a.name === params.agentName);
+    const agentDef = roster.agents.find((a) => a.name === baseName);
     if (!agentDef) {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
         error: "agent_not_found",
-        reason: `Agent '${params.agentName}' was not found in team roster`,
+        reason: `Agent '${baseName}' was not found in team roster`,
       };
     }
 
@@ -118,7 +153,7 @@ export async function openAgent(
     if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
@@ -128,13 +163,29 @@ export async function openAgent(
     }
 
     const live = listLiveAgents(params.projectPath);
-    const isAlreadyLive = live.some((s) => s.agentName === params.agentName);
+    const isAlreadyLive = live.some((s) => s.agentName === effectiveAgentName);
+    const mode = params.mode ?? "new";
+
+    // Duplicate session guard in mode: "new"
+    if (mode === "new" && isAlreadyLive) {
+      const active = live.find((s) => s.agentName === effectiveAgentName);
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: active?.sessionId ?? "",
+        mode: "new",
+        supervised: true,
+        error: "duplicate_session",
+        reason: `Agent '${effectiveAgentName}' already has an active running session (${active?.sessionId})`,
+      };
+    }
+
     if (!isAlreadyLive && live.length >= MAX_TEAM_AGENTS) {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: "",
-        mode: params.mode ?? "new",
+        mode,
         supervised: true,
         error: "capacity_exceeded",
         reason: `Team has reached the maximum of ${MAX_TEAM_AGENTS} concurrent agents`,
@@ -143,17 +194,22 @@ export async function openAgent(
 
     const supervised = resolveAgentSupervised(agentDef, roster, params.supervised);
     const state = await readTeamState(params.projectPath);
-    const mode = params.mode ?? "new";
     const isOrch = isOrchestratorRole(agentDef.role);
 
-    if (mode === "resume" && state.agents[params.agentName]?.sessionId) {
-      const existingSessionId = state.agents[params.agentName].sessionId!;
+    const isCopy = copyNumber !== undefined;
+    const worktreePath = isCopy
+      ? resolveWorktreePath(params.projectPath, effectiveAgentName)
+      : undefined;
+    const sessionCwd = worktreePath ?? params.projectPath;
+
+    if (mode === "resume" && state.agents[effectiveAgentName]?.sessionId) {
+      const existingSessionId = state.agents[effectiveAgentName].sessionId!;
       const existingLive = getLiveAgentBySessionId(existingSessionId);
       const agentToken = existingLive?.agentToken ?? generateAgentToken();
 
       const registered = await registerLiveAgentWithControl({
         sessionId: existingSessionId,
-        agentName: params.agentName,
+        agentName: effectiveAgentName,
         projectPath: params.projectPath,
         role: agentDef.role,
         isOrchestrator: isOrch,
@@ -167,7 +223,7 @@ export async function openAgent(
       if (!registered) {
         return {
           ok: false,
-          agent: params.agentName,
+          agent: effectiveAgentName,
           sessionId: existingSessionId,
           mode: "resume",
           supervised,
@@ -176,16 +232,18 @@ export async function openAgent(
         };
       }
 
+      const effectiveCwd =
+        state.agents[effectiveAgentName].worktree || sessionCwd;
       const tabId = deps.onNewHarnessTab(
         params.spaceId,
-        params.projectPath,
+        effectiveCwd,
         existingSessionId,
       );
 
       if (typeof tabId !== "number") {
         return {
           ok: false,
-          agent: params.agentName,
+          agent: effectiveAgentName,
           sessionId: existingSessionId,
           mode: "resume",
           supervised,
@@ -195,8 +253,8 @@ export async function openAgent(
       }
 
       const now = new Date().toISOString();
-      state.agents[params.agentName] = {
-        ...state.agents[params.agentName],
+      state.agents[effectiveAgentName] = {
+        ...state.agents[effectiveAgentName],
         lastOpenedAt: now,
         supervised,
         ...(params.task
@@ -212,7 +270,7 @@ export async function openAgent(
 
       return {
         ok: true,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: existingSessionId,
         tabId,
         mode: "resume",
@@ -228,15 +286,37 @@ export async function openAgent(
 
     const harnessId = resolveAgentAdapter(agentDef, roster);
     const runtimeMode = supervised ? "supervised" : "auto";
-    const session = deps.newSession(harnessId, params.projectPath, model, runtimeMode);
-    session.composerSeed = promptSeed;
-    deps.cacheSession(session);
+    const session = deps.newSession(harnessId, sessionCwd, model, runtimeMode);
+
+    let initialStatus: TeamAgentStatus;
+    if (supervised) {
+      // Supervised agents wait for owner approval/send
+      session.composerSeed = promptSeed;
+      deps.cacheSession(session);
+      initialStatus = "awaiting_owner";
+    } else {
+      // Unsupervised (auto) agents start immediately with initial task
+      deps.cacheSession(session);
+      initialStatus = "working";
+      if (typeof deps.sendSessionMessage === "function") {
+        await deps.sendSessionMessage(session.id, promptSeed);
+      } else {
+        try {
+          const { sendHarnessSessionMessage } = await import(
+            "@/modules/harness/lib/harnessControlBridge"
+          );
+          await sendHarnessSessionMessage(session.id, promptSeed);
+        } catch {
+          session.composerSeed = promptSeed;
+        }
+      }
+    }
 
     const agentToken = generateAgentToken();
 
     const registered = await registerLiveAgentWithControl({
       sessionId: session.id,
-      agentName: params.agentName,
+      agentName: effectiveAgentName,
       projectPath: params.projectPath,
       role: agentDef.role,
       isOrchestrator: isOrch,
@@ -250,7 +330,7 @@ export async function openAgent(
     if (!registered) {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: session.id,
         mode: "new",
         supervised,
@@ -261,14 +341,14 @@ export async function openAgent(
 
     const tabId = deps.onNewHarnessTab(
       params.spaceId,
-      params.projectPath,
+      sessionCwd,
       session.id,
     );
 
     if (typeof tabId !== "number") {
       return {
         ok: false,
-        agent: params.agentName,
+        agent: effectiveAgentName,
         sessionId: session.id,
         mode: "new",
         supervised,
@@ -277,23 +357,23 @@ export async function openAgent(
       };
     }
 
-    const newStatus: TeamAgentStatus = "working";
     const now = new Date().toISOString();
-    state.agents[params.agentName] = {
-      ...state.agents[params.agentName],
+    state.agents[effectiveAgentName] = {
+      ...state.agents[effectiveAgentName],
       sessionId: session.id,
       lastOpenedAt: now,
-      status: newStatus,
+      status: initialStatus,
       task: params.task || "Await assignment.",
       currentTaskStartedAt: now,
       lastVerdict: undefined,
       supervised,
+      worktree: worktreePath ?? null,
     };
     await writeTeamState(params.projectPath, state);
 
     return {
       ok: true,
-      agent: params.agentName,
+      agent: effectiveAgentName,
       sessionId: session.id,
       tabId,
       mode: "new",

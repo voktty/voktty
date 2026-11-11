@@ -3,6 +3,8 @@ import {
   openAgent,
   isModelForbidden,
   resolveAgentSupervised,
+  parseAgentCopyName,
+  resolveWorktreePath,
   MAX_TEAM_AGENTS,
 } from "./agentLauncher";
 import { clearLiveAgentRegistry, getLiveAgentBySessionId, listLiveAgents, registerLiveAgent } from "./agentRegistry";
@@ -108,7 +110,7 @@ describe("agentLauncher", () => {
 
     // Verify state was saved
     expect(mockState.agents.developer.sessionId).toBe(result.sessionId);
-    expect(mockState.agents.developer.status).toBe("working");
+    expect(mockState.agents.developer.status).toBe("awaiting_owner");
     expect(mockState.agents.developer.supervised).toBe(true);
   });
 
@@ -337,5 +339,173 @@ describe("agentLauncher", () => {
 
     // Session token must not remain in registry
     expect(getLiveAgentBySessionId("s_existing_dev")).toBeUndefined();
+  });
+
+  describe("E4: copies, worktrees, duplicates, and awaiting_owner", () => {
+    it("parseAgentCopyName decomposes copy names correctly", () => {
+      expect(parseAgentCopyName("nodo-2")).toEqual({
+        baseName: "nodo",
+        copyNumber: 2,
+      });
+      expect(parseAgentCopyName("developer-10")).toEqual({
+        baseName: "developer",
+        copyNumber: 10,
+      });
+      expect(parseAgentCopyName("nodo")).toEqual({
+        baseName: "nodo",
+        copyNumber: undefined,
+      });
+      expect(parseAgentCopyName("nodo-abc")).toEqual({
+        baseName: "nodo-abc",
+        copyNumber: undefined,
+      });
+    });
+
+    it("resolveWorktreePath places worktrees outside repository and outside .voktty/", () => {
+      const p = resolveWorktreePath("/home/user/myproject", "nodo-2");
+      expect(p).toBe("/home/user/myproject-worktrees/nodo-2");
+      expect(p).not.toContain("/home/user/myproject/");
+      expect(p).not.toContain(".voktty");
+    });
+
+    it("launching copy nodo-2 creates separate worktree and records worktree in state", async () => {
+      const result = await openAgent(
+        {
+          projectPath: "/repo/myproject",
+          agentName: "developer-2",
+          mode: "new",
+          task: "Worker copy task",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.agent).toBe("developer-2");
+
+      const expectedWorktree = resolveWorktreePath(
+        "/repo/myproject",
+        "developer-2",
+      );
+      expect(mockState.agents["developer-2"]).toBeDefined();
+      expect(mockState.agents["developer-2"].worktree).toBe(expectedWorktree);
+      expect(mockDeps.onNewHarnessTab).toHaveBeenCalledWith(
+        undefined,
+        expectedWorktree,
+        result.sessionId,
+      );
+    });
+
+    it("resuming copy by name reuses its recorded worktree and session", async () => {
+      const copyWorktree = resolveWorktreePath("/repo/myproject", "developer-2");
+      mockState.agents["developer-2"] = {
+        sessionId: "s_dev2_existing",
+        status: "idle",
+        worktree: copyWorktree,
+      };
+
+      const result = await openAgent(
+        {
+          projectPath: "/repo/myproject",
+          agentName: "developer-2",
+          mode: "resume",
+          task: "Resume task",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.agent).toBe("developer-2");
+      expect(result.mode).toBe("resume");
+      expect(result.sessionId).toBe("s_dev2_existing");
+      expect(mockDeps.onNewHarnessTab).toHaveBeenCalledWith(
+        undefined,
+        copyWorktree,
+        "s_dev2_existing",
+      );
+      expect(mockState.agents["developer-2"].worktree).toBe(copyWorktree);
+    });
+
+    it("duplicate session guard rejects mode 'new' when agent is already live and active", async () => {
+      // Register an active live session for 'developer'
+      await registerLiveAgent({
+        sessionId: "s_already_running",
+        agentName: "developer",
+        projectPath: "/repo",
+        role: "roles/developer.md",
+        isOrchestrator: false,
+        permissions: { canManageAgents: false },
+        launchedAt: new Date().toISOString(),
+        agentToken: "tok_running",
+      });
+
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "developer",
+          mode: "new",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("duplicate_session");
+      expect(result.reason).toContain("already has an active running session");
+      expect(result.sessionId).toBe("s_already_running");
+    });
+
+    it("supervised agent starts with status awaiting_owner and composerSeed set", async () => {
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "developer",
+          mode: "new",
+          supervised: true,
+          task: "Supervised task awaiting confirmation",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.supervised).toBe(true);
+      expect(mockState.agents.developer.status).toBe("awaiting_owner");
+      const cached = mockDeps.cacheSession.mock.calls[0][0];
+      expect(cached.composerSeed).toContain("Supervised task awaiting confirmation");
+    });
+
+    it("unsupervised agent starts with status working and sends message automatically", async () => {
+      const sendMock = vi.fn().mockResolvedValue(true);
+      const automaticRoster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "auto-worker",
+            role: "roles/developer.md",
+            start: "on-demand",
+            ...({ supervised: false } as Record<string, unknown>),
+          } as AgentRoster["agents"][number],
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: automaticRoster });
+
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "auto-worker",
+          mode: "new",
+          supervised: false,
+          task: "Autonomous immediate task",
+        },
+        {
+          ...mockDeps,
+          sendSessionMessage: sendMock,
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.supervised).toBe(false);
+      expect(mockState.agents["auto-worker"].status).toBe("working");
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(sendMock.mock.calls[0][1]).toContain("Autonomous immediate task");
+    });
   });
 });

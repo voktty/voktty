@@ -3,7 +3,7 @@ import {
   interruptHarnessSession,
 } from "@/modules/harness/lib/harnessControlBridge";
 import type { TeamAgentStatus, TeamMessageKind } from "../types";
-import { openAgent } from "./agentLauncher";
+import { openAgent, parseAgentCopyName } from "./agentLauncher";
 import { getLiveAgentByToken, revokeLiveAgent } from "./agentRegistry";
 import { isModelForbidden } from "./rosterValidation";
 import { deliverPendingMessages, sendMessage } from "./teamBus";
@@ -115,11 +115,50 @@ export async function dispatchAgentMethod(
     case "agent.list": {
       const { roster } = await readRoster(projectPath);
       const teamState = await readTeamState(projectPath);
-      const agents = (roster?.agents ?? []).map((agentDef) => {
-        const state = teamState.agents[agentDef.name];
+      const rosterAgents = roster?.agents ?? [];
+      const rosterNames = new Set(rosterAgents.map((a) => a.name));
+
+      const allAgentEntries: Array<{
+        name: string;
+        role: string;
+        adapter: string;
+        defaultModel?: string;
+      }> = [];
+
+      for (const agentDef of rosterAgents) {
+        allAgentEntries.push({
+          name: agentDef.name,
+          role: agentDef.role,
+          adapter: agentDef.runtime?.adapter ?? "claude-code",
+          defaultModel:
+            agentDef.runtime?.model || roster?.defaults?.runtime?.model,
+        });
+      }
+
+      for (const [stateName, stateEntry] of Object.entries(teamState.agents)) {
+        if (
+          !rosterNames.has(stateName) &&
+          (stateEntry?.sessionId || stateEntry?.status !== "unopened")
+        ) {
+          const { baseName } = parseAgentCopyName(stateName);
+          const baseDef = rosterAgents.find((a) => a.name === baseName);
+          if (baseDef) {
+            allAgentEntries.push({
+              name: stateName,
+              role: baseDef.role,
+              adapter: baseDef.runtime?.adapter ?? "claude-code",
+              defaultModel:
+                baseDef.runtime?.model || roster?.defaults?.runtime?.model,
+            });
+          }
+        }
+      }
+
+      const agents = allAgentEntries.map((entry) => {
+        const state = teamState.agents[entry.name];
         let status: TeamAgentStatus = state?.status ?? "unopened";
         let pendingApprovals = 0;
-        let activeModel = agentDef.runtime?.model || roster?.defaults?.runtime?.model;
+        let activeModel = entry.defaultModel;
 
         if (state?.sessionId) {
           const snap = getHarnessSessionSnapshot(state.sessionId);
@@ -132,6 +171,8 @@ export async function dispatchAgentMethod(
               pendingApprovals = 1;
             } else if (snap.state === "working") {
               status = "working";
+            } else if (state?.status === "awaiting_owner") {
+              status = "awaiting_owner";
             } else if (snap.state === "done" || snap.state === "idle") {
               status = "idle";
             }
@@ -139,9 +180,9 @@ export async function dispatchAgentMethod(
         }
 
         return {
-          name: agentDef.name,
-          role: agentDef.role,
-          adapter: agentDef.runtime?.adapter ?? "claude-code",
+          name: entry.name,
+          role: entry.role,
+          adapter: entry.adapter,
           model: activeModel || "default",
           host: "local",
           status,
@@ -171,7 +212,8 @@ export async function dispatchAgentMethod(
         throw new AgentControlError("not_found", "Team roster not found");
       }
 
-      const agentDef = roster.agents.find((a) => a.name === agentName);
+      const { baseName } = parseAgentCopyName(agentName);
+      const agentDef = roster.agents.find((a) => a.name === baseName);
       if (!agentDef) {
         throw new AgentControlError(
           "not_found",
@@ -229,7 +271,9 @@ export async function dispatchAgentMethod(
             ? "capacity_exceeded"
             : result.error === "forbidden_model"
               ? "forbidden_model"
-              : "request_failed";
+              : result.error === "duplicate_session"
+                ? "duplicate_session"
+                : "request_failed";
         throw new AgentControlError(
           errCode,
           result.reason ?? result.error ?? "Failed to start agent",
@@ -328,6 +372,8 @@ export async function dispatchAgentMethod(
             pendingApprovals = 1;
           } else if (snap.state === "working") {
             status = "working";
+          } else if (agentState?.status === "awaiting_owner") {
+            status = "awaiting_owner";
           } else if (snap.state === "done" || snap.state === "idle") {
             status = "idle";
           }
@@ -374,6 +420,8 @@ export async function dispatchAgentMethod(
             pendingApproval = true;
           } else if (snap.state === "working") {
             currentStatus = "working";
+          } else if (agentState?.status === "awaiting_owner") {
+            currentStatus = "awaiting_owner";
           } else if (snap.state === "done" || snap.state === "idle") {
             currentStatus = "idle";
           }
@@ -385,6 +433,17 @@ export async function dispatchAgentMethod(
           "needs_input",
           `Agent '${agentName}' is waiting for user approval in its tab`,
         );
+      }
+
+      if (currentStatus === "awaiting_owner") {
+        return {
+          ok: true,
+          matched: true,
+          agent: agentName,
+          condition: until,
+          status: "awaiting_owner",
+          info: `Agent '${agentName}' is awaiting owner input to start`,
+        };
       }
 
       // Deliver pending messages to caller and target agent if not working (F1)
