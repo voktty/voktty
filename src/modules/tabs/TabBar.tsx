@@ -1,4 +1,8 @@
 import {
+  TeamContextMenuItemLazy,
+  TeamTabIconLazy,
+} from "@/modules/teams/components/TeamTabChromeLazy";
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -78,7 +82,6 @@ import {
   SquareLock01Icon,
   SquareUnlock01Icon,
   Tick02Icon,
-  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TabPreviewSplitMenuItem } from "@/modules/tabs/components/TabPreviewSplitMenuItem";
@@ -1025,22 +1028,11 @@ export function TabBar({
                       );
                     })()}
                     {onOpenTeamBoard && (
-                      <ContextMenuItem
+                      <TeamContextMenuItemLazy
+                        tab={t}
+                        onOpen={onOpenTeamBoard}
                         className="gap-2 rounded-md px-2 py-1.5 text-xs"
-                        onSelect={() => {
-                          const tabPath = getTabPath(t);
-                          onOpenTeamBoard(tabPath ?? undefined);
-                        }}
-                      >
-                        <HugeiconsIcon
-                          icon={UserGroupIcon}
-                          size={13}
-                          strokeWidth={1.75}
-                        />
-                        <span className="flex-1">
-                          {translate("teams.openBoardTabMenu")}
-                        </span>
-                      </ContextMenuItem>
+                      />
                     )}
                     {onOpenPreviewSplit && (
                       <TabPreviewSplitMenuItem
@@ -1619,16 +1611,7 @@ export function TabIcon({
       />
     );
   }
-  if (tab.kind === "team") {
-    return (
-      <HugeiconsIcon
-        icon={UserGroupIcon}
-        size={14}
-        strokeWidth={2}
-        className="shrink-0 text-cyan-400"
-      />
-    );
-  }
+  if (tab.kind === "team") return <TeamTabIconLazy />;
   if (tab.kind === "terminal") {
     if (tab.collaboration) {
       return (
