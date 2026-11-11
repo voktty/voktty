@@ -19,6 +19,9 @@ vi.mock("../lib/feedSource", () => ({
   }),
 }));
 vi.mock("@/modules/agents/lib/route", () => ({ routeAgentNotification: io.notify }));
+vi.mock("@/modules/terminal/lib/useTerminalSession", () => ({
+  getLeafWorkspaceEnv: vi.fn(() => undefined),
+}));
 
 import { useAgentAttention } from "../lib/attentionStore";
 import AgentFeedWatcher, { WATCH_INTERVAL_MS } from "./AgentFeedWatcher";
