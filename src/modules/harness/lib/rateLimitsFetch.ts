@@ -24,6 +24,16 @@ import { JsonRpcClient } from "./harness/jsonRpc";
 const USAGE_CHILD_PREFIX = "voktty-codex-usage";
 const DISCOVERY_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 12_000;
+const CODEX_PROBE_EXITED = "Codex usage probe exited";
+
+export function codexProbeExitMessage(
+  code: number | null,
+  stderr: readonly string[],
+): string {
+  const status = code === null ? "" : ` (code ${code})`;
+  const detail = stderr.join(" | ");
+  return `${CODEX_PROBE_EXITED}${status}${detail ? `: ${detail}` : ""}`;
+}
 
 /**
  * Runs one provider read with a hard deadline and records how it went. A read
@@ -199,13 +209,21 @@ async function readCodexRateLimits(
 
   const cwd = await homeDir().catch(() => "/");
   try {
-    const result = await requestCodexAccount<unknown>(
-      path,
-      cwd,
-      "account/rateLimits/read",
-      {},
-      accountId,
-    );
+    const read = () =>
+      requestCodexAccount<unknown>(
+        path,
+        cwd,
+        "account/rateLimits/read",
+        {},
+        accountId,
+      );
+    // Reading usage is idempotent, so a probe whose process died before it
+    // answered gets one more attempt before the footer shows an error.
+    const result = await read().catch((error: unknown) => {
+      if (error instanceof Error && error.message.startsWith(CODEX_PROBE_EXITED))
+        return read();
+      throw error;
+    });
     const parsed = parseCodexRateLimits(result);
     if (
       parsed.session ||
@@ -295,10 +313,19 @@ async function requestCodexAccount<T>(
     await killChild(childId).catch(() => undefined);
   };
 
+  // Keep the tail of stderr so an early exit says why instead of only that
+  // it happened.
+  const stderr: string[] = [];
   watchChild(
     childId,
     (line) => rpc.pushLine(line),
-    () => rpc.close(new Error("Codex usage probe exited")),
+    (code) => rpc.close(new Error(codexProbeExitMessage(code, stderr))),
+    (line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      stderr.push(trimmed.slice(0, 300));
+      if (stderr.length > 3) stderr.shift();
+    },
   );
 
   try {
