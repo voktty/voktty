@@ -149,15 +149,59 @@ describe("TeamBoard", () => {
       }
     });
 
-    // Click save mapping button
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(input).toBeDefined();
+
+    const changeInput = (val: string) => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (nativeSetter) {
+        nativeSetter.call(input, val);
+      } else {
+        input.value = val;
+      }
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    // 1. Without remote project path, save button is disabled (R1)
     const dialogButtons = Array.from(document.querySelectorAll("button"));
     const saveBtn = dialogButtons.find((b) => b.textContent?.includes("teams.saveMapping"));
     expect(saveBtn).toBeDefined();
+    expect(saveBtn?.disabled).toBe(true);
 
+    // 2. With root directory "/", save button is disabled and error is displayed (R1)
     await act(async () => {
-      saveBtn?.click();
+      if (input) {
+        changeInput("/");
+      }
+    });
+    const saveBtnAfterRoot = Array.from(document.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("teams.saveMapping"),
+    );
+    expect(saveBtnAfterRoot?.disabled).toBe(true);
+    expect(document.body.textContent).toContain("teams.remotePathRootError");
+
+    // 3. With valid remote path, confirmation preview shows connection and remote path (R1)
+    await act(async () => {
+      if (input) {
+        changeInput("/srv/remote-app");
+      }
+    });
+    const saveBtnAfterValid = Array.from(document.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("teams.saveMapping"),
+    );
+    expect(saveBtnAfterValid?.disabled).toBe(false);
+    expect(document.body.textContent).toContain("teams.previewMapping");
+    expect(document.body.textContent).toContain("/srv/remote-app");
+
+    // 4. Click save mapping button and verify call with validated remote path
+    await act(async () => {
+      saveBtnAfterValid?.click();
     });
 
-    expect(saveSpy).toHaveBeenCalledWith("/repo", "prod", "conn-prod-1", undefined);
+    expect(saveSpy).toHaveBeenCalledWith("/repo", "prod", "conn-prod-1", "/srv/remote-app");
   });
 });

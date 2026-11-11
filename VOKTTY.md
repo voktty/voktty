@@ -460,6 +460,50 @@ Source Control snapshots and shared-cache keys retain the full captured workspac
 - **Windows PowerShell process lifecycle**: `killer.kill()` from `portable-pty` only kills the immediate child. Descendants (e.g. `npm run dev` started inside pwsh) survive unless something else takes them down. The Job Object in `pty/job.rs` handles this for the Voktty-process-death case; an explicit `pty_close` from JS also kills only the immediate child + relies on the Job to take the rest. Don't disable the Job without a replacement.
 - **Tab `cwd` storage**: comes from OSC 7 with forward slashes (after `parseOsc7` strips `/C:` → `C:`). Anything that consumes `tab.cwd` and passes it to a Rust fs command on Windows must normalize separators or accept both forms - `apply_common` in `pty::shell_init` handles this for PTY spawn; other call sites must do their own.
 
+### Agent teams subsystem
+
+Voktty coordinates multi-agent teams inside project workspaces through an authentic interactive Harness environment, an asynchronous team bus, an authenticated JSON-RPC control plane, and native Rust state management.
+
+#### Roster contract (`.voktty/team/agents.json`)
+
+The team roster conforms to schema `urn:voktty:agent-roster:1` and defines the declarative capabilities of the workspace team:
+- `defaults`: optional fallback runtime settings (adapter, model, reasoning effort) and host target (`local` or `ssh:<alias>`).
+- `forbiddenModels`: global model blacklist enforced at launch and override time; an agent configured with or requested to use a forbidden model is refused before opening.
+- `agents`: array of agent definitions:
+  - `name`: unique identifier (letters, digits, dashes, underscores). Copies use `<name>-<n>`.
+  - `role`: relative path to a role Markdown file under `.voktty/team/roles/` containing specialized instructions.
+  - `start`: launch mode (`on-demand` or `always`).
+  - `host`: execution target (`local` or `ssh:<alias>`).
+  - `runtime`: provider adapter (`claude-code`, `codex`, `antigravity`, `opencode`, `cursor`, `grok`, `pi`, `hermes`, `generic`), model identifier, reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`), and optional command string.
+  - `permissions`: supervisor mode (`supervised` or `automatic`) and `canOpenAgents` boolean flag.
+
+#### Operational state (`.voktty/state/agents.json`)
+
+Project-local runtime tracking conforms to `urn:voktty:team-state:1`:
+- Records agent operational status (`unopened`, `working`, `idle`, `waiting_approval`, `awaiting_owner`, `quota_paused`, `error`, `host_unconfigured`), active task descriptions, last verdicts, recorded errors, and associated Git worktree paths for isolated copies.
+- Concurrency invariant: disk writes are protected by project-exclusive serialization (`runProjectExclusive`). Workspace state files are untrusted for security decisions and never confer execution or host authority.
+
+#### Control plane RPC protocol (`agent.*`)
+
+The control plane connects orchestrator agents and the bundled CLI (`voktty agent *`) to team management:
+- `agent.list`: returns registered agents, their current statuses, supervisor modes, and assigned models.
+- `agent.status`: returns operational status for a designated agent.
+- `agent.start`: opens an authentic Harness tab via `onCreateHarnessTab` in `WorkspaceSurface`, passing the agent role and initial task. Supports `--new` (fresh session), `--resume` (existing session continuity), `--copy <n>` (isolated worktree clone), and `--task <description>`.
+- `agent.wait`: blocks caller until condition is satisfied (e.g. `--until verdict`, `--until idle`) with bounded timeouts.
+- `agent.result`: returns the latest recorded verdict and summary text.
+- `agent.close`: cleanly terminates an active agent session tab.
+- `agent.message`: dispatches messages across the team bus (`kind: "task" | "reply" | "verdict" | "notice"`).
+
+#### Security architecture and invariants
+
+- **Ephemeral token authentication**: Every launched agent receives a cryptographically generated `VOKTTY_AGENT_TOKEN`. The token is held in-memory and validated natively by the control bridge. Tokens are strictly ephemeral: never saved to disk, team state, log streams, process arguments, or SSH transports.
+- **Supervisor mode enforcement**: Agents designated as `supervised` in the roster cannot be relaxed to `automatic` by subordinate calls or orchestrators; callers can only enforce stricter supervision.
+- **Rate limiting and recursion mitigation**: Inter-agent message exchanges are capped at 30 messages per minute. Each message decrements a hop counter (default 8) to prevent autonomous ping-pong loops.
+- **Git worktree isolation**: Agent copies (`<agent>-<n>`) run in dedicated Git worktrees located outside the repository root (`<parent>/<repo>-worktrees/<repo>-<agent>-<n>`). Rust validates that target worktree paths exist and are registered worktrees of the current repository before launch. Remote workspaces reject worktree copies.
+- **Native storage isolation**: Host mappings (`app_data_dir/team_hosts.json`) and command approvals (`app_data_dir/team_generic_approvals.json`) reside exclusively in desktop native storage outside workspace and Git boundaries. Workspace-forged `hosts.json` files concede zero authority.
+- **Atomic persistence and process Mutex**: Read-modify-write cycles in native stores execute under process-wide Mutex locks (`HOSTS_MUTEX`, `APPROVALS_MUTEX`) and atomic temporary-file replacement (`tempfile::NamedTempFile` + sync + persist). Corrupt JSON stores abort with explicit errors and are never overwritten in silence.
+- **Remote SSH host safety**: Host mappings require an explicit connection profile and a mandatory POSIX remote project path; the server root directory (`/`) is strictly prohibited. Turn-based message delivery operates via interactive PTY sessions. Remote mailbox files (`MESSAGING.md`) are strictly diagnostic and read-only; disk files never determine agent status or verdicts.
+
 ## Further reading
 
 Long-form contributor guides live under `docs/`. These guides elaborate on `VOKTTY.md`; if anything conflicts, `VOKTTY.md` wins.

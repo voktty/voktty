@@ -110,6 +110,9 @@ describe("teamHosts", () => {
       expect(() => assertSafeRemotePath("relative/path")).toThrow("absolute path");
       expect(() => assertSafeRemotePath("/srv/app\0injected")).toThrow("null bytes");
       expect(() => assertSafeRemotePath("C:\\Windows")).toThrow("forward slashes");
+      expect(() => assertSafeRemotePath("/")).toThrow("cannot be the root directory ('/')");
+      expect(() => assertSafeRemotePath("")).toThrow("must be a non-empty string");
+      expect(() => assertSafeRemotePath("   ")).toThrow("must be a non-empty string");
     });
   });
 
@@ -154,6 +157,20 @@ describe("teamHosts", () => {
       expect(hosts.hosts["gpu-node"]).toBeUndefined();
     });
 
+    it("rejects empty remote project path and root directory '/' (R1)", async () => {
+      await expect(
+        saveTeamHostMapping("/mock/project", "gpu-node", "conn-gpu-id", ""),
+      ).rejects.toThrow("Remote project path is required");
+
+      await expect(
+        saveTeamHostMapping("/mock/project", "gpu-node", "conn-gpu-id", "   "),
+      ).rejects.toThrow("Remote project path is required");
+
+      await expect(
+        saveTeamHostMapping("/mock/project", "gpu-node", "conn-gpu-id", "/"),
+      ).rejects.toThrow("cannot be the root directory ('/')");
+    });
+
     it("writeTeamHosts delegates to native store without writing to workspace disk (S4)", async () => {
       await writeTeamHosts("/mock/project", {
         $schema: TEAM_HOSTS_SCHEMA,
@@ -192,6 +209,7 @@ describe("teamHosts", () => {
         port: 22,
         user: "root",
         authType: "auto",
+        initialDirectory: "/srv/direct-project",
       },
     ];
 
@@ -264,6 +282,7 @@ describe("teamHosts", () => {
       if (res.kind === "ssh") {
         expect(res.alias).toBe("direct-alias");
         expect(res.connectionId).toBe("direct-alias");
+        expect(res.remoteProjectPath).toBe("/srv/direct-project");
       }
     });
 

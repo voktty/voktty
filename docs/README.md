@@ -42,6 +42,7 @@ If a guide conflicts with `VOKTTY.md`, `VOKTTY.md` wins.
 - [Workspace search and replace](guides/workspace-search-replace.md) - Preview-first project search and transactional replacement for local, WSL and SSH workspaces.
 - [Connect MCP servers](guides/mcp-servers.md) - configure local or remote servers, understand permissions and recover from connection errors.
 - [Filesystem and connection stability](guides/filesystem-connections-stability.md) - document identity, explorer ownership, safe terminal cwd, connection lifecycle, long-chat rendering and release smokes.
+- [Agent teams](guides/agent-teams.md) - multi-agent coordination, roster configuration, CLI control, Git worktrees, and remote SSH execution.
 
 These guides describe shipped behavior and its boundaries. In particular, MCP is a client-only integration today, terminal collaboration uses an experimental external Quick Tunnel, and editor collaboration is not part of the current contract.
 

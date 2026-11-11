@@ -2,8 +2,14 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use tempfile::NamedTempFile;
 use tauri::{AppHandle, Manager};
+
+static APPROVALS_MUTEX: Mutex<()> = Mutex::new(());
+static HOSTS_MUTEX: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenericApprovalRecord {
@@ -70,6 +76,12 @@ pub fn host_mapping_key(canonical_project: &str, alias: &str) -> String {
 
 pub fn validate_remote_path(remote_path: &str) -> Result<String, String> {
     let trimmed = remote_path.trim();
+    if trimmed.is_empty() {
+        return Err("Remote project path cannot be empty".to_string());
+    }
+    if trimmed == "/" {
+        return Err("Remote project path cannot be the root directory ('/')".to_string());
+    }
     if !trimmed.starts_with('/') {
         return Err("Remote project path must be a POSIX absolute path starting with '/'".to_string());
     }
@@ -80,6 +92,9 @@ pub fn validate_remote_path(remote_path: &str) -> Result<String, String> {
         return Err("Remote project path cannot contain null bytes".to_string());
     }
     let segments: Vec<&str> = trimmed.split('/').filter(|s| !s.is_empty()).collect();
+    if segments.is_empty() {
+        return Err("Remote project path cannot be the root directory ('/')".to_string());
+    }
     if segments.contains(&"..") || segments.contains(&".") {
         return Err("Remote project path cannot contain relative segments ('..' or '.')".to_string());
     }
@@ -118,6 +133,30 @@ pub fn store_file_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("team_generic_approvals.json"))
 }
 
+pub fn write_atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Target path has no parent directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+
+    let mut tmp = NamedTempFile::new_in(parent)
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+    let data = serde_json::to_string_pretty(value)
+        .map_err(|e| format!("Failed to serialize store: {}", e))?;
+    tmp.as_file_mut()
+        .write_all(data.as_bytes())
+        .map_err(|e| format!("Failed to write to temporary file: {}", e))?;
+    tmp.as_file_mut()
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temporary file: {}", e))?;
+    if let Ok(metadata) = fs::metadata(path) {
+        let _ = tmp.as_file().set_permissions(metadata.permissions());
+    }
+    tmp.persist(path)
+        .map_err(|e| format!("Failed to persist file atomically: {}", e.error))?;
+    Ok(())
+}
+
 pub fn read_store_from_file(path: &Path) -> Result<GenericApprovalsStore, String> {
     if !path.exists() {
         return Ok(GenericApprovalsStore {
@@ -126,15 +165,12 @@ pub fn read_store_from_file(path: &Path) -> Result<GenericApprovalsStore, String
         });
     }
     let data = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&data).map_err(|e| e.to_string())
+    serde_json::from_str(&data)
+        .map_err(|e| format!("Corrupt approvals store file at '{}': {}", path.display(), e))
 }
 
 pub fn write_store_to_file(path: &Path, store: &GenericApprovalsStore) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let data = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())
+    write_atomic_json(path, store)
 }
 
 pub fn is_generic_command_approved_at(
@@ -150,6 +186,11 @@ pub fn is_generic_command_approved_at(
     let canonical = canonicalize_project_path(project_path);
     let hash = command_sha256(trimmed_cmd);
     let key = approval_key(&canonical, agent_name, &hash);
+
+    let _guard = match APPROVALS_MUTEX.lock() {
+        Ok(g) => g,
+        Err(_) => return false,
+    };
 
     let store = match read_store_from_file(store_path) {
         Ok(s) => s,
@@ -175,6 +216,9 @@ pub fn approve_generic_command_at(
     agent_name: &str,
     command: &str,
 ) -> Result<(), String> {
+    let _guard = APPROVALS_MUTEX
+        .lock()
+        .map_err(|e| format!("Approvals lock poisoned: {}", e))?;
     let trimmed_cmd = command.trim();
     if trimmed_cmd.is_empty() {
         return Err("Command cannot be empty".to_string());
@@ -207,6 +251,9 @@ pub fn revoke_generic_command_at(
     project_path: &str,
     agent_name: &str,
 ) -> Result<(), String> {
+    let _guard = APPROVALS_MUTEX
+        .lock()
+        .map_err(|e| format!("Approvals lock poisoned: {}", e))?;
     let canonical = canonicalize_project_path(project_path);
     let base = base_agent_name(agent_name);
     let mut store = read_store_from_file(store_path)?;
@@ -273,6 +320,9 @@ pub fn team_read_generic_approvals(
 ) -> Result<HashMap<String, GenericApprovalRecord>, String> {
     let store_path = store_file_path(&app)?;
     let canonical = canonicalize_project_path(&project_path);
+    let _guard = APPROVALS_MUTEX
+        .lock()
+        .map_err(|e| format!("Approvals lock poisoned: {}", e))?;
     let store = read_store_from_file(&store_path)?;
     let mut result = HashMap::new();
     for (_, record) in store.approvals {
@@ -308,15 +358,12 @@ pub fn read_hosts_store_from_file(path: &Path) -> Result<TeamHostsStore, String>
         });
     }
     let data = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&data).map_err(|e| e.to_string())
+    serde_json::from_str(&data)
+        .map_err(|e| format!("Corrupt hosts store file at '{}': {}", path.display(), e))
 }
 
 pub fn write_hosts_store_to_file(path: &Path, store: &TeamHostsStore) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let data = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())
+    write_atomic_json(path, store)
 }
 
 pub fn set_team_host_mapping_at(
@@ -326,6 +373,9 @@ pub fn set_team_host_mapping_at(
     connection_id: &str,
     remote_path: &str,
 ) -> Result<(), String> {
+    let _guard = HOSTS_MUTEX
+        .lock()
+        .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
     let norm_alias = normalize_host_alias(alias)?;
     let trimmed_conn = connection_id.trim();
     if trimmed_conn.is_empty() {
@@ -355,6 +405,9 @@ pub fn remove_team_host_mapping_at(
     project_path: &str,
     alias: &str,
 ) -> Result<(), String> {
+    let _guard = HOSTS_MUTEX
+        .lock()
+        .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
     let norm_alias = normalize_host_alias(alias)?;
     let canonical = canonicalize_project_path(project_path);
     let key = host_mapping_key(&canonical, &norm_alias);
@@ -369,6 +422,9 @@ pub fn get_team_host_mapping_at(
     project_path: &str,
     alias: &str,
 ) -> Result<Option<TeamHostRecord>, String> {
+    let _guard = HOSTS_MUTEX
+        .lock()
+        .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
     let norm_alias = normalize_host_alias(alias)?;
     let canonical = canonicalize_project_path(project_path);
     let key = host_mapping_key(&canonical, &norm_alias);
@@ -381,6 +437,9 @@ pub fn read_team_hosts_for_project_at(
     store_path: &Path,
     project_path: &str,
 ) -> Result<HashMap<String, TeamHostRecord>, String> {
+    let _guard = HOSTS_MUTEX
+        .lock()
+        .map_err(|e| format!("Hosts lock poisoned: {}", e))?;
     let canonical = canonicalize_project_path(project_path);
     let store = read_hosts_store_from_file(store_path)?;
     let mut result = HashMap::new();
@@ -675,6 +734,46 @@ mod tests {
         )
         .is_err());
 
+        // Root directory "/" is strictly rejected (R1)
+        let root_err = set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "/",
+        )
+        .unwrap_err();
+        assert!(root_err.contains("root directory ('/')"));
+
+        // Multiple slashes resolving to root directory "///" rejected (R1)
+        let multi_slash_err = set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "///",
+        )
+        .unwrap_err();
+        assert!(multi_slash_err.contains("root directory ('/')"));
+
+        // Empty and whitespace-only remote paths rejected (R1)
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "",
+        )
+        .is_err());
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "   ",
+        )
+        .is_err());
+
         // Valid mapping succeeds
         assert!(set_team_host_mapping_at(
             &native_store_path,
@@ -684,5 +783,89 @@ mod tests {
             "/home/user/project"
         )
         .is_ok());
+    }
+
+    #[test]
+    fn corrupt_store_files_return_error_and_prevent_overwrite() {
+        let app_data_dir = tempdir().unwrap();
+        let project_path = "/valid/local/project";
+
+        // 1. Hosts store corruption test
+        let hosts_path = app_data_dir.path().join("team_hosts.json");
+        let corrupt_hosts_content = "{ \"version\": 1, \"hosts\": { corrupted_json...";
+        fs::write(&hosts_path, corrupt_hosts_content).unwrap();
+
+        // Reading corrupt hosts store fails with clear error
+        let read_err = read_hosts_store_from_file(&hosts_path).unwrap_err();
+        assert!(read_err.contains("Corrupt hosts store file"));
+
+        // get_team_host_mapping_at fails with error
+        let get_err = get_team_host_mapping_at(&hosts_path, project_path, "alias").unwrap_err();
+        assert!(get_err.contains("Corrupt hosts store file"));
+
+        // set_team_host_mapping_at fails without overwriting corrupt file
+        let set_err = set_team_host_mapping_at(
+            &hosts_path,
+            project_path,
+            "alias",
+            "conn-1",
+            "/remote/path",
+        )
+        .unwrap_err();
+        assert!(set_err.contains("Corrupt hosts store file"));
+
+        // Verify the file was NOT overwritten or truncated
+        let after_attempt = fs::read_to_string(&hosts_path).unwrap();
+        assert_eq!(after_attempt, corrupt_hosts_content);
+
+        // 2. Approvals store corruption test
+        let approvals_path = app_data_dir.path().join("team_generic_approvals.json");
+        let corrupt_approvals_content = "{ \"version\": 1, \"approvals\": { invalid_data...";
+        fs::write(&approvals_path, corrupt_approvals_content).unwrap();
+
+        let app_read_err = read_store_from_file(&approvals_path).unwrap_err();
+        assert!(app_read_err.contains("Corrupt approvals store file"));
+
+        // approve_generic_command_at fails without overwriting corrupt file
+        let app_err = approve_generic_command_at(
+            &approvals_path,
+            project_path,
+            "developer",
+            "npm test",
+        )
+        .unwrap_err();
+        assert!(app_err.contains("Corrupt approvals store file"));
+
+        let app_after_attempt = fs::read_to_string(&approvals_path).unwrap();
+        assert_eq!(app_after_attempt, corrupt_approvals_content);
+    }
+
+    #[test]
+    fn atomic_write_and_concurrent_updates() {
+        let app_data_dir = tempdir().unwrap();
+        let hosts_path = app_data_dir.path().join("team_hosts.json");
+        let project_path = "/valid/local/project";
+
+        // Save multiple hosts in sequence and verify persistence
+        for i in 0..10 {
+            set_team_host_mapping_at(
+                &hosts_path,
+                project_path,
+                &format!("host-{}", i),
+                &format!("conn-{}", i),
+                &format!("/remote/path/{}", i),
+            )
+            .unwrap();
+        }
+
+        let store = read_hosts_store_from_file(&hosts_path).unwrap();
+        assert_eq!(store.hosts.len(), 10);
+        for i in 0..10 {
+            let record = get_team_host_mapping_at(&hosts_path, project_path, &format!("host-{}", i))
+                .unwrap()
+                .expect("host should exist");
+            assert_eq!(record.connection_id, format!("conn-{}", i));
+            assert_eq!(record.remote_path, format!("/remote/path/{}", i));
+        }
     }
 }

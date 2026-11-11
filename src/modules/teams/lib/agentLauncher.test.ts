@@ -1012,6 +1012,7 @@ describe("agentLauncher", () => {
         host: "prod.example.com",
         port: 22,
         user: "ubuntu",
+        initialDirectory: "/srv/remote-app",
       };
 
       const res = await openAgent(
@@ -1029,7 +1030,7 @@ describe("agentLauncher", () => {
       expect(res.ok).toBe(true);
       expect(mockDeps.onNewHarnessTab).toHaveBeenLastCalledWith(
         undefined,
-        "remote://voktty-ssh-conn-prod-99/",
+        "remote://voktty-ssh-conn-prod-99/srv/remote-app",
         expect.any(String),
       );
 
@@ -1065,6 +1066,7 @@ describe("agentLauncher", () => {
         host: "prod.example.com",
         port: 22,
         user: "ubuntu",
+        initialDirectory: "/srv/remote-app",
       };
 
       const res = await openAgent(
@@ -1115,6 +1117,7 @@ describe("agentLauncher", () => {
         host: "prod.example.com",
         port: 22,
         user: "ubuntu",
+        initialDirectory: "/srv/remote-app",
       };
 
       const res = await openAgent(

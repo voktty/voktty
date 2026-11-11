@@ -129,7 +129,18 @@ export async function writeRemoteMailboxMessage(
 /**
  * Reads messages from the remote agent's inbox directory with bounded resources (I1).
  *
+ * PURPOSE & ARCHITECTURAL ROLE (R3 / S3):
+ * - Why this function exists: This utility exists solely as an owner-facing diagnostic and
+ *   administrative inspection tool to verify inbound notes formatted according to
+ *   `templates/workspace-kit/dot-voktty/team/MESSAGING.md`. It allows diagnostics, audits,
+ *   or developer tooling to inspect deposited inbox files on a remote host.
+ * - STRICT ARCHITECTURAL INVARIANT: This function MUST NEVER be used to alter agent
+ *   operational state, delivery status, or `lastVerdict`. Operational delivery is strictly
+ *   turn-based via active Harness PTY sessions (S1), and verdicts are accepted exclusively
+ *   through the authenticated control plane RPC channel with an ephemeral token (S3).
+ *
  * Invariants:
+ * - Diagnostic read-only inspection utility only.
  * - Bounded: limits to at most MAX_MAILBOX_READ_FILES (50).
  * - Bounded size: skips any file exceeding MAX_MAILBOX_FILE_BYTES (64 KiB).
  * - S3: Never alters lastVerdict, never alters agent state.

@@ -82,18 +82,28 @@ export function assertSafeRemotePath(remotePath: string): void {
   if (!remotePath || typeof remotePath !== "string") {
     throw new Error("Remote project path must be a non-empty string");
   }
-  if (remotePath.includes("\0")) {
+  const trimmed = remotePath.trim();
+  if (!trimmed) {
+    throw new Error("Remote project path must be a non-empty string");
+  }
+  if (trimmed === "/" || /^\/+$/.test(trimmed)) {
+    throw new Error("Remote project path cannot be the root directory ('/')");
+  }
+  if (trimmed.includes("\0")) {
     throw new Error("Remote project path must not contain null bytes");
   }
-  if (remotePath.includes("\\")) {
+  if (trimmed.includes("\\")) {
     throw new Error("Remote project path must use forward slashes (Unix style)");
   }
-  if (!remotePath.startsWith("/")) {
+  if (!trimmed.startsWith("/")) {
     throw new Error("Remote project path must be an absolute path starting with '/'");
   }
 
   // Check for path traversal components
-  const segments = remotePath.split("/").filter((s) => s.length > 0);
+  const segments = trimmed.split("/").filter((s) => s.length > 0);
+  if (segments.length === 0) {
+    throw new Error("Remote project path cannot be the root directory ('/')");
+  }
   if (segments.includes("..") || segments.includes(".")) {
     throw new Error("Path traversal ('..' or '.') is strictly forbidden in remote project path");
   }
@@ -144,7 +154,7 @@ export async function saveTeamHostMapping(
   projectPath: string,
   hostAlias: string,
   connectionId: string,
-  remoteProjectPath?: string,
+  remoteProjectPath: string,
 ): Promise<void> {
   const parsed = parseAgentHost(`ssh:${hostAlias}`);
   if (parsed.kind !== "ssh") {
@@ -153,9 +163,14 @@ export async function saveTeamHostMapping(
   if (!connectionId || typeof connectionId !== "string" || !connectionId.trim()) {
     throw new Error("connectionId is required to map team host");
   }
-  const cleanRemotePath = remoteProjectPath && remoteProjectPath.trim()
-    ? normalizePath(remoteProjectPath.trim())
-    : "/";
+  if (!remoteProjectPath || typeof remoteProjectPath !== "string" || !remoteProjectPath.trim()) {
+    throw new Error("Remote project path is required to map team host");
+  }
+  const rawTrimmed = remoteProjectPath.trim();
+  if (rawTrimmed === "/" || /^\/+$/.test(rawTrimmed)) {
+    throw new Error("Remote project path cannot be the root directory ('/')");
+  }
+  const cleanRemotePath = normalizePath(rawTrimmed);
   assertSafeRemotePath(cleanRemotePath);
 
   await invoke("team_save_host_mapping", {
@@ -192,7 +207,7 @@ export async function writeTeamHosts(
   state: TeamHostsState,
 ): Promise<void> {
   for (const [alias, config] of Object.entries(state.hosts)) {
-    if (config?.connectionId) {
+    if (config?.connectionId && config.remoteProjectPath) {
       await saveTeamHostMapping(
         projectPath,
         alias,
@@ -234,7 +249,7 @@ export async function resolveHostForAgent(
 
   const mapping = hostsState.hosts[alias];
   let connection: SshConnection | undefined;
-  let remotePath = "/";
+  let remotePath = "";
 
   if (mapping) {
     connection = connections.find(
@@ -262,6 +277,17 @@ export async function resolveHostForAgent(
         reason: `Host 'ssh:${alias}' is not configured on this machine`,
       };
     }
+    if (connection.initialDirectory) {
+      remotePath = connection.initialDirectory;
+    }
+  }
+
+  if (!remotePath || remotePath === "/" || /^\/+$/.test(remotePath.trim())) {
+    return {
+      kind: "unconfigured",
+      alias,
+      reason: `Remote project path for host 'ssh:${alias}' is not configured. Please link this host in the Team Board and provide a remote project path (root '/' is not allowed).`,
+    };
   }
 
   try {

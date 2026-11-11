@@ -218,7 +218,7 @@ export function TeamBoard({
   const handleSaveHostMapping = async (
     hostAlias: string,
     connectionId: string,
-    remoteProjectPath?: string,
+    remoteProjectPath: string,
   ) => {
     try {
       await saveTeamHostMapping(
@@ -790,7 +790,36 @@ export function TeamBoard({
                   value={remoteProjectPathInput}
                   onChange={(e) => setRemoteProjectPathInput(e.target.value)}
                 />
+                {remoteProjectPathInput.trim() === "/" && (
+                  <p className="text-xs text-destructive">
+                    {t("teams.remotePathRootError")}
+                  </p>
+                )}
               </div>
+              {selectedConnId &&
+                remoteProjectPathInput.trim() &&
+                remoteProjectPathInput.trim() !== "/" && (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground">
+                    <p className="mb-1 font-medium text-foreground">
+                      {t("teams.previewMapping")}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-foreground">
+                        {t("teams.connection")}:
+                      </span>{" "}
+                      {sshConnections.find((c) => c.id === selectedConnId)?.name ??
+                        selectedConnId}
+                    </p>
+                    <p className="mt-0.5">
+                      <span className="font-semibold text-foreground">
+                        {t("teams.remotePath")}:
+                      </span>{" "}
+                      <span className="font-mono">
+                        {remoteProjectPathInput.trim()}
+                      </span>
+                    </p>
+                  </div>
+                )}
             </div>
             <DialogFooter>
               <Button
@@ -802,12 +831,17 @@ export function TeamBoard({
               </Button>
               <Button
                 size="sm"
-                disabled={!selectedConnId}
+                disabled={
+                  !selectedConnId ||
+                  !remoteProjectPathInput.trim() ||
+                  remoteProjectPathInput.trim() === "/" ||
+                  !remoteProjectPathInput.trim().startsWith("/")
+                }
                 onClick={() =>
                   void handleSaveHostMapping(
                     linkingHost.hostAlias,
                     selectedConnId,
-                    remoteProjectPathInput.trim() || undefined,
+                    remoteProjectPathInput.trim(),
                   )
                 }
               >
