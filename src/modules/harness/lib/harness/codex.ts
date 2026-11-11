@@ -1,4 +1,5 @@
 import { deleteGeneratedImages, saveGeneratedImage } from "../fs";
+import { meaningfulStderr, pushStderrLine } from "./stderrTail";
 import { nativeModelId } from "../models";
 import { sameProviderAccountId } from "../providerAccounts";
 import type { RuntimeMode } from "../session";
@@ -644,7 +645,7 @@ async function startLive(
     );
     child.rpc = rpc;
 
-    let lastStderr = "";
+    const stderrTail: string[] = [];
     child.handle.watch(
       (line) => {
         if (ownsChild(child)) rpc.pushLine(line);
@@ -652,14 +653,14 @@ async function startLive(
       (code) => {
         if (!ownsChild(child)) return;
         const exitError = new Error(
-          lastStderr.trim() || "Codex app-server exited",
+          meaningfulStderr(stderrTail) || "Codex app-server exited",
         );
         const emit = liveRef.current?.onEvent ?? input.onEvent;
         void closeChild(child, exitError);
         emit({ type: "session.ended", code });
       },
       (stderrLine) => {
-        if (ownsChild(child)) lastStderr = stderrLine;
+        if (ownsChild(child)) pushStderrLine(stderrTail, stderrLine);
       },
     );
 

@@ -15,6 +15,7 @@ import {
   planComposerSwitch,
   sessionChildHarnesses,
   sessionThroughTurn,
+  settleAbandonedHandoff,
   shouldAskOutgoingAgent,
   userMessagesAfterHandoff,
   wrapHandoffPrompt,
@@ -383,5 +384,35 @@ describe("wrapHandoffPrompt", () => {
     expect(buildOutgoingHandoffPrompt("add dark mode")).not.toContain(
       "Goal (the user request)",
     );
+  });
+});
+
+describe("settleAbandonedHandoff", () => {
+  it("closes the divider its turn left on preparing so the session accepts messages again", () => {
+    const preparing = appendPreparingHandoff(
+      sessionWith([{ id: "u1", role: "user", text: "analyse the project" }]),
+      "fx",
+      "codex",
+    );
+    const dividerId = preparing.blocks[preparing.blocks.length - 1].id;
+    const settled = settleAbandonedHandoff(preparing, dividerId);
+    expect(isPreparingHandoff(settled)).toBe(false);
+    expect(settled.blocks[settled.blocks.length - 1]?.handoff).toMatchObject({
+      status: "ready",
+      pending: false,
+    });
+  });
+
+  it("leaves a newer or already completed divider alone", () => {
+    const first = appendPreparingHandoff(sessionWith([]), "fx", "codex");
+    const firstId = first.blocks[first.blocks.length - 1].id;
+    const newer = appendPreparingHandoff(
+      consumeHandoff(completeHandoff(first, "brief")),
+      "codex",
+      "claude",
+    );
+    expect(settleAbandonedHandoff(newer, firstId)).toBe(newer);
+    const done = consumeHandoff(completeHandoff(first, "brief"));
+    expect(settleAbandonedHandoff(done, firstId)).toBe(done);
   });
 });

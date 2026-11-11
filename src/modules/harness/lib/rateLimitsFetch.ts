@@ -19,6 +19,7 @@ import {
   watchChild,
 } from "./harness/child";
 import { asRecord } from "./harness/codexProtocol";
+import { meaningfulStderr, pushStderrLine } from "./harness/stderrTail";
 import { JsonRpcClient } from "./harness/jsonRpc";
 
 const USAGE_CHILD_PREFIX = "voktty-codex-usage";
@@ -31,7 +32,7 @@ export function codexProbeExitMessage(
   stderr: readonly string[],
 ): string {
   const status = code === null ? "" : ` (code ${code})`;
-  const detail = stderr.join(" | ");
+  const detail = meaningfulStderr(stderr);
   return `${CODEX_PROBE_EXITED}${status}${detail ? `: ${detail}` : ""}`;
 }
 
@@ -320,12 +321,7 @@ async function requestCodexAccount<T>(
     childId,
     (line) => rpc.pushLine(line),
     (code) => rpc.close(new Error(codexProbeExitMessage(code, stderr))),
-    (line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      stderr.push(trimmed.slice(0, 300));
-      if (stderr.length > 3) stderr.shift();
-    },
+    (line) => pushStderrLine(stderr, line),
   );
 
   try {

@@ -30,8 +30,10 @@ import {
   consumeHandoff,
   handoffTurnCard,
   isPreparingHandoff,
+  lastHandoffBlock,
   pendingHandoff,
   planComposerSwitch,
+  settleAbandonedHandoff,
   sessionChildHarnesses,
   shouldAskOutgoingAgent,
   userMessagesAfterHandoff,
@@ -1047,6 +1049,13 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
         return;
       }
 
+      // The divider this turn appended, so every exit can settle it.
+      const preparingHandoffId = pendingSwitch
+        ? lastHandoffBlock(
+            sessionsRef.current.find((s) => s.id === sessionId)?.blocks ?? [],
+          )?.id
+        : undefined;
+
       void (async () => {
         let wrap = handoffCard
           ? {
@@ -1261,6 +1270,13 @@ export function useHarnessSessionEngine(inputs: HarnessSessionEngineInputs) {
           promptSource?.release();
           if (editedResend) {
             editedResends.finish(sessionId);
+          }
+          if (preparingHandoffId) {
+            updateSessions([sessionId], (s) =>
+              s.id === sessionId
+                ? settleAbandonedHandoff(s, preparingHandoffId)
+                : s,
+            );
           }
           if (isCurrentTurn(sessionId, gen, turnOwner)) {
             flushHarnessEvents();

@@ -205,6 +205,25 @@ export function userMessagesAfterHandoff(session: Session): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Closes a handoff whose turn ended without completing it. A divider left on
+ * "preparing" blocks every later message in the session (sends are refused
+ * while a handoff prepares), so a turn that stops being current, for example
+ * because another view took the session over, must still settle its own
+ * divider. Only the exact divider that turn created is touched.
+ */
+export function settleAbandonedHandoff(
+  session: Session,
+  handoffBlockId: string,
+): Session {
+  const last = lastHandoffBlock(session.blocks);
+  if (last?.id !== handoffBlockId || last.handoff?.status !== "preparing")
+    return session;
+  return consumeHandoff(
+    completeHandoff(session, buildDeterministicHandoff(session)),
+  );
+}
+
 export function consumeHandoff(session: Session): Session {
   const last = lastHandoffBlock(session.blocks);
   if (!last?.handoff?.pending) return session;

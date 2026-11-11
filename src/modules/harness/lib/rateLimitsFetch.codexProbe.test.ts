@@ -66,9 +66,9 @@ beforeEach(() => {
 });
 
 it("says why the probe exited", () => {
-  expect(codexProbeExitMessage(1, ["boom", "auth expired"])).toBe(
-    "Codex usage probe exited (code 1): boom | auth expired",
-  );
+  expect(
+    codexProbeExitMessage(1, ["Error: auth expired", "Node.js v22.23.2"]),
+  ).toBe("Codex usage probe exited (code 1): Error: auth expired");
   expect(codexProbeExitMessage(null, [])).toBe("Codex usage probe exited");
 });
 
