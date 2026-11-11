@@ -954,4 +954,134 @@ describe("agentLauncher", () => {
       );
     });
   });
+
+  describe("remote SSH agents (E6)", () => {
+    it("fails with host_unconfigured when host is not configured on this machine", async () => {
+      const roster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "remote-dev",
+            role: "roles/dev.md",
+            start: "on-demand",
+            host: "ssh:unconfigured-server",
+            runtime: { adapter: "claude-code" },
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster });
+      vi.spyOn(teamFs, "readTeamState").mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        agents: {},
+      });
+
+      const res = await openAgent(
+        { projectPath: "/repo", agentName: "remote-dev" },
+        mockDeps,
+      );
+
+      expect(res.ok).toBe(false);
+      expect(res.error).toBe("host_unconfigured");
+      expect(res.reason).toContain("not configured on this machine");
+    });
+
+    it("launches remote agent using SSH helper cwd and does not leak token", async () => {
+      const roster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "remote-worker",
+            role: "roles/dev.md",
+            start: "on-demand",
+            host: "ssh:prod",
+            runtime: { adapter: "claude-code", model: "claude-3-7-sonnet" },
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster });
+      const writtenStates: TeamState[] = [];
+      vi.spyOn(teamFs, "writeTeamState").mockImplementation(async (_, s) => {
+        writtenStates.push(s);
+      });
+
+      const mockSshConn = {
+        id: "conn-prod-99",
+        name: "prod",
+        host: "prod.example.com",
+        port: 22,
+        user: "ubuntu",
+      };
+
+      const res = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "remote-worker",
+          task: "Run remote database migrations",
+        },
+        {
+          ...mockDeps,
+          sshConnections: [mockSshConn],
+        },
+      );
+
+      expect(res.ok).toBe(true);
+      expect(mockDeps.onNewHarnessTab).toHaveBeenLastCalledWith(
+        undefined,
+        "remote://voktty-ssh-conn-prod-99/",
+        expect.any(String),
+      );
+
+      const savedState = writtenStates[writtenStates.length - 1];
+      expect(savedState.agents["remote-worker"]).toBeDefined();
+      expect(savedState.agents["remote-worker"].host).toBe("ssh:prod");
+
+      // Verify live agent session registered with remote info
+      const live = listLiveAgents("/repo").find((s) => s.agentName === "remote-worker");
+      expect(live).toBeDefined();
+      expect(live?.isRemote).toBe(true);
+      expect(live?.host).toBe("ssh:prod");
+      expect(live?.remoteConnectionId).toBe("conn-prod-99");
+    });
+
+    it("rejects copies with worktrees on remote SSH hosts", async () => {
+      const roster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "remote-node",
+            role: "roles/dev.md",
+            start: "on-demand",
+            host: "ssh:prod",
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster });
+
+      const mockSshConn = {
+        id: "conn-prod-99",
+        name: "prod",
+        host: "prod.example.com",
+        port: 22,
+        user: "ubuntu",
+      };
+
+      const res = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "remote-node",
+          copy: 2,
+        },
+        {
+          ...mockDeps,
+          sshConnections: [mockSshConn],
+        },
+      );
+
+      expect(res.ok).toBe(false);
+      expect(res.error).toBe("invalid_params");
+      expect(res.reason).toContain("copies with worktrees are not supported on remote SSH hosts");
+    });
+  });
 });

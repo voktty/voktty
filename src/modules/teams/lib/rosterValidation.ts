@@ -60,6 +60,17 @@ export const VALID_ADAPTERS = new Set([
 
 export const VALID_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
+export function isValidHost(host: unknown): boolean {
+  if (host === undefined || host === "local") return true;
+  if (typeof host !== "string") return false;
+  if (!host.startsWith("ssh:")) return false;
+  const name = host.slice(4).trim();
+  if (name.length === 0 || name === "." || name === ".." || name.includes("..")) {
+    return false;
+  }
+  return /^[a-zA-Z0-9_.-]+$/.test(name);
+}
+
 function normalizeKey(path: string): string {
   return path
     .replace(/\\/g, "/")
@@ -128,6 +139,13 @@ export function validateRoster(raw: string): {
             "Field 'defaults.runtime.effort': must be one of low, medium, high, xhigh, max",
         };
       }
+    }
+    const defHost = (obj.defaults as Record<string, unknown>).host;
+    if (defHost !== undefined && !isValidHost(defHost)) {
+      return {
+        roster: null,
+        error: "Field 'defaults.host': must be 'local' or 'ssh:<connection_name>'",
+      };
     }
   }
 
@@ -227,6 +245,13 @@ export function validateRoster(raw: string): {
       return {
         roster: null,
         error: `Field 'agents.${index}.runtime.effort': must be one of low, medium, high, xhigh, max`,
+      };
+    }
+
+    if (a.host !== undefined && !isValidHost(a.host)) {
+      return {
+        roster: null,
+        error: `Field 'agents.${index}.host': must be 'local' or 'ssh:<connection_name>'`,
       };
     }
 

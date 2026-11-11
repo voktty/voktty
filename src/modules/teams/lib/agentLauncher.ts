@@ -4,6 +4,7 @@ import type {
 } from "@/modules/workspace-kit/lib/configTypes";
 import { HARNESSES, type HarnessId } from "@/modules/harness/lib/session";
 import { modelEffortSetting, resolveModel } from "@/modules/harness/lib/models";
+import type { SshConnection } from "@/modules/ssh/types";
 import {
   generateAgentToken,
   getLiveAgentBySessionId,
@@ -20,6 +21,8 @@ import {
 } from "./teamFs";
 import { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
 export { isModelForbidden, isOrchestratorRole } from "./rosterValidation";
+import { resolveHostForAgent } from "./teamHosts";
+import { writeRemoteMailboxMessage } from "./remoteMailbox";
 import type { OpenAgentParams, OpenAgentResult, TeamAgentStatus } from "../types";
 
 export const MAX_TEAM_AGENTS = 6;
@@ -371,6 +374,7 @@ export type LauncherDependencies = {
   cacheSession: (session: any) => void;
   sendSessionMessage?: (sessionId: string, message: string) => Promise<boolean>;
   ensureWorktree?: (projectPath: string, copyName: string) => Promise<string>;
+  sshConnections?: readonly SshConnection[] | null;
 };
 
 export async function openAgent(
@@ -525,6 +529,50 @@ export async function openAgent(
     const state = await readTeamState(params.projectPath);
     const isOrch = isOrchestratorRole(agentDef.role);
 
+    // E6: Resolve host (local vs ssh:<alias>) and check configuration
+    const hostResolution = await resolveHostForAgent(
+      agentDef,
+      roster,
+      params.projectPath,
+      deps.sshConnections,
+    );
+
+    if (hostResolution.kind === "unconfigured") {
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: "",
+        mode,
+        supervised: true,
+        error: "host_unconfigured",
+        reason: hostResolution.reason,
+      };
+    }
+
+    if (hostResolution.kind === "invalid") {
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: "",
+        mode,
+        supervised: true,
+        error: "invalid_params",
+        reason: hostResolution.reason,
+      };
+    }
+
+    if (isCopy && hostResolution.kind === "ssh") {
+      return {
+        ok: false,
+        agent: effectiveAgentName,
+        sessionId: "",
+        mode,
+        supervised: true,
+        error: "invalid_params",
+        reason: "Agent copies with worktrees are not supported on remote SSH hosts",
+      };
+    }
+
     // B1 & R2: If agent is a copy, ensure worktree exists and is authorized natively in Rust.
     // The path returned by ensure_agent_worktree is used as session cwd, as the value
     // persisted in team state, and for resume validation (R2).
@@ -564,7 +612,10 @@ export async function openAgent(
       }
     }
 
-    const sessionCwd = copyWorktreePath ?? params.projectPath;
+    const sessionCwd =
+      hostResolution.kind === "ssh"
+        ? hostResolution.sessionCwd
+        : copyWorktreePath ?? params.projectPath;
 
     if (mode === "resume" && state.agents[effectiveAgentName]?.sessionId) {
       const existingSessionId = state.agents[effectiveAgentName].sessionId!;
@@ -587,6 +638,9 @@ export async function openAgent(
 
       const existingLive = getLiveAgentBySessionId(existingSessionId);
       const agentToken = existingLive?.agentToken ?? generateAgentToken();
+      const isRemote = hostResolution.kind === "ssh";
+      const remoteHostStr = isRemote ? `ssh:${hostResolution.alias}` : undefined;
+      const remoteConnId = isRemote ? hostResolution.connectionId : undefined;
 
       const registered = await registerLiveAgentWithControl({
         sessionId: existingSessionId,
@@ -599,6 +653,13 @@ export async function openAgent(
         },
         launchedAt: existingLive?.launchedAt ?? new Date().toISOString(),
         agentToken,
+        ...(isRemote
+          ? {
+              host: remoteHostStr,
+              isRemote: true,
+              remoteConnectionId: remoteConnId,
+            }
+          : {}),
       });
 
       if (!registered) {
@@ -637,6 +698,7 @@ export async function openAgent(
         ...state.agents[effectiveAgentName],
         lastOpenedAt: now,
         supervised,
+        ...(isRemote ? { host: remoteHostStr } : {}),
         ...(params.task
           ? {
               task: params.task,
@@ -647,6 +709,25 @@ export async function openAgent(
           : {}),
       };
       await writeTeamState(params.projectPath, state);
+
+      if (isRemote && params.task) {
+        try {
+          await writeRemoteMailboxMessage(sessionCwd, effectiveAgentName, {
+            id: `msg_task_${Date.now()}`,
+            projectPath: params.projectPath,
+            from: "owner",
+            to: effectiveAgentName,
+            kind: "task",
+            text: params.task,
+            timestamp: now,
+            hop: 0,
+            delivered: true,
+            read: false,
+          });
+        } catch {
+          // Mailbox write non-blocking
+        }
+      }
 
       return {
         ok: true,
@@ -712,6 +793,9 @@ export async function openAgent(
     deps.cacheSession(session);
 
     const agentToken = generateAgentToken();
+    const isRemote = hostResolution.kind === "ssh";
+    const remoteHostStr = isRemote ? `ssh:${hostResolution.alias}` : undefined;
+    const remoteConnId = isRemote ? hostResolution.connectionId : undefined;
 
     // 1. Register token with native control plane
     const registered = await registerLiveAgentWithControl({
@@ -725,6 +809,13 @@ export async function openAgent(
       },
       launchedAt: new Date().toISOString(),
       agentToken,
+      ...(isRemote
+        ? {
+            host: remoteHostStr,
+            isRemote: true,
+            remoteConnectionId: remoteConnId,
+          }
+        : {}),
     });
 
     if (!registered) {
@@ -770,8 +861,28 @@ export async function openAgent(
       lastVerdict: undefined,
       supervised,
       worktree: copyWorktreePath ?? null,
+      ...(isRemote ? { host: remoteHostStr } : {}),
     };
     await writeTeamState(params.projectPath, state);
+
+    if (isRemote && params.task) {
+      try {
+        await writeRemoteMailboxMessage(sessionCwd, effectiveAgentName, {
+          id: `msg_task_${Date.now()}`,
+          projectPath: params.projectPath,
+          from: "owner",
+          to: effectiveAgentName,
+          kind: "task",
+          text: params.task,
+          timestamp: now,
+          hop: 0,
+          delivered: true,
+          read: false,
+        });
+      } catch {
+        // Mailbox write non-blocking
+      }
+    }
 
     // 4. I1: Send task to unsupervised agents at the end; if send fails, degrade to awaiting_owner with composerSeed
     if (!supervised) {

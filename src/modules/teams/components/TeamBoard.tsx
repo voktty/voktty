@@ -15,6 +15,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useTranslation } from "@/modules/i18n";
 import type {
   AgentDefinition,
@@ -27,7 +36,8 @@ import {
   readRoster,
   readTeamState,
 } from "../lib/teamFs";
-import type { TeamAgentStatus, TeamState } from "../types";
+import { readTeamHosts, saveTeamHostMapping } from "../lib/teamHosts";
+import type { TeamAgentStatus, TeamHostsState, TeamState } from "../types";
 import { AgentFormDialog } from "./AgentFormDialog";
 import { RulesDialog } from "./RulesDialog";
 
@@ -97,6 +107,14 @@ export function TeamBoard({
   const [genericApprovals, setGenericApprovals] = useState<
     Record<string, { command: string }>
   >({});
+  const [teamHosts, setTeamHosts] = useState<TeamHostsState | null>(null);
+  const [linkingHost, setLinkingHost] = useState<{
+    agentName: string;
+    hostAlias: string;
+  } | null>(null);
+  const [selectedConnId, setSelectedConnId] = useState("");
+  const [remoteProjectPathInput, setRemoteProjectPathInput] = useState("");
+  const sshConnections = usePreferencesStore((s) => s.sshConnections ?? []);
 
   const loadData = useCallback(async () => {
     const { roster: loadedRoster, error } = await readRoster(projectPath);
@@ -105,6 +123,8 @@ export function TeamBoard({
     const state = await readTeamState(projectPath);
     const approvals = await readGenericApprovals(projectPath);
     setGenericApprovals(approvals);
+    const hosts = await readTeamHosts(projectPath);
+    setTeamHosts(hosts);
 
     // Sync state with live harness snapshots if available
     try {
@@ -153,6 +173,7 @@ export function TeamBoard({
       agent: AgentDefinition,
       roster: AgentRoster,
       state: TeamState | null,
+      hosts: TeamHostsState | null,
     ): {
       status: TeamAgentStatus;
       isForbidden: boolean;
@@ -164,7 +185,25 @@ export function TeamBoard({
 
       const agentSaved = state?.agents[agent.name];
       const sessionId = agentSaved?.sessionId;
-      const runtimeStatus: TeamAgentStatus = agentSaved?.status ?? "unopened";
+      let runtimeStatus: TeamAgentStatus = agentSaved?.status ?? "unopened";
+
+      const hostVal = agentSaved?.host ?? agent.host ?? roster.defaults?.host;
+      if (runtimeStatus === "unopened" && hostVal && hostVal.startsWith("ssh:")) {
+        const alias = hostVal.slice(4).trim();
+        const mapping = hosts?.hosts[alias];
+        const hasMapping =
+          mapping &&
+          sshConnections.some(
+            (c) =>
+              c.id === mapping.connectionId || c.name === mapping.connectionId,
+          );
+        const hasDirect = sshConnections.some(
+          (c) => c.id === alias || c.name === alias,
+        );
+        if (!hasMapping && !hasDirect) {
+          runtimeStatus = "host_unconfigured";
+        }
+      }
 
       return {
         status: runtimeStatus,
@@ -173,8 +212,32 @@ export function TeamBoard({
         sessionId,
       };
     },
-    [],
+    [sshConnections],
   );
+
+  const handleSaveHostMapping = async (
+    hostAlias: string,
+    connectionId: string,
+    remoteProjectPath?: string,
+  ) => {
+    try {
+      await saveTeamHostMapping(
+        projectPath,
+        hostAlias,
+        connectionId,
+        remoteProjectPath,
+      );
+      setLinkingHost(null);
+      setSelectedConnId("");
+      setRemoteProjectPathInput("");
+      await loadData();
+    } catch (err: unknown) {
+      setFeedback({
+        isError: true,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
 
   const handleOpen = async (agentName: string, mode: "new" | "resume") => {
     if (!onNewHarnessTab) return;
@@ -198,6 +261,7 @@ export function TeamBoard({
           onNewHarnessTab,
           newSession,
           cacheSession,
+          sshConnections,
         },
       );
 
@@ -389,6 +453,7 @@ export function TeamBoard({
               agent,
               roster,
               teamState,
+              teamHosts,
             );
             const model = resolveAgentModel(agent, roster);
             const adapter = resolveAgentAdapter(agent, roster);
@@ -454,6 +519,14 @@ export function TeamBoard({
                           className="text-xs text-muted-foreground"
                         >
                           {t("teams.unopened")}
+                        </Badge>
+                      )}
+                      {status === "host_unconfigured" && (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/40 text-amber-600 bg-amber-500/10 text-xs"
+                        >
+                          {t("teams.hostUnconfigured")}
                         </Badge>
                       )}
                       <Button
@@ -560,14 +633,45 @@ export function TeamBoard({
                       </Button>
                     </div>
                   )}
+
+                  {status === "host_unconfigured" && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs flex flex-col gap-2">
+                      <p className="text-amber-700 dark:text-amber-400 font-medium">
+                        {t("teams.hostUnconfigured")}:{" "}
+                        <span className="font-mono">
+                          {agent.host ?? roster.defaults?.host}
+                        </span>
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-xs w-fit"
+                        onClick={() =>
+                          setLinkingHost({
+                            agentName: agent.name,
+                            hostAlias: (
+                              agent.host ??
+                              roster.defaults?.host ??
+                              ""
+                            ).replace(/^ssh:/, ""),
+                          })
+                        }
+                      >
+                        {t("teams.linkHost")}
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
 
                 <CardFooter className="flex items-center justify-end gap-2 border-t pt-3">
-                  {status === "unopened" ? (
+                  {status === "unopened" || status === "host_unconfigured" ? (
                     <Button
                       size="sm"
                       disabled={
-                        isBusy || isForbidden || (isGeneric && !isApproved)
+                        isBusy ||
+                        isForbidden ||
+                        (isGeneric && !isApproved) ||
+                        status === "host_unconfigured"
                       }
                       onClick={() => handleOpen(agent.name, "new")}
                     >
@@ -631,6 +735,78 @@ export function TeamBoard({
             onImportSuccess={() => void loadData()}
           />
         </Suspense>
+      )}
+
+      {linkingHost && (
+        <Dialog open={true} onOpenChange={() => setLinkingHost(null)}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle>{t("teams.linkHostTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("teams.linkHostDesc")}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">
+                  {t("teams.selectConnection")}
+                </label>
+                {sshConnections.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("teams.noSshConnectionsConfigured")}
+                  </p>
+                ) : (
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                    value={selectedConnId}
+                    onChange={(e) => setSelectedConnId(e.target.value)}
+                  >
+                    <option value="">-- {t("teams.selectConnection")} --</option>
+                    {sshConnections.map((conn) => (
+                      <option key={conn.id} value={conn.id}>
+                        {conn.name} ({conn.host})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">
+                  {t("teams.remoteProjectPathLabel")}
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm font-mono"
+                  placeholder="/srv/project"
+                  value={remoteProjectPathInput}
+                  onChange={(e) => setRemoteProjectPathInput(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLinkingHost(null)}
+              >
+                {t("teams.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!selectedConnId}
+                onClick={() =>
+                  void handleSaveHostMapping(
+                    linkingHost.hostAlias,
+                    selectedConnId,
+                    remoteProjectPathInput.trim() || undefined,
+                  )
+                }
+              >
+                {t("teams.saveMapping")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

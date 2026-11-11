@@ -2,6 +2,7 @@ import {
   getHarnessSessionSnapshot,
   interruptHarnessSession,
 } from "@/modules/harness/lib/harnessControlBridge";
+import type { SshConnection } from "@/modules/ssh/types";
 import type { TeamAgentStatus, TeamMessageKind } from "../types";
 import {
   openAgent,
@@ -17,6 +18,7 @@ import {
   runProjectExclusive,
   writeTeamState,
 } from "./teamFs";
+import { resolveHostForAgent } from "./teamHosts";
 
 export class AgentControlError extends Error {
   constructor(
@@ -53,6 +55,7 @@ export type DispatchContext = {
   };
   activeTabIdRef?: { current: number };
   activeSpaceIdRef?: { current: string | null };
+  sshConnections?: readonly SshConnection[] | null;
 };
 
 export type AgentCaller = {
@@ -128,6 +131,8 @@ export async function dispatchAgentMethod(
         adapter: string;
         defaultModel?: string;
         effort?: string;
+        host?: string;
+        def?: any;
       }> = [];
 
       for (const agentDef of rosterAgents) {
@@ -138,6 +143,8 @@ export async function dispatchAgentMethod(
           defaultModel:
             agentDef.runtime?.model || roster?.defaults?.runtime?.model,
           effort: agentDef.runtime?.effort ?? roster?.defaults?.runtime?.effort,
+          host: agentDef.host ?? roster?.defaults?.host ?? "local",
+          def: agentDef,
         });
       }
 
@@ -157,57 +164,78 @@ export async function dispatchAgentMethod(
                 baseDef.runtime?.model || roster?.defaults?.runtime?.model,
               effort:
                 baseDef.runtime?.effort ?? roster?.defaults?.runtime?.effort,
+              host:
+                stateEntry?.host ??
+                baseDef.host ??
+                roster?.defaults?.host ??
+                "local",
+              def: baseDef,
             });
           }
         }
       }
 
-      const agents = allAgentEntries.map((entry) => {
-        const state = teamState.agents[entry.name];
-        let status: TeamAgentStatus = state?.status ?? "unopened";
-        let pendingApprovals = 0;
-        let activeModel = entry.defaultModel;
+      const agents = await Promise.all(
+        allAgentEntries.map(async (entry) => {
+          const state = teamState.agents[entry.name];
+          let status: TeamAgentStatus = state?.status ?? "unopened";
+          let pendingApprovals = 0;
+          let activeModel = entry.defaultModel;
+          const host = entry.host ?? state?.host ?? "local";
 
-        if (state?.sessionId) {
-          const snap = getHarnessSessionSnapshot(state.sessionId);
-          if (snap) {
-            if (snap.model) {
-              activeModel = snap.model;
-            }
-            if (snap.pendingApproval) {
-              status = "waiting_approval";
-              pendingApprovals = 1;
-            } else if (snap.state === "working") {
-              status = "working";
-            } else if (state?.status === "awaiting_owner") {
-              status = "awaiting_owner";
-            } else if (snap.state === "done" || snap.state === "idle") {
-              status = "idle";
-            }
-          } else {
-            // If session is no longer active in memory, mark copies as unopened
-            if (!rosterNames.has(entry.name)) {
-              status = "unopened";
+          if (state?.sessionId) {
+            const snap = getHarnessSessionSnapshot(state.sessionId);
+            if (snap) {
+              if (snap.model) {
+                activeModel = snap.model;
+              }
+              if (snap.pendingApproval) {
+                status = "waiting_approval";
+                pendingApprovals = 1;
+              } else if (snap.state === "working") {
+                status = "working";
+              } else if (state?.status === "awaiting_owner") {
+                status = "awaiting_owner";
+              } else if (snap.state === "done" || snap.state === "idle") {
+                status = "idle";
+              }
+            } else {
+              // If session is no longer active in memory, mark copies as unopened
+              if (!rosterNames.has(entry.name)) {
+                status = "unopened";
+              }
             }
           }
-        }
 
-        return {
-          name: entry.name,
-          role: entry.role,
-          adapter: entry.adapter,
-          model: activeModel || "default",
-          effort: entry.effort ?? null,
-          host: "local",
-          status,
-          task: state?.task ?? null,
-          lastVerdict: state?.lastVerdict?.text ?? null,
-          pendingApprovals,
-          unreadMessages: 0,
-          sessionId: state?.sessionId ?? null,
-          supervised: state?.supervised ?? true,
-        };
-      });
+          if (status === "unopened" && host.startsWith("ssh:") && entry.def && roster) {
+            const resolved = await resolveHostForAgent(
+              entry.def,
+              roster,
+              projectPath,
+              context.sshConnections,
+            );
+            if (resolved.kind === "unconfigured") {
+              status = "host_unconfigured";
+            }
+          }
+
+          return {
+            name: entry.name,
+            role: entry.role,
+            adapter: entry.adapter,
+            model: activeModel || "default",
+            effort: entry.effort ?? null,
+            host,
+            status,
+            task: state?.task ?? null,
+            lastVerdict: state?.lastVerdict?.text ?? null,
+            pendingApprovals,
+            unreadMessages: 0,
+            sessionId: state?.sessionId ?? null,
+            supervised: state?.supervised ?? true,
+          };
+        }),
+      );
 
       return {
         project: projectPath,
@@ -280,24 +308,27 @@ export async function dispatchAgentMethod(
           onNewHarnessTab: context.onNewHarnessTab,
           newSession,
           cacheSession,
+          sshConnections: context.sshConnections,
         },
       );
 
       if (!result.ok) {
         const errCode =
-          result.error === "capacity_exceeded"
-            ? "capacity_exceeded"
-            : result.error === "forbidden_model"
-              ? "forbidden_model"
-              : result.error === "duplicate_session"
-                ? "duplicate_session"
-                : result.error === "invalid_params"
-                  ? "invalid_params"
-                  : result.error === "agent_not_found"
-                    ? "not_found"
-                    : result.error === "approval_required"
-                      ? "approval_required"
-                      : "request_failed";
+          result.error === "host_unconfigured"
+            ? "host_unconfigured"
+            : result.error === "capacity_exceeded"
+              ? "capacity_exceeded"
+              : result.error === "forbidden_model"
+                ? "forbidden_model"
+                : result.error === "duplicate_session"
+                  ? "duplicate_session"
+                  : result.error === "invalid_params"
+                    ? "invalid_params"
+                    : result.error === "agent_not_found"
+                      ? "not_found"
+                      : result.error === "approval_required"
+                        ? "approval_required"
+                        : "request_failed";
         throw new AgentControlError(
           errCode,
           result.reason ?? result.error ?? "Failed to start agent",
@@ -388,6 +419,11 @@ export async function dispatchAgentMethod(
       let status: TeamAgentStatus = agentState?.status ?? "unopened";
       let pendingApprovals = 0;
 
+      const { roster } = await readRoster(projectPath);
+      const agentDef = roster?.agents.find((a) => a.name === agentName);
+      const host =
+        agentState?.host ?? agentDef?.host ?? roster?.defaults?.host ?? "local";
+
       if (agentState?.sessionId) {
         const snap = getHarnessSessionSnapshot(agentState.sessionId);
         if (snap) {
@@ -404,6 +440,18 @@ export async function dispatchAgentMethod(
         }
       }
 
+      if (status === "unopened" && host.startsWith("ssh:") && agentDef && roster) {
+        const resolved = await resolveHostForAgent(
+          agentDef,
+          roster,
+          projectPath,
+          context.sshConnections,
+        );
+        if (resolved.kind === "unconfigured") {
+          status = "host_unconfigured";
+        }
+      }
+
       // If the inspected agent is idle/done, check and deliver pending messages (F1)
       if (status === "idle" || status === "unopened") {
         try {
@@ -416,6 +464,7 @@ export async function dispatchAgentMethod(
       return {
         agent: agentName,
         status,
+        host,
         sessionId: agentState?.sessionId ?? null,
         task: agentState?.task ?? null,
         pendingApprovals,

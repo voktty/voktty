@@ -4,8 +4,13 @@ import {
   sendHarnessSessionMessage,
 } from "@/modules/harness/lib/harnessControlBridge";
 import { invoke } from "@tauri-apps/api/core";
+import type { AgentDefinition } from "@/modules/workspace-kit/lib/configTypes";
 import type { TeamBusMessage, TeamBusState, TeamMessageKind } from "../types";
 import { isOrchestratorRole } from "./rosterValidation";
+import {
+  readLatestRemoteMailboxVerdict,
+  writeRemoteMailboxMessage,
+} from "./remoteMailbox";
 import {
   readRoster,
   readTeamState,
@@ -13,6 +18,7 @@ import {
   teamPath,
   writeTeamState,
 } from "./teamFs";
+import { resolveHostForAgent } from "./teamHosts";
 
 const MAX_RATE_PER_MINUTE = 30;
 const MAX_MESSAGE_BYTES = 16 * 1024; // 16 KiB
@@ -93,9 +99,9 @@ export function formatBusMessageForHarness(msg: {
 }
 
 function findRosterAgent(
-  agents: readonly { name: string; role?: string }[],
+  agents: readonly AgentDefinition[],
   name: string,
-): { name: string; role?: string } | undefined {
+): AgentDefinition | undefined {
   const direct = agents.find((a) => a.name === name);
   if (direct) return direct;
   const match = name.match(/^(.+)-(\d+)$/);
@@ -331,6 +337,21 @@ export async function sendMessage(
       }
     }
 
+    const targetHost = targetAgent?.host ?? targetDef.host ?? roster.defaults?.host;
+    if (targetHost && targetHost.startsWith("ssh:")) {
+      try {
+        const resolved = await resolveHostForAgent(targetDef, roster, projectPath);
+        if (resolved.kind === "ssh") {
+          await writeRemoteMailboxMessage(resolved.sessionCwd, to, message);
+          if (!targetSessionId) {
+            delivered = true;
+          }
+        }
+      } catch {
+        // Mailbox deposit best-effort
+      }
+    }
+
     message.delivered = delivered;
     busState.messages.push(message);
     busState.messages = pruneBusMessages(busState.messages);
@@ -371,6 +392,42 @@ export async function deliverPendingMessages(
     const busState = await readBus(projectPath);
     const teamState = await readTeamState(projectPath);
     const sessionId = teamState.agents[agentName]?.sessionId;
+
+    const { roster } = await readRoster(projectPath);
+    const agentDef = roster?.agents ? findRosterAgent(roster.agents, agentName) : undefined;
+    const agentHost = teamState.agents[agentName]?.host ?? agentDef?.host ?? roster?.defaults?.host;
+
+    if (agentHost && agentHost.startsWith("ssh:") && agentDef && roster) {
+      try {
+        const resolved = await resolveHostForAgent(agentDef, roster, projectPath);
+        if (resolved.kind === "ssh") {
+          const remoteVerdict = await readLatestRemoteMailboxVerdict(
+            resolved.sessionCwd,
+            agentName,
+          );
+          if (remoteVerdict) {
+            const current = teamState.agents[agentName] ?? { status: "idle" };
+            if (
+              !current.lastVerdict ||
+              current.lastVerdict.timestamp !== remoteVerdict.timestamp ||
+              current.lastVerdict.text !== remoteVerdict.text
+            ) {
+              current.lastVerdict = {
+                text: remoteVerdict.text,
+                timestamp: remoteVerdict.timestamp,
+                messageId: remoteVerdict.messageId,
+              };
+              current.status = "idle";
+              teamState.agents[agentName] = current;
+              await writeTeamState(projectPath, teamState);
+            }
+          }
+        }
+      } catch {
+        // Best effort
+      }
+    }
+
     if (!sessionId) return 0;
 
     let isWorking = false;

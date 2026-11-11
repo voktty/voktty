@@ -244,4 +244,69 @@ describe("rosterValidation", () => {
       expect(res.roster).not.toBeNull();
     }
   });
+
+  describe("host validation (E6)", () => {
+    it("accepts valid host formats on agents and defaults", () => {
+      const raw = JSON.stringify({
+        version: 1,
+        defaults: {
+          runtime: { adapter: "claude-code" },
+          host: "ssh:prod-cluster",
+        },
+        agents: [
+          {
+            name: "local-agent",
+            role: "roles/dev.md",
+            host: "local",
+          },
+          {
+            name: "remote-agent",
+            role: "roles/dev.md",
+            host: "ssh:gpu_01.aws",
+          },
+        ],
+      });
+      const res = validateRoster(raw);
+      expect(res.error).toBeUndefined();
+      expect(res.roster).not.toBeNull();
+    });
+
+    it("rejects invalid host scheme on agent", () => {
+      const raw = JSON.stringify({
+        version: 1,
+        defaults: {
+          runtime: { adapter: "claude-code" },
+        },
+        agents: [
+          {
+            name: "agent-bad-host",
+            role: "roles/dev.md",
+            host: "http://remote-server",
+          },
+        ],
+      });
+      const res = validateRoster(raw);
+      expect(res.roster).toBeNull();
+      expect(res.error).toContain("agents.0.host");
+    });
+
+    it("rejects invalid host on defaults", () => {
+      const raw = JSON.stringify({
+        version: 1,
+        defaults: {
+          runtime: { adapter: "claude-code" },
+          host: "ssh:",
+        },
+        agents: [
+          {
+            name: "agent-1",
+            role: "roles/dev.md",
+          },
+        ],
+      });
+      const res = validateRoster(raw);
+      expect(res.roster).toBeNull();
+      expect(res.error).toContain("defaults.host");
+    });
+  });
 });

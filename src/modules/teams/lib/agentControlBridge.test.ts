@@ -923,5 +923,83 @@ describe("agentControlBridge", () => {
         ),
       ).rejects.toThrow("Unknown agent method 'agent.revoke'");
     });
+
+    it("E6: reports host and host_unconfigured in agent.list and agent.status", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readRoster).mockResolvedValue({
+        roster: {
+          version: 1,
+          agents: [
+            {
+              name: "remote-worker",
+              role: "roles/worker.md",
+              start: "on-demand",
+              host: "ssh:unconfigured-server",
+              runtime: { adapter: "claude-code" },
+            },
+          ],
+        },
+      });
+
+      vi.mocked(readTeamState).mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: "2026-11-11T12:00:00.000Z",
+        agents: {},
+      });
+
+      // 1. agent.list marks unopened agent with unconfigured host as host_unconfigured
+      const listRes = (await dispatchAgentMethod(
+        "agent.list",
+        {},
+        { agent_token: orch.agentToken },
+      )) as { agents: any[] };
+
+      const worker = listRes.agents.find((a) => a.name === "remote-worker");
+      expect(worker).toBeDefined();
+      expect(worker.host).toBe("ssh:unconfigured-server");
+      expect(worker.status).toBe("host_unconfigured");
+
+      // 2. agent.status reports host and host_unconfigured
+      const statusRes = (await dispatchAgentMethod(
+        "agent.status",
+        { agent: "remote-worker" },
+        { agent_token: orch.agentToken },
+      )) as Record<string, unknown>;
+
+      expect(statusRes.status).toBe("host_unconfigured");
+      expect(statusRes.host).toBe("ssh:unconfigured-server");
+
+      // 3. agent.start fails with host_unconfigured error code
+      vi.mocked(openAgent).mockResolvedValue({
+        ok: false,
+        agent: "remote-worker",
+        sessionId: "",
+        mode: "new",
+        supervised: true,
+        error: "host_unconfigured",
+        reason: "Host 'ssh:unconfigured-server' is not configured on this machine",
+      });
+
+      await expect(
+        dispatchAgentMethod(
+          "agent.start",
+          { agent: "remote-worker" },
+          { agent_token: orch.agentToken },
+          { onNewHarnessTab: vi.fn() },
+        ),
+      ).rejects.toMatchObject({
+        code: "host_unconfigured",
+        message: expect.stringContaining("not configured on this machine"),
+      });
+    });
   });
 });

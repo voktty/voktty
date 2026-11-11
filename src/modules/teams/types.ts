@@ -1,4 +1,17 @@
 export const TEAM_STATE_SCHEMA = "urn:voktty:team-state:1" as const;
+export const TEAM_HOSTS_SCHEMA = "urn:voktty:team-hosts:1" as const;
+
+export type TeamHostConfig = {
+  connectionId: string;
+  remoteProjectPath?: string;
+};
+
+export type TeamHostsState = {
+  $schema: typeof TEAM_HOSTS_SCHEMA;
+  version: 1;
+  updatedAt: string;
+  hosts: Record<string, TeamHostConfig>;
+};
 
 export type TeamAgentStatus =
   | "unopened"
@@ -24,6 +37,7 @@ export type TeamAgentCopyState = {
   task?: string;
   worktree: string;
   supervised: boolean;
+  host?: string;
 };
 
 export type TeamAgentState = {
@@ -36,6 +50,7 @@ export type TeamAgentState = {
   lastVerdict?: TeamAgentVerdict;
   worktree?: string | null;
   supervised?: boolean;
+  host?: string;
   copies?: Record<string, TeamAgentCopyState>;
 };
 
@@ -60,6 +75,9 @@ export type LiveAgentSession = {
   pid?: number;
   launchedAt: string;
   agentToken: string;
+  host?: string;
+  isRemote?: boolean;
+  remoteConnectionId?: string;
 };
 
 export type OpenAgentParams = {
@@ -71,6 +89,7 @@ export type OpenAgentParams = {
   supervised?: boolean;
   copy?: number;
   spaceId?: string;
+  host?: string;
 };
 
 export type OpenAgentResult = {
