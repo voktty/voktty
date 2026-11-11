@@ -172,3 +172,20 @@ it("floats over the app and moves by its header", async () => {
   });
   expect(panel?.style.left).toBe("calc(50% + 0px)");
 });
+
+it("tags the question an agent waits on and marks it seen", async () => {
+  const { useAgentAttention, unseenAttention } = await import("../lib/attentionStore");
+  useAgentAttention.setState({
+    bySource: {
+      local: [
+        { key: "local:orch", sourceKey: "local", recordId: "n1", agent: "orquestador", host: "", text: "?", ts: "" },
+      ],
+    },
+    origins: {},
+    seen: {},
+  });
+  poll.response = FEED;
+  await render("/srv/webserver");
+  expect(document.body.textContent).toContain("Needs you");
+  expect(unseenAttention(useAgentAttention.getState())).toHaveLength(0);
+});

@@ -65,10 +65,15 @@ export class FeedSourceError extends Error {
   }
 }
 
-/** One poll. Follows a reconnected SSH session and recovers a lost one. */
+/**
+ * One poll. Follows a reconnected SSH session and, unless `recover` is
+ * false, reopens a lost one. The background watcher passes false: it reads
+ * only connections a tab keeps open and never opens one itself.
+ */
 export async function pollFeed(
   target: FeedTarget,
   request: FeedRequest,
+  { recover = true }: { recover?: boolean } = {},
 ): Promise<FeedResponse> {
   if (target.kind === "local") {
     try {
@@ -87,6 +92,7 @@ export async function pollFeed(
       throw new FeedSourceError("helperOutdated", error.message);
     if (!isSessionLostError(error))
       throw new FeedSourceError("failed", String(error));
+    if (!recover) throw new FeedSourceError("disconnected", String(error));
     try {
       const recovered = await recoverLostRemoteSession(
         sessionId,

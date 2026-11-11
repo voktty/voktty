@@ -25,6 +25,7 @@ import { type FeedTarget, feedTargetFor } from "../lib/feedSource";
 import { tmuxAttachCommand } from "../lib/tmux";
 import { type FeedStatus, useAgentFeed } from "../lib/useAgentFeed";
 import type { FeedScope } from "../lib/types";
+import { useAgentAttention } from "../lib/attentionStore";
 import "./agentFeed.css";
 
 const HOUR = 3_600_000;
@@ -197,6 +198,17 @@ function FeedView({ target }: { target: FeedTarget }) {
     () => new Set(["message", "note", "human", "presence"]),
   );
   const [agentFilter, setAgentFilter] = useState<string | null>(null);
+  // Questions the background watcher found on this host: tagged here and
+  // marked seen while the log shows them.
+  const sourceKey = target.kind === "ssh" ? `ssh:${target.env.connection.id}` : "local";
+  const waitingItems = useAgentAttention((state) => state.bySource[sourceKey]);
+  const waitingIds = useMemo(
+    () => new Set((waitingItems ?? []).map((item) => item.recordId)),
+    [waitingItems],
+  );
+  useEffect(() => {
+    if (waitingItems?.length) useAgentAttention.getState().markSeen(sourceKey);
+  }, [sourceKey, waitingItems]);
   const [showAll, setShowAll] = useState(false);
   const { timeline, status, unrecognized, key } = useAgentFeed(target, scope, rangeMs);
   const [lastSeen] = useState(() => readLastSeen(key));
@@ -350,7 +362,12 @@ function FeedView({ target }: { target: FeedTarget }) {
           {shown.map((item, index) => (
             <li key={item.id}>
               {index === firstUnread && <Rule label={t("agentFeed.newSince")} />}
-              <Entry item={item} colorOf={colorOf} agentByName={agentByName} />
+              <Entry
+                item={item}
+                colorOf={colorOf}
+                agentByName={agentByName}
+                waiting={waitingIds.has(item.id)}
+              />
             </li>
           ))}
         </ol>
@@ -525,10 +542,12 @@ function Entry({
   item,
   colorOf,
   agentByName,
+  waiting = false,
 }: {
   item: TimelineItem;
   colorOf: (name: string) => string;
   agentByName: Map<string, FeedAgent>;
+  waiting?: boolean;
 }) {
   const { t } = useTranslation();
   const gone = (name: string) => agentByName.get(name)?.status === "gone";
@@ -584,6 +603,9 @@ function Entry({
             <span className="agent-feed-chip normal-case">
               {item.delivered ? t("agentFeed.delivered") : t("agentFeed.notDelivered")}
             </span>
+          )}
+          {waiting && (
+            <span className="agent-feed-chip agent-feed-waiting">{t("agentFeed.needsYou")}</span>
           )}
         </div>
         <div

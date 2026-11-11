@@ -121,3 +121,21 @@
     opacity: 0;
   }
 }
+
+/* An agent that stopped for the owner. */
+.agent-feed-waiting {
+  border-color: rgb(245 158 11);
+  color: rgb(217 119 6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-feed-waiting {
+    animation: agent-feed-blink 1s steps(2, jump-none) infinite;
+  }
+}
+
+@keyframes agent-feed-blink {
+  50% {
+    opacity: 0.45;
+  }
+}

@@ -129,6 +129,7 @@ import {
   type CaptureTarget,
 } from "@/modules/preview/lib/resolveCaptureTarget";
 import { getLeafWorkspaceEnv } from "@/modules/terminal/lib/useTerminalSession";
+import type { AttentionOrigin } from "@/modules/agent-feed/lib/attentionStore";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   Header,
@@ -421,6 +422,12 @@ const LazyBroadcastToAgentsDialog = lazy(() =>
 // active project's Claude Code sessions, locally or through the SSH helper.
 const LazyAgentFeedDialog = lazy(
   () => import("@/modules/agent-feed/components/AgentFeedDialog"),
+);
+
+// Always mounted, loaded after first paint: watches every host behind the
+// open tabs for agents that wait for the owner.
+const LazyAgentFeedWatcher = lazy(
+  () => import("@/modules/agent-feed/components/AgentFeedWatcher"),
 );
 
 const LazyHarnessNotch = lazy(() =>
@@ -2488,6 +2495,13 @@ function DesktopApp() {
   });
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
   const [agentFeedOpen, setAgentFeedOpen] = useState(false);
+  // The host the log shows when it was opened for a waiting agent; null
+  // follows the active tab.
+  const [agentFeedOrigin, setAgentFeedOrigin] = useState<AttentionOrigin | null>(null);
+  const openAgentFeedAt = useCallback((origin: AttentionOrigin | null) => {
+    setAgentFeedOrigin(origin);
+    setAgentFeedOpen(true);
+  }, []);
 
   const previewRoot = effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null;
   const openPreviewTab = usePreviewOpening({
@@ -4582,7 +4596,7 @@ function DesktopApp() {
         openNewHarness,
         openNewHarnessInWorktree: () => void openNewHarnessInWorktree(),
         openBroadcastToAgents: () => setBroadcastToAgentsOpen(true),
-        openAgentFeed: () => setAgentFeedOpen(true),
+        openAgentFeed: () => openAgentFeedAt(null),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         openGitClone: () => setGitCloneModalOpen(true),
@@ -5261,7 +5275,7 @@ function DesktopApp() {
               onOpenAi={togglePanelAndFocus}
               onOpenSettings={() => void openSettingsWindow()}
               onOpenAutomations={handleOpenAutomations}
-              onOpenAgentFeed={() => setAgentFeedOpen(true)}
+              onOpenAgentFeed={openAgentFeedAt}
               onRunCommand={handleRunTerminalCommand}
               runCommandDisabledReason={terminalCommandDisabledReason}
               toolkitTarget={toolkitTarget}
@@ -5540,11 +5554,21 @@ function DesktopApp() {
               <LazyAgentFeedDialog
                 open={agentFeedOpen}
                 onOpenChange={setAgentFeedOpen}
-                root={effectiveExplorerRoot}
-                env={activeTabWorkspaceEnv}
+                root={agentFeedOrigin ? null : effectiveExplorerRoot}
+                env={agentFeedOrigin?.env ?? activeTabWorkspaceEnv}
               />
             </Suspense>
           )}
+          <Suspense fallback={null}>
+            <LazyAgentFeedWatcher
+              getTabs={() => tabsRef.current}
+              viewingKey={agentFeedOpen ? (agentFeedOrigin?.key ?? null) : null}
+              onOpen={(origin) => {
+                activateAgentTarget(origin.tabId, origin.leafId);
+                openAgentFeedAt(origin);
+              }}
+            />
+          </Suspense>
 
           {blameTarget ? (
             <BlameDialog

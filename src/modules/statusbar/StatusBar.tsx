@@ -26,7 +26,6 @@ import type {
 import {
   IncognitoIcon,
   Settings01Icon,
-  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { lazy, Suspense, useEffect, useSyncExternalStore, type RefObject } from "react";
@@ -45,6 +44,7 @@ import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore"
 import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
 import { AutomationsPopover } from "@/modules/statusbar/components/AutomationsPopover";
 import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
+import type { AttentionOrigin } from "@/modules/agent-feed/lib/attentionStore";
 import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
 import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
 import {
@@ -62,6 +62,11 @@ const LazyFloatingWorkspaceWidget = lazy(() =>
   import("@/modules/notes-board/components/FloatingWorkspaceWidget").then((m) => ({
     default: m.FloatingWorkspaceWidget,
   })),
+);
+
+// Lazy: its badge store and labels load after first paint.
+const LazyAgentFeedButton = lazy(
+  () => import("@/modules/agent-feed/components/AgentFeedButton"),
 );
 
 type Props = {
@@ -85,8 +90,8 @@ type Props = {
   onOpenAi: () => void;
   onOpenSettings: () => void;
   onOpenAutomations?: () => void;
-  /** Opens the log of what the active host's agents tell each other. */
-  onOpenAgentFeed?: () => void;
+  /** Opens the team log, on the host of a waiting agent when there is one. */
+  onOpenAgentFeed?: (origin: AttentionOrigin | null) => void;
   onRunCommand?: (command: string) => boolean;
   runCommandDisabledReason?: string;
   toolkitTarget?: { path: string; workspace: WorkspaceEnv } | null;
@@ -294,16 +299,9 @@ export function StatusBar({
           target={memoryTarget}
         />
         {onOpenAgentFeed ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-            onClick={onOpenAgentFeed}
-            title={t("agentFeed.openButton")}
-            aria-label={t("agentFeed.openButton")}
-          >
-            <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={1.75} />
-          </Button>
+          <Suspense fallback={null}>
+            <LazyAgentFeedButton onOpen={onOpenAgentFeed} />
+          </Suspense>
         ) : null}
         {onOpenAutomations ? (
           <AutomationsPopover onOpenAll={onOpenAutomations} />
