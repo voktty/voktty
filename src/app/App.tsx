@@ -129,7 +129,12 @@ import {
   type CaptureTarget,
 } from "@/modules/preview/lib/resolveCaptureTarget";
 import { getLeafWorkspaceEnv } from "@/modules/terminal/lib/useTerminalSession";
-import type { AttentionOrigin } from "@/modules/agent-feed/lib/attentionStore";
+import type { AttentionItem } from "@/modules/agent-feed/lib/attention";
+import {
+  type AttentionOrigin,
+  type TeamView,
+  useAgentAttention,
+} from "@/modules/agent-feed/lib/attentionStore";
 import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   Header,
@@ -420,9 +425,6 @@ const LazyBroadcastToAgentsDialog = lazy(() =>
 
 // Lazy and mounted only while open: the team communications log polls the
 // active project's Claude Code sessions, locally or through the SSH helper.
-const LazyAgentFeedDialog = lazy(
-  () => import("@/modules/agent-feed/components/AgentFeedDialog"),
-);
 
 // Always mounted, loaded after first paint: watches every host behind the
 // open tabs for agents that wait for the owner.
@@ -2549,14 +2551,24 @@ function DesktopApp() {
     onError: reportDirectoryTerminalError,
   });
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
-  const [agentFeedOpen, setAgentFeedOpen] = useState(false);
-  // The host the log shows when it was opened for a waiting agent; null
-  // follows the active tab.
-  const [agentFeedOrigin, setAgentFeedOrigin] = useState<AttentionOrigin | null>(null);
-  const openAgentFeedAt = useCallback((origin: AttentionOrigin | null) => {
-    setAgentFeedOrigin(origin);
-    setAgentFeedOpen(true);
-  }, []);
+  // One entry for teams: the board and the communications log share the
+  // team tab. A waiting agent opens the team of the project it works in.
+  const openTeamFor = useCallback(
+    (view: TeamView, origin?: AttentionOrigin | null, item?: AttentionItem | null) => {
+      useAgentAttention.getState().requestView(view);
+      const cwd = item?.cwd?.replace(/[\\/]+$/, "");
+      if (origin && cwd) {
+        handleOpenTeamBoard(
+          origin.env.kind === "ssh"
+            ? `remote://voktty-ssh-${encodeURIComponent(origin.env.connection.id)}${cwd}`
+            : cwd,
+        );
+        return;
+      }
+      handleOpenTeamBoard();
+    },
+    [handleOpenTeamBoard],
+  );
 
   const previewRoot = effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null;
   const openPreviewTab = usePreviewOpening({
@@ -4654,7 +4666,7 @@ function DesktopApp() {
         openNewHarnessInWorktree: () => void openNewHarnessInWorktree(),
         openTeamBoard: () => handleOpenTeamBoard(),
         openBroadcastToAgents: () => setBroadcastToAgentsOpen(true),
-        openAgentFeed: () => openAgentFeedAt(null),
+        openAgentFeed: () => openTeamFor("communications"),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         openGitClone: () => setGitCloneModalOpen(true),
@@ -5336,7 +5348,9 @@ function DesktopApp() {
               onOpenAi={togglePanelAndFocus}
               onOpenSettings={() => void openSettingsWindow()}
               onOpenAutomations={handleOpenAutomations}
-              onOpenAgentFeed={openAgentFeedAt}
+              onOpenAgentFeed={(origin, item) =>
+                openTeamFor(item ? "communications" : "board", origin, item)
+              }
               onRunCommand={handleRunTerminalCommand}
               runCommandDisabledReason={terminalCommandDisabledReason}
               toolkitTarget={toolkitTarget}
@@ -5610,24 +5624,10 @@ function DesktopApp() {
             />
           </Suspense>
 
-          {agentFeedOpen && (
-            <Suspense fallback={null}>
-              <LazyAgentFeedDialog
-                open={agentFeedOpen}
-                onOpenChange={setAgentFeedOpen}
-                root={agentFeedOrigin ? null : effectiveExplorerRoot}
-                env={agentFeedOrigin?.env ?? activeTabWorkspaceEnv}
-              />
-            </Suspense>
-          )}
           <Suspense fallback={null}>
             <LazyAgentFeedWatcher
               getTabs={() => tabsRef.current}
-              viewingKey={agentFeedOpen ? (agentFeedOrigin?.key ?? null) : null}
-              onOpen={(origin) => {
-                activateAgentTarget(origin.tabId, origin.leafId);
-                openAgentFeedAt(origin);
-              }}
+              onOpen={(origin, item) => openTeamFor("communications", origin, item)}
             />
           </Suspense>
 

@@ -8,6 +8,7 @@ import { getLeafWorkspaceEnv } from "@/modules/terminal/lib/useTerminalSession";
 import { LOCAL_WORKSPACE } from "@/modules/workspace";
 import {
   type AttentionItem,
+  type HostAgent,
   emptyWatchState,
   foldWatch,
   type WatchSource,
@@ -58,18 +59,17 @@ function preview(text: string): string {
  */
 export default function AgentFeedWatcher({
   getTabs,
-  viewingKey,
   onOpen,
 }: {
   /** The open tabs, read on every round. */
   getTabs: () => readonly Tab[];
   /** The host the log is showing right now, if it is open. */
-  viewingKey: string | null;
-  onOpen: (origin: AttentionOrigin) => void;
+  /** Opens the team of the waiting agent's project on its communications. */
+  onOpen: (origin: AttentionOrigin, item: AttentionItem) => void;
 }) {
   const { t } = useTranslation();
-  const latest = useRef({ t, viewingKey, onOpen, getTabs });
-  latest.current = { t, viewingKey, onOpen, getTabs };
+  const latest = useRef({ t, onOpen, getTabs });
+  latest.current = { t, onOpen, getTabs };
 
   useEffect(() => {
     let disposed = false;
@@ -78,7 +78,8 @@ export default function AgentFeedWatcher({
     const announced = new Set<string>();
 
     const notify = (source: WatchSource, item: AttentionItem) => {
-      const { t: tr, viewingKey: viewing, onOpen: open } = latest.current;
+      const { t: tr, onOpen: open } = latest.current;
+      const viewing = useAgentAttention.getState().viewing;
       routeAgentNotification({
         source: "terminal",
         agent: item.agent,
@@ -93,7 +94,10 @@ export default function AgentFeedWatcher({
         tabId: source.tabId,
         leafId: source.leafId,
         onActivate: () =>
-          open({ key: source.key, env: source.env, tabId: source.tabId, leafId: source.leafId }),
+          open(
+            { key: source.key, env: source.env, tabId: source.tabId, leafId: source.leafId },
+            item,
+          ),
       });
     };
 
@@ -101,6 +105,7 @@ export default function AgentFeedWatcher({
       const known = states.get(source.key);
       let state = known ?? emptyWatchState();
       let waiting: AttentionItem[] = [];
+      let agents: HostAgent[] = [];
       for (let round = 0; round < MAX_CATCH_UP; round += 1) {
         const response = await pollFeed(
           targetOf(source),
@@ -108,16 +113,16 @@ export default function AgentFeedWatcher({
           { recover: false },
         );
         if (disposed || !response.available) return;
-        ({ state, waiting } = foldWatch(state, response, source));
+        ({ state, waiting, agents } = foldWatch(state, response, source));
         if (!response.truncated) break;
       }
       states.set(source.key, state);
-      useAgentAttention.getState().setWaiting(source.key, waiting, {
-        key: source.key,
-        env: source.env,
-        tabId: source.tabId,
-        leafId: source.leafId,
-      });
+      useAgentAttention.getState().setWaiting(
+        source.key,
+        waiting,
+        { key: source.key, env: source.env, tabId: source.tabId, leafId: source.leafId },
+        agents,
+      );
       for (const item of waiting) {
         if (announced.has(item.recordId)) continue;
         announced.add(item.recordId);

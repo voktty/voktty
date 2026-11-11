@@ -122,7 +122,7 @@ describe("watchSources", () => {
   });
 
   it("counts only questions the owner has not seen", () => {
-    const item = { key: "k", sourceKey: "local", recordId: "r1", agent: "a", host: "", text: "?", ts: "" };
+    const item = { key: "k", sourceKey: "local", recordId: "r1", agent: "a", host: "", text: "?", ts: "", cwd: null };
     expect(unseenAttention({ bySource: { local: [item] }, seen: {} })).toHaveLength(1);
     expect(unseenAttention({ bySource: { local: [item] }, seen: { r1: true } })).toHaveLength(0);
   });

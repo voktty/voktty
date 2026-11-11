@@ -44,6 +44,7 @@ import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore"
 import { isReviewShortcut } from "@/modules/notes-board/lib/reviewShortcut";
 import { AutomationsPopover } from "@/modules/statusbar/components/AutomationsPopover";
 import { ProjectMemoryButton } from "@/modules/workspace-kit/components/ProjectMemoryButton";
+import type { AttentionItem } from "@/modules/agent-feed/lib/attention";
 import type { AttentionOrigin } from "@/modules/agent-feed/lib/attentionStore";
 import { memorySurfaceRegistry } from "@/modules/workspace-kit/lib/memorySurface";
 import { useActiveSurfaceStore } from "@/modules/surfaces/lib/activeSurfaceStore";
@@ -91,7 +92,7 @@ type Props = {
   onOpenSettings: () => void;
   onOpenAutomations?: () => void;
   /** Opens the team log, on the host of a waiting agent when there is one. */
-  onOpenAgentFeed?: (origin: AttentionOrigin | null) => void;
+  onOpenAgentFeed?: (origin: AttentionOrigin | null, item: AttentionItem | null) => void;
   onRunCommand?: (command: string) => boolean;
   runCommandDisabledReason?: string;
   toolkitTarget?: { path: string; workspace: WorkspaceEnv } | null;
@@ -300,7 +301,7 @@ export function StatusBar({
         />
         {onOpenAgentFeed ? (
           <Suspense fallback={null}>
-            <LazyAgentFeedButton onOpen={onOpenAgentFeed} />
+            <LazyAgentFeedButton onOpen={onOpenAgentFeed} env={activeWorkspaceEnv} />
           </Suspense>
         ) : null}
         {onOpenAutomations ? (

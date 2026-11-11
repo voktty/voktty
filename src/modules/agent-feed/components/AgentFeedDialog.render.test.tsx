@@ -178,7 +178,7 @@ it("tags the question an agent waits on and marks it seen", async () => {
   useAgentAttention.setState({
     bySource: {
       local: [
-        { key: "local:orch", sourceKey: "local", recordId: "n1", agent: "orquestador", host: "", text: "?", ts: "" },
+        { key: "local:orch", sourceKey: "local", recordId: "n1", agent: "orquestador", host: "", text: "?", ts: "", cwd: null },
       ],
     },
     origins: {},

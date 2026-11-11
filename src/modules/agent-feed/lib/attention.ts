@@ -84,6 +84,17 @@ export type AttentionItem = {
   host: string;
   text: string;
   ts: string;
+  /** Folder the agent works in, on its host: where its team lives. */
+  cwd: string | null;
+};
+
+/** A named agent live on a host, whoever launched it. */
+export type HostAgent = {
+  sessionId: string;
+  name: string;
+  status: string | null;
+  cwd: string | null;
+  tmux: string | null;
 };
 
 export type WatchState = {
@@ -105,17 +116,25 @@ export function foldWatch(
   state: WatchState,
   response: FeedResponse,
   source: Pick<WatchSource, "key" | "label">,
-): { state: WatchState; waiting: AttentionItem[] } {
+): { state: WatchState; waiting: AttentionItem[]; agents: HostAgent[] } {
   const latest = { ...state.latest };
   for (const record of response.records) {
     const current = latest[record.sessionId];
     if (!current || record.ts >= current.ts) latest[record.sessionId] = record;
   }
   const waiting: AttentionItem[] = [];
+  const agents: HostAgent[] = [];
   const live = new Set<string>();
   for (const session of response.sessions) {
     if (!session.name || session.alive === false) continue;
     live.add(session.sessionId);
+    agents.push({
+      sessionId: session.sessionId,
+      name: session.name,
+      status: session.status,
+      cwd: session.cwd,
+      tmux: session.tmux,
+    });
     const last = latest[session.sessionId];
     if (!last || last.kind !== "note" || session.status === "busy") continue;
     if (!asksForOwner(last.text)) continue;
@@ -127,9 +146,10 @@ export function foldWatch(
       host: source.label,
       text: last.text,
       ts: last.ts,
+      cwd: session.cwd,
     });
   }
   // Forget sessions that ended so the state stays bounded.
   for (const sessionId of Object.keys(latest)) if (!live.has(sessionId)) delete latest[sessionId];
-  return { state: { cursor: response.cursor, latest }, waiting };
+  return { state: { cursor: response.cursor, latest }, waiting, agents };
 }

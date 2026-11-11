@@ -11,11 +11,14 @@ it("counts unseen waiting agents and opens the log on their host", async () => {
   useAgentAttention.setState({
     bySource: {
       "ssh:mini": [
-        { key: "ssh:mini:o", sourceKey: "ssh:mini", recordId: "r1", agent: "orquestador", host: "miniserver", text: "?", ts: "" },
+        { key: "ssh:mini:o", sourceKey: "ssh:mini", recordId: "r1", agent: "orquestador", host: "miniserver", text: "?", ts: "", cwd: null },
       ],
     },
+    agents: {},
     origins: { "ssh:mini": origin },
     seen: {},
+    viewing: null,
+    requestedView: null,
   });
   const onOpen = vi.fn();
   const host = document.createElement("div");
@@ -23,15 +26,15 @@ it("counts unseen waiting agents and opens the log on their host", async () => {
   const root = createRoot(host);
   await act(async () => root.render(createElement(AgentFeedButton, { onOpen })));
   const button = host.querySelector("button");
-  expect(button?.getAttribute("aria-label")).toBe("Team communications: 1 waiting for you");
+  expect(button?.getAttribute("aria-label")).toBe("Team: 1 waiting for you");
   expect(button?.textContent).toBe("1");
   await act(async () => button?.click());
-  expect(onOpen).toHaveBeenCalledWith(origin);
+  expect(onOpen).toHaveBeenCalledWith(origin, expect.objectContaining({ recordId: "r1" }));
 
   await act(async () => useAgentAttention.getState().markSeen("ssh:mini"));
-  expect(button?.getAttribute("aria-label")).toBe("Team communications");
+  expect(button?.getAttribute("aria-label")).toBe("Team");
   await act(async () => button?.click());
-  expect(onOpen).toHaveBeenLastCalledWith(null);
+  expect(onOpen).toHaveBeenLastCalledWith(null, null);
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();

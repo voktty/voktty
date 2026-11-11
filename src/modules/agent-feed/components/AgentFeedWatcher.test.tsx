@@ -79,7 +79,7 @@ beforeEach(() => {
   io.polls = [];
   io.notify.mockReset();
   tabs = [MINI_TAB];
-  useAgentAttention.setState({ bySource: {}, origins: {}, seen: {} });
+  useAgentAttention.setState({ bySource: {}, agents: {}, origins: {}, seen: {}, viewing: null, requestedView: null });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -100,7 +100,7 @@ async function advance(ms: number) {
 
 async function mount(onOpen = vi.fn()) {
   await act(async () =>
-    root.render(createElement(AgentFeedWatcher, { getTabs: () => tabs, viewingKey: null, onOpen })),
+    root.render(createElement(AgentFeedWatcher, { getTabs: () => tabs, onOpen })),
   );
   await advance(0);
   return onOpen;
@@ -126,7 +126,10 @@ it("badges what already waited at launch and notifies only new questions", async
     leafId: 30,
   });
   call.onActivate();
-  expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ key: "ssh:mini", tabId: 3, leafId: 30 }));
+  expect(onOpen).toHaveBeenCalledWith(
+    expect.objectContaining({ key: "ssh:mini", tabId: 3, leafId: 30 }),
+    expect.objectContaining({ recordId: "new1", cwd: "/srv" }),
+  );
   // Never reopens a dropped connection on its own.
   expect(io.polls.every((poll) => (poll.options as { recover: boolean }).recover === false)).toBe(true);
 });

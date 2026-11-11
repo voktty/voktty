@@ -188,12 +188,20 @@ export default function AgentFeedDialog({
   );
 }
 
-function FeedView({ target }: { target: FeedTarget }) {
+export function FeedView({
+  target,
+  active = true,
+  initialScope = "host",
+}: {
+  target: FeedTarget;
+  /** False while its team tab is hidden: nothing is marked seen then. */
+  active?: boolean;
+  /** The floating log reads the whole host; a team's log its project. */
+  initialScope?: FeedScope;
+}) {
   const { t } = useTranslation();
   const [rangeMs, setRangeMs] = useState<number>(RANGES[1].ms);
-  // The whole machine by default: a terminal often sits in a folder other
-  // than the one the agents work in.
-  const [scope, setScope] = useState<FeedScope>("host");
+  const [scope, setScope] = useState<FeedScope>(target.root ? initialScope : "host");
   const [filters, setFilters] = useState<Set<Filter>>(
     () => new Set(["message", "note", "human", "presence"]),
   );
@@ -207,8 +215,15 @@ function FeedView({ target }: { target: FeedTarget }) {
     [waitingItems],
   );
   useEffect(() => {
-    if (waitingItems?.length) useAgentAttention.getState().markSeen(sourceKey);
-  }, [sourceKey, waitingItems]);
+    if (!active) return;
+    const store = useAgentAttention.getState();
+    store.setViewing(sourceKey);
+    if (waitingItems?.length) store.markSeen(sourceKey);
+    return () => {
+      if (useAgentAttention.getState().viewing === sourceKey)
+        useAgentAttention.getState().setViewing(null);
+    };
+  }, [active, sourceKey, waitingItems]);
   const [showAll, setShowAll] = useState(false);
   const { timeline, status, unrecognized, key } = useAgentFeed(target, scope, rangeMs);
   const [lastSeen] = useState(() => readLastSeen(key));
