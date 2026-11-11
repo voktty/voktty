@@ -751,28 +751,43 @@ fn resolve_node() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("node.exe"))
 }
 
+/// The script an npm `.cmd` shim runs, relative to the shim's folder.
+///
+/// npm shims mention `%dp0%\node.exe` before the script (to prefer a Node
+/// installed next to the shim, as nvm does), so taking the first `%dp0%\`
+/// path handed `node.exe` to Node as its script and every launch failed with
+/// "SyntaxError: Invalid or unexpected token". Only a JavaScript file counts.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn cmd_shim_script(content: &str) -> Option<String> {
+    const MARKER: &str = "%dp0%\\";
+    for line in content.lines() {
+        let mut rest = line;
+        while let Some(pos) = rest.find(MARKER) {
+            rest = &rest[pos + MARKER.len()..];
+            let path: String = rest
+                .chars()
+                .take_while(|&ch| ch != '"' && ch != ' ' && ch != '%' && ch != '\r' && ch != '\n')
+                .collect();
+            let lower = path.to_ascii_lowercase();
+            if [".js", ".mjs", ".cjs"].iter().any(|ext| lower.ends_with(ext)) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
 #[cfg(windows)]
 fn extract_js_from_cmd(cmd_path: &Path) -> Option<PathBuf> {
     let parent = cmd_path.parent()?;
 
     // 1. Inspect the .cmd file directly to extract the JS file it executes
     if let Ok(content) = std::fs::read_to_string(cmd_path) {
-        for line in content.lines() {
-            if let Some(pos) = line.find("%dp0%\\") {
-                let rest = &line[pos + 6..];
-                let path_str: String = rest
-                    .chars()
-                    .take_while(|&ch| {
-                        ch != '"' && ch != ' ' && ch != '%' && ch != '\r' && ch != '\n'
-                    })
-                    .collect();
-                if !path_str.is_empty() {
-                    let candidate = parent.join(&path_str);
-                    if candidate.is_file() {
-                        return Some(candidate);
-                    }
-                }
-            }
+        if let Some(script) = cmd_shim_script(&content)
+            .map(|relative| parent.join(relative))
+            .filter(|candidate| candidate.is_file())
+        {
+            return Some(script);
         }
     }
 
@@ -4201,6 +4216,17 @@ mod proxy_lifecycle_tests {
 #[cfg(test)]
 mod binary_resolution_tests {
     use super::*;
+
+    #[test]
+    fn npm_cmd_shim_resolves_to_its_script_not_the_sibling_node() {
+        // npm's shim as nvm installs it, with node.exe next to the shim.
+        let shim = "IF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \"_prog=node\"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & \"%_prog%\"  \"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*";
+        assert_eq!(
+            cmd_shim_script(shim).as_deref(),
+            Some("node_modules\\@openai\\codex\\bin\\codex.js")
+        );
+        assert_eq!(cmd_shim_script("\"%dp0%\\node.exe\" %*"), None);
+    }
 
     #[test]
     fn codex_prefers_the_shell_binary_and_keeps_install_fallbacks() {
