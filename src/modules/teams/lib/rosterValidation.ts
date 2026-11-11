@@ -3,16 +3,7 @@ import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 export const ORCHESTRATOR_ROLE = "roles/orchestrator.md";
 
 export function isOrchestratorRole(role?: string): boolean {
-  if (!role || typeof role !== "string") return false;
-  const clean = role.toLowerCase().replace(/\\/g, "/");
-  return (
-    clean === ORCHESTRATOR_ROLE ||
-    clean === "roles/orquestador.md" ||
-    clean.endsWith("/orchestrator.md") ||
-    clean.endsWith("/orquestador.md") ||
-    clean === "orchestrator" ||
-    clean === "orquestador"
-  );
+  return role === ORCHESTRATOR_ROLE;
 }
 
 /**
@@ -122,6 +113,12 @@ export function validateRoster(raw: string): {
       : undefined;
 
   const names = new Set<string>();
+  const allNames = new Set<string>(
+    obj.agents
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+      .map((x) => (typeof x.name === "string" ? x.name : ""))
+      .filter(Boolean),
+  );
   const ownershipEntries: Array<{ key: string; agentIndex: number; offset: number }> = [];
 
   for (let index = 0; index < obj.agents.length; index++) {
@@ -146,6 +143,19 @@ export function validateRoster(raw: string): {
       };
     }
     names.add(a.name);
+
+    // I2: roster cannot declare names that collide with copy pattern of another agent
+    const copyMatch = /^(.*?)-(\d+)$/.exec(a.name);
+    if (copyMatch) {
+      const baseCandidate = copyMatch[1];
+      const copyNum = parseInt(copyMatch[2], 10);
+      if (copyNum >= 2 && copyNum <= 6 && allNames.has(baseCandidate)) {
+        return {
+          roster: null,
+          error: `Field 'agents.${index}.name': '${a.name}' collides with copy pattern of '${baseCandidate}'`,
+        };
+      }
+    }
 
     if (typeof a.role !== "string" || !a.role.trim()) {
       return {

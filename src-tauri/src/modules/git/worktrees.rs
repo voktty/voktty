@@ -108,6 +108,127 @@ pub async fn git_worktree_delete(
     .await
 }
 
+#[tauri::command]
+pub async fn ensure_agent_worktree(
+    project_path: String,
+    copy_name: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> std::result::Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |registry| {
+        ensure_agent_worktree_impl(registry, &project_path, &copy_name, &workspace)
+    })
+    .await
+}
+
+pub fn ensure_agent_worktree_impl(
+    registry: &WorkspaceRegistry,
+    project_path: &str,
+    copy_name: &str,
+    workspace: &WorkspaceEnv,
+) -> GitResult<String> {
+    ensure_supported_workspace(workspace)?;
+
+    let trimmed = copy_name.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > 64
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed.contains("..")
+        || trimmed.chars().any(|c| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+        || !trimmed.contains('-')
+    {
+        return Err(GitError::InvalidPath(format!(
+            "invalid agent copy name: '{copy_name}'"
+        )));
+    }
+
+    let repo = authorized_repo_root(registry, project_path, workspace)?;
+    ensure_git_available(&repo.workspace)?;
+
+    let repo_canonical = if repo.workspace.is_remote() {
+        PathBuf::from(&repo.git_path)
+    } else {
+        std::fs::canonicalize(resolve_path(&repo.git_path, &repo.workspace))
+            .map_err(|e| GitError::command("git worktree", format!("failed to canonicalize repo path: {e}")))?
+    };
+
+    let repo_parent = repo_canonical.parent().ok_or_else(|| {
+        GitError::command("git worktree", "repository has no parent directory")
+    })?;
+    let repo_file_name = repo_canonical.file_name().ok_or_else(|| {
+        GitError::command("git worktree", "could not determine repository folder name")
+    })?;
+    let project_base = repo_file_name.to_string_lossy();
+
+    let worktree_dir_name = format!("{project_base}-worktrees");
+    let worktree_path = repo_parent.join(&worktree_dir_name).join(trimmed);
+
+    if worktree_path.starts_with(&repo_canonical) {
+        return Err(GitError::command(
+            "git worktree",
+            "worktree path must sit outside the repository",
+        ));
+    }
+    if worktree_path.components().any(|c| c.as_os_str() == ".voktty") {
+        return Err(GitError::command(
+            "git worktree",
+            "worktree path must not sit inside .voktty",
+        ));
+    }
+
+    let listed = list_worktrees(registry, project_path, workspace)?;
+    let existing_tree = listed.worktrees.iter().find(|t| {
+        worktree_paths_match(&t.path, &worktree_path.to_string_lossy(), workspace)
+    });
+
+    if let Some(_existing) = existing_tree {
+        if !repo.workspace.is_remote() {
+            registry.authorize(&worktree_path)?;
+        }
+        return Ok(worktree_path.to_string_lossy().to_string());
+    }
+
+    if worktree_path.exists() {
+        if !repo.workspace.is_remote() {
+            registry.authorize(&worktree_path)?;
+        }
+        return Ok(worktree_path.to_string_lossy().to_string());
+    }
+
+    if let Some(parent) = worktree_path.parent() {
+        if !repo.workspace.is_remote() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                GitError::command(
+                    "git worktree",
+                    format!("failed to create worktree parent directory: {e}"),
+                )
+            })?;
+        }
+    }
+
+    let args = [
+        OsString::from("worktree"),
+        OsString::from("add"),
+        OsString::from("--detach"),
+        OsString::from("--"),
+        worktree_path.clone().into_os_string(),
+        OsString::from("HEAD"),
+    ];
+
+    let output = run_git(&repo.workspace, Some(&repo.git_path), args, 60)?;
+    ensure_success(&output, "git worktree add failed")?;
+
+    if !repo.workspace.is_remote() {
+        let canonical_created =
+            std::fs::canonicalize(&worktree_path).unwrap_or(worktree_path.clone());
+        registry.authorize(&canonical_created)?;
+    }
+
+    Ok(worktree_path.to_string_lossy().to_string())
+}
+
 fn list_worktrees(
     registry: &WorkspaceRegistry,
     cwd: &str,
@@ -1010,5 +1131,70 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Docker workspaces"));
+    }
+
+    #[test]
+    fn ensures_agent_worktree_outside_repo_idempotently_and_authorizes_it() {
+        let (_parent, repo, registry) = repository();
+        let copy_name = "nodo-2";
+
+        // 1. Create worktree initially
+        let path_str = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            copy_name,
+            &WorkspaceEnv::Local,
+        )
+        .expect("ensure agent worktree created");
+
+        let wt_path = PathBuf::from(&path_str);
+        assert!(wt_path.is_dir(), "worktree directory must exist on disk");
+
+        // Validate worktree is outside the repository
+        let repo_canonical = std::fs::canonicalize(&repo).expect("canonical repo");
+        let wt_canonical = std::fs::canonicalize(&wt_path).expect("canonical worktree");
+        assert!(
+            !wt_canonical.starts_with(&repo_canonical),
+            "worktree must sit outside repository root"
+        );
+        assert!(
+            !wt_canonical.components().any(|c| c.as_os_str() == ".voktty"),
+            "worktree must not sit inside .voktty"
+        );
+
+        // Validate worktree path is authorized in WorkspaceRegistry
+        assert!(
+            registry.is_authorized(&wt_canonical),
+            "worktree path must be authorized in WorkspaceRegistry"
+        );
+
+        // 2. Test idempotency when called again upon resume
+        let resumed_path = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            copy_name,
+            &WorkspaceEnv::Local,
+        )
+        .expect("ensure agent worktree is idempotent");
+
+        assert_eq!(resumed_path, path_str);
+        assert!(registry.is_authorized(&wt_canonical));
+
+        // 3. Test rejection of invalid copy names
+        let err_traversal = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            "../evil-2",
+            &WorkspaceEnv::Local,
+        );
+        assert!(err_traversal.is_err());
+
+        let err_no_dash = ensure_agent_worktree_impl(
+            &registry,
+            &repo.to_string_lossy(),
+            "nodo2",
+            &WorkspaceEnv::Local,
+        );
+        assert!(err_no_dash.is_err());
     }
 }

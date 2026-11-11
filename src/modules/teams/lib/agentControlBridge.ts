@@ -3,7 +3,11 @@ import {
   interruptHarnessSession,
 } from "@/modules/harness/lib/harnessControlBridge";
 import type { TeamAgentStatus, TeamMessageKind } from "../types";
-import { openAgent, parseAgentCopyName } from "./agentLauncher";
+import {
+  openAgent,
+  parseAgentCopyName,
+  resolveAgentIdentity,
+} from "./agentLauncher";
 import { getLiveAgentByToken, revokeLiveAgent } from "./agentRegistry";
 import { isModelForbidden } from "./rosterValidation";
 import { deliverPendingMessages, sendMessage } from "./teamBus";
@@ -176,6 +180,11 @@ export async function dispatchAgentMethod(
             } else if (snap.state === "done" || snap.state === "idle") {
               status = "idle";
             }
+          } else {
+            // If session is no longer active in memory, mark copies as unopened
+            if (!rosterNames.has(entry.name)) {
+              status = "unopened";
+            }
           }
         }
 
@@ -212,14 +221,18 @@ export async function dispatchAgentMethod(
         throw new AgentControlError("not_found", "Team roster not found");
       }
 
-      const { baseName } = parseAgentCopyName(agentName);
-      const agentDef = roster.agents.find((a) => a.name === baseName);
-      if (!agentDef) {
+      const identity = resolveAgentIdentity(
+        agentName,
+        roster,
+        typeof params.copy === "number" ? params.copy : undefined,
+      );
+      if (!identity.ok) {
         throw new AgentControlError(
-          "not_found",
-          `Agent '${agentName}' not found in team roster`,
+          identity.error === "agent_not_found" ? "not_found" : identity.error,
+          identity.reason,
         );
       }
+      const agentDef = identity.agentDef;
 
       // Check forbidden models policy using unified validator (B5)
       const requestedModel =
@@ -273,7 +286,11 @@ export async function dispatchAgentMethod(
               ? "forbidden_model"
               : result.error === "duplicate_session"
                 ? "duplicate_session"
-                : "request_failed";
+                : result.error === "invalid_params"
+                  ? "invalid_params"
+                  : result.error === "agent_not_found"
+                    ? "not_found"
+                    : "request_failed";
         throw new AgentControlError(
           errCode,
           result.reason ?? result.error ?? "Failed to start agent",

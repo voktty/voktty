@@ -2991,7 +2991,24 @@ pub(crate) fn apply_gui_env(cmd: &mut Command) {
     }
 }
 
-const CLAUDE_HERITAGE_VARS: &[&str] = &[
+/// Explicit list of Claude Code runtime session markers.
+/// These variables identify an active/child Claude Code session instance and inhibit
+/// independent child conversation persistence if inherited from an outer session.
+///
+/// Sources:
+/// - `CLAUDECODE`: internal marker set by Claude Code CLI to identify execution environment.
+/// - `CLAUDE_CODE_CHILD_SESSION`: marks a child session, preventing independent transcript persistence.
+/// - `CLAUDE_CODE_SESSION_ID`: active session UUID of the parent Claude process.
+/// - `CLAUDE_CODE_SESSION_ATTENDED`: marks interactive attended session in parent.
+/// - `CLAUDE_CODE_ENTRYPOINT`: indicates parent entrypoint invocation mechanism.
+/// - `CLAUDE_CODE_MESSAGING_SOCKET`: parent IPC communication socket path.
+/// - `CLAUDE_CODE_MESSAGING_TOKEN`: authentication token for parent messaging socket.
+/// - `CLAUDE_PID`: process ID of parent Claude Code instance.
+///
+/// Note: Legitimate user configuration variables (e.g. `CLAUDE_CODE_GIT_BASH_PATH` on Windows,
+/// `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`)
+/// MUST be preserved and are intentionally NOT removed.
+const CLAUDE_SESSION_MARKERS: &[&str] = &[
     "CLAUDECODE",
     "CLAUDE_CODE_CHILD_SESSION",
     "CLAUDE_CODE_SESSION_ID",
@@ -3003,13 +3020,8 @@ const CLAUDE_HERITAGE_VARS: &[&str] = &[
 ];
 
 fn clean_claude_heritage_env(cmd: &mut Command) {
-    for var in CLAUDE_HERITAGE_VARS {
+    for var in CLAUDE_SESSION_MARKERS {
         cmd.env_remove(var);
-    }
-    for (key, _) in std::env::vars() {
-        if key.starts_with("CLAUDE_CODE_") {
-            cmd.env_remove(&key);
-        }
     }
 }
 
@@ -4423,9 +4435,12 @@ mod binary_resolution_tests {
     fn cleans_inherited_claude_heritage_markers() {
         let mut cmd = Command::new("claude");
         cmd.env("CLAUDECODE", "1")
+            .env("CLAUDE_CODE_CHILD_SESSION", "true")
             .env("CLAUDE_CODE_ENTRYPOINT", "cli")
             .env("CLAUDE_CODE_SESSION_ID", "parent_123")
             .env("CLAUDE_PID", "4567")
+            .env("CLAUDE_CODE_GIT_BASH_PATH", "C:\\Program Files\\Git\\bin\\bash.exe")
+            .env("CLAUDE_CODE_USE_BEDROCK", "1")
             .env("CUSTOM_VAR", "keep_me");
 
         clean_claude_heritage_env(&mut cmd);
@@ -4440,10 +4455,22 @@ mod binary_resolution_tests {
             })
             .collect();
 
+        // Session markers must be removed
         assert_eq!(envs.get("CLAUDECODE"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_CODE_CHILD_SESSION"), Some(&None));
         assert_eq!(envs.get("CLAUDE_CODE_ENTRYPOINT"), Some(&None));
         assert_eq!(envs.get("CLAUDE_CODE_SESSION_ID"), Some(&None));
         assert_eq!(envs.get("CLAUDE_PID"), Some(&None));
+
+        // Configuration variables must be preserved intact (B4)
+        assert_eq!(
+            envs.get("CLAUDE_CODE_GIT_BASH_PATH"),
+            Some(&Some("C:\\Program Files\\Git\\bin\\bash.exe".to_string()))
+        );
+        assert_eq!(
+            envs.get("CLAUDE_CODE_USE_BEDROCK"),
+            Some(&Some("1".to_string()))
+        );
         assert_eq!(envs.get("CUSTOM_VAR"), Some(&Some("keep_me".to_string())));
     }
 }

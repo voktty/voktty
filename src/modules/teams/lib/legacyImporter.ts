@@ -7,6 +7,51 @@ import type {
 import { validateRoster } from "./rosterValidation";
 import { normalizePath, teamPath } from "./teamFs";
 
+const AGENT_NAME_REGEX = /^[a-zA-Z0-9_-]+$/;
+
+export function isSafeRelativeFilePath(rel?: string): boolean {
+  if (!rel || typeof rel !== "string") return false;
+  const clean = rel.replace(/\\/g, "/");
+  if (clean.startsWith("/") || /^[a-zA-Z]:/.test(clean)) return false;
+  const parts = clean.split("/");
+  for (const p of parts) {
+    if (p === ".." || p === "." || !p) return false;
+  }
+  return true;
+}
+
+export function resolveSafeTeamPath(
+  projectRoot: string,
+  subPath: string,
+): string {
+  const normRoot = normalizePath(projectRoot).replace(/\/+$/, "");
+  const teamBase = `${normRoot}/.voktty/team`;
+  const cleanSub = subPath.replace(/\\/g, "/");
+  if (cleanSub.startsWith("/") || /^[a-zA-Z]:/.test(cleanSub)) {
+    throw new Error(
+      `Security error: path traversal detected. Path '${subPath}' is absolute.`,
+    );
+  }
+  const parts = cleanSub.split("/");
+  const resolvedParts: string[] = [];
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      throw new Error(
+        `Security error: path traversal detected. Path '${subPath}' contains '..'.`,
+      );
+    }
+    resolvedParts.push(part);
+  }
+  const full = `${teamBase}/${resolvedParts.join("/")}`;
+  if (!full.startsWith(`${teamBase}/`)) {
+    throw new Error(
+      `Security error: path traversal detected. '${full}' is outside '${teamBase}'`,
+    );
+  }
+  return full;
+}
+
 export type LegacyAgent = {
   nombre: string;
   dir?: string;
@@ -205,8 +250,16 @@ export async function previewLegacyImport(
   const claimedOwnership: Array<{ key: string; agent: string }> = [];
 
   for (const agent of doc.agentes) {
+    if (!agent || typeof agent !== "object") {
+      throw new Error("Invalid agent entry in legacy config: must be an object");
+    }
     const name = agent.nombre;
-    const roleRel = agent.rol || `roles/${name}.md`;
+    if (!name || typeof name !== "string" || !AGENT_NAME_REGEX.test(name)) {
+      throw new Error(
+        `Invalid agent name '${name}': must match /^[a-zA-Z0-9_-]+$/ and contain no path separators or special characters`,
+      );
+    }
+
     const start = agent.inicio === "siempre" ? "always" : "on-demand";
 
     // Workdir and external path check
@@ -313,13 +366,66 @@ export async function previewLegacyImport(
       }
     }
 
-    // Read role markdown file from legacy project
+    // B2 & I4: Determine role destination strictly under roles/
+    // Orchestrator role is mapped explicitly to roles/orchestrator.md
+    const isOrchestrator =
+      name === "orquestador" ||
+      name === "orchestrator" ||
+      (typeof agent.rol === "string" &&
+        (agent.rol.toLowerCase().includes("orquestador") ||
+          agent.rol.toLowerCase().includes("orchestrator")));
+    const targetRoleRel = isOrchestrator
+      ? "roles/orchestrator.md"
+      : `roles/${name}.md`;
+
+    // Record original role in unmapped if custom
+    if (agent.rol && agent.rol !== targetRoleRel) {
+      unmapped.push({
+        agent: name,
+        field: "rol_original",
+        value: agent.rol,
+      });
+    }
+
+    // Read role markdown file from legacy project strictly within PROMPTS/sesiones/
     let roleContent: string | null = null;
-    const legacyRoleCandidates = [
-      teamPath(projectRoot, "PROMPTS", "sesiones", roleRel),
+    const legacyRoleCandidates: string[] = [];
+
+    if (agent.rol && isSafeRelativeFilePath(agent.rol)) {
+      legacyRoleCandidates.push(
+        teamPath(projectRoot, "PROMPTS", "sesiones", agent.rol),
+      );
+    } else if (agent.rol) {
+      warnings.push({
+        agent: name,
+        type: "invalid_path",
+        detail: `Agent '${name}': unsafe role path '${agent.rol}' ignored; generated default role template`,
+      });
+    }
+
+    legacyRoleCandidates.push(
       teamPath(projectRoot, "PROMPTS", "sesiones", "roles", `${name}.md`),
-      teamPath(projectRoot, roleRel),
-    ];
+    );
+    if (isOrchestrator) {
+      legacyRoleCandidates.push(
+        teamPath(
+          projectRoot,
+          "PROMPTS",
+          "sesiones",
+          "roles",
+          "orquestador.md",
+        ),
+      );
+      legacyRoleCandidates.push(
+        teamPath(
+          projectRoot,
+          "PROMPTS",
+          "sesiones",
+          "roles",
+          "orchestrator.md",
+        ),
+      );
+    }
 
     for (const candidate of legacyRoleCandidates) {
       try {
@@ -339,8 +445,6 @@ export async function previewLegacyImport(
       roleContent = `# Role: ${name}\n\nAgent definition for ${name}.\n`;
     }
 
-    // Role target path under .voktty/team/
-    const targetRoleRel = roleRel.replace(/^team\//, "");
     roles[targetRoleRel] = roleContent;
 
     const agentDef: AgentDefinition = {
@@ -391,20 +495,42 @@ export async function applyLegacyImport(
   projectRoot: string,
   preview: LegacyImportPreview,
 ): Promise<void> {
-  const agentsPath = teamPath(projectRoot, ".voktty", "team", "agents.json");
+  // B3: Refuse to apply if roster validation fails
+  const { error: rosterErr } = validateRoster(JSON.stringify(preview.roster));
+  if (rosterErr) {
+    throw new Error(
+      `Cannot apply legacy import: roster validation failed: ${rosterErr}`,
+    );
+  }
+
+  const agentsPath = resolveSafeTeamPath(projectRoot, "agents.json");
+
+  // B3: If agents.json already exists, create backup copy before overwriting
+  try {
+    const existingContent = await readTextFile(agentsPath);
+    if (existingContent && existingContent.trim()) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const backupPath = resolveSafeTeamPath(
+        projectRoot,
+        `agents.json.bak-${timestamp}`,
+      );
+      await writeTextFile(backupPath, existingContent);
+    }
+  } catch {
+    // File did not exist; no backup needed
+  }
+
+  // Write agents.json safely inside .voktty/team/
   await writeTextFile(agentsPath, JSON.stringify(preview.roster, null, 2));
 
+  // Write roles safely inside .voktty/team/
   for (const [roleRel, content] of Object.entries(preview.roles)) {
-    const rolePath = teamPath(projectRoot, ".voktty", "team", roleRel);
+    const rolePath = resolveSafeTeamPath(projectRoot, roleRel);
     await writeTextFile(rolePath, content);
   }
 
-  const migrationReportPath = teamPath(
-    projectRoot,
-    ".voktty",
-    "team",
-    "MIGRATION.md",
-  );
+  // Write MIGRATION.md safely inside .voktty/team/
+  const migrationReportPath = resolveSafeTeamPath(projectRoot, "MIGRATION.md");
   const reportLines = [
     "# Legacy Import Report",
     "",

@@ -507,5 +507,146 @@ describe("agentLauncher", () => {
       expect(sendMock).toHaveBeenCalledTimes(1);
       expect(sendMock.mock.calls[0][1]).toContain("Autonomous immediate task");
     });
+
+    it("I1: unsupervised agent degrades to awaiting_owner with composerSeed if sendSessionMessage fails", async () => {
+      const sendMock = vi.fn().mockResolvedValue(false); // send failed
+      const automaticRoster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "auto-worker",
+            role: "roles/developer.md",
+            start: "on-demand",
+            ...({ supervised: false } as Record<string, unknown>),
+          } as AgentRoster["agents"][number],
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: automaticRoster });
+
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "auto-worker",
+          mode: "new",
+          supervised: false,
+          task: "Autonomous task that fails to send",
+        },
+        {
+          ...mockDeps,
+          sendSessionMessage: sendMock,
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.supervised).toBe(false);
+      // Status must be degraded to awaiting_owner
+      expect(mockState.agents["auto-worker"].status).toBe("awaiting_owner");
+      // Session must have composerSeed set
+      const lastCached =
+        mockDeps.cacheSession.mock.calls[mockDeps.cacheSession.mock.calls.length - 1][0];
+      expect(lastCached.composerSeed).toContain("Autonomous task that fails to send");
+    });
+
+    it("I2: exact name takes precedence over copy pattern (exact 'web-2' in roster)", async () => {
+      const rosterWithExactCopyName: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "web",
+            role: "roles/web.md",
+            start: "on-demand",
+          },
+          {
+            name: "web-2",
+            role: "roles/web-custom.md",
+            start: "on-demand",
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster: rosterWithExactCopyName });
+
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "web-2",
+          mode: "new",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.agent).toBe("web-2");
+      // Should NOT be treated as a copy: no worktree allocated
+      expect(mockState.agents["web-2"].worktree).toBeNull();
+    });
+
+    it("I2: rejects copy numbers outside 2..MAX_TEAM_AGENTS (e.g. developer-1 and developer-7)", async () => {
+      const res1 = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "developer-1",
+          mode: "new",
+        },
+        mockDeps,
+      );
+      expect(res1.ok).toBe(false);
+      expect(res1.error).toBe("invalid_params");
+      expect(res1.reason).toContain("Copy number must be between 2 and 6");
+
+      const res7 = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "developer-7",
+          mode: "new",
+        },
+        mockDeps,
+      );
+      expect(res7.ok).toBe(false);
+      expect(res7.error).toBe("invalid_params");
+      expect(res7.reason).toContain("Copy number must be between 2 and 6");
+    });
+
+    it("I3: forbids copies of orchestrator with explicit error", async () => {
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "orchestrator-2",
+          mode: "new",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("invalid_params");
+      expect(result.reason).toBe("Copies of the orchestrator agent are forbidden");
+    });
+
+    it("I5: resume rejects if saved worktree in state does not match canonical resolveWorktreePath", async () => {
+      const canonicalWorktree = resolveWorktreePath("/repo", "developer-2");
+      const tamperedWorktree = "/tampered/evil/path";
+
+      mockState.agents["developer-2"] = {
+        sessionId: "s_dev2",
+        status: "idle",
+        task: "previous task",
+        lastOpenedAt: new Date().toISOString(),
+        supervised: true,
+        worktree: tamperedWorktree,
+      };
+
+      const result = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "developer-2",
+          mode: "resume",
+        },
+        mockDeps,
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("invalid_params");
+      expect(result.reason).toContain("does not match canonical worktree path");
+      expect(result.reason).toContain(canonicalWorktree);
+    });
   });
 });

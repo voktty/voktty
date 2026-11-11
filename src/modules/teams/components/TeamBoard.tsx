@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   BookOpen01Icon,
   Delete02Icon,
@@ -25,6 +25,10 @@ import { readRoster, readTeamState } from "../lib/teamFs";
 import type { TeamAgentStatus, TeamState } from "../types";
 import { AgentFormDialog } from "./AgentFormDialog";
 import { RulesDialog } from "./RulesDialog";
+
+const LegacyImportModal = lazy(() =>
+  import("./LegacyImportModal").then((m) => ({ default: m.LegacyImportModal }))
+);
 
 export type TeamBoardProps = {
   projectPath: string;
@@ -84,6 +88,7 @@ export function TeamBoard({
   const [formOpen, setFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     const { roster: loadedRoster, error } = await readRoster(projectPath);
@@ -284,6 +289,14 @@ export function TeamBoard({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => setImportOpen(true)}
+          >
+            <span>{t("teams.importLegacy")}</span>
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -546,6 +559,16 @@ export function TeamBoard({
         onOpenChange={setRulesOpen}
         projectPath={projectPath}
       />
+      {importOpen && (
+        <Suspense fallback={null}>
+          <LegacyImportModal
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            projectPath={projectPath}
+            onImportSuccess={() => void loadData()}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

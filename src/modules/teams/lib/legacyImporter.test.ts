@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 
@@ -21,6 +22,7 @@ import {
   previewLegacyImport,
   applyLegacyImport,
   sanitizePathEntries,
+  resolveSafeTeamPath,
 } from "./legacyImporter";
 import { validateRoster } from "./rosterValidation";
 import { dispatchAgentMethod } from "./agentControlBridge";
@@ -88,7 +90,7 @@ describe("legacyImporter", () => {
     beforeEach(() => {
       clearLiveAgentRegistry();
       tmpDir = path.join(
-        "/tmp",
+        os.tmpdir(),
         `voktty_legacy_test_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       );
       fs.mkdirSync(path.join(tmpDir, "PROMPTS", "sesiones", "roles"), {
@@ -223,7 +225,7 @@ describe("legacyImporter", () => {
       // Verify roles were written under .voktty/team/roles/
       expect(
         fs.existsSync(
-          path.join(tmpDir, ".voktty", "team", "roles", "orquestador.md"),
+          path.join(tmpDir, ".voktty", "team", "roles", "orchestrator.md"),
         ),
       ).toBe(true);
       expect(
@@ -241,23 +243,187 @@ describe("legacyImporter", () => {
     });
   });
 
-  describe("acceptance criterion: importing docker_projects/webserver", () => {
-    const realWebserverSessions = path.resolve(
+  describe("security validations (B2, B3)", () => {
+    const root = path.join(os.tmpdir(), "voktty_sec_root");
+
+    it("resolveSafeTeamPath confines paths inside .voktty/team and rejects .. traversal", () => {
+      expect(() =>
+        resolveSafeTeamPath(root, "roles/../../PROMPTS/sesiones/roles/nodo.md"),
+      ).toThrow("path traversal detected");
+      expect(() => resolveSafeTeamPath(root, "../agents.json")).toThrow(
+        "path traversal detected",
+      );
+    });
+
+    it("resolveSafeTeamPath rejects absolute paths and drive letters (C:/, /)", () => {
+      expect(() => resolveSafeTeamPath(root, "/etc/passwd")).toThrow(
+        "is absolute",
+      );
+      expect(() => resolveSafeTeamPath(root, "C:/Windows/System32")).toThrow(
+        "is absolute",
+      );
+      expect(() => resolveSafeTeamPath(root, "\\\\server\\share")).toThrow(
+        "path traversal detected",
+      );
+    });
+
+    it("resolveSafeTeamPath normalizes backslashes and rejects backslash traversal", () => {
+      expect(() =>
+        resolveSafeTeamPath(root, "roles\\..\\..\\malicious.md"),
+      ).toThrow("path traversal detected");
+      const safe = resolveSafeTeamPath(root, "roles\\nodo.md");
+      expect(safe.replace(/\\/g, "/")).toContain(".voktty/team/roles/nodo.md");
+    });
+
+    it("previewLegacyImport rejects agent names containing separators, .., or invalid characters", async () => {
+      const testDir = path.join(
+        os.tmpdir(),
+        `voktty_sec_names_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      );
+      fs.mkdirSync(path.join(testDir, "PROMPTS", "sesiones"), {
+        recursive: true,
+      });
+
+      const badNames = [
+        "../nodo",
+        "sub/agent",
+        "agent\\copy",
+        "C:agent",
+        "agent with spaces",
+        "agent:name",
+      ];
+
+      for (const badName of badNames) {
+        fs.writeFileSync(
+          path.join(testDir, "PROMPTS", "sesiones", "agentes.json"),
+          JSON.stringify({
+            agentes: [{ nombre: badName, rol: "roles/nodo.md" }],
+          }),
+        );
+        await expect(previewLegacyImport(testDir)).rejects.toThrow(
+          "Invalid agent name",
+        );
+      }
+
+      fs.rmSync(testDir, { recursive: true, force: true });
+    });
+
+    it("applyLegacyImport refuses to apply if roster validation fails (B3)", async () => {
+      const testDir = path.join(
+        os.tmpdir(),
+        `voktty_sec_val_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      );
+      fs.mkdirSync(path.join(testDir, "PROMPTS", "sesiones"), {
+        recursive: true,
+      });
+
+      const mockPreview = {
+        sourceFile: "mock",
+        roster: {
+          $schema: "./team.schema.json",
+          version: 1,
+          defaults: {
+            runtime: { adapter: "claude-code" },
+          },
+          agents: [
+            {
+              name: "agent-1",
+              role: "", // Invalid empty role
+              start: "on-demand" as const,
+            },
+          ],
+        },
+        roles: {},
+        warnings: [],
+        unmapped: [],
+      };
+
+      await expect(
+        applyLegacyImport(testDir, mockPreview as any),
+      ).rejects.toThrow("Cannot apply legacy import: roster validation failed");
+
+      fs.rmSync(testDir, { recursive: true, force: true });
+    });
+
+    it("applyLegacyImport creates a backup copy when agents.json already exists (B3)", async () => {
+      const testDir = path.join(
+        os.tmpdir(),
+        `voktty_sec_bak_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      );
+      const teamDir = path.join(testDir, ".voktty", "team");
+      fs.mkdirSync(teamDir, { recursive: true });
+
+      const originalAgentsContent = JSON.stringify(
+        { original: "roster" },
+        null,
+        2,
+      );
+      fs.writeFileSync(
+        path.join(teamDir, "agents.json"),
+        originalAgentsContent,
+      );
+
+      const mockPreview = {
+        sourceFile: "mock",
+        roster: {
+          $schema: "./team.schema.json",
+          version: 1,
+          defaults: {
+            runtime: { adapter: "claude-code" },
+          },
+          agents: [
+            {
+              name: "valid_agent",
+              role: "roles/valid_agent.md",
+              start: "on-demand" as const,
+            },
+          ],
+        },
+        roles: { "roles/valid_agent.md": "# Valid Agent" },
+        warnings: [],
+        unmapped: [],
+      };
+
+      await applyLegacyImport(testDir, mockPreview as any);
+
+      // Verify agents.json was updated
+      const newContent = fs.readFileSync(
+        path.join(teamDir, "agents.json"),
+        "utf-8",
+      );
+      expect(newContent).toContain("valid_agent");
+
+      // Verify backup file exists
+      const files = fs.readdirSync(teamDir);
+      const backupFile = files.find((f) => f.startsWith("agents.json.bak-"));
+      expect(backupFile).toBeDefined();
+      const backupContent = fs.readFileSync(
+        path.join(teamDir, backupFile!),
+        "utf-8",
+      );
+      expect(backupContent).toBe(originalAgentsContent);
+
+      fs.rmSync(testDir, { recursive: true, force: true });
+    });
+  });
+
+  describe("acceptance criterion: importing legacy webserver fixture (B5)", () => {
+    const fixtureSessions = path.resolve(
       __dirname,
-      "../../../../../docker_projects/webserver/PROMPTS/sesiones",
+      "__fixtures__/legacy_webserver/PROMPTS/sesiones",
     );
 
-    it("imports docker_projects/webserver producing a valid roster without touching PROMPTS/sesiones", async () => {
-      expect(fs.existsSync(realWebserverSessions)).toBe(true);
+    it("imports legacy fixture producing a valid roster without touching PROMPTS/sesiones", async () => {
+      expect(fs.existsSync(fixtureSessions)).toBe(true);
 
-      // Compute hashes of the real repository's PROMPTS/sesiones before anything
-      const realHashesBefore = hashDirFiles(realWebserverSessions);
-      expect(Object.keys(realHashesBefore).length).toBeGreaterThan(0);
+      // Compute hashes of the fixture's PROMPTS/sesiones before anything
+      const fixtureHashesBefore = hashDirFiles(fixtureSessions);
+      expect(Object.keys(fixtureHashesBefore).length).toBeGreaterThan(0);
 
-      // Create a temporary project directory for testing import to protect source tree
+      // Create a temporary project directory for testing import using os.tmpdir() (B5)
       const testProjectDir = path.join(
-        "/tmp",
-        `voktty_webserver_acceptance_${Date.now()}`,
+        os.tmpdir(),
+        `voktty_fixture_acceptance_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       );
       const testSessionsDir = path.join(
         testProjectDir,
@@ -267,13 +433,13 @@ describe("legacyImporter", () => {
       fs.mkdirSync(testSessionsDir, { recursive: true });
 
       // Copy ONLY PROMPTS/sesiones to the test directory
-      fs.cpSync(realWebserverSessions, testSessionsDir, { recursive: true });
+      fs.cpSync(fixtureSessions, testSessionsDir, { recursive: true });
 
       const testHashesBefore = hashDirFiles(testSessionsDir);
 
       // Perform preview and import
       const preview = await previewLegacyImport(testProjectDir);
-      expect(preview.roster.agents.length).toBeGreaterThanOrEqual(10);
+      expect(preview.roster.agents.length).toBe(10);
 
       const val = validateRoster(JSON.stringify(preview.roster));
       expect(val.error).toBeUndefined();
@@ -281,12 +447,12 @@ describe("legacyImporter", () => {
 
       await applyLegacyImport(testProjectDir, preview);
 
-      // Verify that neither the test sessions dir nor the real sessions dir were touched
+      // Verify that neither the test sessions dir nor the fixture dir were touched
       const testHashesAfter = hashDirFiles(testSessionsDir);
       expect(testHashesAfter).toEqual(testHashesBefore);
 
-      const realHashesAfter = hashDirFiles(realWebserverSessions);
-      expect(realHashesAfter).toEqual(realHashesBefore);
+      const fixtureHashesAfter = hashDirFiles(fixtureSessions);
+      expect(fixtureHashesAfter).toEqual(fixtureHashesBefore);
 
       // Verify that orquestador, nodo and other roles are properly imported
       const importedRosterPath = path.join(
@@ -306,16 +472,26 @@ describe("legacyImporter", () => {
       const nodo = importedRoster.agents.find((a: any) => a.name === "nodo");
 
       expect(orch).toBeDefined();
-      expect(orch.role).toBe("roles/orquestador.md");
+      // I4: orchestrator role is strictly roles/orchestrator.md
+      expect(orch.role).toBe("roles/orchestrator.md");
       expect(nodo).toBeDefined();
       expect(nodo.role).toBe("roles/nodo.md");
+
+      // Verify orchestrator role file was created
+      expect(
+        fs.existsSync(
+          path.join(testProjectDir, ".voktty", "team", "roles", "orchestrator.md"),
+        ),
+      ).toBe(true);
+
+      fs.rmSync(testProjectDir, { recursive: true, force: true });
     });
 
     it("acceptance: orchestrator opens nodo and copy nodo-2 in its worktree, sends tasks and collects verdicts without arrancar.py", async () => {
-      // Create isolated test project with imported team
+      // Create isolated test project with imported team using os.tmpdir() (B5)
       const testProjectDir = path.join(
-        "/tmp",
-        `voktty_flow_acceptance_${Date.now()}`,
+        os.tmpdir(),
+        `voktty_flow_acceptance_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       );
       const testSessionsDir = path.join(
         testProjectDir,
@@ -323,19 +499,19 @@ describe("legacyImporter", () => {
         "sesiones",
       );
       fs.mkdirSync(testSessionsDir, { recursive: true });
-      fs.cpSync(realWebserverSessions, testSessionsDir, { recursive: true });
+      fs.cpSync(fixtureSessions, testSessionsDir, { recursive: true });
 
       const preview = await previewLegacyImport(testProjectDir);
       await applyLegacyImport(testProjectDir, preview);
 
       clearLiveAgentRegistry();
 
-      // 1. Authenticate caller orchestrator
+      // 1. Authenticate caller orchestrator (role is roles/orchestrator.md per I4)
       const orchLive = {
         sessionId: "s_orch_real",
         agentName: "orquestador",
         projectPath: testProjectDir,
-        role: "roles/orquestador.md",
+        role: "roles/orchestrator.md",
         isOrchestrator: true,
         permissions: { canManageAgents: true },
         launchedAt: new Date().toISOString(),

@@ -35,6 +35,128 @@ export function parseAgentCopyName(name: string): {
   return { baseName: name, copyNumber: undefined };
 }
 
+export type AgentIdentityResolution =
+  | {
+      ok: true;
+      effectiveAgentName: string;
+      baseName: string;
+      copyNumber?: number;
+      isCopy: boolean;
+      agentDef: AgentDefinition;
+    }
+  | {
+      ok: false;
+      error: "invalid_params" | "agent_not_found";
+      reason: string;
+    };
+
+export function resolveAgentIdentity(
+  agentName: string,
+  roster: AgentRoster,
+  requestedCopy?: number,
+): AgentIdentityResolution {
+  if (!agentName || typeof agentName !== "string") {
+    return {
+      ok: false,
+      error: "invalid_params",
+      reason: "Agent name is required",
+    };
+  }
+
+  // If explicit copy requested
+  if (requestedCopy !== undefined) {
+    if (
+      !Number.isInteger(requestedCopy) ||
+      requestedCopy < 2 ||
+      requestedCopy > MAX_TEAM_AGENTS
+    ) {
+      return {
+        ok: false,
+        error: "invalid_params",
+        reason: `Copy number must be between 2 and ${MAX_TEAM_AGENTS}`,
+      };
+    }
+    const agentDef = roster.agents.find((a) => a.name === agentName);
+    if (!agentDef) {
+      return {
+        ok: false,
+        error: "agent_not_found",
+        reason: `Agent '${agentName}' was not found in team roster`,
+      };
+    }
+    if (isOrchestratorRole(agentDef.role)) {
+      return {
+        ok: false,
+        error: "invalid_params",
+        reason: "Copies of the orchestrator agent are forbidden",
+      };
+    }
+    return {
+      ok: true,
+      effectiveAgentName: `${agentName}-${requestedCopy}`,
+      baseName: agentName,
+      copyNumber: requestedCopy,
+      isCopy: true,
+      agentDef,
+    };
+  }
+
+  // I2: exact name first
+  const exactDef = roster.agents.find((a) => a.name === agentName);
+  if (exactDef) {
+    return {
+      ok: true,
+      effectiveAgentName: agentName,
+      baseName: agentName,
+      copyNumber: undefined,
+      isCopy: false,
+      agentDef: exactDef,
+    };
+  }
+
+  // Not exact: check if it's a copy pattern (e.g. "nodo-2")
+  const parsed = parseAgentCopyName(agentName);
+  if (parsed.copyNumber !== undefined) {
+    const copyNum = parsed.copyNumber;
+    if (copyNum < 2 || copyNum > MAX_TEAM_AGENTS) {
+      return {
+        ok: false,
+        error: "invalid_params",
+        reason: `Copy number must be between 2 and ${MAX_TEAM_AGENTS}`,
+      };
+    }
+    const baseDef = roster.agents.find((a) => a.name === parsed.baseName);
+    if (!baseDef) {
+      return {
+        ok: false,
+        error: "agent_not_found",
+        reason: `Agent '${agentName}' was not found in team roster`,
+      };
+    }
+    if (isOrchestratorRole(baseDef.role)) {
+      return {
+        ok: false,
+        error: "invalid_params",
+        reason: "Copies of the orchestrator agent are forbidden",
+      };
+    }
+    return {
+      ok: true,
+      effectiveAgentName: agentName,
+      baseName: parsed.baseName,
+      copyNumber: copyNum,
+      isCopy: true,
+      agentDef: baseDef,
+    };
+  }
+
+  return {
+    ok: false,
+    error: "agent_not_found",
+    reason: `Agent '${agentName}' was not found in team roster`,
+  };
+}
+
 export function resolveWorktreePath(
   projectPath: string,
   copyName: string,
@@ -98,6 +220,7 @@ export type LauncherDependencies = {
   ) => { id: string; composerSeed?: string };
   cacheSession: (session: any) => void;
   sendSessionMessage?: (sessionId: string, message: string) => Promise<boolean>;
+  ensureWorktree?: (projectPath: string, copyName: string) => Promise<string>;
 };
 
 export async function openAgent(
@@ -105,16 +228,10 @@ export async function openAgent(
   deps: LauncherDependencies,
 ): Promise<OpenAgentResult> {
   return runProjectExclusive(params.projectPath, async () => {
-    const parsedCopy = parseAgentCopyName(params.agentName);
-    const copyNumber = params.copy ?? parsedCopy.copyNumber;
-    const baseName = parsedCopy.baseName;
-    const effectiveAgentName =
-      copyNumber !== undefined ? `${baseName}-${copyNumber}` : baseName;
-
     if (typeof deps.onNewHarnessTab !== "function") {
       return {
         ok: false,
-        agent: effectiveAgentName,
+        agent: params.agentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
@@ -127,7 +244,7 @@ export async function openAgent(
     if (!roster) {
       return {
         ok: false,
-        agent: effectiveAgentName,
+        agent: params.agentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
@@ -136,18 +253,21 @@ export async function openAgent(
       };
     }
 
-    const agentDef = roster.agents.find((a) => a.name === baseName);
-    if (!agentDef) {
+    // I2 & I3: Resolve identity (exact name first, copy limits 2..MAX_TEAM_AGENTS, orchestrator copies forbidden)
+    const identity = resolveAgentIdentity(params.agentName, roster, params.copy);
+    if (!identity.ok) {
       return {
         ok: false,
-        agent: effectiveAgentName,
+        agent: params.agentName,
         sessionId: "",
         mode: params.mode ?? "new",
         supervised: true,
-        error: "agent_not_found",
-        reason: `Agent '${baseName}' was not found in team roster`,
+        error: identity.error,
+        reason: identity.reason,
       };
     }
+
+    const { effectiveAgentName, isCopy, agentDef } = identity;
 
     const model = resolveAgentModel(agentDef, roster, params.model);
     if (model && isModelForbidden(model, roster.policies?.forbiddenModels)) {
@@ -196,14 +316,54 @@ export async function openAgent(
     const state = await readTeamState(params.projectPath);
     const isOrch = isOrchestratorRole(agentDef.role);
 
-    const isCopy = copyNumber !== undefined;
     const worktreePath = isCopy
       ? resolveWorktreePath(params.projectPath, effectiveAgentName)
       : undefined;
     const sessionCwd = worktreePath ?? params.projectPath;
 
+    // B1: If agent is a copy, ensure worktree exists and is authorized natively in Rust
+    if (isCopy) {
+      try {
+        if (typeof deps.ensureWorktree === "function") {
+          await deps.ensureWorktree(params.projectPath, effectiveAgentName);
+        } else {
+          const { invoke } = await import("@tauri-apps/api/core");
+          await invoke("ensure_agent_worktree", {
+            projectPath: params.projectPath,
+            copyName: effectiveAgentName,
+          });
+        }
+      } catch (err: unknown) {
+        return {
+          ok: false,
+          agent: effectiveAgentName,
+          sessionId: "",
+          mode,
+          supervised,
+          error: "request_failed",
+          reason: `Failed to ensure worktree for agent copy: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
     if (mode === "resume" && state.agents[effectiveAgentName]?.sessionId) {
       const existingSessionId = state.agents[effectiveAgentName].sessionId!;
+
+      // I5: Validate saved worktree path matches canonical resolution
+      const savedWorktree = state.agents[effectiveAgentName].worktree ?? null;
+      const expectedWorktree = isCopy ? worktreePath ?? null : null;
+      if (isCopy && savedWorktree !== expectedWorktree) {
+        return {
+          ok: false,
+          agent: effectiveAgentName,
+          sessionId: existingSessionId,
+          mode: "resume",
+          supervised,
+          error: "invalid_params",
+          reason: `Saved worktree path '${savedWorktree}' does not match canonical worktree path '${expectedWorktree}'`,
+        };
+      }
+
       const existingLive = getLiveAgentBySessionId(existingSessionId);
       const agentToken = existingLive?.agentToken ?? generateAgentToken();
 
@@ -232,8 +392,7 @@ export async function openAgent(
         };
       }
 
-      const effectiveCwd =
-        state.agents[effectiveAgentName].worktree || sessionCwd;
+      const effectiveCwd = sessionCwd;
       const tabId = deps.onNewHarnessTab(
         params.spaceId,
         effectiveCwd,
@@ -288,32 +447,14 @@ export async function openAgent(
     const runtimeMode = supervised ? "supervised" : "auto";
     const session = deps.newSession(harnessId, sessionCwd, model, runtimeMode);
 
-    let initialStatus: TeamAgentStatus;
     if (supervised) {
-      // Supervised agents wait for owner approval/send
       session.composerSeed = promptSeed;
-      deps.cacheSession(session);
-      initialStatus = "awaiting_owner";
-    } else {
-      // Unsupervised (auto) agents start immediately with initial task
-      deps.cacheSession(session);
-      initialStatus = "working";
-      if (typeof deps.sendSessionMessage === "function") {
-        await deps.sendSessionMessage(session.id, promptSeed);
-      } else {
-        try {
-          const { sendHarnessSessionMessage } = await import(
-            "@/modules/harness/lib/harnessControlBridge"
-          );
-          await sendHarnessSessionMessage(session.id, promptSeed);
-        } catch {
-          session.composerSeed = promptSeed;
-        }
-      }
     }
+    deps.cacheSession(session);
 
     const agentToken = generateAgentToken();
 
+    // 1. Register token with native control plane
     const registered = await registerLiveAgentWithControl({
       sessionId: session.id,
       agentName: effectiveAgentName,
@@ -339,6 +480,7 @@ export async function openAgent(
       };
     }
 
+    // 2. Open tab
     const tabId = deps.onNewHarnessTab(
       params.spaceId,
       sessionCwd,
@@ -357,12 +499,13 @@ export async function openAgent(
       };
     }
 
+    // 3. Write state
     const now = new Date().toISOString();
     state.agents[effectiveAgentName] = {
       ...state.agents[effectiveAgentName],
       sessionId: session.id,
       lastOpenedAt: now,
-      status: initialStatus,
+      status: supervised ? "awaiting_owner" : "working",
       task: params.task || "Await assignment.",
       currentTaskStartedAt: now,
       lastVerdict: undefined,
@@ -370,6 +513,34 @@ export async function openAgent(
       worktree: worktreePath ?? null,
     };
     await writeTeamState(params.projectPath, state);
+
+    // 4. I1: Send task to unsupervised agents at the end; if send fails, degrade to awaiting_owner with composerSeed
+    if (!supervised) {
+      let sendSucceeded = false;
+      try {
+        if (typeof deps.sendSessionMessage === "function") {
+          sendSucceeded = await deps.sendSessionMessage(session.id, promptSeed);
+        } else {
+          const { sendHarnessSessionMessage } = await import(
+            "@/modules/harness/lib/harnessControlBridge"
+          );
+          await sendHarnessSessionMessage(session.id, promptSeed);
+          sendSucceeded = true;
+        }
+      } catch {
+        sendSucceeded = false;
+      }
+
+      if (!sendSucceeded) {
+        session.composerSeed = promptSeed;
+        deps.cacheSession(session);
+        state.agents[effectiveAgentName] = {
+          ...state.agents[effectiveAgentName],
+          status: "awaiting_owner",
+        };
+        await writeTeamState(params.projectPath, state);
+      }
+    }
 
     return {
       ok: true,

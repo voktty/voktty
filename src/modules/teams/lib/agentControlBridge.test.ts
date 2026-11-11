@@ -756,5 +756,80 @@ describe("agentControlBridge", () => {
       expect(res.status).toBe("awaiting_owner");
       expect(res.info).toContain("awaiting owner input");
     });
+
+    it("E4: agent.list marks copies whose session no longer exists as unopened", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readRoster).mockResolvedValue({
+        roster: {
+          version: 1,
+          agents: [
+            { name: "orchestrator", role: "roles/orchestrator.md", start: "always" },
+            { name: "developer", role: "roles/developer.md", start: "on-demand" },
+          ],
+        },
+      });
+
+      vi.mocked(readTeamState).mockResolvedValue({
+        $schema: "urn:voktty:team-state:1",
+        version: 1,
+        updatedAt: "",
+        agents: {
+          "developer-2": {
+            sessionId: "s_old_closed_session",
+            status: "working",
+          },
+        },
+      });
+
+      // Session snapshot is null (session no longer alive in memory)
+      vi.mocked(getHarnessSessionSnapshot).mockReturnValue(null);
+
+      const res: any = await dispatchAgentMethod(
+        "agent.list",
+        {},
+        { agent_token: orch.agentToken },
+      );
+
+      const dev2 = res.agents.find((a: any) => a.name === "developer-2");
+      expect(dev2).toBeDefined();
+      expect(dev2.status).toBe("unopened");
+    });
+
+    it("E4: agent.start rejects orchestrator copies with invalid_params", async () => {
+      const orch = createLiveAgent({
+        sessionId: "s_orch",
+        agentName: "orchestrator",
+        projectPath: "/project",
+        role: "roles/orchestrator.md",
+        isOrchestrator: true,
+        permissions: { canManageAgents: true },
+      });
+
+      vi.mocked(readRoster).mockResolvedValue({
+        roster: {
+          version: 1,
+          agents: [
+            { name: "orchestrator", role: "roles/orchestrator.md", start: "always" },
+          ],
+        },
+      });
+
+      await expect(
+        dispatchAgentMethod(
+          "agent.start",
+          { agent: "orchestrator-2" },
+          { agent_token: orch.agentToken },
+          { onNewHarnessTab: vi.fn() },
+        ),
+      ).rejects.toThrow("Copies of the orchestrator agent are forbidden");
+    });
   });
 });
