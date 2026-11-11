@@ -20,7 +20,7 @@ export function NotchProjectLauncher({
   if (projects.length === 0) return null;
 
   return (
-    <div className="flex flex-col w-[380px] max-w-[90vw] bg-black/90 backdrop-blur-2xl text-foreground rounded-2xl shadow-2xl border border-white/10 p-2.5 space-y-2 select-none animate-in fade-in zoom-in-95 duration-150">
+    <div className="flex flex-col w-[380px] max-w-[90vw] bg-black text-foreground rounded-2xl border border-white/10 p-2.5 space-y-2 select-none animate-in fade-in zoom-in-95 duration-150">
       <div className="flex items-center justify-between px-1.5 pb-1 border-b border-white/10">
         <span className="font-sans font-medium text-xs text-content/80">
           {t("harness.notch.idleLauncher")}

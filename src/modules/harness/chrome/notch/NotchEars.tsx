@@ -20,7 +20,10 @@ export function NotchEar({ side, className = "", ...props }: NotchEarProps) {
       className={`shrink-0 pointer-events-none ${side === "right" ? "-scale-x-100 -ml-px" : "-mr-px"} ${className}`}
       {...props}
     >
-      <path d="M0,0 Q0,12 14,12 L14,0 Z" />
+      {/* Concave: fills only the corner between the screen edge and the
+          capsule's side, so the notch flows out of the top edge like a brow
+          instead of growing rounded shoulders. */}
+      <path d="M0,0 L14,0 L14,12 Q14,0 0,0 Z" />
     </svg>
   );
 }

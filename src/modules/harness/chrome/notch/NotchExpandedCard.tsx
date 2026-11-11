@@ -52,7 +52,7 @@ export function NotchExpandedCard({
   };
 
   return (
-    <div className="flex flex-col w-[480px] max-w-[90vw] max-h-[460px] bg-black/90 backdrop-blur-2xl text-foreground rounded-2xl shadow-2xl border border-white/10 overflow-hidden text-xs select-none animate-in fade-in zoom-in-95 duration-150">
+    <div className="flex flex-col w-[480px] max-w-[90vw] max-h-[460px] bg-black text-foreground rounded-2xl border border-white/10 overflow-hidden text-xs select-none animate-in fade-in zoom-in-95 duration-150">
       {/* Header */}
       <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/10 bg-white/[0.03]">
         <div className="flex items-center gap-2 min-w-0">

@@ -74,6 +74,20 @@ describe("HarnessNotch", () => {
     expect(container.textContent).toContain("harness.notch.idle");
   });
 
+  it("draws a dark, shadowless brow with concave ears", () => {
+    act(() => {
+      root.render(createElement(HarnessNotch));
+    });
+
+    const shell = container.querySelector('[class*="z-[9999]"]');
+    expect(shell?.classList.contains("dark")).toBe(true);
+    expect(container.innerHTML).not.toMatch(/shadow-(?:xl|2xl)|backdrop-blur/);
+    const ears = [...container.querySelectorAll("svg path")].map((path) =>
+      path.getAttribute("d"),
+    );
+    expect(ears).toEqual(["M0,0 L14,0 L14,12 Q14,0 0,0 Z", "M0,0 L14,0 L14,12 Q14,0 0,0 Z"]);
+  });
+
   it("renders active agent mascot, project name, and elapsed time when agent is running", () => {
     const mockAgent: LiveAgent = {
       id: "agent-1",

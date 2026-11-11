@@ -316,7 +316,9 @@ export function HarnessNotch({
         onMouseLeave={() => {
           setTopHovered(false);
         }}
-        className={`fixed top-0 left-1/2 -translate-x-1/2 z-[9999] flex w-max max-w-none flex-col items-center whitespace-nowrap transition-all duration-300 ease-out select-none ${
+        // The notch is always black, so it always uses the dark palette: the
+        // light theme's dark text was unreadable on it.
+        className={`dark fixed top-0 left-1/2 -translate-x-1/2 z-[9999] flex w-max max-w-none flex-col items-center whitespace-nowrap transition-all duration-300 ease-out select-none ${
           isVisible
             ? "translate-y-0 opacity-100 pointer-events-auto"
             : "-translate-y-full opacity-0 pointer-events-none"
@@ -328,7 +330,7 @@ export function HarnessNotch({
           <NotchEar side="left" className="text-black" />
 
           {/* Center black notch capsule */}
-          <div className="flex items-center justify-center bg-black text-foreground rounded-b-2xl shadow-xl shadow-black/40">
+          <div className="flex items-center justify-center bg-black text-foreground rounded-b-2xl">
             <NotchPill
               liveAgents={overlay ? liveAgents : []}
               activeAgent={activeAgent}
