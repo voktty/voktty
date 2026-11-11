@@ -6499,6 +6499,8 @@ export const es: TranslationSchema = {
       optionsCount: "{count} opciones",
       optionsLabel: "Opciones de {label}",
       startedByAutomation: "Iniciada por una automatización",
+      teamOrchestrator: "Orquestador del equipo: {agent}",
+      teamAgent: "Agente del equipo: {agent}",
       instructions: "Instrucciones",
       instructionsPlaceholder: "Indica al agente qué hacer cuando se ejecute esta automatización…",
       score: "puntuación",

@@ -6371,6 +6371,8 @@ export const en = {
       optionsCount: "{count} options",
       optionsLabel: "{label} options",
       startedByAutomation: "Started by an automation",
+      teamOrchestrator: "Team orchestrator: {agent}",
+      teamAgent: "Team agent: {agent}",
       instructions: "Instructions",
       instructionsPlaceholder: "Tell the agent what to do when this automation runs…",
       score: "score",

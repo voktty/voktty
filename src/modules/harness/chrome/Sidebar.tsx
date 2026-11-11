@@ -13,8 +13,10 @@ import {
   Plus,
   Search,
   StickyNote,
+  Team,
   Zap,
 } from "./icons";
+import { useTeamSession } from "@/modules/teams/lib/agentRegistry";
 import {
   inWorktreeFocus,
   useWorktreeFocus,
@@ -2629,6 +2631,7 @@ function SessionCard({
   const skipClickUntil = useRef(0);
   const [dragging, setDragging] = useState(false);
   const title = sessionDisplayTitle(session.title, session.harness);
+  const teamSession = useTeamSession(session.id);
   const gitLabel = formatGitLabel(session.repo, session.branch);
   const time = formatRelative(session.updatedAt, now);
   const model = compact
@@ -2859,6 +2862,32 @@ function SessionCard({
             className="grid size-5 -mr-1 shrink-0 place-items-center text-amber-400"
           >
             <Zap className="size-3" strokeWidth={1.75} />
+          </span>
+        ) : null}
+        {teamSession ? (
+          <span
+            data-team-session={teamSession.isOrchestrator ? "orchestrator" : "agent"}
+            role="img"
+            title={t(
+              teamSession.isOrchestrator
+                ? "harness.commonUI.teamOrchestrator"
+                : "harness.commonUI.teamAgent",
+              { agent: teamSession.agentName },
+            )}
+            aria-label={t(
+              teamSession.isOrchestrator
+                ? "harness.commonUI.teamOrchestrator"
+                : "harness.commonUI.teamAgent",
+              { agent: teamSession.agentName },
+            )}
+            className={`flex shrink-0 items-center gap-1 rounded px-1 text-[10px] font-medium ${
+              teamSession.isOrchestrator
+                ? "bg-accent/20 text-accent"
+                : "bg-content/10 text-content/60"
+            }`}
+          >
+            <Team className="size-3" strokeWidth={1.75} />
+            <span className="max-w-20 truncate">{teamSession.agentName}</span>
           </span>
         ) : null}
         {compact ? status : null}

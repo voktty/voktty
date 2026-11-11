@@ -1,7 +1,40 @@
+import { useSyncExternalStore } from "react";
 import type { LiveAgentSession } from "../types";
 
 const sessionsById = new Map<string, LiveAgentSession>();
 const sessionsByToken = new Map<string, LiveAgentSession>();
+const listeners = new Set<() => void>();
+
+function changed(): void {
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** What a Harness session shows about the team agent it runs, if any. */
+export type TeamSessionBadge = {
+  agentName: string;
+  isOrchestrator: boolean;
+  projectPath: string;
+};
+
+/**
+ * The team agent a Harness session belongs to, while the board that
+ * launched or resumed it keeps it registered. Never exposes the token.
+ */
+export function useTeamSession(sessionId: string): TeamSessionBadge | null {
+  const read = () => sessionsById.get(sessionId);
+  const session = useSyncExternalStore(subscribe, read, read);
+  if (!session) return null;
+  return {
+    agentName: session.agentName,
+    isOrchestrator: session.isOrchestrator,
+    projectPath: session.projectPath,
+  };
+}
 
 export function generateAgentToken(): string {
   const bytes = new Uint8Array(16);
@@ -14,6 +47,7 @@ export function generateAgentToken(): string {
 export function registerLiveAgent(session: LiveAgentSession): void {
   sessionsById.set(session.sessionId, session);
   sessionsByToken.set(session.agentToken, session);
+  changed();
 }
 
 export function getLiveAgentBySessionId(
@@ -43,6 +77,7 @@ export function removeLiveAgent(sessionId: string): void {
   if (session) {
     sessionsByToken.delete(session.agentToken);
     sessionsById.delete(sessionId);
+    changed();
   }
 }
 

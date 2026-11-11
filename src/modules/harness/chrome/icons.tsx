@@ -3,6 +3,7 @@
 import Add01Icon from "@hugeicons/core-free-icons/Add01Icon";
 import AddSquareIcon from "@hugeicons/core-free-icons/AddSquareIcon";
 import AiIdeaIcon from "@hugeicons/core-free-icons/AiIdeaIcon";
+import UserGroupIcon from "@hugeicons/core-free-icons/UserGroupIcon";
 import AlertCircleIcon from "@hugeicons/core-free-icons/AlertCircleIcon";
 import AppWindowIcon from "@hugeicons/core-free-icons/AppWindowIcon";
 import Archive02Icon from "@hugeicons/core-free-icons/Archive02Icon";
@@ -282,3 +283,4 @@ export const WholeWord = wrap(WholeWordIcon, "WholeWord");
 export const Wrench = wrap(Wrench01Icon, "Wrench");
 export const X = wrap(Cancel01Icon, "X");
 export const Zap = wrap(FlashIcon, "Zap");
+export const Team = wrap(UserGroupIcon, "Team");
