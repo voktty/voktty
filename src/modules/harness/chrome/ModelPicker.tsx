@@ -158,6 +158,31 @@ function pickerSettings(model: AgentModel): ModelSetting[] {
     });
 }
 
+/** Effort-like choices short enough to pick on a track instead of a submenu. */
+const MAX_SLIDER_STOPS = 8;
+
+export function sliderSetting(settings: ModelSetting[]): ModelSetting | undefined {
+  return settings.find(
+    (setting) =>
+      setting.kind === "select" &&
+      isEffortSetting(setting) &&
+      setting.options.length >= 2 &&
+      setting.options.length <= MAX_SLIDER_STOPS,
+  );
+}
+
+const EFFORT_RANK = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
+
+/** Track order: least effort on the left, whatever order the catalog lists. */
+export function sliderOptions(setting: ModelSetting): ModelSetting["options"] {
+  const options = setting.options;
+  const first = EFFORT_RANK.indexOf(options[0]?.value.toLowerCase() ?? "");
+  const last = EFFORT_RANK.indexOf(
+    options[options.length - 1]?.value.toLowerCase() ?? "",
+  );
+  return first >= 0 && last >= 0 && first > last ? [...options].reverse() : options;
+}
+
 function settingValue(
   setting: ModelSetting,
   values: Record<string, string>,
@@ -228,6 +253,7 @@ export function ModelPicker({
   const recentOpenRef = useRef(recentMenu != null);
   const currentRef = useRef<AgentModel | null>(null);
   const lastHotkey = useRef(0);
+  const directRef = useRef(false);
   onCloseRef.current = onClose;
   openRef.current = open;
   recentOpenRef.current = recentMenu != null;
@@ -240,16 +266,21 @@ export function ModelPicker({
   }, [catalogVersion, current]);
   const entries = useMemo<MenuEntry[]>(
     () => [
+      { kind: "model" as const },
       ...settings.map((setting) => ({
         kind: "setting" as const,
         setting,
       })),
-      { kind: "model" as const },
     ],
     [settings],
   );
 
   const triggerLabel = current.name;
+  const effort = sliderSetting(settings);
+  const effortLabel = effort ? settingValueLabel(t, effort, values) : null;
+  // A model with nothing to tune has nothing to show before its list.
+  const direct = settings.length === 0;
+  directRef.current = direct;
 
   const pickerHarnesses = useMemo(() => {
     void availabilityVersion;
@@ -339,7 +370,7 @@ export function ModelPicker({
       ),
     );
     setActive(0);
-    setSubmenu(null);
+    setSubmenu(directRef.current ? { kind: "models" } : null);
     setQuery("");
     setFavorites(loadFavoriteModels());
   }, [open, current.harness]);
@@ -459,7 +490,7 @@ export function ModelPicker({
       setSubmenu({ kind: "models" });
       return;
     }
-    if (entry.setting.kind === "select") {
+    if (entry.setting.kind === "select" && entry.setting !== effort) {
       setSubmenu({ kind: "setting", setting: entry.setting });
       return;
     }
@@ -499,6 +530,26 @@ export function ModelPicker({
       }
       return;
     }
+    const activeEntry = entries[active];
+    if (
+      (event.key === "ArrowRight" || event.key === "ArrowLeft") &&
+      submenu == null &&
+      activeEntry?.kind === "setting" &&
+      effort &&
+      activeEntry.setting === effort
+    ) {
+      event.preventDefault();
+      const options = sliderOptions(effort);
+      const at = options.findIndex(
+        (option) => option.value === settingValue(effort, values),
+      );
+      const next = Math.min(
+        options.length - 1,
+        Math.max(0, at + (event.key === "ArrowRight" ? 1 : -1)),
+      );
+      if (options[next]) setSetting(effort, options[next].value);
+      return;
+    }
     if (event.key === "ArrowRight") {
       event.preventDefault();
       const entry = entries[active];
@@ -524,6 +575,7 @@ export function ModelPicker({
     }
     const entry = entries[active];
     if (!entry) return;
+    if (entry.kind === "setting" && entry.setting === effort) return;
     if (entry.kind === "model" || entry.setting.kind === "select") {
       showEntrySubmenu(entry);
       return;
@@ -567,6 +619,11 @@ export function ModelPicker({
       >
         <HarnessIcon harness={current.harness} className="size-4 shrink-0" />
         <span className="whitespace-nowrap text-[11px]">{triggerLabel}</span>
+        {effortLabel ? (
+          <span className="whitespace-nowrap text-[11px] text-content/50">
+            {effortLabel}
+          </span>
+        ) : null}
         <ChevronDown
           className={`size-3 shrink-0 text-content/50 ${open ? "rotate-180" : ""}`}
           strokeWidth={1.75}
@@ -575,6 +632,7 @@ export function ModelPicker({
 
       {open ? (
         <>
+          {direct ? null : (
           <Popover
             anchor={button}
             side="top"
@@ -635,6 +693,26 @@ export function ModelPicker({
               const setting = entry.setting;
               const value = settingValue(setting, values);
               const isToggle = setting.kind === "toggle";
+              if (setting === effort) {
+                return (
+                  <EffortSlider
+                    key={setting.id}
+                    setting={setting}
+                    value={value}
+                    highlighted={highlighted}
+                    label={modelSettingLabel(t, setting)}
+                    valueLabel={settingValueLabel(t, setting, values)}
+                    optionLabel={(option) =>
+                      modelSettingOptionLabel(t, setting, option)
+                    }
+                    onHover={() => {
+                      setActive(index);
+                      setSubmenu(null);
+                    }}
+                    onPick={(next) => setSetting(setting, next)}
+                  />
+                );
+              }
               return (
                 <button
                   key={setting.id}
@@ -699,6 +777,7 @@ export function ModelPicker({
               );
             })}
           </Popover>
+          )}
 
           {showSubmenu && submenu.kind === "setting" ? (
             <Popover
@@ -749,6 +828,29 @@ export function ModelPicker({
                 );
               })}
             </Popover>
+          ) : null}
+
+          {direct && button.current ? (
+            <ModelFlyout
+              anchor={button.current}
+              side="top"
+              onDismiss={() => dismiss(false)}
+              autoFocusSearch
+              harnesses={pickerHarnesses}
+              tab={visibleTab}
+              models={visibleModels}
+              currentId={current.id}
+              active={activeModel}
+              query={query}
+              favorites={favorites}
+              searchRef={search}
+              onQuery={setQuery}
+              onSelectTab={selectTab}
+              onActive={setActiveModel}
+              onPick={pickModel}
+              onToggleFavorite={toggleFavorite}
+              onClose={() => dismiss(true)}
+            />
           ) : null}
 
           {showSubmenu && submenu.kind === "models" ? (
@@ -844,6 +946,8 @@ export function ModelPicker({
 
 function ModelFlyout({
   anchor,
+  side = "right",
+  onDismiss,
   autoFocusSearch,
   harnesses,
   tab,
@@ -861,6 +965,10 @@ function ModelFlyout({
   onClose,
 }: {
   anchor: HTMLButtonElement;
+  /** Beside the menu row it opens from, or above the trigger on its own. */
+  side?: "right" | "top";
+  /** Set when the list stands alone and owns outside clicks. */
+  onDismiss?: () => void;
   autoFocusSearch: boolean;
   harnesses: HarnessId[];
   tab: ModelPickerTab;
@@ -922,8 +1030,11 @@ function ModelFlyout({
   return (
     <Popover
       anchor={anchor}
-      side="right"
-      gap={SUBMENU_OVERLAP}
+      side={side}
+      gap={side === "right" ? SUBMENU_OVERLAP : undefined}
+      onDismiss={onDismiss}
+      dismissOnEscape={false}
+      ignore={onDismiss ? SELF : undefined}
       width={MODEL_MENU_WIDTH}
       minHeight={MODEL_MENU_FRAME_HEIGHT}
       maxHeight={MODEL_MENU_FRAME_HEIGHT}
@@ -1127,5 +1238,76 @@ function ProviderTabButton({
     >
       <span className="shrink-0">{children}</span>
     </button>
+  );
+}
+
+/** Effort as a track: every level one click away, no submenu. */
+function EffortSlider({
+  setting,
+  value,
+  highlighted,
+  label,
+  valueLabel,
+  optionLabel,
+  onHover,
+  onPick,
+}: {
+  setting: ModelSetting;
+  value: string;
+  highlighted: boolean;
+  label: string;
+  valueLabel: string;
+  optionLabel: (option: ModelSetting["options"][number]) => string;
+  onHover: () => void;
+  onPick: (value: string) => void;
+}) {
+  const options = sliderOptions(setting);
+  const at = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
+  return (
+    <div
+      data-effort-slider
+      onMouseEnter={onHover}
+      className={`rounded-lg px-2 py-1.5 ${highlighted ? "bg-content/10" : ""}`}
+    >
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="text-content">{label}</span>
+        <span className="text-content/55">{valueLabel}</span>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="relative mt-1.5 flex h-6 items-center rounded-full bg-content/10 p-0.5"
+      >
+        <span
+          aria-hidden="true"
+          className="absolute top-0.5 bottom-0.5 rounded-full bg-content/80 transition-[left] duration-150"
+          style={{
+            left: `calc(${(at / options.length) * 100}% + 2px)`,
+            width: `calc(${100 / options.length}% - 4px)`,
+          }}
+        />
+        {options.map((option, index) => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={index === at}
+            aria-label={optionLabel(option)}
+            title={optionLabel(option)}
+            tabIndex={-1}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onPick(option.value)}
+            className="relative z-[1] grid h-full flex-1 place-items-center"
+          >
+            {index === at ? null : (
+              <span className="size-1 rounded-full bg-content/40" />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

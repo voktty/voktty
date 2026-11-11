@@ -105,7 +105,7 @@ it("opens recent models through its active hotkey without accepting the retired 
   ).not.toBeNull();
 });
 
-it("focuses the model search after its flyout appears", async () => {
+it("opens the model list straight away when the model has nothing to tune", async () => {
   await act(async () => {
     root.render(
       createElement(ModelPicker, {
@@ -124,26 +124,61 @@ it("focuses the model search after its flyout appears", async () => {
   expect(trigger).not.toBeNull();
   await act(async () => trigger?.click());
 
-  const modelRow = document.body.querySelector<HTMLButtonElement>(
-    'button[data-model-control-index="0"]',
-  );
-  expect(modelRow).not.toBeNull();
-  await act(async () => {
-    modelRow?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-  });
-
+  // No intermediate one-row menu: the search is already there.
+  expect(
+    document.body.querySelector('button[data-model-control-index="0"]'),
+  ).toBeNull();
   const search = document.body.querySelector<HTMLInputElement>(
     'input[placeholder="harness.modelPicker.searchModels"]',
   );
   expect(search).not.toBeNull();
-  expect(document.activeElement).not.toBe(search);
-  expect(frames.size).toBe(1);
+  const pending = [...frames.entries()];
   act(() => {
-    const frame = frames.entries().next().value;
-    if (!frame) throw new Error("model search focus frame was not scheduled");
-    const [handle, callback] = frame;
-    frames.delete(handle);
-    callback(0);
+    for (const [handle, callback] of pending) {
+      frames.delete(handle);
+      callback(0);
+    }
   });
   expect(document.activeElement).toBe(search);
+});
+
+it("shows the effort on the trigger and picks it on a track, low to high", async () => {
+  const onSettingsChange = vi.fn();
+  await act(async () => {
+    root.render(
+      createElement(ModelPicker, {
+        harness: "grok",
+        model: "grok:grok-4.6",
+        values: { effort: "low" },
+        onChange: vi.fn(),
+        onSettingsChange,
+      }),
+    );
+  });
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="menu"]',
+  );
+  expect(trigger?.textContent).toContain("Grok 4.6");
+  expect(trigger?.textContent).toContain("harness.modelSettings.low");
+  await act(async () => trigger?.click());
+
+  const stops = [
+    ...document.body.querySelectorAll<HTMLButtonElement>(
+      '[data-effort-slider] [role="radio"]',
+    ),
+  ];
+  // The catalog lists Extra High first; the track always starts low.
+  expect(stops.map((stop) => stop.getAttribute("aria-label"))).toEqual([
+    "harness.modelSettings.low",
+    "harness.modelSettings.medium",
+    "harness.modelSettings.high",
+    "harness.modelSettings.extraHigh",
+  ]);
+  expect(stops[0]?.getAttribute("aria-checked")).toBe("true");
+  await act(async () => stops[2]?.click());
+  expect(onSettingsChange).toHaveBeenCalledWith({ effort: "high" });
+  // The menu stays open: the model row is still one click away.
+  expect(
+    document.body.querySelector('button[data-model-control-index="0"]'),
+  ).not.toBeNull();
 });
