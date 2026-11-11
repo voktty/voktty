@@ -225,7 +225,8 @@ describe("AgentTranscript theme contract", () => {
   ];
 
   it("uses Voktty semantic tokens for transcript surfaces and actions", () => {
-    expect(USER_MESSAGE_SURFACE_CLASS).toContain("--surface-card");
+    expect(USER_MESSAGE_SURFACE_CLASS).toContain("user-message-surface");
+    expect(USER_MESSAGE_SURFACE_CLASS).not.toContain("shadow-");
     expect(COMMAND_SUMMARY_SURFACE_CLASS).toContain("--surface-active-item");
     expect(APPROVAL_ALLOW_CLASS).toContain("bg-primary");
     expect(APPROVAL_DENY_CLASS).toContain("--surface-active-item");

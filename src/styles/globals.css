@@ -1742,6 +1742,24 @@ html.theme-light .explorer-file-drag-preview {
   opacity: 1 !important;
 }
 
+/* The human turn in the Harness transcript. Opaque on purpose: with window
+ * vibrancy the shared card token turns translucent and the prompt blended into
+ * the agent's unboxed reply. A light tint of the theme's action accent marks it
+ * as the user's; the full-width layout adds an accent rail on the left. */
+.user-message-surface {
+  --user-message-accent: var(--user-accent-color, var(--accent-action));
+  background: color-mix(
+    in srgb,
+    var(--user-message-accent) 9%,
+    var(--background-base, var(--background))
+  );
+}
+
+.user-message-surface-rail {
+  border-left: 2px solid
+    color-mix(in srgb, var(--user-message-accent) 80%, transparent);
+}
+
 /* Touch layouts keep actions in flow. Desktop places them in the existing
  * turn gap so revealing the controls never shifts or over-spaces the chat. */
 .user-message-actions {

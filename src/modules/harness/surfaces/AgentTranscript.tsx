@@ -119,8 +119,13 @@ const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 const WHEEL_HOLD_MS = 150;
 
+/**
+ * The human turn reads as its own block: an opaque surface tinted with the
+ * theme's action accent (see `.user-message-surface`), never the translucent
+ * card that blends into the agent's unboxed reply under window vibrancy.
+ */
 export const USER_MESSAGE_SURFACE_CLASS =
-  "relative overflow-hidden min-w-0 border border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 text-card-foreground shadow-lg transition-colors hover:border-input";
+  "user-message-surface relative overflow-hidden min-w-0 border border-[var(--border-subtle)] px-4 text-card-foreground transition-colors hover:border-input";
 export const COMMAND_SUMMARY_SURFACE_CLASS =
   "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-active-item)] px-2 py-0.5 font-mono text-[11.5px]";
 export const APPROVAL_ALLOW_CLASS =
@@ -1300,7 +1305,7 @@ function UserMessageBlock({
           } ${
             chat
               ? `w-fit max-w-[min(100%,36rem)] ${singleLine ? "rounded-full py-2" : "rounded-[14px] py-3"}`
-              : "w-full rounded-[14px] py-3"
+              : "user-message-surface-rail w-full rounded-md py-3"
           }`}
           style={{ zIndex: stickyIndex }}
         >
