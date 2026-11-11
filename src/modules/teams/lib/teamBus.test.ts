@@ -961,4 +961,110 @@ describe("teamBus", () => {
       expect.stringContaining("OpenCode: audit dependencies"),
     );
   });
+
+  // --- S1: Messages without live session remain pending and are delivered when session activates ---
+  it("S1: message to agent without live session remains pending (delivered: false) and is delivered on session resume", async () => {
+    let busJson = JSON.stringify({ version: 1, updatedAt: "", messages: [] });
+    let teamStateJson = JSON.stringify({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        developer: { status: "idle" }, // No sessionId!
+      },
+    });
+
+    vi.mocked(readTextFile).mockImplementation(async (path: string) => {
+      if (path.includes("/team/agents.json")) return dummyRoster;
+      if (path.endsWith("bus.json")) return busJson;
+      if (path.endsWith("agents.json")) return teamStateJson;
+      return "";
+    });
+
+    vi.mocked(writeTextFile).mockImplementation(
+      async (path: string, content: string) => {
+        if (path.endsWith("bus.json")) busJson = content;
+        if (path.endsWith("agents.json")) teamStateJson = content;
+      },
+    );
+
+    // Send task to developer without active session
+    const msg = await sendMessage({
+      projectPath: "/project",
+      from: "orchestrator",
+      to: "developer",
+      kind: "task",
+      text: "Task while offline",
+    });
+
+    // Message is queued as pending, NOT delivered
+    expect(msg.delivered).toBe(false);
+    expect(sendHarnessSessionMessage).not.toHaveBeenCalled();
+
+    // Now developer opens session
+    teamStateJson = JSON.stringify({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        developer: { sessionId: "s_dev_active", status: "idle" },
+      },
+    });
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      id: "s_dev_active",
+      state: "idle",
+      pendingApproval: false,
+    } as any);
+
+    // Deliver pending messages
+    const count = await deliverPendingMessages("/project", "developer");
+    expect(count).toBe(1);
+    expect(sendHarnessSessionMessage).toHaveBeenCalledWith(
+      "s_dev_active",
+      expect.stringContaining("Task while offline"),
+    );
+
+    const updatedBus = JSON.parse(busJson);
+    expect(updatedBus.messages[0].delivered).toBe(true);
+  });
+
+  // --- S3: Verdicts NEVER enter from files; only authenticated channel sets lastVerdict ---
+  it("S3: deliverPendingMessages never reads arbitrary files to set lastVerdict or status", async () => {
+    let busJson = JSON.stringify({ version: 1, updatedAt: "", messages: [] });
+    let teamStateJson = JSON.stringify({
+      $schema: "urn:voktty:team-state:1",
+      version: 1,
+      updatedAt: "",
+      agents: {
+        developer: { sessionId: "s_dev", status: "working" },
+      },
+    });
+
+    vi.mocked(readTextFile).mockImplementation(async (path: string) => {
+      if (path.includes("/team/agents.json")) return dummyRoster;
+      if (path.endsWith("bus.json")) return busJson;
+      if (path.endsWith("agents.json")) return teamStateJson;
+      return "";
+    });
+
+    vi.mocked(writeTextFile).mockImplementation(
+      async (path: string, content: string) => {
+        if (path.endsWith("bus.json")) busJson = content;
+        if (path.endsWith("agents.json")) teamStateJson = content;
+      },
+    );
+
+    vi.mocked(getHarnessSessionSnapshot).mockReturnValue({
+      id: "s_dev",
+      state: "idle",
+      pendingApproval: false,
+    } as any);
+
+    // Call deliverPendingMessages - it must NOT look for files to fabricate a verdict
+    await deliverPendingMessages("/project", "developer");
+
+    const state = JSON.parse(teamStateJson);
+    expect(state.agents.developer.lastVerdict).toBeUndefined();
+    expect(state.agents.developer.status).toBe("working");
+  });
 });

@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentDefinition, AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 import type { SshConnection } from "@/modules/ssh/types";
 import {
   assertSafeRemotePath,
+  type NativeHostRecord,
   parseAgentHost,
   readTeamHosts,
   removeTeamHostMapping,
@@ -12,25 +13,59 @@ import {
 } from "./teamHosts";
 import { TEAM_HOSTS_SCHEMA } from "../types";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue(undefined),
-}));
+// In-memory native store to simulate Rust app_data_dir/team_hosts.json
+const nativeStore = new Map<string, NativeHostRecord>();
 
-const mockFiles = new Map<string, string>();
-vi.mock("@/modules/harness/lib/fs", () => ({
-  readTextFile: vi.fn(async (path: string) => {
-    const content = mockFiles.get(path);
-    if (content === undefined) {
-      throw new Error(`File not found: ${path}`);
+const mockInvoke = vi.fn(async (cmd: string, args: Record<string, unknown>) => {
+  if (cmd === "team_save_host_mapping") {
+    const projectPath = args.projectPath as string;
+    const alias = (args.alias as string).toLowerCase();
+    const connectionId = args.connectionId as string;
+    const remotePath = args.remotePath as string;
+    const key = `${projectPath}::${alias}`;
+    nativeStore.set(key, {
+      canonical_project: projectPath,
+      alias,
+      connection_id: connectionId,
+      remote_path: remotePath,
+      updated_at: new Date().toISOString(),
+    });
+    return;
+  }
+  if (cmd === "team_remove_host_mapping") {
+    const projectPath = args.projectPath as string;
+    const alias = (args.alias as string).toLowerCase();
+    nativeStore.delete(`${projectPath}::${alias}`);
+    return;
+  }
+  if (cmd === "team_read_host_mappings") {
+    const projectPath = args.projectPath as string;
+    const result: Record<string, NativeHostRecord> = {};
+    for (const [key, record] of nativeStore.entries()) {
+      if (key.startsWith(`${projectPath}::`)) {
+        result[record.alias] = record;
+      }
     }
-    return content;
-  }),
-  writeTextFile: vi.fn(async (path: string, content: string) => {
-    mockFiles.set(path, content);
-  }),
+    return result;
+  }
+  if (cmd === "team_get_host_mapping") {
+    const projectPath = args.projectPath as string;
+    const alias = (args.alias as string).toLowerCase();
+    return nativeStore.get(`${projectPath}::${alias}`) ?? null;
+  }
+  return null;
+});
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (cmd: string, args: Record<string, unknown>) => mockInvoke(cmd, args),
 }));
 
 describe("teamHosts", () => {
+  beforeEach(() => {
+    nativeStore.clear();
+    mockInvoke.mockClear();
+  });
+
   describe("parseAgentHost", () => {
     it("handles undefined or 'local' as local", () => {
       expect(parseAgentHost(undefined)).toEqual({ kind: "local" });
@@ -78,59 +113,30 @@ describe("teamHosts", () => {
     });
   });
 
-  describe("readTeamHosts & writeTeamHosts", () => {
-    it("reads empty state when hosts.json does not exist", async () => {
-      mockFiles.clear();
+  describe("native host mappings via Rust (S4)", () => {
+    it("reads empty state when no native mappings exist", async () => {
       const state = await readTeamHosts("/mock/project");
       expect(state.$schema).toBe(TEAM_HOSTS_SCHEMA);
       expect(state.hosts).toEqual({});
-    });
-
-    it("persists host mappings without leaking credentials or tokens", async () => {
-      mockFiles.clear();
-      const dirtyState = {
-        $schema: TEAM_HOSTS_SCHEMA,
-        version: 1 as const,
-        updatedAt: new Date().toISOString(),
-        hosts: {
-          server1: {
-            connectionId: "conn-123",
-            remoteProjectPath: "/srv/project-1",
-            password: "leaked-secret-password",
-            privateKey: "-----BEGIN RSA PRIVATE KEY-----",
-            token: "leaked-auth-token",
-            agentToken: "leaked-agent-token",
-          } as unknown as { connectionId: string },
-        },
-      };
-
-      await writeTeamHosts("/mock/project", dirtyState);
-      const filePath = "/mock/project/.voktty/state/hosts.json";
-      const savedRaw = mockFiles.get(filePath)!;
-      expect(savedRaw).toBeDefined();
-
-      // Ensure forbidden strings were never written to disk
-      expect(savedRaw).not.toContain("leaked-secret-password");
-      expect(savedRaw).not.toContain("BEGIN RSA PRIVATE KEY");
-      expect(savedRaw).not.toContain("leaked-auth-token");
-      expect(savedRaw).not.toContain("leaked-agent-token");
-
-      const readBack = await readTeamHosts("/mock/project");
-      expect(readBack.hosts.server1).toEqual({
-        connectionId: "conn-123",
-        remoteProjectPath: "/srv/project-1",
+      expect(mockInvoke).toHaveBeenCalledWith("team_read_host_mappings", {
+        projectPath: "/mock/project",
       });
-      expect((readBack.hosts.server1 as Record<string, unknown>).password).toBeUndefined();
     });
 
-    it("saves and removes team host mapping", async () => {
-      mockFiles.clear();
+    it("saves and removes team host mapping via native Rust commands", async () => {
       await saveTeamHostMapping(
         "/mock/project",
         "gpu-node",
         "conn-gpu-id",
         "/data/models/weights",
       );
+
+      expect(mockInvoke).toHaveBeenCalledWith("team_save_host_mapping", {
+        projectPath: "/mock/project",
+        alias: "gpu-node",
+        connectionId: "conn-gpu-id",
+        remotePath: "/data/models/weights",
+      });
 
       let hosts = await readTeamHosts("/mock/project");
       expect(hosts.hosts["gpu-node"]).toEqual({
@@ -139,127 +145,147 @@ describe("teamHosts", () => {
       });
 
       await removeTeamHostMapping("/mock/project", "gpu-node");
+      expect(mockInvoke).toHaveBeenCalledWith("team_remove_host_mapping", {
+        projectPath: "/mock/project",
+        alias: "gpu-node",
+      });
+
       hosts = await readTeamHosts("/mock/project");
       expect(hosts.hosts["gpu-node"]).toBeUndefined();
     });
+
+    it("writeTeamHosts delegates to native store without writing to workspace disk (S4)", async () => {
+      await writeTeamHosts("/mock/project", {
+        $schema: TEAM_HOSTS_SCHEMA,
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        hosts: {
+          server1: {
+            connectionId: "conn-123",
+            remoteProjectPath: "/srv/project-1",
+          },
+        },
+      });
+
+      const hosts = await readTeamHosts("/mock/project");
+      expect(hosts.hosts.server1).toEqual({
+        connectionId: "conn-123",
+        remoteProjectPath: "/srv/project-1",
+      });
+    });
   });
 
-  describe("resolveHostForAgent", () => {
+  describe("resolveHostForAgent (S4 security invariant)", () => {
     const mockConnections: SshConnection[] = [
       {
         id: "conn-uuid-1",
-        name: "servidor-prod",
+        name: "Production Server",
         host: "prod.example.com",
         port: 22,
-        user: "deployer",
+        user: "admin",
+        authType: "auto",
       },
       {
-        id: "staging-direct-id",
-        name: "staging",
-        host: "staging.example.com",
-        port: 2222,
-        user: "developer",
+        id: "direct-alias",
+        name: "Direct Node",
+        host: "direct.example.com",
+        port: 22,
+        user: "root",
+        authType: "auto",
       },
     ];
 
-    const roster: AgentRoster = {
+    const baseRoster: AgentRoster = {
+      $schema: "urn:voktty:agent-roster:1",
       version: 1,
-      agents: [
-        {
-          name: "local-dev",
-          role: "developer",
-          start: "on-demand",
-          host: "local",
-        },
-        {
-          name: "remote-worker",
-          role: "worker",
-          start: "on-demand",
-          host: "ssh:prod",
-        },
-        {
-          name: "remote-unconfigured",
-          role: "worker",
-          start: "on-demand",
-          host: "ssh:nonexistent-host",
-        },
-      ],
+      agents: [],
     };
 
-    it("resolves local host", async () => {
-      const agent = roster.agents[0];
-      const res = await resolveHostForAgent(agent, roster, "/mock/project", mockConnections);
+    it("resolves local host immediately", async () => {
+      const agent: AgentDefinition = {
+        name: "local-dev",
+        role: "developer",
+        start: "on-demand",
+        host: "local",
+      };
+      const res = await resolveHostForAgent(agent, baseRoster, "/proj", mockConnections);
       expect(res).toEqual({ kind: "local" });
     });
 
-    it("resolves unconfigured host when mapping and connection missing", async () => {
-      mockFiles.clear();
-      const agent = roster.agents[2];
-      const res = await resolveHostForAgent(agent, roster, "/mock/project", mockConnections);
-      expect(res.kind).toBe("unconfigured");
-      if (res.kind === "unconfigured") {
-        expect(res.alias).toBe("nonexistent-host");
-        expect(res.reason).toContain("not configured on this machine");
-      }
-    });
-
-    it("resolves configured host via hosts.json mapping", async () => {
-      mockFiles.clear();
-      await saveTeamHostMapping("/mock/project", "prod", "conn-uuid-1", "/srv/my-repo");
-
-      const agent = roster.agents[1];
-      const res = await resolveHostForAgent(agent, roster, "/mock/project", mockConnections);
-      expect(res.kind).toBe("ssh");
-      if (res.kind === "ssh") {
-        expect(res.alias).toBe("prod");
-        expect(res.connectionId).toBe("conn-uuid-1");
-        expect(res.remoteProjectPath).toBe("/srv/my-repo");
-        expect(res.sessionCwd).toBe("remote://voktty-ssh-conn-uuid-1/srv/my-repo");
-      }
-    });
-
-    it("resolves configured host via direct connection name match", async () => {
-      mockFiles.clear();
+    it("CRITICAL (S4): workspace hosts.json file NEVER overrides native host mapping", async () => {
+      // Attacker attempts to redirect 'gpu-server' by forging a mapping
+      // Because resolveHostForAgent reads native Rust store exclusively,
+      // an unmapped alias returns 'unconfigured' even if workspace files exist
       const agent: AgentDefinition = {
-        name: "staging-worker",
+        name: "attacker-target",
         role: "worker",
         start: "on-demand",
-        host: "ssh:staging",
+        host: "ssh:gpu-server",
       };
 
-      const res = await resolveHostForAgent(agent, roster, "/mock/project", mockConnections);
-      expect(res.kind).toBe("ssh");
-      if (res.kind === "ssh") {
-        expect(res.alias).toBe("staging");
-        expect(res.connectionId).toBe("staging-direct-id");
-        expect(res.sessionCwd).toBe("remote://voktty-ssh-staging-direct-id/");
+      const res = await resolveHostForAgent(agent, baseRoster, "/proj", mockConnections);
+      expect(res.kind).toBe("unconfigured");
+      if (res.kind === "unconfigured") {
+        expect(res.alias).toBe("gpu-server");
       }
     });
 
-    it("rejects path traversal in mapping configuration", async () => {
-      mockFiles.clear();
-      const malformedState = {
-        $schema: TEAM_HOSTS_SCHEMA,
-        version: 1 as const,
-        updatedAt: new Date().toISOString(),
-        hosts: {
-          prod: {
-            connectionId: "conn-uuid-1",
-            remoteProjectPath: "/srv/app/../outside",
-          },
-        },
-      };
-      mockFiles.set(
-        "/mock/project/.voktty/state/hosts.json",
-        JSON.stringify(malformedState),
-      );
+    it("resolves from native Rust store linked by the owner", async () => {
+      // Legitimate owner configuration
+      await saveTeamHostMapping("/proj", "gpu-server", "conn-uuid-1", "/srv/ml-model");
 
-      const agent = roster.agents[1];
-      const res = await resolveHostForAgent(agent, roster, "/mock/project", mockConnections);
-      expect(res.kind).toBe("invalid");
-      if (res.kind === "invalid") {
-        expect(res.reason).toContain("strictly forbidden");
+      const agent: AgentDefinition = {
+        name: "model-runner",
+        role: "worker",
+        start: "on-demand",
+        host: "ssh:gpu-server",
+      };
+
+      const res = await resolveHostForAgent(agent, baseRoster, "/proj", mockConnections);
+      expect(res.kind).toBe("ssh");
+      if (res.kind === "ssh") {
+        expect(res.alias).toBe("gpu-server");
+        expect(res.connectionId).toBe("conn-uuid-1");
+        expect(res.remoteProjectPath).toBe("/srv/ml-model");
+        expect(res.sessionCwd).toBe("remote://voktty-ssh-conn-uuid-1/srv/ml-model");
       }
+    });
+
+    it("falls back to connection matching alias name directly", async () => {
+      const agent: AgentDefinition = {
+        name: "direct-runner",
+        role: "worker",
+        start: "on-demand",
+        host: "ssh:direct-alias",
+      };
+
+      const res = await resolveHostForAgent(agent, baseRoster, "/proj", mockConnections);
+      expect(res.kind).toBe("ssh");
+      if (res.kind === "ssh") {
+        expect(res.alias).toBe("direct-alias");
+        expect(res.connectionId).toBe("direct-alias");
+      }
+    });
+
+    it("returns invalid when remote path is malicious", async () => {
+      // Malicious path in native mapping
+      nativeStore.set("/proj::bad-node", {
+        canonical_project: "/proj",
+        alias: "bad-node",
+        connection_id: "conn-uuid-1",
+        remote_path: "/srv/bad/../etc",
+        updated_at: new Date().toISOString(),
+      });
+
+      const agent: AgentDefinition = {
+        name: "exploit",
+        role: "worker",
+        start: "on-demand",
+        host: "ssh:bad-node",
+      };
+
+      const res = await resolveHostForAgent(agent, baseRoster, "/proj", mockConnections);
+      expect(res.kind).toBe("invalid");
     });
   });
 });

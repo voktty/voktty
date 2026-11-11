@@ -38,6 +38,7 @@ export type TeamAgentCopyState = {
   worktree: string;
   supervised: boolean;
   host?: string;
+  lastError?: string;
 };
 
 export type TeamAgentState = {
@@ -51,6 +52,7 @@ export type TeamAgentState = {
   worktree?: string | null;
   supervised?: boolean;
   host?: string;
+  lastError?: string;
   copies?: Record<string, TeamAgentCopyState>;
 };
 

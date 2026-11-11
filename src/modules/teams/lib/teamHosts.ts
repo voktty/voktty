@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { readTextFile, writeTextFile } from "@/modules/harness/lib/fs";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { SshConnection } from "@/modules/ssh/types";
 import type { AgentDefinition, AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
@@ -8,7 +7,7 @@ import {
   type TeamHostConfig,
   type TeamHostsState,
 } from "../types";
-import { normalizePath, teamPath } from "./teamFs";
+import { normalizePath } from "./teamFs";
 
 export type ResolvedHost =
   | { kind: "local" }
@@ -30,6 +29,14 @@ export type ResolvedHost =
       alias?: string;
       reason: string;
     };
+
+export type NativeHostRecord = {
+  canonical_project: string;
+  alias: string;
+  connection_id: string;
+  remote_path: string;
+  updated_at: string;
+};
 
 export function parseAgentHost(
   hostValue: string | undefined,
@@ -59,14 +66,16 @@ export function parseAgentHost(
     alias === "." ||
     alias === ".." ||
     alias.includes("..") ||
+    alias.includes("/") ||
+    alias.includes("\\") ||
     !/^[a-zA-Z0-9_.-]+$/.test(alias)
   ) {
     return {
       kind: "invalid",
-      reason: `Invalid SSH host alias '${alias}' (allowed characters: letters, numbers, dot, dash, underscore, no '..')`,
+      reason: `Invalid SSH host alias '${alias}' (allowed characters: letters, numbers, dot, dash, underscore, no '..', no separators)`,
     };
   }
-  return { kind: "ssh", alias };
+  return { kind: "ssh", alias: alias.toLowerCase() };
 }
 
 export function assertSafeRemotePath(remotePath: string): void {
@@ -84,99 +93,53 @@ export function assertSafeRemotePath(remotePath: string): void {
   }
 
   // Check for path traversal components
-  const segments = remotePath.split("/");
-  for (const seg of segments) {
-    if (seg === "..") {
-      throw new Error("Path traversal '..' is strictly forbidden in remote project path");
-    }
+  const segments = remotePath.split("/").filter((s) => s.length > 0);
+  if (segments.includes("..") || segments.includes(".")) {
+    throw new Error("Path traversal ('..' or '.') is strictly forbidden in remote project path");
   }
 }
 
+/**
+ * Reads team host mappings from native app state via Rust (S4).
+ * Never reads from .voktty/state/hosts.json in the project workspace.
+ */
 export async function readTeamHosts(projectPath: string): Promise<TeamHostsState> {
-  const filePath = teamPath(projectPath, ".voktty", "state", "hosts.json");
   try {
-    const content = await readTextFile(filePath);
-    const parsed = JSON.parse(content) as Partial<TeamHostsState>;
-    if (parsed && typeof parsed === "object" && parsed.hosts && typeof parsed.hosts === "object") {
-      const sanitizedHosts: Record<string, TeamHostConfig> = {};
-      for (const [alias, config] of Object.entries(parsed.hosts)) {
-        if (config && typeof config === "object" && typeof config.connectionId === "string") {
-          sanitizedHosts[alias] = {
-            connectionId: config.connectionId,
-            ...(typeof config.remoteProjectPath === "string"
-              ? { remoteProjectPath: config.remoteProjectPath }
-              : {}),
+    const raw = await invoke<Record<string, NativeHostRecord>>(
+      "team_read_host_mappings",
+      { projectPath },
+    );
+    const hosts: Record<string, TeamHostConfig> = {};
+    if (raw && typeof raw === "object") {
+      for (const [alias, rec] of Object.entries(raw)) {
+        if (rec && typeof rec.connection_id === "string") {
+          hosts[alias] = {
+            connectionId: rec.connection_id,
+            ...(rec.remote_path ? { remoteProjectPath: rec.remote_path } : {}),
           };
         }
       }
-      return {
-        $schema: TEAM_HOSTS_SCHEMA,
-        version: 1,
-        updatedAt: parsed.updatedAt || new Date().toISOString(),
-        hosts: sanitizedHosts,
-      };
     }
-  } catch {
-    // If not exists or parse error, return fresh state
-  }
-
-  return {
-    $schema: TEAM_HOSTS_SCHEMA,
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    hosts: {},
-  };
-}
-
-export async function writeTeamHosts(
-  projectPath: string,
-  state: TeamHostsState,
-): Promise<void> {
-  const stateDir = teamPath(projectPath, ".voktty", "state");
-  const filePath = teamPath(stateDir, "hosts.json");
-
-  try {
-    await invoke("fs_create_dir", { path: stateDir });
-  } catch {
-    // Directory may already exist
-  }
-
-  // Security invariant: sanitize all host mappings and strictly strip credentials/keys/tokens
-  const cleanHosts: Record<string, TeamHostConfig> = {};
-  for (const [alias, config] of Object.entries(state.hosts)) {
-    if (!config || typeof config !== "object" || !config.connectionId) {
-      continue;
-    }
-    const cleanConfig: TeamHostConfig = {
-      connectionId: String(config.connectionId),
+    return {
+      $schema: TEAM_HOSTS_SCHEMA,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      hosts,
     };
-    if (config.remoteProjectPath && typeof config.remoteProjectPath === "string") {
-      assertSafeRemotePath(config.remoteProjectPath);
-      cleanConfig.remoteProjectPath = normalizePath(config.remoteProjectPath);
-    }
-    // Delete any potential leaked keys or credentials
-    const dirty = cleanConfig as Record<string, unknown>;
-    delete dirty.password;
-    delete dirty.key;
-    delete dirty.privateKey;
-    delete dirty.token;
-    delete dirty.agentToken;
-    delete dirty.secret;
-    delete dirty.credential;
-
-    cleanHosts[alias] = cleanConfig;
+  } catch {
+    return {
+      $schema: TEAM_HOSTS_SCHEMA,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      hosts: {},
+    };
   }
-
-  const payload: TeamHostsState = {
-    $schema: TEAM_HOSTS_SCHEMA,
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    hosts: cleanHosts,
-  };
-
-  await writeTextFile(filePath, JSON.stringify(payload, null, 2));
 }
 
+/**
+ * Saves a host mapping exclusively to native app state via Rust (S4).
+ * Only the project owner from the UI can write this.
+ */
 export async function saveTeamHostMapping(
   projectPath: string,
   hostAlias: string,
@@ -187,21 +150,25 @@ export async function saveTeamHostMapping(
   if (parsed.kind !== "ssh") {
     throw new Error(parsed.kind === "invalid" ? parsed.reason : "Invalid host alias");
   }
-  if (!connectionId || typeof connectionId !== "string") {
+  if (!connectionId || typeof connectionId !== "string" || !connectionId.trim()) {
     throw new Error("connectionId is required to map team host");
   }
-  if (remoteProjectPath) {
-    assertSafeRemotePath(remoteProjectPath);
-  }
+  const cleanRemotePath = remoteProjectPath && remoteProjectPath.trim()
+    ? normalizePath(remoteProjectPath.trim())
+    : "/";
+  assertSafeRemotePath(cleanRemotePath);
 
-  const current = await readTeamHosts(projectPath);
-  current.hosts[parsed.alias] = {
-    connectionId,
-    ...(remoteProjectPath ? { remoteProjectPath: normalizePath(remoteProjectPath) } : {}),
-  };
-  await writeTeamHosts(projectPath, current);
+  await invoke("team_save_host_mapping", {
+    projectPath,
+    alias: parsed.alias,
+    connectionId: connectionId.trim(),
+    remotePath: cleanRemotePath,
+  });
 }
 
+/**
+ * Removes a host mapping from native app state via Rust (S4).
+ */
 export async function removeTeamHostMapping(
   projectPath: string,
   hostAlias: string,
@@ -210,11 +177,39 @@ export async function removeTeamHostMapping(
   if (parsed.kind !== "ssh") {
     throw new Error(parsed.kind === "invalid" ? parsed.reason : "Invalid host alias");
   }
-  const current = await readTeamHosts(projectPath);
-  delete current.hosts[parsed.alias];
-  await writeTeamHosts(projectPath, current);
+  await invoke("team_remove_host_mapping", {
+    projectPath,
+    alias: parsed.alias,
+  });
 }
 
+/**
+ * Compatibility helper: saves mappings into native store.
+ * Never writes to project workspace files.
+ */
+export async function writeTeamHosts(
+  projectPath: string,
+  state: TeamHostsState,
+): Promise<void> {
+  for (const [alias, config] of Object.entries(state.hosts)) {
+    if (config?.connectionId) {
+      await saveTeamHostMapping(
+        projectPath,
+        alias,
+        config.connectionId,
+        config.remoteProjectPath,
+      );
+    }
+  }
+}
+
+/**
+ * Resolves host configuration for an agent.
+ *
+ * CRITICAL SECURITY INVARIANT (S4):
+ * Resolution is backed by Rust native storage outside the workspace.
+ * Any hosts.json created by agents in .voktty/state/ is completely ignored.
+ */
 export async function resolveHostForAgent(
   agent: AgentDefinition,
   roster: AgentRoster,
@@ -256,7 +251,7 @@ export async function resolveHostForAgent(
       remotePath = mapping.remoteProjectPath;
     }
   } else {
-    // If no explicit mapping in hosts.json, check if an existing connection directly matches the alias
+    // If no explicit mapping in native store, check if an existing connection directly matches the alias
     connection = connections.find(
       (c) => c.id === alias || c.name === alias,
     );

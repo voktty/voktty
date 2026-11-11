@@ -1083,5 +1083,58 @@ describe("agentLauncher", () => {
       expect(res.error).toBe("invalid_params");
       expect(res.reason).toContain("copies with worktrees are not supported on remote SSH hosts");
     });
+
+    it("I2: records mailbox failure in agent state when initial task delivery fails", async () => {
+      const roster: AgentRoster = {
+        version: 1,
+        agents: [
+          {
+            name: "remote-worker",
+            role: "roles/dev.md",
+            start: "on-demand",
+            host: "ssh:prod",
+            runtime: { adapter: "claude-code" },
+          },
+        ],
+      };
+      vi.spyOn(teamFs, "readRoster").mockResolvedValue({ roster });
+      const writtenStates: TeamState[] = [];
+      vi.spyOn(teamFs, "writeTeamState").mockImplementation(async (_, s) => {
+        writtenStates.push(JSON.parse(JSON.stringify(s)));
+      });
+
+      // Mock remoteMailbox.writeRemoteMailboxMessage to throw
+      const remoteMailboxMod = await import("./remoteMailbox");
+      vi.spyOn(remoteMailboxMod, "writeRemoteMailboxMessage").mockRejectedValueOnce(
+        new Error("SSH connection timeout"),
+      );
+
+      const mockSshConn = {
+        id: "conn-prod-99",
+        name: "prod",
+        host: "prod.example.com",
+        port: 22,
+        user: "ubuntu",
+      };
+
+      const res = await openAgent(
+        {
+          projectPath: "/repo",
+          agentName: "remote-worker",
+          task: "Deploy to staging",
+        },
+        {
+          ...mockDeps,
+          sshConnections: [mockSshConn],
+        },
+      );
+
+      expect(res.ok).toBe(true);
+      const lastState = writtenStates[writtenStates.length - 1];
+      expect(lastState.agents["remote-worker"].lastError).toBeDefined();
+      expect(lastState.agents["remote-worker"].lastError).toContain(
+        "Failed to write initial task to remote mailbox: SSH connection timeout",
+      );
+    });
   });
 });

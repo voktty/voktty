@@ -1,27 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
-import type { TeamBusMessage } from "../types";
 import {
   assertSafeAgentName,
-  readLatestRemoteMailboxVerdict,
-  readRemoteMailboxVerdicts,
+  generateMailboxFileName,
+  MAX_MAILBOX_FILE_BYTES,
+  MAX_MAILBOX_READ_FILES,
+  readRemoteInboxMessages,
   remoteInboxDir,
   remoteMailboxDir,
-  remoteOutboxDir,
   writeRemoteMailboxMessage,
 } from "./remoteMailbox";
 
 describe("remoteMailbox", () => {
   describe("path validation and construction", () => {
-    it("constructs mailbox directories correctly", () => {
+    it("constructs mailbox directories correctly without outbox (S2)", () => {
       const remoteCwd = "remote://voktty-ssh-conn/srv/project";
       expect(remoteMailboxDir(remoteCwd, "worker")).toBe(
         "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker",
       );
       expect(remoteInboxDir(remoteCwd, "worker")).toBe(
         "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker/inbox",
-      );
-      expect(remoteOutboxDir(remoteCwd, "worker")).toBe(
-        "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker/outbox",
       );
     });
 
@@ -34,27 +31,30 @@ describe("remoteMailbox", () => {
     });
   });
 
-  describe("writeRemoteMailboxMessage", () => {
-    it("writes inbox message file and never leaks agent token", async () => {
+  describe("writeRemoteMailboxMessage (S2 & kit format)", () => {
+    it("generates filename matching kit pattern <UTC>-<sender>-<suffix>.json", () => {
+      const date = new Date("2026-11-11T14:30:00.000Z");
+      const filename = generateMailboxFileName("orchestrator", date);
+      expect(filename).toMatch(/^2026-11-11T14-30-00-000Z-orchestrator-[a-z0-9]+\.json$/);
+    });
+
+    it("writes inbox message with exact MESSAGING.md fields and never leaks agent token", async () => {
       const writtenFiles = new Map<string, string>();
       const mockWrite = vi.fn(async (path: string, content: string) => {
         writtenFiles.set(path, content);
       });
 
-      const message: TeamBusMessage & { token?: string; agentToken?: string } = {
-        id: "msg_12345",
-        projectPath: "remote://voktty-ssh-conn/srv/project",
+      const message = {
         from: "orchestrator",
         to: "worker",
-        kind: "task",
+        kind: "task" as const,
         text: "Run test suite",
-        timestamp: "2026-11-11T12:00:00.000Z",
-        hop: 0,
-        delivered: true,
-        read: false,
+        sentAt: "2026-11-11T12:00:00.000Z",
         // Injected dirty secrets that must never reach disk
         token: "SUPER_SECRET_TOKEN",
         agentToken: "AGENT_BEARER_TOKEN",
+        hop: 1,
+        id: "msg_internal_id",
       };
 
       const path = await writeRemoteMailboxMessage(
@@ -64,14 +64,25 @@ describe("remoteMailbox", () => {
         { writeTextFile: mockWrite },
       );
 
-      expect(path).toBe(
-        "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker/inbox/msg_12345.json",
-      );
+      expect(path).toContain(".voktty/mailbox/worker/inbox/");
+      expect(path).toMatch(/2026-11-11T12-00-00-000Z-orchestrator-[a-z0-9]+\.json$/);
 
       const content = writtenFiles.get(path)!;
       expect(content).toBeDefined();
-      expect(content).toContain('"text": "Run test suite"');
-      expect(content).toContain('"from": "orchestrator"');
+      const parsed = JSON.parse(content);
+
+      // Exactly the fields from MESSAGING.md
+      expect(parsed).toEqual({
+        from: "orchestrator",
+        to: "worker",
+        kind: "task",
+        text: "Run test suite",
+        sentAt: "2026-11-11T12:00:00.000Z",
+      });
+
+      // S2: No id, no hop, no outbox
+      expect(parsed.id).toBeUndefined();
+      expect(parsed.hop).toBeUndefined();
 
       // Security invariant: token must never appear in remote inbox file
       expect(content).not.toContain("SUPER_SECRET_TOKEN");
@@ -81,135 +92,124 @@ describe("remoteMailbox", () => {
     });
   });
 
-  describe("readRemoteMailboxVerdicts", () => {
-    it("reads and sorts verdicts from outbox newest first", async () => {
-      const mockEntries = [
-        {
-          name: "old_verdict.json",
-          path: "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker/outbox/old_verdict.json",
-          isDir: false,
-          ignored: false,
-        },
-        {
-          name: "new_verdict.json",
-          path: "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker/outbox/new_verdict.json",
-          isDir: false,
-          ignored: false,
-        },
-        {
-          name: "ignored_folder",
-          path: "remote://voktty-ssh-conn/srv/project/.voktty/mailbox/worker/outbox/ignored_folder",
-          isDir: true,
-          ignored: false,
-        },
-      ];
+  describe("readRemoteInboxMessages (I1 limits)", () => {
+    it("respects MAX_MAILBOX_READ_FILES limit (I1)", async () => {
+      const mockEntries = Array.from({ length: 80 }, (_, i) => ({
+        name: `msg_${String(i).padStart(3, "0")}.json`,
+        path: `remote://conn/srv/.voktty/mailbox/worker/inbox/msg_${String(i).padStart(3, "0")}.json`,
+        isDir: false,
+        ignored: false,
+      }));
 
-      const files = new Map<string, string>([
-        [
-          mockEntries[0].path,
+      const files = new Map<string, string>();
+      for (const entry of mockEntries) {
+        files.set(
+          entry.path,
           JSON.stringify({
-            text: "Initial tests failed",
-            timestamp: "2026-11-11T10:00:00.000Z",
-            messageId: "msg_1",
+            from: "peer",
+            to: "worker",
+            kind: "task",
+            text: `Task ${entry.name}`,
+            sentAt: "2026-11-11T10:00:00.000Z",
           }),
-        ],
-        [
-          mockEntries[1].path,
-          JSON.stringify({
-            text: "All tests green",
-            timestamp: "2026-11-11T11:00:00.000Z",
-            messageId: "msg_2",
-          }),
-        ],
-      ]);
+        );
+      }
 
       const mockListDir = vi.fn(async () => mockEntries);
-      const mockReadTextFile = vi.fn(async (path: string) => {
-        const c = files.get(path);
-        if (!c) throw new Error("File not found");
-        return c;
+      const mockReadTextFile = vi.fn(async (path: string) => files.get(path) || "");
+
+      const messages = await readRemoteInboxMessages("remote://conn/srv", "worker", {
+        listDir: mockListDir,
+        readTextFile: mockReadTextFile,
       });
 
-      const verdicts = await readRemoteMailboxVerdicts(
-        "remote://voktty-ssh-conn/srv/project",
-        "worker",
-        { listDir: mockListDir, readTextFile: mockReadTextFile },
-      );
-
-      expect(verdicts).toHaveLength(2);
-      expect(verdicts[0].text).toBe("All tests green");
-      expect(verdicts[1].text).toBe("Initial tests failed");
-
-      const latest = await readLatestRemoteMailboxVerdict(
-        "remote://voktty-ssh-conn/srv/project",
-        "worker",
-        { listDir: mockListDir, readTextFile: mockReadTextFile },
-      );
-      expect(latest?.text).toBe("All tests green");
-      expect(latest?.messageId).toBe("msg_2");
+      // Clamped to MAX_MAILBOX_READ_FILES (50)
+      expect(messages.length).toBe(MAX_MAILBOX_READ_FILES);
+      expect(mockReadTextFile).toHaveBeenCalledTimes(MAX_MAILBOX_READ_FILES);
     });
 
-    it("returns empty array if outbox directory does not exist yet", async () => {
-      const mockListDir = vi.fn(async () => {
-        throw new Error("Directory does not exist");
+    it("skips files exceeding MAX_MAILBOX_FILE_BYTES (I1)", async () => {
+      const normalEntry = {
+        name: "normal.json",
+        path: "remote://conn/srv/.voktty/mailbox/worker/inbox/normal.json",
+        isDir: false,
+        ignored: false,
+      };
+      const oversizedEntry = {
+        name: "huge.json",
+        path: "remote://conn/srv/.voktty/mailbox/worker/inbox/huge.json",
+        isDir: false,
+        ignored: false,
+      };
+
+      const oversizedContent = "x".repeat(MAX_MAILBOX_FILE_BYTES + 1024);
+      const normalContent = JSON.stringify({
+        from: "peer",
+        to: "worker",
+        kind: "status",
+        text: "normal payload",
+        sentAt: "2026-11-11T11:00:00.000Z",
       });
-      const verdicts = await readRemoteMailboxVerdicts(
-        "remote://voktty-ssh-conn/srv/project",
-        "worker",
-        { listDir: mockListDir },
-      );
-      expect(verdicts).toEqual([]);
+
+      const files = new Map([
+        [normalEntry.path, normalContent],
+        [oversizedEntry.path, oversizedContent],
+      ]);
+
+      const mockListDir = vi.fn(async () => [oversizedEntry, normalEntry]);
+      const mockReadTextFile = vi.fn(async (path: string) => files.get(path) || "");
+
+      const messages = await readRemoteInboxMessages("remote://conn/srv", "worker", {
+        listDir: mockListDir,
+        readTextFile: mockReadTextFile,
+      });
+
+      expect(messages.length).toBe(1);
+      expect(messages[0].text).toBe("normal payload");
     });
   });
 
-  describe("resilience against SSH drops and reconnect", () => {
-    it("handles temporary transport disconnect and recovers upon reconnect", async () => {
-      let isConnected = false;
-      const written = new Map<string, string>();
+  describe("transport resilience (SSH disconnect & retry)", () => {
+    it("handles temporary network drop and succeeds upon reconnect", async () => {
+      const writtenFiles = new Map<string, string>();
+      let attempts = 0;
 
-      const flakeyWriter = async (path: string, content: string) => {
-        if (!isConnected) {
-          throw new Error("SSH connection lost: broken pipe");
+      const flakyWriter = vi.fn(async (path: string, content: string) => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error("SSH transport error: Connection reset by peer");
         }
-        written.set(path, content);
-      };
+        writtenFiles.set(path, content);
+      });
 
-      const message: TeamBusMessage = {
-        id: "msg_resilience_1",
-        projectPath: "remote://voktty-ssh-conn/srv/project",
+      const message = {
         from: "orchestrator",
         to: "worker",
-        kind: "task",
-        text: "Resume build",
-        timestamp: new Date().toISOString(),
-        hop: 0,
-        delivered: false,
-        read: false,
+        kind: "decision" as const,
+        text: "Retry deployment",
+        sentAt: "2026-11-11T12:00:00.000Z",
       };
 
-      // 1. Initial attempt fails while SSH is down
+      // 1. Initial attempt fails due to network drop
       await expect(
         writeRemoteMailboxMessage(
           "remote://voktty-ssh-conn/srv/project",
           "worker",
           message,
-          { writeTextFile: flakeyWriter },
+          { writeTextFile: flakyWriter },
         ),
-      ).rejects.toThrow("SSH connection lost");
+      ).rejects.toThrow("Connection reset by peer");
 
-      // 2. SSH reconnects (helper re-attaches)
-      isConnected = true;
-
-      // 3. Retry succeeds and writes cleanly
-      const savedPath = await writeRemoteMailboxMessage(
+      // 2. Reconnect & retry succeeds cleanly
+      const path = await writeRemoteMailboxMessage(
         "remote://voktty-ssh-conn/srv/project",
         "worker",
         message,
-        { writeTextFile: flakeyWriter },
+        { writeTextFile: flakyWriter },
       );
 
-      expect(savedPath).toContain("msg_resilience_1.json");
-      expect(written.get(savedPath)).toContain('"text": "Resume build"');
+      expect(writtenFiles.has(path)).toBe(true);
+      expect(writtenFiles.get(path)).toContain("Retry deployment");
     });
   });
 });

@@ -381,7 +381,7 @@ export async function openAgent(
   params: OpenAgentParams,
   deps: LauncherDependencies,
 ): Promise<OpenAgentResult> {
-  return runProjectExclusive(params.projectPath, async () => {
+  const result = await runProjectExclusive<OpenAgentResult>(params.projectPath, async () => {
     if (typeof deps.onNewHarnessTab !== "function") {
       return {
         ok: false,
@@ -713,19 +713,20 @@ export async function openAgent(
       if (isRemote && params.task) {
         try {
           await writeRemoteMailboxMessage(sessionCwd, effectiveAgentName, {
-            id: `msg_task_${Date.now()}`,
-            projectPath: params.projectPath,
             from: "owner",
             to: effectiveAgentName,
             kind: "task",
             text: params.task,
-            timestamp: now,
-            hop: 0,
-            delivered: true,
-            read: false,
+            sentAt: now,
           });
-        } catch {
-          // Mailbox write non-blocking
+        } catch (err: unknown) {
+          // I2: Record failure in agent state so the owner sees it
+          const errMsg = `Failed to write initial task to remote mailbox: ${err instanceof Error ? err.message : String(err)}`;
+          state.agents[effectiveAgentName] = {
+            ...state.agents[effectiveAgentName],
+            lastError: errMsg,
+          };
+          await writeTeamState(params.projectPath, state);
         }
       }
 
@@ -868,19 +869,20 @@ export async function openAgent(
     if (isRemote && params.task) {
       try {
         await writeRemoteMailboxMessage(sessionCwd, effectiveAgentName, {
-          id: `msg_task_${Date.now()}`,
-          projectPath: params.projectPath,
           from: "owner",
           to: effectiveAgentName,
           kind: "task",
           text: params.task,
-          timestamp: now,
-          hop: 0,
-          delivered: true,
-          read: false,
+          sentAt: now,
         });
-      } catch {
-        // Mailbox write non-blocking
+      } catch (err: unknown) {
+        // I2: Record failure in agent state so the owner sees it
+        const errMsg = `Failed to write initial task to remote mailbox: ${err instanceof Error ? err.message : String(err)}`;
+        state.agents[effectiveAgentName] = {
+          ...state.agents[effectiveAgentName],
+          lastError: errMsg,
+        };
+        await writeTeamState(params.projectPath, state);
       }
     }
 
@@ -922,4 +924,16 @@ export async function openAgent(
       ...(effortResolution.warning ? { warning: effortResolution.warning } : {}),
     };
   });
+
+  // S1: Deliver any pending messages queued for this agent once session is active
+  if (result.ok && (!result.supervised || result.mode === "resume")) {
+    try {
+      const { deliverPendingMessages } = await import("./teamBus");
+      await deliverPendingMessages(params.projectPath, result.agent);
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  return result;
 }

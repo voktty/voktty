@@ -6804,6 +6804,7 @@ export const en = {
     invalidRoster: "Team roster configuration error",
     taskLabel: "Current task",
     lastVerdictLabel: "Last verdict",
+    errorLabel: "Error",
     noTaskAssigned: "No task assigned",
     refresh: "Refresh",
     addAgent: "Add agent",

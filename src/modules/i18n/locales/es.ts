@@ -6941,6 +6941,7 @@ export const es: TranslationSchema = {
     invalidRoster: "Error de configuración en el roster del equipo",
     taskLabel: "Tarea actual",
     lastVerdictLabel: "Último veredicto",
+    errorLabel: "Error",
     noTaskAssigned: "Sin tarea asignada",
     refresh: "Actualizar",
     addAgent: "Añadir agente",

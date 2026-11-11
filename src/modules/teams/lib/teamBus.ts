@@ -7,10 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { AgentDefinition } from "@/modules/workspace-kit/lib/configTypes";
 import type { TeamBusMessage, TeamBusState, TeamMessageKind } from "../types";
 import { isOrchestratorRole } from "./rosterValidation";
-import {
-  readLatestRemoteMailboxVerdict,
-  writeRemoteMailboxMessage,
-} from "./remoteMailbox";
+import { writeRemoteMailboxMessage } from "./remoteMailbox";
 import {
   readRoster,
   readTeamState,
@@ -342,10 +339,15 @@ export async function sendMessage(
       try {
         const resolved = await resolveHostForAgent(targetDef, roster, projectPath);
         if (resolved.kind === "ssh") {
-          await writeRemoteMailboxMessage(resolved.sessionCwd, to, message);
-          if (!targetSessionId) {
-            delivered = true;
-          }
+          // S2: Mailbox copy in exact MESSAGING.md format.
+          // S1: Mailbox write is NEVER proof of delivery; delivery is strictly live session.
+          await writeRemoteMailboxMessage(resolved.sessionCwd, to, {
+            from: message.from,
+            to: message.to,
+            kind: message.kind,
+            text: message.text,
+            sentAt: message.timestamp,
+          });
         }
       } catch {
         // Mailbox deposit best-effort
@@ -392,41 +394,6 @@ export async function deliverPendingMessages(
     const busState = await readBus(projectPath);
     const teamState = await readTeamState(projectPath);
     const sessionId = teamState.agents[agentName]?.sessionId;
-
-    const { roster } = await readRoster(projectPath);
-    const agentDef = roster?.agents ? findRosterAgent(roster.agents, agentName) : undefined;
-    const agentHost = teamState.agents[agentName]?.host ?? agentDef?.host ?? roster?.defaults?.host;
-
-    if (agentHost && agentHost.startsWith("ssh:") && agentDef && roster) {
-      try {
-        const resolved = await resolveHostForAgent(agentDef, roster, projectPath);
-        if (resolved.kind === "ssh") {
-          const remoteVerdict = await readLatestRemoteMailboxVerdict(
-            resolved.sessionCwd,
-            agentName,
-          );
-          if (remoteVerdict) {
-            const current = teamState.agents[agentName] ?? { status: "idle" };
-            if (
-              !current.lastVerdict ||
-              current.lastVerdict.timestamp !== remoteVerdict.timestamp ||
-              current.lastVerdict.text !== remoteVerdict.text
-            ) {
-              current.lastVerdict = {
-                text: remoteVerdict.text,
-                timestamp: remoteVerdict.timestamp,
-                messageId: remoteVerdict.messageId,
-              };
-              current.status = "idle";
-              teamState.agents[agentName] = current;
-              await writeTeamState(projectPath, teamState);
-            }
-          }
-        }
-      } catch {
-        // Best effort
-      }
-    }
 
     if (!sessionId) return 0;
 

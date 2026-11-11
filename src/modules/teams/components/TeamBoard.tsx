@@ -610,6 +610,15 @@ export function TeamBoard({
                     </div>
                   )}
 
+                  {savedAgent?.lastError && (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                      <span className="font-semibold">
+                        {t("teams.errorLabel")}:{" "}
+                      </span>
+                      <span>{savedAgent.lastError}</span>
+                    </div>
+                  )}
+
                   {isForbidden && (
                     <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
                       <p className="font-semibold">

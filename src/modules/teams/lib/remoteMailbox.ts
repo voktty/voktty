@@ -4,14 +4,28 @@ import {
   writeTextFile,
   type FsEntry,
 } from "@/modules/harness/lib/fs";
-import type { TeamBusMessage, TeamMessageKind } from "../types";
+import type { TeamMessageKind } from "../types";
 import { normalizePath } from "./teamFs";
 
-export type RemoteMailboxVerdict = {
+export const MAX_MAILBOX_READ_FILES = 50;
+export const MAX_MAILBOX_FILE_BYTES = 64 * 1024; // 64 KiB
+
+/**
+ * Message payload format strictly complying with templates/workspace-kit/dot-voktty/team/MESSAGING.md:
+ * {
+ *   "from": string,
+ *   "to": string,
+ *   "kind": "task" | "verdict" | "decision" | "blocker" | "status" | "question",
+ *   "text": string,
+ *   "sentAt": string (ISO 8601 UTC)
+ * }
+ */
+export type KitMailboxMessage = {
+  from: string;
+  to: string;
+  kind: TeamMessageKind;
   text: string;
-  timestamp: string;
-  messageId?: string;
-  filePath: string;
+  sentAt: string;
 };
 
 export type RemoteMailboxDeps = {
@@ -45,54 +59,62 @@ export function remoteInboxDir(
   return `${remoteMailboxDir(remoteProjectCwd, agentName)}/inbox`;
 }
 
-export function remoteOutboxDir(
-  remoteProjectCwd: string,
-  agentName: string,
+/**
+ * Generates a unique mailbox filename matching MESSAGING.md:
+ * `<UTC timestamp>-<sender>-<unique suffix>.json`
+ */
+export function generateMailboxFileName(
+  sender: string,
+  sentAtDate: Date = new Date(),
 ): string {
-  return `${remoteMailboxDir(remoteProjectCwd, agentName)}/outbox`;
+  const utcStr = sentAtDate.toISOString().replace(/[:.]/g, "-");
+  const safeSender = sender.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${utcStr}-${safeSender}-${suffix}.json`;
 }
 
-export type SafeMailboxMessagePayload = {
-  id: string;
-  from: string;
-  to: string;
-  kind: TeamMessageKind;
-  text: string;
-  timestamp: string;
-  hop: number;
-  replyTo?: string;
-};
-
 /**
- * Deposits a message in the remote agent's inbox.
+ * Deposits a message in the remote agent's inbox in exact MESSAGING.md format:
+ * File: .voktty/mailbox/<recipient>/inbox/<UTC>-<sender>-<suffix>.json
+ * Fields: from, to, kind, text, sentAt.
  *
- * CRITICAL SECURITY INVARIANT:
- * The agent token NEVER travels over SSH, into remote mailbox files,
- * or across network arguments. Only message payload data is serialized.
+ * CRITICAL SECURITY INVARIANTS:
+ * - The agent token NEVER travels into mailbox files or remote storage.
+ * - Writing to mailbox is NEVER proof of delivery (S1).
+ * - No outbox directory is created or used (S2).
  */
 export async function writeRemoteMailboxMessage(
   remoteProjectCwd: string,
-  agentName: string,
-  message: TeamBusMessage,
+  recipient: string,
+  message: {
+    from: string;
+    to: string;
+    kind: TeamMessageKind;
+    text: string;
+    sentAt?: string;
+  },
   deps?: RemoteMailboxDeps,
 ): Promise<string> {
-  assertSafeAgentName(agentName);
-  const inbox = remoteInboxDir(remoteProjectCwd, agentName);
-  const safeMessageId = message.id.replace(/[^a-zA-Z0-9_.-]/g, "_");
-  const filePath = `${inbox}/${safeMessageId}.json`;
+  assertSafeAgentName(recipient);
+  const inbox = remoteInboxDir(remoteProjectCwd, recipient);
+  const sentAt = message.sentAt || new Date().toISOString();
+  const sentAtDate = new Date(sentAt);
+  const filename = generateMailboxFileName(
+    message.from,
+    Number.isNaN(sentAtDate.getTime()) ? new Date() : sentAtDate,
+  );
+  const filePath = `${inbox}/${filename}`;
 
-  const payload: SafeMailboxMessagePayload = {
-    id: message.id,
+  // S2: Exact fields per MESSAGING.md, no outbox, no id, no hop, no token
+  const payload: KitMailboxMessage = {
     from: message.from,
     to: message.to,
     kind: message.kind,
     text: message.text,
-    timestamp: message.timestamp,
-    hop: message.hop,
-    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    sentAt,
   };
 
-  // Explicit safety check: ensure no token or secret fields leak
+  // Explicit safety check: ensure no credentials or tokens leak
   const raw = payload as Record<string, unknown>;
   delete raw.token;
   delete raw.agentToken;
@@ -105,42 +127,58 @@ export async function writeRemoteMailboxMessage(
 }
 
 /**
- * Reads pending verdicts from the remote agent's outbox directory.
+ * Reads messages from the remote agent's inbox directory with bounded resources (I1).
+ *
+ * Invariants:
+ * - Bounded: limits to at most MAX_MAILBOX_READ_FILES (50).
+ * - Bounded size: skips any file exceeding MAX_MAILBOX_FILE_BYTES (64 KiB).
+ * - S3: Never alters lastVerdict, never alters agent state.
  */
-export async function readRemoteMailboxVerdicts(
+export async function readRemoteInboxMessages(
   remoteProjectCwd: string,
   agentName: string,
   deps?: RemoteMailboxDeps,
-): Promise<RemoteMailboxVerdict[]> {
+): Promise<KitMailboxMessage[]> {
   assertSafeAgentName(agentName);
-  const outbox = remoteOutboxDir(remoteProjectCwd, agentName);
+  const inbox = remoteInboxDir(remoteProjectCwd, agentName);
   const lister = deps?.listDir ?? listDir;
   const reader = deps?.readTextFile ?? readTextFile;
 
   let entries: FsEntry[] = [];
   try {
-    entries = await lister(outbox);
+    entries = await lister(inbox);
   } catch {
-    // Directory might not exist yet or empty
     return [];
   }
 
-  const verdicts: RemoteMailboxVerdict[] = [];
-  for (const entry of entries) {
-    if (entry.isDir || !entry.name.endsWith(".json")) continue;
+  // Filter valid .json files, bounded to MAX_MAILBOX_READ_FILES (I1)
+  const jsonFiles = entries
+    .filter((e) => !e.isDir && e.name.endsWith(".json"))
+    .slice(0, MAX_MAILBOX_READ_FILES);
+
+  const messages: KitMailboxMessage[] = [];
+  for (const entry of jsonFiles) {
     try {
       const content = await reader(entry.path);
+      // Byte size protection (I1)
+      if (new TextEncoder().encode(content).length > MAX_MAILBOX_FILE_BYTES) {
+        continue;
+      }
       const parsed = JSON.parse(content) as Record<string, unknown>;
-      if (parsed && typeof parsed.text === "string") {
-        verdicts.push({
+      if (
+        parsed &&
+        typeof parsed.from === "string" &&
+        typeof parsed.to === "string" &&
+        typeof parsed.kind === "string" &&
+        typeof parsed.text === "string" &&
+        typeof parsed.sentAt === "string"
+      ) {
+        messages.push({
+          from: parsed.from,
+          to: parsed.to,
+          kind: parsed.kind as TeamMessageKind,
           text: parsed.text,
-          timestamp:
-            typeof parsed.timestamp === "string"
-              ? parsed.timestamp
-              : new Date().toISOString(),
-          messageId:
-            typeof parsed.messageId === "string" ? parsed.messageId : undefined,
-          filePath: entry.path,
+          sentAt: parsed.sentAt,
         });
       }
     } catch {
@@ -148,19 +186,6 @@ export async function readRemoteMailboxVerdicts(
     }
   }
 
-  // Sort newest first
-  verdicts.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return verdicts;
-}
-
-/**
- * Reads the latest verdict from the agent's outbox.
- */
-export async function readLatestRemoteMailboxVerdict(
-  remoteProjectCwd: string,
-  agentName: string,
-  deps?: RemoteMailboxDeps,
-): Promise<RemoteMailboxVerdict | null> {
-  const verdicts = await readRemoteMailboxVerdicts(remoteProjectCwd, agentName, deps);
-  return verdicts[0] ?? null;
+  messages.sort((a, b) => a.sentAt.localeCompare(b.sentAt));
+  return messages;
 }

@@ -20,6 +20,72 @@ pub struct GenericApprovalsStore {
     pub approvals: HashMap<String, GenericApprovalRecord>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamHostRecord {
+    pub canonical_project: String,
+    pub alias: String,
+    pub connection_id: String,
+    pub remote_path: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TeamHostsStore {
+    pub version: u32,
+    pub hosts: HashMap<String, TeamHostRecord>,
+}
+
+pub fn normalize_host_alias(alias: &str) -> Result<String, String> {
+    let trimmed = alias.trim();
+    let cleaned = trimmed.strip_prefix("ssh:").unwrap_or(trimmed);
+    if cleaned.is_empty() {
+        return Err("Host alias cannot be empty".to_string());
+    }
+    if cleaned == "."
+        || cleaned == ".."
+        || cleaned.contains("..")
+        || cleaned.contains('/')
+        || cleaned.contains('\\')
+    {
+        return Err(format!(
+            "Host alias '{}' contains invalid path traversal or separators",
+            alias
+        ));
+    }
+    if !cleaned
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+    {
+        return Err(format!(
+            "Host alias '{}' contains invalid characters",
+            alias
+        ));
+    }
+    Ok(cleaned.to_lowercase())
+}
+
+pub fn host_mapping_key(canonical_project: &str, alias: &str) -> String {
+    format!("{}::{}", canonical_project, alias)
+}
+
+pub fn validate_remote_path(remote_path: &str) -> Result<String, String> {
+    let trimmed = remote_path.trim();
+    if !trimmed.starts_with('/') {
+        return Err("Remote project path must be a POSIX absolute path starting with '/'".to_string());
+    }
+    if trimmed.contains('\\') {
+        return Err("Remote project path cannot contain backslashes".to_string());
+    }
+    if trimmed.contains('\0') {
+        return Err("Remote project path cannot contain null bytes".to_string());
+    }
+    let segments: Vec<&str> = trimmed.split('/').filter(|s| !s.is_empty()).collect();
+    if segments.contains(&"..") || segments.contains(&".") {
+        return Err("Remote project path cannot contain relative segments ('..' or '.')".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
 fn command_sha256(command: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(command.trim().as_bytes());
@@ -228,6 +294,145 @@ pub fn team_verify_generic_launch(
     verify_generic_launch_at(&store_path, &project_path, &agent_name, &command)
 }
 
+pub fn team_hosts_store_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("team_hosts.json"))
+}
+
+pub fn read_hosts_store_from_file(path: &Path) -> Result<TeamHostsStore, String> {
+    if !path.exists() {
+        return Ok(TeamHostsStore {
+            version: 1,
+            hosts: HashMap::new(),
+        });
+    }
+    let data = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&data).map_err(|e| e.to_string())
+}
+
+pub fn write_hosts_store_to_file(path: &Path, store: &TeamHostsStore) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let data = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    fs::write(path, data).map_err(|e| e.to_string())
+}
+
+pub fn set_team_host_mapping_at(
+    store_path: &Path,
+    project_path: &str,
+    alias: &str,
+    connection_id: &str,
+    remote_path: &str,
+) -> Result<(), String> {
+    let norm_alias = normalize_host_alias(alias)?;
+    let trimmed_conn = connection_id.trim();
+    if trimmed_conn.is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+    let safe_remote_path = validate_remote_path(remote_path)?;
+    let canonical = canonicalize_project_path(project_path);
+    let key = host_mapping_key(&canonical, &norm_alias);
+
+    let mut store = read_hosts_store_from_file(store_path)?;
+    let now = chrono::Utc::now().to_rfc3339();
+    store.hosts.insert(
+        key,
+        TeamHostRecord {
+            canonical_project: canonical,
+            alias: norm_alias,
+            connection_id: trimmed_conn.to_string(),
+            remote_path: safe_remote_path,
+            updated_at: now,
+        },
+    );
+    write_hosts_store_to_file(store_path, &store)
+}
+
+pub fn remove_team_host_mapping_at(
+    store_path: &Path,
+    project_path: &str,
+    alias: &str,
+) -> Result<(), String> {
+    let norm_alias = normalize_host_alias(alias)?;
+    let canonical = canonicalize_project_path(project_path);
+    let key = host_mapping_key(&canonical, &norm_alias);
+
+    let mut store = read_hosts_store_from_file(store_path)?;
+    store.hosts.remove(&key);
+    write_hosts_store_to_file(store_path, &store)
+}
+
+pub fn get_team_host_mapping_at(
+    store_path: &Path,
+    project_path: &str,
+    alias: &str,
+) -> Result<Option<TeamHostRecord>, String> {
+    let norm_alias = normalize_host_alias(alias)?;
+    let canonical = canonicalize_project_path(project_path);
+    let key = host_mapping_key(&canonical, &norm_alias);
+
+    let store = read_hosts_store_from_file(store_path)?;
+    Ok(store.hosts.get(&key).cloned())
+}
+
+pub fn read_team_hosts_for_project_at(
+    store_path: &Path,
+    project_path: &str,
+) -> Result<HashMap<String, TeamHostRecord>, String> {
+    let canonical = canonicalize_project_path(project_path);
+    let store = read_hosts_store_from_file(store_path)?;
+    let mut result = HashMap::new();
+    for (_, record) in store.hosts {
+        if record.canonical_project == canonical {
+            result.insert(record.alias.clone(), record);
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn team_save_host_mapping(
+    app: AppHandle,
+    project_path: String,
+    alias: String,
+    connection_id: String,
+    remote_path: String,
+) -> Result<(), String> {
+    let store_path = team_hosts_store_path(&app)?;
+    set_team_host_mapping_at(&store_path, &project_path, &alias, &connection_id, &remote_path)
+}
+
+#[tauri::command]
+pub fn team_remove_host_mapping(
+    app: AppHandle,
+    project_path: String,
+    alias: String,
+) -> Result<(), String> {
+    let store_path = team_hosts_store_path(&app)?;
+    remove_team_host_mapping_at(&store_path, &project_path, &alias)
+}
+
+#[tauri::command]
+pub fn team_get_host_mapping(
+    app: AppHandle,
+    project_path: String,
+    alias: String,
+) -> Result<Option<TeamHostRecord>, String> {
+    let store_path = team_hosts_store_path(&app)?;
+    get_team_host_mapping_at(&store_path, &project_path, &alias)
+}
+
+#[tauri::command]
+pub fn team_read_host_mappings(
+    app: AppHandle,
+    project_path: String,
+) -> Result<HashMap<String, TeamHostRecord>, String> {
+    let store_path = team_hosts_store_path(&app)?;
+    read_team_hosts_for_project_at(&store_path, &project_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,5 +535,154 @@ mod tests {
             "legit-agent",
             "python3 -m unittest"
         ));
+    }
+
+    #[test]
+    fn project_hosts_json_does_not_override_native_host_mapping() {
+        let ws_dir = tempdir().unwrap();
+        let project_path = ws_dir.path().to_string_lossy().to_string();
+
+        // Attacker writes a fake hosts.json in .voktty/state/hosts.json
+        let fake_state_dir = ws_dir.path().join(".voktty").join("state");
+        fs::create_dir_all(&fake_state_dir).unwrap();
+        let fake_hosts_file = fake_state_dir.join("hosts.json");
+        fs::write(
+            &fake_hosts_file,
+            r#"{
+                "$schema": "urn:voktty:team-hosts:1",
+                "version": 1,
+                "updatedAt": "2026-11-11T00:00:00Z",
+                "hosts": {
+                    "evil-target": {
+                        "connectionId": "attacker-conn-id",
+                        "remotePath": "/tmp/evil"
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        // Native app data store outside workspace
+        let app_data_dir = tempdir().unwrap();
+        let native_store_path = app_data_dir.path().join("team_hosts.json");
+
+        // 1. Verify that the workspace file concedes NOTHING to Rust native host store
+        let unconfigured = get_team_host_mapping_at(&native_store_path, &project_path, "evil-target")
+            .unwrap();
+        assert!(
+            unconfigured.is_none(),
+            "A workspace file in .voktty/state/hosts.json must not grant or define any host mapping"
+        );
+
+        let project_hosts =
+            read_team_hosts_for_project_at(&native_store_path, &project_path).unwrap();
+        assert!(
+            project_hosts.is_empty(),
+            "Native host query must ignore workspace hosts.json completely"
+        );
+
+        // 2. Owner legitimately links host via native Rust API
+        set_team_host_mapping_at(
+            &native_store_path,
+            &project_path,
+            "ssh:gpu-node",
+            "valid-ssh-conn-uuid",
+            "/home/user/workspace/remote-project",
+        )
+        .unwrap();
+
+        let resolved =
+            get_team_host_mapping_at(&native_store_path, &project_path, "gpu-node")
+                .unwrap()
+                .expect("Expected host mapping to exist");
+        assert_eq!(resolved.alias, "gpu-node");
+        assert_eq!(resolved.connection_id, "valid-ssh-conn-uuid");
+        assert_eq!(resolved.remote_path, "/home/user/workspace/remote-project");
+
+        // Lookup with ssh: prefix also works
+        let resolved_prefix =
+            get_team_host_mapping_at(&native_store_path, &project_path, "ssh:gpu-node")
+                .unwrap()
+                .expect("Expected host mapping to exist with prefix");
+        assert_eq!(resolved_prefix, resolved);
+
+        // 3. Removal works
+        remove_team_host_mapping_at(&native_store_path, &project_path, "gpu-node").unwrap();
+        let after_remove =
+            get_team_host_mapping_at(&native_store_path, &project_path, "gpu-node").unwrap();
+        assert!(after_remove.is_none());
+    }
+
+    #[test]
+    fn host_alias_and_remote_path_validation() {
+        let app_data_dir = tempdir().unwrap();
+        let native_store_path = app_data_dir.path().join("team_hosts.json");
+        let project_path = "/valid/local/project";
+
+        // Traversal in alias rejected
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "..",
+            "conn-1",
+            "/home/user"
+        )
+        .is_err());
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "ssh:..",
+            "conn-1",
+            "/home/user"
+        )
+        .is_err());
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "host/sub",
+            "conn-1",
+            "/home/user"
+        )
+        .is_err());
+
+        // Relative remote path rejected
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "relative/path"
+        )
+        .is_err());
+
+        // Traversal in remote path rejected
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "/home/user/../etc"
+        )
+        .is_err());
+
+        // Backslashes in remote path rejected
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "/home\\user"
+        )
+        .is_err());
+
+        // Valid mapping succeeds
+        assert!(set_team_host_mapping_at(
+            &native_store_path,
+            project_path,
+            "valid-alias",
+            "conn-1",
+            "/home/user/project"
+        )
+        .is_ok());
     }
 }
