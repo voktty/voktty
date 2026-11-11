@@ -604,6 +604,27 @@ struct RemoteRouting {
     app: AppHandle,
     session_id: AtomicU64,
     retired: Arc<AtomicBool>,
+    /// Set once the helper's SSH channel ends. The session stays registered
+    /// until the frontend closes it, so every later request must report the
+    /// loss in a form the frontend recognizes and recovers from, instead of
+    /// the raw OS pipe error of writing into a dead `ssh` process.
+    channel_lost: AtomicBool,
+}
+
+/// Recognized by the frontend (`isSessionLostError`) as a lost session.
+const REMOTE_CHANNEL_LOST: &str = "remote helper closed the SSH channel";
+
+/// A broken pipe into the helper means its `ssh` process is gone; any other
+/// write error (an oversized frame, say) keeps its own message.
+fn helper_write_error(error: std::io::Error) -> String {
+    // ERROR_BROKEN_PIPE (109) and ERROR_NO_DATA (232), "the pipe is being closed".
+    let broken = error.kind() == std::io::ErrorKind::BrokenPipe
+        || (cfg!(windows) && matches!(error.raw_os_error(), Some(109 | 232)));
+    if broken {
+        format!("{REMOTE_CHANNEL_LOST}: {error}")
+    } else {
+        error.to_string()
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -633,6 +654,7 @@ impl RemoteSession {
 
     fn request(&self, request: &RemoteRequest) -> Result<RemoteResponse, String> {
         self.resources.ensure_active()?;
+        self.routing.ensure_channel()?;
         let (sender, receiver) = mpsc::channel();
         {
             let mut pending = self
@@ -641,6 +663,9 @@ impl RemoteSession {
                 .lock()
                 .map_err(|_| "remote request state is poisoned".to_string())?;
             self.resources.ensure_active()?;
+            // Checked under the lock `fail_all` drains, so a request cannot
+            // slip in after the drain and wait out its whole timeout.
+            self.routing.ensure_channel()?;
             if pending.insert(request.id.clone(), sender).is_some() {
                 return Err("duplicate remote request id".to_string());
             }
@@ -775,11 +800,15 @@ impl RemoteSession {
             .lock()
             .map_err(|_| "remote helper input is poisoned".to_string())?;
         self.resources.ensure_active()?;
+        self.routing.ensure_channel()?;
         let stdin = stdin
             .as_mut()
             .ok_or_else(|| "remote helper input is closed".to_string())?;
-        write_frame(stdin, frame).map_err(|error| error.to_string())?;
-        stdin.flush().map_err(|error| error.to_string())
+        // A failed write means the `ssh` process is gone (on Windows the raw
+        // error is "the pipe is being closed", os error 232), so report it as
+        // a lost channel the frontend can recover from.
+        write_frame(stdin, frame).map_err(helper_write_error)?;
+        stdin.flush().map_err(helper_write_error)
     }
 
     fn register_pty(
@@ -900,7 +929,22 @@ impl RemoteRouting {
             app,
             session_id: AtomicU64::new(0),
             retired,
+            channel_lost: AtomicBool::new(false),
         }
+    }
+
+    fn ensure_channel(&self) -> Result<(), String> {
+        if self.channel_lost.load(Ordering::Acquire) {
+            Err(REMOTE_CHANNEL_LOST.to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// The helper's SSH channel ended: refuse new work, then fail what waits.
+    fn mark_channel_lost(&self, message: &str) {
+        self.channel_lost.store(true, Ordering::Release);
+        self.fail_all(message);
     }
 
     fn route(&self, frame: Frame) -> Result<(), String> {
@@ -3155,16 +3199,16 @@ fn remote_reader_loop(stdout: ChildStdout, routing: Arc<RemoteRouting>) {
         match read_frame(&mut reader) {
             Ok(Some(frame)) => {
                 if let Err(error) = routing.route(frame) {
-                    routing.fail_all(&error);
+                    routing.mark_channel_lost(&error);
                     return;
                 }
             }
             Ok(None) => {
-                routing.fail_all("remote helper closed the SSH channel");
+                routing.mark_channel_lost(REMOTE_CHANNEL_LOST);
                 return;
             }
             Err(error) => {
-                routing.fail_all(&format!("remote helper protocol error: {error}"));
+                routing.mark_channel_lost(&format!("{REMOTE_CHANNEL_LOST}: protocol error: {error}"));
                 return;
             }
         }
@@ -3638,6 +3682,22 @@ mod retirement_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_broken_helper_pipe_reports_a_lost_channel() {
+        let broken = helper_write_error(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+        assert!(broken.starts_with(REMOTE_CHANNEL_LOST));
+        #[cfg(windows)]
+        assert!(
+            helper_write_error(std::io::Error::from_raw_os_error(232))
+                .starts_with(REMOTE_CHANNEL_LOST)
+        );
+        let other = helper_write_error(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "frame too large",
+        ));
+        assert_eq!(other, "frame too large");
+    }
+
     #[test]
     fn tunnel_mirrors_a_free_preferred_port_and_otherwise_falls_back() {
         let free = allocate_loopback_port().unwrap();

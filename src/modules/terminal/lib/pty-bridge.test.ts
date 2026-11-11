@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openPty } from "./pty-bridge";
 import type { WorkspaceEnv } from "@/modules/workspace";
 
+import {
+  clearRemoteSessionAliases,
+  recordRemoteSessionReplacement,
+} from "@/modules/remote/sessionAliases";
+
 const invokeMock = vi.hoisted(() => vi.fn());
+const recoverMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
@@ -11,8 +17,21 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
+vi.mock("@/modules/remote/sessionManager", () => ({
+  recoverLostRemoteSession: recoverMock,
+}));
+
+const sshEnv = (sessionId: number): WorkspaceEnv => ({
+  kind: "ssh",
+  root: "/srv/app",
+  sessionId,
+  connection: { id: "server-1", name: "Server", host: "server.example" },
+});
+
 describe("PTY bridge", () => {
   beforeEach(() => {
+    clearRemoteSessionAliases();
+    recoverMock.mockReset();
     invokeMock.mockReset();
     invokeMock.mockImplementation((command: string) => {
       if (command === "remote_pty_open") return Promise.resolve(91);
@@ -78,6 +97,67 @@ describe("PTY bridge", () => {
       sessionId: 7,
       ptyId: 91,
     });
+  });
+
+  it("opens the shell on the session that replaced a stale id", async () => {
+    recordRemoteSessionReplacement(7, 8);
+    const session = await openPty(80, 24, { onData: vi.fn() }, undefined, false, undefined, undefined, sshEnv(7));
+    expect(invokeMock).toHaveBeenCalledWith(
+      "remote_pty_open",
+      expect.objectContaining({ sessionId: 8 }),
+    );
+    await session.write("x");
+    const write = invokeMock.mock.calls.find(([command]) => command === "remote_pty_write");
+    expect(write?.[2]).toEqual({ headers: { "x-pty-id": "91", "x-remote-session-id": "8" } });
+  });
+
+  it("reopens a session whose SSH channel died and starts the shell there", async () => {
+    invokeMock.mockImplementation((command: string, args: { sessionId?: number }) => {
+      if (command === "remote_pty_open" && args.sessionId === 7)
+        return Promise.reject(
+          "remote helper closed the SSH channel: Se está cerrando la canalización. (os error 232)",
+        );
+      if (command === "remote_pty_open") return Promise.resolve(92);
+      return Promise.resolve();
+    });
+    recoverMock.mockResolvedValue({ session_id: 9 });
+
+    const session = await openPty(80, 24, { onData: vi.fn() }, undefined, false, undefined, undefined, sshEnv(7));
+
+    expect(session.id).toBe(92);
+    expect(recoverMock).toHaveBeenCalledWith(
+      7,
+      "server-1",
+      expect.objectContaining({ host: "server.example" }),
+      "/srv/app",
+    );
+    const opens = invokeMock.mock.calls.filter(([command]) => command === "remote_pty_open");
+    expect(opens.map(([, args]) => args.sessionId)).toEqual([7, 9]);
+    expect(opens[0][1].onData).not.toBe(opens[1][1].onData);
+    await session.close();
+    expect(invokeMock).toHaveBeenCalledWith("remote_pty_close", { sessionId: 9, ptyId: 92 });
+  });
+
+  it("reports the original failure when the host stays unreachable", async () => {
+    invokeMock.mockImplementation((command: string) =>
+      command === "remote_pty_open"
+        ? Promise.reject("remote helper closed the SSH channel")
+        : Promise.resolve(),
+    );
+    recoverMock.mockRejectedValue(new Error("host unreachable"));
+    await expect(
+      openPty(80, 24, { onData: vi.fn() }, undefined, false, undefined, undefined, sshEnv(7)),
+    ).rejects.toBe("remote helper closed the SSH channel");
+  });
+
+  it("does not reopen the session for an unrelated failure", async () => {
+    invokeMock.mockImplementation((command: string) =>
+      command === "remote_pty_open" ? Promise.reject("permission denied") : Promise.resolve(),
+    );
+    await expect(
+      openPty(80, 24, { onData: vi.fn() }, undefined, false, undefined, undefined, sshEnv(7)),
+    ).rejects.toBe("permission denied");
+    expect(recoverMock).not.toHaveBeenCalled();
   });
 
   it("keeps local workspaces on the native PTY transport", async () => {

@@ -7,6 +7,9 @@ import { consumeSnapshotBarrier } from "@/modules/terminal/lib/snapshotBarrier";
 import { ownedPtyTargets } from "@/modules/terminal/lib/ownedPtyTargets";
 import { reserveRestoredProjectTarget } from "@/modules/terminal/lib/restoreProjectTarget";
 import { requestRemoteResult } from "@/modules/remote/client";
+import { liveRemoteSessionId } from "@/modules/remote/sessionAliases";
+import { recoverLostRemoteSession } from "@/modules/remote/sessionManager";
+import { isSessionLostError } from "@/modules/remote/sessionPool";
 import {
   currentWorkspaceEnv,
   type WorkspaceEnv,
@@ -169,32 +172,46 @@ async function openNativePty(
 
   const remoteWorkspace =
     activeWorkspace.kind === "ssh" ? activeWorkspace : undefined;
-  const remoteSessionId = remoteWorkspace?.sessionId;
-  if (remoteWorkspace && remoteSessionId === undefined) {
+  if (remoteWorkspace && remoteWorkspace.sessionId === undefined) {
     throw new Error("Remote workspace is not connected");
   }
-
-  // Raw bytes — no base64/JSON round-trip; messages arrive as ArrayBuffer.
-  const onData = new Channel<ArrayBuffer>();
-  const onExit = new Channel<number>();
+  // A Space or tab may still carry the id of a session that was replaced
+  // after its SSH connection dropped.
+  let remoteSessionId =
+    remoteWorkspace?.sessionId === undefined
+      ? undefined
+      : liveRemoteSessionId(remoteWorkspace.sessionId);
 
   let released = false;
   const noop = () => {};
+  let releaseChannels = noop;
   const releaseHandlers = () => {
     if (released) return;
     released = true;
-    onData.onmessage = noop;
-    onExit.onmessage = noop;
+    releaseChannels();
   };
 
-  onData.onmessage = (buf) => {
-    const bytes = new Uint8Array(buf);
-    if (paneId !== undefined && consumeSnapshotBarrier(paneId, bytes)) return;
-    handlers.onData(bytes);
-  };
-  onExit.onmessage = (code) => {
-    releaseHandlers();
-    handlers.onExit?.(code);
+  // Raw bytes, no base64/JSON round-trip; messages arrive as ArrayBuffer.
+  // Each open attempt gets its own pair, so a failed attempt's native
+  // registration can never deliver into the session that replaced it.
+  const channels = () => {
+    releaseChannels();
+    const onData = new Channel<ArrayBuffer>();
+    const onExit = new Channel<number>();
+    onData.onmessage = (buf) => {
+      const bytes = new Uint8Array(buf);
+      if (paneId !== undefined && consumeSnapshotBarrier(paneId, bytes)) return;
+      handlers.onData(bytes);
+    };
+    onExit.onmessage = (code) => {
+      releaseHandlers();
+      handlers.onExit?.(code);
+    };
+    releaseChannels = () => {
+      onData.onmessage = noop;
+      onExit.onmessage = noop;
+    };
+    return { onData, onExit };
   };
 
   const sshConnection =
@@ -204,31 +221,56 @@ async function openNativePty(
     sshConnection?.activeMultiplexerSession ?? sshConnection?.tmuxSessionName;
   const multiplexerAction = sshConnection?.multiplexerAction;
 
-  const id =
-    remoteSessionId !== undefined
-      ? await invoke<number>("remote_pty_open", {
-          sessionId: remoteSessionId,
-          cols,
-          rows,
-          cwd: cwd ?? remoteWorkspace?.root,
-          blocks: blocks ?? false,
-          multiplexerMode: multiplexerMode ?? null,
-          tmuxSessionName: tmuxSessionName ?? null,
-          multiplexerAction: multiplexerAction ?? null,
-          onData,
-          onExit,
-        })
-      : await invoke<number>("pty_open", {
-          cols,
-          rows,
-          cwd: cwd ?? null,
-          workspace: workspaceEnvForNativePty(activeWorkspace),
-          blocks: blocks ?? false,
-          shell: shell ?? null,
-          paneId: paneId ?? null,
-          onData,
-          onExit,
-        });
+  const openRemote = (sessionId: number) =>
+    invoke<number>("remote_pty_open", {
+      sessionId,
+      cols,
+      rows,
+      cwd: cwd ?? remoteWorkspace?.root,
+      blocks: blocks ?? false,
+      multiplexerMode: multiplexerMode ?? null,
+      tmuxSessionName: tmuxSessionName ?? null,
+      multiplexerAction: multiplexerAction ?? null,
+      ...channels(),
+    });
+
+  let id: number;
+  if (remoteWorkspace && remoteSessionId !== undefined) {
+    try {
+      id = await openRemote(remoteSessionId);
+    } catch (reason) {
+      // The helper's SSH channel died (idle drop, sleep, network change).
+      // Reopen it for the same profile and root and start the shell there;
+      // nothing ran on the lost session, so opening again is safe.
+      if (!isSessionLostError(reason)) throw reason;
+      let recovered: number;
+      try {
+        recovered = (
+          await recoverLostRemoteSession(
+            remoteSessionId,
+            remoteWorkspace.connection.id,
+            remoteWorkspace.connection,
+            remoteWorkspace.root,
+          )
+        ).session_id;
+      } catch {
+        throw reason;
+      }
+      remoteSessionId = recovered;
+      id = await openRemote(recovered);
+    }
+  } else {
+    id = await invoke<number>("pty_open", {
+      cols,
+      rows,
+      cwd: cwd ?? null,
+      workspace: workspaceEnvForNativePty(activeWorkspace),
+      blocks: blocks ?? false,
+      shell: shell ?? null,
+      paneId: paneId ?? null,
+      ...channels(),
+    });
+  }
 
   let closed = false;
   let activityRetired = false;
