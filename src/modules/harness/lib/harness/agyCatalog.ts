@@ -144,8 +144,85 @@ export async function discoverAgyModels(
         else parsed[existingIndex] = model;
       }
     }
-    return parsed.length > 0 ? parsed : AGY_MODEL_CATALOG;
+    return parsed.length > 0 ? groupEffortVariants(parsed) : AGY_MODEL_CATALOG;
   } catch {
     return AGY_MODEL_CATALOG;
   }
+}
+
+const EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+const LEVEL_LABEL: Record<string, string> = {
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra High",
+  max: "Max",
+};
+const VARIANT = new RegExp(`^(.+)-(${EFFORT_LEVELS.join("|")})$`);
+
+/**
+ * The CLI lists one model per reasoning level (`gemini-3.8-flash-high`,
+ * `-medium`, `-low`). Those are one model with an effort, not three
+ * models: fold them, defaulting to high when it exists. A lone suffixed
+ * entry (`gpt-oss-120b-medium`) stays as it is.
+ */
+export function groupEffortVariants(models: AgentModel[]): AgentModel[] {
+  const groups = new Map<string, AgentModel[]>();
+  for (const model of models) {
+    const base = VARIANT.exec(model.nativeId ?? "")?.[1];
+    if (!base) continue;
+    groups.set(base, [...(groups.get(base) ?? []), model]);
+  }
+  const out: AgentModel[] = [];
+  const emitted = new Set<string>();
+  for (const model of models) {
+    const match = VARIANT.exec(model.nativeId ?? "");
+    const group = match ? groups.get(match[1]) : undefined;
+    if (!match || !group || group.length < 2) {
+      out.push(model);
+      continue;
+    }
+    const base = match[1];
+    if (emitted.has(base)) continue;
+    emitted.add(base);
+    const levels = group
+      .map((entry) => VARIANT.exec(entry.nativeId ?? "")?.[2] ?? "")
+      .sort(
+        (a, b) =>
+          EFFORT_LEVELS.indexOf(b as (typeof EFFORT_LEVELS)[number]) -
+          EFFORT_LEVELS.indexOf(a as (typeof EFFORT_LEVELS)[number]),
+      );
+    const preferred = levels.includes("high") ? "high" : levels[0];
+    out.push({
+      id: `gemini:${base}`,
+      harness: "gemini",
+      name: model.name.replace(/\s*\([^)]*\)\s*$/, ""),
+      nativeId: `${base}-${preferred}`,
+      settings: [
+        {
+          id: "effort",
+          label: "Reasoning Effort",
+          kind: "select",
+          value: preferred,
+          options: levels.map((level) => ({
+            value: level,
+            label: LEVEL_LABEL[level] ?? level,
+          })),
+        },
+      ],
+    });
+  }
+  return out;
+}
+
+/** The variant of a grouped model that carries the chosen effort. */
+export function agyModelForEffort(
+  nativeId: string,
+  effort: string | undefined,
+  offered: readonly string[],
+): string {
+  if (!effort || !offered.includes(effort)) return nativeId;
+  const match = VARIANT.exec(nativeId);
+  return match ? `${match[1]}-${effort}` : nativeId;
 }

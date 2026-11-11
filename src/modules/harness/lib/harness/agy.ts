@@ -1,4 +1,5 @@
-import { nativeModelId } from "../models";
+import { nativeModelId, resolveModel } from "../models";
+import { agyModelForEffort } from "./agyCatalog";
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
 import {
   assertHarnessMemoryTarget,
@@ -441,7 +442,16 @@ export function buildAgySpawnArgs(
     "--output-format",
     "stream-json",
   ];
-  const model = nativeModelId(input.model);
+  // A model folded from per-level CLI entries runs as the level picked.
+  const offered =
+    resolveModel("gemini", input.model)
+      .settings?.find((setting) => setting.id === "effort")
+      ?.options.map((option) => option.value) ?? [];
+  const model = agyModelForEffort(
+    nativeModelId(input.model),
+    input.modelSettings?.effort,
+    offered,
+  );
   if (model) args.push("--model", model);
 
   const effort = input.modelSettings?.effort;
