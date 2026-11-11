@@ -33,8 +33,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
-    METHOD_AGENT_PROBE, METHOD_CANONICALIZE, METHOD_COPY, METHOD_COUNT_TEXT_LINES,
-    METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
+    METHOD_AGENT_FEED_POLL, METHOD_AGENT_PROBE, METHOD_CANONICALIZE, METHOD_COPY,
+    METHOD_COUNT_TEXT_LINES, METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
     METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GLOB, METHOD_GREP,
     METHOD_GREP_CANCEL, METHOD_GREP_INDEPENDENT, METHOD_HANDSHAKE, METHOD_LIST_DIR,
     METHOD_MEMORY_MANAGE, METHOD_OPENCODE_SERVICE, METHOD_PROC_ATTACH, METHOD_PROC_CLOSE,
@@ -309,6 +309,31 @@ impl RemoteServer {
         }
     }
 
+    /// Read-only feed of the messages this host's Claude Code sessions send
+    /// each other. Reads only `~/.claude/sessions/*.json` and project
+    /// transcripts; never messaging keys or sockets.
+    fn agent_feed_poll(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<voktty_agent_feed::FeedRequest>(request.params)
+        {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        if params.root.trim().is_empty() || params.root.len() > 4096 {
+            return RemoteResponse::failure(request.id, "invalid_params", "invalid project root");
+        }
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default();
+        let claude_home = voktty_agent_feed::claude_home(
+            std::env::var("CLAUDE_CONFIG_DIR").ok().as_deref(),
+            &home,
+        );
+        let feed = voktty_agent_feed::poll(&claude_home, &params);
+        RemoteResponse::success(request.id, json!(feed))
+    }
+
     fn write_proc(&mut self, attach_id: u64, data: Vec<u8>) {
         if let Some(host) = self.proc_host.as_ref() {
             host.write(attach_id, data);
@@ -362,6 +387,7 @@ impl RemoteServer {
                 self.proc_control(request)
             }
             METHOD_AGENT_PROBE => self.agent_probe(request),
+            METHOD_AGENT_FEED_POLL => self.agent_feed_poll(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -429,6 +455,7 @@ impl RemoteServer {
                     METHOD_PROC_CLOSE,
                     METHOD_PROC_LIST,
                     METHOD_AGENT_PROBE,
+                    METHOD_AGENT_FEED_POLL,
                     METHOD_MEMORY_MANAGE
                 ]
             }),

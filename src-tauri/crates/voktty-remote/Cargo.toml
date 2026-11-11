@@ -23,6 +23,7 @@ portable-pty = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
+voktty-agent-feed = { path = "../voktty-agent-feed" }
 voktty-memory-local = { path = "../voktty-memory-local" }
 voktty-remote-protocol = { path = "../voktty-remote-protocol" }
 voktty-workspace-edit = { path = "../voktty-workspace-edit" }

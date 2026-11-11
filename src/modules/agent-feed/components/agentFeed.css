@@ -1,0 +1,123 @@
+/* Pixel chat bubbles for the team communications log. The notched corners
+   and stepped tail match the pixel mascots; text keeps the UI font. */
+
+.agent-feed-bubble {
+  --bubble-edge: var(--agent-color, var(--border));
+  --bubble-fill: color-mix(in srgb, var(--agent-color, var(--muted)) 12%, var(--background));
+  position: relative;
+  margin: 2px 2px 2px 8px;
+  padding: 6px 10px;
+  background: var(--bubble-fill);
+  /* Two-pixel frame with the corner pixels left out, arcade style. */
+  box-shadow:
+    0 -2px 0 0 var(--bubble-edge),
+    0 2px 0 0 var(--bubble-edge),
+    -2px 0 0 0 var(--bubble-edge),
+    2px 0 0 0 var(--bubble-edge);
+  image-rendering: pixelated;
+}
+
+/* Stepped tail pointing back at the speaker's mascot. */
+.agent-feed-bubble::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: -8px;
+  width: 6px;
+  height: 6px;
+  background: var(--bubble-edge);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 66% 100%, 66% 66%, 33% 66%, 33% 33%, 0 33%);
+}
+
+.agent-feed-bubble[data-side="right"] {
+  margin: 2px 8px 2px 2px;
+}
+
+.agent-feed-bubble[data-side="right"]::before {
+  left: auto;
+  right: -8px;
+  transform: scaleX(-1);
+}
+
+.agent-feed-bubble[data-tone="note"] {
+  --bubble-fill: color-mix(in srgb, var(--agent-color, var(--muted)) 6%, var(--background));
+}
+
+.agent-feed-bubble[data-pending="true"] {
+  --bubble-edge: color-mix(in srgb, var(--agent-color, var(--border)) 45%, transparent);
+}
+
+/* Square pixel chips for names, times and marks. */
+.agent-feed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow:
+    0 -1px 0 0 currentColor,
+    0 1px 0 0 currentColor,
+    -1px 0 0 0 currentColor,
+    1px 0 0 0 currentColor;
+}
+
+.agent-feed-cut::after {
+  content: "6";
+}
+
+/* Dashed pixel rule for arrivals, departures and the unread marker. */
+.agent-feed-rule {
+  height: 2px;
+  flex: 1;
+  background-image: linear-gradient(to right, currentColor 50%, transparent 50%);
+  background-size: 6px 2px;
+  opacity: 0.5;
+}
+
+/* New entries appear in steps, not with a smooth fade. */
+.agent-feed-enter {
+  animation: agent-feed-step-in 240ms steps(3, end) both;
+}
+
+@keyframes agent-feed-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* One hop of the speaker when a message lands. */
+.agent-feed-pulse {
+  animation: agent-feed-pulse 360ms steps(2, end) 2;
+}
+
+@keyframes agent-feed-pulse {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.agent-feed-gone {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-feed-enter,
+  .agent-feed-pulse,
+  .agent-feed-mascot .mascot-active,
+  .agent-feed-mascot .mascot-rest,
+  .agent-feed-mascot .mascot-talk {
+    animation: none !important;
+  }
+  .agent-feed-mascot .mascot-talk {
+    opacity: 0;
+  }
+}

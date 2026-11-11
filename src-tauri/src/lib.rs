@@ -3,10 +3,10 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions,
-    fs, git, git_review, harness, history, lsp, mcp, net, notch_window, project_memory, pty,
-    quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel, vibrancy,
-    web_server, workspace,
+    agent, agent_feed, agent_history, aliases, api_client, collab, companion, control, dap, docker,
+    extensions, fs, git, git_review, harness, history, lsp, mcp, net, notch_window, project_memory,
+    pty, quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel,
+    vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -533,6 +533,7 @@ pub fn run() {
             notch_window::notch_window_show,
             notch_window::notch_window_fit,
             notch_window::notch_window_hide,
+            agent_feed::agent_feed_poll,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
             secrets::secrets_get,

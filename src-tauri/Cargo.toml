@@ -10,6 +10,7 @@ default-run = "voktty"
 [workspace]
 members = [
 	"crates/voktty-cli",
+	"crates/voktty-agent-feed",
 	"crates/voktty-aliases",
 	"crates/voktty-control-protocol",
 	"crates/voktty-collab-protocol",
@@ -26,6 +27,7 @@ members = [
 default-members = [
 	".",
 	"crates/voktty-cli",
+	"crates/voktty-agent-feed",
 	"crates/voktty-aliases",
 	"crates/voktty-control-protocol",
 	"crates/voktty-collab-protocol",
@@ -80,6 +82,7 @@ voktty-remote-protocol = { path = "crates/voktty-remote-protocol" }
 voktty-tool-policy = { path = "crates/voktty-tool-policy" }
 voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
 voktty-paths = { path = "crates/voktty-paths" }
+voktty-agent-feed = { path = "crates/voktty-agent-feed" }
 voktty-memory-local = { path = "crates/voktty-memory-local" }
 voktty-workspace-kit = { path = "crates/voktty-workspace-kit" }
 wake-core = { path = "crates/wake-core" }

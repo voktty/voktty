@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_feed;
 pub mod agent_history;
 pub mod aliases;
 pub mod api_client;

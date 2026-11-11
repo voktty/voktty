@@ -45,6 +45,7 @@ import {
   TerminalIcon,
   Upload01Icon,
   UsbIcon,
+  UserGroupIcon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import type { PaletteItem } from "./types";
@@ -91,6 +92,7 @@ export type CommandPaletteActionContext = {
   openNewHarness?: () => void;
   openNewHarnessInWorktree?: () => void;
   openBroadcastToAgents?: () => void;
+  openAgentFeed?: () => void;
   openActiveTabs: () => void;
   openGitGraph: () => void;
   openGitClone?: () => void;
@@ -566,6 +568,26 @@ export function createCommandItems(
       icon: Megaphone01Icon,
       shortcutId: "ai.broadcastToAgents",
       run: () => ctx.openBroadcastToAgents?.(),
+    },
+    {
+      id: "ai.agentFeed",
+      title: t("commandPalette.commands.agentFeed"),
+      group: "AI",
+      keywords: [
+        "agents",
+        "messages",
+        "team",
+        "orchestrator",
+        "communications",
+        "agentes",
+        "mensajes",
+        "equipo",
+        "orquestador",
+        "comunicaciones",
+      ],
+      icon: UserGroupIcon,
+      disabledReason: ctx.openAgentFeed ? undefined : t("agentFeed.noProject"),
+      run: () => ctx.openAgentFeed?.(),
     },
     {
       id: "tab.close",

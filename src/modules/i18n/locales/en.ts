@@ -2184,6 +2184,7 @@ export const en = {
       worktreeNeedsProject:
         "Open a project first to create an isolated worktree session",
       broadcastToAgents: "Send message to all agents",
+      agentFeed: "Team communications",
       newTerminal: "New terminal",
       dropPrompt: "Drop file or folder here to open",
       dropSubtitle:
@@ -6772,6 +6773,56 @@ export const en = {
     sharedFile: "Shared file",
     statusTruncated:
       "Git returned an incomplete file list. Scoped commits are disabled until the full list is available.",
+  },
+  agentFeed: {
+    title: "Team communications",
+    description:
+      "What your agents say to each other and to you, read from the Claude Code sessions of this project.",
+    command: "Team communications",
+    sourceLocal: "{project} on this computer",
+    sourceSsh: "{project} on {host}",
+    live: "Live",
+    loading: "Reading",
+    range6h: "6 h",
+    range24h: "24 h",
+    range3d: "3 days",
+    filterMessages: "Between agents",
+    filterNotes: "To you",
+    filterHuman: "Your prompts",
+    filterPresence: "Arrivals and departures",
+    filterAgent: "Show only {agent}",
+    orchestrator: "Orchestrator",
+    statusBusy: "working",
+    statusIdle: "waiting",
+    statusShell: "running a command",
+    statusGone: "closed",
+    statusUnknown: "unknown",
+    you: "You",
+    toYou: "to you",
+    delivered: "delivered",
+    notDelivered: "no receipt seen",
+    joined: "{agent} joined at {time}",
+    left: "{agent} left at {time}",
+    toAgent: "to {agent}",
+    newSince: "New since your last visit",
+    expand: "Show all",
+    collapse: "Show less",
+    truncated: "This message was shortened.",
+    copyTmux: "Copy tmux",
+    copied: "tmux command copied",
+    showOlder: "Show {count} older entries",
+    empty:
+      "No messages in this range. Claude Code agents that talk to each other in this project appear here.",
+    noProject: "Open a project folder or a terminal in the project first.",
+    disconnected:
+      "The SSH connection is not open. Open a terminal on the host to reconnect.",
+    unsupported:
+      "This environment is not supported yet. Use a local project or an SSH connection.",
+    helperOutdated:
+      "The remote helper on this host is outdated. Reconnect the SSH workspace to update it.",
+    unavailable: "Claude Code has no data on this machine.",
+    failed: "Could not read the agent messages: {error}",
+    unrecognized: "{count} entries could not be read",
   },
 };
 

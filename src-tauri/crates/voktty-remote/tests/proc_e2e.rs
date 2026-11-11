@@ -30,6 +30,7 @@ impl Helper {
         let mut child = Command::new(env!("CARGO_BIN_EXE_voktty-remote"))
             .arg("--stdio")
             .env("HOME", home)
+            .env_remove("CLAUDE_CONFIG_DIR")
             .env("PATH", bin)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -240,4 +241,44 @@ fn agent_probe_reports_the_installed_version_and_rejects_other_commands() {
     assert_eq!(missing.result.unwrap()["found"], false);
     let rejected = helper.request("agent.probe", json!({ "command": "sh" }));
     assert_eq!(rejected.error.unwrap().code, "command_not_allowed");
+}
+
+#[test]
+fn agent_feed_poll_reads_project_transcripts_and_rejects_bad_params() {
+    let home = tempfile::tempdir().unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let root = "/srv/team/webserver";
+    let projects = home.path().join(".claude/projects/-srv-team-webserver");
+    fs::create_dir_all(&projects).unwrap();
+    let row = json!({"type": "assistant", "uuid": "u1", "timestamp": "2026-11-11T10:00:00.000Z",
+        "message": {"content": [{"type": "text", "text": "Batería lanzada."}]}});
+    fs::write(
+        projects.join("s1.jsonl"),
+        format!(
+            "{row}
+"
+        ),
+    )
+    .unwrap();
+    fs::create_dir_all(home.path().join(".claude/sessions")).unwrap();
+    fs::write(home.path().join(".claude/sessions/77.key"), "SECRET").unwrap();
+    let mut helper = Helper::start(home.path(), bin.path(), work.path());
+
+    let feed = helper.request("agentFeed.poll", json!({ "root": root, "sinceMs": 0 }));
+    let result = feed.result.expect("feed result");
+    assert_eq!(result["available"], true);
+    assert_eq!(result["records"][0]["kind"], "note");
+    assert_eq!(result["records"][0]["text"], "Batería lanzada.");
+    assert!(!result.to_string().contains("SECRET"));
+
+    let cursor = result["cursor"].clone();
+    let again = helper.request(
+        "agentFeed.poll",
+        json!({ "root": root, "sinceMs": 0, "cursor": cursor }),
+    );
+    assert_eq!(again.result.unwrap()["records"], json!([]));
+
+    let bad = helper.request("agentFeed.poll", json!({ "root": root, "path": "/etc" }));
+    assert_eq!(bad.error.unwrap().code, "invalid_params");
 }

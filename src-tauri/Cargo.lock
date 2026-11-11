@@ -8797,6 +8797,7 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
+ "voktty-agent-feed",
  "voktty-aliases",
  "voktty-collab-protocol",
  "voktty-companion-protocol",
@@ -8812,6 +8813,15 @@ dependencies = [
  "window-vibrancy",
  "windows-sys 0.61.2",
  "zip 4.6.1",
+]
+
+[[package]]
+name = "voktty-agent-feed"
+version = "1.0.21"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -8910,6 +8920,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "uuid",
+ "voktty-agent-feed",
  "voktty-memory-local",
  "voktty-remote-protocol",
  "voktty-workspace-edit",

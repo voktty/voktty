@@ -106,6 +106,7 @@ const RULES: Readonly<Record<ShortcutId, CommandSurfaceRule>> = {
 
 const COMMAND_RULES: Readonly<Record<string, CommandSurfaceRule>> = {
   ...RULES,
+  "ai.agentFeed": GLOBAL,
   "ai.openHarness": GLOBAL,
   "ai.openHarnessInWorktree": GLOBAL,
   "aliases.manage": GLOBAL,

@@ -2244,6 +2244,7 @@ export const es: TranslationSchema = {
       worktreeNeedsProject:
         "Abre un proyecto primero para crear una sesion en un worktree aislado",
       broadcastToAgents: "Enviar mensaje a todos los agentes",
+      agentFeed: "Comunicaciones del equipo",
       newTerminal: "Nueva terminal",
       dropPrompt: "Suelta el archivo o carpeta aquí para abrirlo",
       dropSubtitle:
@@ -6909,5 +6910,55 @@ export const es: TranslationSchema = {
     sharedFile: "Archivo compartido",
     statusTruncated:
       "Git devolvió una lista de archivos incompleta. Los commits por selección se desactivan hasta obtener la lista completa.",
+  },
+  agentFeed: {
+    title: "Comunicaciones del equipo",
+    description:
+      "Lo que tus agentes se dicen entre ellos y te dicen a ti, leído de las sesiones de Claude Code de este proyecto.",
+    command: "Comunicaciones del equipo",
+    sourceLocal: "{project} en este equipo",
+    sourceSsh: "{project} en {host}",
+    live: "En directo",
+    loading: "Leyendo",
+    range6h: "6 h",
+    range24h: "24 h",
+    range3d: "3 días",
+    filterMessages: "Entre agentes",
+    filterNotes: "Para ti",
+    filterHuman: "Tus órdenes",
+    filterPresence: "Entradas y salidas",
+    filterAgent: "Ver solo {agent}",
+    orchestrator: "Orquestador",
+    statusBusy: "trabajando",
+    statusIdle: "esperando",
+    statusShell: "ejecutando un comando",
+    statusGone: "cerrado",
+    statusUnknown: "desconocido",
+    you: "Tú",
+    toYou: "para ti",
+    delivered: "entregado",
+    notDelivered: "sin acuse",
+    joined: "{agent} entró a las {time}",
+    left: "{agent} salió a las {time}",
+    toAgent: "a {agent}",
+    newSince: "Nuevos desde tu última visita",
+    expand: "Ver todo",
+    collapse: "Ver menos",
+    truncated: "Este mensaje se recortó.",
+    copyTmux: "Copiar tmux",
+    copied: "Comando de tmux copiado",
+    showOlder: "Ver {count} entradas anteriores",
+    empty:
+      "No hay mensajes en este rango. Aquí aparecen los agentes de Claude Code que se hablan en este proyecto.",
+    noProject: "Abre antes una carpeta del proyecto o un terminal en él.",
+    disconnected:
+      "La conexión SSH no está abierta. Abre un terminal en el servidor para reconectar.",
+    unsupported:
+      "Este entorno todavía no está soportado. Usa un proyecto local o una conexión SSH.",
+    helperOutdated:
+      "El helper remoto de este servidor está desactualizado. Reconecta el espacio SSH para actualizarlo.",
+    unavailable: "Claude Code no tiene datos en esta máquina.",
+    failed: "No se pudieron leer los mensajes de los agentes: {error}",
+    unrecognized: "{count} entradas no se pudieron leer",
   },
 };

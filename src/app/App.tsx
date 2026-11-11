@@ -417,6 +417,12 @@ const LazyBroadcastToAgentsDialog = lazy(() =>
   })),
 );
 
+// Lazy and mounted only while open: the team communications log polls the
+// active project's Claude Code sessions, locally or through the SSH helper.
+const LazyAgentFeedDialog = lazy(
+  () => import("@/modules/agent-feed/components/AgentFeedDialog"),
+);
+
 const LazyHarnessNotch = lazy(() =>
   import("@/modules/harness/chrome/HarnessNotch").then((m) => ({
     default: m.HarnessNotch,
@@ -2481,6 +2487,7 @@ function DesktopApp() {
     onError: reportDirectoryTerminalError,
   });
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
+  const [agentFeedOpen, setAgentFeedOpen] = useState(false);
 
   const previewRoot = effectiveExplorerRoot || activeSpace?.root || localLaunchCwd || localHome || null;
   const openPreviewTab = usePreviewOpening({
@@ -4575,6 +4582,7 @@ function DesktopApp() {
         openNewHarness,
         openNewHarnessInWorktree: () => void openNewHarnessInWorktree(),
         openBroadcastToAgents: () => setBroadcastToAgentsOpen(true),
+        openAgentFeed: () => setAgentFeedOpen(true),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         openGitClone: () => setGitCloneModalOpen(true),
@@ -5525,6 +5533,17 @@ function DesktopApp() {
               onOpenChange={setBroadcastToAgentsOpen}
             />
           </Suspense>
+
+          {agentFeedOpen && (
+            <Suspense fallback={null}>
+              <LazyAgentFeedDialog
+                open={agentFeedOpen}
+                onOpenChange={setAgentFeedOpen}
+                root={effectiveExplorerRoot}
+                env={activeTabWorkspaceEnv}
+              />
+            </Suspense>
+          )}
 
           {blameTarget ? (
             <BlameDialog
