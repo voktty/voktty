@@ -91,6 +91,7 @@ export type CommandPaletteActionContext = {
   openNewApiClient?: () => void;
   openNewHarness?: () => void;
   openNewHarnessInWorktree?: () => void;
+  openTeamBoard?: () => void;
   openBroadcastToAgents?: () => void;
   openAgentFeed?: () => void;
   openActiveTabs: () => void;
@@ -548,6 +549,22 @@ export function createCommandItems(
       ],
       icon: GitBranchPlusIcon,
       run: () => ctx.openNewHarnessInWorktree?.(),
+    },
+    {
+      id: "teams.openBoard",
+      title: t("teams.openBoard"),
+      group: "General",
+      keywords: [
+        "team",
+        "equipo",
+        "board",
+        "tablero",
+        "agents",
+        "agentes",
+        "roster",
+      ],
+      icon: UserGroupIcon,
+      run: () => ctx.openTeamBoard?.(),
     },
     {
       id: "ai.broadcastToAgents",

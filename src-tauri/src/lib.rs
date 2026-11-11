@@ -5,8 +5,8 @@ pub mod modules;
 use modules::{
     agent, agent_feed, agent_history, aliases, api_client, collab, companion, control, dap, docker,
     extensions, fs, git, git_review, harness, history, lsp, mcp, net, notch_window, project_memory,
-    pty, quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, tray, tunnel,
-    vibrancy, web_server, workspace,
+    pty, quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, teams, tray,
+    tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -483,6 +483,16 @@ pub fn run() {
             git::worktrees::git_worktrees,
             git::worktrees::git_worktree_create,
             git::worktrees::git_worktree_delete,
+            git::worktrees::ensure_agent_worktree,
+            teams::team_approve_generic_command,
+            teams::team_revoke_generic_command,
+            teams::team_is_generic_command_approved,
+            teams::team_read_generic_approvals,
+            teams::team_verify_generic_launch,
+            teams::team_save_host_mapping,
+            teams::team_remove_host_mapping,
+            teams::team_get_host_mapping,
+            teams::team_read_host_mappings,
             git::commands::git_add_safe_directory,
             git::commands::git_init,
             git::commands::git_clone,
@@ -524,6 +534,8 @@ pub fn run() {
             workspace::workspace_current_dir,
             control::control_frontend_ready,
             control::control_respond,
+            control::control_register_agent_token,
+            control::control_revoke_agent_token,
             aliases::aliases_get_config_path,
             aliases::aliases_get_state,
             aliases::aliases_save_user,

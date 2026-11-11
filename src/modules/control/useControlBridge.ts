@@ -67,6 +67,12 @@ type UseControlBridgeOptions = {
   activeSpaceIdRef: RefObject<string | null>;
   onOpen: (request: LaunchRequest & { spaceId: string }) => number | null;
   onNewHarness?: NewHarnessHandler;
+  onNewHarnessTab?: (
+    spaceId?: string,
+    cwd?: string,
+    sessionId?: string,
+  ) => number;
+  onCloseTab?: (tabId: number) => void;
 };
 
 class RequestError extends Error {
@@ -343,6 +349,8 @@ export function useControlBridge({
   activeSpaceIdRef,
   onOpen,
   onNewHarness,
+  onNewHarnessTab,
+  onCloseTab,
 }: UseControlBridgeOptions): void {
   useEffect(() => {
     if (!ready) return;
@@ -435,14 +443,38 @@ export function useControlBridge({
           await respond(request.id, { ok: true, result });
           return;
         }
+        if (request.method.startsWith("agent.")) {
+          const { dispatchAgentMethod } = await import(
+            "@/modules/teams/lib/agentControlBridge"
+          );
+          const result = await dispatchAgentMethod(
+            request.method,
+            request.params,
+            request.caller as any,
+            {
+              onNewHarness,
+              onNewHarnessTab,
+              onCloseTab,
+              tabsRef,
+              activeTabIdRef,
+              activeSpaceIdRef,
+            },
+          );
+          await respond(request.id, { ok: true, result });
+          return;
+        }
         throw new RequestError(
           "unknown_method",
           `unsupported frontend method '${request.method}'`,
         );
       } catch (error) {
         const responseError =
-          error instanceof RequestError
-            ? { code: error.code, message: error.message }
+          error instanceof RequestError ||
+          (error &&
+            typeof error === "object" &&
+            "code" in error &&
+            "message" in error)
+            ? { code: (error as any).code, message: (error as any).message }
             : { code: "frontend_error", message: String(error) };
         await respond(request.id, { ok: false, error: responseError }).catch(
           (responseError) => {
@@ -474,5 +506,14 @@ export function useControlBridge({
         console.error("[voktty] control bridge cleanup failed:", error);
       });
     };
-  }, [ready, tabsRef, activeTabIdRef, activeSpaceIdRef, onOpen, onNewHarness]);
+  }, [
+    ready,
+    tabsRef,
+    activeTabIdRef,
+    activeSpaceIdRef,
+    onOpen,
+    onNewHarness,
+    onNewHarnessTab,
+    onCloseTab,
+  ]);
 }

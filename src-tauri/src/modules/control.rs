@@ -45,6 +45,7 @@ struct ControlCore {
     shutting_down: AtomicBool,
     active_connections: AtomicUsize,
     pending: Mutex<HashMap<String, SyncSender<FrontendResponse>>>,
+    agent_tokens: Mutex<HashMap<String, String>>,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ impl Default for ControlState {
             shutting_down: AtomicBool::new(false),
             active_connections: AtomicUsize::new(0),
             pending: Mutex::new(HashMap::new()),
+            agent_tokens: Mutex::new(HashMap::new()),
         }))
     }
 }
@@ -80,6 +82,7 @@ pub struct HarnessControlEnv {
     pub session_id: String,
     pub cli_path: Option<String>,
     pub cli_bin_dir: Option<PathBuf>,
+    pub agent_token: Option<String>,
 }
 
 impl ControlState {
@@ -100,6 +103,27 @@ impl ControlState {
         })
     }
 
+    pub fn register_agent_token(&self, session_id: String, token: String) -> bool {
+        if !valid_session_id(&session_id) || !valid_agent_token(&token) {
+            return false;
+        }
+        if let Ok(mut map) = self.0.agent_tokens.lock() {
+            if map.len() >= MAX_AGENT_TOKENS && !map.contains_key(&session_id) {
+                return false;
+            }
+            map.insert(session_id, token);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn revoke_agent_token(&self, session_id: &str) {
+        if let Ok(mut map) = self.0.agent_tokens.lock() {
+            map.remove(session_id);
+        }
+    }
+
     pub fn harness_env(&self, session_id: &str) -> Option<HarnessControlEnv> {
         if self.0.shutting_down.load(Ordering::Acquire) {
             return None;
@@ -108,12 +132,19 @@ impl ControlState {
         if self.0.shutting_down.load(Ordering::Acquire) {
             return None;
         }
+        let agent_token = self
+            .0
+            .agent_tokens
+            .lock()
+            .ok()
+            .and_then(|map| map.get(session_id).cloned());
         Some(HarnessControlEnv {
             address: runtime.address.clone(),
             token: runtime.token.clone(),
             session_id: session_id.to_string(),
             cli_path: runtime.cli_path.as_ref().map(fs::to_canon),
             cli_bin_dir: runtime.launcher_dir.clone(),
+            agent_token,
         })
     }
 
@@ -560,6 +591,23 @@ pub fn control_frontend_ready(state: tauri::State<'_, ControlState>, ready: bool
 }
 
 #[tauri::command]
+pub fn control_register_agent_token(
+    state: tauri::State<'_, ControlState>,
+    session_id: String,
+    token: String,
+) -> bool {
+    state.register_agent_token(session_id, token)
+}
+
+#[tauri::command]
+pub fn control_revoke_agent_token(
+    state: tauri::State<'_, ControlState>,
+    session_id: String,
+) {
+    state.revoke_agent_token(&session_id);
+}
+
+#[tauri::command]
 pub fn control_respond(
     state: tauri::State<'_, ControlState>,
     request_id: String,
@@ -581,6 +629,20 @@ fn write_response(stream: &mut TcpStream, response: &ControlResponse) -> std::io
 }
 
 fn valid_request_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.:".contains(&byte))
+}
+
+pub const MAX_AGENT_TOKENS: usize = 64;
+
+pub fn valid_agent_token(token: &str) -> bool {
+    token.len() == 32 && token.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+pub fn valid_session_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
         && id
@@ -999,6 +1061,47 @@ mod tests {
 
         state.shutdown();
         assert!(state.harness_env("session-42").is_none());
+    }
+
+    #[test]
+    fn agent_token_lifecycle_in_control_state() {
+        let state = ControlState::default();
+        assert!(state
+            .0
+            .runtime
+            .set(RuntimeInfo {
+                address: "127.0.0.1:4312".into(),
+                token: "a".repeat(64),
+                descriptor_path: PathBuf::from("unused-control.json"),
+                cli_path: None,
+                launcher_dir: None,
+            })
+            .is_ok());
+
+        let env1 = state.harness_env("s-1").expect("harness env");
+        assert!(env1.agent_token.is_none());
+
+        let valid_token = "0123456789abcdef0123456789abcdef";
+        assert!(state.register_agent_token("s-1".into(), valid_token.into()));
+        let env2 = state.harness_env("s-1").expect("harness env");
+        assert_eq!(env2.agent_token.as_deref(), Some(valid_token));
+
+        state.revoke_agent_token("s-1");
+        let env3 = state.harness_env("s-1").expect("harness env");
+        assert!(env3.agent_token.is_none());
+
+        // M6: rejects invalid tokens and session IDs
+        assert!(!state.register_agent_token("s-1".into(), "too-short".into()));
+        assert!(!state.register_agent_token("s-1".into(), "not-hex-characters-0123456789!".into()));
+        assert!(!state.register_agent_token("".into(), valid_token.into()));
+        assert!(!state.register_agent_token("a".repeat(129), valid_token.into()));
+
+        // M6: enforces MAX_AGENT_TOKENS capacity
+        for i in 0..MAX_AGENT_TOKENS {
+            let session = format!("sess-{i}");
+            assert!(state.register_agent_token(session, valid_token.into()));
+        }
+        assert!(!state.register_agent_token("overflow-sess".into(), valid_token.into()));
     }
 
     #[test]

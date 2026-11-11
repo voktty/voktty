@@ -33,6 +33,7 @@ pub mod serial;
 pub mod shell;
 pub mod ssh_native;
 pub mod ssh_proxy;
+pub mod teams;
 pub mod tray;
 pub mod tunnel;
 pub mod vibrancy;

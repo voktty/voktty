@@ -136,6 +136,7 @@ const COMMAND_RULES: Readonly<Record<string, CommandSurfaceRule>> = {
   "tab.revealInFileManager": GLOBAL,
   "tab.revealInExplorer": GLOBAL,
   "tab.splitPreview": GLOBAL,
+  "teams.openBoard": GLOBAL,
   "theme.pick": GLOBAL,
   "vault.lock": GLOBAL,
   "workbench.openDebugger": GLOBAL,

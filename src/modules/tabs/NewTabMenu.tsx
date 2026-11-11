@@ -31,6 +31,7 @@ import {
   PencilEdit02Icon,
   PlusSignIcon,
   SparklesIcon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -70,6 +71,7 @@ export type NewTabMenuProps = {
   onOpenFolder?: () => void;
   onNewGitGraph?: () => void;
   onLaunchAgents: (request: AgentLaunchRequest) => void;
+  onOpenTeamBoard?: () => void;
 };
 
 type NewTabMenuItemsProps = NewTabMenuProps & {
@@ -187,6 +189,7 @@ export function NewTabMenu({
   onOpenFolder,
   onNewGitGraph,
   onLaunchAgents,
+  onOpenTeamBoard,
 }: NewTabMenuProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -257,6 +260,7 @@ export function NewTabMenu({
                 onOpenFolder={onOpenFolder}
                 onNewGitGraph={onNewGitGraph}
                 onLaunchAgents={onLaunchAgents}
+                onOpenTeamBoard={onOpenTeamBoard}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -303,6 +307,7 @@ export function NewTabMenuItems({
   onOpenFile,
   onOpenFolder,
   onNewGitGraph: _onNewGitGraph,
+  onOpenTeamBoard,
 }: NewTabMenuItemsProps) {
   const { t } = useTranslation();
   const aiAvailable = useAiAvailable();
@@ -393,6 +398,22 @@ export function NewTabMenuItems({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       ) : null}
+
+      {/* Team Board */}
+      {onOpenTeamBoard && (
+        <NewTabMenuItem
+          onSelect={onOpenTeamBoard}
+          customIcon={
+            <HugeiconsIcon
+              icon={UserGroupIcon}
+              size={14}
+              strokeWidth={1.75}
+              className="shrink-0 text-amber-400"
+            />
+          }
+          label={t("teams.openBoardTabMenu")}
+        />
+      )}
 
       {/* 3. Otras Terminales con Desplegable */}
       {hasExtraShells && (

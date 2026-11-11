@@ -225,6 +225,14 @@ export type HarnessTab = TabBase & {
   cwd?: string;
 };
 
+export type TeamTab = TabBase & {
+  id: number;
+  kind: "team";
+  title: string;
+  projectPath: string;
+  workspaceEnv?: WorkspaceEnv;
+};
+
 export type Tab =
   | TerminalTab
   | EditorTab
@@ -237,7 +245,8 @@ export type Tab =
   | GitCommitDiffTab
   | RdpTab
   | ApiClientTab
-  | HarnessTab;
+  | HarnessTab
+  | TeamTab;
 
 export type TabPatch = Partial<{
   title: string;
@@ -1814,7 +1823,49 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return id;
   }, []);
 
+  const newTeamTab = useCallback((projectPath: string, spaceId?: string) => {
+    const targetSpace = spaceId ?? activeSpaceIdRef.current;
+    const curr = tabsRef.current;
+    const existing = curr.find(
+      (t): t is TeamTab =>
+        t.kind === "team" &&
+        t.projectPath === projectPath &&
+        t.spaceId === targetSpace,
+    );
+    if (existing) {
+      setActiveId(existing.id);
+      return existing.id;
+    }
+    const id = nextIdRef.current++;
+    const nextTabs: Tab[] = [
+      ...curr,
+      {
+        id,
+        ...createTabIdentity(targetSpace),
+        kind: "team",
+        spaceId: targetSpace,
+        title: translate("teams.boardTitle"),
+        projectPath,
+      },
+    ];
+    tabsRef.current = nextTabs;
+    setTabs(nextTabs);
+    setActiveId(id);
+    return id;
+  }, []);
+
   const closeTab = useCallback((id: number, preferredNextId?: number | null) => {
+    const closingTab = tabsRef.current.find((tab) => tab.id === id);
+    if (closingTab?.kind === "harness" && closingTab.sessionId) {
+      const sid = closingTab.sessionId;
+      void import("@/modules/teams/lib/agentRegistry").then(
+        ({ isLiveAgentSession, revokeLiveAgent }) => {
+          if (isLiveAgentSession(sid)) {
+            void revokeLiveAgent(sid);
+          }
+        },
+      );
+    }
     const editor = tabsRef.current.find(
       (tab): tab is EditorTab =>
         tab.id === id && tab.kind === "editor" && !tab.locked,
@@ -1849,7 +1900,18 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       const result = applyCloseTabsPlan(tabsRef.current, anchorId, plan);
       if (!result) return [];
       for (const tab of tabsRef.current) {
-        if (tab.kind !== "editor" || !result.closeIds.includes(tab.id)) continue;
+        if (!result.closeIds.includes(tab.id)) continue;
+        if (tab.kind === "harness" && tab.sessionId) {
+          const sid = tab.sessionId;
+          void import("@/modules/teams/lib/agentRegistry").then(
+            ({ isLiveAgentSession, revokeLiveAgent }) => {
+              if (isLiveAgentSession(sid)) {
+                void revokeLiveAgent(sid);
+              }
+            },
+          );
+        }
+        if (tab.kind !== "editor") continue;
         recentlyClosedEditorsRef.current = pushClosedEditor(
           recentlyClosedEditorsRef.current,
           {
@@ -2262,6 +2324,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     newRdpTab,
     newApiClientTab,
     newHarnessTab,
+    newTeamTab,
     setMarkdownView,
     openAiDiffTab,
     openGitDiffTab,

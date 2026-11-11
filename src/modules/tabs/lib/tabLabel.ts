@@ -88,6 +88,7 @@ export function labelFor(t: Tab): string {
   if (t.kind === "rdp") return t.title;
   if (t.kind === "api-client") return t.title;
   if (t.kind === "harness") return t.title;
+  if (t.kind === "team") return t.title;
   if (t.customTitle) return t.customTitle;
 
   const agentMatch = matchAgentFromTitle(t.title);

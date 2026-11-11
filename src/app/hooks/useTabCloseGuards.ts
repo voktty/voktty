@@ -159,6 +159,16 @@ export function useTabCloseGuards({
         setPendingCloseTab(id);
         return;
       }
+      if (t?.kind === "harness" && t.sessionId) {
+        const { getHarnessSessionSnapshot } = await import(
+          "@/modules/harness/lib/harnessControlBridge"
+        );
+        const snapshot = getHarnessSessionSnapshot(t.sessionId);
+        if (snapshot?.state === "working") {
+          setPendingTerminalCloseTab(id);
+          return;
+        }
+      }
       if (t?.kind === "terminal") {
         const leaves = leafIds(t.paneTree);
         const confirmForeground = confirmRunningTerminal();

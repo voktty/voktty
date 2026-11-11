@@ -2991,8 +2991,45 @@ pub(crate) fn apply_gui_env(cmd: &mut Command) {
     }
 }
 
+/// Explicit list of Claude Code runtime session markers removed from spawned child sessions.
+/// These variables identify an active/child Claude Code session instance and could inhibit
+/// independent child conversation persistence if inherited from an outer session.
+///
+/// Verified markers:
+/// - `CLAUDECODE`: internal marker set by Claude Code CLI to identify execution environment.
+/// - `CLAUDE_CODE_ENTRYPOINT`: indicates parent entrypoint invocation mechanism.
+///
+/// Defensive markers (scrubbed to prevent inheritance from interactive/wrapped parent sessions):
+/// - `CLAUDE_CODE_CHILD_SESSION`
+/// - `CLAUDE_CODE_SESSION_ID`
+/// - `CLAUDE_CODE_SESSION_ATTENDED`
+/// - `CLAUDE_CODE_MESSAGING_SOCKET`
+/// - `CLAUDE_CODE_MESSAGING_TOKEN`
+/// - `CLAUDE_PID`
+///
+/// Note: Legitimate user configuration variables (e.g. `CLAUDE_CODE_GIT_BASH_PATH` on Windows,
+/// `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`)
+/// MUST be preserved and are intentionally NOT removed.
+const CLAUDE_SESSION_MARKERS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_PID",
+];
+
+fn clean_claude_heritage_env(cmd: &mut Command) {
+    for var in CLAUDE_SESSION_MARKERS {
+        cmd.env_remove(var);
+    }
+}
+
 fn prepare_child(cmd: &mut Command, command: &str) {
     apply_gui_env(cmd);
+    clean_claude_heritage_env(cmd);
     if command_basename(command) == "fx" {
         apply_fx_env(cmd);
     }
@@ -3016,6 +3053,9 @@ fn apply_harness_control_env(cmd: &mut Command, env: &control::HarnessControlEnv
     cmd.env("VOKTTY_CONTROL_TOKEN", &env.token);
     cmd.env("VOKTTY_SESSION_ID", &env.session_id);
     cmd.env("VOKTTY_CLI_HELP", HARNESS_CLI_HELP);
+    if let Some(agent_token) = &env.agent_token {
+        cmd.env("VOKTTY_AGENT_TOKEN", agent_token);
+    }
     if let Some(path) = &env.cli_path {
         cmd.env("VOKTTY_CLI", path);
     }
@@ -3916,6 +3956,7 @@ mod harness_control_env_tests {
             session_id: "session-42".into(),
             cli_path: Some("/opt/voktty/bin/voktty".into()),
             cli_bin_dir: None,
+            agent_token: None,
         };
         apply_harness_control_env(&mut cmd, &env);
 
@@ -3936,6 +3977,26 @@ mod harness_control_env_tests {
             Some("/opt/voktty/bin/voktty")
         );
         assert!(env_value(&cmd, "VOKTTY_CLI_HELP").is_some());
+        assert!(env_value(&cmd, "VOKTTY_AGENT_TOKEN").is_none());
+    }
+
+    #[test]
+    fn injects_agent_token_when_present() {
+        let mut cmd = Command::new("true");
+        let env = control::HarnessControlEnv {
+            address: "127.0.0.1:4312".into(),
+            token: "a".repeat(64),
+            session_id: "session-42".into(),
+            cli_path: None,
+            cli_bin_dir: None,
+            agent_token: Some("secret_agent_token_123".into()),
+        };
+        apply_harness_control_env(&mut cmd, &env);
+
+        assert_eq!(
+            env_value(&cmd, "VOKTTY_AGENT_TOKEN").as_deref(),
+            Some("secret_agent_token_123")
+        );
     }
 
     #[test]
@@ -3953,6 +4014,7 @@ mod harness_control_env_tests {
             session_id: "session-42".into(),
             cli_path: None,
             cli_bin_dir: Some(PathBuf::from("/opt/voktty/launcher")),
+            agent_token: None,
         };
         apply_harness_control_env(&mut cmd, &env);
 
@@ -4369,6 +4431,49 @@ mod binary_resolution_tests {
         };
         let error = remote_agent_restrictions(None, Some(&account)).unwrap_err();
         assert!(error.contains("Provider accounts"));
+    }
+
+    #[test]
+    fn cleans_inherited_claude_heritage_markers() {
+        let mut cmd = Command::new("claude");
+        cmd.env("CLAUDECODE", "1")
+            .env("CLAUDE_CODE_CHILD_SESSION", "true")
+            .env("CLAUDE_CODE_ENTRYPOINT", "cli")
+            .env("CLAUDE_CODE_SESSION_ID", "parent_123")
+            .env("CLAUDE_PID", "4567")
+            .env("CLAUDE_CODE_GIT_BASH_PATH", "C:\\Program Files\\Git\\bin\\bash.exe")
+            .env("CLAUDE_CODE_USE_BEDROCK", "1")
+            .env("CUSTOM_VAR", "keep_me");
+
+        clean_claude_heritage_env(&mut cmd);
+
+        let envs: std::collections::HashMap<_, _> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|s| s.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        // Session markers must be removed
+        assert_eq!(envs.get("CLAUDECODE"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_CODE_CHILD_SESSION"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_CODE_ENTRYPOINT"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_CODE_SESSION_ID"), Some(&None));
+        assert_eq!(envs.get("CLAUDE_PID"), Some(&None));
+
+        // Configuration variables must be preserved intact (B4)
+        assert_eq!(
+            envs.get("CLAUDE_CODE_GIT_BASH_PATH"),
+            Some(&Some("C:\\Program Files\\Git\\bin\\bash.exe".to_string()))
+        );
+        assert_eq!(
+            envs.get("CLAUDE_CODE_USE_BEDROCK"),
+            Some(&Some("1".to_string()))
+        );
+        assert_eq!(envs.get("CUSTOM_VAR"), Some(&Some("keep_me".to_string())));
     }
 }
 

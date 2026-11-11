@@ -53,6 +53,7 @@ import {
   SparklesIcon,
   SquareLock01Icon,
   SquareUnlock01Icon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -136,6 +137,7 @@ type Props = {
   onRevealInExplorer?: (tab: Tab) => void;
   onReconnectTab?: (tab: Tab) => void;
   onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
+  onOpenTeamBoard?: (projectPath?: string) => void;
 };
 
 function tabCategory(t: Tab): "terminals" | "files" | "tools" {
@@ -188,6 +190,16 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
         size={14}
         strokeWidth={1.75}
         className="text-violet-400"
+      />
+    );
+  }
+  if (tab.kind === "team") {
+    return (
+      <HugeiconsIcon
+        icon={UserGroupIcon}
+        size={14}
+        strokeWidth={1.75}
+        className="text-cyan-400"
       />
     );
   }
@@ -258,6 +270,7 @@ export function VerticalTabBar({
   onWorkspaceDrop,
   onRevealInExplorer,
   onCardDrop,
+  onOpenTeamBoard,
 }: Props) {
   const { t } = useTranslation();
   const fileManagerReveal = useTabFileManagerReveal(tabs);
@@ -407,6 +420,7 @@ export function VerticalTabBar({
             onOpenFolder={onOpenFolder}
             onNewGitGraph={onNewGitGraph}
             onLaunchAgents={onLaunchAgents}
+            onOpenTeamBoard={onOpenTeamBoard ? () => onOpenTeamBoard() : undefined}
           />
         ) : onNew ? (
           <button
@@ -944,6 +958,24 @@ export function VerticalTabBar({
                         </>
                       );
                     })()}
+                    {onOpenTeamBoard && (
+                      <ContextMenuItem
+                        className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                        onSelect={() => {
+                          const tabPath = getTabPath(tab);
+                          onOpenTeamBoard(tabPath ?? undefined);
+                        }}
+                      >
+                        <HugeiconsIcon
+                          icon={UserGroupIcon}
+                          size={13}
+                          strokeWidth={1.75}
+                        />
+                        <span className="flex-1">
+                          {t("teams.openBoardTabMenu")}
+                        </span>
+                      </ContextMenuItem>
+                    )}
                     {onOpenPreviewSplit && (
                       <TabPreviewSplitMenuItem
                         tab={tab}

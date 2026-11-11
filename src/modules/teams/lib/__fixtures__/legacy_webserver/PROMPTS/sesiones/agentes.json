@@ -1,0 +1,172 @@
+{
+  "_nota": "Anonymized test fixture for legacy PROMPTS import",
+  "base": "projects/sample-webserver",
+  "agentes": [
+    {
+      "nombre": "orquestador",
+      "dir": "sample-webserver",
+      "modelo": "claude-opus-5-5",
+      "esfuerzo": "medium",
+      "inicio": "siempre",
+      "rol": "roles/orquestador.md",
+      "iniciar": "sample-webserver/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "PROMPTS/ (estructura)",
+        "AGENTS.md",
+        "docs/planes/ (planes transversales)"
+      ],
+      "lee_tambien": [
+        "app-desktop",
+        "signage-app",
+        "mobile-app",
+        "core-system"
+      ]
+    },
+    {
+      "nombre": "nodo",
+      "dir": "sample-webserver",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "medium",
+      "inicio": "bajo demanda",
+      "rol": "roles/nodo.md",
+      "iniciar": "sample-webserver/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "server.py",
+        "core/",
+        "modules/",
+        "scripts/",
+        "tests/",
+        "services/billing",
+        "services/attendance",
+        "services/stats",
+        "templates/",
+        "docker-compose.yml y .env.example (compartidos)",
+        "PROMPTS/dominios/{CORE,BILLING,STATS}.md"
+      ],
+      "lee_tambien": []
+    },
+    {
+      "nombre": "panel-crm",
+      "dir": "sample-webserver",
+      "modelo": "claude-opus-5-5",
+      "esfuerzo": "medium",
+      "inicio": "bajo demanda",
+      "rol": "roles/panel-crm.md",
+      "iniciar": "sample-webserver/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "panel/",
+        "services/crm",
+        "styles/theme",
+        "PROMPTS/dominios/{PANEL,CRM}.md"
+      ],
+      "lee_tambien": [
+        "signage-app"
+      ]
+    },
+    {
+      "nombre": "web",
+      "dir": "sample-webserver",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "high",
+      "inicio": "bajo demanda",
+      "rol": "roles/web.md",
+      "iniciar": "sample-webserver/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "services/web",
+        "PROMPTS/dominios/{WEB,LANDINGS}.md"
+      ],
+      "lee_tambien": []
+    },
+    {
+      "nombre": "app",
+      "dir": "mobile-app",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "high",
+      "inicio": "bajo demanda",
+      "rol": "roles/app.md",
+      "iniciar": "mobile-app/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "mobile-app (todo el repo)",
+        "PROMPTS/dominios/MOBILE.md"
+      ],
+      "lee_tambien": [
+        "sample-webserver/PROMPTS"
+      ]
+    },
+    {
+      "nombre": "pix",
+      "dir": "app-desktop",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "high",
+      "inicio": "bajo demanda",
+      "rol": "roles/pix.md",
+      "iniciar": "app-desktop/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "app-desktop (todo el repo)",
+        "PROMPTS/dominios/DESKTOP.md"
+      ],
+      "lee_tambien": [
+        "sample-webserver/PROMPTS"
+      ]
+    },
+    {
+      "nombre": "pantallas",
+      "dir": "signage-app",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "high",
+      "inicio": "bajo demanda",
+      "rol": "roles/pantallas.md",
+      "iniciar": "signage-app/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "signage-app (todo el repo)",
+        "PROMPTS/dominios/SIGNAGE.md"
+      ],
+      "lee_tambien": [
+        "sample-webserver/PROMPTS"
+      ]
+    },
+    {
+      "nombre": "voktty",
+      "dir": "core-system",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "high",
+      "inicio": "bajo demanda",
+      "rol": "roles/voktty.md",
+      "iniciar": "core-system/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "core-system (todo el repo)"
+      ],
+      "lee_tambien": [
+        "sample-webserver/PROMPTS"
+      ]
+    },
+    {
+      "nombre": "anuncios",
+      "dir": "sample-webserver",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "medium",
+      "inicio": "bajo demanda",
+      "rol": "roles/anuncios.md",
+      "iniciar": "sample-webserver/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "docs/anuncios/",
+        "tmp/anuncios/ (fuera de git)"
+      ],
+      "lee_tambien": []
+    },
+    {
+      "nombre": "webs-clientes",
+      "dir": "sample-webserver",
+      "modelo": "claude-sonnet-5-5",
+      "esfuerzo": "medium",
+      "inicio": "bajo demanda",
+      "rol": "roles/webs-clientes.md",
+      "iniciar": "sample-webserver/PROMPTS/iniciar.txt",
+      "dueño_de": [
+        "PROMPTS/dominios/SITES.md",
+        "tmp/sites/ (fuera de git)"
+      ],
+      "lee_tambien": []
+    }
+  ]
+}

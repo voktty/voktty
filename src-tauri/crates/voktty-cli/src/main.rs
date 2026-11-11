@@ -15,7 +15,9 @@ use voktty_aliases::{
 };
 use voktty_control_protocol::{
     CallerContext, ControlDescriptor, ControlRequest, ControlResponse, OpenParams,
-    MAX_MESSAGE_BYTES, METHOD_BROWSER_CLICK, METHOD_BROWSER_EVAL, METHOD_BROWSER_NAVIGATE,
+    MAX_MESSAGE_BYTES, METHOD_AGENT_CLOSE, METHOD_AGENT_LIST, METHOD_AGENT_RESULT,
+    METHOD_AGENT_SEND, METHOD_AGENT_START, METHOD_AGENT_STATUS, METHOD_AGENT_STOP,
+    METHOD_AGENT_WAIT, METHOD_BROWSER_CLICK, METHOD_BROWSER_EVAL, METHOD_BROWSER_NAVIGATE,
     METHOD_BROWSER_SELECTED, METHOD_BROWSER_SNAPSHOT, METHOD_BROWSER_TYPE, METHOD_CAPABILITIES,
     METHOD_HARNESS_LIST, METHOD_HARNESS_RESULT, METHOD_HARNESS_SEND, METHOD_HARNESS_STATUS,
     METHOD_HARNESS_WAIT, METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING, PROTOCOL_VERSION,
@@ -37,6 +39,16 @@ const EXIT_HARNESS_TIMEOUT: u8 = 7;
 /// `harness.send` had no mounted session to deliver the message to.
 const EXIT_HARNESS_NOT_DELIVERED: u8 = 8;
 
+const EXIT_AGENT_NEEDS_INPUT: u8 = 6;
+const EXIT_AGENT_TIMEOUT: u8 = 7;
+const EXIT_AGENT_NOT_FOUND: u8 = 8;
+const EXIT_AGENT_FORBIDDEN: u8 = 9;
+const EXIT_AGENT_RATE_LIMITED: u8 = 10;
+const EXIT_AGENT_CAPACITY_EXCEEDED: u8 = 11;
+const EXIT_AGENT_FORBIDDEN_MODEL: u8 = 12;
+const EXIT_AGENT_HOP_LIMIT_EXCEEDED: u8 = 13;
+const EXIT_AGENT_BUSY: u8 = 14;
+
 /// `harness.*` request failures that deserve a more specific exit code than
 /// the generic `EXIT_REQUEST`. `None` means the caller should keep the
 /// default, matching every other control-plane method's behavior.
@@ -46,6 +58,38 @@ fn harness_error_exit_code(method: &str, error_code: &str) -> Option<u8> {
     }
     None
 }
+
+fn agent_error_exit_code(method: &str, error_code: &str) -> Option<u8> {
+    if !method.starts_with("agent.") {
+        return None;
+    }
+    match error_code {
+        "needs_input" => Some(EXIT_AGENT_NEEDS_INPUT),
+        "timeout" => Some(EXIT_AGENT_TIMEOUT),
+        "not_found" => Some(EXIT_AGENT_NOT_FOUND),
+        "forbidden" => Some(EXIT_AGENT_FORBIDDEN),
+        "rate_limited" => Some(EXIT_AGENT_RATE_LIMITED),
+        "capacity_exceeded" => Some(EXIT_AGENT_CAPACITY_EXCEEDED),
+        "forbidden_model" => Some(EXIT_AGENT_FORBIDDEN_MODEL),
+        "hop_limit_exceeded" => Some(EXIT_AGENT_HOP_LIMIT_EXCEEDED),
+        "busy" => Some(EXIT_AGENT_BUSY),
+        _ => None,
+    }
+}
+
+fn current_caller_context() -> CallerContext {
+    let pane_id = env::var("VOKTTY_PANE_ID")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok());
+    let agent_token = env::var("VOKTTY_AGENT_TOKEN").ok().filter(|s| !s.is_empty());
+    let session_id = env::var("VOKTTY_SESSION_ID").ok().filter(|s| !s.is_empty());
+    CallerContext {
+        pane_id,
+        agent_token,
+        session_id,
+    }
+}
+
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, PartialEq)]
@@ -62,6 +106,12 @@ enum Action {
         session_id: String,
         states: Vec<String>,
         timeout: Duration,
+    },
+    AgentWait {
+        agent: String,
+        until: String,
+        timeout: Duration,
+        project: Option<String>,
     },
 }
 
@@ -134,16 +184,14 @@ fn run(args: Vec<OsString>) -> Result<ExitCode, CliError> {
         }
         Action::Request { method, params } => {
             let endpoint = load_endpoint()?;
-            let caller = env::var("VOKTTY_PANE_ID")
-                .ok()
-                .and_then(|value| value.parse::<u32>().ok());
+            let caller = current_caller_context();
             let request = ControlRequest {
                 protocol: PROTOCOL_VERSION,
                 id: request_id(),
                 token: endpoint.token,
                 method: method.to_string(),
                 params,
-                caller: CallerContext { pane_id: caller },
+                caller,
             };
             let response = send_request(&endpoint.address, &request)?;
             if !response.ok {
@@ -153,7 +201,9 @@ fn run(args: Vec<OsString>) -> Result<ExitCode, CliError> {
                         "Voktty rejected the request",
                     )
                 });
-                let exit = harness_error_exit_code(method, &error.code).unwrap_or(EXIT_REQUEST);
+                let exit = harness_error_exit_code(method, &error.code)
+                    .or_else(|| agent_error_exit_code(method, &error.code))
+                    .unwrap_or(EXIT_REQUEST);
                 return Err(CliError::new(error.code, error.message, exit));
             }
             let result = response.result.unwrap_or(Value::Null);
@@ -167,6 +217,12 @@ fn run(args: Vec<OsString>) -> Result<ExitCode, CliError> {
             states,
             timeout,
         } => run_harness_wait(session_id, states, timeout, config.json),
+        Action::AgentWait {
+            agent,
+            until,
+            timeout,
+            project,
+        } => run_agent_wait(agent, until, timeout, project, config.json),
     }
 }
 
@@ -181,9 +237,7 @@ fn run_harness_wait(
 ) -> Result<ExitCode, CliError> {
     const PER_CALL_TIMEOUT_MS: u64 = 4_000;
     let endpoint = load_endpoint()?;
-    let caller = env::var("VOKTTY_PANE_ID")
-        .ok()
-        .and_then(|value| value.parse::<u32>().ok());
+    let caller = current_caller_context();
     let deadline = Instant::now() + timeout;
     loop {
         let request = ControlRequest {
@@ -196,7 +250,7 @@ fn run_harness_wait(
                 "states": states,
                 "timeout_ms": PER_CALL_TIMEOUT_MS,
             }),
-            caller: CallerContext { pane_id: caller },
+            caller: caller.clone(),
         };
         let response = send_request(&endpoint.address, &request)?;
         if !response.ok {
@@ -232,6 +286,60 @@ fn run_harness_wait(
     }
 }
 
+fn run_agent_wait(
+    agent: String,
+    until: String,
+    timeout: Duration,
+    project: Option<String>,
+    json: bool,
+) -> Result<ExitCode, CliError> {
+    const POLL_INTERVAL: Duration = Duration::from_millis(500);
+    let endpoint = load_endpoint()?;
+    let caller = current_caller_context();
+    let deadline = Instant::now() + timeout;
+    loop {
+        let mut params_map = serde_json::Map::new();
+        params_map.insert("agent".to_string(), Value::String(agent.clone()));
+        params_map.insert("until".to_string(), Value::String(until.clone()));
+        if let Some(ref proj) = project {
+            params_map.insert("project".to_string(), Value::String(proj.clone()));
+        }
+        let request = ControlRequest {
+            protocol: PROTOCOL_VERSION,
+            id: request_id(),
+            token: endpoint.token.clone(),
+            method: METHOD_AGENT_WAIT.to_string(),
+            params: Value::Object(params_map),
+            caller: caller.clone(),
+        };
+        let response = send_request(&endpoint.address, &request)?;
+        if !response.ok {
+            let error = response.error.unwrap_or_else(|| {
+                voktty_control_protocol::ControlError::new(
+                    "request_failed",
+                    "Voktty rejected the request",
+                )
+            });
+            let exit = agent_error_exit_code(METHOD_AGENT_WAIT, &error.code).unwrap_or(EXIT_REQUEST);
+            return Err(CliError::new(error.code, error.message, exit));
+        }
+        let result = response.result.unwrap_or(Value::Null);
+        let matched = result
+            .get("matched")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if matched {
+            print_result(METHOD_AGENT_WAIT, result, json);
+            return Ok(ExitCode::SUCCESS);
+        }
+        if Instant::now() >= deadline {
+            print_result(METHOD_AGENT_WAIT, result, json);
+            return Ok(ExitCode::from(EXIT_AGENT_TIMEOUT));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
 fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
     let json = extract_json_flag(&mut args);
     if args.is_empty() {
@@ -251,6 +359,7 @@ fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
         Some("identify") => request_without_params(args, METHOD_IDENTIFY)?,
         Some("browser") => parse_browser(args)?,
         Some("harness") => parse_harness(args)?,
+        Some("agent") => parse_agent(args)?,
         Some("open") => parse_open(args)?,
         Some("review") => parse_review(args)?,
         Some("alias") => Action::Alias(parse_alias(args)?),
@@ -595,6 +704,293 @@ fn parse_harness_wait(mut args: Vec<OsString>) -> Result<Action, CliError> {
         session_id,
         states,
         timeout,
+    })
+}
+
+fn parse_agent(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error(
+            "agent requires a subcommand: list|start|send|status|wait|result|stop|close",
+        ));
+    }
+    let subcommand = args.remove(0);
+    match subcommand.to_str() {
+        Some("list") => parse_agent_list(args),
+        Some("start") => parse_agent_start(args),
+        Some("send") => parse_agent_send(args),
+        Some("status") => parse_agent_single_target(args, METHOD_AGENT_STATUS, "status"),
+        Some("wait") => parse_agent_wait(args),
+        Some("result") => parse_agent_single_target(args, METHOD_AGENT_RESULT, "result"),
+        Some("stop") => parse_agent_single_target(args, METHOD_AGENT_STOP, "stop"),
+        Some("close") => parse_agent_single_target(args, METHOD_AGENT_CLOSE, "close"),
+        Some(value) => Err(usage_error(format!("unknown agent command '{value}'"))),
+        None => Err(usage_error("agent command must be valid UTF-8")),
+    }
+}
+
+fn parse_agent_list(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    let mut project = None;
+    while !args.is_empty() {
+        let arg = args.remove(0);
+        match arg.to_str() {
+            Some("--project") => {
+                if args.is_empty() {
+                    return Err(usage_error("--project requires a value"));
+                }
+                project = Some(args.remove(0).to_string_lossy().into_owned());
+            }
+            Some(value) => return Err(usage_error(format!("unknown option '{value}'"))),
+            None => return Err(usage_error("invalid argument encoding")),
+        }
+    }
+    let mut params = serde_json::Map::new();
+    if let Some(p) = project {
+        params.insert("project".to_string(), Value::String(p));
+    }
+    Ok(Action::Request {
+        method: METHOD_AGENT_LIST,
+        params: Value::Object(params),
+    })
+}
+
+fn parse_agent_start(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error("agent start requires an agent name"));
+    }
+    let mut agent = None;
+    let mut mode = None;
+    let mut task = None;
+    let mut copy = None;
+    let mut model = None;
+    let mut supervised = None;
+    let mut project = None;
+
+    while !args.is_empty() {
+        let arg = args.remove(0);
+        let arg_str = arg.to_string_lossy();
+        if arg_str == "--new" {
+            mode = Some("new".to_string());
+        } else if arg_str == "--resume" {
+            mode = Some("resume".to_string());
+        } else if arg_str == "--task" {
+            if args.is_empty() {
+                return Err(usage_error("--task requires a value"));
+            }
+            task = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str == "--copy" {
+            if args.is_empty() {
+                return Err(usage_error("--copy requires a value"));
+            }
+            let val = args.remove(0);
+            let n = val
+                .to_string_lossy()
+                .parse::<u32>()
+                .map_err(|_| usage_error("--copy must be an integer"))?;
+            copy = Some(n);
+        } else if arg_str == "--model" {
+            if args.is_empty() {
+                return Err(usage_error("--model requires a value"));
+            }
+            model = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str == "--supervised" {
+            supervised = Some(true);
+        } else if arg_str == "--unsupervised" {
+            supervised = Some(false);
+        } else if arg_str == "--project" {
+            if args.is_empty() {
+                return Err(usage_error("--project requires a value"));
+            }
+            project = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if let Some(val) = arg_str.strip_prefix("--supervised=") {
+            match val {
+                "true" | "1" => supervised = Some(true),
+                "false" | "0" => supervised = Some(false),
+                _ => return Err(usage_error("--supervised value must be true or false")),
+            }
+        } else if arg_str.starts_with("--") {
+            return Err(usage_error(format!("unknown option '{arg_str}'")));
+        } else if agent.is_none() {
+            agent = Some(arg_str.into_owned());
+        } else {
+            return Err(usage_error(format!("unexpected argument '{arg_str}'")));
+        }
+    }
+
+    let agent_name = agent.ok_or_else(|| usage_error("agent start requires an agent name"))?;
+    let mut params = serde_json::Map::new();
+    params.insert("agent".to_string(), Value::String(agent_name));
+    if let Some(m) = mode {
+        params.insert("mode".to_string(), Value::String(m));
+    }
+    if let Some(t) = task {
+        params.insert("task".to_string(), Value::String(t));
+    }
+    if let Some(c) = copy {
+        params.insert("copy".to_string(), Value::from(c));
+    }
+    if let Some(m) = model {
+        params.insert("model".to_string(), Value::String(m));
+    }
+    if let Some(s) = supervised {
+        params.insert("supervised".to_string(), Value::Bool(s));
+    }
+    if let Some(p) = project {
+        params.insert("project".to_string(), Value::String(p));
+    }
+
+    Ok(Action::Request {
+        method: METHOD_AGENT_START,
+        params: Value::Object(params),
+    })
+}
+
+fn parse_agent_send(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error("agent send requires a recipient agent name"));
+    }
+    let mut to = None;
+    let mut kind = None;
+    let mut reply_to = None;
+    let mut text_tokens = Vec::new();
+
+    while !args.is_empty() {
+        let arg = args.remove(0);
+        let arg_str = arg.to_string_lossy();
+        if arg_str == "--kind" {
+            if args.is_empty() {
+                return Err(usage_error("--kind requires a value"));
+            }
+            kind = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str == "--reply-to" {
+            if args.is_empty() {
+                return Err(usage_error("--reply-to requires a value"));
+            }
+            reply_to = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str == "--text" {
+            if args.is_empty() {
+                return Err(usage_error("--text requires a value"));
+            }
+            text_tokens.push(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str.starts_with("--") {
+            return Err(usage_error(format!("unknown option '{arg_str}'")));
+        } else if to.is_none() {
+            to = Some(arg_str.into_owned());
+        } else {
+            text_tokens.push(arg_str.into_owned());
+        }
+    }
+
+    let to_name = to.ok_or_else(|| usage_error("agent send requires a recipient agent name"))?;
+    if text_tokens.is_empty() {
+        return Err(usage_error("agent send requires message text"));
+    }
+    let text = text_tokens.join(" ");
+    let kind_val = kind.unwrap_or_else(|| "message".to_string());
+
+    let mut params = serde_json::Map::new();
+    params.insert("to".to_string(), Value::String(to_name));
+    params.insert("kind".to_string(), Value::String(kind_val));
+    params.insert("text".to_string(), Value::String(text));
+    if let Some(r) = reply_to {
+        params.insert("reply_to".to_string(), Value::String(r));
+    }
+
+    Ok(Action::Request {
+        method: METHOD_AGENT_SEND,
+        params: Value::Object(params),
+    })
+}
+
+fn parse_agent_single_target(
+    mut args: Vec<OsString>,
+    method: &'static str,
+    label: &'static str,
+) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error(format!("agent {label} requires an agent name")));
+    }
+    let mut agent = None;
+    let mut project = None;
+    while !args.is_empty() {
+        let arg = args.remove(0);
+        let arg_str = arg.to_string_lossy();
+        if arg_str == "--project" {
+            if args.is_empty() {
+                return Err(usage_error("--project requires a value"));
+            }
+            project = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str.starts_with("--") {
+            return Err(usage_error(format!("unknown option '{arg_str}'")));
+        } else if agent.is_none() {
+            agent = Some(arg_str.into_owned());
+        } else {
+            return Err(usage_error(format!("unexpected argument '{arg_str}'")));
+        }
+    }
+    let agent_name =
+        agent.ok_or_else(|| usage_error(format!("agent {label} requires an agent name")))?;
+    let mut params = serde_json::Map::new();
+    params.insert("agent".to_string(), Value::String(agent_name));
+    if let Some(p) = project {
+        params.insert("project".to_string(), Value::String(p));
+    }
+    Ok(Action::Request {
+        method,
+        params: Value::Object(params),
+    })
+}
+
+fn parse_agent_wait(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error("agent wait requires an agent name"));
+    }
+    let mut agent = None;
+    let mut until = "verdict".to_string();
+    let mut timeout = Duration::from_secs(30);
+    let mut project = None;
+
+    while !args.is_empty() {
+        let arg = args.remove(0);
+        let arg_str = arg.to_string_lossy();
+        if arg_str == "--until" {
+            if args.is_empty() {
+                return Err(usage_error("--until requires a value"));
+            }
+            until = args.remove(0).to_string_lossy().into_owned();
+        } else if arg_str == "--timeout" {
+            if args.is_empty() {
+                return Err(usage_error("--timeout requires seconds as a number"));
+            }
+            let raw = args.remove(0);
+            let raw_str = raw
+                .to_str()
+                .ok_or_else(|| usage_error("--timeout must be valid UTF-8"))?;
+            let clean = raw_str.strip_suffix('s').unwrap_or(raw_str);
+            let secs = clean
+                .parse::<u64>()
+                .map_err(|_| usage_error("--timeout requires seconds as a number"))?;
+            timeout = Duration::from_secs(secs);
+        } else if arg_str == "--project" {
+            if args.is_empty() {
+                return Err(usage_error("--project requires a value"));
+            }
+            project = Some(args.remove(0).to_string_lossy().into_owned());
+        } else if arg_str.starts_with("--") {
+            return Err(usage_error(format!("unknown option '{arg_str}'")));
+        } else if agent.is_none() {
+            agent = Some(arg_str.into_owned());
+        } else {
+            return Err(usage_error(format!("unexpected argument '{arg_str}'")));
+        }
+    }
+
+    let agent_name = agent.ok_or_else(|| usage_error("agent wait requires an agent name"))?;
+
+    Ok(Action::AgentWait {
+        agent: agent_name,
+        until,
+        timeout,
+        project,
     })
 }
 
@@ -1895,9 +2291,7 @@ fn open_alias_file(path: &std::path::Path, as_json: bool) -> Result<(), CliError
         )
     })?;
     let endpoint = load_endpoint()?;
-    let caller = env::var("VOKTTY_PANE_ID")
-        .ok()
-        .and_then(|value| value.parse::<u32>().ok());
+    let caller = current_caller_context();
     let request = ControlRequest {
         protocol: PROTOCOL_VERSION,
         id: request_id(),
@@ -1910,7 +2304,7 @@ fn open_alias_file(path: &std::path::Path, as_json: bool) -> Result<(), CliError
             focus: true,
         })
         .map_err(|error| CliError::new("serialization_error", error.to_string(), EXIT_PROTOCOL))?,
-        caller: CallerContext { pane_id: caller },
+        caller,
     };
     let response = send_request(&endpoint.address, &request)?;
     if !response.ok {
@@ -1993,6 +2387,58 @@ fn print_result(method: &str, result: Value, as_json: bool) {
                 println!("Opened {path} in Voktty");
             }
         }
+        METHOD_AGENT_LIST => {
+            if let Some(agents) = result.get("agents").and_then(Value::as_array) {
+                for agent in agents {
+                    let name = agent.get("name").and_then(Value::as_str).unwrap_or("");
+                    let role = agent.get("role").and_then(Value::as_str).unwrap_or("");
+                    let status = agent.get("status").and_then(Value::as_str).unwrap_or("");
+                    println!("{name}\t{role}\t{status}");
+                }
+            }
+        }
+        METHOD_AGENT_START => {
+            let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
+            let mode = result.get("mode").and_then(Value::as_str).unwrap_or("new");
+            println!("Started agent '{agent}' ({mode})");
+        }
+        METHOD_AGENT_SEND => {
+            let msg_id = result.get("messageId").and_then(Value::as_str).unwrap_or("");
+            let status = result.get("status").and_then(Value::as_str).unwrap_or("sent");
+            println!("Message {msg_id} {status}");
+        }
+        METHOD_AGENT_STATUS => {
+            let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
+            let status = result.get("status").and_then(Value::as_str).unwrap_or("");
+            println!("Agent '{agent}' status: {status}");
+        }
+        METHOD_AGENT_WAIT => {
+            let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
+            let matched = result.get("matched").and_then(Value::as_bool).unwrap_or(false);
+            let status = result.get("status").and_then(Value::as_str).unwrap_or("");
+            if matched {
+                if let Some(verdict) = result.get("verdict").and_then(Value::as_str) {
+                    println!("Agent '{agent}' verdict: {verdict}");
+                } else {
+                    println!("Agent '{agent}' reached state: {status}");
+                }
+            } else {
+                println!("Agent '{agent}' wait timed out (current: {status})");
+            }
+        }
+        METHOD_AGENT_RESULT => {
+            let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
+            let verdict = result.get("verdict").and_then(Value::as_str).unwrap_or("");
+            println!("Agent '{agent}' verdict:\n{verdict}");
+        }
+        METHOD_AGENT_STOP => {
+            let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
+            println!("Stopped agent '{agent}'");
+        }
+        METHOD_AGENT_CLOSE => {
+            let agent = result.get("agent").and_then(Value::as_str).unwrap_or("");
+            println!("Closed agent '{agent}'");
+        }
         _ => println!("{result}"),
     }
 }
@@ -2001,7 +2447,7 @@ fn print_help() {
     println!("Standalone project memory: voktty memory status [--project <directory>] [--json]\nInitialization and policy: voktty memory --help\n");
     println!(
         "Voktty command line interface\n\n\
-Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty harness list [--json]\n  voktty harness status|result <session-id> [--json]\n  voktty harness send <session-id> <text> [--json]\n  voktty harness wait <session-id> [--state <working|waiting|done>]... [--timeout <seconds>] [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
+Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty harness list [--json]\n  voktty harness status|result <session-id> [--json]\n  voktty harness send <session-id> <text> [--json]\n  voktty harness wait <session-id> [--state <working|waiting|done>]... [--timeout <seconds>] [--json]\n  voktty agent list [--project <path>] [--json]\n  voktty agent start <name> [--new|--resume] [--task <text>] [--copy <n>] [--model <m>] [--supervised] [--json]\n  voktty agent send <to> <text> [--kind <message|verdict|...>] [--reply-to <id>] [--json]\n  voktty agent status|result|stop|close <name> [--project <path>] [--json]\n  voktty agent wait <name> [--until <verdict|idle|...>] [--timeout <seconds>] [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
 Alias execution is tokenized and never evaluated by a shell. Public IP lookup only runs\n\
 when ipme receives --public. App control commands require Voktty to be running."
     );
@@ -2399,5 +2845,184 @@ mod tests {
         bytes.push(b'\n');
         let response = read_response(&mut Cursor::new(bytes), &request).expect("read response");
         assert!(!response.ok);
+    }
+
+    #[test]
+    fn parses_agent_commands() {
+        let list = parse_args(args(&["agent", "list"])).expect("parse agent list");
+        assert_eq!(
+            list.action,
+            Action::Request {
+                method: METHOD_AGENT_LIST,
+                params: json!({}),
+            }
+        );
+
+        let list_proj = parse_args(args(&["agent", "list", "--project", "/tmp/proj"]))
+            .expect("parse agent list proj");
+        assert_eq!(
+            list_proj.action,
+            Action::Request {
+                method: METHOD_AGENT_LIST,
+                params: json!({ "project": "/tmp/proj" }),
+            }
+        );
+
+        let start = parse_args(args(&[
+            "agent",
+            "start",
+            "developer",
+            "--new",
+            "--task",
+            "build features",
+            "--model",
+            "claude-3-7-sonnet",
+            "--supervised",
+        ]))
+        .expect("parse agent start");
+        match start.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_AGENT_START);
+                assert_eq!(params.get("agent").and_then(Value::as_str), Some("developer"));
+                assert_eq!(params.get("mode").and_then(Value::as_str), Some("new"));
+                assert_eq!(
+                    params.get("task").and_then(Value::as_str),
+                    Some("build features")
+                );
+                assert_eq!(
+                    params.get("model").and_then(Value::as_str),
+                    Some("claude-3-7-sonnet")
+                );
+                assert_eq!(params.get("supervised").and_then(Value::as_bool), Some(true));
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        let send = parse_args(args(&[
+            "agent",
+            "send",
+            "developer",
+            "review",
+            "this",
+            "code",
+            "--kind",
+            "message",
+            "--reply-to",
+            "m1",
+        ]))
+        .expect("parse agent send");
+        match send.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_AGENT_SEND);
+                assert_eq!(params.get("to").and_then(Value::as_str), Some("developer"));
+                assert_eq!(
+                    params.get("text").and_then(Value::as_str),
+                    Some("review this code")
+                );
+                assert_eq!(params.get("kind").and_then(Value::as_str), Some("message"));
+                assert_eq!(params.get("reply_to").and_then(Value::as_str), Some("m1"));
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        let status =
+            parse_args(args(&["agent", "status", "developer"])).expect("parse agent status");
+        assert_eq!(
+            status.action,
+            Action::Request {
+                method: METHOD_AGENT_STATUS,
+                params: json!({ "agent": "developer" }),
+            }
+        );
+
+        let wait = parse_args(args(&[
+            "agent",
+            "wait",
+            "developer",
+            "--until",
+            "verdict",
+            "--timeout",
+            "45s",
+        ]))
+        .expect("parse agent wait");
+        assert_eq!(
+            wait.action,
+            Action::AgentWait {
+                agent: "developer".to_string(),
+                until: "verdict".to_string(),
+                timeout: Duration::from_secs(45),
+                project: None,
+            }
+        );
+
+        let result =
+            parse_args(args(&["agent", "result", "developer"])).expect("parse agent result");
+        assert_eq!(
+            result.action,
+            Action::Request {
+                method: METHOD_AGENT_RESULT,
+                params: json!({ "agent": "developer" }),
+            }
+        );
+
+        let stop = parse_args(args(&["agent", "stop", "developer"])).expect("parse agent stop");
+        assert_eq!(
+            stop.action,
+            Action::Request {
+                method: METHOD_AGENT_STOP,
+                params: json!({ "agent": "developer" }),
+            }
+        );
+
+        let close =
+            parse_args(args(&["agent", "close", "developer"])).expect("parse agent close");
+        assert_eq!(
+            close.action,
+            Action::Request {
+                method: METHOD_AGENT_CLOSE,
+                params: json!({ "agent": "developer" }),
+            }
+        );
+    }
+
+    #[test]
+    fn agent_error_exit_codes_match_specification() {
+        assert_eq!(
+            agent_error_exit_code("agent.wait", "needs_input"),
+            Some(EXIT_AGENT_NEEDS_INPUT)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.wait", "timeout"),
+            Some(EXIT_AGENT_TIMEOUT)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.status", "not_found"),
+            Some(EXIT_AGENT_NOT_FOUND)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.start", "forbidden"),
+            Some(EXIT_AGENT_FORBIDDEN)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.send", "rate_limited"),
+            Some(EXIT_AGENT_RATE_LIMITED)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.start", "capacity_exceeded"),
+            Some(EXIT_AGENT_CAPACITY_EXCEEDED)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.start", "forbidden_model"),
+            Some(EXIT_AGENT_FORBIDDEN_MODEL)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.send", "hop_limit_exceeded"),
+            Some(EXIT_AGENT_HOP_LIMIT_EXCEEDED)
+        );
+        assert_eq!(
+            agent_error_exit_code("agent.close", "busy"),
+            Some(EXIT_AGENT_BUSY)
+        );
+        assert_eq!(agent_error_exit_code("harness.send", "forbidden"), None);
     }
 }

@@ -78,6 +78,7 @@ import {
   SquareLock01Icon,
   SquareUnlock01Icon,
   Tick02Icon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TabPreviewSplitMenuItem } from "@/modules/tabs/components/TabPreviewSplitMenuItem";
@@ -191,6 +192,7 @@ type Props = {
   onReconnectTab?: (tab: Tab) => void;
   compact?: boolean;
   onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
+  onOpenTeamBoard?: (projectPath?: string) => void;
 };
 
 function projectedItemKey(item: ProjectedStripItem): string {
@@ -251,6 +253,7 @@ export function TabBar({
   onRevealInExplorer,
   compact,
   onCardDrop,
+  onOpenTeamBoard,
 }: Props) {
   const { t: translate } = useTranslation();
   const fileManagerReveal = useTabFileManagerReveal(tabs);
@@ -1021,6 +1024,24 @@ export function TabBar({
                         </>
                       );
                     })()}
+                    {onOpenTeamBoard && (
+                      <ContextMenuItem
+                        className="gap-2 rounded-md px-2 py-1.5 text-xs"
+                        onSelect={() => {
+                          const tabPath = getTabPath(t);
+                          onOpenTeamBoard(tabPath ?? undefined);
+                        }}
+                      >
+                        <HugeiconsIcon
+                          icon={UserGroupIcon}
+                          size={13}
+                          strokeWidth={1.75}
+                        />
+                        <span className="flex-1">
+                          {translate("teams.openBoardTabMenu")}
+                        </span>
+                      </ContextMenuItem>
+                    )}
                     {onOpenPreviewSplit && (
                       <TabPreviewSplitMenuItem
                         tab={t}
@@ -1343,6 +1364,7 @@ export function TabBar({
         onOpenFolder={onOpenFolder}
         onNewGitGraph={onNewGitGraph}
         onLaunchAgents={onLaunchAgents}
+        onOpenTeamBoard={onOpenTeamBoard ? () => onOpenTeamBoard() : undefined}
       />
     </div>
   );
@@ -1594,6 +1616,16 @@ export function TabIcon({
         size={14}
         strokeWidth={2}
         className="shrink-0 text-violet-400"
+      />
+    );
+  }
+  if (tab.kind === "team") {
+    return (
+      <HugeiconsIcon
+        icon={UserGroupIcon}
+        size={14}
+        strokeWidth={2}
+        className="shrink-0 text-cyan-400"
       />
     );
   }

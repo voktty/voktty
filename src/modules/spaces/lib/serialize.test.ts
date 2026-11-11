@@ -365,4 +365,33 @@ describe("hydrateTabs", () => {
     expect(out).toHaveLength(1);
     expect(out[0].kind).toBe("editor");
   });
+
+  it("serializes and hydrates team tabs with projectPath", () => {
+    const teamTab: Tab = {
+      id: 99,
+      tabKey: asTabKey("tab-team-1"),
+      workspaceScopeId: asWorkspaceScopeId("s1"),
+      kind: "team",
+      spaceId: "s1",
+      title: "Equipo",
+      projectPath: "/projects/terax-ai",
+    };
+
+    const [serialized] = serializeTabs([teamTab]);
+    expect(serialized).toMatchObject({
+      kind: "team",
+      projectPath: "/projects/terax-ai",
+      tabKey: teamTab.tabKey,
+      workspaceScopeId: teamTab.workspaceScopeId,
+    });
+
+    const [restored] = hydrateTabs([serialized], "s1", counter());
+    expect(restored).toMatchObject({
+      kind: "team",
+      projectPath: "/projects/terax-ai",
+      tabKey: teamTab.tabKey,
+      workspaceScopeId: teamTab.workspaceScopeId,
+      spaceId: "s1",
+    });
+  });
 });
