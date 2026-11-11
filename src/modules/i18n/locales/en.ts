@@ -648,9 +648,22 @@ export const en = {
         backdropVibrancy: "Window vibrancy",
         backdropVibrancyDesc:
           "Frost the header, status bar and gutters over what is behind the window. Panes stay solid.",
+        material: "Material",
+        materials: {
+          auto: "Automatic",
+          mica: "Mica",
+          "mica-alt": "Mica Alt",
+          acrylic: "Acrylic",
+        },
+        materialsDesc: {
+          auto: "Follows the theme: Acrylic on dark modern themes, Mica on the rest, opaque on period skins.",
+          mica: "Tints the window with your wallpaper. Calm and easy to read for long sessions.",
+          "mica-alt": "Like Mica with a stronger wallpaper tint.",
+          acrylic: "Blurs whatever is behind the window, other windows included.",
+        },
         vibrancyOpacity: "Surface opacity",
         vibrancyOpacityDesc:
-          "Adjust how much the native Mica or Vibrancy backdrop shines through app surfaces.",
+          "One value for the whole window: frame, sidebar, toolbars, terminal and Harness change together. Menus and dialogs keep a minimum so text stays legible.",
       },
       pack: {
         title: "Appearance Pack",

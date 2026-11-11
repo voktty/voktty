@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// The translucent window backdrop a platform can provide.
 ///
@@ -16,6 +16,35 @@ pub enum Backdrop {
 
 /// First Windows 11 build. `apply_mica` fails below it.
 const WIN11_BUILD: u32 = 22000;
+/// First build with `DWMWA_SYSTEMBACKDROP_TYPE`: Mica Alt and the modern
+/// Acrylic exist from here on.
+const SYSTEM_BACKDROP_BUILD: u32 = 22523;
+
+/// The Windows 11 backdrop painted behind the webview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowMaterial {
+    /// Wallpaper tint only; never shows other windows.
+    Mica,
+    /// Mica with a stronger wallpaper tint (tabbed windows).
+    MicaAlt,
+    /// Blurs whatever is behind the window, other windows included.
+    Acrylic,
+}
+
+/// Materials the running Windows can paint. Empty where the material
+/// choice does not apply (macOS has its own effect, Linux none).
+pub fn materials_for(os: &str, build: u32) -> Vec<WindowMaterial> {
+    match os {
+        "windows" if build >= SYSTEM_BACKDROP_BUILD => vec![
+            WindowMaterial::Mica,
+            WindowMaterial::MicaAlt,
+            WindowMaterial::Acrylic,
+        ],
+        "windows" if build >= WIN11_BUILD => vec![WindowMaterial::Mica],
+        _ => Vec::new(),
+    }
+}
 
 pub fn backdrop_for(os: &str, build: u32) -> Backdrop {
     match os {
@@ -30,11 +59,28 @@ pub fn window_backdrop_kind() -> Backdrop {
     backdrop_for(std::env::consts::OS, os_build())
 }
 
-/// `dark` only matters for Mica, which tints its own backdrop and cannot read
-/// the webview's theme.
 #[tauri::command]
-pub fn window_set_backdrop(window: tauri::Window, enabled: bool, dark: bool) -> Result<(), String> {
-    set_backdrop(&window, enabled, dark)
+pub fn window_materials() -> Vec<WindowMaterial> {
+    materials_for(std::env::consts::OS, os_build())
+}
+
+/// `dark` tints the Windows backdrop, which cannot read the webview's
+/// theme. `material` defaults to Mica and is ignored outside Windows; a
+/// material this Windows cannot paint falls back to Mica.
+#[tauri::command]
+pub fn window_set_backdrop(
+    window: tauri::Window,
+    enabled: bool,
+    dark: bool,
+    material: Option<WindowMaterial>,
+) -> Result<(), String> {
+    let wanted = material.unwrap_or(WindowMaterial::Mica);
+    let material = if materials_for(std::env::consts::OS, os_build()).contains(&wanted) {
+        wanted
+    } else {
+        WindowMaterial::Mica
+    };
+    set_backdrop(&window, enabled, dark, material)
 }
 
 #[cfg(target_os = "windows")]
@@ -58,7 +104,12 @@ fn os_build() -> u32 {
 }
 
 #[cfg(target_os = "macos")]
-fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(), String> {
+fn set_backdrop(
+    window: &tauri::Window,
+    enabled: bool,
+    dark: bool,
+    _material: WindowMaterial,
+) -> Result<(), String> {
     use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
 
     if enabled {
@@ -116,36 +167,121 @@ pub fn window_set_corner_preference(window: tauri::Window, square: bool) -> Resu
 }
 
 #[cfg(target_os = "windows")]
-fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(), String> {
-    use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
+fn set_backdrop(
+    window: &tauri::Window,
+    enabled: bool,
+    dark: bool,
+    material: WindowMaterial,
+) -> Result<(), String> {
+    use window_vibrancy::{
+        apply_acrylic, apply_mica, apply_tabbed, clear_acrylic, clear_mica, clear_tabbed,
+    };
 
-    if enabled {
-        let _ = clear_acrylic(window);
-        if apply_mica(window, Some(dark)).is_err() {
-            let tint = if dark {
-                (18, 18, 20, 100)
-            } else {
-                (240, 240, 245, 100)
-            };
+    // One backdrop at a time: switching material must not leave the
+    // previous one painted underneath.
+    let _ = clear_acrylic(window);
+    let _ = clear_mica(window);
+    let _ = clear_tabbed(window);
+    if !enabled {
+        let _ = apply_rounded_corners(window);
+        return Ok(());
+    }
+    let tint = if dark {
+        (18, 18, 20, 100)
+    } else {
+        (240, 240, 245, 100)
+    };
+    match material {
+        WindowMaterial::Mica => {
+            if apply_mica(window, Some(dark)).is_err() {
+                apply_acrylic(window, Some(tint)).map_err(|e| e.to_string())?;
+            }
+        }
+        WindowMaterial::MicaAlt => {
+            if apply_tabbed(window, Some(dark)).is_err() {
+                apply_mica(window, Some(dark)).map_err(|e| e.to_string())?;
+            }
+        }
+        WindowMaterial::Acrylic => {
+            // Acrylic takes its light or dark tint from the window's
+            // immersive dark mode, which only Mica sets on its own.
+            set_immersive_dark_mode(window, dark);
             apply_acrylic(window, Some(tint)).map_err(|e| e.to_string())?;
         }
-        Ok(())
-    } else {
-        let _ = clear_acrylic(window);
-        let _ = clear_mica(window);
-        let _ = apply_rounded_corners(window);
-        Ok(())
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn set_immersive_dark_mode(window: &tauri::Window, dark: bool) {
+    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
+
+    let Ok(hwnd) = window.hwnd() else { return };
+    let value: u32 = dark.into();
+    let hr = unsafe {
+        DwmSetWindowAttribute(
+            hwnd.0 as _,
+            DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
+            &value as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<u32>() as u32,
+        )
+    };
+    if hr != 0 {
+        log::debug!("DwmSetWindowAttribute DWMWA_USE_IMMERSIVE_DARK_MODE failed: {hr:#x}");
     }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn set_backdrop(_window: &tauri::Window, _enabled: bool, _dark: bool) -> Result<(), String> {
+fn set_backdrop(
+    _window: &tauri::Window,
+    _enabled: bool,
+    _dark: bool,
+    _material: WindowMaterial,
+) -> Result<(), String> {
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{backdrop_for, Backdrop, WIN11_BUILD};
+    use super::{
+        backdrop_for, materials_for, Backdrop, WindowMaterial, SYSTEM_BACKDROP_BUILD, WIN11_BUILD,
+    };
+
+    #[test]
+    fn windows_11_with_system_backdrops_offers_all_three_materials() {
+        assert_eq!(
+            materials_for("windows", SYSTEM_BACKDROP_BUILD),
+            vec![
+                WindowMaterial::Mica,
+                WindowMaterial::MicaAlt,
+                WindowMaterial::Acrylic
+            ]
+        );
+        assert_eq!(materials_for("windows", 26300).len(), 3);
+    }
+
+    #[test]
+    fn early_windows_11_offers_only_mica_and_other_systems_none() {
+        assert_eq!(
+            materials_for("windows", WIN11_BUILD),
+            vec![WindowMaterial::Mica]
+        );
+        assert!(materials_for("windows", WIN11_BUILD - 1).is_empty());
+        assert!(materials_for("macos", 99999).is_empty());
+        assert!(materials_for("linux", 99999).is_empty());
+    }
+
+    #[test]
+    fn material_names_match_the_frontend() {
+        assert_eq!(
+            serde_json::to_string(&WindowMaterial::MicaAlt).unwrap(),
+            "\"mica-alt\""
+        );
+        assert_eq!(
+            serde_json::from_str::<WindowMaterial>("\"acrylic\"").unwrap(),
+            WindowMaterial::Acrylic
+        );
+    }
 
     #[test]
     fn macos_reports_vibrancy_regardless_of_build() {

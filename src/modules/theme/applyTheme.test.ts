@@ -141,6 +141,18 @@ describe("applyTheme", () => {
     expect(mockRoot.style.getPropertyValue("--content-lightness")).toBe("18%");
   });
 
+  it("paints one chrome layer over the native backdrop", () => {
+    applyTheme(darkOnlyTheme, "dark", true, 0.6);
+    const css = (name: string) => mockRoot.style.getPropertyValue(name);
+    // The frame carries the whole opacity; sidebar and toolbars sit on it
+    // transparent, so the sidebar and the centre are the same material.
+    expect(css("--frame")).toBe("rgba(30, 30, 46, 0.6)");
+    expect(css("--surface-sidebar")).toBe("transparent");
+    expect(css("--surface-toolbar")).toBe("transparent");
+    expect(css("--surface-canvas")).toBe("transparent");
+    expect(css("--surface-card")).toBe("rgba(24, 24, 37, 0.72)");
+  });
+
   it("clears all injected CSS variables on clearTheme", () => {
     applyTheme(darkOnlyTheme, "dark");
     expect(mockRoot.style.getPropertyValue("--background-base")).toBe("#1e1e2e");

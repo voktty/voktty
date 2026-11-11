@@ -524,11 +524,13 @@ html[data-vibrancy="on"] #settings-root {
 }
 
 html[data-vibrancy="on"] {
-  --frame: rgba(18, 18, 20, calc(var(--vibrancy-opacity, 0.85) * 0.55));
+  /* One chrome layer (see surfaceAlpha.ts): the frame carries the opacity,
+   * sidebar and toolbars sit transparent on it. */
+  --frame: rgba(18, 18, 20, var(--vibrancy-opacity, 0.85));
   --surface-canvas: transparent;
-  --surface-sidebar: rgba(22, 23, 26, calc(var(--vibrancy-opacity, 0.85) * 0.75));
-  --surface-toolbar: rgba(25, 26, 30, calc(var(--vibrancy-opacity, 0.85) * 0.70));
-  --surface-card: rgba(30, 32, 37, calc(var(--vibrancy-opacity, 0.85) * 0.85));
+  --surface-sidebar: transparent;
+  --surface-toolbar: transparent;
+  --surface-card: rgba(30, 32, 37, min(1, calc(var(--vibrancy-opacity, 0.85) + 0.12)));
   --surface-pane: transparent;
   --surface-popover: rgba(34, 37, 42, 0.90);
   --surface-active-item: rgba(255, 255, 255, 0.10);
@@ -537,10 +539,10 @@ html[data-vibrancy="on"] {
 }
 
 html[data-vibrancy="on"].light {
-  --frame: rgba(244, 245, 248, calc(var(--vibrancy-opacity, 0.85) * 0.60));
-  --surface-sidebar: rgba(235, 236, 239, calc(var(--vibrancy-opacity, 0.85) * 0.80));
-  --surface-toolbar: rgba(248, 249, 250, calc(var(--vibrancy-opacity, 0.85) * 0.75));
-  --surface-card: rgba(255, 255, 255, calc(var(--vibrancy-opacity, 0.85) * 0.85));
+  --frame: rgba(244, 245, 248, var(--vibrancy-opacity, 0.85));
+  --surface-sidebar: transparent;
+  --surface-toolbar: transparent;
+  --surface-card: rgba(255, 255, 255, min(1, calc(var(--vibrancy-opacity, 0.85) + 0.12)));
   --surface-pane: transparent;
   --surface-popover: rgba(255, 255, 255, 0.92);
   --surface-active-item: rgba(0, 0, 0, 0.08);
@@ -563,6 +565,13 @@ html[data-vibrancy="on"] .bg-frame {
 html[data-vibrancy="on"] header[data-tabs-header],
 html[data-vibrancy="on"] footer {
   background: transparent;
+}
+
+/* With a native backdrop the Harness body is the same material as its
+ * sidebar; the liquid tint would paint a second, darker layer. */
+html[data-vibrancy="on"] .voktty-harness-root > .body-glass {
+  background: transparent !important;
+  backdrop-filter: none !important;
 }
 
 html[data-vibrancy="on"] .xterm .xterm-screen,
