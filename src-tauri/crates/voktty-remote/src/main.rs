@@ -1,5 +1,7 @@
 mod agent_proc;
 mod canonical_path;
+#[cfg(unix)]
+mod exec_run;
 mod file_preview;
 mod filename_search;
 mod git_output;
@@ -127,6 +129,15 @@ struct RemoteServer {
     owned_search: OwnedSearchState,
     proc_host: Option<ProcHost>,
     memory: project_memory_host::MemoryHost,
+    #[cfg(unix)]
+    exec: Arc<exec_run::ExecState>,
+}
+
+impl Drop for RemoteServer {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        self.exec.shutdown();
+    }
 }
 
 type SharedOutput = Arc<Mutex<BufWriter<io::Stdout>>>;
@@ -168,6 +179,8 @@ impl RemoteServer {
             owned_search: OwnedSearchState::default(),
             proc_host: None,
             memory: project_memory_host::MemoryHost::default(),
+            #[cfg(unix)]
+            exec: Arc::new(exec_run::ExecState::default()),
         }
     }
 
@@ -406,6 +419,8 @@ impl RemoteServer {
             Err(error) => return RemoteResponse::failure(request.id, "invalid_root", error),
         };
         self.memory.reset();
+        #[cfg(unix)]
+        self.exec.cancel_all();
         self.root = Some(root.clone());
         RemoteResponse::success(
             request.id,
@@ -424,6 +439,7 @@ impl RemoteServer {
                     METHOD_STAT,
                     METHOD_CANONICALIZE,
                     team_fs::METHOD,
+                    if cfg!(unix) { "exec.run" } else { "" },
                     METHOD_CREATE_FILE,
                     METHOD_CREATE_DIR,
                     METHOD_RENAME,
@@ -2870,6 +2886,31 @@ fn run_stdio() -> io::Result<()> {
                     )
                 } else {
                     match request.method.as_str() {
+                        #[cfg(unix)]
+                        "exec.run" => {
+                            let (params, cancelled) = match server.exec.prepare(&request) {
+                                Ok(value) => value,
+                                Err(response) => { send_frame(&stdout, &Frame::Response(response))?; continue; }
+                            };
+                            let cwd = match server.resolve_existing_directory(&params.cwd) {
+                                Ok(cwd) => cwd,
+                                Err(error) => { server.exec.finish(&request.id); send_frame(&stdout, &Frame::Response(RemoteResponse::failure(request.id, "invalid_cwd", error)))?; continue; }
+                            };
+                            let id = request.id;
+                            let state = server.exec.clone();
+                            let sink = sink.clone();
+                            thread::spawn(move || {
+                                let response = exec_run::run(id.clone(), params, cwd, cancelled);
+                                state.finish(&id);
+                                let _ = sink(Frame::Response(response));
+                            });
+                            continue;
+                        }
+                        #[cfg(unix)]
+                        "exec.cancel" => {
+                            let id = request.params.get("id").and_then(Value::as_str).unwrap_or("");
+                            RemoteResponse::success(request.id, json!({"cancelled":server.exec.cancel(id)}))
+                        }
                         METHOD_PTY_OPEN => server.open_pty(request, stdout.clone()),
                         METHOD_PROC_SPAWN => server.proc_spawn(request, sink.clone()),
                         METHOD_PROC_ATTACH => server.proc_attach(request, sink.clone()),

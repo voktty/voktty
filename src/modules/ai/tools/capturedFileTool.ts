@@ -62,6 +62,7 @@ function captureTarget(ctx: ToolContext): FileToolTarget {
 }
 
 export type CapturedExecution = FileToolTarget & {
+  signal?: AbortSignal;
   assertCurrent: () => void;
   guarded: <Result>(action: () => Promise<Result>) => Promise<Result>;
 };
@@ -157,6 +158,7 @@ export function capturedTool<Input>(
         assertCurrent();
         return await definition.execute(definition.inputSchema.parse(input), {
           ...target,
+          signal,
           assertCurrent,
           guarded,
         });

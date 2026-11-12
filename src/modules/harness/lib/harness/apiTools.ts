@@ -77,7 +77,7 @@ export async function acquireRemoteApiTools(
     sessionId: lease.info.session_id,
   };
   return {
-    target: { root: parsed.hostPath, workspace, shell: false },
+    target: { root: parsed.hostPath, workspace, shell: lease.info.capabilities?.includes("exec.run") ?? false },
     release: () => {
       if (released) return;
       released = true;

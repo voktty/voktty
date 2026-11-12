@@ -95,6 +95,9 @@ pub struct RemoteRequest {
 
 impl RemoteRequest {
     pub fn response_timeout(&self) -> Duration {
+        if self.method == "exec.run" {
+            return Duration::from_secs(130);
+        }
         if self.method == METHOD_PTY_GET_ACTIVITY {
             return Duration::from_secs(2);
         }

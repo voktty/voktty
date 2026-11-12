@@ -173,7 +173,7 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
         return;
       }
       target = lease?.target ?? null;
-      input.onEvent({
+      if (!target?.shell) input.onEvent({
         type: "status",
         text: t(target ? "harness.apiRemoteNoShell" : "harness.apiRemoteChatOnly"),
       });

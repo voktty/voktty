@@ -24,11 +24,13 @@ function runInSessionShell(
   ]);
   return agentShellSessions.run(ctx, key, {
     assertCurrent: captured.assertCurrent,
-    open: () => native.shellSessionOpen(captured.directory, captured.workspace),
-    close: native.shellSessionClose,
+    open: () => captured.workspace.kind === "ssh" ? Promise.resolve(0) : native.shellSessionOpen(captured.directory, captured.workspace),
+    close: captured.workspace.kind === "ssh" ? async () => {} : native.shellSessionClose,
     execute: (shellId) =>
       captured.guarded(() =>
-        native.shellSessionRun(
+        captured.workspace.kind === "ssh" ? native.remoteShellRun(
+          command, captured.directory, timeoutSecs, captured.workspace, captured.signal,
+        ) : native.shellSessionRun(
           shellId,
           command,
           captured.directory,
@@ -56,7 +58,7 @@ export function buildShellTools(ctx: ToolContext) {
   return {
     bash_run: capturedTool(ctx, "bash_run", {
       description:
-        "Run a foreground shell command in this session's persistent agent shell. cwd persists across calls (so `cd foo` then `bash_run pwd` works). Use for short-lived commands (lint, test, search, build). For long-running or daemon processes (dev servers, watch tasks), use `bash_background`. NEVER invoke interactive tools (vim, less, top) — they will hang. Asks for user approval.",
+        "Run a foreground shell command. Local sessions retain cwd between calls; SSH commands start in the project directory each time. Use for short-lived commands such as lint, test, search or build. Do not invoke interactive tools. Asks for user approval.",
       inputSchema: z.object({
         command: z.string(),
         timeout_secs: z.number().int().min(1).max(300).optional(),

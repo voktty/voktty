@@ -11,6 +11,7 @@ import {
 } from "@/modules/remote";
 import { withLostSessionRecovery } from "@/modules/remote/filesystem";
 import { liveRemoteSessionId } from "@/modules/remote/sessionAliases";
+import { nextRemoteRequestId, REMOTE_PROTOCOL_VERSION, type RemoteResponse } from "@/modules/remote/client";
 import {
   currentWorkspaceEnv,
   isWindowsNativePath,
@@ -347,6 +348,31 @@ function resolveShellWorkspace(
 }
 
 export const native = {
+  remoteShellRun: async (
+    command: string,
+    cwd: string,
+    timeoutSecs: number | undefined,
+    workspace: Extract<WorkspaceEnv, { kind: "ssh" }>,
+    signal?: AbortSignal,
+  ) => {
+    if (workspace.sessionId === undefined) throw new Error("Remote workspace is not connected.");
+    if (signal?.aborted) throw new Error("The original shell call has retired.");
+    const sessionId = liveRemoteSessionId(workspace.sessionId);
+    const id = nextRemoteRequestId();
+    const cancel = () => { void invoke("remote_request", { sessionId, request: { protocol: REMOTE_PROTOCOL_VERSION, id: nextRemoteRequestId(), method: "exec.cancel", params: { id } } }).catch(() => {}); };
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      if (signal?.aborted) cancel();
+      const response = await invoke<RemoteResponse>("remote_request", { sessionId, request: { protocol: REMOTE_PROTOCOL_VERSION, id, method: "exec.run", params: { command, cwd, timeoutSecs: timeoutSecs ?? 120 } } });
+      if (!response.ok) {
+        if (response.error?.code === "method_not_found") throw new Error("Update the remote helper to run commands.");
+        throw new Error(response.error?.message ?? "Remote command failed.");
+      }
+      return response.result as { stdout: string; stderr: string; exit_code: number | null; timed_out: boolean; truncated: boolean; cwd_after: string };
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+    }
+  },
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
   workspaceAuthorize: (path: string) =>
     invoke<string>("workspace_authorize", {

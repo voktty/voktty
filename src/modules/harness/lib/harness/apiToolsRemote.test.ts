@@ -13,6 +13,7 @@ const io = vi.hoisted(() => ({
   ),
   readFile: vi.fn(async () => ({ kind: "text" as const, content: "original", size: 8 })),
   writeFile: vi.fn(async () => undefined),
+  remoteShellRun: vi.fn(async () => ({ stdout: "ok", stderr: "", exit_code: 0, timed_out: false, truncated: false, cwd_after: "/srv/app" })),
 }));
 vi.mock("@/modules/ai/lib/native", () => ({ native: io }));
 
@@ -63,8 +64,8 @@ const TARGET: ApiToolTarget = { root: PROJECT, workspace: SSH, shell: false };
 
 beforeEach(() => vi.clearAllMocks());
 
-async function call(name: string, value: Record<string, unknown>, approve = true) {
-  const context = apiToolContext("ssh-fixture", `remote://env-box${PROJECT}`, "fixture", TARGET);
+async function call(name: string, value: Record<string, unknown>, approve = true, shell = false) {
+  const context = apiToolContext("ssh-fixture", `remote://env-box${PROJECT}`, "fixture", { ...TARGET, shell });
   if (!context) throw new Error("Missing context");
   let step = 0;
   const callId = crypto.randomUUID();
@@ -82,12 +83,27 @@ async function call(name: string, value: Record<string, unknown>, approve = true
   return runApiAgentLoop({
     model,
     messages: [{ role: "user", content: "Work" }],
-    tools: buildApiTools(context, { shell: false }),
+    tools: buildApiTools(context, { shell }),
     signal: new AbortController().signal,
     onEvent: () => {},
     onApproval: async () => approve,
   });
 }
+
+it("runs an approved SSH command and rejects a denied command", async () => {
+  await call("bash_run", { command: "git status" }, false, true);
+  expect(io.remoteShellRun).not.toHaveBeenCalled();
+  await call("bash_run", { command: "git status" }, true, true);
+  expect(io.remoteShellRun).toHaveBeenCalledOnce();
+  await forgetApiTools("ssh-fixture");
+});
+
+it("enables shell only when the helper advertises exec.run", async () => {
+  remote.acquire.mockResolvedValueOnce({ info: { session_id: 41, workspace_root: "/srv", capabilities: ["exec.run"] }, release: remote.release } as never);
+  const lease = await acquireRemoteApiTools(`remote://env-box${PROJECT}`);
+  expect(lease?.target.shell).toBe(true);
+  lease?.release();
+});
 
 it("offers file and search tools over SSH but no shell", () => {
   const context = apiToolContext("ssh-shell", `remote://env-box${PROJECT}`, "fixture", TARGET);
