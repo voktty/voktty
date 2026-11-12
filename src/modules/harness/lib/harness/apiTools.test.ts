@@ -9,6 +9,11 @@ const io = vi.hoisted(() => ({
 }));
 vi.mock("@/modules/ai/lib/native", () => ({ native: io }));
 import { apiToolContext, buildApiTools, forgetApiTools } from "./apiTools";
+import { IS_WINDOWS as IS_WIN } from "@/lib/platform";
+
+// Same platform check as isLocalPath: drive-letter project folders on Windows.
+const ROOT = IS_WIN ? "c:/project" : "/project";
+const OUTSIDE = IS_WIN ? "c:/outside" : "/outside";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -17,7 +22,7 @@ it("does not resolve an SSH project URI as a local tool context", () => {
 });
 
 async function call(name: string, value: Record<string, unknown>) {
-  const context = apiToolContext("api-tools-fixture", "/project", "fixture");
+  const context = apiToolContext("api-tools-fixture", ROOT, "fixture");
   if (!context) throw new Error("Missing context");
   let step = 0;
   const callId = crypto.randomUUID();
@@ -38,16 +43,16 @@ async function call(name: string, value: Record<string, unknown>) {
 it("reads and edits within the original project", async () => {
   await call("read_file", { path: "file.ts" });
   await call("edit", { path: "file.ts", old_string: "original", new_string: "changed" });
-  expect(io.readFile).toHaveBeenCalledWith("/project/file.ts", { kind: "local" });
-  expect(io.writeFile).toHaveBeenCalledWith("/project/file.ts", "changed", { kind: "local" });
+  expect(io.readFile).toHaveBeenCalledWith(`${ROOT}/file.ts`, { kind: "local" });
+  expect(io.writeFile).toHaveBeenCalledWith(`${ROOT}/file.ts`, "changed", { kind: "local" });
   await forgetApiTools("api-tools-fixture");
 });
 
 it.each([
-  ["read_file", "/outside/file.ts"],
-  ["read_file", "/project/.env"],
-  ["write_file", "/outside/file.ts"],
-  ["write_file", "/project/.env"],
+  ["read_file", `${OUTSIDE}/file.ts`],
+  ["read_file", `${ROOT}/.env`],
+  ["write_file", `${OUTSIDE}/file.ts`],
+  ["write_file", `${ROOT}/.env`],
 ])("refuses %s at %s", async (name, path) => {
   const messages = await call(name, name === "write_file" ? { path, content: "secret" } : { path });
   expect(JSON.stringify(messages)).toContain("Refused");

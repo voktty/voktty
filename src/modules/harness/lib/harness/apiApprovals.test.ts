@@ -10,12 +10,18 @@ vi.mock("@/modules/ai/lib/native", () => ({ native: {
 } }));
 
 import { forgetApiSession, respondApiApproval, sendApiTurn, cancelApiTurn, steerApiTurn, stopApiSession } from "./apiAdapter";
+import { IS_WINDOWS as IS_WIN } from "@/lib/platform";
 
+// Same platform check as isLocalPath: drive-letter project folders on Windows.
+const ROOT = IS_WIN ? "c:/project" : "/project";
+
+// Warming the whole chat agent graph is slow while the full suite runs in
+// parallel, so this cold import gets more than the default hook timeout.
 beforeAll(async () => {
   await import("@/modules/ai/lib/agent");
   await import("./apiTools");
   await import("./apiAgentLoop");
-});
+}, 60_000);
 
 function model() {
   let step = 0;
@@ -37,7 +43,7 @@ it.each(["allow", "deny", "cancel", "full-access"] as const)("handles %s for a s
   fixture.model = model();
   const sessionId = `approval-${decision}`;
   const events: HarnessEvent[] = [];
-  const pending = sendApiTurn({ sessionId, cwd: "/project", model: "fixture", runtimeMode: decision === "full-access" ? "full-access" : "supervised", text: "Write", onEvent: (event) => {
+  const pending = sendApiTurn({ sessionId, cwd: ROOT, model: "fixture", runtimeMode: decision === "full-access" ? "full-access" : "supervised", text: "Write", onEvent: (event) => {
     events.push(event);
     if (event.type !== "approval.requested") return;
     if (decision === "cancel") void cancelApiTurn(sessionId);
@@ -56,7 +62,7 @@ it("ignores responses for other sessions and cancels on close", async () => {
   const sessionId = "approval-owner";
   let requestId = 0;
   const events: HarnessEvent[] = [];
-  const pending = sendApiTurn({ sessionId, cwd: "/project", model: "fixture", runtimeMode: "supervised", text: "Write", onEvent: (event) => {
+  const pending = sendApiTurn({ sessionId, cwd: ROOT, model: "fixture", runtimeMode: "supervised", text: "Write", onEvent: (event) => {
     events.push(event);
     if (event.type === "approval.requested") requestId = event.requestId;
   } });
@@ -80,9 +86,9 @@ it("keeps supervised mode when steering", async () => {
     events.push(event);
     if (event.type === "approval.requested") respondApiApproval(sessionId, event.requestId, "deny");
   };
-  await sendApiTurn({ sessionId, cwd: "/project", model: "fixture", runtimeMode: "supervised", text: "First", onEvent });
+  await sendApiTurn({ sessionId, cwd: ROOT, model: "fixture", runtimeMode: "supervised", text: "First", onEvent });
   fixture.model = model();
-  await steerApiTurn({ sessionId, cwd: "/project", model: "fixture", text: "Next" });
+  await steerApiTurn({ sessionId, cwd: ROOT, model: "fixture", text: "Next" });
   expect(events.filter((event) => event.type === "approval.requested")).toHaveLength(2);
   expect(fixture.writeFile).not.toHaveBeenCalled();
   await forgetApiSession(sessionId);
