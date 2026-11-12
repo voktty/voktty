@@ -129,7 +129,6 @@ import { useDragResize } from "../hooks/useDragResize";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useInboxUnseen } from "../hooks/useInboxUnseen";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
-import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -619,7 +618,6 @@ function SidebarComponent({
   const explorer = useRef<string | null>(null);
   if (sidebarVisible && tab === "files") explorer.current = gitRoot;
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
-  const changeStats = useProjectDiffStats(gitRoot, open);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectKey(cwd), groupLogos);
   const sessionDiffs = useSessionDiffStats(
@@ -1173,9 +1171,6 @@ function SidebarComponent({
     onTabChange(itemId);
   };
 
-  const changeAdditions = changeStats?.additions ?? 0;
-  const changeDeletions = changeStats?.deletions ?? 0;
-  const hasChangeStats = changeAdditions > 0 || changeDeletions > 0;
 
   const workspaceTabItems = visibleTabs.map((itemId, index) => {
     const active = tab === itemId;
@@ -1230,21 +1225,6 @@ function SidebarComponent({
     );
   });
 
-  const gitShortcut = onShowSourceControl && inProject ? (
-    <button
-      type="button"
-      aria-label={t("harness.chrome.changes")}
-      title={t("harness.chrome.changes")}
-      onClick={onShowSourceControl}
-      className="flex h-6 shrink-0 items-center rounded-md px-2 text-[12px] text-content/60 hover:bg-content/10 hover:text-content focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      {hasChangeStats ? (
-        <DiffStat additions={changeAdditions} deletions={changeDeletions} />
-      ) : (
-        <GitBranch className="size-3.5" />
-      )}
-    </button>
-  ) : null;
 
   const sidebarContent = (
     <aside
@@ -1272,7 +1252,6 @@ function SidebarComponent({
                 </span>
               )}
             </div>
-            {gitShortcut}
             <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
           </div>
           {visibleTabs.length > 1 ? (
@@ -1294,7 +1273,6 @@ function SidebarComponent({
             >
               {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
               <div className="min-w-0 flex-1" />
-              {gitShortcut}
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}
@@ -1309,7 +1287,6 @@ function SidebarComponent({
               className="flex h-9.75 shrink-0 select-none items-center justify-end pr-1.5"
               data-tauri-drag-region="deep"
             >
-              {gitShortcut}
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}

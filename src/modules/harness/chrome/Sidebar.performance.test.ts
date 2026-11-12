@@ -155,7 +155,7 @@ it("retains the project rail and its input state through focus visibility change
   expect(rail.value).toBe("remote picker state");
 });
 
-it("replaces the legacy changes tab with a button to the owning Git target", () => {
+it("leaves Git to the chat title bar instead of a changes tab or a second shortcut", () => {
   const showSourceControl = vi.fn();
   props = {
     ...props,
@@ -170,9 +170,8 @@ it("replaces the legacy changes tab with a button to the owning Git target", () 
   expect([...container.querySelectorAll('[role="tab"]')].some((tab) =>
     tab.getAttribute("aria-label")?.includes(t("harness.chrome.changes")),
   )).toBe(false);
-  const shortcut = container.querySelector<HTMLButtonElement>(`button[title="${t("harness.chrome.changes")}"]`);
-  if (!shortcut) throw new Error("Git shortcut did not mount");
-  act(() => shortcut.click());
-  expect(showSourceControl).toHaveBeenCalledOnce();
-  expect(props.onTabChange).not.toHaveBeenCalledWith("changes");
+  expect(
+    container.querySelector(`button[title="${t("harness.chrome.changes")}"]`),
+  ).toBeNull();
+  expect(showSourceControl).not.toHaveBeenCalled();
 });
