@@ -4971,7 +4971,7 @@ export const en = {
       emptySessionGames: "Session signal",
       emptySessionGamesDesc:
         "A quiet Voktty signal animates above a new session.",
-      notch: "Harness Notch",
+      notch: "Harness Notch (alpha)",
       notchDesc:
         "Shows a dynamic top island with agent activities, code summary, and quick project access.",
       notes: "Notes",
@@ -6041,7 +6041,7 @@ export const en = {
       composerMascot: "Composer mascot",
       diffView: "Diff view",
       emptySessionGames: "Session signal",
-      notch: "Harness Notch",
+      notch: "Harness Notch (alpha)",
       providerAccounts: "Provider accounts",
       showRemainingUsage: "Show remaining usage",
       maskEmails: "Mask account emails",

@@ -575,9 +575,11 @@ export function subscribeLiveAgentsEnabled(onStoreChange: () => void) {
     window.removeEventListener(LIVE_AGENTS_ENABLED_CHANGE_EVENT, onStoreChange);
 }
 
-const HARNESS_NOTCH_ENABLED_KEY = "monocode.harnessNotch";
+// The notch is alpha: a new key starts everyone with it off, including
+// installs that saved it on while it was enabled by default.
+const HARNESS_NOTCH_ENABLED_KEY = "monocode.harnessNotch.alpha";
 
-export const HARNESS_NOTCH_ENABLED_DEFAULT = true;
+export const HARNESS_NOTCH_ENABLED_DEFAULT = false;
 
 /** Fired on `window` when the Harness Notch setting flips. */
 export const HARNESS_NOTCH_ENABLED_CHANGE_EVENT =

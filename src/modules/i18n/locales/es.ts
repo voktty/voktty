@@ -5088,7 +5088,7 @@ export const es: TranslationSchema = {
       emptySessionGames: "Señal de sesión",
       emptySessionGamesDesc:
         "Una animación propia de Voktty acompaña el inicio de una sesión.",
-      notch: "Notch del Harness",
+      notch: "Notch del Harness (alfa)",
       notchDesc:
         "Muestra una isla dinámica superior con la actividad de los agentes, resumen de código y acceso rápido a proyectos.",
       notes: "Notas",
@@ -6169,7 +6169,7 @@ export const es: TranslationSchema = {
       composerMascot: "Mascota del compositor",
       diffView: "Vista de diferencias",
       emptySessionGames: "Señal de sesión",
-      notch: "Notch del Harness",
+      notch: "Notch del Harness (alfa)",
       providerAccounts: "Cuentas de proveedor",
       showRemainingUsage: "Mostrar uso restante",
       maskEmails: "Enmascarar correos de cuenta",
