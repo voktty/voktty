@@ -1829,6 +1829,36 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return id;
   }, []);
 
+  /**
+   * Binds an existing terminal to a Harness project so the project's dock
+   * can present it as a canonical terminal. Refuses private and shared
+   * terminals, a different environment (local vs SSH) and a terminal that
+   * already belongs to another project. Returns the stored project path.
+   */
+  const assignTerminalProject = useCallback(
+    (tabKey: string, projectCwd: string): string | undefined => {
+      const curr = tabsRef.current;
+      const tab = curr.find((candidate) => candidate.tabKey === tabKey);
+      if (tab?.kind !== "terminal" || tab.private || tab.collaboration)
+        return undefined;
+      const project = terminalProjectMetadata(
+        projectCwd,
+        tab.workspaceEnv,
+      ).projectCwd;
+      if (!project) return undefined;
+      if (tab.projectCwd !== undefined) {
+        return tab.projectCwd === project ? project : undefined;
+      }
+      const nextTabs = curr.map((candidate) =>
+        candidate === tab ? { ...tab, projectCwd: project } : candidate,
+      );
+      tabsRef.current = nextTabs;
+      setTabs(nextTabs);
+      return project;
+    },
+    [],
+  );
+
   const newTeamTab = useCallback((projectPath: string, spaceId?: string) => {
     const targetSpace = spaceId ?? activeSpaceIdRef.current;
     const curr = tabsRef.current;
@@ -2343,6 +2373,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     closeTabs,
     reopenClosedEditor,
     updateTab,
+    assignTerminalProject,
     selectByIndex,
     setLeafCwd,
     focusPane,

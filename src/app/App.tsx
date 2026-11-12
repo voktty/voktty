@@ -224,6 +224,7 @@ import {
 } from "@/modules/ssh";
 import { ConsoleUptimeWidget, StatusBar } from "@/modules/statusbar";
 import { useResidentHarness } from "@/modules/surfaces/lib/useResidentHarness";
+import { requestHarnessTerminalAdoption } from "@/modules/surfaces/lib/harnessTerminalAdoption";
 import { HarnessRailButton } from "@/modules/sidebar/HarnessRailButton";
 import { preloadHarnessApp } from "@/modules/harness/components/HarnessStack";
 import {
@@ -516,6 +517,7 @@ function DesktopApp() {
     reopenClosedEditor,
     pinTab,
     updateTab,
+    assignTerminalProject,
     setLeafCwd,
     focusPane,
     focusNextPaneInTab,
@@ -3821,7 +3823,19 @@ function DesktopApp() {
         handleCreateSpaceFromTab(tab);
         return;
       }
-      if (plan.operation === "split-new-space") {
+      if (plan.operation === "adopt-terminal") {
+        if (tab.kind !== "terminal") return;
+        const adopted = requestHarnessTerminalAdoption(plan.hostTabKey, {
+          tabKey: tab.tabKey,
+          cwd: tab.cwd ?? "",
+          title: tab.customTitle ?? tab.title,
+          assignProject: (projectCwd) =>
+            assignTerminalProject(tab.tabKey, projectCwd),
+        });
+        if (!adopted) toast.error(t("spaces.harnessTerminalRejected"));
+        return;
+      }
+            if (plan.operation === "split-new-space") {
         const host = tabsRef.current.find(
           (candidate) => candidate.tabKey === plan.hostTabKey,
         );

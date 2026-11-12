@@ -8,6 +8,11 @@ import {
   useHarnessTerminalRecovery,
 } from "@/modules/harness/hooks/useHarnessTerminalRecovery";
 import { useCanonicalTerminalCatalog } from "@/modules/terminal/CanonicalTerminalCatalog";
+import { HarnessTerminalOwner } from "@/modules/harness/hooks/harnessTerminalContext";
+import {
+  type AdoptableTerminal,
+  registerHarnessTerminalAdoption,
+} from "@/modules/surfaces/lib/harnessTerminalAdoption";
 import { terminalProjectMetadata } from "@/modules/tabs/lib/terminalProject";
 import { useHarnessViewEngine } from "@/modules/harness/hooks/useHarnessViewEngine";
 import { useHarnessViewRegistration } from "@/modules/harness/hooks/useHarnessViewRegistration";
@@ -30,6 +35,7 @@ import {
   startTransition,
   Suspense,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -1773,6 +1779,60 @@ export function HarnessApp({
     },
     [createCanonicalTerminal, focusProjectTerminal],
   );
+
+  // A terminal dropped on this view joins the project's dock as the same
+  // canonical tab: nothing is created or closed, so its process and its
+  // window tab survive, exactly as for terminals born in the Harness.
+  const adoptProjectTerminal = useCallback(
+    (terminal: AdoptableTerminal) => {
+      const projectPath = projectCwdRef.current;
+      if (!looksLikeProject(projectPath)) return false;
+      const association = terminalProjectMetadata(projectPath).projectCwd;
+      if (!association) return false;
+      const docked = findProjectTerminal(
+        projectTerminalsRef.current,
+        projectPath,
+      )?.pane.files.some(
+        (file) => file.canonicalTerminal?.tabKey === terminal.tabKey,
+      );
+      if (docked) {
+        focusProjectTerminal();
+        return true;
+      }
+      const project = terminal.assignProject(association);
+      if (!project) return false;
+      const existing = findProjectTerminal(
+        projectTerminalsRef.current,
+        projectPath,
+      );
+      const workdir = terminal.cwd || projectPath;
+      const file = {
+        ...newTerminalFile(
+          workdir,
+          terminal.title ??
+            (existing ? nextDockTerminalTitle(existing, workdir) : undefined),
+        ),
+        canonicalTerminal: { tabKey: terminal.tabKey, projectCwd: project },
+      };
+      setProjectTerminals((previous) => {
+        const current = findProjectTerminal(previous, projectPath);
+        return current
+          ? mapProjectTerminal(previous, projectPath, (dock) =>
+              addTerminalToDock(dock, file),
+            )
+          : [...previous, createProjectTerminal(projectPath, file)];
+      });
+      focusProjectTerminal();
+      return true;
+    },
+    [focusProjectTerminal],
+  );
+  const terminalOwner = useContext(HarnessTerminalOwner);
+  const terminalOwnerKey = terminalOwner?.tabKey;
+  useEffect(() => {
+    if (!terminalOwnerKey) return;
+    return registerHarnessTerminalAdoption(terminalOwnerKey, adoptProjectTerminal);
+  }, [terminalOwnerKey, adoptProjectTerminal]);
 
   const onOpenTerminal = useCallback(
     (cwd: string, _asWorkspaceTab = false, _occupySessionId?: string) => {

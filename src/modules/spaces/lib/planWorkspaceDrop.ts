@@ -65,6 +65,13 @@ export type WorkspaceDropPlan =
     }
   | {
       accepted: true;
+      /** A terminal dropped on a Harness joins its project terminals and keeps its tab. */
+      operation: "adopt-terminal";
+      source: Extract<WorkspaceDragSource, { tabId: number }>;
+      hostTabKey: TabKey;
+    }
+  | {
+      accepted: true;
       operation: "reference-resource";
       source: Extract<WorkspaceDragSource, { kind: "file" | "directory" }>;
       viewSpaceId: ViewSpaceId;
@@ -128,6 +135,16 @@ export function planWorkspaceDrop({
     if (resource) return invalid("resource-requires-view");
     if (!tab) return invalid("source-not-tab");
     if (tab.tabKey === target.tabKey) return invalid("same-target");
+    const host = tabs.find((candidate) => candidate.tabKey === target.tabKey);
+    const dragged = tabs.find((candidate) => candidate.tabKey === tab.tabKey);
+    if (host?.kind === "harness" && dragged?.kind === "terminal") {
+      return {
+        accepted: true,
+        operation: "adopt-terminal",
+        source: tab,
+        hostTabKey: target.tabKey,
+      };
+    }
     if (viewSpaces.some((space) => space.memberOrder.includes(target.tabKey))) {
       return invalid("host-not-standalone");
     }

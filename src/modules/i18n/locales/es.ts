@@ -1459,6 +1459,9 @@ export const es: TranslationSchema = {
     dragReady: "Arrastre activo. Muévelo a un espacio o slot resaltado.",
     dropReady: "Suelta para colocar la pestaña aquí.",
     splitDropReady: "Suelta para dividir la vista y crear un espacio nuevo.",
+    harnessTerminalDropReady: "Suelta para añadir esta terminal a las terminales del proyecto del Harness.",
+    harnessTerminalRejected:
+      "Esta terminal no puede unirse al Harness: es privada, compartida, de otro entorno o ya pertenece a otro proyecto.",
     resourceDragReady:
       "Arrastre activo. Muévelo sobre una vista para citarlo en la IA.",
     resourceDropReady: "Suelta aquí para citar este archivo en la IA.",

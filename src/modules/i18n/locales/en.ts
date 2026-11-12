@@ -1418,6 +1418,9 @@ export const en = {
     dragReady: "Drag active. Move to a highlighted space or slot.",
     dropReady: "Release to place the tab here.",
     splitDropReady: "Release to split the view and create a new space.",
+    harnessTerminalDropReady: "Release to add this terminal to the Harness project terminals.",
+    harnessTerminalRejected:
+      "This terminal cannot join the Harness: it is private, shared, on another environment or already belongs to another project.",
     resourceDragReady: "Drag active. Move over a view to cite it in AI.",
     resourceDropReady: "Release here to cite this file in AI.",
     rendererCapacity:

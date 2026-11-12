@@ -111,7 +111,9 @@ export function StandaloneSplitDropZone({
       {isTarget ? (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/35 px-4 text-center text-sm font-medium text-foreground backdrop-blur-[1px]">
           {plan.accepted
-            ? t("spaces.splitDropReady")
+            ? plan.operation === "adopt-terminal"
+              ? t("spaces.harnessTerminalDropReady")
+              : t("spaces.splitDropReady")
             : plan.reason === "max-slots"
               ? t("spaces.maxSlots")
               : plan.reason === "renderer-capacity"

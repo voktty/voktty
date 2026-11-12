@@ -377,3 +377,49 @@ describe("planWorkspaceDrop", () => {
     });
   });
 });
+
+describe("terminals dropped on a Harness", () => {
+  const harness = { tabKey: asTabKey("harness"), kind: "harness" };
+  const terminal = { tabKey: asTabKey("term"), kind: "terminal" };
+  const editor = { tabKey: asTabKey("editor"), kind: "editor" };
+  const onHarness: WorkspaceDropTarget = {
+    kind: "tab-split",
+    tabKey: asTabKey("harness"),
+  };
+
+  it("adopts the terminal into the Harness instead of splitting the view", () => {
+    expect(
+      planWorkspaceDrop({
+        source: standalone("term"),
+        target: onHarness,
+        viewSpaces: [],
+        tabs: [harness, terminal],
+      }),
+    ).toEqual({
+      accepted: true,
+      operation: "adopt-terminal",
+      source: standalone("term"),
+      hostTabKey: asTabKey("harness"),
+    });
+  });
+
+  it("adopts even when the Harness already lives in a split space", () => {
+    const plan = planWorkspaceDrop({
+      source: standalone("term"),
+      target: onHarness,
+      viewSpaces: [space("a", "harness", "other")],
+      tabs: [harness, terminal],
+    });
+    expect(plan.accepted && plan.operation).toBe("adopt-terminal");
+  });
+
+  it("keeps splitting for anything that is not a terminal", () => {
+    const plan = planWorkspaceDrop({
+      source: standalone("editor"),
+      target: onHarness,
+      viewSpaces: [],
+      tabs: [harness, editor],
+    });
+    expect(plan.accepted && plan.operation).toBe("split-new-space");
+  });
+});
