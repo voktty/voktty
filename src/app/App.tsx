@@ -221,6 +221,9 @@ import {
   SshSessionPickerModal,
 } from "@/modules/ssh";
 import { ConsoleUptimeWidget, StatusBar } from "@/modules/statusbar";
+import { useResidentHarness } from "@/modules/surfaces/lib/useResidentHarness";
+import { HarnessRailButton } from "@/modules/sidebar/HarnessRailButton";
+import { preloadHarnessApp } from "@/modules/harness/components/HarnessStack";
 import {
   ActiveTabsLaunchpad,
   type CloseTabsPlan,
@@ -2358,6 +2361,19 @@ function DesktopApp() {
     createWorktree: createLocalHarnessWorktree,
     onError: reportHarnessOpeningError,
     onMissingProject: reportMissingHarnessProject,
+  });
+  useResidentHarness({
+    ready: booted && spacesHydrated,
+    spaceId: activeSpaceId,
+    tabsRef,
+    localRoot:
+      ((!activeSpace?.env || activeSpace.env.kind === "local") &&
+        activeSpace?.root) ||
+      localLaunchCwd ||
+      localHome ||
+      initialLaunchCwd ||
+      undefined,
+    newHarnessTab,
   });
 
   const teamOpeningOwner = useMemo(() => ({}), [activeSpaceId, activeSpace?.root, activeSpace?.env]);
@@ -4850,6 +4866,7 @@ function DesktopApp() {
               onNewEditor={openNewEditor}
               onNewApiClient={() => newApiClientTab()}
               onNewHarness={openNewHarness}
+              hideHarnessControl
               onNewRdp={(opts) => newRdpTab(opts)}
               onConnectRemote={() => setGuestConnectOpen(true)}
               onShareTerminal={handleShareTerminal}
@@ -4908,6 +4925,13 @@ function DesktopApp() {
                 onSelectView={handleSidebarViewSelect}
                 changedCount={sourceControl.changedCount}
                 workspaceRoot={quickOpenRoot}
+                header={
+                  <HarnessRailButton
+                    active={activeTab?.kind === "harness"}
+                    onOpen={openNewHarness}
+                    onPreload={preloadHarnessApp}
+                  />
+                }
                 footer={<ConsoleUptimeWidget cwd={activeCwd} variant="rail" />}
               />
             <ResizablePanelGroup

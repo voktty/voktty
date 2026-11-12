@@ -1791,7 +1791,13 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return id;
   }, []);
 
-  const newHarnessTab = useCallback((spaceId?: string, cwd?: string, sessionId?: string) => {
+  const newHarnessTab = useCallback((
+    spaceId?: string,
+    cwd?: string,
+    sessionId?: string,
+    options?: { activate?: boolean },
+  ) => {
+    const activate = options?.activate ?? true;
     const targetSpace = spaceId ?? activeSpaceIdRef.current;
     const curr = tabsRef.current;
     const existing = curr.find(
@@ -1801,7 +1807,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         (sessionId ? t.sessionId === sessionId : true),
     );
     if (existing) {
-      setActiveId(existing.id);
+      if (activate) setActiveId(existing.id);
       return existing.id;
     }
     const id = nextIdRef.current++;
@@ -1819,7 +1825,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     ];
     tabsRef.current = nextTabs;
     setTabs(nextTabs);
-    setActiveId(id);
+    if (activate) setActiveId(id);
     return id;
   }, []);
 

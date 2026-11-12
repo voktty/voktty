@@ -49,6 +49,8 @@ type Props = {
   onNewEditor: () => void;
   onNewApiClient?: () => void;
   onNewHarness?: () => void;
+  /** The activity bar owns the Harness entry, so the header leaves it out. */
+  hideHarnessControl?: boolean;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -147,6 +149,7 @@ export function Header({
   onNewEditor,
   onNewApiClient,
   onNewHarness,
+  hideHarnessControl = false,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -325,7 +328,7 @@ export function Header({
           <HugeiconsIcon icon={Rocket01Icon} size={15} strokeWidth={1.75} />
         </Button>
 
-        {tabStyle === "vertical" && onNewHarness && (
+        {tabStyle === "vertical" && onNewHarness && !hideHarnessControl && (
           <Button
             onClick={onNewHarness}
             onMouseEnter={preloadHarnessApp}
@@ -363,7 +366,7 @@ export function Header({
         {tabStyle === "horizontal" && (
           <>
             {spaceSwitcher}
-            {onNewHarness && (
+            {onNewHarness && !hideHarnessControl && (
               isHarnessOpen && harnessTab ? (
                 <div
                   role="tab"

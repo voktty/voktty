@@ -38,6 +38,8 @@ type Props = {
   onSelectView: (view: SidebarViewId) => void;
   changedCount: number;
   workspaceRoot: string | null;
+  /** Above the view icons: the permanent entry to the Harness. */
+  header?: ReactNode;
   /** Pinned to the bottom of the bar, below the view icons. */
   footer?: ReactNode;
 };
@@ -47,6 +49,7 @@ export function SidebarRail({
   onSelectView,
   changedCount,
   workspaceRoot,
+  header,
   footer,
 }: Props) {
   const { t } = useTranslation();
@@ -114,6 +117,12 @@ export function SidebarRail({
       style={{ width: SIDEBAR_RAIL_WIDTH }}
       className="flex shrink-0 flex-col items-stretch gap-0.5 border-r border-content/10 bg-content/[0.025] px-1 py-1"
     >
+      {header ? (
+        <>
+          {header}
+          <div aria-hidden className="mx-2 my-0.5 border-t border-content/10" />
+        </>
+      ) : null}
       {items.map((item) => {
         const isActive = item.id === activeView;
         const badge = item.badge ?? 0;
