@@ -112,8 +112,13 @@ const paths = [
   "src-tauri/Cargo.toml",
   "src-tauri/Cargo.lock",
 ];
+// Windows checkouts with core.autocrlf get CRLF files; CI reads LF. The
+// assertions below compare line by line, so read every fixture as LF.
 const readRepo = (path) =>
-  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8").replace(
+    /\r\n/g,
+    "\n",
+  );
 const files = Object.fromEntries(paths.map((path) => [path, readRepo(path)]));
 const memberManifests = workspaceMemberManifests(files["src-tauri/Cargo.toml"]);
 for (const path of memberManifests) files[path] = readRepo(path);
