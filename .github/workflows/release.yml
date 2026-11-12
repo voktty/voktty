@@ -130,13 +130,14 @@ jobs:
               }
             }
             const android = Boolean(inputs.android);
-            const existing = releases.find((release) => release.tag_name === plan.tag);
+            // A draft whose tag does not exist yet is listed as `untagged-...`, so also match it by name.
+            const existing = releases.find((release) => release.tag_name === plan.tag || (release.draft && release.name === `Voktty ${plan.tag}`));
             if (existing && !existing.draft) throw new Error('This release is already published. Choose a new version.');
             const body = `Source commit: ${source}\n${ciUrl ? `CI: ${ciUrl}\n` : ''}Desktop platforms: ${plan.matrix.include.map((target) => target.selection).join(', ')}${android ? '\nAndroid APKs: arm64, x64' : ''}\nAuto-update latest: ${plan.latest}\n\nSee the assets to download and install.`;
             let release = existing;
             if (existing) {
-              if (existing.target_commitish !== source || existing.body !== body) {
-                const updated = await github.rest.repos.updateRelease({ ...context.repo, release_id: existing.id, target_commitish: source, body });
+              if (existing.tag_name !== plan.tag || existing.target_commitish !== source || existing.body !== body) {
+                const updated = await github.rest.repos.updateRelease({ ...context.repo, release_id: existing.id, tag_name: plan.tag, target_commitish: source, body });
                 release = updated.data;
               }
             } else {
