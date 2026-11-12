@@ -31,6 +31,8 @@ export type WorkspaceSurfaceProps = {
   activeTab: Tab | undefined;
   onCreateHarnessTab?: (spaceId?: string, cwd?: string, sessionId?: string) => number;
   onActivateHarnessTab?: (id: number) => void;
+  nativeAiRequest?: { id: number } | null;
+  onNativeAiRequestHandled?: (request: { id: number }) => void;
   onCloseTerminalTab?: (id: number, terminalIds?: readonly number[]) => void | Promise<void>;
   onWarmTerminalTabs?: (
     ids: number[],
@@ -107,6 +109,8 @@ function WorkspaceSurfaceLayers({
   activeTab,
   onCreateHarnessTab,
   onActivateHarnessTab,
+  nativeAiRequest,
+  onNativeAiRequestHandled,
   registerTerminalHandle,
   onSearchReady,
   onCwd,
@@ -362,6 +366,8 @@ function WorkspaceSurfaceLayers({
         aria-hidden={!layerVisible("harness")}
       >
         <HarnessStack
+          nativeAiRequest={nativeAiRequest}
+          onNativeAiRequestHandled={onNativeAiRequestHandled}
           onCreateTab={onCreateHarnessTab}
           tabs={tabs}
           activeId={activeId}

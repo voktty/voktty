@@ -105,12 +105,12 @@ vi.mock("./HarnessApp", () => ({
   },
 }));
 vi.mock("./HarnessNativeAiView", () => ({
-  HarnessNativeAiView: () => {
+  HarnessNativeAiView: ({ onClose }: { onClose: () => void }) => {
     useEffect(() => {
       mounts.native();
       return mounts.release;
     }, []);
-    return createElement("div", { "data-native": true }, "Native AI");
+    return createElement("div", { "data-native": true }, "Native AI", createElement("button", { type: "button", onClick: onClose }, "Close"));
   },
 }));
 function required<T>(value: T | null | undefined): T {
@@ -143,9 +143,8 @@ it("keeps Harness sessions mounted and releases native chat when the tab loses f
     root.render(createElement(HarnessStack, { tabs, activeId: 1 }));
   });
   expect(mounts.harness).toHaveBeenCalledTimes(1);
-  const buttons = container.querySelectorAll<HTMLButtonElement>("button");
   await act(async () => {
-    buttons[1].click();
+    root.render(createElement(HarnessStack, { tabs, activeId: 1, nativeAiRequest: { id: 1 } }));
   });
   expect(container.querySelector("[data-native]")).not.toBeNull();
   expect(container.querySelector("[data-harness]")).not.toBeNull();
@@ -160,7 +159,7 @@ it("keeps Harness sessions mounted and releases native chat when the tab loses f
   });
   expect(mounts.native).toHaveBeenCalledTimes(2);
   await act(async () => {
-    buttons[0].click();
+    container.querySelector<HTMLButtonElement>("[data-native] button")?.click();
   });
   expect(container.querySelector("[data-native]")).toBeNull();
   expect(mounts.harness).toHaveBeenCalledTimes(1);
@@ -173,8 +172,7 @@ it("hides the inner selector without AI and returns to Harness when AI disconnec
   expect(mounts.native).not.toHaveBeenCalled();
   mounts.aiAvailable = true;
   await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
-  const nativeButton = container.querySelectorAll<HTMLButtonElement>('[role="group"] button')[1];
-  await act(async () => nativeButton.click());
+  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} nativeAiRequest={{ id: 1 }} />));
   expect(container.querySelector('[data-native]')).not.toBeNull();
   mounts.aiAvailable = false;
   await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
@@ -186,7 +184,7 @@ it("hides the inner selector without AI and returns to Harness when AI disconnec
   mounts.aiAvailable = true;
   await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
   expect(container.querySelector('[data-native]')).toBeNull();
-  expect(container.querySelector('[role="group"] button')?.getAttribute('aria-pressed')).toBe('true');
+  expect(container.querySelector('[role="group"]')).toBeNull();
 });
 it("keeps owner reports when hidden and removes only the unmounted owner", async () => {
   const otherTab = { id: 2, kind: "harness", cwd: "/other" } as HarnessTab;
@@ -391,7 +389,7 @@ it("accepts a newly created destination before its first outer render", async ()
 it("returns a directed destination from native chat to Harness before consuming the request", async () => {
   const destination = { ...tabs[0], tabKey: "tab-native" } as HarnessTab;
   await act(async () => root.render(<HarnessStack tabs={[destination]} activeId={1} />));
-  await act(async () => container.querySelectorAll<HTMLButtonElement>("button")[1].click());
+  await act(async () => root.render(<HarnessStack tabs={[destination]} activeId={1} nativeAiRequest={{ id: 1 }} />));
   expect(container.querySelector("[data-native]")).not.toBeNull();
   await act(async () => requestHarnessProject("/native-destination", { ownerId: 1, tabKey: asTabKey("tab-native") }));
   expect(container.querySelector("[data-native]")).toBeNull();

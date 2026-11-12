@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useContext, useLayoutEffect } from "react";
+import { lazy, Suspense, useEffect, useState, useContext, useLayoutEffect, useRef } from "react";
 import { HarnessRestoreContext } from "@/modules/harness/hooks/harnessRestoreContext";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -61,6 +61,8 @@ function HarnessWorkbench({
   onProjectRequestHandled,
   onRegistered,
   layoutKey,
+  nativeAiRequest,
+  onNativeAiRequestHandled,
 }: {
   tab: HarnessTab;
   focused: boolean;
@@ -70,8 +72,9 @@ function HarnessWorkbench({
   onProjectRequestHandled: (request: { path: string }) => void;
   onRegistered: (view: HarnessNavigationView) => void;
   layoutKey?: string;
+  nativeAiRequest?: { id: number } | null;
+  onNativeAiRequestHandled?: (request: { id: number }) => void;
 }) {
-  const { t } = useTranslation();
   const aiAvailable = useAiAvailable();
   const restored = useContext(HarnessRestoreContext);
   const [bootView] = useState(() => restored && !restored.claimed.has(tab.tabKey)
@@ -79,6 +82,14 @@ function HarnessWorkbench({
   useLayoutEffect(() => { restored?.claimed.add(tab.tabKey); }, [restored, tab.tabKey]);
   const [view, setView] = useState<"harness" | "native">("harness");
   const nativeVisible = aiAvailable && view === "native";
+  const handledNativeRequest = useRef<typeof nativeAiRequest>(null);
+  useEffect(() => {
+    if (focused && aiAvailable && nativeAiRequest?.id === tab.id && handledNativeRequest.current !== nativeAiRequest) {
+      handledNativeRequest.current = nativeAiRequest;
+      setView("native");
+      onNativeAiRequestHandled?.(nativeAiRequest);
+    }
+  }, [focused, aiAvailable, nativeAiRequest, onNativeAiRequestHandled, tab.id]);
   useLayoutEffect(() => {
     if (!aiAvailable) setView("harness");
   }, [aiAvailable]);
@@ -95,32 +106,6 @@ function HarnessWorkbench({
   useEffect(() => () => removeHarnessSurface(tab.id), [tab.id]);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {aiAvailable ? (
-      <div
-        role="group"
-        aria-label={t("harness.agentDevelopment")}
-        className="flex shrink-0 gap-1 border-b border-border bg-background px-3 py-1.5"
-      >
-        {(["harness", "native"] as const).map((item) => (
-          <button
-            key={item}
-            type="button"
-            aria-pressed={view === item}
-            onClick={() => setView(item)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs",
-              view === item
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted/50",
-            )}
-          >
-            {item === "harness"
-              ? t("harness.agentDevelopment")
-              : t("harness.commonUI.vokttyAi", { ai: t("shortcuts.groups.ai") })}
-          </button>
-        ))}
-      </div>
-      ) : null}
       <div className="min-h-0 flex-1" hidden={nativeVisible}>
         <HarnessProjectOwner value={{ ownerId: tab.id, tabKey: tab.tabKey }}>
         <Suspense fallback={null}>
@@ -171,6 +156,8 @@ type Props = {
   placements?: ReadonlyMap<number, WorkspacePlacement>;
   onActivateTab?: (id: number) => void;
   onCreateTab?: () => number;
+  nativeAiRequest?: { id: number } | null;
+  onNativeAiRequestHandled?: (request: { id: number }) => void;
 };
 
 export function HarnessStack({
@@ -179,6 +166,8 @@ export function HarnessStack({
   placements,
   onActivateTab,
   onCreateTab,
+  nativeAiRequest,
+  onNativeAiRequestHandled,
 }: Props) {
   const { t } = useTranslation();
   const creation = useHarnessViewCreation(tabs, onCreateTab);
@@ -262,6 +251,8 @@ export function HarnessStack({
                     }
                   >
                     <HarnessWorkbench
+                      nativeAiRequest={nativeAiRequest}
+                      onNativeAiRequestHandled={onNativeAiRequestHandled}
                       layoutKey={
                         placement
                           ? `${placement.rect.x}:${placement.rect.y}:${placement.rect.width}:${placement.rect.height}`

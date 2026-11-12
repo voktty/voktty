@@ -18,6 +18,7 @@ import {
   FolderTreeIcon,
   HierarchyIcon,
   PlayIcon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef } from "react";
@@ -38,6 +39,7 @@ type Props = {
   onSelectView: (view: SidebarViewId) => void;
   changedCount: number;
   workspaceRoot: string | null;
+  onOpenNativeAi: () => void;
 };
 
 export function SidebarRail({
@@ -45,6 +47,7 @@ export function SidebarRail({
   onSelectView,
   changedCount,
   workspaceRoot,
+  onOpenNativeAi,
 }: Props) {
   const { t } = useTranslation();
   const problemDocuments = useDiagnosticsStore(
@@ -111,6 +114,14 @@ export function SidebarRail({
       style={{ width: SIDEBAR_RAIL_WIDTH }}
       className="flex shrink-0 flex-col items-stretch gap-0.5 border-r border-content/10 bg-content/[0.025] px-1 py-1"
     >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" aria-label={t("harness.commonUI.vokttyAi", { ai: t("shortcuts.groups.ai") })} onClick={onOpenNativeAi} className="flex h-10 shrink-0 items-center justify-center rounded-md text-content/50 hover:bg-content/10 hover:text-content focus-visible:ring-2 focus-visible:ring-primary/40">
+            <HugeiconsIcon icon={SparklesIcon} size={18} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" sideOffset={6}>{t("harness.commonUI.vokttyAi", { ai: t("shortcuts.groups.ai") })}</TooltipContent>
+      </Tooltip>
       {items.map((item) => {
         const isActive = item.id === activeView;
         const badge = item.badge ?? 0;

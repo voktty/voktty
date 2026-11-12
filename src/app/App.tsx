@@ -3957,6 +3957,22 @@ function DesktopApp() {
     [setActiveId],
   );
 
+  const [nativeAiRequest, setNativeAiRequest] = useState<{ id: number } | null>(null);
+  const consumeNativeAiRequest = useCallback((request: { id: number }) => {
+    setNativeAiRequest((current) => current === request ? null : current);
+  }, []);
+  const openNativeAi = useCallback(() => {
+    if (!hasComposer) {
+      void openSettingsWindow("models");
+      return;
+    }
+    const existing = tabsRef.current.find((tab) => tab.id === effectiveActiveId && tab.kind === "harness")
+      ?? tabsRef.current.find((tab) => tab.kind === "harness");
+    const id = existing ? existing.id : newHarnessTab();
+    if (existing) jumpToTab(id);
+    setNativeAiRequest({ id });
+  }, [effectiveActiveId, hasComposer, jumpToTab, newHarnessTab]);
+
   const handleOpenAutomations = useCallback(() => {
     const harnessTab =
       tabsRef.current.find((tab) => tab.id === activeId && tab.kind === "harness") ??
@@ -4908,6 +4924,7 @@ function DesktopApp() {
                 onSelectView={handleSidebarViewSelect}
                 changedCount={sourceControl.changedCount}
                 workspaceRoot={quickOpenRoot}
+                onOpenNativeAi={openNativeAi}
               />
             <ResizablePanelGroup
               orientation="horizontal"
@@ -5147,6 +5164,8 @@ function DesktopApp() {
                               onActivateEditorTab={setActiveId}
                               onCreateHarnessTab={newHarnessTab}
                               onActivateHarnessTab={jumpToTab}
+                              nativeAiRequest={nativeAiRequest}
+                              onNativeAiRequestHandled={consumeNativeAiRequest}
                               onEditorDirtyChange={handleEditorDirty}
                               onEditorCloseTab={disposeTab}
                               registerPreviewHandle={registerPreviewHandle}
