@@ -17,6 +17,8 @@ const source = fileURLToPath(
   new URL("../../../../templates/workspace-kit/", import.meta.url),
 );
 
+const GIT_TIMEOUT_MS = 20_000;
+
 it.each([false, true])(
   "checks bundled template and contract checkout bytes with LF attributes=%s",
   (controlled) => {
@@ -66,7 +68,7 @@ it.each([false, true])(
             "core.safecrlf=false",
             ...args,
           ],
-          { cwd: repository, stdio: "pipe", timeout: 5_000 },
+          { cwd: repository, stdio: "pipe", timeout: GIT_TIMEOUT_MS },
         );
       git("init", "--quiet");
       git("add", "--", ...paths, ...(controlled ? [".gitattributes"] : []));
@@ -80,7 +82,11 @@ it.each([false, true])(
         }
       }
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      // Windows can briefly keep a just-used git directory locked (EBUSY).
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   },
+  // Three git processes per case: slow Windows runners need more than the
+  // default 5 s, and each one gets its own bound below.
+  60_000,
 );
