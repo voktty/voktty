@@ -325,7 +325,10 @@ import { useTrayCommands } from "@/app/hooks/useTrayCommands";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
 import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
 import { useProjectTerminalRequests } from "@/app/hooks/useProjectTerminalRequests";
-import type { SshMultiplexerSelection } from "@/modules/ssh/multiplexerSelection";
+import {
+  shouldPickSshMultiplexer,
+  type SshMultiplexerSelection,
+} from "@/modules/ssh/multiplexerSelection";
 
 const RIGHT_PANEL_DEFAULT_WIDTH = 280;
 const RIGHT_PANEL_MIN_WIDTH = 180;
@@ -1764,8 +1767,9 @@ function DesktopApp() {
   }, []);
 
   const startSshConnection = useCallback(
-    async (conn: SshConnection, openTab: boolean = true) => {
+    async (conn: SshConnection, openTab: boolean = true): Promise<void> => {
       const toastId = `ssh-${conn.id}`;
+      let tabOpened = false;
       const targetLabel =
         conn.name || `${conn.user ? `${conn.user}@` : ""}${conn.host}`;
       toast.loading(t("ssh.connecting", { name: targetLabel }), {
@@ -1785,6 +1789,7 @@ function DesktopApp() {
           useSpaces.getState().setEnv(activeSpaceId, connected);
         if (openTab) {
           const opened = newSshTab(connected.root, targetLabel, connected);
+          tabOpened = true;
           await waitForLeafConnection(opened.leafId);
         }
         useWorkspaceEnvStore.getState().clearConnection(envCandidate);
@@ -1797,14 +1802,24 @@ function DesktopApp() {
         useWorkspaceEnvStore
           .getState()
           .failConnection(envCandidate, targetLabel, message);
+        // Once a tab exists it reconnects on its own; retrying here would
+        // open a second tab, so only a failure before the tab offers Retry.
         toast.error(t("ssh.connectionFailed", { name: targetLabel }), {
           id: toastId,
           description: message,
+          action: tabOpened
+            ? undefined
+            : {
+                label: t("common.retry"),
+                onClick: () => void startSshConnectionRef.current(conn, openTab),
+              },
         });
       }
     },
     [activateWorkspaceEnv, activeSpaceId, newSshTab, t],
   );
+  const startSshConnectionRef = useRef(startSshConnection);
+  startSshConnectionRef.current = startSshConnection;
 
   const handleConnectSsh = useCallback(
     async (
@@ -1814,34 +1829,46 @@ function DesktopApp() {
     ) => {
       const mode = conn.multiplexerMode ?? "auto";
       if (openTab && mode !== "none") {
+        let probe: RemoteMultiplexerProbe;
         try {
-          const probe = await probeSshMultiplexer(conn);
-          if (probe.supported) {
-            const hasMultiple = probe.sessions.length > 1;
-            const hasAttached = probe.sessions.some(
-              (s) => s.isAttached || s.attachedCount > 0,
-            );
-            if (
-              forcePickSession ||
-              mode === "ask" ||
-              hasMultiple ||
-              hasAttached
-            ) {
-              cancelProjectPicker();
-              setSessionPickerConn(conn);
-              setSessionPickerProbe(probe);
-              setSessionPickerOpen(true);
-              return;
-            }
-          }
-        } catch {
-          // If probe fails (e.g. host down or auth required in PTY), proceed to startSshConnection
+          probe = await probeSshMultiplexer(conn);
+        } catch (err) {
+          // Connecting anyway would silently start a new session and hide
+          // the ones already on the host, so the choice goes to the user.
+          const targetLabel =
+            conn.name || `${conn.user ? `${conn.user}@` : ""}${conn.host}`;
+          toast.error(t("ssh.sessionProbeFailed", { name: targetLabel }), {
+            id: `ssh-${conn.id}`,
+            description: err instanceof Error ? err.message : String(err),
+            action: {
+              label: t("common.retry"),
+              onClick: () =>
+                void handleConnectSshRef.current(conn, forcePickSession, openTab),
+            },
+            cancel: {
+              label: t("ssh.connectWithoutSessionChoice"),
+              onClick: () => void startSshConnection(conn, openTab),
+            },
+          });
+          return;
+        }
+        if (
+          probe.supported &&
+          (forcePickSession || shouldPickSshMultiplexer(conn, probe))
+        ) {
+          cancelProjectPicker();
+          setSessionPickerConn(conn);
+          setSessionPickerProbe(probe);
+          setSessionPickerOpen(true);
+          return;
         }
       }
       await startSshConnection(conn, openTab);
     },
-    [cancelProjectPicker, startSshConnection],
+    [cancelProjectPicker, startSshConnection, t],
   );
+  const handleConnectSshRef = useRef(handleConnectSsh);
+  handleConnectSshRef.current = handleConnectSsh;
 
   const openProjectTerminal = useProjectTerminalRequests({
     source: activeTab,

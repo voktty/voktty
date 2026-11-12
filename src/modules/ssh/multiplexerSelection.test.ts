@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  automaticMultiplexerSessionName,
   shouldPickSshMultiplexer,
   sshMultiplexerSettingsForSelection,
 } from "./multiplexerSelection";
@@ -58,6 +59,53 @@ describe("SSH multiplexer selection", () => {
         { supported: true, sessions: [session("one", true, 1)] },
       ),
     ).toBe(false);
+  });
+
+  it("prompts for a single detached session the automatic path would skip", () => {
+    expect(
+      shouldPickSshMultiplexer(
+        { host: "server", multiplexerMode: "auto" },
+        { supported: true, sessions: [session("agent-build", false, 0)] },
+      ),
+    ).toBe(true);
+  });
+
+  it("joins the automatic session silently when it is the only one", () => {
+    expect(
+      shouldPickSshMultiplexer(
+        { host: "server", multiplexerMode: "auto" },
+        { supported: true, sessions: [session("voktty", false, 0)] },
+      ),
+    ).toBe(false);
+    expect(
+      shouldPickSshMultiplexer(
+        { host: "server", tmuxSessionName: "my work" },
+        { supported: true, sessions: [session("my_work", false, 0)] },
+      ),
+    ).toBe(false);
+  });
+
+  it("connects without asking when the host has no sessions yet", () => {
+    expect(
+      shouldPickSshMultiplexer(
+        { host: "server", multiplexerMode: "auto" },
+        emptyProbe,
+      ),
+    ).toBe(false);
+  });
+
+  it("names the automatic session like the PTY command does", () => {
+    expect(automaticMultiplexerSessionName({ host: "server" })).toBe("voktty");
+    expect(
+      automaticMultiplexerSessionName({
+        host: "server",
+        tmuxSessionName: "dev",
+        activeMultiplexerSession: "build/1",
+      }),
+    ).toBe("build_1");
+    expect(
+      automaticMultiplexerSessionName({ host: "server", tmuxSessionName: "  " }),
+    ).toBe("voktty");
   });
 
   it("converts a picker choice into the SSH PTY configuration", () => {

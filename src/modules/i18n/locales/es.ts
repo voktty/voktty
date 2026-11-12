@@ -3585,6 +3585,8 @@ export const es: TranslationSchema = {
     connecting: "Conectando a {name}...",
     connected: "Conectado a {name}",
     connectionFailed: "Error al conectar a {name}",
+    sessionProbeFailed: "No se pudieron listar las sesiones remotas de {name}",
+    connectWithoutSessionChoice: "Conectar igualmente",
     disconnected: "Desconectado de {name}",
     reconnecting: "Reconectando a {name}...",
     reconnect: "Reconectar",

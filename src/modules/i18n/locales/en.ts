@@ -3495,6 +3495,8 @@ export const en = {
     connecting: "Connecting to {name}...",
     connected: "Connected to {name}",
     connectionFailed: "Failed to connect to {name}",
+    sessionProbeFailed: "Could not list remote sessions on {name}",
+    connectWithoutSessionChoice: "Connect anyway",
     disconnected: "Disconnected from {name}",
     reconnecting: "Reconnecting to {name}...",
     reconnect: "Reconnect",
