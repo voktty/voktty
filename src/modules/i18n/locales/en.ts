@@ -4856,6 +4856,9 @@ export const en = {
   },
   harness: {
     apiRemoteChatOnly: "In SSH projects, API models can only chat for now. Tools are unavailable.",
+    apiToolCompleted: "Tool completed.",
+    apiToolFailed: "Tool failed.",
+    apiToolDenied: "Tool denied.",
     agentDevelopment: "Agent Development",
     closeAgentDevelopment: "Close Agent Development",
     promptOutline: "Prompt outline",

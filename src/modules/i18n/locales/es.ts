@@ -4971,6 +4971,9 @@ export const es: TranslationSchema = {
   },
   harness: {
     apiRemoteChatOnly: "En proyectos SSH, los modelos de API solo pueden conversar por ahora. Las herramientas no están disponibles.",
+    apiToolCompleted: "Herramienta completada.",
+    apiToolFailed: "La herramienta falló.",
+    apiToolDenied: "Herramienta denegada.",
     agentDevelopment: "Desarrollo de Agentes",
     closeAgentDevelopment: "Cerrar Desarrollo de Agentes",
     promptOutline: "Esquema de prompts",

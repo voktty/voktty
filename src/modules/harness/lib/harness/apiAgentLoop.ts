@@ -1,6 +1,7 @@
 import { stepCountIs, streamText, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import { MAX_AGENT_STEPS } from "@/modules/ai/config";
 import { fileToolApprovalTransform } from "@/modules/ai/lib/fileToolApprovals";
+import { t } from "@/modules/i18n";
 import type { HarnessEvent } from "./types";
 import type { ToolPreview } from "../session";
 
@@ -104,11 +105,18 @@ export async function runApiAgentLoop(input: {
           if (resumedCalls.has(part.toolCallId)) {
             resumedResults.push({ type: "tool-result", toolCallId: part.toolCallId, toolName: part.toolName, output: { type: "json", value: JSON.parse(JSON.stringify(part.output ?? null)) } });
           }
-          input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: typeof part.output === "object" && part.output !== null && "error" in part.output ? "failed" : "completed" });
+          {
+            const failed = typeof part.output === "object" && part.output !== null && "error" in part.output;
+            input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: failed ? "failed" : "completed", detail: t(failed ? "harness.apiToolFailed" : "harness.apiToolCompleted") });
+          }
           break;
         case "tool-error":
+          if (resumedCalls.has(part.toolCallId)) resumedResults.push({ type: "tool-result", toolCallId: part.toolCallId, toolName: part.toolName, output: { type: "error-text", value: "Tool execution failed." } });
+          input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: "failed", detail: t("harness.apiToolFailed") });
+          break;
         case "tool-output-denied":
-          input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: "failed" });
+          if (resumedCalls.has(part.toolCallId)) resumedResults.push({ type: "tool-result", toolCallId: part.toolCallId, toolName: part.toolName, output: { type: "execution-denied" } });
+          input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: "failed", detail: t("harness.apiToolDenied") });
           break;
         case "error":
           throw part.error;
@@ -138,7 +146,7 @@ export async function runApiAgentLoop(input: {
       approvals.push({ type: "tool-approval-response", approvalId: request.approvalId, approved });
     }
     const approvalMessage: ModelMessage = { role: "tool", content: approvals };
-    resumedCalls = new Set(requests.filter((_, index) => approvals[index].approved).map((request) => request.callId));
+    resumedCalls = new Set(requests.map((request) => request.callId));
     messages.push(approvalMessage);
     response.push(approvalMessage);
   }

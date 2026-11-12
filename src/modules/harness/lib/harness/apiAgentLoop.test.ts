@@ -42,6 +42,7 @@ it("streams tool calls and retains their results in the response history", async
   expect(execute).toHaveBeenCalledOnce();
   expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", callId: "call-1" }));
   expect(events).toContainEqual(expect.objectContaining({ type: "tool.updated", callId: "call-1", status: "completed" }));
+  expect(JSON.stringify(events)).not.toContain("result");
   expect(events).toContainEqual({ type: "message.delta", text: "Done" });
   expect(messages.some((message) => message.role === "tool")).toBe(true);
 });
@@ -79,6 +80,7 @@ it.each([true, false])("resumes a tool approval with decision %s", async (approv
   expect(events).toContainEqual(expect.objectContaining({ type: "approval.resolved", decision: approved ? "allow" : "deny" }));
   expect(execute).toHaveBeenCalledTimes(approved ? 1 : 0);
   expect(messages.some((message) => message.role === "tool" && message.content.some((part) => part.type === "tool-approval-response" && part.approved === approved))).toBe(true);
+  expect(messages.some((message) => message.role === "tool" && message.content.some((part) => part.type === "tool-result" && (approved ? part.output.type === "json" : part.output.type === "execution-denied")))).toBe(true);
   expect(events).toContainEqual(expect.objectContaining({ type: "tool.updated", callId: "write-1", status: approved ? "completed" : "failed" }));
 });
 
