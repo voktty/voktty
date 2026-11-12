@@ -9,6 +9,7 @@ import {
 import { native, type GitBranchEntry } from "@/modules/ai/lib/native";
 import { t } from "@/modules/i18n";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useSourceControlWorkspace } from "@/modules/source-control/sourceControlWorkspace";
 import { toast } from "sonner";
 
 export function useBranchDropdown({
@@ -20,13 +21,14 @@ export function useBranchDropdown({
   contextKey: string;
   onRefresh: () => void;
 }) {
-  const workspace = useWorkspaceEnvStore((state) => state.env);
+  const workspace = useSourceControlWorkspace();
+  const ambientFilesystem = useWorkspaceEnvStore((state) => JSON.stringify(state.env));
   const filesystem = JSON.stringify(workspace);
   const [epoch, setEpoch] = useState(0);
   const epochRef = useRef(0);
   const binding = useMemo(
-    () => ({ repoRoot, contextKey, filesystem, epoch }),
-    [repoRoot, contextKey, filesystem, epoch],
+    () => ({ repoRoot, contextKey, filesystem, ambientFilesystem, epoch }),
+    [repoRoot, contextKey, filesystem, ambientFilesystem, epoch],
   );
   type Owner = { binding: typeof binding; live: boolean; pending: boolean };
   type Menu = { owner: Owner; live: boolean };
@@ -70,7 +72,7 @@ export function useBranchDropdown({
       current.current === owner &&
       owner.binding === binding &&
       binding.epoch === epochRef.current &&
-      binding.filesystem ===
+      binding.ambientFilesystem ===
         JSON.stringify(useWorkspaceEnvStore.getState().env),
     [binding],
   );

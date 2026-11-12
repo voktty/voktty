@@ -8,7 +8,7 @@ import {
 import { native, type GitBranchComparison } from "@/modules/ai/lib/native";
 import { t } from "@/modules/i18n";
 import { useConflictScope } from "@/modules/source-control/useConflictScope";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useSourceControlWorkspace } from "@/modules/source-control/sourceControlWorkspace";
 
 type Comparison =
   | { status: "idle" }
@@ -35,7 +35,7 @@ export function useBranchComparison({
   contextKey: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const workspace = useWorkspaceEnvStore((state) => state.env);
+  const workspace = useSourceControlWorkspace();
   const scope = useConflictScope(
     JSON.stringify([repoRoot, currentBranch, contextKey]),
     open,

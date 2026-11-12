@@ -15,6 +15,7 @@ import {
 import { normalizeProjectPath } from "@/modules/harness/lib/recents";
 import { loadSidebarOpen } from "@/modules/harness/lib/appearance";
 import { useLayoutVisibilityStore } from "@/modules/sidebar/layoutVisibility";
+import { subscribeHarnessSourceControl } from "@/modules/source-control/harnessSourceControlRequest";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, assert, expect, it, vi } from "vitest";
 import { HarnessApp } from "@/modules/harness/components/HarnessApp";
@@ -53,11 +54,16 @@ type ViewState = ReturnType<
     typeof import("@/modules/harness/hooks/useHarnessViewRegistration").useHarnessViewRegistration
   >[0]["read"]
 >;
+type RegistrationProps = Parameters<
+  typeof import("@/modules/harness/hooks/useHarnessViewRegistration").useHarnessViewRegistration
+>[0];
 
 const state = vi.hoisted(() => ({
   sidebar: null as SidebarProps | null,
+  title: null as { onShowSourceControl?: () => void } | null,
   dock: null as DockProps | null,
   view: null as ViewState | null,
+  applyRemoval: undefined as RegistrationProps["applyRemoval"],
   pane: null as PaneProps | null,
   recover: null as React.ContextType<typeof HarnessTerminalRecovery>,
   capture: (): PersistencePermit | null | undefined => undefined,
@@ -89,8 +95,9 @@ vi.mock("@/modules/harness/hooks/useWindowPersistenceAdmission", () => ({
   }),
 }));
 vi.mock("@/modules/harness/hooks/useHarnessViewRegistration", () => ({
-  useHarnessViewRegistration: (props: { read: () => ViewState }) => {
+  useHarnessViewRegistration: (props: RegistrationProps) => {
     state.view = props.read();
+    state.applyRemoval = props.applyRemoval;
   },
 }));
 vi.mock("@/modules/harness/hooks/useInitialHarnessSession", () => ({
@@ -126,7 +133,10 @@ vi.mock("@/modules/harness/chrome/Sidebar", () => ({
     return null;
   },
 }));
-vi.mock("@/modules/harness/chrome/TitleBar", () => ({ TitleBar: () => null }));
+vi.mock("@/modules/harness/chrome/TitleBar", () => ({ TitleBar: (props: { onShowSourceControl?: () => void }) => {
+  state.title = props;
+  return null;
+} }));
 vi.mock("@/modules/harness/chrome/UsageFooter", () => ({
   UsageFooter: () => null,
 }));
@@ -849,4 +859,60 @@ it("keeps the original rail preference when its control is invoked during focus 
   await act(async () => required(sidebar().onToggleProjectRail)());
   await act(async () => useLayoutVisibilityStore.setState({ focusMode: false }));
   expect(sidebar().projectRailOpen).toBe(true);
+});
+
+it.each([project, "/srv/app-worktree"])("opens the same Git target %s from the chat and sessions headers", async (worktree) => {
+  const runtime = state.runtime as { engine: { sessions: ReturnType<typeof newSession>[] } };
+  runtime.engine.sessions[0].worktreeCwd = worktree;
+  const received = vi.fn();
+  const stop = subscribeHarnessSourceControl(received);
+  try {
+    await act(async () => root.render(<Host />));
+    await act(async () => required(required(state.title).onShowSourceControl)());
+    await act(async () => required(sidebar().onShowSourceControl)());
+    expect(received.mock.calls.map((call) => call[0])).toEqual([worktree, worktree]);
+    const isCurrent = received.mock.calls[0][1] as () => boolean;
+    expect(isCurrent()).toBe(true);
+    await act(async () => root.render(<Host focused={false} />));
+    await act(async () => root.render(<Host />));
+    expect(isCurrent()).toBe(false);
+  } finally {
+    stop();
+  }
+});
+
+it("retires restored copied Git panes while preserving the live conversation", async () => {
+  const runtime = state.runtime as { engine: { sessions: ReturnType<typeof newSession>[] } };
+  const session = runtime.engine.sessions[0];
+  const tab = { ...newTab(session.id), diffOpen: true, diffFocused: true };
+  const resumed: ResumedWorkspace = {
+    tabs: [tab],
+    activeTabId: tab.id,
+    sessions: [session],
+    projectCwd: project,
+    projectTerminals: [],
+  };
+  await act(async () => root.render(<Host resumed={resumed} />));
+  expect(view().tabs[0]).toMatchObject({ diffOpen: false, diffFocused: false });
+  expect(required(state.pane).focusedId).toBe(session.id);
+  const input = view();
+  await act(async () => required(state.applyRemoval)({
+    layout: {
+      tabs: [tab],
+      sessions: [session],
+      activeTabId: tab.id,
+      projectCwd: project,
+      projectTerminals: [],
+    },
+    returnTargets: [],
+    keptTabIds: [tab.id],
+    report: input.report,
+    removingSessionIds: [],
+    switchingSessionIds: [],
+  }, []));
+  expect(view().tabs[0].diffFocused).toBe(true);
+  expect(required(state.pane).focusedId).toBe(session.id);
+  expect(state.close).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+  expect(state.admit).not.toHaveBeenCalled();
 });

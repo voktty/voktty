@@ -7,6 +7,10 @@ Voktty exposes working-tree changes in two coordinated surfaces:
 
 Both surfaces derive their rows from the same `GitStatusSnapshot.changedFiles` data and open the same `git-diff` editor tabs. The queue does not run a second status scanner or maintain a private repository model.
 
+Harness project, conversation-header and sidebar change summaries open this same Source Control sidebar with their captured project or session worktree. There is no separate Harness Changes tab or working-tree pane. The fixed target retains its explicit filesystem independently of the selected workspace, including saved SSH project namespaces. Panel readers, mutations, file menus, branch controls and large review share that filesystem; pending navigation retires when its originating view or project changes. These in-window requests do not grant filesystem authority.
+
+The sidebar also opens a lazy large review dialog using its existing summary and diff queue. Repository, filesystem or panel changes retire that dialog. Session checkpoint reviews retain their session-specific behavior separately from working-tree Git review.
+
 ## Review actions
 
 Selecting a row opens its unstaged diff when one exists, otherwise its staged diff. The primary action stages the current on-disk change, or unstages an already staged change. Discard is available only for unstaged content and always requires confirmation.

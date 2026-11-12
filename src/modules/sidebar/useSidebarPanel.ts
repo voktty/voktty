@@ -158,7 +158,10 @@ export function useSidebarPanel(
 
   const openSidebarView = useCallback(
     (view: SidebarViewId) => {
-      if (useLayoutVisibilityStore.getState().focusMode) return;
+      if (useLayoutVisibilityStore.getState().focusMode) {
+        focusWidthRef.current = null;
+        useLayoutVisibilityStore.setState({ focusMode: false });
+      }
       const panel = sidebarRef.current;
       if (panel && panel.getSize().asPercentage <= 0) {
         panel.resize(`${sidebarWidthRef.current}px`);

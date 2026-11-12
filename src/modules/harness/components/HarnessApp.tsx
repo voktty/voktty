@@ -1,6 +1,8 @@
 import { useHarnessWindow } from "@/modules/harness/components/HarnessWindowHost";
 import { useHarnessTerminalCreation } from "@/modules/harness/hooks/useHarnessTerminalCreation";
 import { useHarnessFileOpening } from "@/modules/harness/hooks/useHarnessFileOpening";
+import { useHarnessSourceControlOpening } from "@/modules/harness/hooks/useHarnessSourceControlOpening";
+import { requestHarnessSourceControl } from "@/modules/source-control/harnessSourceControlRequest";
 import {
   HarnessTerminalRecovery,
   useHarnessTerminalRecovery,
@@ -114,7 +116,7 @@ import {
 import { inboxAskKey, type InboxAskContext } from "../lib/inboxAsk";
 import { buildDeterministicHandoff, buildHandoffComposerCard, HANDOFF_TITLE, sessionChildHarnesses, sessionThroughTurn } from "../lib/handoff";
 
-import { bindHarnessSession, forgetHarnessSession, isLiveHarness, pickTextHarness, refreshHarnessCatalogs,  } from "../lib/harness";
+import { bindHarnessSession, forgetHarnessSession, isLiveHarness, refreshHarnessCatalogs,  } from "../lib/harness";
 import { latestTurnNeedsHarnessLogin } from "../lib/harness/auth";
 
 import type { UsageFooterSession } from "../chrome/UsageFooter";
@@ -157,7 +159,7 @@ import { useNotchStore } from "../lib/notchStore";
 
 import { mergeModelSettings, resolveModel } from "../lib/models";
 import { ADD_NOTE_TO_CHAT_EVENT, loadNotes, type NoteComposerCard } from "../lib/notes";
-import { displayPath, isEqualOrInside, pathKey, projectName, rebasePath } from "../lib/paths";
+import { isEqualOrInside, pathKey, projectName, rebasePath } from "../lib/paths";
 import { planTitle } from "../lib/plan";
 import { runProjectRemoval } from "@/modules/harness/lib/projectRemoval";
 import { sameRemovalProject } from "@/modules/harness/lib/retainedSessionReferences";
@@ -212,7 +214,6 @@ import { openAddToChatSessionPane } from "../lib/workspaceTabGroups";
 import { mergeOrderedSubset, orderByIds } from "../lib/reorder";
 import type {
   EditorNavigationTarget,
-  FileOpenOptions,
 } from "../lib/search";
 import {
   buildSecondOpinionCard,
@@ -333,11 +334,6 @@ import {
 } from "../surfaces/TranscriptPool";
 import type { ConnectableInboxSource } from "../lib/inboxFilters";
 
-const LazyDiffPane = lazy(() =>
-  import("../surfaces/DiffPane").then((module) => ({
-    default: module.DiffPane,
-  })),
-);
 const LazyInboxDetailPane = lazy(() =>
   import("../surfaces/InboxView").then((module) => ({
     default: module.InboxDetailPane,
@@ -558,7 +554,11 @@ export function HarnessApp({
     return { session, tab };
   });
   const [tabs, setTabs] = useState<WorkspaceTab[]>(
-    () => windowTransfer?.tabs ?? resumed?.tabs ?? [seed.tab],
+    () => (windowTransfer?.tabs ?? resumed?.tabs ?? [seed.tab]).map((tab) =>
+      tab.diffOpen || tab.diffFocused
+        ? { ...tab, diffOpen: false, diffFocused: false }
+        : tab,
+    ),
   );
   const [projectTerminals, setProjectTerminals] = useState<ProjectTerminal[]>(
     () => windowTransfer?.projectTerminals ?? resumed?.projectTerminals ?? [],
@@ -598,7 +598,7 @@ export function HarnessApp({
     : undefined;
   const dockVisible = !!currentProjectDock?.open;
   const [sidebarTab, setSidebarTab] = useState<SidebarTabId>(
-    () => loadSidebarTabOrder()[0] ?? "sessions",
+    () => loadSidebarTabOrder().find((tab) => tab !== "changes") ?? "sessions",
   );
   const classicInbox = !deckLayout && sidebarTab === "inbox";
   const [filesSearchOpen, setFilesSearchOpen] = useState(false);
@@ -2692,25 +2692,6 @@ export function HarnessApp({
   const onClosePane = useCallback(
     (sessionId?: string) => {
       if (!activeTab) return;
-      if (
-        !deckLayout &&
-        sessionId === undefined &&
-        activeTab.diffOpen &&
-        activeTab.diffFocused
-      ) {
-        setTabs((prev: any) =>
-          prev.map((tab: any) =>
-            tab.id === activeTab.id
-              ? {
-                  ...tab,
-                  diffOpen: false,
-                  diffFocused: false,
-                }
-              : tab,
-          ),
-        );
-        return;
-      }
       const focusedSurface = findSurfacePane(activeTab, activeTab.focusedId);
       if (sessionId === undefined && focusedSurface) {
         onCloseFile(focusedSurface.pane.id, focusedSurface.pane.activeFileId);
@@ -2755,7 +2736,6 @@ export function HarnessApp({
     },
     [
       activeTab,
-      deckLayout,
       onCloseFile,
       onCloseTab,
       onClearTabSession,
@@ -2927,11 +2907,9 @@ export function HarnessApp({
         isCurrent() ? { path, ...navigation, token } : previous,
       );
     },
-    showChanges: (isCurrent) => {
+    showChanges: (projectPath, isCurrent) => {
       if (!isCurrent()) return;
-      setSidebarOpen((previous) => (isCurrent() ? true : previous));
-      saveSidebarOpen(true);
-      setSidebarTab((previous) => (isCurrent() ? "changes" : previous));
+      requestHarnessSourceControl(projectPath, isCurrent);
     },
     focusEditor: (isCurrent) =>
       setComposerFocused((previous) => (isCurrent() ? false : previous)),
@@ -2940,49 +2918,11 @@ export function HarnessApp({
     },
   });
 
-  const onOpenWorkingTreeDiff = useCallback(
-    (path: string, options?: FileOpenOptions) =>
-      onOpenDiff(path, undefined, options),
-    [onOpenDiff],
+  const onToggleChanges = useHarnessSourceControlOpening(
+    gitCwd,
+    focused && visible,
+    () => getPersistenceOwner()?.capture(),
   );
-
-  const onToggleDiff = useCallback(() => {
-    setTabs((prev: any) =>
-      prev.map((tab: any) =>
-        tab.id === activeTabId
-          ? {
-              ...tab,
-              diffOpen: !tab.diffOpen,
-              diffFocused: !tab.diffOpen,
-            }
-          : tab,
-      ),
-    );
-    setComposerFocused(false);
-  }, [activeTabId]);
-
-  const onFocusDiff = useCallback(() => {
-    setTabs((prev: any) =>
-      prev.map((tab: any) =>
-        tab.id === activeTabId ? { ...tab, diffFocused: true } : tab,
-      ),
-    );
-    setComposerFocused(false);
-  }, [activeTabId]);
-
-  const onToggleChanges = useCallback(() => {
-    if (deckLayout) {
-      if (sidebarOpen && sidebarTab === "changes") {
-        setSidebarTab("sessions");
-      } else {
-        setSidebarOpen(true);
-        saveSidebarOpen(true);
-        setSidebarTab("changes");
-      }
-    } else {
-      onToggleDiff();
-    }
-  }, [deckLayout, onToggleDiff, sidebarOpen, sidebarTab]);
 
   const onReorderTabs = useCallback(
     (ids: string[], movedId?: string) => {
@@ -4800,7 +4740,7 @@ export function HarnessApp({
   }, []);
 
   useEffect(() => {
-    if (!deckLayout && sidebarTab === "changes") {
+    if (sidebarTab === "changes") {
       setSidebarTab("sessions");
     }
     if (deckLayout && sidebarTab === "inbox") {
@@ -4842,7 +4782,7 @@ export function HarnessApp({
       const activeWorkspace = tabsRef.current.find(
         (entry) => entry.id === activeTabIdRef.current,
       );
-      if (!activeWorkspace || activeWorkspace.diffFocused) return;
+      if (!activeWorkspace) return;
       const current = sessionsRef.current.find(
         (session) => session.id === activeWorkspace.focusedId,
       );
@@ -5217,12 +5157,7 @@ export function HarnessApp({
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
-        onOpenDiff={onOpenWorkingTreeDiff}
         onShowSourceControl={onToggleChanges}
-        selectedDiffPath={
-          activeTab ? selectedChangePath(activeTab, gitCwd) : undefined
-        }
-        textHarness={pickTextHarness(active?.harness)}
         recents={recents}
         busyProjectPaths={sessions.flatMap((session) =>
           session.busy && session.cwd ? [session.cwd] : [],
@@ -5281,11 +5216,6 @@ export function HarnessApp({
             sidebarOpen={sessionsVisible}
             deckLayout={deckLayout}
             projectRailOpen={projectRailVisible}
-            sourceControlActive={
-              deckLayout
-                ? sidebarOpen && sidebarTab === "changes"
-                : !!activeTab?.diffOpen
-            }
             onToggleSidebar={onToggleSidebar}
             onShowSourceControl={onToggleChanges}
             onSelect={activateTab}
@@ -5403,7 +5333,6 @@ export function HarnessApp({
                             fileErrorCounts={fileErrorCounts}
                             focusedId={
                               tab.id === activeTabId &&
-                              !tab.diffFocused &&
                               !projectTerminalFocused
                                 ? tab.focusedId
                                 : ""
@@ -5469,19 +5398,6 @@ export function HarnessApp({
                     ))}
                   </div>
                 )}
-                {!deckLayout && !classicInbox && activeTab?.diffOpen ? (
-                  <Suspense fallback={null}>
-                    <LazyDiffPane
-                      key={gitCwd ?? ""}
-                      cwd={gitCwd}
-                      textHarness={pickTextHarness(active?.harness)}
-                      selectedPath={selectedChangePath(activeTab, gitCwd)}
-                      focused={!!activeTab.diffFocused}
-                      onFocus={onFocusDiff}
-                      onOpenFile={onOpenDiff}
-                    />
-                  </Suspense>
-                ) : null}
               </div>
             </div>
           </main>
@@ -5669,15 +5585,6 @@ function conversationTitle(session: Session): string {
   return title === "New session" ? "" : title;
 }
 
-
-function selectedChangePath(
-  tab: WorkspaceTab,
-  gitCwd?: string,
-): string | undefined {
-  const file = focusedFileTab(tab);
-  if (!file || !isFilesystemTab(file) || !file.review) return undefined;
-  return displayPath(file.path, gitCwd || file.cwd);
-}
 
 function isBlankWorkspaceTab(tab: WorkspaceTab, sessions: Session[]): boolean {
   if (tab.filePanes.some((pane: any) => pane.files.length > 0)) return false;

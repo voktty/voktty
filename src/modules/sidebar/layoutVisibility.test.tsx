@@ -174,3 +174,32 @@ it("keeps focus available on every surface and only sends session toggles from a
     container.remove();
   }
 });
+
+it("opens an explicitly requested view from focus mode without restoring a previously collapsed panel over it", async () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  let width = 0;
+  const panel = {
+    getSize: () => ({ inPixels: width, asPercentage: width > 0 ? 30 : 0 }),
+    collapse: () => { width = 0; },
+    resize: (next: string) => { width = Number.parseFloat(next); },
+  } as unknown as PanelImperativeHandle;
+  function Fixture() {
+    const sidebar = useSidebarPanel(useRef(null));
+    useLayoutEffect(() => { sidebar.sidebarRef.current = panel; });
+    return <button type="button" onClick={() => sidebar.openSidebarView("source-control")}>{sidebar.sidebarView}</button>;
+  }
+  try {
+    await act(async () => root.render(<Fixture />));
+    await act(async () => useLayoutVisibilityStore.getState().toggleFocus());
+    expect(width).toBe(0);
+    await act(async () => container.querySelector("button")!.click());
+    expect(useLayoutVisibilityStore.getState().focusMode).toBe(false);
+    expect(width).toBe(260);
+    expect(container.textContent).toBe("source-control");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

@@ -5,9 +5,21 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SourceControlPanel } from "@/modules/source-control/SourceControlPanel";
 import type { SourceControlSummary } from "@/modules/source-control/useSourceControl";
 import { t } from "@/modules/i18n";
+import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 
 const feedback = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const refreshCallbacks = vi.hoisted(() => [] as (() => void)[]);
+const reviewDialogs = vi.hoisted(() => [] as {
+  repoRoot: string;
+  workspaceEnv: WorkspaceEnv;
+  onClose: () => void;
+}[]);
+vi.mock("@/modules/source-control/SourceControlReviewDialog", () => ({
+  SourceControlReviewDialog: (props: typeof reviewDialogs[number]) => {
+    reviewDialogs.push(props);
+    return <div data-review-repository={props.repoRoot} />;
+  },
+}));
 vi.mock("sonner", () => ({ toast: feedback }));
 vi.mock("@/modules/ai/lib/native", () => ({ native: {} }));
 vi.mock("@/modules/ai/lib/runtimeAvailability", () => ({
@@ -34,14 +46,14 @@ let root: Root;
 let container: HTMLDivElement;
 let value: SourceControlSummary;
 type Control = "trust" | "init";
-function render(open = true) {
+function render(open = true, fixedRoot?: string) {
   return act(async () =>
     root.render(
       <SourceControlPanel
         open={open}
         sourceControl={value}
         onOpenDiff={() => {}}
-        repositoryTarget={{ mode: "follow-context" }}
+        repositoryTarget={fixedRoot ? { mode: "fixed", repoRoot: fixedRoot } : { mode: "follow-context" }}
         onFollowRepositoryContext={() => {}}
       />,
     ),
@@ -64,6 +76,8 @@ function install(control: Control, run: () => Promise<boolean>) {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   feedback.success.mockReset();
+  useWorkspaceEnvStore.setState({ env: { kind: "local" } });
+  reviewDialogs.length = 0;
   feedback.error.mockReset();
   refreshCallbacks.length = 0;
   container = document.createElement("div");
@@ -90,10 +104,92 @@ beforeEach(() => {
     runRemoteAction: vi.fn(async () => ({ ok: false, action: null })),
   };
 });
+function discoverRepository(path: string) {
+  const repo = { repoRoot: path, branch: "main", upstream: null, isDetached: false };
+  value = {
+    ...value,
+    contextPath: path,
+    hasRepo: true,
+    repo,
+    status: { ...repo, ahead: 0, behind: 0, truncated: false, changedFiles: [] },
+  };
+}
+function clickReview() {
+  const button = [...container.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === t("sessionReview.reviewChanges"),
+  );
+  expect(button).toBeDefined();
+  button?.click();
+}
+it.each([
+  "/project/.git/voktty-worktrees/feature",
+  "remote://voktty-ssh-build/work/project",
+])("captures the current repository for large review: %s", async (path) => {
+  discoverRepository(path);
+  await render();
+  await act(async () => clickReview());
+  expect(container.querySelector("[data-review-repository]")?.getAttribute("data-review-repository")).toBe(path);
+  expect(reviewDialogs[reviewDialogs.length - 1]?.repoRoot).toBe(path);
+  expect(reviewDialogs[reviewDialogs.length - 1]?.workspaceEnv).toEqual({ kind: "local" });
+  await act(async () => reviewDialogs[reviewDialogs.length - 1]?.onClose());
+  expect(container.querySelector("[data-review-repository]")).toBeNull();
+});
+it.each(["repository", "workspace", "closed", "fixed-target"])(
+  "retires review when its %s changes and does not revive it on return",
+  async (change) => {
+    discoverRepository("/project");
+    await render();
+    await act(async () => clickReview());
+    expect(container.querySelector("[data-review-repository]")).not.toBeNull();
+    if (change === "repository") discoverRepository("/other");
+    if (change === "workspace") await act(async () => useWorkspaceEnvStore.setState({ env: { kind: "wsl", distro: "Ubuntu" } }));
+    await render(change !== "closed", change === "fixed-target" ? "/other" : undefined);
+    expect(container.querySelector("[data-review-repository]")).toBeNull();
+    discoverRepository("/project");
+    await act(async () => useWorkspaceEnvStore.setState({ env: { kind: "local" } }));
+    await render();
+    expect(container.querySelector("[data-review-repository]")).toBeNull();
+  },
+);
+it("does not review an old snapshot while a fixed repository target is pending", async () => {
+  discoverRepository("/project");
+  await render(true, "/replacement");
+  await act(async () => clickReview());
+  expect(container.querySelector("[data-review-repository]")).toBeNull();
+  expect(reviewDialogs).toHaveLength(0);
+});
 afterEach(async () => {
   await act(async () => root.unmount());
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+it("opens repository review from the canonical panel only after repository discovery", async () => {
+  await render();
+  const findReview = () => [...container.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === t("sessionReview.reviewChanges"),
+  );
+  expect(findReview()?.disabled).toBe(true);
+  findReview()?.click();
+  expect(reviewDialogs).toHaveLength(0);
+  value = {
+    ...value,
+    hasRepo: true,
+    repo: { repoRoot: "/project", branch: "main", upstream: null, isDetached: false },
+    status: {
+      repoRoot: "/project",
+      branch: "main",
+      upstream: null,
+      isDetached: false,
+      ahead: 0,
+      behind: 0,
+      truncated: false,
+      changedFiles: [],
+    },
+  };
+  await render();
+  expect(findReview()?.disabled).toBe(false);
+  await act(async () => findReview()?.click());
+  expect(container.querySelector("[data-review-repository]")?.getAttribute("data-review-repository")).toBe("/project");
 });
 it.each<Control>(["trust", "init"])(
   "does not announce an unacknowledged %s",

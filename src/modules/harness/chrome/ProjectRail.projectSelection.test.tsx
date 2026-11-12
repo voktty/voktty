@@ -7,6 +7,7 @@ import {
 } from "@/modules/harness/lib/paths";
 import { saveTabGroupLabel } from "@/modules/harness/lib/tabGroups";
 import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
+import { subscribeHarnessSourceControl } from "@/modules/source-control/harnessSourceControlRequest";
 import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,6 +16,7 @@ import { afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   dialogs: [] as { onOpen: (path: string) => void; onCancel: () => void }[],
   menus: [] as { label: string; onExtraPick: (action: string) => void }[],
+  stats: null as { files: number; additions: number; deletions: number } | null,
 }));
 vi.mock("@/modules/harness/chrome/TabGroupMenu", () => ({
   TabGroupMenu: (props: {
@@ -65,7 +67,7 @@ vi.mock("@/modules/harness/hooks/useProjectAvailability", () => ({
   }),
 }));
 vi.mock("@/modules/harness/hooks/useProjectDiffStats", () => ({
-  useProjectDiffStats: () => null,
+  useProjectDiffStats: () => mocks.stats,
 }));
 vi.mock("@/modules/harness/hooks/useTabGroupLogos", () => ({
   useTabGroupLogos: () => ({}),
@@ -88,6 +90,7 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   mocks.dialogs = [];
   mocks.menus = [];
+  mocks.stats = null;
   setRemoteRootLabelResolver(() => undefined);
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -101,6 +104,7 @@ async function setup() {
     await act(async () => root.unmount());
   });
   const selected = vi.fn();
+  const projectSelected = vi.fn();
   cleanups.push(subscribeHarnessProjectRequests(selected));
   const render = async (ownerId = 1, cwd = "/project") => {
     await act(async () =>
@@ -111,7 +115,7 @@ async function setup() {
           <ProjectRail
             cwd={cwd}
             recents={[]}
-            onSelectProject={vi.fn()}
+            onSelectProject={projectSelected}
             onOpenProject={vi.fn()}
             onRemoveProject={vi.fn()}
           />
@@ -130,8 +134,31 @@ async function setup() {
     return required(mocks.dialogs[mocks.dialogs.length - 1]);
   };
   await render();
-  return { render, open, selected, element };
+  return { render, open, selected, projectSelected, element };
 }
+
+it.each(["/worktree/project", "remote://voktty-ssh-profile/srv/project"])(
+  "opens the shared Git panel from the diff on its exact project row %s",
+  async (path) => {
+    mocks.stats = { files: 2, additions: 7, deletions: 3 };
+    const received = vi.fn();
+    cleanups.push(subscribeHarnessSourceControl(received));
+    const f = await setup();
+    await f.render(1, path);
+    const button = required(f.element.querySelector<HTMLButtonElement>('button[aria-label^="harness.chrome.changes:"]'));
+    expect(button.textContent).toContain("+7");
+    expect(button.textContent).toContain("-3");
+    expect(button.closest("button")?.parentElement?.closest("button")).toBeNull();
+    await act(async () => button.click());
+    expect(received).toHaveBeenCalledExactlyOnceWith(path, expect.any(Function));
+    expect(f.projectSelected).not.toHaveBeenCalled();
+    const isCurrent = received.mock.calls[0][1] as () => boolean;
+    expect(isCurrent()).toBe(true);
+    await f.render(1, "/other");
+    await f.render(1, path);
+    expect(isCurrent()).toBe(false);
+  },
+);
 
 it("returns a remote folder to its original view without a DOM selection event", async () => {
   const f = await setup();

@@ -42,7 +42,7 @@ type Props = {
     navigation: EditorNavigation,
     isCurrent: () => boolean,
   ) => void;
-  showChanges: (isCurrent: () => boolean) => void;
+  showChanges: (projectPath: string, isCurrent: () => boolean) => void;
   focusEditor: (isCurrent: () => boolean) => void;
   onError: (error: unknown) => void;
 };
@@ -135,6 +135,10 @@ export function useHarnessFileOpening(props: Props) {
       const copiedNavigation = navigation ? { ...navigation } : undefined;
       const copiedOptions = options ? { ...options } : undefined;
       const copiedReview = review ? { ...review } : undefined;
+      if (diff && !copiedReview) {
+        original.showChanges(fileCwd, presentationCurrent);
+        return;
+      }
       let stop: (() => void) | undefined;
       let sourceCurrent = () => true;
       let sourceEstablished = false;
@@ -180,10 +184,7 @@ export function useHarnessFileOpening(props: Props) {
                     resolved,
                     copiedReview.view,
                   );
-                const opened = file ? openEditorTab(entry, file) : entry;
-                return diff && !original.deckLayout
-                  ? { ...opened, diffOpen: true, diffFocused: !resolved }
-                  : opened;
+                return file ? openEditorTab(entry, file) : entry;
               });
             });
             if (!isCurrent()) return;
@@ -192,8 +193,7 @@ export function useHarnessFileOpening(props: Props) {
             if (resolved && copiedNavigation)
               original.navigate(resolved, copiedNavigation, isCurrent);
             if (!isCurrent()) return;
-            if (diff && original.deckLayout) original.showChanges(isCurrent);
-            if (isCurrent()) original.focusEditor(isCurrent);
+            original.focusEditor(isCurrent);
           });
         } catch (error) {
           if (presentationCurrent() && (!sourceEstablished || sourceCurrent()))

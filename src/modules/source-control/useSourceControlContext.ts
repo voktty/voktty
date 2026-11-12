@@ -105,6 +105,9 @@ export function useSourceControlContext({
     sourceControlPath,
     true,
     shouldKeepSourceControlLive(sidebarView, explorerGitDecorations),
+    sidebarView === "source-control" && repositoryTarget.mode === "fixed"
+      ? repositoryTarget.workspaceEnv
+      : undefined,
   );
 
   const toggleSourceControl = useCallback(() => {

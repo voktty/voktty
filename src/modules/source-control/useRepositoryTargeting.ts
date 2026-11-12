@@ -50,12 +50,19 @@ export function useRepositoryTargeting({
   }, [requestScope]);
 
   const resolveRepository = useCallback(
-    async (path: string, requestRef: RequestCounter) => {
+    async (
+      path: string,
+      requestRef: RequestCounter,
+      isCurrent: () => boolean = () => true,
+      workspaceOverride?: WorkspaceEnv,
+    ) => {
+      if (!isCurrent() || !isContextCurrent(spaceId, workspaceKey)) return null;
       const requestId = ++requestRef.current;
       try {
-        const repo = await native.gitResolveRepo(path, workspaceEnv);
+        const repo = await native.gitResolveRepo(path, workspaceOverride ?? workspaceEnv);
         if (
           requestId !== requestRef.current ||
+          !isCurrent() ||
           !isContextCurrent(spaceId, workspaceKey)
         ) {
           return null;
@@ -67,6 +74,7 @@ export function useRepositoryTargeting({
       } catch (error) {
         if (
           requestId === requestRef.current &&
+          isCurrent() &&
           isContextCurrent(spaceId, workspaceKey)
         ) {
           toast.error(t("feedback.resolveGitRepositoryFailed"), {
@@ -80,20 +88,22 @@ export function useRepositoryTargeting({
   );
 
   const openInSourceControl = useCallback(
-    async (path: string) => {
-      const repo = await resolveRepository(path, sourceControlRequestRef);
-      if (!repo) return;
-      setTargets((current) =>
-        setRepositoryTargetForSpace(
-          current,
-          spaceId,
-          workspaceKey,
-          repo.repoRoot,
-        ),
+    async (
+      path: string,
+      isCurrent: () => boolean = () => true,
+      workspaceOverride?: WorkspaceEnv,
+    ) => {
+      const current = () => isCurrent() && isContextCurrent(spaceId, workspaceKey);
+      const repo = await resolveRepository(path, sourceControlRequestRef, current, workspaceOverride);
+      if (!repo || !current()) return;
+      setTargets((previous) =>
+        current()
+          ? setRepositoryTargetForSpace(previous, spaceId, workspaceKey, repo.repoRoot, workspaceOverride)
+          : previous,
       );
-      openSourceControl();
+      if (current()) openSourceControl();
     },
-    [openSourceControl, resolveRepository, spaceId, workspaceKey],
+    [isContextCurrent, openSourceControl, resolveRepository, spaceId, workspaceKey],
   );
 
   const openGitHistory = useCallback(

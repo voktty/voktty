@@ -10,11 +10,12 @@ export function useConflictScope(
   observeGlobal = false,
 ) {
   const filesystem = JSON.stringify(workspace);
+  const ambientFilesystem = useWorkspaceEnvStore((state) => observeGlobal ? JSON.stringify(state.env) : "");
   const [epoch, setEpoch] = useState(0);
   const epochRef = useRef(0);
   const binding = useMemo(
-    () => ({ key, open, filesystem, epoch }),
-    [key, open, filesystem, epoch],
+    () => ({ key, open, filesystem, ambientFilesystem, epoch }),
+    [key, open, filesystem, ambientFilesystem, epoch],
   );
   type Owner = {
     binding: typeof binding;
@@ -54,7 +55,7 @@ export function useConflictScope(
       binding.open &&
       binding.epoch === epochRef.current &&
       (!observeGlobal ||
-        binding.filesystem ===
+        binding.ambientFilesystem ===
           JSON.stringify(useWorkspaceEnvStore.getState().env));
     if (!owner || !isCurrent()) return null;
     const begin: ConflictAdmission = (mutation) => {

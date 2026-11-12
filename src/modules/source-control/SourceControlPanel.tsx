@@ -49,6 +49,8 @@ import {
   COMPACT_ITEM,
 } from "@/modules/explorer/lib/menuItemClass";
 import { useTranslation } from "@/modules/i18n";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { SourceControlWorkspace } from "@/modules/source-control/sourceControlWorkspace";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   setGitCommitMessageUseEditorLanguage,
@@ -84,6 +86,8 @@ import { GitCloneModal } from "./GitCloneModal";
 import { StashDropdown, TagDropdown } from "./GitStashAndTags";
 import {
   memo,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -108,6 +112,12 @@ import {
   type SourceControlFileEntry,
 } from "./useSourceControlPanel";
 import type { SemanticCommitGroup } from "./lib/semanticStaging";
+
+const LazySourceControlReviewDialog = lazy(() =>
+  import("@/modules/source-control/SourceControlReviewDialog").then((module) => ({
+    default: module.SourceControlReviewDialog,
+  })),
+);
 
 type Props = {
   open: boolean;
@@ -508,6 +518,23 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   );
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const ambientWorkspace = useWorkspaceEnvStore((state) => state.env);
+  const workspaceEnv = sourceControl.workspaceEnv ?? ambientWorkspace;
+  const reviewScope = JSON.stringify([
+    open,
+    sourceControl.contextPath,
+    sourceControl.repo?.repoRoot,
+    workspaceEnv,
+    repositoryTarget,
+  ]);
+  const [reviewTarget, setReviewTarget] = useState<{
+    scope: string;
+    repoRoot: string;
+    workspaceEnv: typeof workspaceEnv;
+  } | null>(null);
+  useEffect(() => {
+    setReviewTarget((target) => target?.scope === reviewScope ? target : null);
+  }, [reviewScope]);
 
   const fixedTargetPending = repositoryTargetIsPending({
     target: repositoryTarget,
@@ -793,6 +820,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   const pullBusy = sourceControl.busyAction === "pull";
 
   return (
+    <SourceControlWorkspace value={workspaceEnv}>
     <TooltipProvider delayDuration={800} skipDelayDuration={300}>
       <aside className="flex h-full min-w-0 flex-col [contain:layout_style]">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 pb-2.5 pt-3">
@@ -971,6 +999,23 @@ export const SourceControlPanel = memo(function SourceControlPanel({
           conflictedFiles={conflictedFiles}
           onRefresh={handleRefresh}
         />
+
+          <button
+            type="button"
+            disabled={fixedTargetPending || !scm.repo?.repoRoot}
+            onClick={() => {
+              if (fixedTargetPending || !scm.repo?.repoRoot) return;
+              setReviewTarget({
+                scope: reviewScope,
+                repoRoot: scm.repo.repoRoot,
+                workspaceEnv: structuredClone(workspaceEnv),
+              });
+            }}
+            className="flex shrink-0 items-center gap-2 border-b border-border/40 px-3 py-2 text-left text-[12px] font-medium text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground disabled:opacity-50"
+          >
+            <HugeiconsIcon icon={GitCompareIcon} size={13} strokeWidth={1.85} />
+            {t("sessionReview.reviewChanges")}
+          </button>
 
         {onOpenGitGraph ? (
           <button
@@ -1594,7 +1639,19 @@ export const SourceControlPanel = memo(function SourceControlPanel({
         currentBranch={scm.status?.branch ?? scm.repo?.branch ?? null}
         contextKey={JSON.stringify([sourceControl.contextPath, repositoryTarget])}
       />
+      {reviewTarget?.scope === reviewScope ? (
+        <Suspense fallback={null}>
+          <LazySourceControlReviewDialog
+            repoRoot={reviewTarget.repoRoot}
+            workspaceEnv={reviewTarget.workspaceEnv}
+            sourceControl={sourceControl}
+            dirtyPaths={dirtyPaths}
+            onClose={() => setReviewTarget(null)}
+          />
+        </Suspense>
+      ) : null}
     </TooltipProvider>
+    </SourceControlWorkspace>
   );
 });
 

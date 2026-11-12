@@ -8,6 +8,7 @@ import {
 } from "react";
 import { t } from "@/modules/i18n";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
+import { useSourceControlWorkspace } from "@/modules/source-control/sourceControlWorkspace";
 import { toast } from "sonner";
 
 type Operation = (root: string, workspace: WorkspaceEnv) => Promise<void>;
@@ -30,13 +31,14 @@ export function useGitCollectionMenu<T extends object>({
   keyOf: (item: T) => string;
   onRefresh: () => void;
 }) {
-  const workspace = useWorkspaceEnvStore((state) => state.env);
+  const workspace = useSourceControlWorkspace();
+  const ambientFilesystem = useWorkspaceEnvStore((state) => JSON.stringify(state.env));
   const filesystem = JSON.stringify(workspace);
   const [epoch, setEpoch] = useState(0);
   const epochRef = useRef(0);
   const binding = useMemo(
-    () => ({ repoRoot, contextKey, filesystem, epoch, load, keyOf }),
-    [repoRoot, contextKey, filesystem, epoch, load, keyOf],
+    () => ({ repoRoot, contextKey, filesystem, ambientFilesystem, epoch, load, keyOf }),
+    [repoRoot, contextKey, filesystem, ambientFilesystem, epoch, load, keyOf],
   );
   type Owner = { binding: typeof binding; live: boolean; pending: boolean };
   type Scope = {
@@ -93,7 +95,7 @@ export function useGitCollectionMenu<T extends object>({
       current.current === owner &&
       owner.binding === binding &&
       binding.epoch === epochRef.current &&
-      binding.filesystem ===
+      binding.ambientFilesystem ===
         JSON.stringify(useWorkspaceEnvStore.getState().env),
     [binding],
   );
@@ -120,7 +122,7 @@ export function useGitCollectionMenu<T extends object>({
         !owner?.live ||
         owner.binding !== binding ||
         binding.epoch !== epochRef.current ||
-        binding.filesystem !==
+        binding.ambientFilesystem !==
           JSON.stringify(useWorkspaceEnvStore.getState().env)
       )
         return;

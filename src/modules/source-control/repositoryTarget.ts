@@ -5,10 +5,10 @@ import { tabDirectoryTarget } from "@/modules/surfaces/lib/tabDirectoryTarget";
 
 export type SourceControlRepositoryTarget =
   | { mode: "follow-context" }
-  | { mode: "fixed"; repoRoot: string };
+  | { mode: "fixed"; repoRoot: string; workspaceEnv?: WorkspaceEnv };
 
 export type SourceControlRepositoryTargets = Readonly<
-  Record<string, string>
+  Record<string, { repoRoot: string; workspaceEnv?: WorkspaceEnv }>
 >;
 
 const FOLLOW_CONTEXT: SourceControlRepositoryTarget = {
@@ -36,9 +36,9 @@ export function repositoryTargetForSpace(
   spaceId: string,
   workspaceKey: string,
 ): SourceControlRepositoryTarget {
-  const repoRoot = targets[targetScopeKey(spaceId, workspaceKey)];
-  return repoRoot
-    ? { mode: "fixed", repoRoot }
+  const target = targets[targetScopeKey(spaceId, workspaceKey)];
+  return target
+    ? { mode: "fixed", ...target }
     : FOLLOW_CONTEXT;
 }
 
@@ -47,10 +47,12 @@ export function setRepositoryTargetForSpace(
   spaceId: string,
   workspaceKey: string,
   repoRoot: string,
+  workspaceEnv?: WorkspaceEnv,
 ): SourceControlRepositoryTargets {
   const key = targetScopeKey(spaceId, workspaceKey);
-  if (targets[key] === repoRoot) return targets;
-  return { ...targets, [key]: repoRoot };
+  if (targets[key]?.repoRoot === repoRoot &&
+      JSON.stringify(targets[key]?.workspaceEnv) === JSON.stringify(workspaceEnv)) return targets;
+  return { ...targets, [key]: { repoRoot, ...(workspaceEnv ? { workspaceEnv: structuredClone(workspaceEnv) } : {}) } };
 }
 
 export function clearRepositoryTargetForSpace(
@@ -140,7 +142,7 @@ export function gitGraphTarget({
   target: SourceControlRepositoryTarget;
 }) {
   if (sidebarView === "source-control" && target.mode === "fixed")
-    return { path: target.repoRoot, workspace };
+    return { path: target.repoRoot, workspace: target.workspaceEnv ?? workspace };
   if (!activeTab)
     return root && workspace.kind !== "serial"
       ? { path: root, workspace }

@@ -11,7 +11,7 @@ import {
   type GitOperationKind,
 } from "@/modules/ai/lib/native";
 import { t } from "@/modules/i18n";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { useSourceControlWorkspace } from "@/modules/source-control/sourceControlWorkspace";
 import {
   useConflictScope,
   type ConflictAdmission,
@@ -23,7 +23,7 @@ export function useConflictsPanel(
   files: GitChangedFile[],
   onRefresh: () => void,
 ) {
-  const workspace = useWorkspaceEnvStore((state) => state.env);
+  const workspace = useSourceControlWorkspace();
   const scope = useConflictScope(repoRoot ?? "", !!repoRoot, workspace, true);
   type Permit = NonNullable<ReturnType<typeof scope.capture>>;
   type Fact = { binding: object; kind: GitOperationKind; error: string | null };

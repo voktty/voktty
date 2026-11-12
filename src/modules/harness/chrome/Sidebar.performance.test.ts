@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { Sidebar } from "@/modules/harness/chrome/Sidebar";
+import { t } from "@/modules/i18n";
 import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -23,6 +24,9 @@ vi.mock("@/modules/harness/chrome/FileTree", () => ({
 }));
 vi.mock("@/modules/harness/chrome/ProjectRail", () => ({
   ProjectRail: () => createElement("input", { "data-project-rail": true }),
+}));
+vi.mock("@/modules/harness/chrome/SourceControl", () => ({
+  SourceControl: () => createElement("div", { "data-copied-source-control": true }),
 }));
 
 let container: HTMLDivElement;
@@ -149,4 +153,26 @@ it("retains the project rail and its input state through focus visibility change
   render();
   expect(container.querySelector("[data-project-rail]")).toBe(rail);
   expect(rail.value).toBe("remote picker state");
+});
+
+it("replaces the legacy changes tab with a button to the owning Git target", () => {
+  const showSourceControl = vi.fn();
+  props = {
+    ...props,
+    layout: "deck",
+    tab: "changes",
+    gitCwd: "C:/workspace/project-worktree",
+    onShowSourceControl: showSourceControl,
+  };
+  render();
+  expect(props.onTabChange).toHaveBeenCalledWith("sessions");
+  expect(container.querySelector("[data-copied-source-control]")).toBeNull();
+  expect([...container.querySelectorAll('[role="tab"]')].some((tab) =>
+    tab.getAttribute("aria-label")?.includes(t("harness.chrome.changes")),
+  )).toBe(false);
+  const shortcut = container.querySelector<HTMLButtonElement>(`button[title="${t("harness.chrome.changes")}"]`);
+  if (!shortcut) throw new Error("Git shortcut did not mount");
+  act(() => shortcut.click());
+  expect(showSourceControl).toHaveBeenCalledOnce();
+  expect(props.onTabChange).not.toHaveBeenCalledWith("changes");
 });

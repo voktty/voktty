@@ -10,6 +10,7 @@ import { useDirectoryTerminalOpening } from "@/modules/surfaces/lib/useDirectory
 import { usePathOpening } from "@/modules/surfaces/lib/usePathOpening";
 import { useNativeResourceDrop } from "@/modules/surfaces/lib/useNativeResourceDrop";
 import { useGitHistoryRequests } from "@/modules/source-control/useGitHistoryRequests";
+import { useHarnessSourceControlOpening } from "@/modules/source-control/useHarnessSourceControlOpening";
 import type { BlameTarget } from "@/modules/source-control/useBlameOpening";
 import {
   requestPathOpening,
@@ -2564,6 +2565,12 @@ function DesktopApp() {
     openSourceControl,
     openCommitHistoryTab,
   });
+  useHarnessSourceControlOpening({
+    sourceKey: activeTab?.kind === "harness"
+      ? JSON.stringify([activeTab.tabKey, activeHarnessFolder])
+      : null,
+    open: handleOpenRepositoryInSourceControl,
+  });
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
@@ -2587,7 +2594,7 @@ function DesktopApp() {
     spaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
     selectedKey: activeTabKey,
     root: sourceControl.repo?.repoRoot ?? sourceControl.contextPath,
-    workspace: workspaceEnv,
+    workspace: sourceControl.workspaceEnv ?? workspaceEnv,
     create: createDirectoryTerminal,
     openProject: openProjectTerminal,
     onError: reportDirectoryTerminalError,
@@ -5048,6 +5055,11 @@ function DesktopApp() {
                           onOpenDiff={openGitDiffTab}
                           onOpenGitGraph={openGitGraphFromContext}
                           onOpenFile={handleOpenFile}
+                          onOpenProjectFile={
+                            sourceControl.contextPath?.startsWith("remote://voktty-ssh-")
+                              ? (path) => { handleOpenFile(path, true, { workspaceEnv: LOCAL_WORKSPACE }); }
+                              : undefined
+                          }
                           onNavigateToPath={revealRepositoryDirectoryInTerminal}
                           repositoryTarget={sourceControlRepositoryTarget}
                           onFollowRepositoryContext={

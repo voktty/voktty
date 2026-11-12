@@ -346,6 +346,15 @@ Editor model roles are explicit: the active chat model owns reasoning, quick fix
 
 ### UI conventions
 
+The activity rail keeps conversation visibility and focus controls accessible.
+Harness conversation and project panels hide through CSS and `inert` without
+unmounting their content. Focus mode preserves their saved visibility and the
+desktop sidebar's exact width; leaving it restores the prior layout. Its shortcuts
+yield to a focused terminal. Harness Git summaries open the desktop Source Control
+view with their explicit project or session worktree path and filesystem, retaining SSH namespaces.
+Source Control owns the large, lazy review dialog; session checkpoint reviews keep
+their independent session-scoped meaning.
+
 Desktop surface publication and chrome directory navigation live in `surfaces/lib/desktopSurface.ts` and `useDesktopSurface.ts`. App supplies selected-tab metadata and existing action callbacks. A Harness directory action selects its project; a terminal action writes through the existing shell callback. Editors and other surfaces provide no shell-navigation target. Navigation reads the committed surface and requires its original mounted owner and current callback binding, so a cached callback cannot navigate a successor owner or terminal leaf. This routing grants no filesystem or process authority.
 
 `useHarnessDesktopContext` owns the desktop's Harness project fallback, selected-owner reports and Explorer projection. Its projected tab uses the focused folder while the canonical tab retains the reported project root. Non-Harness selections expose no Harness project or folder. Project synchronization checks the original selected tab key against the live registry; changing a tab's cwd independently does not replay an unchanged report. Raw legacy folder events cannot publish a report or retarget the selected tab. Project-terminal requests receive this selected project metadata through their existing admission service.

@@ -107,31 +107,38 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it.each(["file", "diff"] as const)(
-  "opens a current %s under its captured root",
-  async (mode) => {
+it("opens a current file under its captured root", async () => {
     await render({ cwd: "/worktree", projectCwd: "/project" });
     await act(async () => {
-      if (mode === "file") opening.onOpenFile("/worktree/new.ts", { line: 3 });
-      else
-        opening.onOpenDiff("/worktree/new.ts", undefined, {
-          exact: true,
-          repoRoot: "/repo",
-        });
+      opening.onOpenFile("/worktree/new.ts", { line: 3 });
     });
     expect(tabs[0].filePanes[0].files[1]).toMatchObject({
       path: "/worktree/new.ts",
-      cwd: mode === "file" ? "/project" : "/repo",
-      ...(mode === "diff" ? { review: true } : {}),
+      cwd: "/project",
     });
     expect(io.remember).toHaveBeenCalledExactlyOnceWith(
       "/project",
       "/worktree/new.ts",
     );
     expect(io.focus).toHaveBeenCalledOnce();
-    expect(mode === "file" ? io.navigate : io.changes).toHaveBeenCalledOnce();
-  },
-);
+    expect(io.navigate).toHaveBeenCalledOnce();
+});
+
+it.each([true, false])("routes generic diffs only to Git in deck layout %s", async (deckLayout) => {
+  await render({ cwd: "/worktree", projectCwd: "/project", deckLayout });
+  await act(async () => opening.onOpenDiff("/worktree/new.ts", undefined, { repoRoot: "/repo" }));
+  expect(tabs).toEqual([original]);
+  expect(io.resolve).not.toHaveBeenCalled();
+  expect(io.focus).not.toHaveBeenCalled();
+  expect(io.remember).not.toHaveBeenCalled();
+  expect(io.changes).toHaveBeenCalledExactlyOnceWith("/repo", expect.any(Function));
+  const isCurrent = io.changes.mock.calls[0][1] as () => boolean;
+  await render({ cwd: "/worktree", projectCwd: "/project", deckLayout, metadata: true });
+  expect(isCurrent()).toBe(true);
+  await render({ cwd: "/other", deckLayout });
+  await render({ cwd: "/worktree", projectCwd: "/project", deckLayout });
+  expect(isCurrent()).toBe(false);
+});
 
 it.each([
   "cwd",
@@ -197,7 +204,7 @@ it("keeps only the newest requested file selection when reads finish out of orde
   expect(io.remember).toHaveBeenCalledOnce();
 });
 
-it.each(["file", "diff"] as const)(
+it.each(["file", "review"] as const)(
   "retires a pending %s after an SSH profile roundtrip",
   async (mode) => {
     const read = deferred();
@@ -206,7 +213,7 @@ it.each(["file", "diff"] as const)(
     await act(async () => {
       if (mode === "file")
         opening.onOpenFile(`${remote}/file.ts`, undefined, { exact: true });
-      else opening.onOpenDiff(`${remote}/file.ts`, undefined, { exact: true });
+      else opening.onOpenDiff(`${remote}/file.ts`, { sessionId: "source", cwd: remote }, { exact: true });
     });
     await act(async () => {
       usePreferencesStore.setState({ sshConnections: [] });
@@ -272,10 +279,12 @@ it("retains all 256 unsettled resolutions after retirement and recovers only on 
   expect(tabs[0].filePanes[0].files[1].path).toBe("/replacement/current.ts");
 });
 
-it("keeps captured session-review and classic diff behavior", async () => {
+it("keeps captured session review separate from the shared Git panel", async () => {
   await render({ deckLayout: false });
   await act(async () => opening.onOpenDiff());
-  expect(tabs[0]).toMatchObject({ diffOpen: true, diffFocused: true });
+  expect(tabs[0]).toBe(original);
+  expect(io.changes).toHaveBeenCalledOnce();
+  io.changes.mockClear();
   await act(async () =>
     opening.onOpenDiff("/session/file.ts", {
       sessionId: "source",
@@ -287,6 +296,15 @@ it("keeps captured session-review and classic diff behavior", async () => {
     cwd: "/session",
     sessionChanges: { sessionId: "source", view: "commit" },
   });
+  expect(io.changes).not.toHaveBeenCalled();
+});
+
+it("routes an SSH diff with its namespace and no local file read", async () => {
+  await render({ cwd: remote });
+  await act(async () => opening.onOpenDiff(`${remote}/file.ts`));
+  expect(io.changes).toHaveBeenCalledExactlyOnceWith(remote, expect.any(Function));
+  expect(io.resolve).not.toHaveBeenCalled();
+  expect(tabs[0]).toBe(original);
 });
 
 it("preserves the admitted selection when a full-budget request is refused", async () => {

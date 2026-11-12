@@ -11,6 +11,7 @@ import {
   resolveFileActionPath,
 } from "@/modules/surfaces/lib/fileActionTarget";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
+import { useSourceControlWorkspace } from "@/modules/source-control/sourceControlWorkspace";
 
 export type SourceControlFileOpening = (
   path: string,
@@ -41,7 +42,8 @@ export function useSourceControlEntryMenu({
   onOpenFile?: SourceControlFileOpening;
   onOpenProjectFile?: (path: string) => void;
 }) {
-  const workspace = useWorkspaceEnvStore((state) => state.env);
+  const workspace = useSourceControlWorkspace();
+  const ambientFilesystem = useWorkspaceEnvStore((state) => JSON.stringify(state.env));
   const filesystem = JSON.stringify(workspace);
   const entryKey = JSON.stringify(entry);
   const file = useMemo<SourceControlFileEntry>(
@@ -56,6 +58,7 @@ export function useSourceControlEntryMenu({
       key: crypto.randomUUID(),
       target,
       filesystem,
+      ambientFilesystem,
       epoch,
       actionBusy,
       onFocusRow,
@@ -68,6 +71,7 @@ export function useSourceControlEntryMenu({
     [
       target,
       filesystem,
+      ambientFilesystem,
       epoch,
       actionBusy,
       onFocusRow,
@@ -111,7 +115,7 @@ export function useSourceControlEntryMenu({
       current.current === owner &&
       owner.binding === binding &&
       binding.epoch === epochRef.current &&
-      binding.filesystem ===
+      binding.ambientFilesystem ===
         JSON.stringify(useWorkspaceEnvStore.getState().env),
     [binding],
   );

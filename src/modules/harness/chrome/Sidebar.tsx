@@ -85,7 +85,7 @@ import { copyText } from "../lib/clipboard";
 import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
-import type { FileOpenOptions, OpenFileFn } from "../lib/search";
+import type { OpenFileFn } from "../lib/search";
 import { sessionDisplayTitle } from "../lib/session";
 import { ParticleText } from "./ParticleText";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
@@ -112,7 +112,6 @@ import {
   saveSessionSidebarFilters,
   type SessionSidebarFilters,
 } from "../lib/sessionFilters";
-import type { HarnessId } from "../lib/session";
 import type { LiveAgent } from "../lib/liveAgents";
 import type { SessionSummary } from "../lib/sessionStore";
 import {
@@ -153,7 +152,6 @@ import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
-import { SourceControl } from "./SourceControl";
 // Lazy on purpose: HarnessApp already splits this surface, and importing it
 // here statically pulled it back into the first-click graph along with the
 // markdown renderer and its maths and highlighting dependencies. The inbox is
@@ -236,9 +234,6 @@ type Props = {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
-  onOpenDiff?: (path: string, options?: FileOpenOptions) => void;
-  selectedDiffPath?: string;
-  textHarness?: HarnessId;
   onShowSourceControl?: () => void;
   recents?: RecentProject[];
   busyProjectPaths?: Iterable<string>;
@@ -307,9 +302,6 @@ function SidebarComponent({
   canGoForward = false,
   onGoBack,
   onGoForward,
-  onOpenDiff,
-  selectedDiffPath,
-  textHarness,
   onShowSourceControl,
   recents = [],
   busyProjectPaths,
@@ -602,12 +594,12 @@ function SidebarComponent({
     { axis: "y" },
   );
   const visibleTabs = deckLayout
-    ? tabOrder.filter((itemId) => itemId === "sessions" || itemId === "changes")
+    ? tabOrder.filter((itemId) => itemId === "sessions")
     : tabOrder.filter((itemId) => itemId !== "changes");
   const canDragTabs = visibleTabs.length > 1;
 
   useEffect(() => {
-    if (deckLayout && tab !== "sessions" && tab !== "changes") {
+    if (tab === "changes" || (deckLayout && tab !== "sessions")) {
       onTabChange("sessions");
     }
   }, [deckLayout, tab, onTabChange]);
@@ -1187,7 +1179,6 @@ function SidebarComponent({
 
   const workspaceTabItems = visibleTabs.map((itemId, index) => {
     const active = tab === itemId;
-    const isChangesTab = (itemId as string) === "changes";
     const draggingTab = sortable.draggingId === itemId;
     const showStart =
       sortable.draggingId &&
@@ -1222,19 +1213,6 @@ function SidebarComponent({
           type="button"
           role="tab"
           aria-selected={active}
-          aria-label={
-            isChangesTab
-              ? hasChangeStats
-                ? [
-                    t("harness.chrome.changes"),
-                    changeAdditions > 0 ? `+${changeAdditions}` : "",
-                    changeDeletions > 0 ? `-${changeDeletions}` : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")
-                : t("harness.chrome.changes")
-              : undefined
-          }
           data-tauri-drag-region="false"
           onClick={() => {
             if (sortable.consumeClick()) return;
@@ -1246,15 +1224,27 @@ function SidebarComponent({
               : "text-content/50 hover:bg-content/5 hover:text-content"
           } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
-          {isChangesTab && hasChangeStats ? (
-            <DiffStat additions={changeAdditions} deletions={changeDeletions} />
-          ) : (
-            <span className="block truncate">{sidebarTabLabel(itemId)}</span>
-          )}
+          <span className="block truncate">{sidebarTabLabel(itemId)}</span>
         </button>
       </div>
     );
   });
+
+  const gitShortcut = onShowSourceControl && inProject ? (
+    <button
+      type="button"
+      aria-label={t("harness.chrome.changes")}
+      title={t("harness.chrome.changes")}
+      onClick={onShowSourceControl}
+      className="flex h-6 shrink-0 items-center rounded-md px-2 text-[12px] text-content/60 hover:bg-content/10 hover:text-content focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      {hasChangeStats ? (
+        <DiffStat additions={changeAdditions} deletions={changeDeletions} />
+      ) : (
+        <GitBranch className="size-3.5" />
+      )}
+    </button>
+  ) : null;
 
   const sidebarContent = (
     <aside
@@ -1282,6 +1272,7 @@ function SidebarComponent({
                 </span>
               )}
             </div>
+            {gitShortcut}
             <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
           </div>
           {visibleTabs.length > 1 ? (
@@ -1303,6 +1294,7 @@ function SidebarComponent({
             >
               {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
               <div className="min-w-0 flex-1" />
+              {gitShortcut}
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}
@@ -1317,6 +1309,7 @@ function SidebarComponent({
               className="flex h-9.75 shrink-0 select-none items-center justify-end pr-1.5"
               data-tauri-drag-region="deep"
             >
+              {gitShortcut}
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}
@@ -1382,7 +1375,6 @@ function SidebarComponent({
                     onFileDeleted={onFileDeleted}
                     onSearch={onOpenFilesSearch}
                     gitStatuses={gitStatuses}
-                    sourceControlActive={open && tab === "changes"}
                     onShowSourceControl={onShowSourceControl}
                   />
                 ) : null}
@@ -1770,23 +1762,6 @@ function SidebarComponent({
               </div>
             )}
           </div>
-          {deckLayout && tab === "changes" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <SourceControl
-                cwd={gitRoot}
-                enabled={open}
-                textHarness={textHarness}
-                selectedPath={selectedDiffPath}
-                onOpenFile={(path) =>
-                  onOpenFile(path, undefined, { exact: true })
-                }
-                onOpenDiff={
-                  onOpenDiff ??
-                  ((path) => onOpenFile(path, undefined, { exact: true }))
-                }
-              />
-            </div>
-          ) : null}
           {!deckLayout && tab === "inbox" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <Suspense fallback={null}>

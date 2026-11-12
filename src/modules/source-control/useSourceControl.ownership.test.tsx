@@ -77,8 +77,8 @@ function snapshot(branch = "local"): GitStatusSnapshot {
     changedFiles: [],
   };
 }
-function Probe({ path }: { path: string }) {
-  output = useSourceControl(path, true, false);
+function Probe({ path, workspace }: { path: string; workspace?: WorkspaceEnv }) {
+  output = useSourceControl(path, true, false, workspace);
   return null;
 }
 async function render(path = folder) {
@@ -93,6 +93,18 @@ async function flushIdle() {
 async function select(workspace: WorkspaceEnv) {
   await act(async () => useWorkspaceEnvStore.setState({ env: workspace }));
 }
+
+it.each(["/local/project", "remote://voktty-ssh-other/work/project"])(
+  "uses the explicit project filesystem for reads and mutations under ambient SSH: %s",
+  async (path) => {
+    await act(async () => root.render(<Probe path={path} workspace={LOCAL_WORKSPACE} />));
+    await flushIdle();
+    expect(mocks.resolve).toHaveBeenCalledExactlyOnceWith(path, LOCAL_WORKSPACE);
+    expect(output.workspaceEnv).toEqual(LOCAL_WORKSPACE);
+    await act(async () => expect(await output.undoCommit()).toBe(true));
+    expect(mocks.undo).toHaveBeenCalledExactlyOnceWith(folder, LOCAL_WORKSPACE);
+  },
+);
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {

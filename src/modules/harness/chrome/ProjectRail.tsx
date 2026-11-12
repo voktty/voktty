@@ -11,6 +11,7 @@ import {
   FolderOpen,
   FolderPlus,
   FolderTree,
+  GitBranch,
   ImagePlus,
   Inbox,
   Internet,
@@ -24,6 +25,7 @@ import {
 } from "./icons";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { t, useTranslation } from "@/modules/i18n";
+import { useHarnessSourceControlOpening } from "@/modules/harness/hooks/useHarnessSourceControlOpening";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectAvailability } from "../hooks/useProjectAvailability";
@@ -1646,6 +1648,8 @@ function ProjectCard({
   const additions = stats?.additions ?? 0;
   const deletions = stats?.deletions ?? 0;
   const hasChanges = files > 0 || additions > 0 || deletions > 0;
+  const captureProject = useHarnessProjectSelection(JSON.stringify([item.path, selected]));
+  const openSourceControl = useHarnessSourceControlOpening(item.path, !unavailable, captureProject);
   const reason = useUnavailableReason(item.path);
   const cardTitle = projectCardTitle(item.path, name, stats, busy, unavailable ? (reason ?? "missing-directory") : null);
   const cardAriaLabel = projectCardAriaLabel(name, stats, busy, unavailable ? (reason ?? "missing-directory") : null);
@@ -1725,12 +1729,28 @@ function ProjectCard({
           >
             <CircleAlert className="size-3.5 shrink-0 text-amber-400" strokeWidth={2} />
           </span>
-        ) : hasChanges ? (
-          <span className="shrink-0 group-hover:hidden">
-            <ProjectDiffStat additions={additions} deletions={deletions} />
-          </span>
         ) : null}
       </button>
+      {!unavailable && hasChanges ? (
+        <button
+          type="button"
+          data-no-drag
+          aria-label={`${t("harness.chrome.changes")}: ${name}`}
+          title={t("harness.chrome.changes")}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            openSourceControl();
+          }}
+          className="mr-6 flex shrink-0 items-center rounded-sm px-1 hover:bg-content/10 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {additions > 0 || deletions > 0 ? (
+            <ProjectDiffStat additions={additions} deletions={deletions} />
+          ) : (
+            <GitBranch className="size-3.5" />
+          )}
+        </button>
+      ) : null}
       <button
         type="button"
         data-no-drag

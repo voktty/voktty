@@ -142,11 +142,12 @@ function usePanelActionOwner(
   workspace: WorkspaceEnv,
 ) {
   const workspaceKey = JSON.stringify(workspace);
+  const ambientWorkspaceKey = useWorkspaceEnvStore((state) => JSON.stringify(state.env));
   const [epoch, setEpoch] = useState(0);
   const epochRef = useRef(0);
   const binding = useMemo(
-    () => ({ open, contextPath, repoRoot, workspaceKey, epoch }),
-    [open, contextPath, repoRoot, workspaceKey, epoch],
+    () => ({ open, contextPath, repoRoot, workspaceKey, ambientWorkspaceKey, epoch }),
+    [open, contextPath, repoRoot, workspaceKey, ambientWorkspaceKey, epoch],
   );
   const current = useRef<{ binding: typeof binding; live: boolean } | null>(
     null,
@@ -177,7 +178,7 @@ function usePanelActionOwner(
       owner.binding === binding &&
       binding.open &&
       binding.epoch === epochRef.current &&
-      binding.workspaceKey ===
+      binding.ambientWorkspaceKey ===
         JSON.stringify(useWorkspaceEnvStore.getState().env);
     return isCurrent() ? isCurrent : null;
   }, [binding]);
@@ -556,7 +557,8 @@ export function useSourceControlPanel(
     | null,
   dirtyPaths: readonly string[] = [],
 ): SourceControlPanelState {
-  const workspaceInput = useWorkspaceEnvStore((state) => state.env);
+  const ambientWorkspace = useWorkspaceEnvStore((state) => state.env);
+  const workspaceInput = summary.workspaceEnv ?? ambientWorkspace;
   const workspaceEnv = useMemo(
     () => structuredClone(workspaceInput),
     [workspaceInput],

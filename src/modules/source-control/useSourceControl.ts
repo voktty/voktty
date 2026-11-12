@@ -48,6 +48,7 @@ export type SourceControlRemoteActionResult = {
 };
 
 export type SourceControlSummary = {
+  workspaceEnv?: WorkspaceEnv;
   contextPath: string | null;
   repo: GitRepoInfo | null;
   status: GitStatusSnapshot | null;
@@ -466,8 +467,11 @@ export function useSourceControl(
   contextPath: string | null,
   enabled: boolean = true,
   live: boolean = enabled,
+  workspaceOverride?: WorkspaceEnv,
 ): SourceControlSummary {
-  const workspaceInput = useWorkspaceEnvStore((s) => s.env);
+  const ambientWorkspace = useWorkspaceEnvStore((s) => s.env);
+  const ambientWorkspaceKey = sourceControlWorkspaceKey(ambientWorkspace);
+  const workspaceInput = workspaceOverride ?? ambientWorkspace;
   const workspaceKey = sourceControlWorkspaceKey(workspaceInput);
   const workspaceEnv = useMemo(
     () => structuredClone(workspaceInput),
@@ -480,8 +484,8 @@ export function useSourceControl(
   const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
   const workspaceEpochRef = useRef(0);
   const binding = useMemo(
-    () => ({ contextKey, workspaceKey, workspaceEpoch, enabled }),
-    [contextKey, workspaceKey, workspaceEpoch, enabled],
+    () => ({ contextKey, workspaceKey, ambientWorkspaceKey, workspaceEpoch, enabled }),
+    [contextKey, workspaceKey, ambientWorkspaceKey, workspaceEpoch, enabled],
   );
   const [ownedState, setOwnedState] = useState<OwnedSourceControlState>(() => ({
     workspaceKey,
@@ -534,7 +538,7 @@ export function useSourceControl(
       !!owner?.live &&
       ownerRef.current === owner &&
       owner.binding.workspaceEpoch === workspaceEpochRef.current &&
-      owner.binding.workspaceKey ===
+      owner.binding.ambientWorkspaceKey ===
         sourceControlWorkspaceKey(useWorkspaceEnvStore.getState().env),
     [],
   );
@@ -1072,6 +1076,7 @@ export function useSourceControl(
 
   return useMemo<SourceControlSummary>(
     () => ({
+      workspaceEnv,
       contextPath: state.contextPath,
       repo: state.repo,
       status: state.status,
@@ -1094,6 +1099,7 @@ export function useSourceControl(
     }),
     [
       state,
+      workspaceEnv,
       applyStatus,
       refresh,
       trustRepository,
