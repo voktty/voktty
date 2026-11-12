@@ -28,6 +28,17 @@ const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
 
 const activeControllers = new Map<string, AbortController>();
 const historyBySession = new Map<string, ModelMessage[]>();
+const MAX_HISTORY_BYTES = 1024 * 1024;
+
+export function boundedApiHistory(messages: ModelMessage[]): ModelMessage[] {
+  let start = 0;
+  while (start < messages.length && JSON.stringify(messages.slice(start)).length > MAX_HISTORY_BYTES) {
+    const next = messages.findIndex((message, index) => index > start && message.role === "user");
+    if (next < 0) return [];
+    start = next;
+  }
+  return messages.slice(start);
+}
 
 async function resolveApiModel(
   modelId: string,
@@ -122,8 +133,14 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
     const customEndpoints = usePreferencesStore.getState().customEndpoints ?? [];
     const model = await resolveApiModel(input.model, customEndpoints);
 
-    const history = historyBySession.get(input.sessionId) ?? [];
-    history.push({ role: "user", content: input.text });
+    if (controller.signal.aborted) {
+      input.onEvent({ type: "session.ended", code: 0 });
+      return;
+    }
+    const history: ModelMessage[] = [
+      ...(historyBySession.get(input.sessionId) ?? []),
+      { role: "user", content: input.text },
+    ];
 
     const { runApiAgentLoop } = await import("./apiAgentLoop");
     const response = await runApiAgentLoop({
@@ -138,9 +155,8 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
       return;
     }
 
-    if (response.length) {
-      history.push(...response);
-      historyBySession.set(input.sessionId, history);
+    if (response.length && activeControllers.get(input.sessionId) === controller) {
+      historyBySession.set(input.sessionId, boundedApiHistory([...history, ...response]));
     }
 
     input.onEvent({ type: "message.completed" });

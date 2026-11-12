@@ -12,6 +12,7 @@ vi.mock("@/modules/settings/store", async (importOriginal) => ({
 import { getHarness } from "./registry";
 import {
   apiAdapter,
+  boundedApiHistory,
   cancelApiTurn,
   ensureApiRegistered,
   forgetApiSession,
@@ -21,6 +22,11 @@ import { modelsFor } from "../models";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 
 describe("apiAdapter", () => {
+  it("bounds history by dropping complete oldest turns", () => {
+    const recent = [{ role: "user" as const, content: "recent" }, { role: "assistant" as const, content: "answer" }];
+    expect(boundedApiHistory([{ role: "user", content: "x".repeat(1024 * 1024) }, { role: "assistant", content: "old" }, ...recent])).toEqual(recent);
+    expect(boundedApiHistory([{ role: "user", content: "x".repeat(1024 * 1024) }])).toEqual([]);
+  });
   it("registers in the harness registry", () => {
     ensureApiRegistered();
     expect(getHarness("api")).toBe(apiAdapter);
