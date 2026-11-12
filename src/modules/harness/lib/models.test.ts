@@ -195,7 +195,7 @@ describe("provider defaults", () => {
       claude: "claude:sonnet-5-5",
       codex: "codex:gpt-6.1-sol",
       gemini: "gemini:gemini-3.8-flash",
-      grok: "grok:grok-4.7",
+      grok: "grok:grok-4.6",
     });
     expect(modelsFor("claude").map((model) => model.nativeId)).toContain(
       "claude-opus-5-5",
@@ -203,9 +203,46 @@ describe("provider defaults", () => {
     expect(modelsFor("codex").map((model) => model.nativeId)).toContain(
       "gpt-6.1-sol",
     );
-    expect(modelsFor("grok").map((model) => model.nativeId)).toContain(
-      "grok-4.7",
+    expect(modelsFor("grok").map((model) => model.nativeId)).toEqual([
+      "grok-4.6",
+      "grok-4.5",
+    ]);
+  });
+
+  // Mirrors what each CLI listed through its OAuth session on 2026-11-12.
+  it("keeps the offline fallbacks in line with what the OAuth agents offer", () => {
+    const native = (harness: Parameters<typeof modelsFor>[0]) =>
+      modelsFor(harness).map((model) => model.nativeId);
+    expect(native("claude")).toEqual(
+      expect.arrayContaining([
+        "claude-fable-5-2",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+      ]),
     );
+    expect(native("claude")).not.toContain("claude-opus-4-5");
+    expect(native("codex")).toEqual([
+      "gpt-6.1-sol",
+      "gpt-6-astra",
+      "gpt-6.1-terra",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+    ]);
+    expect(native("gemini")).toEqual([
+      "gemini-3.8-flash-high",
+      "claude-sonnet-4-6",
+      "claude-opus-4-6-thinking",
+      "gpt-oss-120b-medium",
+    ]);
+  });
+
+  it("moves a session saved on a retired model to a current one", () => {
+    expect(resolveModel("codex", "codex:gpt-5.4-mini").harness).toBe("codex");
+    expect(resolveModel("codex", "codex:gpt-5.4-mini").nativeId).not.toBe("gpt-5.4-mini");
+    expect(resolveModel("grok", "grok:grok-4.7").nativeId).not.toBe("grok-4.7");
   });
 
   it("migrates saved Gemini 3.7 selections to Gemini 3.8", () => {

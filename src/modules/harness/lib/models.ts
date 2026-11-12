@@ -60,6 +60,13 @@ export const MODELS: AgentModel[] = [
     contextWindow: 1_000_000,
   },
   {
+    id: "claude:fable-5.2",
+    harness: "claude",
+    name: "Claude Fable 5.2",
+    nativeId: "claude-fable-5-2",
+    contextWindow: 1_000_000,
+  },
+  {
     id: "claude:sonnet-5",
     harness: "claude",
     name: "Claude Sonnet 5",
@@ -78,6 +85,18 @@ export const MODELS: AgentModel[] = [
     nativeId: "claude-fable-5",
   },
   {
+    id: "claude:opus-4.8",
+    harness: "claude",
+    name: "Opus 4.8",
+    nativeId: "claude-opus-4-8",
+  },
+  {
+    id: "claude:opus-4.7",
+    harness: "claude",
+    name: "Opus 4.7",
+    nativeId: "claude-opus-4-7",
+  },
+  {
     id: "claude:opus-4.6",
     harness: "claude",
     name: "Opus 4.6",
@@ -94,12 +113,6 @@ export const MODELS: AgentModel[] = [
     harness: "claude",
     name: "Haiku 4.5",
     nativeId: "claude-haiku-4-5",
-  },
-  {
-    id: "claude:opus-4.5",
-    harness: "claude",
-    name: "Opus 4.5",
-    nativeId: "claude-opus-4-5",
   },
 
   {
@@ -133,13 +146,6 @@ export const MODELS: AgentModel[] = [
     nativeId: "grok-4.7",
   },
 
-  {
-    id: "grok:grok-4.7",
-    harness: "grok",
-    name: "Grok 4.7",
-    nativeId: "grok-4.7",
-    contextWindow: 500_000,
-  },
   {
     id: "grok:grok-4.6",
     harness: "grok",
@@ -269,6 +275,46 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
+    id: "codex:gpt-6.1-terra",
+    harness: "codex",
+    name: "GPT-6.1 Terra",
+    nativeId: "gpt-6.1-terra",
+    settings: [
+      {
+        id: "reasoningEffort",
+        label: "Reasoning",
+        kind: "select",
+        value: "medium",
+        options: [
+          { value: "xhigh", label: "Extra High" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "codex:gpt-6-sol",
+    harness: "codex",
+    name: "GPT-6 Sol",
+    nativeId: "gpt-6-sol",
+    settings: [
+      {
+        id: "reasoningEffort",
+        label: "Reasoning",
+        kind: "select",
+        value: "medium",
+        options: [
+          { value: "xhigh", label: "Extra High" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
+  },
+  {
     id: "codex:gpt-6-luna",
     harness: "codex",
     name: "GPT-6 Luna",
@@ -288,17 +334,18 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
-    id: "codex:gpt-5.5",
+    id: "codex:gpt-5.6-sol",
     harness: "codex",
-    name: "GPT-5.5",
-    nativeId: "gpt-5.5",
+    name: "GPT-5.6 Sol",
+    nativeId: "gpt-5.6-sol",
     settings: [
       {
         id: "reasoningEffort",
         label: "Reasoning",
         kind: "select",
-        value: "high",
+        value: "medium",
         options: [
+          { value: "xhigh", label: "Extra High" },
           { value: "high", label: "High" },
           { value: "medium", label: "Medium" },
           { value: "low", label: "Low" },
@@ -307,16 +354,44 @@ export const MODELS: AgentModel[] = [
     ],
   },
   {
-    id: "codex:gpt-5.4",
+    id: "codex:gpt-5.6-terra",
     harness: "codex",
-    name: "GPT-5.4",
-    nativeId: "gpt-5.4",
+    name: "GPT-5.6 Terra",
+    nativeId: "gpt-5.6-terra",
+    settings: [
+      {
+        id: "reasoningEffort",
+        label: "Reasoning",
+        kind: "select",
+        value: "medium",
+        options: [
+          { value: "xhigh", label: "Extra High" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
   },
   {
-    id: "codex:gpt-5.4-mini",
+    id: "codex:gpt-5.6-luna",
     harness: "codex",
-    name: "GPT-5.4 Mini",
-    nativeId: "gpt-5.4-mini",
+    name: "GPT-5.6 Luna",
+    nativeId: "gpt-5.6-luna",
+    settings: [
+      {
+        id: "reasoningEffort",
+        label: "Reasoning",
+        kind: "select",
+        value: "medium",
+        options: [
+          { value: "xhigh", label: "Extra High" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
   },
   {
     id: "gemini:gemini-3.8-flash",
@@ -332,49 +407,6 @@ export const MODELS: AgentModel[] = [
         options: [
           { value: "high", label: "High" },
           { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "gemini:gemini-3.5-flash-lite",
-    harness: "gemini",
-    name: "Gemini 3.5 Flash-Lite",
-    nativeId: "gemini-3.5-flash-lite",
-  },
-  {
-    id: "gemini:gemini-3.6-flash",
-    harness: "gemini",
-    name: "Gemini 3.6 Flash",
-    nativeId: "gemini-3.6-flash-medium",
-    settings: [
-      {
-        id: "effort",
-        label: "Reasoning",
-        kind: "select",
-        value: "medium",
-        options: [
-          { value: "high", label: "High" },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "gemini:gemini-3.1-pro-preview",
-    harness: "gemini",
-    name: "Gemini 3.1 Pro Preview",
-    nativeId: "gemini-3.1-pro-preview-low",
-    settings: [
-      {
-        id: "effort",
-        label: "Reasoning",
-        kind: "select",
-        value: "low",
-        options: [
-          { value: "high", label: "High" },
           { value: "low", label: "Low" },
         ],
       },
@@ -426,7 +458,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   codex: "codex:gpt-6.1-sol",
   cursor: "cursor:composer-2.5",
   gemini: "gemini:gemini-3.8-flash",
-  grok: "grok:grok-4.7",
+  grok: "grok:grok-4.6",
   hermes: "hermes:hermes-3-llama-3.1-70b",
   opencode: "opencode:glm-5",
   pi: "pi:default",
@@ -550,7 +582,38 @@ export function syncCustomEndpointsToHarness(
       });
     }
   }
-  setHarnessModels("api", models);
+  apiEndpointModels = models;
+  setHarnessModels("api", [...apiEndpointModels, ...apiProviderModels]);
+}
+
+let apiEndpointModels: AgentModel[] = [];
+let apiProviderModels: AgentModel[] = [];
+
+/** Prefix of "api" models served by a built-in provider and its saved key. */
+export const API_PROVIDER_MODEL_PREFIX = "apikey:";
+
+/**
+ * Sync the models of built-in API providers that have a saved key (DeepSeek,
+ * OpenAI, ...) into the "api" provider tab, next to the custom endpoints.
+ */
+export function syncKeyedProvidersToHarness(
+  models: readonly {
+    id: string;
+    provider: string;
+    providerName: string;
+    label: string;
+    contextWindow?: number;
+  }[],
+): void {
+  apiProviderModels = models.map((model) => ({
+    id: `${API_PROVIDER_MODEL_PREFIX}${model.provider}:${model.id}`,
+    harness: "api",
+    name: model.label,
+    nativeId: model.id,
+    provider: { id: model.provider, name: model.providerName },
+    contextWindow: model.contextWindow || 128_000,
+  }));
+  setHarnessModels("api", [...apiEndpointModels, ...apiProviderModels]);
 }
 
 /** True after a live CLI catalog has replaced the built-in fallback list. */

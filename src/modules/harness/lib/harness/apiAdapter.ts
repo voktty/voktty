@@ -1,8 +1,21 @@
 import { createProxyFetch } from "@/modules/ai/lib/proxyFetch";
-import { getCustomEndpointKey } from "@/modules/ai/lib/keyring";
-import { parseCompatModelId, type CustomEndpoint } from "@/modules/ai/config";
+import { getAllKeys, getCustomEndpointKey } from "@/modules/ai/lib/keyring";
+import {
+  getProvider,
+  MODEL_CONTEXT_LIMITS,
+  MODELS,
+  parseCompatModelId,
+  providerNeedsKey,
+  type CustomEndpoint,
+  type ProviderId,
+} from "@/modules/ai/config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { syncCustomEndpointsToHarness } from "../models";
+import { onKeysChanged } from "@/modules/settings/store";
+import {
+  API_PROVIDER_MODEL_PREFIX,
+  syncCustomEndpointsToHarness,
+  syncKeyedProvidersToHarness,
+} from "../models";
 import { registerHarness, type HarnessAdapter } from "./registry";
 import type {
   ApprovalDecision,
@@ -20,6 +33,27 @@ async function resolveApiModel(
   modelId: string,
   endpoints: readonly CustomEndpoint[],
 ): Promise<LanguageModel> {
+  if (modelId.startsWith(API_PROVIDER_MODEL_PREFIX)) {
+    const raw = modelId.slice(API_PROVIDER_MODEL_PREFIX.length);
+    const colonIndex = raw.indexOf(":");
+    const provider = raw.slice(0, colonIndex) as ProviderId;
+    const chatModelId = raw.slice(colonIndex + 1);
+    const keys = await getAllKeys();
+    const local = localProviderConfig();
+    if (
+      colonIndex <= 0 ||
+      !availableProviderModels(keys, local).some(
+        (model) => model.provider === provider && model.id === chatModelId,
+      )
+    ) {
+      throw new Error(`API model is not configured: ${modelId}`);
+    }
+    const { buildConfiguredLanguageModel } = await import(
+      "@/modules/ai/lib/agent"
+    );
+    return buildConfiguredLanguageModel(chatModelId, keys, local);
+  }
+
   let endpointId = "";
   let subModelId = "";
 
@@ -179,9 +213,95 @@ export function bindApiSession(
   // Stateless resume
 }
 
+function localProviderConfig() {
+  const prefs = usePreferencesStore.getState();
+  return {
+    lmstudioBaseURL: prefs.lmstudioBaseURL,
+    lmstudioModelId: prefs.lmstudioModelId,
+    mlxBaseURL: prefs.mlxBaseURL,
+    mlxModelId: prefs.mlxModelId,
+    ollamaBaseURL: prefs.ollamaBaseURL,
+    ollamaModelId: prefs.ollamaModelId,
+    openaiCompatibleBaseURL: prefs.openaiCompatibleBaseURL,
+    openaiCompatibleModelId: prefs.openaiCompatibleModelId,
+    openrouterModelId: prefs.openrouterModelId,
+    customEndpoints: prefs.customEndpoints,
+  };
+}
+
+type LocalConfig = ReturnType<typeof localProviderConfig>;
+
+const filled = (value: string | undefined) => !!value?.trim();
+
+/**
+ * Every chat model a configured provider can serve without the OAuth agents,
+ * which already have their own tabs: cloud providers with a saved key, plus
+ * OpenRouter, LM Studio, MLX, Ollama and the OpenAI-compatible slot once
+ * their model id (and base URL) is set. Custom and third-party endpoints are
+ * listed separately from the endpoint list.
+ */
+function availableProviderModels(
+  keys: Awaited<ReturnType<typeof getAllKeys>>,
+  local: LocalConfig,
+) {
+  // A third-party connection also saves the provider key; its endpoint
+  // already lists the models, so the built-in entries would be duplicates.
+  const viaEndpoint = new Set(
+    (local.customEndpoints ?? []).flatMap((endpoint) =>
+      endpoint.providerType ? [endpoint.providerType] : [],
+    ),
+  );
+  return MODELS.filter((model) => {
+    const provider: ProviderId = model.provider;
+    if (provider === "harness" || viaEndpoint.has(provider)) return false;
+    if (providerNeedsKey(provider) && !keys[provider]) return false;
+    switch (model.id) {
+      case "openrouter-custom":
+        return filled(local.openrouterModelId);
+      case "openai-compatible-custom":
+        return (
+          filled(local.openaiCompatibleBaseURL) &&
+          filled(local.openaiCompatibleModelId)
+        );
+      case "lmstudio-local":
+        return filled(local.lmstudioModelId);
+      case "mlx-local":
+        return filled(local.mlxModelId);
+      case "ollama-local":
+        return filled(local.ollamaModelId);
+      default:
+        return providerNeedsKey(provider);
+    }
+  });
+}
+
+function providerModelLabel(model: (typeof MODELS)[number], local: LocalConfig) {
+  const configured: Partial<Record<string, string>> = {
+    "openrouter-custom": local.openrouterModelId,
+    "openai-compatible-custom": local.openaiCompatibleModelId,
+    "lmstudio-local": local.lmstudioModelId,
+    "mlx-local": local.mlxModelId,
+    "ollama-local": local.ollamaModelId,
+  };
+  const id = configured[model.id]?.trim();
+  return id ? `${model.label}: ${id}` : model.label;
+}
+
 export async function refreshApiCatalog(): Promise<void> {
   const endpoints = usePreferencesStore.getState().customEndpoints ?? [];
   syncCustomEndpointsToHarness(endpoints);
+  const keys = await getAllKeys().catch(() => null);
+  if (!keys) return;
+  const local = localProviderConfig();
+  syncKeyedProvidersToHarness(
+    availableProviderModels(keys, local).map((model) => ({
+      id: model.id,
+      provider: model.provider,
+      providerName: getProvider(model.provider).label,
+      label: providerModelLabel(model, local),
+      contextWindow: MODEL_CONTEXT_LIMITS[model.id],
+    })),
+  );
 }
 
 export const apiAdapter: HarnessAdapter = {
@@ -204,4 +324,19 @@ export function ensureApiRegistered(): void {
   if (registered) return;
   registerHarness(apiAdapter);
   registered = true;
+  // A key saved or removed in Settings changes which API models exist.
+  void onKeysChanged(() => void refreshApiCatalog()).catch(() => undefined);
+  usePreferencesStore.subscribe((state, previous) => {
+    if (
+      state.customEndpoints !== previous.customEndpoints ||
+      state.lmstudioModelId !== previous.lmstudioModelId ||
+      state.mlxModelId !== previous.mlxModelId ||
+      state.ollamaModelId !== previous.ollamaModelId ||
+      state.openaiCompatibleBaseURL !== previous.openaiCompatibleBaseURL ||
+      state.openaiCompatibleModelId !== previous.openaiCompatibleModelId ||
+      state.openrouterModelId !== previous.openrouterModelId
+    )
+      void refreshApiCatalog();
+  });
+  void refreshApiCatalog();
 }

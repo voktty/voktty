@@ -197,27 +197,6 @@ export const CLAUDE_MODEL_CATALOG: AgentModel[] = [
     settings: [EFFORT_LOW_TO_ULTRATHINK, contextWindow("200k")],
   },
   {
-    id: "claude:opus-4.5",
-    harness: "claude",
-    name: "Claude Opus 4.5",
-    nativeId: "claude-opus-4-5",
-    settings: [
-      {
-        id: "effort",
-        label: "Reasoning",
-        kind: "select",
-        value: "high",
-        options: [
-          { value: "low", label: "Low" },
-          { value: "medium", label: "Medium" },
-          { value: "high", label: "High" },
-          { value: "max", label: "Max" },
-        ],
-      },
-      FAST_MODE,
-    ],
-  },
-  {
     id: "claude:haiku-4.5",
     harness: "claude",
     name: "Claude Haiku 4.5",
