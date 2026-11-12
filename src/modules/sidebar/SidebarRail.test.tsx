@@ -42,3 +42,37 @@ it("keeps all views accessible and lets the active view close and reopen", async
     vi.unstubAllGlobals();
   }
 });
+
+it("pins the footer below the view icons", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        <TooltipProvider>
+          <SidebarRail
+            activeView="explorer"
+            onSelectView={() => {}}
+            changedCount={0}
+            workspaceRoot={null}
+            footer={<span data-testid="rail-footer">0H</span>}
+          />
+        </TooltipProvider>,
+      ),
+    );
+    const footer = container.querySelector('[data-testid="rail-footer"]');
+    expect(footer).not.toBeNull();
+    const lastView = [...container.querySelectorAll("button")].at(-1);
+    if (!lastView || !footer) throw new Error("Missing rail elements");
+    expect(
+      lastView.compareDocumentPosition(footer) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

@@ -27,12 +27,16 @@ import {
 type Props = {
   cwd?: string | null;
   className?: string;
+  /** "rail" stacks the badge to fit the vertical activity bar. */
+  variant?: "inline" | "rail";
 };
 
 export const ConsoleUptimeWidget = memo(function ConsoleUptimeWidget({
   cwd,
   className,
+  variant = "inline",
 }: Props) {
+  const rail = variant === "rail";
   const { t } = useTranslation();
   const sessionStart = useUptimeStore((s) => s.sessionStart);
   const history = useUptimeStore((s) => s.history);
@@ -67,7 +71,10 @@ export const ConsoleUptimeWidget = memo(function ConsoleUptimeWidget({
           onClick={() => setOpen((v) => !v)}
           aria-label={`${t("statusbar.uptime.title")}: ${sessionHours}H`}
           className={cn(
-            "group/uptime inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-all shadow-none select-none cursor-pointer active:scale-97",
+            "group/uptime inline-flex items-center rounded-md border text-[10px] font-medium transition-all shadow-none select-none cursor-pointer active:scale-97",
+            rail
+              ? "w-8.5 flex-col gap-0.5 px-0.5 py-1"
+              : "h-5.5 gap-1.5 px-2 py-0.5",
             colorLevel.badgeClass,
             className,
           )}
@@ -91,8 +98,8 @@ export const ConsoleUptimeWidget = memo(function ConsoleUptimeWidget({
       </HoverCardTrigger>
 
       <HoverCardContent
-        side="top"
-        align="start"
+        side={rail ? "right" : "top"}
+        align={rail ? "end" : "start"}
         sideOffset={6}
         className="w-80 p-3 bg-popover/95 backdrop-blur-md border border-border/70 rounded-xl shadow-2xl space-y-3 select-none"
       >

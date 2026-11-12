@@ -20,7 +20,7 @@ import {
   PlayIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import type { SidebarViewId } from "./types";
 
 export const SIDEBAR_RAIL_WIDTH = 44;
@@ -38,6 +38,8 @@ type Props = {
   onSelectView: (view: SidebarViewId) => void;
   changedCount: number;
   workspaceRoot: string | null;
+  /** Pinned to the bottom of the bar, below the view icons. */
+  footer?: ReactNode;
 };
 
 export function SidebarRail({
@@ -45,6 +47,7 @@ export function SidebarRail({
   onSelectView,
   changedCount,
   workspaceRoot,
+  footer,
 }: Props) {
   const { t } = useTranslation();
   const problemDocuments = useDiagnosticsStore(
@@ -162,6 +165,9 @@ export function SidebarRail({
           </Tooltip>
         );
       })}
+      {footer ? (
+        <div className="mt-auto flex flex-col items-center pb-1">{footer}</div>
+      ) : null}
     </div>
   );
 }

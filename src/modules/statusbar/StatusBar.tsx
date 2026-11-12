@@ -35,7 +35,6 @@ import { DiagnosticsBadge } from "./DiagnosticsBadge";
 import { EditorStatus } from "./EditorStatus";
 import { WorkspaceEnvSelector } from "./WorkspaceEnvSelector";
 
-import { ConsoleUptimeWidget } from "./components/ConsoleUptimeWidget";
 import { ProjectToolkitPopover } from "./components/ProjectToolkitPopover";
 import { useArcadeStore } from "./arcadeStore";
 import { PacmanIcon } from "./components/PacmanIcon";
@@ -234,7 +233,6 @@ export function StatusBar({
   return (
     <footer className="flex h-7.5 shrink-0 items-center justify-between gap-2 border-t border-border/30 px-2.5 text-[10.5px]">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <ConsoleUptimeWidget cwd={cwd} />
         <WorkspaceEnvSelector
           onSelect={onWorkspaceChange}
           onConnectSsh={onConnectSsh}

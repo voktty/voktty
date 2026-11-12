@@ -220,7 +220,7 @@ import {
   SshConnectionDialog,
   SshSessionPickerModal,
 } from "@/modules/ssh";
-import { StatusBar } from "@/modules/statusbar";
+import { ConsoleUptimeWidget, StatusBar } from "@/modules/statusbar";
 import {
   ActiveTabsLaunchpad,
   type CloseTabsPlan,
@@ -4908,6 +4908,7 @@ function DesktopApp() {
                 onSelectView={handleSidebarViewSelect}
                 changedCount={sourceControl.changedCount}
                 workspaceRoot={quickOpenRoot}
+                footer={<ConsoleUptimeWidget cwd={activeCwd} variant="rail" />}
               />
             <ResizablePanelGroup
               orientation="horizontal"
