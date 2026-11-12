@@ -5,6 +5,7 @@ import {
   projectKey,
   setRemoteRootLabelResolver,
 } from "@/modules/harness/lib/paths";
+import { IS_WIN } from "@/modules/harness/lib/platform";
 import { saveTabGroupLabel } from "@/modules/harness/lib/tabGroups";
 import { subscribeHarnessProjectRequests } from "@/modules/surfaces/lib/harnessProjectRequest";
 import { subscribeHarnessSourceControl } from "@/modules/source-control/harnessSourceControlRequest";
@@ -137,7 +138,11 @@ async function setup() {
   return { render, open, selected, projectSelected, element };
 }
 
-it.each(["/worktree/project", "remote://voktty-ssh-profile/srv/project"])(
+// A POSIX path is not a local project on Windows, so the local row uses a
+// path the host platform accepts.
+const LOCAL_WORKTREE = IS_WIN ? "c:/worktree/project" : "/worktree/project";
+
+it.each([LOCAL_WORKTREE, "remote://voktty-ssh-profile/srv/project"])(
   "opens the shared Git panel from the diff on its exact project row %s",
   async (path) => {
     mocks.stats = { files: 2, additions: 7, deletions: 3 };
