@@ -26,6 +26,7 @@ import { tmuxAttachCommand } from "../lib/tmux";
 import { type FeedStatus, useAgentFeed } from "../lib/useAgentFeed";
 import type { FeedScope } from "../lib/types";
 import { useAgentAttention } from "../lib/attentionStore";
+import { belongsToClosedAgent, closedAgentNames } from "../lib/closedAgents";
 import "./agentFeed.css";
 
 const HOUR = 3_600_000;
@@ -35,6 +36,23 @@ const RANGES = [
   { ms: 72 * HOUR, key: "agentFeed.range3d" },
 ] as const;
 const VISIBLE_ITEMS = 400;
+const HIDE_CLOSED_KEY = "voktty.agentFeed.hideClosed";
+
+function readHideClosed(): boolean {
+  try {
+    return localStorage.getItem(HIDE_CLOSED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeHideClosed(value: boolean) {
+  try {
+    localStorage.setItem(HIDE_CLOSED_KEY, String(value));
+  } catch {
+    // Storage is optional; the filter still works for this view.
+  }
+}
 const COLLAPSED_CHARS = 420;
 
 type Filter = "message" | "note" | "human" | "presence";
@@ -206,6 +224,7 @@ export function FeedView({
     () => new Set(["message", "note", "human", "presence"]),
   );
   const [agentFilter, setAgentFilter] = useState<string | null>(null);
+  const [hideClosed, setHideClosed] = useState(readHideClosed);
   // Questions the background watcher found on this host: tagged here and
   // marked seen while the log shows them.
   const sourceKey = target.kind === "ssh" ? `ssh:${target.env.connection.id}` : "local";
@@ -248,8 +267,15 @@ export function FeedView({
     [timeline.agents],
   );
 
+  const closed = useMemo(() => closedAgentNames(timeline.agents), [timeline.agents]);
+  // An agent picked on purpose stays visible even after its session closes.
+  const hiding = hideClosed && !(agentFilter && closed.has(agentFilter));
+  const agentCards = hiding
+    ? timeline.agents.filter((agent) => !closed.has(agent.name))
+    : timeline.agents;
   const visible = timeline.items.filter((item) => {
     if (!filters.has(filterOf(item))) return false;
+    if (hiding && belongsToClosedAgent(item, closed)) return false;
     if (!agentFilter) return true;
     if (item.kind === "message") return item.from === agentFilter || item.to === agentFilter;
     return item.agent === agentFilter;
@@ -317,7 +343,7 @@ export function FeedView({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {timeline.agents.map((agent) => (
+        {agentCards.map((agent) => (
           <AgentCard
             key={agent.name}
             agent={agent}
@@ -330,6 +356,23 @@ export function FeedView({
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
+        <button
+          type="button"
+          className={cn(
+            "agent-feed-chip cursor-pointer",
+            hideClosed ? "text-foreground" : "text-muted-foreground opacity-60",
+          )}
+          aria-pressed={hideClosed}
+          disabled={closed.size === 0}
+          onClick={() => {
+            const next = !hideClosed;
+            setHideClosed(next);
+            writeHideClosed(next);
+          }}
+        >
+          {t("agentFeed.hideClosed", { count: closed.size })}
+        </button>
+        <span className="w-2" />
         {FILTERS.map((filter) => (
           <button
             key={filter.id}

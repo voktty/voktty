@@ -6826,6 +6826,7 @@ export const en = {
     filterNotes: "To you",
     filterHuman: "Your prompts",
     filterPresence: "Arrivals and departures",
+    hideClosed: "Hide closed ({count})",
     filterAgent: "Show only {agent}",
     orchestrator: "Orchestrator",
     statusBusy: "working",

@@ -6963,6 +6963,7 @@ export const es: TranslationSchema = {
     filterNotes: "Para ti",
     filterHuman: "Tus órdenes",
     filterPresence: "Entradas y salidas",
+    hideClosed: "Ocultar cerrados ({count})",
     filterAgent: "Ver solo {agent}",
     orchestrator: "Orquestador",
     statusBusy: "trabajando",
