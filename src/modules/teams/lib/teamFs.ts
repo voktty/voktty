@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ensureDirectory, nativeProjectPath, readTextFile, writeTextFile } from "@/modules/teams/lib/teamFileIo";
+import {
+  ensureDirectory,
+  isNotFoundError,
+  nativeProjectPath,
+  readTextFile,
+  writeTextFile,
+} from "@/modules/teams/lib/teamFileIo";
 import type { AgentRoster } from "@/modules/workspace-kit/lib/configTypes";
 import { validateRoster } from "./rosterValidation";
 import {
@@ -64,6 +70,9 @@ export async function readRoster(
   try {
     content = await readTextFile(filePath);
   } catch (error) {
+    // A project without a team yet is not a broken team: the board offers
+    // to add the first agent instead of reporting a configuration error.
+    if (isNotFoundError(error)) return { roster: null };
     return {
       roster: null,
       error: `Could not read roster at ${filePath}: ${error instanceof Error ? error.message : String(error)}`,

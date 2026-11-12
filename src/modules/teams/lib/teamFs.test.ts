@@ -82,6 +82,29 @@ describe("teamFs", () => {
     expect(result.error).toContain("agents.0.runtime.adapter");
   });
 
+  it("treats a project without a roster as an empty team, locally and over SSH", async () => {
+    vi.mocked(readTextFile).mockRejectedValueOnce(
+      new Error("No such file or directory (os error 2)"),
+    );
+    expect(await readRoster("/repo")).toEqual({ roster: null });
+    vi.mocked(readTextFile).mockRejectedValueOnce("not_found: not_found");
+    expect(await readRoster("/repo")).toEqual({ roster: null });
+  });
+
+  it("still reports a roster that exists but cannot be read", async () => {
+    vi.mocked(readTextFile).mockRejectedValueOnce(
+      new Error("permission_denied: access denied"),
+    );
+    const result = await readRoster("/repo");
+    expect(result.roster).toBeNull();
+    expect(result.error).toContain("permission_denied");
+  });
+
+  it("does not mistake an agent lookup failure for a missing file", async () => {
+    vi.mocked(readTextFile).mockRejectedValueOnce(new Error("agent_not_found"));
+    expect((await readRoster("/repo")).error).toContain("agent_not_found");
+  });
+
   it("reads role content", async () => {
     vi.mocked(readTextFile).mockResolvedValueOnce("# Developer role\nDo work.");
     const content = await readRole("/repo", "roles/developer.md");

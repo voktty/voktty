@@ -52,3 +52,35 @@ export async function nativeProjectPath(projectPath: string): Promise<string> {
   );
   return `${namespace}${root}`;
 }
+
+/** True when a local or remote read failed because the file does not exist. */
+export function isNotFoundError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === "object") {
+    const errorObj = err as { code?: string; message?: string };
+    if (errorObj.code === "ENOENT" || errorObj.code === "not_found") {
+      return true;
+    }
+    const msg = errorObj.message || "";
+    if (
+      // The remote helper reports `not_found: <detail>`.
+      /^not_found(:|$)/.test(msg) ||
+      msg.includes("ENOENT") ||
+      msg.includes("not found") ||
+      msg.includes("No such file") ||
+      msg.includes("os error 2")
+    ) {
+      return true;
+    }
+  }
+  if (typeof err === "string") {
+    return (
+      /^not_found(:|$)/.test(err) ||
+      err.includes("ENOENT") ||
+      err.includes("not found") ||
+      err.includes("No such file") ||
+      err.includes("os error 2")
+    );
+  }
+  return false;
+}

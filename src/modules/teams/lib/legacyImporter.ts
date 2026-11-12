@@ -1,4 +1,8 @@
-import { readTextFile, writeTextFile } from "@/modules/teams/lib/teamFileIo";
+import {
+  isNotFoundError,
+  readTextFile,
+  writeTextFile,
+} from "@/modules/teams/lib/teamFileIo";
 import type {
   AgentDefinition,
   AgentRoster,
@@ -493,33 +497,6 @@ export async function previewLegacyImport(
   };
 }
 
-function isNotFoundError(err: unknown): boolean {
-  if (!err) return false;
-  if (typeof err === "object") {
-    const errorObj = err as { code?: string; message?: string };
-    if (errorObj.code === "ENOENT" || errorObj.code === "not_found") {
-      return true;
-    }
-    const msg = errorObj.message || "";
-    if (
-      msg.includes("ENOENT") ||
-      msg.includes("not found") ||
-      msg.includes("No such file") ||
-      msg.includes("os error 2")
-    ) {
-      return true;
-    }
-  }
-  if (typeof err === "string") {
-    return (
-      err.includes("ENOENT") ||
-      err.includes("not found") ||
-      err.includes("No such file") ||
-      err.includes("os error 2")
-    );
-  }
-  return false;
-}
 
 export async function applyLegacyImport(
   projectRoot: string,
