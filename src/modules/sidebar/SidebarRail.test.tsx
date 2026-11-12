@@ -64,7 +64,8 @@ it("pins the footer below the view icons", async () => {
     );
     const footer = container.querySelector('[data-testid="rail-footer"]');
     expect(footer).not.toBeNull();
-    const lastView = [...container.querySelectorAll("button")].at(-1);
+    const views = container.querySelectorAll("button");
+    const lastView = views[views.length - 1];
     if (!lastView || !footer) throw new Error("Missing rail elements");
     expect(
       lastView.compareDocumentPosition(footer) &
