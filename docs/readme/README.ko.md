@@ -1,7 +1,7 @@
 <div align="center">
   <img src="../../voktty-svg.svg" width="144" height="144" alt="Voktty" />
   <h1>Voktty</h1>
-  <p><strong>가볍고 터미널 중심인 AI 네이티브 개발 워크스페이스.</strong></p>
+  <p><strong>코딩 에이전트가 일하는 워크스페이스.</strong></p>
   <p><a href="https://voktty.dev">웹사이트</a> · <a href="https://voktty.dev/docs">문서</a> · <a href="https://github.com/voktty/voktty">웹사이트 소스 코드</a></p>
 
   <p>
@@ -19,84 +19,49 @@
 
 ---
 
-Voktty는 Tauri 2 + Rust와 React 19로 만든 가볍고 오픈 소스이며 터미널 중심인 AI 네이티브 개발 환경(ADE)입니다. WebGL 렌더러를 갖춘 네이티브 PTY 백엔드, 사용자의 키나 완전한 로컬 모델로 실행되는 에이전트형 AI 사이드 패널, 코드 편집기, 파일 탐색기, Git 그래프를 포함한 소스 제어, 웹 미리보기 패널이 내장되어 있습니다. 디스크 사용량은 약 7-8 MB입니다. 원격 측정 없음. 계정 필요 없음.
+Voktty는 AI 코딩 에이전트를 위한 오픈 소스 데스크톱 워크스페이스로, Tauri 2, Rust, React 19로 만들어졌습니다. Agent Harness는 Claude Code, Codex, Gemini(Antigravity 경유), Cursor, Grok, OpenCode, Pi, 그리고 API로 접근하는 모든 모델을 로컬 및 SSH 프로젝트에서 실행하며, 승인, 변경 검토, 공유 프로젝트 메모리, 팀 협업을 제공합니다. 주변에는 네이티브 터미널, 코드 편집기, Git, 그리고 로컬, WSL, SSH, Docker, 시리얼, 원격 데스크톱 환경이 있습니다. 계정 불필요, 텔레메트리 없음. 설치 파일 크기는 25~36 MB입니다(v1.0.27, Linux AppImage는 약 118 MB).
 
 ## 스크린샷
 
+스크린샷은 스페인어 인터페이스를 사용합니다. 더 많은 이미지는 [갤러리](../screenshots.md)에서 볼 수 있습니다.
+
 <p align="center">
-  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty 작업 공간" /><br/><sub>터미널, AI 어시스턴트, 다중 환경 세션 선택기</sub>
+  <img src="../images/harness-session-review.png" width="800" alt="Agent Harness: 에이전트가 프로젝트를 편집하면 변경 사항이 유지하거나 되돌릴 수 있는 diff로 표시됩니다" /><br/><sub>Agent Harness: 에이전트가 프로젝트를 편집하면 변경 사항이 유지하거나 되돌릴 수 있는 diff로 표시됩니다</sub>
 </p>
 
-## 기능
+<p align="center">
+  <img src="../images/ssh-project-terminal.png" width="800" alt="SSH 프로젝트: 원격 파일과 서버의 실시간 터미널을 나란히 표시" /><br/><sub>SSH 프로젝트: 원격 파일과 서버의 실시간 터미널을 나란히 표시</sub>
+</p>
 
-### 터미널
+<p align="center">
+  <img src="../images/terminal-ai-chat.png" width="800" alt="활성 터미널의 디렉터리, 최근 명령, 출력을 읽는 플로팅 AI 채팅" /><br/><sub>활성 터미널의 디렉터리, 최근 명령, 출력을 읽는 플로팅 AI 채팅</sub>
+</p>
 
-- WebGL 렌더러, 다중 탭, 백그라운드 스트리밍을 지원하는 xterm.js
-- 편집기와 같은 명령 입력을 갖춘 GPU 가속 블록 기반 터미널
-- `portable-pty`를 통한 네이티브 PTY 백엔드(zsh, bash, pwsh, fish, cmd)
-- 가로 및 세로 분할 패널
-- 인라인 검색, 링크 감지, 트루 컬러
-- 탐색기나 데스크톱의 파일을 셸에서 안전하게 인용된 경로로 터미널에 드래그
-- Windows의 탭별 워크스페이스 환경(Local 또는 설치된 WSL 배포판)
-- Spaces가 탭, 작업 디렉터리, 분할 레이아웃을 다음 실행 시 복원
+## 제공하는 기능
 
-### 코드 편집기
+### 에이전트
 
-- CodeMirror 6(TS/JS, Rust, Python, Go, C/C++, Java, HTML/CSS, JSON, Markdown 등 주요 언어 지원)
-- 로컬 모델을 지원하는 인라인 AI 자동 완성
-- AI 편집 차이를 헝크별로 수락하거나 거부
-- 진단, 탐색, 완성, 포매팅, 사용자 지정 서버를 제공하는 선택형 언어 서버
-- Markdown 렌더링과 이미지, 비디오, 오디오, PDF 보기
-- Vim 모드
-- Kanagawa, Catppuccin, Rosé Pine, Everforest, Dracula, Solarized, Nord, Tokyo Night, GitHub, Xcode 등의 내장 테마
+- **여러 에이전트를 한곳에서.** Claude Code, Codex, Antigravity(Gemini), Cursor, Grok, OpenCode, Pi 세션을 나란히 실행하며, 각각 자체 CLI와 로그인을 사용합니다.
+- **모든 API 모델을 에이전트로.** 클라우드 제공업체, 사용자 지정 엔드포인트, 로컬 Ollama, LM Studio, MLX 모델이 AI 채팅과 같은 워크스페이스 및 비밀 경로 검사를 거쳐 프로젝트에서 읽고, 검색하고, 편집하고, 명령을 실행할 수 있습니다. 에이전트 루프와 키는 내 컴퓨터에 남습니다.
+- **어디까지 허용할지는 직접 정합니다.** 감독 세션은 쓰기나 명령 전에 매번 묻고, 전체 액세스는 묻지 않습니다. 편집 내용은 유지하거나 되돌릴 수 있는 diff로 표시됩니다.
+- **내 서버의 에이전트.** SSH 프로젝트에서는 Claude Code, Codex, OpenCode가 호스트에서 실행되며 연결이 끊겨도 멈추지 않습니다. API 모델은 원격 파일을 읽고, 검색하고, 편집하며, 원격 헬퍼가 최신이면 명령도 실행합니다.
+- **에이전트 팀.** 역할과 규칙이 있는 명단, 누가 작업 중이거나 대기 중인지 보여 주는 보드, 다른 에이전트를 시작하고 메시지를 보내는 오케스트레이터, 그리고 서로와 사용자에게 한 말의 기록. [에이전트 팀 가이드](../guides/agent-teams.md)를 참고하세요.
+- **메모리와 상태 표시.** 에이전트가 프로젝트에 대해 기억하는 내용을 확인하고 복원하며, 열려 있는 어느 호스트에서든 에이전트가 사용자를 기다리면 알림을 받고, 선택 사항인 Notch(알파)에서 실행 중인 에이전트를 볼 수 있습니다.
 
-### 소스 제어
+### 그 주변의 워크스페이스
 
-- 헝크 스테이지 / 스테이지 해제, 커밋(Cmd+Enter / Ctrl+Enter), 업스트림을 인식하는 푸시
-- 분리된 HEAD 상태를 포함한 브랜치 표시
-- 병합과 브랜치 레인을 그리는 실제 커밋 그래프가 있는 Git 히스토리
-- 커밋 검색 및 필터, 원격 커밋 페이지 열기
+- **터미널.** WebGL 렌더링을 사용하는 네이티브 PTY, 원시 및 블록 모드, 패널, 스페이스, 비공개 터미널.
+- **편집기.** CodeMirror 6, 선택형 LSP, AI 자동 완성과 편집, Quick Open, 미리 보기 중심의 검색 및 바꾸기.
+- **Git.** 소스 제어, 커밋 그래프가 있는 기록, worktree, AI 지원 커밋.
+- **환경.** 로컬, WSL, SSH, Docker, 시리얼, RDP. 저장된 연결, 터널, 서버 대시보드를 지원합니다.
+- **미리 보기와 도구.** 로컬 개발 서버 미리 보기(SSH 경유 포함), 미디어 및 PDF 뷰어, API 클라이언트, MCP 클라이언트.
+- **휴대폰 동반 앱.** QR 코드로 연결해 로컬 네트워크에서 AI 세션을 확인하고 제어하는 미리 보기 Android 앱.
 
-### 파일 탐색기
+### 기본적으로 비공개
 
-- Catppuccin 아이콘 테마
-- 퍼지 검색, 키보드 탐색, 인라인 이름 변경, 컨텍스트 작업
-- 디스크에서 파일이 바뀌면 실시간 업데이트
-- 파일과 선택 항목을 AI 사이드 패널에 직접 첨부
+계정이 필요 없고 Voktty 텔레메트리도 없습니다. 제공업체 키는 OS 키체인에 저장되고, 네이티브 파일 시스템 접근은 워크스페이스별로 승인되며, AI 파일 도구는 비밀 경로를 거부하고, 전체 액세스를 허용하지 않는 한 변경을 일으키는 모든 도구 호출은 먼저 묻습니다.
 
-### 웹 미리보기
-
-- 로컬 개발 서버를 자동 감지해 미리보기 탭에서 열기
-- 네이티브 자식 WebView를 통한 외부 URL 미리보기
-
-### 테마와 사용자 지정
-
-- 앱에서 사용자 지정 테마를 만들고 내장 프리셋과 전환
-- 테마를 공유하거나 커뮤니티에서 가져오기
-- 불투명도와 블러를 조절할 수 있는 배경 이미지
-- 편집기 테마는 앱 테마와 독립적
-
-### AI
-
-- **BYOK 제공자:** OpenAI, Anthropic, Google(Gemini), Groq, xAI(Grok), Cerebras, OpenRouter, DeepSeek, Mistral 및 모든 OpenAI 호환 엔드포인트
-- **로컬 / 오프라인:** LM Studio, MLX, Ollama
-- **에이전트형 워크플로:** 계획, 하위 에이전트, `VOKTTY.md`를 통한 프로젝트 메모리, 파일 읽기 / 쓰기 / 편집 / 다중 편집 / grep / glob, 승인형 bash, 백그라운드 프로세스
-- **코딩 에이전트 오케스트레이션:** 터미널에서 Claude Code를 실행하고 출력을 확인한 뒤 승인형 도구로 후속 작업 전송
-- **작성기:** `#handle` 프롬프트 스니펫, `@path` 파일, 음성 입력, 탐색기나 선택 항목에서 에이전트로 첨부
-- 자체 시스템 프롬프트와 도구 하위 집합을 가진 **사용자 지정 에이전트**
-- 실행 전에 계획을 만들고 확인하는 **계획 모드**
-
-## Voktty 최신 기능
-
-- **평면 복합 Spaces:** 독립 탭은 이름이 있는 Spaces와 분리됩니다. 구성원을 결정적으로 재정렬할 수 있으며 2, 4, 6 또는 8개의 뷰를 지원하고 중첩 Spaces는 허용하지 않습니다.
-- **IDE 및 디버깅:** CodeMirror 6, 심볼 탐색, Problems 패널, 코드 작업, Ghost 자동 완성, 검토 가능한 diff 변경과 호환 어댑터가 설정된 경우의 DAP 디버깅을 제공합니다.
-- **안전한 MCP 클라이언트:** 로컬 stdio 서버 또는 원격 Streamable HTTP 서버에 연결할 수 있습니다. 도구는 검증되며 변경 작업에는 네이티브 일회성 승인이 필요합니다.
-- **네이티브 확장:** `~/.voktty/extensions/`의 JavaScript 확장으로 명령, 단축키, AI 도구, 알림 및 workspace 작업을 추가할 수 있습니다. Voktty API이며 VS Code 확장 호환 계층은 아닙니다.
-- **터미널 협업:** 관찰자와 제어자 역할, 추가 암호화, 읽기 전용 원격 파일 인용을 지원하는 터미널 임시 공유 기능입니다.
-- **연결 및 성능:** Local, WSL, SSH, Docker 및 serial 환경이 연결 수명 주기를 표시하며, 숨겨진 터미널은 활성 프로세스를 중지하지 않고 비용이 큰 렌더러를 해제합니다.
-- **에이전트 상태 표시:** 역할별 아바타, 외부 에이전트용 애니메이션 아이콘, 저장·Git·Problems·디버깅·에이전트 응답용 선택적 로컬 사운드를 제공하고 동작 줄이기 설정을 지원합니다.
-
-보안 경계와 플랫폼별 지원을 포함한 전체 최신 기능 목록은 [영문 README](../../README.md)에서 확인할 수 있습니다.
+전체 기능 목록은 [docs/features.md](../features.md)(영어)에 있습니다.
 
 ## 설치
 
@@ -113,11 +78,11 @@ Voktty는 Tauri 2 + Rust와 React 19로 만든 가볍고 오픈 소스이며 터
 - **NixOS / Nix:** 공식 flake를 사용하세요. NixOS 외부에서는 `nix profile install github:voktty/voktty`를 실행합니다. NixOS에서는 flake를 가져오고 `inputs.voktty.packages.${pkgs.system}.voktty`를 `environment.systemPackages`에 추가합니다. 더 간단한 설정에는 `nixosModules.voktty`도 있습니다.
 - **AppImage:** FUSE가 필요합니다. 없다면 `./Voktty_*.AppImage --appimage-extract-and-run`을 실행하세요. Wayland 렌더링 문제가 있으면 `WEBKIT_DISABLE_DMABUF_RENDERER=1`을 시도하세요. `.deb` / `.rpm` 패키지는 시스템 GTK 스택을 사용해 보통 더 부드럽습니다.
 
-## AI 설정
+## 에이전트와 AI 설정
 
-1. **설정 -> AI**를 엽니다.
-2. 제공자를 선택하고 API 키를 붙여 넣습니다. 로컬 추론은 LM Studio / MLX / Ollama 엔드포인트를 지정합니다.
-3. 키는 `keyring`을 통해 OS 키체인에 저장됩니다. 디스크나 localStorage에는 기록되지 않습니다.
+1. **코딩 에이전트.** 사용하는 에이전트 CLI(예: Claude Code 또는 Codex)를 설치하고 평소처럼 로그인하세요. Voktty가 이를 찾아 각자의 로그인을 사용합니다. SSH 프로젝트에서는 서버에 설치하세요.
+2. **API 모델.** 설정을 열어 **AI 모델**로 이동한 뒤 키가 있는 제공업체나 사용자 지정 엔드포인트를 추가하거나, 로컬 LM Studio, MLX, Ollama 서버를 지정하세요. 그러면 모델이 Harness 모델 선택기의 **API** 아래에 나타납니다.
+3. 키는 `keyring`을 통해 OS 키체인에 저장되며 `localStorage`에는 저장되지 않습니다. 세션 버스나 Secret Service가 없는 Linux에서는 Voktty가 모드 0600의 비공개 대체 파일을 사용합니다.
 
 ## 소스에서 빌드
 
@@ -147,11 +112,11 @@ cd src-tauri && cargo nextest run --locked                           # 또는 ca
 
 ## 기술 스택
 
-Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 6, Vercel AI SDK v6, Tailwind v4, shadcn/ui, Zustand.
+Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 6, Vercel AI SDK, Tailwind v4, shadcn/ui, Zustand.
 
 ## 기여
 
-Issue와 PR을 환영합니다. 문제를 보고하고 기능을 제안하거나 Pull Request를 제출하세요. 자세한 내용은 [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md)와 [아키텍처 문서](../README.md)를 참조하세요.
+Issue와 PR을 환영합니다. 문제를 보고하고 기능을 제안하거나 Pull Request를 제출하세요. 자세한 내용은 [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md)와 [아키텍처 문서](../README.md)를 참조하세요. 프로젝트의 방향은 [로드맵](../../ROADMAP.md)에 있습니다.
 
 ## 플랫폼 서명 상태
 
@@ -162,6 +127,10 @@ Issue와 PR을 환영합니다. 문제를 보고하고 기능을 제안하거나
 플랫폼 인증서와 공증은 안정 버전 배포 전에 추가됩니다.
 
 <br clear="left" />
+
+## 출처와 저작자 표시
+
+Voktty는 Terax(Crynta)에서 독립한 포크이며, Agent Harness는 MonoCode(MIT, 작성자 Nick)에서 파생되었습니다. 두 저작자 모두 Voktty와 제휴 관계가 아니며 이를 보증하지 않습니다. [NOTICE](../../NOTICE)와 [LICENSE](../../LICENSE)를 참고하세요.
 
 ## 라이선스
 

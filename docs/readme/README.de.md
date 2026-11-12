@@ -2,7 +2,7 @@
   <img src="../../voktty-svg.svg" width="144" height="144" alt="Voktty" />
   <h1>Voktty</h1>
 
-  <p><strong>Leichtgewichtiger, terminalorientierter und KI-nativer Entwicklungsarbeitsbereich.</strong></p>
+  <p><strong>Der Arbeitsplatz, an dem deine Coding-Agenten arbeiten.</strong></p>
 
   <p>
     <a href="https://voktty.dev">Website</a> ·
@@ -35,84 +35,49 @@
 
 ---
 
-Voktty ist eine leichtgewichtige, quelloffene, terminalorientierte und KI-native Entwicklungsumgebung (ADE), die auf Tauri 2 + Rust und React 19 basiert. Sie bietet ein natives PTY-Backend mit WebGL-Renderer, eine agentische KI-Seitenleiste für eigene Schlüssel oder vollständig lokale Modelle sowie einen Code-Editor, Datei-Explorer, Quellcodeverwaltung mit Git-Graph und eine integrierte Webvorschau. Etwa 7-8 MB auf der Festplatte. Keine Telemetrie. Kein Konto.
+Voktty ist ein quelloffener Desktop-Arbeitsplatz für KI-Coding-Agenten, gebaut mit Tauri 2, Rust und React 19. Das Agent Harness führt Claude Code, Codex, Gemini (über Antigravity), Cursor, Grok, OpenCode, Pi und jedes Modell aus, das du per API erreichst, in lokalen und SSH-Projekten aus, mit Freigaben, Änderungsprüfung, gemeinsamem Projektgedächtnis und Team-Koordination. Darum herum gibt es ein natives Terminal, einen Code-Editor, Git sowie lokale, WSL-, SSH-, Docker-, serielle und Remote-Desktop-Umgebungen. Kein Konto, keine Telemetrie. Die Installer sind 25 bis 36 MB groß (v1.0.27; das Linux-AppImage etwa 118 MB).
 
 ## Screenshots
 
+Die Aufnahmen zeigen eine spanische Oberfläche; weitere findest du in der [Galerie](../screenshots.md).
+
 <p align="center">
-  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty-Arbeitsbereich" /><br/><sub>Terminal, KI-Assistent und Umgebungsauswahl für mehrere Sitzungen</sub>
+  <img src="../images/harness-session-review.png" width="800" alt="Agent Harness: Ein Agent bearbeitet ein Projekt, seine Änderungen erscheinen als Diff zum Behalten oder Rückgängigmachen" /><br/><sub>Agent Harness: Ein Agent bearbeitet ein Projekt, seine Änderungen erscheinen als Diff zum Behalten oder Rückgängigmachen</sub>
 </p>
 
-## Funktionen
+<p align="center">
+  <img src="../images/ssh-project-terminal.png" width="800" alt="SSH-Projekt: Remote-Dateien neben einem Live-Terminal auf dem Server" /><br/><sub>SSH-Projekt: Remote-Dateien neben einem Live-Terminal auf dem Server</sub>
+</p>
 
-### Terminal
+<p align="center">
+  <img src="../images/terminal-ai-chat.png" width="800" alt="Schwebender KI-Chat, der Verzeichnis, letzte Befehle und Ausgabe des aktiven Terminals liest" /><br/><sub>Schwebender KI-Chat, der Verzeichnis, letzte Befehle und Ausgabe des aktiven Terminals liest</sub>
+</p>
 
-- xterm.js mit WebGL-Renderer, mehreren Tabs und Hintergrund-Streaming
-- GPU-beschleunigtes blockbasiertes Terminal mit editorähnlicher Befehlseingabe
-- Natives PTY-Backend über `portable-pty` (zsh, bash, pwsh, fish, cmd)
-- Horizontal und vertikal geteilte Bereiche
-- Integrierte Suche, Linkerkennung und True Color
-- Dateien aus Explorer oder Desktop als Shell-sicher quotierte Pfade in ein Terminal ziehen
-- Arbeitsumgebungen pro Tab unter Windows (Lokal oder jede installierte WSL-Distribution)
-- Spaces stellt Tabs, Arbeitsverzeichnisse und geteilte Layouts nach einem Neustart wieder her
+## Das bekommst du
 
-### Code-Editor
+### Agenten
 
-- CodeMirror 6 (unterstützt alle verbreiteten Sprachen wie TS/JS, Rust, Python, Go, C/C++, Java, HTML/CSS, JSON, Markdown usw.)
-- Integrierte KI-Vervollständigung mit Unterstützung lokaler Modelle
-- KI-Bearbeitungs-Diffs, abschnittsweise annehmbar oder ablehnbar
-- Optionale Language-Server-Unterstützung mit Diagnosen, Navigation, Vervollständigung, Formatierung und eigenen Servern
-- Gerendertes Markdown sowie Anzeige von Bildern, Videos, Audio und PDF
-- Vim-Modus
-- Integrierte Editor-Themes wie Kanagawa, Catppuccin, Rosé Pine, Everforest, Dracula, Solarized, Nord, Tokyo Night, GitHub und Xcode
+- **Viele Agenten, ein Ort.** Sitzungen für Claude Code, Codex, Antigravity (Gemini), Cursor, Grok, OpenCode und Pi nebeneinander, jede mit ihrer eigenen CLI und ihrem eigenen Login.
+- **Jedes API-Modell als Agent.** Cloud-Anbieter, eigene Endpunkte sowie lokale Ollama-, LM-Studio- oder MLX-Modelle können in einem Projekt lesen, suchen, bearbeiten und Befehle ausführen, mit denselben Workspace- und Geheimpfad-Prüfungen wie der KI-Chat. Die Agentenschleife und dein Schlüssel bleiben auf deinem Rechner.
+- **Du bestimmst, wie viel sie dürfen.** Überwachte Sitzungen fragen vor jedem Schreibzugriff und jedem Befehl; bei vollem Zugriff nicht. Änderungen erscheinen als Diffs, die du behalten oder rückgängig machen kannst.
+- **Agenten auf deinen Servern.** In SSH-Projekten laufen Claude Code, Codex und OpenCode auf dem Host, und eine abgebrochene Verbindung stoppt sie nicht. API-Modelle lesen, durchsuchen und bearbeiten Remote-Dateien und führen Befehle aus, wenn der Remote-Helper aktuell ist.
+- **Agenten-Teams.** Ein Roster mit Rollen und Regeln, ein Board, wer arbeitet oder wartet, ein Orchestrator, der die anderen startet und anschreibt, und ein Protokoll dessen, was sie einander und dir mitteilen. Siehe den [Leitfaden zu Agenten-Teams](../guides/agent-teams.md).
+- **Gedächtnis und Präsenz.** Prüfe und stelle wieder her, was Agenten über ein Projekt wissen, werde benachrichtigt, wenn ein Agent auf einem offenen Host auf dich wartet, und beobachte laufende Agenten im optionalen Notch (Alpha).
 
-### Quellcodeverwaltung
+### Der Arbeitsplatz drumherum
 
-- Abschnitte stagen oder unstagen, committen (Cmd+Enter / Ctrl+Enter) und mit Upstream-Erkennung pushen
-- Branch-Anzeige einschließlich Detached-HEAD-Zustand
-- Git-Verlauf mit echtem Commit-Graphen und Spuren für Merges und Branches
-- Commits suchen und filtern sowie die Remote-Commit-Seite öffnen
+- **Terminal.** Natives PTY mit WebGL-Rendering, Raw- und Blockmodus, Panes, Spaces und private Terminals.
+- **Editor.** CodeMirror 6 mit optionalem LSP, KI-Vervollständigung und -Bearbeitung, Quick Open sowie Suchen und Ersetzen mit Vorschau.
+- **Git.** Versionskontrolle, Verlauf mit Commit-Graph, Worktrees und KI-gestützte Commits.
+- **Umgebungen.** Lokal, WSL, SSH, Docker, seriell und RDP, mit gespeicherten Verbindungen, Tunneln und einem Server-Dashboard.
+- **Vorschauen und Werkzeuge.** Vorschau lokaler Entwicklungsserver (auch über SSH), Medien- und PDF-Viewer, ein API-Client und ein MCP-Client.
+- **Begleiter am Telefon.** Eine Android-App in der Vorschau, die sich per QR-Code koppelt, um KI-Sitzungen über dein lokales Netzwerk zu verfolgen und zu steuern.
 
-### Datei-Explorer
+### Standardmäßig privat
 
-- Catppuccin-Icon-Theme
-- Unscharfe Suche, Tastaturnavigation, direktes Umbenennen und Kontextaktionen
-- Live-Aktualisierung bei Dateiänderungen auf der Festplatte
-- Dateien und Auswahl direkt an die KI-Seitenleiste anhängen
+Kein Konto und keine Voktty-Telemetrie. Anbieter-Schlüssel liegen im Schlüsselbund des Betriebssystems, nativer Dateisystemzugriff wird pro Workspace autorisiert, die KI-Dateiwerkzeuge verweigern geheime Pfade, und jeder ändernde Werkzeugaufruf fragt zuerst, sofern du keinen vollen Zugriff gewährst.
 
-### Webvorschau
-
-- Erkennt lokale Entwicklungsserver automatisch und öffnet sie in einem Vorschau-Tab
-- Vorschau externer URLs über eine native untergeordnete Webview
-
-### Themes und Anpassung
-
-- Eigene Themes in der App erstellen und zwischen integrierten Vorgaben und eigenen Themes wechseln
-- Themes teilen oder aus der Community importieren
-- Hintergrundbilder mit einstellbarer Deckkraft und Unschärfe
-- Das Editor-Theme ist unabhängig vom App-Theme
-
-### KI
-
-- **Anbieter mit eigenem Schlüssel:** OpenAI, Anthropic, Google (Gemini), Groq, xAI (Grok), Cerebras, OpenRouter, DeepSeek, Mistral sowie jeder OpenAI-kompatible Endpunkt
-- **Lokal / offline:** LM Studio, MLX, Ollama
-- **Agentischer Workflow:** Pläne, Sub-Agenten, Projektgedächtnis über `VOKTTY.md`, Lesen / Schreiben / Bearbeiten / Mehrfachbearbeitung / grep / glob, Bash mit Freigabe und Hintergrundprozesse
-- **Orchestrierung von Coding-Agenten:** Claude Code in einem Terminal starten, Ausgabe prüfen und Folgeaufgaben über freigabepflichtige Tools senden
-- **Composer:** Prompt-Snippets über `#handle`, Dateien über `@path`, Spracheingabe und Anhängen aus Explorer oder Auswahl
-- **Eigene Agenten** mit eigenem System-Prompt und Tool-Teilsatz
-- **Planungsmodus**, der vor der Ausführung einen Plan erstellt und bestätigen lässt
-
-## Aktuelle Neuerungen in Voktty
-
-- **Flache zusammengesetzte Spaces:** Einzelne Tabs bleiben von benannten Spaces getrennt. Mitglieder lassen sich deterministisch neu anordnen; verschachtelte Spaces und unbegrenzte Ansichten werden verhindert. Verfügbar sind 2, 4, 6 oder 8 Ansichten.
-- **IDE und Debugging:** CodeMirror 6, Symbolnavigation, Problems-Panel, Code Actions, Ghost-Completion, überprüfbare Diff-Änderungen und DAP-Debugging, wenn ein passender Adapter eingerichtet ist.
-- **Sicherer MCP-Client:** Lokale stdio-Server und entfernte Streamable-HTTP-Server können verbunden werden. Tools werden validiert; Änderungen benötigen eine native einmalige Freigabe.
-- **Native Erweiterungen:** JavaScript-Erweiterungen aus `~/.voktty/extensions/` können Befehle, Tastenkürzel, KI-Tools, Benachrichtigungen und Workspace-Aktionen beitragen. Dies ist eine Voktty-API und keine Kompatibilität mit VS-Code-Erweiterungen.
-- **Terminal-Kollaboration:** Eine Terminal-Sitzung kann vorübergehend mit Beobachter- und Steuerungsrollen, zusätzlicher Verschlüsselung und schreibgeschützten entfernten Dateizitaten geteilt werden.
-- **Verbindungen und Leistung:** Lokale Umgebungen, WSL, SSH, Docker und serielle Verbindungen zeigen ihren Verbindungsstatus; ausgeblendete Terminals geben teure Renderer frei, ohne aktive Prozesse zu stoppen.
-- **Agentenpräsenz:** Rollenbasierte Avatare, animierte Symbole für externe Agenten und optionale lokale Sounds für Speichern, Git, Problems, Debugging und Agentenantworten unterstützen reduzierte Bewegung.
-
-Die vollständige und kanonische Funktionsliste steht im [englischen README](../../README.md), einschließlich Sicherheitsgrenzen und plattformspezifischer Verfügbarkeit.
+Die vollständige Funktionsliste steht in [docs/features.md](../features.md) (auf Englisch).
 
 ## Installation
 
@@ -129,11 +94,11 @@ Die neuesten Installationspakete stehen auf der Seite [Releases](https://github.
 - **NixOS / Nix:** Nutze den offiziellen Flake: `nix profile install github:voktty/voktty` außerhalb von NixOS. Unter NixOS importierst du den Flake und fügst `inputs.voktty.packages.${pkgs.system}.voktty` zu `environment.systemPackages` hinzu. Für eine einfachere Einrichtung ist auch `nixosModules.voktty` verfügbar.
 - **AppImage:** Benötigt FUSE. Ohne FUSE: `./Voktty_*.AppImage --appimage-extract-and-run`. Bei Darstellungsfehlern unter Wayland hilft möglicherweise `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Die `.deb`- / `.rpm`-Pakete binden stattdessen den GTK-Stack des Systems ein und laufen meist flüssiger.
 
-## KI konfigurieren
+## Agenten und KI einrichten
 
-1. Öffne **Einstellungen -> KI**.
-2. Wähle einen Anbieter und füge deinen API-Schlüssel ein. Für lokale Inferenz verweist du Voktty auf deinen LM Studio- / MLX- / Ollama-Endpunkt.
-3. Schlüssel werden über `keyring` im Schlüsselbund des Betriebssystems gespeichert. Sie werden niemals auf die Festplatte oder in localStorage geschrieben.
+1. **Coding-Agenten.** Installiere die Agenten-CLIs, die du nutzt (zum Beispiel Claude Code oder Codex), und melde dich wie gewohnt an. Voktty findet sie und nutzt ihren eigenen Login. Für SSH-Projekte installierst du sie auf dem Server.
+2. **API-Modelle.** Öffne die Einstellungen und gehe zu **KI-Modelle**, füge einen Anbieter mit Schlüssel oder einen eigenen Endpunkt hinzu oder richte Voktty auf einen lokalen LM-Studio-, MLX- oder Ollama-Server. Die Modelle erscheinen dann in der Harness-Modellauswahl unter **API**.
+3. Schlüssel werden über `keyring` im Schlüsselbund des Betriebssystems gespeichert, nie in `localStorage`. Unter Linux ohne Session-Bus oder Secret Service nutzt Voktty eine private Ausweichdatei mit Modus 0600.
 
 ## Aus dem Quellcode bauen
 
@@ -163,11 +128,11 @@ cd src-tauri && cargo nextest run --locked                           # oder: car
 
 ## Technologie-Stack
 
-Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 6, Vercel AI SDK v6, Tailwind v4, shadcn/ui und Zustand.
+Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 6, Vercel AI SDK, Tailwind v4, shadcn/ui und Zustand.
 
 ## Mitwirken
 
-Issues und PRs sind willkommen. Melde Probleme, schlage Funktionen vor oder reiche Pull Requests ein. Weitere Informationen findest du in [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md) und der [Architekturdokumentation](../README.md).
+Issues und PRs sind willkommen. Melde Probleme, schlage Funktionen vor oder reiche Pull Requests ein. Weitere Informationen findest du in [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md) und der [Architekturdokumentation](../README.md). Die Richtung des Projekts steht in der [Roadmap](../../ROADMAP.md).
 
 ## Status der Plattform-Signierung
 
@@ -178,6 +143,10 @@ Diese Warnungen beweisen für sich allein keine Malware. Installiere jedoch nur 
 Plattformzertifikate und Notarisierung werden vor der stabilen Veröffentlichung ergänzt.
 
 <br clear="left" />
+
+## Herkunft und Namensnennung
+
+Voktty ist ein unabhängiger Fork von Terax (Crynta), und sein Agent Harness leitet sich von MonoCode (MIT, von Nick) ab. Keiner der Autoren ist mit Voktty verbunden oder unterstützt es. Siehe [NOTICE](../../NOTICE) und [LICENSE](../../LICENSE).
 
 ## Lizenz
 

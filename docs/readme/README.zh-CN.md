@@ -2,7 +2,7 @@
   <img src="../../voktty-svg.svg" width="144" height="144" alt="Voktty" />
   <h1>Voktty</h1>
 
-  <p><strong>轻量、终端优先的 AI 原生开发工作区。</strong></p>
+  <p><strong>AI 编程智能体工作的空间。</strong></p>
 
   <p>
     <a href="https://voktty.dev">网站</a>
@@ -37,84 +37,49 @@
 
 ---
 
-Voktty 是一个轻量、开源、终端优先的 AI 原生开发环境（ADE），基于 Tauri 2 + Rust 和 React 19 构建。它内置原生 PTY 后端与 WebGL 渲染器、使用你自己的密钥或完全本地模型运行的智能体 AI 侧边栏，以及代码编辑器、文件浏览器、带 Git 图的源代码管理和网页预览面板。磁盘占用约 7-8 MB。无遥测。无需账户。
+Voktty 是一个开源的桌面工作空间，专为 AI 编程智能体打造，基于 Tauri 2、Rust 和 React 19 构建。它的 Agent Harness 可在本地和 SSH 项目中运行 Claude Code、Codex、Gemini（通过 Antigravity）、Cursor、Grok、OpenCode、Pi，以及任何可通过 API 访问的模型，并提供审批、变更审查、共享项目记忆和团队协作。周围是原生终端、代码编辑器、Git，以及本地、WSL、SSH、Docker、串口和远程桌面环境。无需账号，无遥测。安装包大小为 25 至 36 MB（v1.0.27；Linux AppImage 约 118 MB）。
 
 ## 截图
 
+截图使用西班牙语界面；更多截图见[图库](../screenshots.md)。
+
 <p align="center">
-  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty 工作区" /><br/><sub>终端、AI 助手和多环境会话选择器</sub>
+  <img src="../images/harness-session-review.png" width="800" alt="Agent Harness：智能体编辑项目，其变更以差异形式呈现，可保留或撤销" /><br/><sub>Agent Harness：智能体编辑项目，其变更以差异形式呈现，可保留或撤销</sub>
 </p>
 
-## 功能
+<p align="center">
+  <img src="../images/ssh-project-terminal.png" width="800" alt="SSH 项目：远程文件与服务器上的实时终端并排显示" /><br/><sub>SSH 项目：远程文件与服务器上的实时终端并排显示</sub>
+</p>
 
-### 终端
+<p align="center">
+  <img src="../images/terminal-ai-chat.png" width="800" alt="悬浮 AI 聊天，可读取活动终端的目录、最近命令和输出" /><br/><sub>悬浮 AI 聊天，可读取活动终端的目录、最近命令和输出</sub>
+</p>
 
-- 使用 WebGL 渲染器的 xterm.js，支持多标签和后台流式输出
-- GPU 加速的块式终端，提供类似编辑器的命令输入
-- 通过 `portable-pty` 提供原生 PTY 后端（zsh、bash、pwsh、fish、cmd）
-- 水平和垂直拆分面板
-- 内联搜索、链接检测和真彩色
-- 将文件从浏览器或桌面拖入终端，自动转换为适合 Shell 的安全引用路径
-- Windows 上的逐标签工作区环境（本地或任意已安装的 WSL 发行版）
-- Spaces 可跨启动恢复标签、工作目录和拆分布局
+## 你能得到什么
 
-### 代码编辑器
+### 智能体
 
-- CodeMirror 6（支持所有常用语言，包括 TS/JS、Rust、Python、Go、C/C++、Java、HTML/CSS、JSON、Markdown 等）
-- 支持本地模型的内联 AI 自动补全
-- AI 编辑差异，可逐块接受或拒绝
-- 可选语言服务器支持，提供诊断、导航、补全、格式化和自定义服务器
-- 渲染 Markdown，并可查看图片、视频、音频和 PDF
-- Vim 模式
-- 内置编辑器主题，包括 Kanagawa、Catppuccin、Rosé Pine、Everforest、Dracula、Solarized、Nord、Tokyo Night、GitHub 和 Xcode
+- **多个智能体，一个地方。** Claude Code、Codex、Antigravity（Gemini）、Cursor、Grok、OpenCode 和 Pi 会话并排运行，各自使用自己的 CLI 和登录状态。
+- **任何 API 模型都能当智能体。** 云端提供商、自定义端点以及本地 Ollama、LM Studio 或 MLX 模型，都可以在项目中读取、搜索、编辑并执行命令，并遵循与 AI 聊天相同的工作区和机密路径检查。智能体循环和你的密钥都留在你的电脑上。
+- **由你决定它们能做多少。** 受监督的会话在每次写入或执行命令前都会询问；完全访问则不会。编辑以差异形式呈现，你可以保留或撤销。
+- **服务器上的智能体。** 在 SSH 项目中，Claude Code、Codex 和 OpenCode 在主机上运行，连接断开不会让它们停止。API 模型可以读取、搜索和编辑远程文件，并在远程辅助程序为最新版本时执行命令。
+- **智能体团队。** 带有角色和规则的名册、显示谁在工作或等待的看板、能启动并向其他智能体发消息的协调者，以及记录它们彼此之间和对你说过什么的日志。参见[智能体团队指南](../guides/agent-teams.md)。
+- **记忆与存在感。** 查看并恢复智能体对项目的记忆；任何已打开主机上的智能体在等你时会通知你；还可在可选的 Notch（Alpha）中查看运行中的智能体。
 
-### 源代码管理
+### 围绕它们的工作空间
 
-- 暂存或取消暂存代码块、提交（Cmd+Enter / Ctrl+Enter）、支持感知上游分支的推送
-- 分支显示，包括分离 HEAD 状态
-- 带真实提交图的 Git 历史面板（为合并和分支渲染轨道）
-- 提交搜索与筛选，可点击跳转到远程提交页面
+- **终端。** 原生 PTY，WebGL 渲染，原始与分块模式、窗格、空间和私有终端。
+- **编辑器。** CodeMirror 6，可选 LSP、AI 补全与编辑、Quick Open，以及先预览的搜索与替换。
+- **Git。** 源代码管理、带提交图的历史、worktree 和 AI 辅助提交。
+- **环境。** 本地、WSL、SSH、Docker、串口和 RDP，支持已保存的连接、隧道和服务器仪表板。
+- **预览与工具。** 本地开发服务器预览（也支持通过 SSH）、媒体和 PDF 查看器、API 客户端和 MCP 客户端。
+- **手机伴侣。** 预览版 Android 应用，通过二维码配对，在本地网络中查看并操控 AI 会话。
 
-### 文件浏览器
+### 默认私密
 
-- Catppuccin 图标主题
-- 模糊搜索、键盘导航、内联重命名和上下文操作
-- 磁盘文件变更时实时更新
-- 将文件和选区直接附加到 AI 侧边栏
+无需账号，Voktty 不含遥测。提供商密钥存放在操作系统钥匙串中，原生文件系统访问按工作区授权，AI 文件工具会拒绝机密路径，除非你授予完全访问，否则每次修改类工具调用都会先询问。
 
-### 网页预览
-
-- 自动检测本地开发服务器并在预览标签中打开
-- 通过原生子 WebView 预览外部 URL
-
-### 主题和自定义
-
-- 在应用内创建自定义主题，可在内置预设和自己的主题之间切换
-- 创建并分享自己的主题，或从社区导入
-- 背景图支持调整不透明度和模糊度
-- 编辑器主题独立于应用主题
-
-### AI
-
-- **自带密钥提供商：** OpenAI、Anthropic、Google（Gemini）、Groq、xAI（Grok）、Cerebras、OpenRouter、DeepSeek、Mistral，以及任意兼容 OpenAI 的端点
-- **本地 / 离线：** LM Studio、MLX、Ollama
-- **智能体工作流：** 计划、子智能体、通过 `VOKTTY.md` 实现的项目记忆、文件读取 / 写入 / 编辑 / 多处编辑 / grep / glob、需要批准的 bash、后台进程
-- **编码智能体编排：** 在终端中启动 Claude Code、检查其输出，并通过需要批准的工具发送后续工作
-- **输入区：** 通过 `#handle` 使用提示片段、通过 `@path` 添加文件、语音输入，以及从文件浏览器或选区附加到智能体
-- **自定义智能体**，拥有各自的系统提示和工具子集
-- **计划模式**，在执行前生成计划并请求确认
-
-## Voktty 当前更新
-
-- **扁平复合空间：** 独立标签页与命名 Spaces 分开管理。成员可以确定性地重新排序，并支持 2、4、6 或 8 个视图，不允许嵌套 Spaces。
-- **IDE 与调试：** CodeMirror 6、符号导航、Problems 面板、代码操作、Ghost 补全、可审阅的 diff 修改，以及配置兼容适配器后的 DAP 调试。
-- **安全的 MCP 客户端：** 连接本地 stdio 服务器或远程 Streamable HTTP 服务器。工具会经过验证，所有修改操作都需要原生的一次性批准。
-- **原生扩展：** 从 `~/.voktty/extensions/` 加载 JavaScript 扩展，为工作区添加命令、快捷键、AI 工具、通知和操作。这是 Voktty API，不是 VS Code 扩展兼容层。
-- **终端协作：** 临时共享终端，支持观察者和控制者角色、额外加密，以及只读的远程文件引用。
-- **连接与性能：** Local、WSL、SSH、Docker 和串行环境会显示连接生命周期；隐藏终端会释放昂贵的渲染器，但不会停止活动进程。
-- **智能体状态：** 按角色显示头像，为外部智能体显示动画图标，并提供可选的本地声音，用于保存、Git、Problems、调试和智能体响应，同时支持减少动态效果。
-
-完整且权威的功能列表位于[英文 README](../../README.md)，其中还说明了安全边界和各平台的可用性。
+完整功能列表见 [docs/features.md](../features.md)（英文）。
 
 ## 安装
 
@@ -131,11 +96,11 @@ Voktty 是一个轻量、开源、终端优先的 AI 原生开发环境（ADE）
 - **NixOS / Nix：** 使用官方 flake。非 NixOS 运行 `nix profile install github:voktty/voktty`；NixOS 可导入 flake，并将 `inputs.voktty.packages.${pkgs.system}.voktty` 添加到 `environment.systemPackages`。也可以使用 `nixosModules.voktty` 输出进行更简单的配置。
 - **AppImage：** 需要 FUSE。没有 FUSE 时运行 `./Voktty_*.AppImage --appimage-extract-and-run`。如果在 Wayland 上出现渲染问题，请尝试 `WEBKIT_DISABLE_DMABUF_RENDERER=1`。否则，`.deb` / `.rpm` 包会链接系统 GTK 栈，通常更流畅。
 
-## 配置 AI
+## 配置智能体和 AI
 
-1. 打开**设置 -> AI**。
-2. 选择提供商并粘贴 API 密钥。对于本地推理，将 Voktty 指向你的 LM Studio / MLX / Ollama 端点。
-3. 密钥通过 `keyring` 写入操作系统钥匙串。密钥绝不会写入磁盘或 localStorage。
+1. **编程智能体。** 安装你使用的智能体 CLI（例如 Claude Code 或 Codex），并照常登录。Voktty 会找到它们并使用它们自己的登录。对于 SSH 项目，请在服务器上安装。
+2. **API 模型。** 打开设置并进入 **AI 模型**，添加带密钥的提供商或自定义端点，或将 Voktty 指向本地 LM Studio、MLX 或 Ollama 服务器。这些模型随后会出现在 Harness 的模型选择器的 **API** 下。
+3. 密钥通过 `keyring` 写入操作系统钥匙串，绝不会写入 `localStorage`。在没有会话总线或 Secret Service 的 Linux 上，Voktty 使用权限为 0600 的私有备用文件。
 
 ## 从源代码构建
 
@@ -165,11 +130,11 @@ cd src-tauri && cargo nextest run --locked                           # 或：car
 
 ## 技术栈
 
-Tauri 2、Rust、`portable-pty`、React 19、TypeScript、Vite、xterm.js、CodeMirror 6、Vercel AI SDK v6、Tailwind v4、shadcn/ui、Zustand。
+Tauri 2、Rust、`portable-pty`、React 19、TypeScript、Vite、xterm.js、CodeMirror 6、Vercel AI SDK、Tailwind v4、shadcn/ui、Zustand。
 
 ## 贡献
 
-欢迎提交 Issue 和 PR！你可以提出问题、建议功能或提交拉取请求。更多信息请参阅 [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md) 和[架构文档](../README.md)。
+欢迎提交 Issue 和 PR！你可以提出问题、建议功能或提交拉取请求。更多信息请参阅 [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md) 和[架构文档](../README.md)。 项目方向见[路线图](../../ROADMAP.md)。
 
 ## 平台签名状态
 
@@ -180,6 +145,10 @@ Tauri 2、Rust、`portable-pty`、React 19、TypeScript、Vite、xterm.js、Code
 平台证书和公证将在稳定发布前加入。
 
 <br clear="left" />
+
+## 来源与署名
+
+Voktty 是 Terax（Crynta）的独立分支，其 Agent Harness 源自 MonoCode（MIT，作者 Nick）。两位作者均与 Voktty 无隶属关系，也未为其背书。参见 [NOTICE](../../NOTICE) 和 [LICENSE](../../LICENSE)。
 
 ## 许可证
 

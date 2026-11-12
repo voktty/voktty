@@ -1,7 +1,7 @@
 <div align="center">
   <img src="../../voktty-svg.svg" width="144" height="144" alt="Voktty" />
   <h1>Voktty</h1>
-  <p><strong>Ruang kerja pengembangan ringan, berfokus pada terminal, dan berteknologi AI.</strong></p>
+  <p><strong>Ruang kerja tempat agen pemrograman Anda bekerja.</strong></p>
   <p><a href="https://voktty.dev">Situs web</a> · <a href="https://voktty.dev/docs">Dokumentasi</a> · <a href="https://github.com/voktty/voktty">Kode sumber situs web</a></p>
 
   <p>
@@ -19,84 +19,49 @@
 
 ---
 
-Voktty adalah lingkungan pengembangan (ADE) ringan, sumber terbuka, berfokus pada terminal, dan berteknologi AI yang dibangun dengan Tauri 2 + Rust dan React 19. Voktty memiliki backend PTY native dengan perender WebGL, panel samping AI berbasis agen yang berjalan dengan kunci Anda sendiri atau model yang sepenuhnya lokal, serta editor kode, penjelajah berkas, kontrol sumber dengan grafik Git, dan panel pratinjau web. Sekitar 7-8 MB di disk. Tanpa telemetri. Tanpa akun.
+Voktty adalah ruang kerja desktop sumber terbuka untuk agen pemrograman AI, dibangun dengan Tauri 2, Rust, dan React 19. Agent Harness-nya menjalankan Claude Code, Codex, Gemini (lewat Antigravity), Cursor, Grok, OpenCode, Pi, dan model apa pun yang dapat Anda akses lewat API, pada proyek lokal maupun SSH, dengan persetujuan, peninjauan perubahan, memori proyek bersama, dan koordinasi tim. Di sekelilingnya ada terminal native, editor kode, Git, serta lingkungan lokal, WSL, SSH, Docker, serial, dan desktop jarak jauh. Tanpa akun, tanpa telemetri. Ukuran installer 25 hingga 36 MB (v1.0.27; AppImage Linux sekitar 118 MB).
 
 ## Tangkapan layar
 
+Tangkapan layar memakai antarmuka bahasa Spanyol; lebih banyak lagi ada di [galeri](../screenshots.md).
+
 <p align="center">
-  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Ruang kerja Voktty" /><br/><sub>Terminal, asisten AI, dan pemilih sesi multi-lingkungan</sub>
+  <img src="../images/harness-session-review.png" width="800" alt="Agent Harness: agen mengedit proyek dan perubahannya tampil sebagai diff yang bisa dipertahankan atau dibatalkan" /><br/><sub>Agent Harness: agen mengedit proyek dan perubahannya tampil sebagai diff yang bisa dipertahankan atau dibatalkan</sub>
 </p>
 
-## Fitur
+<p align="center">
+  <img src="../images/ssh-project-terminal.png" width="800" alt="Proyek SSH: berkas jarak jauh di samping terminal langsung di server" /><br/><sub>Proyek SSH: berkas jarak jauh di samping terminal langsung di server</sub>
+</p>
 
-### Terminal
+<p align="center">
+  <img src="../images/terminal-ai-chat.png" width="800" alt="Obrolan AI mengambang yang membaca direktori, perintah terbaru, dan keluaran terminal aktif" /><br/><sub>Obrolan AI mengambang yang membaca direktori, perintah terbaru, dan keluaran terminal aktif</sub>
+</p>
 
-- xterm.js dengan perender WebGL, multitab, dan streaming latar belakang
-- Terminal berbasis blok dengan akselerasi GPU dan masukan perintah seperti editor
-- Backend PTY native melalui `portable-pty` (zsh, bash, pwsh, fish, cmd)
-- Panel terbagi secara horizontal dan vertikal
-- Pencarian inline, deteksi tautan, dan true color
-- Seret berkas dari penjelajah atau desktop ke terminal sebagai path yang dikutip secara aman untuk shell
-- Lingkungan ruang kerja per tab di Windows (Local atau distribusi WSL apa pun yang terpasang)
-- Spaces memulihkan tab, direktori kerja, dan tata letak terbagi pada peluncuran berikutnya
+## Yang Anda dapatkan
 
-### Editor kode
+### Agen
 
-- CodeMirror 6, mendukung bahasa populer seperti TS/JS, Rust, Python, Go, C/C++, Java, HTML/CSS, JSON, dan Markdown
-- Pelengkapan otomatis AI inline dengan dukungan model lokal
-- Diff penyuntingan AI yang dapat diterima atau ditolak per bagian
-- Dukungan server bahasa opsional dengan diagnostik, navigasi, pelengkapan, pemformatan, dan server kustom
-- Markdown terender serta tampilan gambar, video, audio, dan PDF
-- Mode Vim
-- Tema bawaan termasuk Kanagawa, Catppuccin, Rosé Pine, Everforest, Dracula, Solarized, Nord, Tokyo Night, GitHub, dan Xcode
+- **Banyak agen, satu tempat.** Sesi Claude Code, Codex, Antigravity (Gemini), Cursor, Grok, OpenCode, dan Pi berdampingan, masing-masing memakai CLI dan login sendiri.
+- **Model API apa pun sebagai agen.** Penyedia cloud, endpoint kustom, dan model lokal Ollama, LM Studio, atau MLX dapat membaca, mencari, mengedit, dan menjalankan perintah di proyek, dengan pemeriksaan ruang kerja dan jalur rahasia yang sama seperti obrolan AI. Loop agen dan kunci Anda tetap berada di komputer Anda.
+- **Anda yang menentukan batasnya.** Sesi terawasi bertanya sebelum setiap penulisan atau perintah; akses penuh tidak. Hasil edit tampil sebagai diff yang bisa dipertahankan atau dibatalkan.
+- **Agen di server Anda.** Pada proyek SSH, Claude Code, Codex, dan OpenCode berjalan di host dan koneksi yang terputus tidak menghentikannya. Model API membaca, mencari, dan mengedit berkas jarak jauh, serta menjalankan perintah saat helper jarak jauh sudah terbaru.
+- **Tim agen.** Daftar anggota dengan peran dan aturan, papan yang menunjukkan siapa yang bekerja atau menunggu, orkestrator yang memulai dan mengirim pesan ke yang lain, dan log tentang apa yang mereka katakan satu sama lain dan kepada Anda. Lihat [panduan tim agen](../guides/agent-teams.md).
+- **Memori dan kehadiran.** Periksa dan pulihkan apa yang diingat agen tentang sebuah proyek, dapatkan pemberitahuan saat agen di host terbuka mana pun menunggu Anda, dan pantau agen yang berjalan di Notch opsional (alfa).
 
-### Kontrol sumber
+### Ruang kerja di sekelilingnya
 
-- Stage / unstage bagian, commit (Cmd+Enter / Ctrl+Enter), dan push dengan kesadaran upstream
-- Tampilan branch termasuk status detached HEAD
-- Riwayat Git dengan grafik commit nyata dan jalur untuk merge serta branch
-- Cari dan filter commit, lalu buka halaman commit remote
+- **Terminal.** PTY native dengan rendering WebGL, mode raw dan blok, panel, ruang, dan terminal privat.
+- **Editor.** CodeMirror 6 dengan LSP opsional, pelengkapan dan pengeditan AI, Quick Open, serta pencarian dan penggantian dengan pratinjau.
+- **Git.** Kontrol sumber, riwayat dengan grafik commit, worktree, dan commit berbantuan AI.
+- **Lingkungan.** Lokal, WSL, SSH, Docker, serial, dan RDP, dengan koneksi tersimpan, tunnel, dan dasbor server.
+- **Pratinjau dan alat.** Pratinjau server pengembangan lokal (juga lewat SSH), penampil media dan PDF, klien API, dan klien MCP.
+- **Pendamping di ponsel.** Aplikasi Android versi pratinjau yang dipasangkan lewat kode QR untuk memantau dan mengarahkan sesi AI melalui jaringan lokal Anda.
 
-### Penjelajah berkas
+### Privat secara bawaan
 
-- Tema ikon Catppuccin
-- Pencarian fuzzy, navigasi keyboard, ganti nama inline, dan tindakan kontekstual
-- Pembaruan langsung saat berkas berubah di disk
-- Lampirkan berkas dan pilihan langsung ke panel samping AI
+Tanpa akun dan tanpa telemetri Voktty. Kunci penyedia disimpan di keychain sistem operasi, akses sistem berkas native diotorisasi per ruang kerja, alat berkas AI menolak jalur rahasia, dan setiap pemanggilan alat yang mengubah sesuatu bertanya dulu kecuali Anda memberi akses penuh.
 
-### Pratinjau web
-
-- Mendeteksi server pengembangan lokal dan membukanya di tab pratinjau
-- Pratinjau URL eksternal melalui WebView anak native
-
-### Tema dan kustomisasi
-
-- Buat tema kustom di aplikasi dan beralih antara preset bawaan dan tema Anda
-- Bagikan tema atau impor dari komunitas
-- Gambar latar dengan opasitas dan blur yang dapat disesuaikan
-- Tema editor terpisah dari tema aplikasi
-
-### AI
-
-- **Penyedia dengan kunci Anda sendiri:** OpenAI, Anthropic, Google (Gemini), Groq, xAI (Grok), Cerebras, OpenRouter, DeepSeek, Mistral, dan endpoint apa pun yang kompatibel dengan OpenAI
-- **Lokal / offline:** LM Studio, MLX, Ollama
-- **Alur kerja berbasis agen:** rencana, subagen, memori proyek melalui `VOKTTY.md`, baca / tulis / sunting / multisunting / grep / glob, bash dengan persetujuan, dan proses latar belakang
-- **Orkestrasi agen pemrograman:** jalankan Claude Code di terminal, periksa output, dan kirim pekerjaan lanjutan melalui alat yang memerlukan persetujuan
-- **Komposer:** cuplikan prompt melalui `#handle`, berkas melalui `@path`, masukan suara, serta lampiran dari penjelajah atau pilihan
-- **Agen kustom** dengan prompt sistem dan subset alat sendiri
-- **Mode rencana** yang membuat rencana dan meminta konfirmasi sebelum bertindak
-
-## Pembaruan Voktty saat ini
-
-- **Spaces gabungan datar:** tab mandiri tetap terpisah dari Spaces bernama. Anggotanya dapat diurutkan secara deterministik, dengan 2, 4, 6, atau 8 tampilan tanpa Spaces bertingkat.
-- **IDE dan debugging:** CodeMirror 6, navigasi simbol, panel Problems, tindakan kode, ghost completion, perubahan yang dapat ditinjau sebagai diff, dan debugging DAP saat adaptor yang sesuai dikonfigurasi.
-- **Klien MCP yang aman:** hubungkan server stdio lokal atau server Streamable HTTP jarak jauh. Semua alat divalidasi dan mutasi memerlukan persetujuan native sekali pakai.
-- **Ekstensi native:** ekstensi JavaScript dari `~/.voktty/extensions/` dapat menambahkan perintah, pintasan, alat AI, notifikasi, dan tindakan workspace. Ini adalah API Voktty, bukan kompatibilitas ekstensi VS Code.
-- **Kolaborasi terminal:** bagikan terminal sementara dengan peran pengamat dan pengendali, enkripsi tambahan, serta kutipan berkas jarak jauh hanya-baca.
-- **Koneksi dan kinerja:** lingkungan Local, WSL, SSH, Docker, dan serial menampilkan siklus koneksi; terminal tersembunyi melepaskan renderer mahal tanpa menghentikan proses aktif.
-- **Kehadiran agen:** avatar berdasarkan peran, ikon animasi untuk agen eksternal, dan suara lokal opsional untuk penyimpanan, Git, Problems, debugging, serta respons agen, dengan dukungan gerakan yang dikurangi.
-
-Daftar fitur lengkap dan kanonik tersedia di [README berbahasa Inggris](../../README.md), termasuk batas keamanan dan ketersediaan per platform.
+Daftar fitur lengkap ada di [docs/features.md](../features.md) (dalam bahasa Inggris).
 
 ## Instalasi
 
@@ -113,11 +78,11 @@ Penginstal terbaru tersedia di halaman [Releases](https://github.com/voktty/vokt
 - **NixOS / Nix:** gunakan flake resmi. Di luar NixOS, jalankan `nix profile install github:voktty/voktty`. Di NixOS, impor flake dan tambahkan `inputs.voktty.packages.${pkgs.system}.voktty` ke `environment.systemPackages`. `nixosModules.voktty` juga tersedia untuk pengaturan yang lebih sederhana.
 - **AppImage:** memerlukan FUSE. Tanpanya, jalankan `./Voktty_*.AppImage --appimage-extract-and-run`. Jika ada masalah perenderan di Wayland, coba `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Paket `.deb` / `.rpm` menggunakan stack GTK sistem dan biasanya lebih lancar.
 
-## Konfigurasi AI
+## Menyiapkan agen dan AI
 
-1. Buka **Pengaturan -> AI**.
-2. Pilih penyedia dan tempel kunci API. Untuk inferensi lokal, arahkan Voktty ke endpoint LM Studio / MLX / Ollama.
-3. Kunci disimpan di keychain sistem operasi melalui `keyring`. Kunci tidak pernah ditulis ke disk atau localStorage.
+1. **Agen pemrograman.** Pasang CLI agen yang Anda pakai (misalnya Claude Code atau Codex) dan masuk seperti biasa. Voktty menemukannya dan memakai login mereka sendiri. Untuk proyek SSH, pasang di server.
+2. **Model API.** Buka pengaturan dan masuk ke **AI Models**, tambahkan penyedia beserta kuncinya atau endpoint kustom, atau arahkan Voktty ke server LM Studio, MLX, atau Ollama lokal. Model-model itu kemudian muncul di pemilih model Harness di bawah **API**.
+3. Kunci ditulis ke keychain sistem operasi lewat `keyring` dan tidak pernah ke `localStorage`. Di Linux tanpa session bus atau Secret Service, Voktty memakai berkas cadangan privat dengan mode 0600.
 
 ## Build dari sumber
 
@@ -147,11 +112,11 @@ cd src-tauri && cargo nextest run --locked                           # atau carg
 
 ## Stack teknologi
 
-Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 6, Vercel AI SDK v6, Tailwind v4, shadcn/ui, dan Zustand.
+Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 6, Vercel AI SDK, Tailwind v4, shadcn/ui, dan Zustand.
 
 ## Berkontribusi
 
-Issue dan PR dipersilakan. Laporkan masalah, sarankan fitur, atau kirim pull request. Lihat [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md) dan [dokumentasi arsitektur](../README.md) untuk informasi lebih lanjut.
+Issue dan PR dipersilakan. Laporkan masalah, sarankan fitur, atau kirim pull request. Lihat [CONTRIBUTING.md](https://github.com/voktty/voktty/blob/main/CONTRIBUTING.md) dan [dokumentasi arsitektur](../README.md) untuk informasi lebih lanjut. Arah proyek ada di [peta jalan](../../ROADMAP.md).
 
 ## Status penandatanganan platform
 
@@ -162,6 +127,10 @@ Peringatan ini saja tidak membuktikan adanya malware, tetapi instal hanya build 
 Sertifikat platform dan notarifikasi akan ditambahkan sebelum distribusi stabil.
 
 <br clear="left" />
+
+## Asal dan atribusi
+
+Voktty adalah fork independen dari Terax (Crynta), dan Agent Harness-nya diturunkan dari MonoCode (MIT, oleh Nick). Tidak ada dari kedua penulis yang berafiliasi dengan atau mendukung Voktty. Lihat [NOTICE](../../NOTICE) dan [LICENSE](../../LICENSE).
 
 ## Lisensi
 
