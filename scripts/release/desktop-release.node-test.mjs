@@ -8,6 +8,7 @@ import {
   requireGreenMain,
   verifyUpdaterManifest,
   versionUpdates,
+  workspaceMemberManifests,
 } from "./desktop-release.mjs";
 
 const sourceVersion = "1.2.3";
@@ -111,12 +112,11 @@ const paths = [
   "src-tauri/Cargo.toml",
   "src-tauri/Cargo.lock",
 ];
-const files = Object.fromEntries(
-  paths.map((path) => [
-    path,
-    readFileSync(new URL(`../../${path}`, import.meta.url), "utf8"),
-  ]),
-);
+const readRepo = (path) =>
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+const files = Object.fromEntries(paths.map((path) => [path, readRepo(path)]));
+const memberManifests = workspaceMemberManifests(files["src-tauri/Cargo.toml"]);
+for (const path of memberManifests) files[path] = readRepo(path);
 
 test("build-only version changes keep native metadata and locked internal crates consistent", () => {
   const current = JSON.parse(files["package.json"]).version;
@@ -148,7 +148,19 @@ test("build-only version changes keep native metadata and locked internal crates
       before[index].replace(`version = "${current}"`, `version = "${target}"`),
     );
   }
-  assert.equal(changed, 13);
+  // The app crate and every member inheriting the workspace version move,
+  // including members added after this test; wake-core keeps its own.
+  const inheriting = memberManifests.filter((path) =>
+    /^version\.workspace\s*=\s*true/m.test(files[path]),
+  );
+  assert.equal(changed, inheriting.length + 1);
+  assert.ok(updated["src-tauri/Cargo.lock"].includes('name = "wake-core"\nversion = "0.5.2"'));
+  for (const path of memberManifests) assert.equal(updated[path], undefined);
+  assert.ok(
+    updated["src-tauri/Cargo.lock"].includes(
+      `name = "voktty-agent-feed"\nversion = "${target}"`,
+    ),
+  );
   assert.deepEqual(versionUpdates(files, current), {});
   const stale = {
     ...files,
@@ -160,8 +172,8 @@ test("build-only version changes keep native metadata and locked internal crates
       {
         ...files,
         "src-tauri/Cargo.lock": files["src-tauri/Cargo.lock"].replace(
-          'name = "voktty-cli"',
-          'name = "missing-cli"',
+          'name = "voktty"\n',
+          'name = "missing-app"\n',
         ),
       },
       target,

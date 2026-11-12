@@ -32,21 +32,34 @@ const targets = [
     "apple-signing-identity": "-",
   },
 ];
-const internalCrates = new Set([
-  "voktty",
-  "voktty-aliases",
-  "voktty-cli",
-  "voktty-collab-protocol",
-  "voktty-companion-protocol",
-  "voktty-control-protocol",
-  "voktty-memory-local",
-  "voktty-paths",
-  "voktty-remote",
-  "voktty-remote-protocol",
-  "voktty-tool-policy",
-  "voktty-workspace-edit",
-  "voktty-workspace-kit",
-]);
+/** Manifest paths of the workspace members listed in src-tauri/Cargo.toml. */
+export function workspaceMemberManifests(cargoToml) {
+  const list = cargoToml.match(/^\[workspace\][\s\S]*?^members\s*=\s*\[([^\]]*)\]/m);
+  if (!list) throw new Error("Workspace members missing from Cargo.toml.");
+  return [...list[1].matchAll(/"([^"]+)"/g)].map(
+    ([, member]) => `src-tauri/${member}/Cargo.toml`,
+  );
+}
+
+/**
+ * Crates whose version moves with a release: the app crate and every
+ * workspace member that inherits the workspace version. Deriving this from
+ * the manifests keeps a newly added crate from leaving a stale Cargo.lock
+ * entry, which made `cargo --locked` reject every release build. Members
+ * with their own version (such as wake-core) keep it.
+ */
+function releasedCrates(files) {
+  const names = new Set(["voktty"]);
+  for (const path of workspaceMemberManifests(files["src-tauri/Cargo.toml"])) {
+    const manifest = files[path];
+    if (manifest === undefined) throw new Error(`Missing manifest ${path}.`);
+    if (!/^version\.workspace\s*=\s*true/m.test(manifest)) continue;
+    const name = manifest.match(/^\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m)?.[1];
+    if (!name) throw new Error(`Package name missing in ${path}.`);
+    names.add(name);
+  }
+  return names;
+}
 
 function versionParts(version) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version))
@@ -162,6 +175,8 @@ export function versionUpdates(files, target) {
   );
   if (sections !== 2)
     throw new Error("Expected package and workspace Cargo versions.");
+  const internalCrates = releasedCrates(files);
+  for (const path of workspaceMemberManifests(cargo)) replacements.delete(path);
   const found = new Set();
   replacements.set(
     "src-tauri/Cargo.lock",
@@ -246,9 +261,10 @@ export function applyVersion(root, version) {
     "src-tauri/Cargo.toml",
     "src-tauri/Cargo.lock",
   ];
-  const files = Object.fromEntries(
-    paths.map((path) => [path, readFileSync(resolve(root, path), "utf8")]),
-  );
+  const read = (path) => readFileSync(resolve(root, path), "utf8");
+  const files = Object.fromEntries(paths.map((path) => [path, read(path)]));
+  for (const path of workspaceMemberManifests(files["src-tauri/Cargo.toml"]))
+    files[path] = read(path);
   const updates = versionUpdates(files, version);
   for (const [path, content] of Object.entries(updates))
     writeFileSync(resolve(root, path), content);
