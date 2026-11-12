@@ -35,6 +35,7 @@ describe("remote agent support", () => {
   it("never blocks local projects or supported agents", () => {
     expect(() => assertRemoteAgentSupported("cursor", "/home/me/app")).not.toThrow();
     expect(() => assertRemoteAgentSupported("codex", remote)).not.toThrow();
+    expect(() => assertRemoteAgentSupported("api", remote)).not.toThrow();
   });
 
   it("looks agents up by the binary the helper starts", () => {

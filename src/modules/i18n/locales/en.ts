@@ -4855,6 +4855,7 @@ export const en = {
     taskPromptWithDetails: "Task: {title}\n\nDetails:\n{details}",
   },
   harness: {
+    apiRemoteChatOnly: "In SSH projects, API models can only chat for now. Tools are unavailable.",
     agentDevelopment: "Agent Development",
     closeAgentDevelopment: "Close Agent Development",
     promptOutline: "Prompt outline",

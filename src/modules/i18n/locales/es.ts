@@ -4970,6 +4970,7 @@ export const es: TranslationSchema = {
     taskPromptWithDetails: "Tarea: {title}\n\nDetalles:\n{details}",
   },
   harness: {
+    apiRemoteChatOnly: "En proyectos SSH, los modelos de API solo pueden conversar por ahora. Las herramientas no están disponibles.",
     agentDevelopment: "Desarrollo de Agentes",
     closeAgentDevelopment: "Cerrar Desarrollo de Agentes",
     promptOutline: "Esquema de prompts",

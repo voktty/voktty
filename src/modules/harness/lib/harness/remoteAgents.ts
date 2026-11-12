@@ -58,7 +58,7 @@ export function assertRemoteAgentSupported(
   harness: HarnessId,
   cwd: string,
 ): void {
-  if (!isRemoteProjectPath(cwd) || supportsRemoteAgent(harness)) return;
+  if (!isRemoteProjectPath(cwd) || harness === "api" || supportsRemoteAgent(harness)) return;
   const supported = Object.keys(REMOTE_AGENTS).join(", ");
   throw new RemoteAgentError(
     "remote-agent-unsupported",

@@ -12,6 +12,10 @@ import { apiToolContext, buildApiTools, forgetApiTools } from "./apiTools";
 
 beforeEach(() => vi.clearAllMocks());
 
+it("does not resolve an SSH project URI as a local tool context", () => {
+  expect(apiToolContext("remote", "remote://ssh-host/srv/project", "fixture")).toBeNull();
+});
+
 async function call(name: string, value: Record<string, unknown>) {
   const context = apiToolContext("api-tools-fixture", "/project", "fixture");
   if (!context) throw new Error("Missing context");

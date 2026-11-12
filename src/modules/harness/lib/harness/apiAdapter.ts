@@ -11,6 +11,8 @@ import {
 } from "@/modules/ai/config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { onKeysChanged } from "@/modules/settings/store";
+import { t } from "@/modules/i18n";
+import { isRemoteProjectPath } from "@/modules/harness/lib/recents";
 import {
   API_PROVIDER_MODEL_PREFIX,
   syncCustomEndpointsToHarness,
@@ -135,6 +137,8 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
 
   const turnId = `api-turn-${Date.now()}`;
   input.onEvent({ type: "turn.started", providerTurnId: turnId });
+  if (isRemoteProjectPath(input.cwd))
+    input.onEvent({ type: "status", text: t("harness.apiRemoteChatOnly") });
 
   try {
     if (input.networkAllowlist != null)
