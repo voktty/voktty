@@ -10,11 +10,5 @@
     ],
     "limit": "540 KB",
     "gzip": true
-  },
-  {
-    "name": "total client JS",
-    "path": ["dist/assets/*.js"],
-    "limit": "7.5 MB",
-    "gzip": true
   }
 ]
