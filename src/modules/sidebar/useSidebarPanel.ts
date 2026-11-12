@@ -1,4 +1,5 @@
-import { type RefObject, useCallback, useRef, useState } from "react";
+import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutVisibilityStore } from "@/modules/sidebar/layoutVisibility";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { SidebarViewId } from "./types";
 
@@ -81,6 +82,21 @@ export function useSidebarPanel(
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(readSidebarCollapsed);
   const collapsedRef = useRef(initialSidebarCollapsed);
+  const focusMode = useLayoutVisibilityStore((state) => state.focusMode);
+  const focusWidthRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const panel = sidebarRef.current;
+    if (!panel) return;
+    if (focusMode) {
+      focusWidthRef.current = panel.getSize().inPixels;
+      panel.collapse();
+    } else if (focusWidthRef.current !== null) {
+      const width = focusWidthRef.current;
+      focusWidthRef.current = null;
+      if (width > 0) panel.resize(`${width}px`);
+      else panel.collapse();
+    }
+  }, [focusMode]);
 
   const persistSidebarView = useCallback((view: SidebarViewId) => {
     setSidebarViewState(view);
@@ -92,6 +108,7 @@ export function useSidebarPanel(
   }, []);
 
   const persistSidebarCollapsed = useCallback((collapsed: boolean) => {
+    if (useLayoutVisibilityStore.getState().focusMode) return;
     setSidebarCollapsed(collapsed);
     if (collapsedRef.current === collapsed) return;
     collapsedRef.current = collapsed;
@@ -106,6 +123,7 @@ export function useSidebarPanel(
   }, []);
 
   const toggleSidebar = useCallback(() => {
+    if (useLayoutVisibilityStore.getState().focusMode) return;
     const p = sidebarRef.current;
     if (!p) return;
     if (p.getSize().asPercentage <= 0) {
@@ -119,6 +137,7 @@ export function useSidebarPanel(
 
   const cycleSidebarView = useCallback(
     (view: SidebarViewId) => {
+      if (useLayoutVisibilityStore.getState().focusMode) return;
       const panel = sidebarRef.current;
       const collapsed = panel ? panel.getSize().asPercentage <= 0 : false;
       if (collapsed) {
@@ -139,6 +158,7 @@ export function useSidebarPanel(
 
   const openSidebarView = useCallback(
     (view: SidebarViewId) => {
+      if (useLayoutVisibilityStore.getState().focusMode) return;
       const panel = sidebarRef.current;
       if (panel && panel.getSize().asPercentage <= 0) {
         panel.resize(`${sidebarWidthRef.current}px`);
@@ -151,6 +171,7 @@ export function useSidebarPanel(
 
   const persistSidebarWidth = useCallback(
     (next: number, isUserInteraction: boolean) => {
+      if (useLayoutVisibilityStore.getState().focusMode) return;
       if (!shouldPersistSidebarWidth(next, isUserInteraction)) return;
       const clamped = clampSidebarWidth(next);
       sidebarWidthRef.current = clamped;
@@ -164,6 +185,7 @@ export function useSidebarPanel(
   );
 
   const toggleExplorerFocus = useCallback(() => {
+    if (useLayoutVisibilityStore.getState().focusMode) return;
     const explorer = explorerRef.current;
     const panel = sidebarRef.current;
     const collapsed = panel ? panel.getSize().asPercentage <= 0 : false;

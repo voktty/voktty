@@ -20,9 +20,10 @@ it("keeps all views accessible and lets the active view close and reopen", async
   try {
     await act(async () => root.render(<Fixture />));
     const buttons = [...container.querySelectorAll("button")];
-    expect(buttons).toHaveLength(6);
+    expect(buttons).toHaveLength(8);
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
       "sidebar.files", "sidebar.search", "sidebar.outline", "sidebar.problems", "sidebar.runDebug", "sidebar.git",
+      "shortcuts.labels.harnessSessionsToggle", "shortcuts.labels.viewFocusMode",
     ]);
     expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
     expect(buttons[0].firstElementChild?.className).toContain("bg-content/10");

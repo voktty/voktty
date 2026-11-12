@@ -49,6 +49,8 @@ const RULES: Readonly<Record<ShortcutId, CommandSurfaceRule>> = {
   "search.focus": GLOBAL,
   "settings.open": GLOBAL,
   "sidebar.toggle": GLOBAL,
+  "harness.sessionsToggle": GLOBAL,
+  "view.focusMode": GLOBAL,
   "sourceControl.toggle": GLOBAL,
   "space.next": GLOBAL,
   "space.overview": GLOBAL,

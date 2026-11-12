@@ -14,6 +14,7 @@ import { restrictPersistencePermit } from "@/modules/harness/lib/scopedPersisten
 export { HarnessWindowHost as HarnessRuntimeRoot } from "@/modules/harness/components/HarnessWindowHost";
 import { harnessSessionDeltas } from "@/modules/harness/lib/harnessSessionEngineState";
 import { t } from "@/modules/i18n";
+import { useLayoutVisibilityStore } from "@/modules/sidebar/layoutVisibility";
 import { isForegroundHarnessSession } from "@/modules/harness/lib/harnessFlush";
 import { useWindowPersistenceAdmission } from "@/modules/harness/hooks/useWindowPersistenceAdmission";
 import { useInitialHarnessSession } from "@/modules/harness/hooks/useInitialHarnessSession";
@@ -586,6 +587,9 @@ export function HarnessApp({
   );
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen);
   const [projectRailOpen, setProjectRailOpen] = useState(loadProjectRailOpen);
+  const focusMode = useLayoutVisibilityStore((state) => state.focusMode);
+  const sessionsVisible = sidebarOpen && !focusMode;
+  const projectRailVisible = projectRailOpen && !focusMode;
   const sidebarLayout = useSidebarLayout();
   const deckLayout = sidebarLayout === "deck";
   const tabCloseScope = deckLayout ? "project" : "workspace";
@@ -4518,6 +4522,7 @@ export function HarnessApp({
   );
 
   const onToggleSidebar = useCallback(() => {
+    if (useLayoutVisibilityStore.getState().focusMode) return;
     if (deckLayout) {
       setProjectRailOpen((open: any) => {
         const next = !open;
@@ -4534,12 +4539,27 @@ export function HarnessApp({
   }, [deckLayout]);
 
   const onToggleProjectRail = useCallback(() => {
+    if (useLayoutVisibilityStore.getState().focusMode) return;
     setProjectRailOpen((open: any) => {
       const next = !open;
       saveProjectRailOpen(next);
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    const onToggleSessions = () => {
+      if (!visibleRef.current || !focusedRef.current || focusMode) return;
+      setSidebarOpen((open) => {
+        const next = !open;
+        saveSidebarOpen(next);
+        return next;
+      });
+    };
+    window.addEventListener("voktty:toggle-harness-sessions", onToggleSessions);
+    return () =>
+      window.removeEventListener("voktty:toggle-harness-sessions", onToggleSessions);
+  }, [focusMode]);
 
   const onGoToFile = useCallback(() => {
     setSearchViewOpen(false);
@@ -5156,7 +5176,7 @@ export function HarnessApp({
             ? workspaceNavigation.error.message
             : undefined
         }
-        open={deckLayout || sidebarOpen}
+        open={sessionsVisible}
         layout={sidebarLayout}
         tab={sidebarTab}
         onTabChange={setSidebarTab}
@@ -5224,7 +5244,7 @@ export function HarnessApp({
         notesActive={notesViewOpen}
         automationsActive={automationsViewOpen}
         notesEnabled={notesEnabled}
-        projectRailOpen={projectRailOpen}
+        projectRailOpen={projectRailVisible}
         onToggleProjectRail={onToggleProjectRail}
         unseenFinishedIds={unseenFinishedIds}
       />
@@ -5258,9 +5278,9 @@ export function HarnessApp({
             activeId={activeTabId}
             cwd={sidebarCwd}
             gitCwd={gitCwd}
-            sidebarOpen={deckLayout || sidebarOpen}
+            sidebarOpen={sessionsVisible}
             deckLayout={deckLayout}
-            projectRailOpen={projectRailOpen}
+            projectRailOpen={projectRailVisible}
             sourceControlActive={
               deckLayout
                 ? sidebarOpen && sidebarTab === "changes"
@@ -5475,7 +5495,7 @@ export function HarnessApp({
               history={projectHistory}
               sessions={sessions}
               focusToken={searchViewFocusToken}
-              besideRail={deckLayout && projectRailOpen}
+              besideRail={deckLayout && projectRailVisible}
               onClose={onLeaveSearch}
               onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
               onOpenFile={onOpenFile}
@@ -5489,7 +5509,7 @@ export function HarnessApp({
             <LazyInboxView
               cwd={sidebarCwd}
               recents={recents}
-              besideRail={deckLayout && projectRailOpen}
+              besideRail={deckLayout && projectRailVisible}
               onClose={onLeaveInbox}
               onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
               onStart={onStartInboxItem}
@@ -5503,7 +5523,7 @@ export function HarnessApp({
         {notesViewOpen ? (
           <Suspense fallback={null}>
             <LazyNotesView
-              besideRail={deckLayout && projectRailOpen}
+              besideRail={deckLayout && projectRailVisible}
               cwd={projectCwd}
               onClose={onLeaveNotes}
               onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
@@ -5515,8 +5535,8 @@ export function HarnessApp({
             <LazyAutomationsView
               cwd={sidebarCwd}
               recents={recents}
-              besideRail={deckLayout && projectRailOpen}
-              compactRail={deckLayout && !projectRailOpen}
+              besideRail={deckLayout && projectRailVisible}
+              compactRail={deckLayout && !projectRailVisible}
               onClose={onLeaveAutomations}
               onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
               onLaunch={(automation, run) =>

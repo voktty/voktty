@@ -13,6 +13,8 @@ import {
   useTerminalSurfaceController,
 } from "@/modules/terminal/TerminalSurface";
 import { normalizeProjectPath } from "@/modules/harness/lib/recents";
+import { loadSidebarOpen } from "@/modules/harness/lib/appearance";
+import { useLayoutVisibilityStore } from "@/modules/sidebar/layoutVisibility";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, assert, expect, it, vi } from "vitest";
 import { HarnessApp } from "@/modules/harness/components/HarnessApp";
@@ -283,6 +285,7 @@ function Host({
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
+  useLayoutVisibilityStore.setState({ focusMode: false });
   vi.clearAllMocks();
   state.resolveFile
     .mockReset()
@@ -756,4 +759,94 @@ it("applies current file navigation through the production App state setters", a
     line: 7,
     column: 2,
   });
+});
+
+it("remembers the sessions toggle without replacing a live canonical dock", async () => {
+  await act(async () => root.render(<Host />));
+  await act(async () => required(sidebar().onNewTerminal)());
+  const originalDock = view().projectTerminals[0];
+  const tabs = view().tabs;
+  const sessionIds = required(state.pane).sessions.map((session) => session.id);
+  expect(sidebar().open).toBe(true);
+  await act(async () => window.dispatchEvent(new Event("voktty:toggle-harness-sessions")));
+  expect(sidebar().open).toBe(false);
+  expect(loadSidebarOpen()).toBe(false);
+  expect(view().projectTerminals[0]).toBe(originalDock);
+  expect(view().tabs).toBe(tabs);
+  expect(required(state.pane).sessions.map((session) => session.id)).toEqual(sessionIds);
+  await act(async () => root.render(null));
+  await act(async () => root.render(<Host />));
+  expect(sidebar().open).toBe(false);
+  await act(async () => window.dispatchEvent(new Event("voktty:toggle-harness-sessions")));
+  expect(sidebar().open).toBe(true);
+  expect(loadSidebarOpen()).toBe(true);
+  expect(state.close).not.toHaveBeenCalled();
+  expect(state.admit).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("restores the exact sessions preference %s after focus mode", async (open) => {
+  await act(async () => root.render(<Host />));
+  await act(async () => required(sidebar().onNewTerminal)());
+  if (!open) {
+    await act(async () => window.dispatchEvent(new Event("voktty:toggle-harness-sessions")));
+  }
+  const originalDock = view().projectTerminals[0];
+  const tabs = view().tabs;
+  expect(sidebar().projectRailOpen).toBe(true);
+  await act(async () => useLayoutVisibilityStore.setState({ focusMode: true }));
+  expect(sidebar().open).toBe(false);
+  expect(sidebar().projectRailOpen).toBe(false);
+  expect(loadSidebarOpen()).toBe(open);
+  await act(async () => useLayoutVisibilityStore.setState({ focusMode: false }));
+  expect(sidebar().open).toBe(open);
+  expect(sidebar().projectRailOpen).toBe(true);
+  expect(view().projectTerminals[0]).toBe(originalDock);
+  expect(view().tabs).toBe(tabs);
+  expect(state.close).not.toHaveBeenCalled();
+  expect(state.admit).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+});
+
+it("does not toggle sessions in an unfocused Harness", async () => {
+  await act(async () => root.render(<Host focused={false} />));
+  await act(async () => window.dispatchEvent(new Event("voktty:toggle-harness-sessions")));
+  expect(sidebar().open).toBe(true);
+  expect(loadSidebarOpen()).toBe(true);
+});
+
+it.each(["b", "f"])("leaves Alt+Mod+%s to a focused terminal", async (key) => {
+  await act(async () => root.render(<Host />));
+  await act(async () => required(sidebar().onNewTerminal)());
+  const originalDock = view().projectTerminals[0];
+  const terminalNode = document.createElement("div");
+  terminalNode.className = "xterm monocode-terminal";
+  const input = document.createElement("textarea");
+  input.className = "xterm-helper-textarea";
+  terminalNode.append(input);
+  node.append(terminalNode);
+  input.focus();
+  const event = new KeyboardEvent("keydown", {
+    key,
+    code: key === "b" ? "KeyB" : "KeyF",
+    metaKey: true,
+    altKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => input.dispatchEvent(event));
+  expect(event.defaultPrevented).toBe(false);
+  expect(sidebar().open).toBe(true);
+  expect(useLayoutVisibilityStore.getState().focusMode).toBe(false);
+  expect(view().projectTerminals[0]).toBe(originalDock);
+  expect(state.close).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+});
+
+it("keeps the original rail preference when its control is invoked during focus mode", async () => {
+  await act(async () => root.render(<Host />));
+  await act(async () => useLayoutVisibilityStore.setState({ focusMode: true }));
+  await act(async () => required(sidebar().onToggleProjectRail)());
+  await act(async () => useLayoutVisibilityStore.setState({ focusMode: false }));
+  expect(sidebar().projectRailOpen).toBe(true);
 });

@@ -67,6 +67,20 @@ describe("shortcutScope", () => {
     const termTarget = makeTarget(["xterm-helper-textarea"]);
     const outsideTarget = makeTarget(["sidebar-btn"]);
 
+    it.each(["view.focusMode", "harness.sessionsToggle"] as const)(
+      "leaves %s to a focused terminal on every platform",
+      (id) => {
+        for (const isMac of [true, false]) {
+          expect(shouldDisableShortcut({ id, event: makeKeyboardEvent({ target: termTarget, altKey: true }), activeTabKind: "harness", isMac })).toBe(true);
+          expect(shouldDisableShortcut({ id, event: makeKeyboardEvent({ target: outsideTarget, altKey: true }), activeTabKind: "harness", isMac })).toBe(false);
+        }
+      },
+    );
+
+    it("only toggles conversations from a Harness surface", () => {
+      expect(shouldDisableShortcut({ id: "harness.sessionsToggle", event: makeKeyboardEvent({ target: outsideTarget }), activeTabKind: "editor" })).toBe(true);
+    });
+
     it("disables editor.openFile (Ctrl+O) when inside terminal so nano/mc receive it", () => {
       const eventInTerm = makeKeyboardEvent({ key: "o", target: termTarget });
       expect(

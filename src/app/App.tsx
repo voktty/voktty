@@ -4,6 +4,7 @@ import {
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
 import { useHarnessDesktopContext } from "@/modules/surfaces/lib/useHarnessDesktopContext";
+import { toggleHarnessSessions, useLayoutVisibilityStore } from "@/modules/sidebar/layoutVisibility";
 import { useSurfaceTerminalCommand } from "@/modules/surfaces/lib/useSurfaceTerminalCommand";
 import { useDirectoryTerminalOpening } from "@/modules/surfaces/lib/useDirectoryTerminalOpening";
 import { usePathOpening } from "@/modules/surfaces/lib/usePathOpening";
@@ -809,6 +810,7 @@ function DesktopApp() {
     persistSidebarWidth,
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
+  const focusMode = useLayoutVisibilityStore((state) => state.focusMode);
 
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
   const panelOpen = useChatStore((s) => s.panelOpen);
@@ -3156,6 +3158,8 @@ function DesktopApp() {
       },
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
+      "harness.sessionsToggle": toggleHarnessSessions,
+      "view.focusMode": () => useLayoutVisibilityStore.getState().toggleFocus(),
       "sourceControl.toggle": toggleSourceControl,
       "explorer.focus": toggleExplorerFocus,
       "explorer.toggleHidden": toggleHiddenFiles,
@@ -4921,7 +4925,8 @@ function DesktopApp() {
             <WorkspaceDragLiveRegion viewSpaces={viewSpaces} tabs={tabs} />
             <div className="flex min-h-0 min-w-0 flex-1">
               <SidebarRail
-                activeView={sidebarCollapsed ? null : sidebarView}
+                activeView={sidebarCollapsed || focusMode ? null : sidebarView}
+                harnessActive={activeTab?.kind === "harness"}
                 onSelectView={handleSidebarViewSelect}
                 changedCount={sourceControl.changedCount}
                 workspaceRoot={quickOpenRoot}
@@ -4971,7 +4976,7 @@ function DesktopApp() {
                   persistSidebarCollapsed(size.inPixels <= 0);
                 }}
               >
-                <div className="h-full min-h-0 border-r border-border/30">
+                <div className="h-full min-h-0 border-r border-border/30" inert={focusMode || undefined} aria-hidden={focusMode || undefined}>
                   <div className="voktty-pane flex h-full min-h-0 flex-col">
                     <div className="min-h-0 flex-1 voktty-panel-in">
                       {sidebarView === "explorer" ? (
@@ -5101,7 +5106,7 @@ function DesktopApp() {
                   </div>
                 </div>
               </ResizablePanel>
-              <ResizableHandle className="w-1 rounded-full bg-transparent transition-colors duration-[var(--dur-fast)] after:w-4 hover:bg-border" />
+              <ResizableHandle disabled={focusMode} className={cn("w-1 rounded-full bg-transparent transition-colors duration-[var(--dur-fast)] after:w-4 hover:bg-border", focusMode && "hidden")} />
               <ResizablePanel
                 id="workspace"
                 groupResizeBehavior="preserve-relative-size"

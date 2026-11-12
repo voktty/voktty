@@ -21,6 +21,9 @@ vi.mock("@/modules/harness/chrome/FileTree", () => ({
   FileTree: ({ cwd }: { cwd: string }) =>
     createElement("div", { "data-explorer-cwd": cwd }),
 }));
+vi.mock("@/modules/harness/chrome/ProjectRail", () => ({
+  ProjectRail: () => createElement("input", { "data-project-rail": true }),
+}));
 
 let container: HTMLDivElement;
 let root: Root;
@@ -90,4 +93,60 @@ it("updates the visible explorer immediately on project changes", () => {
   props = { ...props, cwd: "C:/workspace/second" };
   render();
   expect(explorer()?.dataset.explorerCwd).toBe(props.cwd);
+});
+
+it.each(["classic", "deck"] as const)(
+  "retains session rows while the %s column is hidden and restored",
+  (layout) => {
+    props = {
+      ...props,
+      layout,
+      sessions: [{
+        id: "retained-session",
+        cwd: props.cwd,
+        harness: "claude",
+        model: "claude-model",
+        runtimeMode: "supervised",
+        title: "Retained conversation",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }],
+    };
+    render();
+    const row = container.querySelector('[data-session-card="retained-session"]');
+    expect(row).not.toBeNull();
+    const column = row?.closest("aside")?.parentElement;
+    props = { ...props, open: false };
+    render();
+    expect(container.querySelector('[data-session-card="retained-session"]')).toBe(row);
+    expect(column?.getAttribute("aria-hidden")).toBe("true");
+    expect(column?.hasAttribute("inert")).toBe(true);
+    expect(column?.className).toBe("hidden");
+    props = { ...props, open: true };
+    render();
+    expect(container.querySelector('[data-session-card="retained-session"]')).toBe(row);
+    expect(column?.getAttribute("aria-hidden")).toBe("false");
+  },
+);
+
+it("retains the project rail and its input state through focus visibility changes", () => {
+  props = {
+    ...props,
+    layout: "deck",
+    onSelectProject: vi.fn(),
+    onOpenProject: vi.fn(),
+    projectRailOpen: true,
+  };
+  render();
+  const rail = container.querySelector<HTMLInputElement>("[data-project-rail]");
+  if (!rail) throw new Error("Project rail did not mount");
+  rail.value = "remote picker state";
+  props = { ...props, open: false, projectRailOpen: false };
+  render();
+  expect(container.querySelector("[data-project-rail]")).toBe(rail);
+  expect(rail.parentElement?.getAttribute("aria-hidden")).toBe("true");
+  props = { ...props, open: true, projectRailOpen: true };
+  render();
+  expect(container.querySelector("[data-project-rail]")).toBe(rail);
+  expect(rail.value).toBe("remote picker state");
 });

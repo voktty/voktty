@@ -66,6 +66,9 @@ export function shouldDisableShortcut(
       ? (document.activeElement as HTMLElement | null)
       : null);
   const inTerminal = isTerminalFocused(target);
+  if (id === "view.focusMode" || id === "harness.sessionsToggle") {
+    return inTerminal || (id === "harness.sessionsToggle" && activeTabKind !== "harness");
+  }
 
   // 1. Pane swap shortcuts need >= 2 panes in terminal tab
   if (shouldDisablePaneSwapShortcut(id, terminalPaneCount)) {

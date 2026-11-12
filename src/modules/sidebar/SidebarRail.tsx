@@ -10,9 +10,12 @@ import {
   summarizeProblems,
 } from "@/modules/editor/lib/problems";
 import { useTranslation } from "@/modules/i18n";
+import { toggleHarnessSessions, useLayoutVisibilityStore } from "@/modules/sidebar/layoutVisibility";
 import { playVokttySoundThrottled, problemSoundCue } from "@/modules/sound";
 import {
   Alert02Icon,
+  BubbleChatIcon,
+  FocusIcon,
   FileSearchIcon,
   FolderGitTwoIcon,
   FolderTreeIcon,
@@ -42,6 +45,7 @@ type Props = {
   header?: ReactNode;
   /** Pinned to the bottom of the bar, below the view icons. */
   footer?: ReactNode;
+  harnessActive?: boolean;
 };
 
 export function SidebarRail({
@@ -51,8 +55,11 @@ export function SidebarRail({
   workspaceRoot,
   header,
   footer,
+  harnessActive = false,
 }: Props) {
   const { t } = useTranslation();
+  const focusMode = useLayoutVisibilityStore((state) => state.focusMode);
+  const toggleFocus = useLayoutVisibilityStore((state) => state.toggleFocus);
   const problemDocuments = useDiagnosticsStore(
     (state) => state.problemDocuments,
   );
@@ -134,6 +141,7 @@ export function SidebarRail({
                 type="button"
                 aria-label={item.label}
                 aria-pressed={isActive}
+                disabled={focusMode}
                 onClick={() => onSelectView(item.id)}
                 className="group flex h-10 shrink-0 cursor-pointer items-center justify-center text-content/50 outline-none transition-colors duration-[var(--dur-base)] hover:text-content"
               >
@@ -174,9 +182,31 @@ export function SidebarRail({
           </Tooltip>
         );
       })}
-      {footer ? (
-        <div className="mt-auto flex flex-col items-center pb-1">{footer}</div>
-      ) : null}
+      <div className="mt-auto flex flex-col gap-0.5">
+        <button
+          type="button"
+          aria-label={t("shortcuts.labels.harnessSessionsToggle")}
+          title={t("shortcuts.labels.harnessSessionsToggle")}
+          disabled={!harnessActive || focusMode}
+          onClick={toggleHarnessSessions}
+          className="flex h-10 items-center justify-center rounded-md text-content/60 hover:bg-content/10 focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-30"
+        >
+          <HugeiconsIcon icon={BubbleChatIcon} size={18} />
+        </button>
+        <button
+          type="button"
+          aria-label={t("shortcuts.labels.viewFocusMode")}
+          title={t("shortcuts.labels.viewFocusMode")}
+          aria-pressed={focusMode}
+          onClick={toggleFocus}
+          className="flex h-10 items-center justify-center rounded-md text-content/60 hover:bg-content/10 focus-visible:ring-2 focus-visible:ring-primary/40 aria-pressed:bg-content/10"
+        >
+          <HugeiconsIcon icon={FocusIcon} size={18} />
+        </button>
+        {footer ? (
+          <div className="flex flex-col items-center pb-1 pt-0.5">{footer}</div>
+        ) : null}
+      </div>
     </div>
   );
 }

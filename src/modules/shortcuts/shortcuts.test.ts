@@ -157,6 +157,14 @@ describe("IDE shortcut defaults", () => {
     );
   }
 
+  it("assigns distinct focus and conversation shortcuts without new conflicts", () => {
+    for (const id of ["view.focusMode", "harness.sessionsToggle"] as const) {
+      const binding = bindings(id)[0];
+      const matching = SHORTCUTS.filter((shortcut) => shortcut.defaultBindings.some((candidate) => matchBinding(event({ key: binding.key, ctrlKey: binding.ctrl, metaKey: binding.meta, altKey: binding.alt, shiftKey: binding.shift }), candidate)));
+      expect(matching.map((shortcut) => shortcut.id)).toEqual([id]);
+    }
+  });
+
   it("opens commands on F1 and workspace files on Mod+P", () => {
     expect(bindings("file.quickOpen")).toEqual([{ ctrl: true, key: "p" }]);
     expect(bindings("tabs.launchpad")).toEqual([]);

@@ -1860,7 +1860,12 @@ function SidebarComponent({
         railVisible || sidebarVisible ? "" : "hidden"
       }`}
     >
-      {railVisible && onSelectProject && onOpenProject ? (
+      {showProjectRail && onSelectProject && onOpenProject ? (
+        <div
+          className={railVisible ? "flex h-full" : "hidden"}
+          aria-hidden={!railVisible}
+          inert={!railVisible || undefined}
+        >
         <ProjectRail
           cwd={cwd}
           recents={recents}
@@ -1886,8 +1891,15 @@ function SidebarComponent({
           onOpenProject={onOpenProject}
           onRemoveProject={onRemoveProject}
         />
+        </div>
       ) : null}
-      {sidebarVisible ? sidebarContent : null}
+      <div
+        className={sidebarVisible ? "flex h-full" : "hidden"}
+        aria-hidden={!sidebarVisible}
+        inert={!sidebarVisible || undefined}
+      >
+        {sidebarContent}
+      </div>
     </div>
   );
 }

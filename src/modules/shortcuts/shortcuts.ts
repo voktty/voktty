@@ -50,6 +50,8 @@ export type ShortcutId =
   | "view.zoomOut"
   | "view.zoomReset"
   | "view.zenMode"
+  | "view.focusMode"
+  | "harness.sessionsToggle"
   | "ai.toggle"
   | "ai.toggleMini"
   | "ai.askSelection"
@@ -463,6 +465,18 @@ export const SHORTCUTS: Shortcut[] = [
     labelKey: "shortcuts.labels.viewZenMode",
     group: "View",
     defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "'" }],
+  },
+  {
+    id: "view.focusMode",
+    labelKey: "shortcuts.labels.viewFocusMode",
+    group: "View",
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "f" }],
+  },
+  {
+    id: "harness.sessionsToggle",
+    labelKey: "shortcuts.labels.harnessSessionsToggle",
+    group: "View",
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "b" }],
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface
