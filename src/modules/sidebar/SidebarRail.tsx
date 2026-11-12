@@ -23,7 +23,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef } from "react";
 import type { SidebarViewId } from "./types";
 
-export const SIDEBAR_RAIL_HEIGHT = 30;
+export const SIDEBAR_RAIL_WIDTH = 44;
 
 type RailItem = {
   id: SidebarViewId;
@@ -34,7 +34,7 @@ type RailItem = {
 };
 
 type Props = {
-  activeView: SidebarViewId;
+  activeView: SidebarViewId | null;
   onSelectView: (view: SidebarViewId) => void;
   changedCount: number;
   workspaceRoot: string | null;
@@ -108,8 +108,8 @@ export function SidebarRail({
 
   return (
     <div
-      style={{ height: SIDEBAR_RAIL_HEIGHT }}
-      className="flex shrink-0 items-stretch gap-0.5 border-t border-border/60 bg-foreground/[0.025] px-1 py-0.5"
+      style={{ width: SIDEBAR_RAIL_WIDTH }}
+      className="flex shrink-0 flex-col items-stretch gap-0.5 border-r border-border/60 bg-foreground/[0.025] px-1 py-1"
     >
       {items.map((item) => {
         const isActive = item.id === activeView;
@@ -123,7 +123,7 @@ export function SidebarRail({
                 aria-label={item.label}
                 aria-pressed={isActive}
                 onClick={() => onSelectView(item.id)}
-                className="group flex min-w-0 flex-1 cursor-pointer items-center justify-center text-muted-foreground outline-none transition-colors duration-[var(--dur-base)] hover:text-foreground"
+                className="group flex h-10 shrink-0 cursor-pointer items-center justify-center text-muted-foreground outline-none transition-colors duration-[var(--dur-base)] hover:text-foreground"
               >
                 <span
                   className={cn(
@@ -135,7 +135,7 @@ export function SidebarRail({
                 >
                   <HugeiconsIcon
                     icon={item.icon}
-                    size={14}
+                    size={18}
                     strokeWidth={isActive ? 2 : 1.75}
                     className="shrink-0 transition-[stroke-width] duration-[var(--dur-base)]"
                   />
@@ -156,7 +156,7 @@ export function SidebarRail({
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6}>
+            <TooltipContent side="right" sideOffset={6}>
               {item.label}
             </TooltipContent>
           </Tooltip>

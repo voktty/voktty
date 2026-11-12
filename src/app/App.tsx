@@ -298,8 +298,6 @@ import {
 } from "@/modules/workspace-search";
 import { SettingsModal } from "@/settings/SettingsModal";
 import { BootstrapLoader } from "@/modules/mobile";
-import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -801,7 +799,6 @@ function DesktopApp() {
     sidebarView,
     initialSidebarCollapsed,
     sidebarCollapsed,
-    persistSidebarView,
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
@@ -899,9 +896,9 @@ function DesktopApp() {
         setWorkspaceSearchMounted(true);
         setWorkspaceSearchFocusRequest((request) => request + 1);
       }
-      persistSidebarView(view);
+      cycleSidebarView(view);
     },
-    [persistSidebarView],
+    [cycleSidebarView],
   );
   const openQuickOpen = useCallback(() => {
     setQuickOpenOpen(true);
@@ -4905,6 +4902,13 @@ function DesktopApp() {
 
           <main className="zoom-content flex min-h-0 flex-1 flex-col">
             <WorkspaceDragLiveRegion viewSpaces={viewSpaces} tabs={tabs} />
+            <div className="flex min-h-0 min-w-0 flex-1">
+              <SidebarRail
+                activeView={sidebarCollapsed ? null : sidebarView}
+                onSelectView={handleSidebarViewSelect}
+                changedCount={sourceControl.changedCount}
+                workspaceRoot={quickOpenRoot}
+              />
             <ResizablePanelGroup
               orientation="horizontal"
               className="min-h-0 flex-1"
@@ -5069,36 +5073,10 @@ function DesktopApp() {
                         </div>
                       ) : null}
                     </div>
-                    <SidebarRail
-                      activeView={sidebarView}
-                      onSelectView={handleSidebarViewSelect}
-                      changedCount={sourceControl.changedCount}
-                      workspaceRoot={quickOpenRoot}
-                    />
                   </div>
                 </div>
               </ResizablePanel>
-              <ResizableHandle className="group/divider w-1 rounded-full bg-transparent transition-colors duration-[var(--dur-fast)] after:w-4 hover:bg-border">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSidebar();
-                  }}
-                  title={t("header.toggleSidebar")}
-                  className={cn(
-                    "absolute top-8 z-30 flex size-5.5 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-popover/95 text-muted-foreground shadow-md backdrop-blur-md transition-all duration-150 cursor-pointer hover:scale-110 hover:bg-accent hover:text-foreground active:scale-95",
-                    "opacity-0 pointer-events-none group-hover/divider:opacity-100 group-hover/divider:pointer-events-auto",
-                    sidebarCollapsed ? "left-2.5" : "left-1/2",
-                  )}
-                >
-                  <HugeiconsIcon
-                    icon={sidebarCollapsed ? ArrowRight01Icon : ArrowLeft01Icon}
-                    size={12}
-                    strokeWidth={2.2}
-                  />
-                </button>
-              </ResizableHandle>
+              <ResizableHandle className="w-1 rounded-full bg-transparent transition-colors duration-[var(--dur-fast)] after:w-4 hover:bg-border" />
               <ResizablePanel
                 id="workspace"
                 groupResizeBehavior="preserve-relative-size"
@@ -5342,6 +5320,7 @@ function DesktopApp() {
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
+            </div>
           </main>
 
           {!zenMode && (
