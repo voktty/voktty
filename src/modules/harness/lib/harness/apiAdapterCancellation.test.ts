@@ -3,6 +3,11 @@ import type { ModelMessage } from "ai";
 
 const fixture = vi.hoisted(() => ({ histories: [] as ModelMessage[][] }));
 vi.mock("@ai-sdk/openai-compatible", () => ({ createOpenAICompatible: () => () => ({}) }));
+vi.mock("@/modules/ai/lib/agent", () => ({ buildStableSystem: () => "system" }));
+vi.mock("@/modules/harness/lib/harness/apiTools", () => ({
+  apiToolContext: () => null,
+  forgetApiTools: async () => {},
+}));
 vi.mock("@/modules/harness/lib/harness/apiAgentLoop", () => ({
   runApiAgentLoop: async (input: { messages: ModelMessage[]; signal: AbortSignal }) => {
     fixture.histories.push(input.messages);

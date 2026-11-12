@@ -21,6 +21,7 @@ export async function runApiAgentLoop(input: {
   model: LanguageModel;
   messages: ModelMessage[];
   tools?: ToolSet;
+  system?: string;
   signal: AbortSignal;
   onEvent: (event: HarnessEvent) => void;
   onApproval?: (request: ApiApproval) => Promise<boolean>;
@@ -29,10 +30,13 @@ export async function runApiAgentLoop(input: {
   const messages = [...input.messages];
   const response: ModelMessage[] = [];
   let remaining = MAX_AGENT_STEPS;
+  let resumedCalls = new Set<string>();
   while (remaining > 0 && !input.signal.aborted) {
     const requests: ApiApproval[] = [];
+    const resumedResults: Extract<ModelMessage, { role: "tool" }>["content"] = [];
     const result = streamText({
       model: input.model,
+      system: input.system,
       messages,
       tools,
       abortSignal: input.signal,
@@ -55,7 +59,10 @@ export async function runApiAgentLoop(input: {
           requests.push({ approvalId: part.approvalId, callId: part.toolCall.toolCallId, title: part.toolCall.toolName, requestId: ++nextRequestId });
           break;
         case "tool-result":
-          input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: "completed" });
+          if (resumedCalls.has(part.toolCallId)) {
+            resumedResults.push({ type: "tool-result", toolCallId: part.toolCallId, toolName: part.toolName, output: { type: "json", value: JSON.parse(JSON.stringify(part.output ?? null)) } });
+          }
+          input.onEvent({ type: "tool.updated", callId: part.toolCallId, status: typeof part.output === "object" && part.output !== null && "error" in part.output ? "failed" : "completed" });
           break;
         case "tool-error":
         case "tool-output-denied":
@@ -68,6 +75,11 @@ export async function runApiAgentLoop(input: {
     if (input.signal.aborted) return [];
     const steps = await result.steps;
     remaining -= Math.max(1, steps.length);
+    if (resumedResults.length) {
+      const results: ModelMessage = { role: "tool", content: resumedResults };
+      response.push(results);
+      messages.push(results);
+    }
     const next = steps.flatMap((step) => step.response.messages);
     response.push(...next);
     messages.push(...next);
@@ -84,6 +96,7 @@ export async function runApiAgentLoop(input: {
       approvals.push({ type: "tool-approval-response", approvalId: request.approvalId, approved });
     }
     const approvalMessage: ModelMessage = { role: "tool", content: approvals };
+    resumedCalls = new Set(requests.filter((_, index) => approvals[index].approved).map((request) => request.callId));
     messages.push(approvalMessage);
     response.push(approvalMessage);
   }

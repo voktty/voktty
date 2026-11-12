@@ -28,6 +28,7 @@ const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
 
 const activeControllers = new Map<string, AbortController>();
 const historyBySession = new Map<string, ModelMessage[]>();
+let apiToolsModule: typeof import("./apiTools") | undefined;
 const MAX_HISTORY_CHARS = 1024 * 1024;
 
 export function boundedApiHistory(messages: ModelMessage[]): ModelMessage[] {
@@ -132,6 +133,8 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
   input.onEvent({ type: "turn.started", providerTurnId: turnId });
 
   try {
+    if (input.networkAllowlist != null)
+      throw new Error("API agents do not support the requested network sandbox.");
     const customEndpoints = usePreferencesStore.getState().customEndpoints ?? [];
     const model = await resolveApiModel(input.model, customEndpoints);
 
@@ -145,12 +148,29 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
     ];
 
     const { runApiAgentLoop } = await import("./apiAgentLoop");
-    const response = await runApiAgentLoop({
-      model,
-      messages: history,
-      signal: controller.signal,
-      onEvent: input.onEvent,
-    });
+    const apiTools = await import("./apiTools");
+    apiToolsModule = apiTools;
+    const { buildStableSystem } = await import("@/modules/ai/lib/agent");
+    if (controller.signal.aborted) {
+      input.onEvent({ type: "session.ended", code: 0 });
+      return;
+    }
+    const context = apiTools.apiToolContext(input.sessionId, input.cwd, input.model);
+    const tools = context ? apiTools.buildApiTools(context) : undefined;
+    const { retireFileToolRun } = await import("@/modules/ai/lib/fileToolApprovals");
+    let response: ModelMessage[];
+    try {
+      response = await runApiAgentLoop({
+        model,
+        messages: history,
+        tools,
+        system: buildStableSystem(input.model, null, undefined, null),
+        signal: controller.signal,
+        onEvent: input.onEvent,
+      });
+    } finally {
+      if (tools) retireFileToolRun(tools);
+    }
 
     if (controller.signal.aborted) {
       input.onEvent({ type: "session.ended", code: 0 });
@@ -206,10 +226,11 @@ export function respondApiApproval(
 
 export async function stopApiSession(sessionId: string): Promise<void> {
   await cancelApiTurn(sessionId);
+  await apiToolsModule?.forgetApiTools(sessionId);
 }
 
 export async function forgetApiSession(sessionId: string): Promise<void> {
-  await cancelApiTurn(sessionId);
+  await stopApiSession(sessionId);
   historyBySession.delete(sessionId);
 }
 
