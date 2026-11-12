@@ -4970,6 +4970,7 @@ export const es: TranslationSchema = {
     taskPromptWithDetails: "Tarea: {title}\n\nDetalles:\n{details}",
   },
   harness: {
+    apiRemoteNoShell: "En proyectos SSH, los modelos de API pueden leer, buscar y editar ficheros, pero todavía no ejecutar comandos.",
     apiRemoteChatOnly: "En proyectos SSH, los modelos de API solo pueden conversar por ahora. Las herramientas no están disponibles.",
     apiToolCompleted: "Herramienta completada.",
     apiToolFailed: "La herramienta falló.",

@@ -137,9 +137,8 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
 
   const turnId = `api-turn-${Date.now()}`;
   input.onEvent({ type: "turn.started", providerTurnId: turnId });
-  if (isRemoteProjectPath(input.cwd))
-    input.onEvent({ type: "status", text: t("harness.apiRemoteChatOnly") });
-
+  // An SSH turn holds a helper session for its tools until it ends.
+  let remoteLease: { release: () => void } | null = null;
   try {
     if (input.networkAllowlist != null)
       throw new Error("API agents do not support the requested network sandbox.");
@@ -163,8 +162,31 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
       input.onEvent({ type: "session.ended", code: 0 });
       return;
     }
-    const context = apiTools.apiToolContext(input.sessionId, input.cwd, input.model);
-    const tools = context ? apiTools.buildApiTools(context) : undefined;
+    let target = apiTools.localApiToolTarget(input.cwd);
+    if (isRemoteProjectPath(input.cwd)) {
+      const lease = await apiTools
+        .acquireRemoteApiTools(input.cwd)
+        .catch(() => null);
+      remoteLease = lease;
+      if (controller.signal.aborted) {
+        input.onEvent({ type: "session.ended", code: 0 });
+        return;
+      }
+      target = lease?.target ?? null;
+      input.onEvent({
+        type: "status",
+        text: t(target ? "harness.apiRemoteNoShell" : "harness.apiRemoteChatOnly"),
+      });
+    }
+    const context = apiTools.apiToolContext(
+      input.sessionId,
+      input.cwd,
+      input.model,
+      target,
+    );
+    const tools = context
+      ? apiTools.buildApiTools(context, { shell: target?.shell })
+      : undefined;
     const { retireFileToolRun } = await import("@/modules/ai/lib/fileToolApprovals");
     let response: ModelMessage[];
     try {
@@ -224,6 +246,7 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
     input.onEvent({ type: "session.ended", code: 1 });
     throw err;
   } finally {
+    remoteLease?.release();
     if (activeControllers.get(input.sessionId) === controller) {
       activeControllers.delete(input.sessionId);
     }

@@ -4855,6 +4855,7 @@ export const en = {
     taskPromptWithDetails: "Task: {title}\n\nDetails:\n{details}",
   },
   harness: {
+    apiRemoteNoShell: "In SSH projects, API models can read, search and edit files, but cannot run commands yet.",
     apiRemoteChatOnly: "In SSH projects, API models can only chat for now. Tools are unavailable.",
     apiToolCompleted: "Tool completed.",
     apiToolFailed: "Tool failed.",
