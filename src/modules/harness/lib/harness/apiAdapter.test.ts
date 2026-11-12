@@ -25,7 +25,8 @@ describe("apiAdapter", () => {
   it("bounds history by dropping complete oldest turns", () => {
     const recent = [{ role: "user" as const, content: "recent" }, { role: "assistant" as const, content: "answer" }];
     expect(boundedApiHistory([{ role: "user", content: "x".repeat(1024 * 1024) }, { role: "assistant", content: "old" }, ...recent])).toEqual(recent);
-    expect(boundedApiHistory([{ role: "user", content: "x".repeat(1024 * 1024) }])).toEqual([]);
+    const oversized = [{ role: "user" as const, content: "x".repeat(1024 * 1024) }];
+    expect(boundedApiHistory(oversized)).toEqual(oversized);
   });
   it("registers in the harness registry", () => {
     ensureApiRegistered();

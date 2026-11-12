@@ -28,14 +28,16 @@ const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
 
 const activeControllers = new Map<string, AbortController>();
 const historyBySession = new Map<string, ModelMessage[]>();
-const MAX_HISTORY_BYTES = 1024 * 1024;
+const MAX_HISTORY_CHARS = 1024 * 1024;
 
 export function boundedApiHistory(messages: ModelMessage[]): ModelMessage[] {
+  const sizes = messages.map((message) => JSON.stringify(message).length + 1);
+  let total = sizes.reduce((sum, size) => sum + size, 1);
   let start = 0;
-  while (start < messages.length && JSON.stringify(messages.slice(start)).length > MAX_HISTORY_BYTES) {
-    const next = messages.findIndex((message, index) => index > start && message.role === "user");
-    if (next < 0) return [];
-    start = next;
+  for (let index = 1; index < messages.length; index++) {
+    if (messages[index].role !== "user") continue;
+    if (total <= MAX_HISTORY_CHARS) break;
+    while (start < index) total -= sizes[start++];
   }
   return messages.slice(start);
 }
