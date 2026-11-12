@@ -144,6 +144,36 @@ function ownState(input: HarnessWindowViewInput): ViewState {
   return state;
 }
 
+/**
+ * The merged workspace keeps one terminal dock per project, but each view
+ * owns its own dock, so two views of one project (or a retained view and its
+ * successor) legitimately disagree. The active, most recent view's dock is
+ * the one the merge keeps; the others stay untouched in their own cohorts.
+ */
+function projectDockOwners(
+  cohorts: readonly HarnessWindowViewCohort[],
+): Map<string, HarnessWindowViewCohort> {
+  const ranks = (cohort: HarnessWindowViewCohort) =>
+    [cohort.active ? 1 : 0, cohort.sequence] as const;
+  const outranks = (
+    left: HarnessWindowViewCohort,
+    right: HarnessWindowViewCohort,
+  ) => {
+    const [leftActive, leftSequence] = ranks(left);
+    const [rightActive, rightSequence] = ranks(right);
+    return leftActive !== rightActive
+      ? leftActive > rightActive
+      : leftSequence > rightSequence;
+  };
+  const owners = new Map<string, HarnessWindowViewCohort>();
+  for (const cohort of cohorts)
+    for (const dock of cohort.state.layout.projectTerminals) {
+      const owner = owners.get(dock.projectPath);
+      if (!owner || outranks(cohort, owner)) owners.set(dock.projectPath, cohort);
+    }
+  return owners;
+}
+
 function captureCohorts(
   cohorts: readonly HarnessWindowViewCohort[],
   selectedOwnerId: number | null,
@@ -156,10 +186,16 @@ function captureCohorts(
     projectCwd: "~",
     projectTerminals: [],
   };
+  const dockOwners = projectDockOwners(cohorts);
   const captures = cohorts.map((cohort) => ({
     ownerId: cohort.ownerId,
     sessions,
-    snapshot: cohort.state.layout,
+    snapshot: {
+      ...cohort.state.layout,
+      projectTerminals: cohort.state.layout.projectTerminals.filter(
+        (dock) => dockOwners.get(dock.projectPath) === cohort,
+      ),
+    },
   }));
   const merged = mergeHarnessWindowWorkspaces(
     captures.length

@@ -3,7 +3,12 @@ import {
   createHarnessWindowViews,
   type HarnessWindowViewInput,
 } from "@/modules/harness/lib/harnessWindowViews";
-import { newTab } from "@/modules/harness/lib/layout";
+import {
+  newEditorPane,
+  newTab,
+  newTerminalFile,
+} from "@/modules/harness/lib/layout";
+import type { ProjectTerminalDock } from "@/modules/harness/lib/projectTerminal";
 import { newSession } from "@/modules/harness/lib/session";
 import { collectWorkspaceSnapshot } from "@/modules/harness/lib/workspaceSnapshot";
 
@@ -368,5 +373,70 @@ describe("Harness window resource cohorts", () => {
       RangeError,
     );
     expect(views.getSnapshot()).toBe(before);
+  });
+});
+
+describe("Harness window project terminal docks", () => {
+  const cwd = "/work/one";
+  const dockFiles = (views: ReturnType<typeof createHarnessWindowViews>) =>
+    views
+      .capture([])
+      .projectTerminals.flatMap((entry) => entry.pane.files.map((file) => file.id));
+  function dock(
+    files: ReturnType<typeof newTerminalFile>[],
+    paneId?: string,
+  ): ProjectTerminalDock {
+    const pane = newEditorPane(files[0]);
+    return {
+      projectPath: cwd,
+      pane: { ...pane, id: paneId ?? pane.id, files },
+      side: "bottom",
+      size: 30,
+      open: true,
+    };
+  }
+
+  it("lets a view change a dock that a released view of the project still holds", () => {
+    const views = createHarnessWindowViews();
+    const first = newTerminalFile(cwd, "one");
+    const input = { ...fixture(cwd).input, projectTerminals: [dock([first], "pane")] };
+    views.register(1, input).release();
+    const view = views.register(2, input);
+    const grown = dock([first, newTerminalFile(cwd, "two")], "pane");
+    expect(() =>
+      view.update({ ...input, projectTerminals: [grown] }),
+    ).not.toThrow();
+    expect(dockFiles(views)).toEqual(grown.pane.files.map((file) => file.id));
+  });
+
+  it("lets a new view open its own dock where a released view had one", () => {
+    const views = createHarnessWindowViews();
+    views
+      .register(1, {
+        ...fixture(cwd).input,
+        projectTerminals: [dock([newTerminalFile(cwd, "old")])],
+      })
+      .release();
+    const view = views.register(2, fixture(cwd).input);
+    const opened = dock([newTerminalFile(cwd, "new")]);
+    expect(() =>
+      view.update({ ...fixture(cwd).input, projectTerminals: [opened] }),
+    ).not.toThrow();
+    expect(dockFiles(views)).toEqual(opened.pane.files.map((file) => file.id));
+  });
+
+  it("keeps the most recent dock when two live views of one project open terminals", () => {
+    const views = createHarnessWindowViews();
+    const one = views.register(1, fixture(cwd).input);
+    const two = views.register(2, fixture(cwd).input);
+    one.update({
+      ...fixture(cwd).input,
+      projectTerminals: [dock([newTerminalFile(cwd, "one")])],
+    });
+    const latest = dock([newTerminalFile(cwd, "two")]);
+    expect(() =>
+      two.update({ ...fixture(cwd).input, projectTerminals: [latest] }),
+    ).not.toThrow();
+    expect(dockFiles(views)).toEqual(latest.pane.files.map((file) => file.id));
   });
 });
