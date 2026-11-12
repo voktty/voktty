@@ -23,11 +23,14 @@ import type {
   SteerTurnInput,
 } from "./types";
 import type { LanguageModel, ModelMessage } from "ai";
+import type { RuntimeMode } from "../session";
 
 const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
 
 const activeControllers = new Map<string, AbortController>();
 const historyBySession = new Map<string, ModelMessage[]>();
+const sessionSettings = new Map<string, { mode: RuntimeMode; onEvent: SendTurnInput["onEvent"] }>();
+const pendingApprovals = new Map<string, Map<number, (allowed: boolean) => void>>();
 let apiToolsModule: typeof import("./apiTools") | undefined;
 const MAX_HISTORY_CHARS = 1024 * 1024;
 
@@ -125,6 +128,7 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
 
   const controller = new AbortController();
   activeControllers.set(input.sessionId, controller);
+  sessionSettings.set(input.sessionId, { mode: input.runtimeMode, onEvent: input.onEvent });
 
   input.onEvent({ type: "session.started" });
   input.onAccepted?.();
@@ -167,6 +171,29 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
         system: buildStableSystem(input.model, null, undefined, null),
         signal: controller.signal,
         onEvent: input.onEvent,
+        showApprovals: input.runtimeMode !== "full-access",
+        onApproval: ({ requestId }) => {
+          if (input.runtimeMode === "full-access") return Promise.resolve(true);
+          return new Promise<boolean>((resolve) => {
+            if (controller.signal.aborted) return resolve(false);
+            let session = pendingApprovals.get(input.sessionId);
+            if (!session) {
+              session = new Map();
+              pendingApprovals.set(input.sessionId, session);
+            }
+            const owned = session;
+            const finish = (allowed: boolean) => {
+              controller.signal.removeEventListener("abort", abort);
+              if (owned.get(requestId) === finish) owned.delete(requestId);
+              if (!owned.size && pendingApprovals.get(input.sessionId) === owned) pendingApprovals.delete(input.sessionId);
+              resolve(allowed);
+            };
+            const abort = () => finish(false);
+            owned.set(requestId, finish);
+            controller.signal.addEventListener("abort", abort, { once: true });
+            if (controller.signal.aborted) abort();
+          });
+        },
       });
     } finally {
       if (tools) retireFileToolRun(tools);
@@ -208,23 +235,24 @@ export async function cancelApiTurn(sessionId: string): Promise<void> {
 }
 
 export async function steerApiTurn(input: SteerTurnInput): Promise<void> {
-  // Steer turn by sending the message in sequence
+  const settings = sessionSettings.get(input.sessionId);
   return sendApiTurn({
     ...input,
-    runtimeMode: "full-access",
-    onEvent: () => undefined,
+    runtimeMode: settings?.mode ?? "supervised",
+    onEvent: settings?.onEvent ?? (() => undefined),
   });
 }
 
 export function respondApiApproval(
-  _sessionId: string,
-  _requestId: number,
-  _decision: ApprovalDecision,
+  sessionId: string,
+  requestId: number,
+  decision: ApprovalDecision,
 ): void {
-  // No-op for direct API models
+  pendingApprovals.get(sessionId)?.get(requestId)?.(decision === "allow");
 }
 
 export async function stopApiSession(sessionId: string): Promise<void> {
+  sessionSettings.delete(sessionId);
   await cancelApiTurn(sessionId);
   await apiToolsModule?.forgetApiTools(sessionId);
 }
