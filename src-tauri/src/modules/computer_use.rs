@@ -285,6 +285,15 @@ mod tests {
     mod unix {
         use super::*;
         use std::os::unix::fs::PermissionsExt;
+        use std::sync::{Mutex, MutexGuard};
+
+        static SPAWN_LOCK: Mutex<()> = Mutex::new(());
+
+        fn lock() -> MutexGuard<'static, ()> {
+            SPAWN_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+        }
 
         fn script(dir: &Path, body: &str) -> PathBuf {
             let path = dir.join("ocu");
@@ -299,6 +308,7 @@ mod tests {
 
         #[test]
         fn reads_version_and_doctor() {
+            let _guard = lock();
             let dir = tempfile::tempdir().unwrap();
             let path = script(
                 dir.path(),
@@ -312,6 +322,7 @@ mod tests {
 
         #[test]
         fn skips_doctor_when_not_requested() {
+            let _guard = lock();
             let dir = tempfile::tempdir().unwrap();
             let marker = dir.path().join("ran-doctor");
             let path = script(
@@ -329,6 +340,7 @@ mod tests {
 
         #[test]
         fn a_failing_doctor_is_a_problem_with_bounded_text() {
+            let _guard = lock();
             let dir = tempfile::tempdir().unwrap();
             let path = script(
                 dir.path(),
@@ -341,6 +353,7 @@ mod tests {
 
         #[test]
         fn a_hung_binary_times_out_and_is_unusable() {
+            let _guard = lock();
             let dir = tempfile::tempdir().unwrap();
             let path = script(dir.path(), "exec sleep 30");
             let started = Instant::now();
@@ -352,6 +365,7 @@ mod tests {
 
         #[test]
         fn a_binary_without_a_version_is_unusable() {
+            let _guard = lock();
             let dir = tempfile::tempdir().unwrap();
             let path = script(dir.path(), "exit 3");
             let probe = probe_with(find_in(path), None, true);

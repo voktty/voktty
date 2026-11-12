@@ -226,9 +226,24 @@ fn probe_with(
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+    use std::sync::{Mutex, MutexGuard};
+
+    static SPAWN_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock() -> MutexGuard<'static, ()> {
+        SPAWN_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The script directory first, then the system tools the scripts call.
+    fn search(dir: &Path) -> String {
+        format!("{}:/usr/bin:/bin", dir.display())
+    }
 
     fn script(dir: &Path, body: &str) -> PathBuf {
-        let path = dir.join("ocu");
+        // The first name looked up, so a real install elsewhere on the path never wins.
+        let path = dir.join("open-computer-use");
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         path
@@ -236,13 +251,14 @@ mod tests {
 
     #[test]
     fn finds_the_binary_on_the_search_path_only() {
+        let _guard = lock();
         let empty = tempfile::tempdir().unwrap();
         let none = probe(empty.path().to_str().unwrap(), true);
         assert_eq!(none.status, Status::NotInstalled);
 
         let dir = tempfile::tempdir().unwrap();
         script(dir.path(), "echo 1.1.4");
-        let found = probe(dir.path().to_str().unwrap(), false);
+        let found = probe(&search(dir.path()), false);
         assert_eq!(found.status, Status::Installed);
         assert_eq!(found.version.as_deref(), Some("1.1.4"));
         assert!(found.doctor.is_none());
@@ -250,18 +266,20 @@ mod tests {
 
     #[test]
     fn reads_doctor_output_and_flags_a_failing_doctor() {
+        let _guard = lock();
         let dir = tempfile::tempdir().unwrap();
         script(
             dir.path(),
             "if [ \"$1\" = doctor ]; then echo needs-display; exit 1; fi; echo 1.1.4",
         );
-        let probe = probe(dir.path().to_str().unwrap(), true);
+        let probe = probe(&search(dir.path()), true);
         assert_eq!(probe.status, Status::DoctorProblem);
         assert_eq!(probe.doctor.as_deref(), Some("needs-display"));
     }
 
     #[test]
     fn doctor_is_not_run_unless_asked() {
+        let _guard = lock();
         let dir = tempfile::tempdir().unwrap();
         let marker = dir.path().join("ran-doctor");
         script(
@@ -271,27 +289,29 @@ mod tests {
                 marker.display()
             ),
         );
-        probe(dir.path().to_str().unwrap(), false);
+        probe(&search(dir.path()), false);
         assert!(!marker.exists());
     }
 
     #[test]
     fn output_is_bounded() {
+        let _guard = lock();
         let dir = tempfile::tempdir().unwrap();
         script(
             dir.path(),
             "if [ \"$1\" = doctor ]; then yes warning | head -c 200000; exit 1; fi; echo 1.1.4",
         );
-        let probe = probe(dir.path().to_str().unwrap(), true);
+        let probe = probe(&search(dir.path()), true);
         assert!(probe.doctor.unwrap().chars().count() <= DOCTOR_CHARS + 1);
     }
 
     #[test]
     fn a_hung_binary_times_out() {
+        let _guard = lock();
         let dir = tempfile::tempdir().unwrap();
         script(dir.path(), "exec sleep 30");
         let started = Instant::now();
-        let probe = probe(dir.path().to_str().unwrap(), true);
+        let probe = probe(&search(dir.path()), true);
         assert_eq!(probe.status, Status::Unusable);
         assert!(probe.error.unwrap().contains("timed out"));
         assert!(started.elapsed() < Duration::from_secs(9));
@@ -299,14 +319,16 @@ mod tests {
 
     #[test]
     fn a_binary_without_a_version_is_unusable() {
+        let _guard = lock();
         let dir = tempfile::tempdir().unwrap();
         script(dir.path(), "exit 3");
-        let probe = probe(dir.path().to_str().unwrap(), true);
+        let probe = probe(&search(dir.path()), true);
         assert_eq!(probe.status, Status::Unusable);
     }
 
     #[test]
     fn rejects_unknown_parameters() {
+        let _guard = lock();
         assert!(serde_json::from_str::<Params>("{\"doctor\":true}").is_ok());
         assert!(serde_json::from_str::<Params>("{\"command\":\"rm\"}").is_err());
     }
