@@ -343,6 +343,20 @@ describe("Header drag and double-click interactions", () => {
     expect(mockStartDragging).not.toHaveBeenCalled();
   });
 
+  it("opens the command palette without dragging the window from its icon", async () => {
+    await renderHeader();
+    const button = container.querySelector<HTMLButtonElement>("button[aria-label^='header.commandPalette']");
+    expect(button).not.toBeNull();
+    act(() => {
+      button?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+      button?.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, buttons: 1, clientX: 30, clientY: 10 }));
+      button?.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, clientX: 30, clientY: 10 }));
+      button?.click();
+    });
+    expect(mockStartDragging).not.toHaveBeenCalled();
+    expect(onOpenCommandPaletteMock).toHaveBeenCalledOnce();
+  });
+
   it("suppresses onNew if a drag occurred prior to double-click", async () => {
     await renderHeader();
 

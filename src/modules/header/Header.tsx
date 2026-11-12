@@ -228,34 +228,6 @@ export function Header({
     return () => observer.disconnect();
   }, []);
 
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const draggedIconRef = useRef(false);
-
-  const handleIconPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.button !== 0) return;
-    draggedIconRef.current = false;
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleIconPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!dragStartRef.current || e.buttons !== 1) return;
-    const dist = Math.hypot(
-      e.clientX - dragStartRef.current.x,
-      e.clientY - dragStartRef.current.y,
-    );
-    if (dist > 4) {
-      draggedIconRef.current = true;
-      dragStartRef.current = null;
-      try {
-        void getCurrentWindow().startDragging();
-      } catch {}
-    }
-  };
-
-  const handleIconPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.button === 0) dragStartRef.current = null;
-  };
-
   const headerDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const headerDraggedRef = useRef(false);
 
@@ -327,26 +299,12 @@ export function Header({
     >
       <div className="flex shrink-0 items-center gap-1">
         <Button
-          onPointerDown={handleIconPointerDown}
-          onPointerMove={handleIconPointerMove}
-          onPointerUp={handleIconPointerUp}
-          onPointerCancel={() => {
-            dragStartRef.current = null;
-            draggedIconRef.current = false;
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            if (draggedIconRef.current) {
-              draggedIconRef.current = false;
-              return;
-            }
-            onOpenCommandPalette();
-          }}
+          onClick={onOpenCommandPalette}
           title={commandPaletteLabel}
           aria-label={commandPaletteLabel}
           variant="ghost"
           size="icon-sm"
-          className="group relative shrink-0 cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground active:cursor-grabbing"
+          className="group relative shrink-0 cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <img
             src="/voktty-icon.png"

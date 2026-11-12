@@ -1,9 +1,8 @@
-import { lazy, Suspense, useEffect, useState, useContext, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useState, useContext, useLayoutEffect } from "react";
 import { HarnessRestoreContext } from "@/modules/harness/hooks/harnessRestoreContext";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useTranslation } from "@/modules/i18n";
-import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 import { removeHarnessSurface } from "@/modules/surfaces";
@@ -41,11 +40,6 @@ const LazyHarnessRuntime = lazy(() =>
     return loadHarnessRuntime(m.HarnessRuntimeRoot);
   }),
 );
-const LazyNativeAiView = lazy(() =>
-  import("./HarnessNativeAiView").then((module) => ({
-    default: module.HarnessNativeAiView,
-  })),
-);
 const LazyMemorySource = lazy(() =>
   import("@/modules/harness/chrome/HarnessProjectMemoryButton").then((module) => ({
     default: module.HarnessActiveMemorySource,
@@ -61,8 +55,6 @@ function HarnessWorkbench({
   onProjectRequestHandled,
   onRegistered,
   layoutKey,
-  nativeAiRequest,
-  onNativeAiRequestHandled,
 }: {
   tab: HarnessTab;
   focused: boolean;
@@ -72,41 +64,21 @@ function HarnessWorkbench({
   onProjectRequestHandled: (request: { path: string }) => void;
   onRegistered: (view: HarnessNavigationView) => void;
   layoutKey?: string;
-  nativeAiRequest?: { id: number } | null;
-  onNativeAiRequestHandled?: (request: { id: number }) => void;
 }) {
-  const aiAvailable = useAiAvailable();
   const restored = useContext(HarnessRestoreContext);
   const [bootView] = useState(() => restored && !restored.claimed.has(tab.tabKey)
     ? restored.views.get(tab.tabKey) : undefined);
   useLayoutEffect(() => { restored?.claimed.add(tab.tabKey); }, [restored, tab.tabKey]);
-  const [view, setView] = useState<"harness" | "native">("harness");
-  const nativeVisible = aiAvailable && view === "native";
-  const handledNativeRequest = useRef<typeof nativeAiRequest>(null);
-  useEffect(() => {
-    if (focused && aiAvailable && nativeAiRequest?.id === tab.id && handledNativeRequest.current !== nativeAiRequest) {
-      handledNativeRequest.current = nativeAiRequest;
-      setView("native");
-      onNativeAiRequestHandled?.(nativeAiRequest);
-    }
-  }, [focused, aiAvailable, nativeAiRequest, onNativeAiRequestHandled, tab.id]);
-  useLayoutEffect(() => {
-    if (!aiAvailable) setView("harness");
-  }, [aiAvailable]);
   const activate = useHarnessViewActivation(
-    focused && !nativeVisible,
+    focused,
     () => {
-      setView("harness");
       onActivate();
     },
   );
-  useEffect(() => {
-    if (projectRequest) setView("harness");
-  }, [projectRequest]);
   useEffect(() => () => removeHarnessSurface(tab.id), [tab.id]);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1" hidden={nativeVisible}>
+      <div className="min-h-0 flex-1">
         <HarnessProjectOwner value={{ ownerId: tab.id, tabKey: tab.tabKey }}>
         <Suspense fallback={null}>
           <LazyMemorySource />
@@ -114,10 +86,9 @@ function HarnessWorkbench({
         <HarnessTerminalOwner
           value={{
             tabKey: tab.tabKey,
-            visible: visible && !nativeVisible,
+            visible,
             layoutKey,
             onFocus: () => {
-              setView("harness");
               onActivate();
             },
           }}
@@ -127,8 +98,8 @@ function HarnessWorkbench({
             initialCwd={tab.cwd}
             initialSessionId={tab.sessionId}
             surfaceOwnerId={tab.id}
-            visible={visible && !nativeVisible}
-            focused={focused && !nativeVisible}
+            visible={visible}
+            focused={focused}
             onActivate={activate}
             projectRequest={projectRequest}
             onProjectRequestHandled={onProjectRequestHandled}
@@ -137,15 +108,6 @@ function HarnessWorkbench({
         </HarnessTerminalOwner>
         </HarnessProjectOwner>
       </div>
-      {nativeVisible && (
-        <div className="min-h-0 flex-1">
-          {focused ? (
-            <Suspense fallback={null}>
-              <LazyNativeAiView onClose={() => setView("harness")} />
-            </Suspense>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }
@@ -156,8 +118,6 @@ type Props = {
   placements?: ReadonlyMap<number, WorkspacePlacement>;
   onActivateTab?: (id: number) => void;
   onCreateTab?: () => number;
-  nativeAiRequest?: { id: number } | null;
-  onNativeAiRequestHandled?: (request: { id: number }) => void;
 };
 
 export function HarnessStack({
@@ -166,8 +126,6 @@ export function HarnessStack({
   placements,
   onActivateTab,
   onCreateTab,
-  nativeAiRequest,
-  onNativeAiRequestHandled,
 }: Props) {
   const { t } = useTranslation();
   const creation = useHarnessViewCreation(tabs, onCreateTab);
@@ -251,8 +209,6 @@ export function HarnessStack({
                     }
                   >
                     <HarnessWorkbench
-                      nativeAiRequest={nativeAiRequest}
-                      onNativeAiRequestHandled={onNativeAiRequestHandled}
                       layoutKey={
                         placement
                           ? `${placement.rect.x}:${placement.rect.y}:${placement.rect.width}:${placement.rect.height}`

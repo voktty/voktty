@@ -23,10 +23,7 @@ import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { useHarnessProjectSelection } from "@/modules/harness/hooks/useHarnessProjectSelection";
 
 const mounts = vi.hoisted(() => ({
-  aiAvailable: true,
   harness: vi.fn(),
-  native: vi.fn(),
-  release: vi.fn(),
   removeSurface: vi.fn(),
   runtime: vi.fn(),
   stopRuntime: vi.fn(),
@@ -34,9 +31,6 @@ const mounts = vi.hoisted(() => ({
   create: undefined as CreateHarnessNavigationView | undefined,
   registrations: vi.fn(),
   failedOwnerId: null as number | null,
-}));
-vi.mock("@/modules/ai/lib/runtimeAvailability", () => ({
-  useAiAvailable: () => mounts.aiAvailable,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(null),
@@ -104,15 +98,6 @@ vi.mock("./HarnessApp", () => ({
     return createElement("div", { "data-harness": true }, "Harness", createElement("button", { type: "button", "data-project-owner": surfaceOwnerId, onClick: () => captureProject()?.select("/owned-project") }, "Select project"));
   },
 }));
-vi.mock("./HarnessNativeAiView", () => ({
-  HarnessNativeAiView: ({ onClose }: { onClose: () => void }) => {
-    useEffect(() => {
-      mounts.native();
-      return mounts.release;
-    }, []);
-    return createElement("div", { "data-native": true }, "Native AI", createElement("button", { type: "button", onClick: onClose }, "Close"));
-  },
-}));
 function required<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error("Missing project selection fixture");
   return value;
@@ -135,56 +120,26 @@ afterEach(async () => {
   vi.clearAllMocks();
   mounts.create = undefined;
   mounts.failedOwnerId = null;
-  mounts.aiAvailable = true;
   vi.unstubAllGlobals();
 });
-it("keeps Harness sessions mounted and releases native chat when the tab loses focus", async () => {
+it("keeps Harness sessions mounted when the tab loses focus", async () => {
   await act(async () => {
     root.render(createElement(HarnessStack, { tabs, activeId: 1 }));
   });
-  expect(mounts.harness).toHaveBeenCalledTimes(1);
-  await act(async () => {
-    root.render(createElement(HarnessStack, { tabs, activeId: 1, nativeAiRequest: { id: 1 } }));
-  });
-  expect(container.querySelector("[data-native]")).not.toBeNull();
-  expect(container.querySelector("[data-harness]")).not.toBeNull();
   expect(mounts.harness).toHaveBeenCalledTimes(1);
   await act(async () => {
     root.render(createElement(HarnessStack, { tabs, activeId: 2 }));
   });
-  expect(container.querySelector("[data-native]")).toBeNull();
-  expect(mounts.release).toHaveBeenCalledTimes(1);
+  expect(container.querySelector("[data-harness]")).not.toBeNull();
   await act(async () => {
     root.render(createElement(HarnessStack, { tabs, activeId: 1 }));
   });
-  expect(mounts.native).toHaveBeenCalledTimes(2);
-  await act(async () => {
-    container.querySelector<HTMLButtonElement>("[data-native] button")?.click();
-  });
-  expect(container.querySelector("[data-native]")).toBeNull();
   expect(mounts.harness).toHaveBeenCalledTimes(1);
 });
-it("hides the inner selector without AI and returns to Harness when AI disconnects", async () => {
-  mounts.aiAvailable = false;
+it("shows Harness without an inner AI selector", async () => {
   await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
   expect(container.querySelector('[role="group"]')).toBeNull();
   expect(container.querySelector('[data-harness]')).not.toBeNull();
-  expect(mounts.native).not.toHaveBeenCalled();
-  mounts.aiAvailable = true;
-  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
-  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} nativeAiRequest={{ id: 1 }} />));
-  expect(container.querySelector('[data-native]')).not.toBeNull();
-  mounts.aiAvailable = false;
-  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
-  expect(container.querySelector('[role="group"]')).toBeNull();
-  expect(container.querySelector('[data-native]')).toBeNull();
-  expect(container.querySelector('[data-harness]')?.parentElement?.hidden).toBe(false);
-  expect(mounts.harness).toHaveBeenCalledOnce();
-  expect(mounts.release).toHaveBeenCalledOnce();
-  mounts.aiAvailable = true;
-  await act(async () => root.render(<HarnessStack tabs={tabs} activeId={1} />));
-  expect(container.querySelector('[data-native]')).toBeNull();
-  expect(container.querySelector('[role="group"]')).toBeNull();
 });
 it("keeps owner reports when hidden and removes only the unmounted owner", async () => {
   const otherTab = { id: 2, kind: "harness", cwd: "/other" } as HarnessTab;
@@ -386,13 +341,10 @@ it("accepts a newly created destination before its first outer render", async ()
   expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(2, "/created-project");
 });
 
-it("returns a directed destination from native chat to Harness before consuming the request", async () => {
+it("delivers a directed project request to the Harness", async () => {
   const destination = { ...tabs[0], tabKey: "tab-native" } as HarnessTab;
   await act(async () => root.render(<HarnessStack tabs={[destination]} activeId={1} />));
-  await act(async () => root.render(<HarnessStack tabs={[destination]} activeId={1} nativeAiRequest={{ id: 1 }} />));
-  expect(container.querySelector("[data-native]")).not.toBeNull();
   await act(async () => requestHarnessProject("/native-destination", { ownerId: 1, tabKey: asTabKey("tab-native") }));
-  expect(container.querySelector("[data-native]")).toBeNull();
   expect(mounts.requests).toHaveBeenCalledExactlyOnceWith(1, "/native-destination");
 });
 
