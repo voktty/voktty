@@ -125,31 +125,21 @@ export async function sendApiTurn(input: SendTurnInput): Promise<void> {
     const history = historyBySession.get(input.sessionId) ?? [];
     history.push({ role: "user", content: input.text });
 
-    const { streamText } = await import("ai");
-    const result = streamText({
+    const { runApiAgentLoop } = await import("./apiAgentLoop");
+    const response = await runApiAgentLoop({
       model,
       messages: history,
-      abortSignal: controller.signal,
+      signal: controller.signal,
+      onEvent: input.onEvent,
     });
-
-    let fullText = "";
-    for await (const part of result.fullStream) {
-      if (controller.signal.aborted) break;
-      if (part.type === "text-delta") {
-        fullText += part.text;
-        input.onEvent({ type: "message.delta", text: part.text });
-      } else if (part.type === "reasoning-delta") {
-        input.onEvent({ type: "reasoning.delta", text: part.text });
-      }
-    }
 
     if (controller.signal.aborted) {
       input.onEvent({ type: "session.ended", code: 0 });
       return;
     }
 
-    if (fullText) {
-      history.push({ role: "assistant", content: fullText });
+    if (response.length) {
+      history.push(...response);
       historyBySession.set(input.sessionId, history);
     }
 
