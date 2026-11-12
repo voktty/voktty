@@ -109,7 +109,7 @@ export function SidebarRail({
   return (
     <div
       style={{ width: SIDEBAR_RAIL_WIDTH }}
-      className="flex shrink-0 flex-col items-stretch gap-0.5 border-r border-border/60 bg-foreground/[0.025] px-1 py-1"
+      className="flex shrink-0 flex-col items-stretch gap-0.5 border-r border-content/10 bg-content/[0.025] px-1 py-1"
     >
       {items.map((item) => {
         const isActive = item.id === activeView;
@@ -123,14 +123,14 @@ export function SidebarRail({
                 aria-label={item.label}
                 aria-pressed={isActive}
                 onClick={() => onSelectView(item.id)}
-                className="group flex h-10 shrink-0 cursor-pointer items-center justify-center text-muted-foreground outline-none transition-colors duration-[var(--dur-base)] hover:text-foreground"
+                className="group flex h-10 shrink-0 cursor-pointer items-center justify-center text-content/50 outline-none transition-colors duration-[var(--dur-base)] hover:text-content"
               >
                 <span
                   className={cn(
                     "relative inline-flex size-6.5 items-center justify-center rounded-md transition-colors duration-[var(--dur-base)]",
-                    "group-hover:bg-foreground/[0.045] group-focus-visible:ring-2 group-focus-visible:ring-primary/40",
+                    "group-hover:bg-content/10 group-focus-visible:ring-2 group-focus-visible:ring-primary/40",
                     isActive &&
-                      "bg-foreground/[0.07] text-foreground dark:bg-foreground/[0.09]",
+                      "bg-content/10 text-content",
                   )}
                 >
                   <HugeiconsIcon

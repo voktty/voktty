@@ -25,11 +25,15 @@ it("keeps all views accessible and lets the active view close and reopen", async
       "sidebar.files", "sidebar.search", "sidebar.outline", "sidebar.problems", "sidebar.runDebug", "sidebar.git",
     ]);
     expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
+    expect(buttons[0].firstElementChild?.className).toContain("bg-content/10");
+    expect(buttons[1].firstElementChild?.className).toContain("group-hover:bg-content/10");
+    expect(buttons[1].firstElementChild?.className).toContain("group-focus-visible:ring-2");
     expect(buttons[5].textContent).toContain("3");
     buttons[0].focus();
     expect(document.activeElement).toBe(buttons[0]);
     await act(async () => buttons[0].click());
     expect(buttons[0].getAttribute("aria-pressed")).toBe("false");
+    expect(buttons[0].firstElementChild?.className).not.toContain("bg-content/10 text-content");
     await act(async () => buttons[0].click());
     expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
   } finally {
