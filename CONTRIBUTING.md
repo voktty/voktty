@@ -74,7 +74,7 @@ A 10-minute conversation saves a 500-line PR that doesn't fit the roadmap.
 
 ## Quality bar
 
-Voktty positions itself as **lightweight, fast, production-grade**. Every PR is reviewed against:
+Voktty positions itself as **lean, fast, production-grade**. Every PR is reviewed against:
 
 - `pnpm lint` clean
 - `pnpm check-types` clean

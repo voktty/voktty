@@ -68,6 +68,7 @@ The themes below frame every scope decision.
 - [x] Inline AI autocomplete with automatic and manual triggering, multiline suggestions, and local-model support
 - [x] AI edit diffs
 - [x] Opt-in LSP support with diagnostics, navigation, completion, formatting, and custom servers
+- [x] Opt-in debug sessions through the Debug Adapter Protocol in local and WSL workspaces
 - [x] Vim mode
 
 ### Themes and Customization
@@ -175,7 +176,7 @@ See `good-first-issue` and `help-wanted` labels on GitHub Issues for concrete ta
 
 Categories that will not be built into Voktty. Individual feature requests in these categories will be closed.
 
-- **Heavyweight IDE infrastructure.** Integrated debugger and profiler suites, unbounded background indexing, and always-resident extension hosts are out of scope. Focused LSP, autocomplete, formatting, and editor workflows remain in scope when they are opt-in, lazy, and resource-bounded.
+- **Heavyweight IDE infrastructure.** Profiler suites, unbounded background indexing, and always-resident extension hosts are out of scope. Debugging stays limited to opt-in Debug Adapter Protocol sessions. Focused LSP, autocomplete, formatting, and editor workflows remain in scope when they are opt-in, lazy, and resource-bounded.
 - **Notebook and document workspaces.** Anything that turns Voktty into a document host rather than a terminal.
 - **Package manager and toolchain UIs.** Use `npm`, `pip`, `cargo` and friends in the terminal directly.
 - **Full web browser features.** Preview pane stays scoped to local dev servers and lightweight doc viewing. No navigation history, no bookmarks, no dev tools.

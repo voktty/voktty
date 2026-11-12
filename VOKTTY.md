@@ -4,7 +4,7 @@ Voktty loads `VOKTTY.md` from the workspace root as agent memory (similar to AGE
 
 ## Project
 
-**Voktty**: open-source AI-native terminal emulator. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client, BYOK AI via Vercel AI SDK v6.
+**Voktty**: open-source desktop workspace for AI coding agents: an Agent Harness with a native terminal, editor and Git around it. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client, BYOK AI via Vercel AI SDK v6.
 
 - Bundle id: `app.voktty.voktty`
 - Package manager: **pnpm**
@@ -17,7 +17,7 @@ Voktty loads `VOKTTY.md` from the workspace root as agent memory (similar to AGE
 Production-grade or it does not ship. Every change is judged against all of these, not just "it works":
 
 - **Correctness**: edge cases, failure modes, concurrent access. No "works for now".
-- **Performance**: ultra-lightweight is the product. ~7-8 MB bundle, high-performance terminal. For every change ask: how much RAM it costs, whether it adds IPC round-trips or redundant requests, whether it triggers extra re-renders or wasted work, whether it pulls a heavy dependency. Unused features consume zero resources.
+- **Performance**: staying lean is a requirement. Installers are 25 to 36 MB (v1.0.27), with a high-performance terminal. For every change ask: how much RAM it costs, whether it adds IPC round-trips or redundant requests, whether it triggers extra re-renders or wasted work, whether it pulls a heavy dependency. Unused features consume zero resources.
 - **Security**: no critical security holes. Validate at every boundary (IPC, fs, network, AI tool surface). The secret-path deny-list applies on both read and write and is never bypassed.
 - **UI/UX**: polished, professional, premium. Every state and detail considered.
 - **Architecture**: new or changed logic lives in pure, dependency-light functions (functional core); tauri commands and React components stay thin (imperative shell). Keeps it testable without a later rewrite.
