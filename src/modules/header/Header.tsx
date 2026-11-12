@@ -521,9 +521,9 @@ export function Header({
           />
           <HugeiconsIcon
             icon={StarIcon}
-            size={8}
+            size={6}
             strokeWidth={2}
-            className="absolute -top-0.5 -right-0.5 text-amber-400 fill-amber-400 drop-shadow-[0_0_3px_rgba(251,191,36,0.6)] transition-transform group-hover:scale-125"
+            className="absolute -top-0.5 -right-0.5 size-1.5 text-amber-400 fill-amber-400 drop-shadow-[0_0_1px_rgba(251,191,36,0.6)] transition-transform group-hover:scale-125"
           />
         </Button>
 
