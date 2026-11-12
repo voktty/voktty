@@ -1,11 +1,9 @@
 # Official screenshots
 
-These captures show the current Voktty interface and are maintained as project documentation assets. Source files live in [images/](images/), which documents how they should be stored and linked.
+These captures show the current Voktty interface and are maintained as project documentation assets. Source files live in [images/](images/), which documents how they should be stored and linked. The interface in these captures is in Spanish.
 
 | Capture | Area | What it shows |
 | --- | --- | --- |
-| ![Voktty API Client and Sandbox](images/voktty_6LhZMEZPC6.png) | API Client | Request building, API responses, headers, timings, and AI-assisted investigation. |
-| ![Voktty agent operational history](images/voktty_E7ePo9A5ka.png) | Agent history | Searchable agent sessions, transcripts, recovery actions, and export. |
-| ![Voktty environment selector](images/voktty_k5Xr4AqgSA.png) | Environments | Local, WSL, SSH, RDP, and serial connection targets. |
-| ![Voktty editor and terminal](images/voktty_MAZn6eHFXb.png) | Editor and terminal | Code editing beside a terminal and AI panel, with file details on hover. |
-| ![Voktty file preview](images/voktty_vPOlZrpa70.png) | File explorer | Image preview and file metadata shown from the explorer. |
+| ![Voktty Agent Harness session with an agent's changes shown as a reviewable diff](images/harness-session-review.png) | Agent Harness | An agent session in a project, with the conversation, the session's changes as a diff to keep or undo, and source control beside it. |
+| ![Voktty SSH project with the remote file explorer beside a live terminal on the server](images/ssh-project-terminal.png) | SSH projects | The file explorer of a remote server beside a live terminal running a full-screen text interface on that server. |
+| ![Voktty floating AI chat over a terminal](images/terminal-ai-chat.png) | AI chat | The floating chat over a terminal, which sees the active terminal's directory, recent commands and output. |

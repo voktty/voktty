@@ -6,28 +6,45 @@ This file is updated as direction evolves. For day-to-day work, see [GitHub Issu
 
 ## What Voktty is
 
-Voktty is a fast, lightweight, terminal-first AI-native development environment (ADE). It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor, a file explorer, source control, and a first-class AI agent system that works with your own API keys or fully local models. About 7-8 MB on disk. No telemetry. Keys stored in the OS keychain.
+Voktty is an open-source desktop workspace for AI coding agents. Its center is the Agent Harness, which runs Claude Code, Codex, Gemini (through Antigravity), Cursor, Grok, OpenCode, Pi and any model you reach through an API, on local and SSH projects, and keeps their sessions, approvals, change review, memory and teamwork in one place. Around it sit a native PTY terminal, a code editor, source control, previews, and local, WSL, SSH, Docker, serial and remote-desktop environments. No telemetry, no account, keys stored in the OS keychain. Installers are 25 to 36 MB (v1.0.27; the Linux AppImage is about 118 MB).
 
-The product is opinionated: terminal-first, AI as a primitive (not a sidebar), lightweight always, cross-platform without compromise.
+The product is opinionated: agents are a primitive and not a sidebar, you stay in control of what they may do, the terminal stays correct, and every dependency has to earn its place.
 
 ## What Voktty is not
 
 - Not an IDE clone. Voktty selectively integrates high-value editor capabilities such as LSP, AI autocomplete, formatting, source control, and previews without adopting the heavyweight runtime and always-on background services of a traditional IDE.
 - Not a browser. Web preview exists for local dev servers and lightweight doc viewing only.
-- Not a general workspace. Tools and formats that pull the product away from the terminal-first surface are out of scope.
-- Not a one-size-fits-all CLI replacement. The goal is the best terminal-first AI-native development environment, not a shell with extras.
+- Not a general workspace. Tools and formats that pull the product away from developing with agents and terminals are out of scope.
+- Not a hosted service. Agents run on your machines, with your accounts and your keys.
 
 ## Themes
 
 The themes below frame every scope decision.
 
-1. **AI as a native primitive.** Agents, tools, autocomplete, voice - first-class, not a panel bolted onto a regular terminal.
-2. **Lightweight always.** 7-8 MB binary. Every dependency justified. Per-tab memory budget enforced.
-3. **Terminal-first.** xterm.js correctness, PTY fidelity, TUI app compatibility are non-negotiable.
-4. **Cross-platform parity.** macOS, Linux, Windows, WSL. No platform-specific exclusives.
-5. **Security by default.** Path guards, SSRF protection, OSC trust, IPC sandboxing. Defaults safe out of the box.
+1. **Agents as a native primitive.** Sessions, approvals, review, memory and teams are first-class, not a panel bolted onto a terminal.
+2. **You stay in control.** Every write and command asks first unless you grant full access, and every secret path stays protected.
+3. **Terminal fidelity.** xterm.js correctness, PTY fidelity and TUI app compatibility are non-negotiable.
+4. **Lean by design.** Every dependency is justified, the startup bundle has an enforced budget, and heavy surfaces load on demand.
+5. **Cross-platform parity.** macOS, Linux, Windows and WSL, with no platform-specific exclusives.
+6. **Security by default.** Path guards, SSRF protection, OSC trust and IPC sandboxing. Defaults are safe out of the box.
 
 ## Shipped
+
+### Agent Harness
+
+- [x] Sessions for Claude Code, Codex, Antigravity (Gemini), Cursor, Grok, OpenCode and Pi, side by side, using each tool's own login
+- [x] API models as agents, with file, search and shell tools, per-action approval and the chat's workspace and secret-path checks (local and SSH projects)
+- [x] Local Ollama, LM Studio and MLX models as Harness agents once configured
+- [x] Supervised and full-access modes, with change review, keep and undo
+- [x] Agents on SSH hosts through the remote helper, with reconnection that keeps the agent running
+- [x] Choose or reuse a tmux session when connecting over SSH
+- [x] Agent teams: roster, roles and rules, board, orchestrator control through the CLI, Git worktrees and SSH hosts
+- [x] Team communications log, hide-closed filter and notifications when an agent waits for you
+- [x] Project memory inspection and restoration, locally and over SSH
+- [x] Model picker across every configured provider, with favorites and recents
+- [x] Project terminals docked in the Harness, including adoption of an existing terminal tab
+- [x] Dynamic Notch for running agents (alpha, opt-in)
+- [x] Android companion app (preview) paired by QR code over the local network
 
 ### Terminal
 
@@ -59,6 +76,8 @@ The themes below frame every scope decision.
 - [x] Prebuilt and custom app and terminal themes with import and sharing
 - [x] Background images with adjustable opacity and blur
 - [x] App-theme-aware and independently selectable editor themes
+- [x] Mica, Mica Alt and Acrylic window materials driven by a single opacity control
+- [x] Interface size scale that leaves editor and terminal text untouched
 
 ### File Explorer & Workspaces
 
@@ -76,6 +95,7 @@ The themes below frame every scope decision.
 ### AI & Agentic Tools
 
 - [x] Multiple cloud and local providers (BYOK)
+- [x] MCP client for local stdio and remote Streamable HTTP servers, with approval-gated tools
 - [x] Multi-agent and sub-agents
 - [x] Approval-gated Claude Code orchestration with spawn, output inspection, and follow-up
 - [x] Voice input
@@ -88,7 +108,7 @@ The themes below frame every scope decision.
 ### Tools & Previews
 
 - [x] Integrated API Client with cURL parser and response inspection
-- [x] Auto-detected local dev server preview
+- [x] Auto-detected local dev server preview, also over SSH through a tunnel
 - [x] Image, video, audio, and PDF viewers
 - [x] Rendered Markdown preview with raw and rendered views
 - [x] Sandboxed iframe
@@ -124,10 +144,13 @@ The themes below frame every scope decision.
   - Scoped persistent identity (global-user, git-root workspace, agent persona).
   - Durable executions with atomic checkpoints and idempotency to scale to **Hermes Agent** autonomous loops.
   - Transparent chat memory badges and portable `.voktty-memory.json` export/import.
-- [ ] Unified capability policy, per-tool trust levels, and MCP (Model Context Protocol) client runtime.
-- [ ] Expand external coding-agent orchestration beyond Claude Code (Hermes, Codex, Ollama agent loops).
+- [ ] Unified capability policy and per-tool trust levels across agents and MCP servers.
+- [ ] Agents that can use the computer (see and drive other applications), opt-in per session, with a visible indicator, a stop button and an action log.
 - [ ] Complete, extensible slash-command and reusable skills system.
-- [ ] Approval flow improvements (YOLO / auto-approve, project-scoped policies, per-tool trust).
+- [ ] Project-scoped approval policies and per-tool trust.
+- [ ] One search for files, commands and conversations.
+- [ ] One project panel that follows the active view.
+- [ ] Tools for API-model agents in WSL projects, and conversation memory that survives restarts.
 - [ ] Persistent terminal processes across app restarts.
 
 ### Longer horizon

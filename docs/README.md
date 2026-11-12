@@ -4,6 +4,11 @@ This directory holds long-form contributor and maintainer guides. `VOKTTY.md` at
 
 If a guide conflicts with `VOKTTY.md`, `VOKTTY.md` wins.
 
+## Product overview
+
+- [Features](features.md) - the complete feature list: Agent Harness, terminal, editor, Git, remote systems, AI chat and tools, collaboration and privacy.
+- [Roadmap](https://github.com/voktty/voktty/blob/main/ROADMAP.md) - what is shipped, what is next and what is out of scope.
+
 ## Official screenshots
 
 - [Screenshot gallery](screenshots.md) - current product captures grouped by feature.
