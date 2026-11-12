@@ -3,7 +3,7 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, agent_feed, agent_history, aliases, api_client, collab, companion, control, dap, docker,
+    agent, agent_feed, agent_history, aliases, api_client, collab, companion, computer_use, control, dap, docker,
     extensions, fs, git, git_review, harness, history, lsp, mcp, net, notch_window, project_memory,
     pty, quick_composer, quota, rdp, remote, secrets, serial, shell, ssh_native, teams, tray,
     tunnel, vibrancy, web_server, workspace,
@@ -554,6 +554,7 @@ pub fn run() {
             secrets::secrets_set,
             secrets::secrets_delete,
             secrets::secrets_get_all,
+            computer_use::computer_use_probe,
             mcp::manager::mcp_upsert_server,
             mcp::manager::mcp_list_servers,
             mcp::manager::mcp_connect_server,

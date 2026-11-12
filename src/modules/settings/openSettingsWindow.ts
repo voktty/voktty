@@ -19,6 +19,7 @@ export type SettingsTab =
   | "integrations"
   | "projects"
   | "companion"
+  | "computerUse"
   | "about";
 
 export async function openSettingsWindow(tab?: SettingsTab): Promise<void> {

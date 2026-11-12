@@ -1,4 +1,4 @@
-mod env;
+pub(crate) mod env;
 mod framing;
 mod rss;
 mod session;

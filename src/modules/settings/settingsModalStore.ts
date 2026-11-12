@@ -27,6 +27,7 @@ function getInitialTab(): SettingsTab {
         "integrations",
         "projects",
         "companion",
+        "computerUse",
         "about",
       ].includes(saved)
     ) {

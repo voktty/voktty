@@ -49,6 +49,7 @@ pub const METHOD_PROC_KILL: &str = "proc.kill";
 pub const METHOD_PROC_CLOSE: &str = "proc.close";
 pub const METHOD_PROC_LIST: &str = "proc.list";
 pub const METHOD_AGENT_PROBE: &str = "agent.probe";
+pub const METHOD_OCU_PROBE: &str = "ocu.probe";
 pub const METHOD_MEMORY_MANAGE: &str = "memory.manage";
 pub const METHOD_AGENT_FEED_POLL: &str = "agentFeed.poll";
 pub const REMOTE_SHELL_INTEGRATION_VERSION: &str = "3";

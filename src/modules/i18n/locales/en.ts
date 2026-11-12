@@ -270,6 +270,7 @@ export const en = {
       integrations: "Integrations",
       projects: "Projects",
       companion: "Mobile Companion",
+      computerUse: "Computer use",
       about: "About",
     },
     agentic: {
@@ -287,6 +288,44 @@ export const en = {
       openHarness: "Open a project in the Harness to manage its worktrees and archive.",
       remoteTitle: "Remote projects",
       remoteDescription: "Open project folders on your saved SSH machines.",
+    },
+    computerUse: {
+      title: "Computer use",
+      description:
+        "Let agents see and drive desktop applications through open-computer-use. This page only detects and installs the tool; it does not give any agent access.",
+      target: "Where",
+      thisComputer: "This computer",
+      refresh: "Check again",
+      runDiagnostics: "Run diagnostics",
+      checking: "Checking...",
+      notInstalled: "Not installed",
+      notInstalledHint: "open-computer-use was not found on this machine.",
+      installed: "Installed, version {version}",
+      installedHint:
+        "The command is present. This does not confirm that the screen and permissions are ready.",
+      doctorProblem: "Installed, version {version}, but diagnostics reported a problem",
+      unusable: "Found, but it did not report a version",
+      path: "Found at {path}",
+      diagnostics: "Diagnostics",
+      diagnosticsSkipped:
+        "Diagnostics were not run here because they can open the system permission prompts.",
+      helperOutdated:
+        "The helper on this host is out of date and cannot check for computer use. Reconnect the host to update it.",
+      unknownHost: "That saved connection no longer exists.",
+      error: "The check failed: {message}",
+      install: "Install version {version}",
+      installTitle: "Install open-computer-use",
+      installDescription:
+        "A terminal tab opens on {where} and runs this exact command. Nothing is installed in the background.",
+      installConfirm: "Open terminal and install",
+      cancel: "Cancel",
+      installFailed: "Could not open a terminal for the installation.",
+      installStarted: "Installation started in a terminal. Check again when it finishes.",
+      macTitle: "macOS permissions",
+      macBody:
+        "Using it on macOS needs Accessibility and Screen Recording access for the tool, granted by you in System Settings, Privacy and Security. Voktty does not change these permissions.",
+      docs: "Installation guide",
+      noAccessNote: "Installing does not give any agent control of this computer.",
     },
     companion: {
       title: "Mobile Companion",

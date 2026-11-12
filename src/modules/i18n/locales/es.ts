@@ -277,6 +277,7 @@ export const es: TranslationSchema = {
       integrations: "Integraciones",
       projects: "Proyectos",
       companion: "Companion móvil",
+      computerUse: "Uso del ordenador",
       about: "Acerca de",
     },
     agentic: {
@@ -294,6 +295,44 @@ export const es: TranslationSchema = {
       openHarness: "Abre un proyecto en el Harness para gestionar sus worktrees y su archivo.",
       remoteTitle: "Proyectos remotos",
       remoteDescription: "Abre carpetas de proyecto en tus máquinas SSH guardadas.",
+    },
+    computerUse: {
+      title: "Uso del ordenador",
+      description:
+        "Permite que los agentes vean y manejen aplicaciones de escritorio con open-computer-use. Esta página solo detecta e instala la herramienta; no da acceso a ningún agente.",
+      target: "Dónde",
+      thisComputer: "Este equipo",
+      refresh: "Comprobar de nuevo",
+      runDiagnostics: "Ejecutar diagnóstico",
+      checking: "Comprobando...",
+      notInstalled: "No instalado",
+      notInstalledHint: "No se encontró open-computer-use en esta máquina.",
+      installed: "Instalado, versión {version}",
+      installedHint:
+        "El comando está presente. Esto no confirma que la pantalla y los permisos estén listos.",
+      doctorProblem: "Instalado, versión {version}, pero el diagnóstico indica un problema",
+      unusable: "Encontrado, pero no informó de su versión",
+      path: "Encontrado en {path}",
+      diagnostics: "Diagnóstico",
+      diagnosticsSkipped:
+        "El diagnóstico no se ejecutó aquí porque puede abrir los avisos de permisos del sistema.",
+      helperOutdated:
+        "El helper de este servidor está desactualizado y no puede comprobar el uso del ordenador. Reconecta el servidor para actualizarlo.",
+      unknownHost: "Esa conexión guardada ya no existe.",
+      error: "La comprobación falló: {message}",
+      install: "Instalar la versión {version}",
+      installTitle: "Instalar open-computer-use",
+      installDescription:
+        "Se abre una pestaña de terminal en {where} y ejecuta este comando exacto. No se instala nada en segundo plano.",
+      installConfirm: "Abrir terminal e instalar",
+      cancel: "Cancelar",
+      installFailed: "No se pudo abrir una terminal para la instalación.",
+      installStarted: "La instalación empezó en una terminal. Vuelve a comprobar cuando termine.",
+      macTitle: "Permisos de macOS",
+      macBody:
+        "Usarlo en macOS requiere acceso de Accesibilidad y de Grabación de pantalla para la herramienta, que concedes tú en Ajustes del Sistema, Privacidad y seguridad. Voktty no cambia estos permisos.",
+      docs: "Guía de instalación",
+      noAccessNote: "Instalar no da a ningún agente el control de este equipo.",
     },
     companion: {
       title: "Companion móvil",

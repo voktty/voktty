@@ -6,6 +6,8 @@ mod file_preview;
 mod filename_search;
 mod git_output;
 mod line_metrics;
+#[cfg(unix)]
+mod ocu_probe;
 mod opencode_service;
 mod owned_search;
 mod proc_host;
@@ -36,7 +38,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
-    METHOD_AGENT_FEED_POLL, METHOD_AGENT_PROBE, METHOD_CANONICALIZE, METHOD_COPY,
+    METHOD_AGENT_FEED_POLL, METHOD_AGENT_PROBE, METHOD_CANONICALIZE, METHOD_COPY, METHOD_OCU_PROBE,
     METHOD_COUNT_TEXT_LINES, METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
     METHOD_GIT_EXEC_WORKSPACE, METHOD_GIT_EXEC_WORKSPACE_INPUT, METHOD_GLOB, METHOD_GREP,
     METHOD_GREP_CANCEL, METHOD_GREP_INDEPENDENT, METHOD_HANDSHAKE, METHOD_LIST_DIR,
@@ -305,6 +307,36 @@ impl RemoteServer {
         }
     }
 
+    /// Reports whether `open-computer-use` is installed on this host. Detection
+    /// only: fixed arguments, bounded time and output, nothing is installed.
+    #[cfg(unix)]
+    fn ocu_probe(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<ocu_probe::Params>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default();
+        let search_path =
+            agent_proc::agent_search_path(std::env::var("PATH").ok().as_deref(), &home);
+        RemoteResponse::success(
+            request.id,
+            json!(ocu_probe::probe(&search_path, params.doctor())),
+        )
+    }
+
+    #[cfg(not(unix))]
+    fn ocu_probe(&self, request: RemoteRequest) -> RemoteResponse {
+        RemoteResponse::failure(
+            request.id,
+            "unsupported_platform",
+            "computer use probing needs a Unix host",
+        )
+    }
+
     fn agent_probe(&self, request: RemoteRequest) -> RemoteResponse {
         let params = match serde_json::from_value::<AgentProbeParams>(request.params) {
             Ok(params) => params,
@@ -402,6 +434,7 @@ impl RemoteServer {
                 self.proc_control(request)
             }
             METHOD_AGENT_PROBE => self.agent_probe(request),
+            METHOD_OCU_PROBE => self.ocu_probe(request),
             METHOD_AGENT_FEED_POLL => self.agent_feed_poll(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
@@ -440,6 +473,8 @@ impl RemoteServer {
                     METHOD_CANONICALIZE,
                     team_fs::METHOD,
                     if cfg!(unix) { "exec.run" } else { "" },
+                    if cfg!(unix) { METHOD_OCU_PROBE } else { "" },
+                    if cfg!(unix) { METHOD_OCU_PROBE } else { "" },
                     METHOD_CREATE_FILE,
                     METHOD_CREATE_DIR,
                     METHOD_RENAME,

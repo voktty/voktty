@@ -6,6 +6,7 @@ pub mod api_client;
 #[cfg(target_os = "android")]
 pub mod bootstrap;
 pub mod collab;
+pub mod computer_use;
 pub mod companion;
 pub mod control;
 pub mod dap;

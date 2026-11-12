@@ -306,6 +306,7 @@ import { SettingsModal } from "@/settings/SettingsModal";
 import { BootstrapLoader } from "@/modules/mobile";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useInstallTerminal } from "@/modules/computer-use/useInstallTerminal";
 import type { SearchAddon } from "@xterm/addon-search";
 import {
   lazy,
@@ -1825,6 +1826,23 @@ function DesktopApp() {
   );
   const startSshConnectionRef = useRef(startSshConnection);
   startSshConnectionRef.current = startSshConnection;
+
+  useInstallTerminal({
+    local: LOCAL_WORKSPACE,
+    localCwd: localLaunchCwd ?? localHome ?? initialLaunchCwd ?? undefined,
+    openTerminal: (workspace, cwd) =>
+      newAgentGroupTab(cwd, t("settings.computerUse.title"), 1, workspace)
+        .leafIds[0],
+    connect: (connection) =>
+      activateWorkspaceEnv({
+        kind: "ssh",
+        connection,
+        root: connection.initialDirectory?.trim() || ".",
+      }),
+    whenReady: whenSessionReady,
+    write: writeToSession,
+    onFailure: () => toast.error(t("settings.computerUse.installFailed")),
+  });
 
   const handleConnectSsh = useCallback(
     async (

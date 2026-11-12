@@ -95,6 +95,12 @@ const CompanionSection = React.lazy(() =>
   })),
 );
 
+const ComputerUseSection = React.lazy(() =>
+  import("@/modules/computer-use/ComputerUseSection").then((m) => ({
+    default: m.ComputerUseSection,
+  })),
+);
+
 const TABS: {
   id: SettingsTab;
   icon: typeof Settings01Icon;
@@ -157,6 +163,11 @@ const TABS: {
     component: CompanionSection,
   },
   {
+    id: "computerUse",
+    icon: ComputerIcon,
+    component: ComputerUseSection,
+  },
+  {
     id: "about",
     icon: InformationCircleIcon,
     component: AboutSection,
@@ -176,6 +187,7 @@ const VALID_TABS: SettingsTab[] = [
   "mcp",
   "vault",
   "companion",
+  "computerUse",
   "about",
 ];
 
