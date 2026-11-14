@@ -1,10 +1,12 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useTranslation } from "@/modules/i18n";
+import { useProjectAvailability } from "../hooks/useProjectAvailability";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import { basename } from "../lib/fs";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
@@ -25,10 +27,11 @@ import {
   resolveTabGroupLogo,
   resolveTabGroupMascot,
 } from "../lib/tabGroups";
-import { Check, ChevronDown, Plus, Search } from "./icons";
+import { Check, ChevronDown, CircleAlert, Plus, Search } from "./icons";
 import { Popover } from "./Popover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
+import { unavailableKeys } from "./unavailableReasons";
 
 function loadAppearance() {
   return {
@@ -85,8 +88,10 @@ export function SearchableProjectPicker({
   const pickerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const [{ groupLabels, groupColors, groupCustomColors, groupMascots }, setAppearance] =
-    useState(loadAppearance);
+  const [
+    { groupLabels, groupColors, groupCustomColors, groupMascots },
+    setAppearance,
+  ] = useState(loadAppearance);
   useEffect(
     () => subscribeProjectPathsChanged(() => setAppearance(loadAppearance())),
     [],
@@ -109,6 +114,19 @@ export function SearchableProjectPicker({
     ...projects.filter((item) => sameProjectPath(item.path, cwd)),
     ...projects.filter((item) => !sameProjectPath(item.path, cwd)),
   ];
+  // Probe only while the dropdown is open; an empty list keeps the hook idle.
+  const projectPathsKey = orderedProjects.map((item) => item.path).join("\n");
+  const probePaths = useMemo(
+    () => (open && projectPathsKey ? projectPathsKey.split("\n") : []),
+    [open, projectPathsKey],
+  );
+  const { unavailableReasons } = useProjectAvailability(probePaths);
+  const reasonFor = (path: string) => {
+    for (const [candidate, reason] of unavailableReasons) {
+      if (sameProjectPath(candidate, path)) return reason;
+    }
+    return null;
+  };
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredProjects = normalizedQuery
     ? orderedProjects.filter((item) => {
@@ -168,7 +186,12 @@ export function SearchableProjectPicker({
       if (!project || !row) return;
       event.preventDefault();
       const rect = row.getBoundingClientRect();
-      onProjectContextMenu(project.path, rect.left, rect.bottom, searchRef.current);
+      onProjectContextMenu(
+        project.path,
+        rect.left,
+        rect.bottom,
+        searchRef.current,
+      );
       return;
     }
     if (!(target instanceof HTMLInputElement)) return;
@@ -273,7 +296,9 @@ export function SearchableProjectPicker({
         >
           <label className="flex h-11 shrink-0 items-center gap-2.5 border-b border-stroke px-3 text-content/45 focus-within:text-content/70">
             <Search className="size-4 shrink-0" strokeWidth={1.75} />
-            <span className="sr-only">{t("harness.commonUI.searchProjects")}</span>
+            <span className="sr-only">
+              {t("harness.commonUI.searchProjects")}
+            </span>
             <input
               ref={searchRef}
               value={query}
@@ -306,11 +331,16 @@ export function SearchableProjectPicker({
                   groupCustomColors,
                   itemSeed,
                 );
+                const unavailable = reasonFor(item.path);
                 return (
                   <button
                     key={item.path}
                     type="button"
-                    title={item.path}
+                    title={
+                      unavailable
+                        ? t(unavailableKeys(unavailable).titleKey)
+                        : item.path
+                    }
                     onMouseEnter={() => setActive(index)}
                     onClick={() => pickProject(item.path)}
                     onContextMenu={
@@ -351,12 +381,27 @@ export function SearchableProjectPicker({
                         />
                       )}
                     </span>
-                    <span className="min-w-0 max-w-[calc(100%_-_36px)] shrink-0 truncate text-[13px] font-medium">
+                    <span
+                      className={`min-w-0 max-w-[calc(100%_-_36px)] shrink-0 truncate text-[13px] font-medium${
+                        unavailable ? " text-content/55 italic" : ""
+                      }`}
+                    >
                       {itemLabel}
                     </span>
                     <span className="min-w-0 max-w-28 flex-1 truncate font-mono text-[11px] text-content/40">
                       {prettyParent(item.path)}
                     </span>
+                    {unavailable ? (
+                      <span
+                        aria-label={t(unavailableKeys(unavailable).shortKey)}
+                        className="flex shrink-0 items-center justify-center"
+                      >
+                        <CircleAlert
+                          className="size-3.5 shrink-0 text-amber-400"
+                          strokeWidth={2}
+                        />
+                      </span>
+                    ) : null}
                   </button>
                 );
               })
