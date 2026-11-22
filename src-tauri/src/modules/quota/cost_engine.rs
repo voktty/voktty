@@ -163,12 +163,21 @@ impl CostEngine {
         cached_tokens: u64,
     ) -> f64 {
         let normalized = model.to_lowercase();
-        let price = self
-            .prices
-            .iter()
-            .find(|(k, _)| normalized.contains(*k))
-            .map(|(_, p)| p)
-            .cloned()
+        let price = llm_prices::lookup(&normalized)
+            .and_then(|p| {
+                Some(ModelPrice {
+                    input_per_million: p.input?,
+                    output_per_million: p.output?,
+                    cache_read_per_million: p.cache_read.or(p.input)?,
+                })
+            })
+            .or_else(|| {
+                self.prices
+                    .iter()
+                    .filter(|(k, _)| normalized.contains(k.as_str()))
+                    .max_by_key(|(k, _)| k.len())
+                    .map(|(_, p)| p.clone())
+            })
             .unwrap_or(ModelPrice {
                 input_per_million: 1.0,
                 output_per_million: 3.0,
@@ -180,5 +189,36 @@ impl CostEngine {
         let cache_cost = (cached_tokens as f64 / 1_000_000.0) * price.cache_read_per_million;
 
         in_cost + out_cost + cache_cost
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CostEngine;
+
+    #[test]
+    fn mini_models_are_not_billed_at_parent_rates() {
+        let engine = CostEngine::new();
+        for _ in 0..32 {
+            let mini = engine.calculate_cost_usd("gpt-4o-mini-2024-07-18", 1_000_000, 1_000_000, 0);
+            assert!((mini - 0.75).abs() < 1e-9, "gpt-4o-mini billed at {mini}");
+        }
+    }
+
+    #[test]
+    fn listed_models_use_current_list_prices() {
+        let engine = CostEngine::new();
+        let opus = engine.calculate_cost_usd("claude-opus-4-6", 1_000_000, 1_000_000, 0);
+        assert!(
+            (opus - 30.0).abs() < 1e-9,
+            "claude-opus-4-6 billed at {opus}"
+        );
+    }
+
+    #[test]
+    fn unlisted_ids_still_use_the_local_table() {
+        let engine = CostEngine::new();
+        let cost = engine.calculate_cost_usd("claude-3-7-sonnet", 1_000_000, 1_000_000, 0);
+        assert!((cost - 18.0).abs() < 1e-9);
     }
 }
